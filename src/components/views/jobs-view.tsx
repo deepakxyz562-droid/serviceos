@@ -3631,14 +3631,20 @@ export function JobsView() {
               // summary), then open the detail page so the tenant can view
               // and edit the completed job (fix a mistake, add a missed item,
               // etc.). Edits are saved through the normal PUT /api/jobs/[id].
+              //
+              // NOTE: we deliberately do NOT call setJobsTab('active') here.
+              // The detail page renders via formMode='detail' which takes
+              // priority over the tab rendering, so switching tabs would
+              // cause an unnecessary re-render of the Active list (visible
+              // flicker) before the detail page appears. Leaving jobsTab as
+              // 'history' means the user returns to the History list when
+              // they click Back from the detail page — which is the desired
+              // behaviour.
               try {
                 const res = await fetch(`/api/jobs/${jobId}`);
                 if (res.ok) {
                   const data = await res.json();
                   const fullJob = data.job ?? data;
-                  // Switch to the Active tab so the detail page renders (the
-                  // History tab doesn't have a detail panel).
-                  setJobsTab('active');
                   await openJobDetail(fullJob);
                 } else {
                   toast.error('Failed to load job details');

@@ -23,12 +23,16 @@ import {
   Mic,
   PhoneForwarded,
   Sparkles,
+  History,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { AiAgentsView } from '@/components/views/ai-agents-view';
+import { AiCallHistoryView } from '@/components/views/ai-call-history-view';
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -75,6 +79,7 @@ export function AiReceptionistView() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [tab, setTab] = useState<'dashboard' | 'agents' | 'history'>('dashboard');
   const setActiveView = useAppStore((s) => s.setActiveView);
 
   const fetchData = async (silent = false) => {
@@ -153,6 +158,21 @@ export function AiReceptionistView() {
         </div>
       </div>
 
+      {/* ─── Tabs: Dashboard | AI Agents | Call History ─────────── */}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+        <TabsList className="h-11">
+          <TabsTrigger value="dashboard" className="text-sm min-h-[44px]">
+            <PhoneCall className="size-4 mr-1.5" /> Dashboard
+          </TabsTrigger>
+          <TabsTrigger value="agents" className="text-sm min-h-[44px]">
+            <Bot className="size-4 mr-1.5" /> AI Agents
+          </TabsTrigger>
+          <TabsTrigger value="history" className="text-sm min-h-[44px]">
+            <History className="size-4 mr-1.5" /> Call History
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard" className="space-y-6 mt-6">
       {/* ─── BYOK status banner ─────────────────────────────────────── */}
       {!data?.vapiConfigured && (
         <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/10">
@@ -414,6 +434,16 @@ export function AiReceptionistView() {
           </div>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="agents" className="mt-6">
+          <AiAgentsView />
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-6">
+          <AiCallHistoryView />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

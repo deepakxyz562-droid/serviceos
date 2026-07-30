@@ -49,6 +49,10 @@ export interface SettingsSection {
   keywords?: string[];
   /** Marks sections whose UI is still a "Coming Soon" placeholder. */
   comingSoon?: boolean;
+  /** When true, the content area renders full-width (drops the max-w-4xl
+   *  reading-width constraint). Use for dense, multi-card sections like
+   *  Work Settings, Channels & Credentials, Integrations. */
+  fullWidth?: boolean;
 }
 
 export const SETTINGS_GROUP_LABELS: Record<SettingsGroup, string> = {
@@ -118,6 +122,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'Users',
     description: 'Lead pipeline, opportunity stages, customer types, tags, segments, custom fields',
     group: 'business',
+    fullWidth: true,
     keywords: ['leads', 'pipeline', 'opportunities', 'stages', 'segments', 'tags'],
   },
   {
@@ -214,6 +219,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'Briefcase',
     description: 'Quotes, jobs, invoices, visit titles, payment terms, invoice reminders, chemical tracking',
     group: 'team',
+    fullWidth: true,
     keywords: ['quotes', 'jobs', 'invoices', 'visit titles', 'payment terms', 'reminders', 'chemical tracking', 'work settings'],
   },
 
@@ -282,31 +288,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     group: 'communication',
     keywords: ['phone number', 'buy', 'release', 'sms', 'call forwarding', 'voicemail', 'voice', 'dedicated'],
   },
-  {
-    id: 'sms-text',
-    label: 'SMS / 2-Way Text',
-    icon: 'MessageSquare',
-    description: 'SMS provider config, 2-way text messaging, sender ID, keywords',
-    group: 'communication',
-    comingSoon: true,
-    keywords: ['sms', 'text', '2-way', 'sender id', 'keywords', 'messaging'],
-  },
-  {
-    id: 'whatsapp',
-    label: 'WhatsApp',
-    icon: 'MessageCircle',
-    description: 'Meta Cloud API config, templates, phone number, webhook setup',
-    group: 'communication',
-    keywords: ['whatsapp', 'meta', 'cloud api', 'templates', 'webhook'],
-  },
-  {
-    id: 'email-providers',
-    label: 'Email Providers',
-    icon: 'Mail',
-    description: 'SMTP config, sender domain, DKIM/SPF, delivery settings',
-    group: 'communication',
-    keywords: ['email', 'smtp', 'provider', 'dkim', 'spf', 'delivery', 'sender'],
-  },
+  // NOTE: SMS / 2-Way Text, WhatsApp, and Email Providers sections have been
+  // REMOVED from Settings — they are duplicates of the Channels & Credentials
+  // section (Integrations group), which is the single source of truth for all
+  // communication provider CRUD (SMS, WhatsApp, Email, Credentials). The
+  // unique features (SMS keywords/2-way, WhatsApp templates/webhook) are
+  // embedded directly inside the Channels view's SMS and WhatsApp tabs.
   {
     id: 'ai-auto-reply',
     label: 'AI Auto-Reply',
@@ -324,15 +311,17 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     description: 'Stripe, QuickBooks, Google Calendar, Zapier, WhatsApp, OpenAI, Claude, Gemini',
     group: 'integrations',
     existingTab: 'integrations',
+    fullWidth: true,
     keywords: ['stripe', 'quickbooks', 'google calendar', 'zapier', 'whatsapp', 'openai', 'claude', 'gemini', 'wordpress', 'webhooks', 'n8n'],
   },
   {
     id: 'channels-credentials',
     label: 'Channels & Credentials',
     icon: 'KeyRound',
-    description: 'API keys, provider credentials, secure vault for all channel configs',
+    description: 'SMS, WhatsApp, Email provider config, API keys, secure vault for all channel configs',
     group: 'integrations',
-    keywords: ['credentials', 'api keys', 'secrets', 'vault', 'channels'],
+    fullWidth: true,
+    keywords: ['credentials', 'api keys', 'secrets', 'vault', 'channels', 'sms', 'whatsapp', 'email', 'provider', 'twilio'],
   },
   {
     id: 'payment-integrations',

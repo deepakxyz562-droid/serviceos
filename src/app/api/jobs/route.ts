@@ -61,6 +61,15 @@ export async function GET(request: NextRequest) {
     const priority = searchParams.get('priority')
     const assigneeId = searchParams.get('assigneeId')
     const customerId = searchParams.get('customerId')
+    // History mode: only completed + soft-deleted jobs (used by the Job
+    // History tab). When true, we use a lighter `select` (no relations) and
+    // a `take` limit for performance — the History list only needs summary
+    // fields, not full assignee/customer/resource records.
+    const historyMode = searchParams.get('history') === 'true'
+    // includeDeleted=false → exclude soft-deleted jobs from the result set.
+    // includeDeleted=true (or unset) → return soft-deleted jobs too (backward
+    // compat — most callers client-side filter them anyway).
+    const excludeDeleted = searchParams.get('includeDeleted') === 'false'
 
     const where: Record<string, unknown> = {}
 
@@ -122,6 +131,21 @@ export async function GET(request: NextRequest) {
 
     if (assigneeId) where.assigneeId = assigneeId
     if (customerId) where.customerId = customerId
+
+    // ── History vs Active filtering ───────────────────────────────────
+    // history=true  → only completed + soft-deleted jobs (for the History tab)
+    // includeDeleted=false → exclude soft-deleted jobs (for the Active list)
+    if (historyMode) {
+      // Completed OR soft-deleted. We use a fresh OR so it doesn't conflict
+      // with the search OR (which is set below if `search` is present).
+      where.AND = [
+        ...(where.AND as unknown[] || []),
+        { OR: [{ status: 'completed' }, { deletedAt: { not: null } }] },
+      ]
+    } else if (excludeDeleted) {
+      where.deletedAt = null
+    }
+
     if (search) {
       where.OR = [
         { title: { contains: search } },
@@ -130,6 +154,40 @@ export async function GET(request: NextRequest) {
         { assigneeName: { contains: search } },
         { address: { contains: search } },
       ]
+    }
+
+    // ── History mode: lighter query ───────────────────────────────────
+    // The History tab only renders summary cards (title, customer, assignee
+    // names, dates, amounts) — it doesn't need full relation records. Using
+    // `select` instead of `include` avoids fetching large text fields
+    // (description, metadataJson, lineItemsJson, etc.) and entire related
+    // rows, dramatically reducing payload size and query time.
+    if (historyMode) {
+      const historyJobs = await db.job.findMany({
+        where,
+        select: {
+          id: true,
+          jobNumber: true,
+          title: true,
+          status: true,
+          priority: true,
+          type: true,
+          paymentStatus: true,
+          paymentMethod: true,
+          amountCollected: true,
+          quotedAmount: true,
+          customerName: true,
+          assigneeName: true,
+          completedAt: true,
+          actualEndTime: true,
+          deletedAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      })
+      return NextResponse.json(historyJobs)
     }
 
     const jobs = await db.job.findMany({

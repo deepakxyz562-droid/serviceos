@@ -37,7 +37,6 @@ import {
   Mail,
   CalendarCheck,
   Plug,
-  MessageCircle,
   Bot,
   KeyRound,
   Link2,
@@ -52,6 +51,7 @@ import {
   Search as SearchIcon,
   Users,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { SettingsSidebar } from '@/components/settings/settings-sidebar';
 import { SettingsSearch } from '@/components/settings/settings-search';
 import { getSettingsSection } from '@/components/settings/settings-config';
@@ -74,8 +74,6 @@ import { BillingSettings } from '@/components/settings/sections/billing-settings
 import { GoogleBusinessProfileSettings } from '@/components/settings/sections/google-business-profile-settings';
 import { DedicatedPhoneSettings } from '@/components/settings/sections/dedicated-phone-settings';
 import { WorkSettings } from '@/components/settings/sections/work-settings';
-import { SmsTextSettings } from '@/components/settings/sections/sms-text-settings';
-import { WhatsAppSettings } from '@/components/settings/sections/whatsapp-settings';
 import { AiAutoReplySettings } from '@/components/settings/sections/ai-auto-reply-settings';
 import { PaymentIntegrationsSettings } from '@/components/settings/sections/payment-integrations-settings';
 import { GenericPlaceholder } from '@/components/settings/sections/generic-placeholder';
@@ -87,7 +85,6 @@ import { ChecklistBuilder } from '@/components/views/checklists-view';
 import { FormBuilderView } from '@/components/views/form-builder-view';
 import ChannelsView from '@/components/views/channels-view';
 import { CredentialsView } from '@/components/views/credentials-view';
-import { EmailProvidersView } from '@/components/views/email-providers-view';
 import { EmailTemplatesView } from '@/components/views/email-templates-view';
 import { ActivityLogsView } from '@/components/views/activity-logs-view';
 import { HistoryView } from '@/components/views/history-view';
@@ -299,42 +296,6 @@ const PLACEHOLDER_CONFIGS: Record<string, {
       { label: 'Embeddable Widgets', hint: 'Booking widget for your website' },
       { label: 'Booking Links', hint: 'Shareable booking URLs' },
       { label: 'Client Portal Apps', hint: 'White-label client portal apps' },
-    ],
-  },
-  'sms-text': {
-    title: 'SMS / 2-Way Text',
-    description: 'SMS provider config, 2-way text messaging, sender ID, keywords',
-    icon: MessageCircle,
-    accent: 'emerald',
-    items: [
-      { label: 'SMS Provider', hint: 'Twilio, Vonage, or custom provider config' },
-      { label: 'Sender ID', hint: 'Your business phone number or short code' },
-      { label: '2-Way Messaging', hint: 'Receive replies from customers' },
-      { label: 'Keywords', hint: 'Auto-respond to keywords like STOP, HELP' },
-    ],
-  },
-  'whatsapp': {
-    title: 'WhatsApp',
-    description: 'Meta Cloud API config, templates, phone number, webhook setup',
-    icon: MessageCircle,
-    accent: 'emerald',
-    items: [
-      { label: 'Meta Cloud API', hint: 'Connect your WhatsApp Business account' },
-      { label: 'Phone Number', hint: 'Your WhatsApp Business phone number' },
-      { label: 'Message Templates', hint: 'Pre-approved template messages' },
-      { label: 'Webhook Setup', hint: 'Configure webhook URL for incoming messages' },
-    ],
-  },
-  'email-providers': {
-    title: 'Email Providers',
-    description: 'SMTP config, sender domain, DKIM/SPF, delivery settings',
-    icon: Mail,
-    accent: 'emerald',
-    items: [
-      { label: 'SMTP Configuration', hint: 'Host, port, username, password' },
-      { label: 'Sender Domain', hint: 'Your sending domain for email campaigns' },
-      { label: 'DKIM/SPF Records', hint: 'Email authentication DNS records' },
-      { label: 'Delivery Settings', hint: 'Retry rules, bounce handling' },
     ],
   },
   'ai-auto-reply': {
@@ -570,7 +531,7 @@ export function SettingsView() {
       case 'google-business-profile':
         return <GoogleBusinessProfileSettings />;
       case 'dedicated-phone':
-        return <DedicatedPhoneSettings />;
+        return <DedicatedPhoneSettings onNavigateSection={setActiveSection} />;
 
       // ─── Sections that embed developed views (Phase 2 mapping) ──────────
       case 'products-services':
@@ -596,8 +557,6 @@ export function SettingsView() {
             </TabsContent>
           </Tabs>
         );
-      case 'email-providers':
-        return <EmailProvidersView />;
       case 'emails':
         return <EmailTemplatesView />;
       case 'audit-logs':
@@ -614,10 +573,6 @@ export function SettingsView() {
       // ─── Phase 3: newly built DB-backed settings sections ───────────────
       case 'work-settings':
         return <WorkSettings />;
-      case 'sms-text':
-        return <SmsTextSettings />;
-      case 'whatsapp':
-        return <WhatsAppSettings />;
       case 'ai-auto-reply':
         return <AiAutoReplySettings />;
       case 'payment-integrations':
@@ -667,7 +622,7 @@ export function SettingsView() {
           activeSectionId={activeSection}
           onSelect={setActiveSection}
         />
-        <main className="flex-1 min-w-0 max-w-4xl">
+        <main className={cn('flex-1 min-w-0', activeConfig?.fullWidth ? '' : 'max-w-4xl')}>
           {renderActiveSection()}
         </main>
       </div>

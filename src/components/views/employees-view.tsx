@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
 import {
-  Users, UserPlus, Shield, Clock, CheckCircle2, UserCheck,
+  Users, UserPlus, Shield, Clock, CheckCircle2, UserCheck, UserCog,
   Search, Phone, MapPin, Star, Briefcase, Loader2,
   Trash2, Pencil, MoreVertical, UserX,
   Mail, Send, KeyRound, Power, Globe, Copy, ExternalLink, AlertCircle,
@@ -31,6 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { authFetch } from '@/lib/client-auth';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { TimesheetView } from '@/components/views/timesheet-view';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -529,6 +530,7 @@ export function EmployeesView() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [listTab, setListTab] = useState<'list' | 'teams'>('list');
+  const [tab, setTab] = useState<'employees' | 'timesheet'>('employees');
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
   // Dialogs
@@ -998,6 +1000,18 @@ export function EmployeesView() {
 
   return (
     <div className="space-y-6 w-full">
+      {/* Top-level Tabs: Employees | Timesheet */}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+        <TabsList className="h-11">
+          <TabsTrigger value="employees" className="text-sm min-h-[44px]">
+            <UserCog className="size-4 mr-1.5" /> Employees
+          </TabsTrigger>
+          <TabsTrigger value="timesheet" className="text-sm min-h-[44px]">
+            <Clock className="size-4 mr-1.5" /> Timesheet
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="employees" className="space-y-6 mt-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
@@ -1384,6 +1398,12 @@ export function EmployeesView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </TabsContent>
+
+        <TabsContent value="timesheet" className="mt-6">
+          <TimesheetView />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
