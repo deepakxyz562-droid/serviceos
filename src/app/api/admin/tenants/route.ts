@@ -232,15 +232,19 @@ export async function POST(request: NextRequest) {
         maxJobs: config.maxJobs,
         maxWorkflows: config.maxWorkflows,
         featuresJson: JSON.stringify({
-          whatsappIntegration: selectedPlan !== 'starter',
+          // WhatsApp is NOT platform-provided — BYO Meta API only. The
+          // whatsappIntegration flag here only controls menu visibility for
+          // paid plans; actual sending requires a user-connected provider.
+          // See Issue 5.
+          whatsappIntegration: false,
           customWorkflows: selectedPlan === 'business' || selectedPlan === 'enterprise',
           apiAccess: selectedPlan === 'business' || selectedPlan === 'enterprise',
           prioritySupport: selectedPlan === 'enterprise',
         }),
-        // Trial credit system defaults (explicit for clarity)
-        trialWhatsappCredits: 10,
+        // No trial WhatsApp credits — platform provides Email + SMS + Push only.
+        trialWhatsappCredits: 0,
         trialWhatsappUsed: 0,
-        platformWhatsappEnabled: true,
+        platformWhatsappEnabled: false,
         ownWhatsappConnected: false,
         ownEmailProviderConnected: false,
       },

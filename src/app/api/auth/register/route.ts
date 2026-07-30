@@ -122,18 +122,25 @@ export async function POST(request: NextRequest) {
           billingCycle: 'monthly',
           trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
           maxUsers: 1,
-          maxJobs: 100,
+          maxJobs: 200,
           maxWorkflows: 10,
           featuresJson: JSON.stringify({
-            whatsappIntegration: true,
+            // WhatsApp is NOT platform-provided. It is BYO (user connects own
+            // Meta API). The whatsappIntegration flag gates the menu's
+            // visibility, but the actual sending requires a user-connected
+            // CommunicationProvider. See Issue 5.
+            whatsappIntegration: false,
             customWorkflows: false,
             apiAccess: false,
             prioritySupport: false,
           }),
-          // Trial credit system defaults (explicit for clarity)
-          trialWhatsappCredits: 10,
+          // Trial credit system defaults — platform no longer provides WhatsApp
+          // so there are no trial WhatsApp credits. Email + SMS + Push are the
+          // platform-provided channels. WhatsApp unlocks when the user upgrades
+          // to a paid plan AND connects their own Meta API.
+          trialWhatsappCredits: 0,
           trialWhatsappUsed: 0,
-          platformWhatsappEnabled: true,
+          platformWhatsappEnabled: false,
           ownWhatsappConnected: false,
           ownEmailProviderConnected: false,
         },

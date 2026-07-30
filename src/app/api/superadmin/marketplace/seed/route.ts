@@ -5,6 +5,12 @@ import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { db } from '@/lib/db';
 import { INDUSTRY_CATALOG, getIndustry } from '@/lib/industry-catalog';
 
+// Allow up to 5 minutes on Vercel Pro/Enterprise — seeding many categories
+// against the Overpass API can take well past the default 10s/60s serverless
+// limit. Without this the request is killed mid-batch and the UI shows a
+// generic "seed failed" error even though the work was partially done.
+export const maxDuration = 300;
+
 // ─── Constants ─────────────────────────────────────────────────────────────
 
 const COUNTRY_CURRENCY: Record<string, string> = {
@@ -22,7 +28,10 @@ const ALLOWED_COUNTRIES = Object.keys(COUNTRY_CURRENCY);
 
 const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter';
 const OSM_USER_AGENT = 'ServiceOS-Seed/1.0';
-const OVERPASS_TIMEOUT_MS = 60_000;
+// Reduced from 60s to 45s so a single slow category can't eat the whole
+// request budget. Combined with maxDuration=300, this gives enough headroom
+// for many categories in a single seed run.
+const OVERPASS_TIMEOUT_MS = 45_000;
 
 // OSM category → list of Overpass tag matchers. Each entry produces a separate
 // node selector inside the union block. The `others` category uses wildcard
@@ -398,71 +407,119 @@ export async function POST(request: NextRequest) {
       toInsert.push(l);
     }
 
-    // ── Insert new tenants ────────────────────────────────────────────────
+    // ── Insert new tenants (batched to avoid one-roundtrip-per-row) ──────
+    // Previously this loop issued one `db.tenant.create()` per listing, which
+    // for 50+ listings added dozens of sequential DB roundtrips and pushed the
+    // whole request past the Vercel serverless limit even with maxDuration.
+    // We now batch inserts in chunks of 25 using `createMany`, which is a
+    // single roundtrip per chunk. Slug uniqueness is pre-computed in memory.
     const currency = COUNTRY_CURRENCY[ctry] || 'USD';
     const insertedSamples: { name: string; industry: string; city: string }[] = [];
-    let inserted = 0;
-    let insertFailed = 0;
-
-    // Track slugs we've generated in this run to avoid collisions within the batch
     const usedSlugs = new Set<string>();
 
-    for (const l of toInsert) {
+    // Pre-compute slug + denormalized fields for every listing to insert.
+    const prepared = toInsert.map((l) => {
+      const ind = getIndustry(l.category);
+      const categoryName = ind?.name || l.category;
+      let slugBase = slugify(l.name) || 'business';
+      let slug = `${slugBase}-${randomHex(4)}`;
+      let tries = 0;
+      while (usedSlugs.has(slug)) {
+        slug = `${slugBase}-${randomHex(4)}`;
+        tries++;
+        if (tries > 5) {
+          slugBase = `${slugBase}-${randomHex(2)}`;
+        }
+      }
+      usedSlugs.add(slug);
+      const address = [l.street, l.housenumber].filter(Boolean).join(' ').trim() || null;
+      const description = l.description || `Established ${categoryName} business serving ${l.city}.`;
+      return { l, slug, address, description };
+    });
+
+    let inserted = 0;
+    let insertFailed = 0;
+    const BATCH_SIZE = 25;
+    for (let i = 0; i < prepared.length; i += BATCH_SIZE) {
+      const chunk = prepared.slice(i, i + BATCH_SIZE);
+      const rows = chunk.map(({ l, slug, address, description }) => ({
+        name: l.name,
+        slug,
+        industry: l.category,
+        businessCategoriesJson: JSON.stringify([l.category]),
+        phone: l.phone,
+        email: l.email,
+        address,
+        city: l.city,
+        state: l.state,
+        postalCode: l.postcode,
+        country: ctry,
+        currency,
+        latitude: l.lat,
+        longitude: l.lon,
+        listingTier: 'free' as const,
+        claimed: false,
+        marketplaceOptIn: true,
+        publicProfileEnabled: true,
+        onboardingCompleted: true,
+        rating: randomFloat(3.5, 4.9, 1),
+        reviewCount: randomInt(5, 120),
+        description,
+        plan: 'starter',
+        planStatus: 'trial',
+        publicSlug: slug,
+      }));
       try {
-        const ind = getIndustry(l.category);
-        const categoryName = ind?.name || l.category;
-        // Slug: base slug + 4-char hex
-        let slugBase = slugify(l.name) || 'business';
-        let slug = `${slugBase}-${randomHex(4)}`;
-        let tries = 0;
-        while (usedSlugs.has(slug)) {
-          slug = `${slugBase}-${randomHex(4)}`;
-          tries++;
-          if (tries > 5) {
-            slugBase = `${slugBase}-${randomHex(2)}`;
+        const result = await db.tenant.createMany({ data: rows, skipDuplicates: true });
+        inserted += result.count;
+        for (const { l } of chunk) {
+          if (insertedSamples.length < 10) {
+            insertedSamples.push({ name: l.name, industry: l.category, city: l.city as string });
           }
         }
-        usedSlugs.add(slug);
-
-        const address = [l.street, l.housenumber].filter(Boolean).join(' ').trim() || null;
-        const description = l.description || `Established ${categoryName} business serving ${l.city}.`;
-
-        await db.tenant.create({
-          data: {
-            name: l.name,
-            slug,
-            industry: l.category,
-            businessCategoriesJson: JSON.stringify([l.category]),
-            phone: l.phone,
-            email: l.email,
-            address,
-            city: l.city,
-            state: l.state,
-            postalCode: l.postcode,
-            country: ctry,
-            currency,
-            latitude: l.lat,
-            longitude: l.lon,
-            listingTier: 'free',
-            claimed: false,
-            marketplaceOptIn: true,
-            publicProfileEnabled: true,
-            onboardingCompleted: true,
-            rating: randomFloat(3.5, 4.9, 1),
-            reviewCount: randomInt(5, 120),
-            description,
-            plan: 'starter',
-            planStatus: 'trial',
-            publicSlug: slug,
-          },
-        });
-        inserted++;
-        if (insertedSamples.length < 10) {
-          insertedSamples.push({ name: l.name, industry: l.category, city: l.city as string });
-        }
       } catch (err) {
-        console.error('[superadmin/seed] insert failed:', err);
-        insertFailed++;
+        console.error('[superadmin/seed] batch insert failed:', err);
+        // Fallback: try inserts one-by-one so a single bad row doesn't sink
+        // the entire chunk. This is slower but maximizes the seed count.
+        for (const { l, slug, address, description } of chunk) {
+          try {
+            await db.tenant.create({
+              data: {
+                name: l.name,
+                slug,
+                industry: l.category,
+                businessCategoriesJson: JSON.stringify([l.category]),
+                phone: l.phone,
+                email: l.email,
+                address,
+                city: l.city,
+                state: l.state,
+                postalCode: l.postcode,
+                country: ctry,
+                currency,
+                latitude: l.lat,
+                longitude: l.lon,
+                listingTier: 'free',
+                claimed: false,
+                marketplaceOptIn: true,
+                publicProfileEnabled: true,
+                onboardingCompleted: true,
+                rating: randomFloat(3.5, 4.9, 1),
+                reviewCount: randomInt(5, 120),
+                description,
+                plan: 'starter',
+                planStatus: 'trial',
+                publicSlug: slug,
+              },
+            });
+            inserted++;
+            if (insertedSamples.length < 10) {
+              insertedSamples.push({ name: l.name, industry: l.category, city: l.city as string });
+            }
+          } catch (e2) {
+            insertFailed++;
+          }
+        }
       }
     }
 

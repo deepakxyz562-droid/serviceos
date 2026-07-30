@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { getPayPalAccessToken, PAYPAL_PLANS, getPayPalBaseUrl, isPayPalConfigured } from '@/lib/paypal';
+import { getPayPalAccessToken, getPayPalPlanConfig, getPayPalBaseUrl, isPayPalConfigured } from '@/lib/paypal';
+import { getPlanByCode } from '@/lib/billing-seed';
 import { logBillingEvent } from '@/lib/billing-events';
 
 /**
@@ -37,6 +38,24 @@ export async function POST(request: NextRequest) {
     if (!orderID) {
       return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
     }
+
+    // Determine plan + billing cycle up-front so they're available in both
+    // the error path and the success path below.
+    const selectedPlan = plan || 'growth';
+    const cycle = billingCycle === 'yearly' ? 'yearly' : 'monthly';
+
+    // ─── Live pricing from the DB (canonical source of truth) ───────────
+    // Previously this route hardcoded stale $10/$25/$50 prices in a local
+    // `planDetails` map, which meant PayPal captured the WRONG amount after a
+    // superadmin changed a plan's price in the catalog. We now read the live
+    // price + feature flags + limits from the Plan table (seeded by
+    // billing-seed.ts PLAN_DEFS, editable via superadmin billing UI).
+    const planRow = await getPlanByCode(selectedPlan);
+    const planConfig = await getPayPalPlanConfig(selectedPlan);
+    if (!planRow || !planConfig) {
+      return NextResponse.json({ error: `Invalid plan: ${selectedPlan}` }, { status: 400 });
+    }
+    const price = cycle === 'yearly' ? planConfig.yearlyPrice : planConfig.monthlyPrice;
 
     // Get PayPal access token
     const accessToken = await getPayPalAccessToken();
@@ -77,12 +96,6 @@ export async function POST(request: NextRequest) {
     const payerEmail = captureData.payer?.email_address || '';
     const paypalOrderId = captureData.id;
 
-    // Determine plan and billing cycle from the order
-    const selectedPlan = plan || 'growth';
-    const cycle = billingCycle === 'yearly' ? 'yearly' : 'monthly';
-    const planConfig = PAYPAL_PLANS[selectedPlan];
-    const price = cycle === 'yearly' ? planConfig.yearlyPrice : planConfig.monthlyPrice;
-
     // The capture resource lives under purchase_units[0].payments.captures[0]
     const captureUnit = captureData.purchase_units?.[0]?.payments?.captures?.[0];
     const paypalCaptureId = captureUnit?.id || null;
@@ -90,37 +103,14 @@ export async function POST(request: NextRequest) {
       ? parseFloat(captureUnit.amount.value)
       : price;
 
-    // Plan details — keep in sync with billing-seed.ts and paypal.ts PAYPAL_PLANS
-    // `amount` is the monthly price; the actual captured amount for yearly is
-    // taken from the PayPal order (capturedAmount) / planConfig.yearlyPrice.
-    const planDetails: Record<string, { amount: number; maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }> = {
-      starter: {
-        amount: 10,
-        maxUsers: 1,
-        maxJobs: 100,
-        maxWorkflows: 10,
-        features: { whatsappIntegration: true, customWorkflows: false, apiAccess: false, prioritySupport: false },
-      },
-      growth: {
-        amount: 25,
-        maxUsers: 5,
-        maxJobs: 1000,
-        maxWorkflows: 50,
-        features: { whatsappIntegration: true, customWorkflows: true, apiAccess: false, prioritySupport: true },
-      },
-      pro: {
-        amount: 50,
-        maxUsers: 999,
-        maxJobs: 99999,
-        maxWorkflows: 999,
-        features: { whatsappIntegration: true, customWorkflows: true, apiAccess: true, prioritySupport: true },
-      },
-    };
-
-    const selected = planDetails[selectedPlan];
-    if (!selected) {
-      return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
-    }
+    // Plan features + limits come from the live DB row (featuresJson /
+    // limitsJson columns, seeded by billing-seed.ts and editable by superadmin).
+    // We parse them once here so the Subscription record we create reflects
+    // the current plan configuration, not a stale hardcoded snapshot.
+    let planFeatures: Record<string, boolean> = {};
+    try {
+      planFeatures = planRow.featuresJson ? JSON.parse(planRow.featuresJson) : {};
+    } catch { /* keep empty */ }
 
     const now = new Date();
     const endDate = new Date(now);
@@ -144,10 +134,10 @@ export async function POST(request: NextRequest) {
         paypalOrderId,
         paypalPayerEmail: payerEmail,
         paymentProvider: 'paypal',
-        maxUsers: selected.maxUsers,
-        maxJobs: selected.maxJobs,
-        maxWorkflows: selected.maxWorkflows,
-        featuresJson: JSON.stringify(selected.features),
+        maxUsers: planRow.maxUsers,
+        maxJobs: planRow.maxJobs,
+        maxWorkflows: planRow.maxWorkflows,
+        featuresJson: JSON.stringify(planFeatures),
       },
     });
 

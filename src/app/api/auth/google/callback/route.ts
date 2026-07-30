@@ -85,17 +85,19 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
         billingCycle: 'monthly',
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
         maxUsers: 1,
-        maxJobs: 100,
+        maxJobs: 200,
         maxWorkflows: 10,
         featuresJson: JSON.stringify({
-          whatsappIntegration: true,
+          // WhatsApp is NOT platform-provided — BYO Meta API only. See Issue 5.
+          whatsappIntegration: false,
           customWorkflows: false,
           apiAccess: false,
           prioritySupport: false,
         }),
-        trialWhatsappCredits: 10,
+        // No trial WhatsApp credits — platform provides Email + SMS + Push only.
+        trialWhatsappCredits: 0,
         trialWhatsappUsed: 0,
-        platformWhatsappEnabled: true,
+        platformWhatsappEnabled: false,
         ownWhatsappConnected: false,
         ownEmailProviderConnected: false,
       },

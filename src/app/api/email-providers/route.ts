@@ -43,12 +43,37 @@ export async function GET(request: NextRequest) {
       orderBy: [{ isDefaultTransactional: 'desc' }, { createdAt: 'desc' }],
     });
 
-    // Mask sensitive fields in each provider's configJson
-    const masked = providers.map((p) => ({
-      ...p,
-      config: maskedConfigFromString(p.configJson),
-      configJson: undefined,
-    }));
+    // ─── Issue 2: Tenants see only a minimal "email is enabled" view ────
+    // For non-superadmins we strip all config/credentials and return just
+    // the fields needed to know email is available (id, name, providerType,
+    // status, isPlatform). The full config (with masked secrets) is only
+    // returned to superadmins who can actually edit the provider.
+    const masked = providers.map((p) => {
+      const base = {
+        id: p.id,
+        name: p.name,
+        providerType: p.providerType,
+        status: p.status,
+        usageType: p.usageType,
+        isPlatform: p.isPlatform,
+        isDefaultTransactional: p.isDefaultTransactional,
+        isDefaultMarketing: p.isDefaultMarketing,
+        fromName: p.fromName,
+        fromEmail: p.fromEmail,
+        replyTo: p.replyTo,
+        createdAt: p.createdAt,
+      };
+      if (!isSuperAdmin) {
+        // Tenants: no config details at all
+        return { ...base, config: {}, configJson: undefined };
+      }
+      // Superadmin: masked config (secrets hidden)
+      return {
+        ...base,
+        config: maskedConfigFromString(p.configJson),
+        configJson: undefined,
+      };
+    });
 
     return NextResponse.json(masked);
   } catch (error) {
@@ -77,14 +102,21 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // ─── Issue 2: Email provider config is SUPERADMIN-ONLY ─────────────
+    // Tenants must NOT create/edit/delete email providers. The platform
+    // email provider is configured once by the superadmin and shared across
+    // all tenants. Tenants only consume the platform relay for sending.
+    const isSuperAdmin = user.isSuperAdmin || !user.tenantId;
+    if (!isSuperAdmin) {
+      return NextResponse.json(
+        { error: 'Forbidden — email provider configuration is managed by the platform superadmin.' },
+        { status: 403 },
+      );
+    }
     // For super admins without a tenantId, attach the provider to the first tenant
     // (or leave it as a cross-tenant platform provider if isPlatform=true).
     // Never use 'default' as a fake tenantId — it breaks provider resolution.
-    const isSuperAdmin = user.isSuperAdmin || !user.tenantId;
     let tenantId = user.tenantId;
-    if (!tenantId && !isSuperAdmin) {
-      return NextResponse.json({ error: 'No tenant associated with your account' }, { status: 400 });
-    }
     if (!tenantId && isSuperAdmin) {
       // Super admin creating a provider — if isPlatform, attach to first tenant;
       // otherwise require the tenant to be specified in the body or use first tenant.

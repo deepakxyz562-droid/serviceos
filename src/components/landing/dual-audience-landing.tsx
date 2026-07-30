@@ -120,7 +120,6 @@ const FALLBACK_PRICING_PLANS: PricingPlan[] = [
     features: [
       '1 User',
       'CRM & Customer Management',
-      'Leads & Sales Pipeline',
       'Quotes & Estimates',
       'Jobs & Scheduling',
       'Calendar',
@@ -132,7 +131,6 @@ const FALLBACK_PRICING_PLANS: PricingPlan[] = [
       'Before & After Photos',
       'Digital Signatures',
       'Customer 360',
-      'GPS Tracking',
       'Reviews Management',
       'Basic Reports',
       '5 GB Storage',
@@ -151,7 +149,8 @@ const FALLBACK_PRICING_PLANS: PricingPlan[] = [
       'Everything in Starter, plus:',
       'Up to 5 Users',
       'Unlimited Customers & Jobs',
-      'WhatsApp + Email + SMS Integration',
+      'Email + SMS + Push Notifications',
+      'WhatsApp (BYO Meta API)',
       'Omnichannel Inbox',
       'AI Assistant + AI Quote Generator',
       'AI Job Summary & Suggested Replies',
@@ -1159,7 +1158,7 @@ function CrmChannels() {
             Reach customers <span className="text-emerald-600">where they are</span>
           </h2>
           <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
-            Email, SMS, and WhatsApp work out of the box — no Meta approvals, no waiting. Reach your customers and team instantly from day one.
+            Email, SMS, and Push notifications work out of the box — no configuration needed. WhatsApp is also available when you connect your own Meta Business API. Reach your customers and team instantly from day one.
           </p>
         </div>
         <div className="grid md:grid-cols-3 gap-5">
@@ -1467,12 +1466,16 @@ function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
             return {
               ...curated,
               name: p.name || curated.name,
-              monthlyPrice: p.monthlyPrice !== null && p.monthlyPrice !== undefined
+              monthlyPrice: p.monthlyPrice !== null && p.monthlyPrice !== undefined && Number(p.monthlyPrice) > 0
                 ? Number(p.monthlyPrice)
-                : curated.monthlyPrice,
-              yearlyPrice: p.yearlyPrice !== null && p.yearlyPrice !== undefined
+                : (curated.monthlyPrice !== null && curated.monthlyPrice !== undefined && curated.monthlyPrice > 0
+                    ? curated.monthlyPrice
+                    : null),
+              yearlyPrice: p.yearlyPrice !== null && p.yearlyPrice !== undefined && Number(p.yearlyPrice) > 0
                 ? Number(p.yearlyPrice)
-                : curated.yearlyPrice,
+                : (curated.yearlyPrice !== null && curated.yearlyPrice !== undefined && curated.yearlyPrice > 0
+                    ? curated.yearlyPrice
+                    : null),
               originalMonthlyPrice: Number(p.originalMonthlyPrice) || curated.originalMonthlyPrice,
               popular: p.popular ?? curated.popular,
             } as PricingPlan;
@@ -1505,7 +1508,7 @@ function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
             Simple, <span className="text-emerald-600">Transparent Pricing</span>
           </h2>
-          <p className="text-muted-foreground mt-3">Start free for 14 days. No credit card required. Email & SMS included on every plan.</p>
+          <p className="text-muted-foreground mt-3">Start free for 14 days. No credit card required. Email, SMS & Push notifications included on every plan. WhatsApp available with your own Meta API.</p>
 
           <div className="flex items-center justify-center gap-3 mt-6">
             <span className={cn('text-sm font-medium', !yearly ? 'text-foreground' : 'text-muted-foreground')}>Monthly</span>
@@ -1558,7 +1561,9 @@ function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
                 </CardHeader>
                 <CardContent className="flex-1">
                   <div className="mb-5">
-                    {plan.monthlyPrice !== null ? (
+                    {/* Issue 6: treat monthlyPrice === 0 the same as null (Enterprise = Custom).
+                        Previously a DB-stored 0 for Enterprise rendered as "$0/mo" instead of "Custom". */}
+                    {(plan.monthlyPrice !== null && plan.monthlyPrice !== undefined && plan.monthlyPrice > 0) ? (
                       <>
                         {/* Strikethrough original price + Save % badge */}
                         {plan.originalMonthlyPrice > 0 && (

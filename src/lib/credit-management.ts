@@ -129,140 +129,49 @@ export async function checkWhatsAppCredits(tenantId: string): Promise<CreditChec
   }
 
   const isTrial = subscription.status === 'trial'
-  const isPaid = ['active'].includes(subscription.status)
   const plan = subscription.plan
   const planStatus = subscription.status
 
-  // ── Paid plans: Unlimited if own WhatsApp connected ─────────────────
-  if (isPaid && subscription.ownWhatsappConnected) {
+  // ── PLATFORM WHATSAPP REMOVED (Issue 5) ──────────────────────────────
+  // The platform no longer provides a shared WhatsApp provider. WhatsApp is
+  // strictly BYO (user connects their own Meta Cloud API). The only condition
+  // under which WhatsApp sends are allowed is `ownWhatsappConnected === true`.
+  //
+  // Trial users without own WhatsApp → blocked (must upgrade + connect).
+  // Paid users without own WhatsApp → blocked (must connect own Meta API).
+  // Any user WITH own WhatsApp connected → unlimited (billed via their own
+  //   Meta account, not the platform).
+  //
+  // The legacy `trialWhatsappCredits` / `platformWhatsappEnabled` fields are
+  // kept in the schema for backward compat but no longer gate sending.
+
+  if (subscription.ownWhatsappConnected) {
     return {
       allowed: true,
-      remainingCredits: -1, // -1 = unlimited
+      remainingCredits: -1, // -1 = unlimited (own Meta account)
       usedCredits: subscription.whatsappUsageCount,
       totalCredits: -1,
-      isTrial: false,
+      isTrial,
       ownWhatsappConnected: true,
-      platformWhatsappEnabled: subscription.platformWhatsappEnabled,
-      planStatus,
-      plan,
-    }
-  }
-
-  // ── Paid plans without own WhatsApp: 10 free platform credits ───────
-  // Same rule as trial: 10 free messages via platform WhatsApp, then must
-  // connect their own Meta account. Once they connect own WA → unlimited.
-  if (isPaid && !subscription.ownWhatsappConnected) {
-    if (subscription.platformWhatsappEnabled) {
-      const totalCredits = subscription.trialWhatsappCredits
-      const usedCredits = subscription.trialWhatsappUsed
-      const remainingCredits = Math.max(0, totalCredits - usedCredits)
-
-      if (remainingCredits > 0) {
-        return {
-          allowed: true,
-          remainingCredits,
-          usedCredits,
-          totalCredits,
-          isTrial: false,
-          ownWhatsappConnected: false,
-          platformWhatsappEnabled: true,
-          planStatus,
-          plan,
-        }
-      }
-
-      // Credits exhausted — must connect own WhatsApp
-      return {
-        allowed: false,
-        reason: 'Your platform WhatsApp credits are exhausted. Connect your own WhatsApp Business account to continue messaging.',
-        remainingCredits: 0,
-        usedCredits,
-        totalCredits,
-        isTrial: false,
-        ownWhatsappConnected: false,
-        platformWhatsappEnabled: true,
-        planStatus,
-        plan,
-      }
-    }
-
-    return {
-      allowed: false,
-      reason: 'Please connect your WhatsApp Business account to send messages.',
-      remainingCredits: 0,
-      usedCredits: subscription.whatsappUsageCount,
-      totalCredits: 0,
-      isTrial: false,
-      ownWhatsappConnected: false,
       platformWhatsappEnabled: false,
       planStatus,
       plan,
     }
   }
 
-  // ── Trial users: credit-based ────────────────────────────────────────
-  if (isTrial) {
-    const totalCredits = subscription.trialWhatsappCredits
-    const usedCredits = subscription.trialWhatsappUsed
-    const remainingCredits = Math.max(0, totalCredits - usedCredits)
-
-    // If own WhatsApp is connected, unlimited trial messaging via own account
-    if (subscription.ownWhatsappConnected) {
-      return {
-        allowed: true,
-        remainingCredits: -1,
-        usedCredits,
-        totalCredits,
-        isTrial: true,
-        ownWhatsappConnected: true,
-        platformWhatsappEnabled: subscription.platformWhatsappEnabled,
-        planStatus,
-        plan,
-      }
-    }
-
-    // Platform WhatsApp with remaining credits
-    if (remainingCredits > 0 && subscription.platformWhatsappEnabled) {
-      return {
-        allowed: true,
-        remainingCredits,
-        usedCredits,
-        totalCredits,
-        isTrial: true,
-        ownWhatsappConnected: false,
-        platformWhatsappEnabled: true,
-        planStatus,
-        plan,
-      }
-    }
-
-    // Credits exhausted or platform WhatsApp disabled
-    return {
-      allowed: false,
-      reason: remainingCredits <= 0
-        ? 'Your trial WhatsApp credits are exhausted. Connect your own WhatsApp Business account or upgrade your plan to continue messaging.'
-        : 'Platform WhatsApp is not available. Please connect your own WhatsApp Business account.',
-      remainingCredits,
-      usedCredits,
-      totalCredits,
-      isTrial: true,
-      ownWhatsappConnected: false,
-      platformWhatsappEnabled: subscription.platformWhatsappEnabled,
-      planStatus,
-      plan,
-    }
-  }
-
-  // ── Other statuses (paused, cancelled, expired) ──────────────────────
+  // No own WhatsApp connected → block with a clear reason.
+  const reason = isTrial
+    ? 'WhatsApp is available on paid plans with your own Meta Business Account. Upgrade and connect your WhatsApp to send messages.'
+    : 'Connect your own WhatsApp Business Account (Meta Cloud API) to send WhatsApp messages. The platform provides Email, SMS, and Push notifications only.';
   return {
     allowed: false,
-    reason: `Your subscription is ${subscription.status}. Please ${subscription.status === 'paused' ? 'resume' : 'renew'} your subscription to send messages.`,
+    reason,
     remainingCredits: 0,
     usedCredits: subscription.whatsappUsageCount,
     totalCredits: 0,
-    isTrial: false,
-    ownWhatsappConnected: subscription.ownWhatsappConnected,
-    platformWhatsappEnabled: subscription.platformWhatsappEnabled,
+    isTrial,
+    ownWhatsappConnected: false,
+    platformWhatsappEnabled: false,
     planStatus,
     plan,
   }

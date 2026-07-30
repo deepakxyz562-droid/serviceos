@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useCurrentUser } from '@/hooks/use-current-user';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -177,6 +178,20 @@ export function EmailProvidersView() {
   const [deleteTarget, setDeleteTarget] = useState<EmailProvider | null>(null);
   const [testTarget, setTestTarget] = useState<EmailProvider | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // ─── Issue 2: Email provider config is SUPERADMIN-ONLY ───────────────
+  // The platform email provider (e.g. AWS SES relay using
+  // support@serviceos.cc / reply-to sales@serviceos.cc) is configured once
+  // by the superadmin and shared across all tenants. Tenants must NOT see
+  // the provider details, credentials, or edit/test/delete controls — they
+  // only need to know that "Email is enabled by the platform".
+  //
+  // We fetch the current user and, if they are NOT a superadmin, render a
+  // read-only banner instead of the full provider management UI. The backend
+  // email-providers API routes are also gated to superadmin (see those route
+  // files), so even a direct API call from a tenant returns 403.
+  const { user: currentUser, loading: userLoading } = useCurrentUser();
+  const isSuperAdmin = !!currentUser?.isSuperAdmin;
 
   // Form state
   const [form, setForm] = useState<ProviderFormState>(emptyForm('smtp'));
@@ -418,6 +433,64 @@ export function EmailProvidersView() {
     }
   };
 
+  // ─── Issue 2: Tenant gate — show read-only banner for non-superadmins ─
+  // Tenants never see provider config. Email is enabled by the platform.
+  if (userLoading) {
+    return (
+      <div className="space-y-6 w-full">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
+            <Mail className="size-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Email</h2>
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          </div>
+        </div>
+        <Card><CardContent className="py-10 text-center text-muted-foreground">Loading…</CardContent></Card>
+      </div>
+    );
+  }
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="space-y-6 w-full">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
+            <Mail className="size-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Email</h2>
+            <p className="text-sm text-muted-foreground">
+              Transactional & marketing email delivery
+            </p>
+          </div>
+        </div>
+        <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20">
+          <CardContent className="py-8">
+            <div className="flex items-start gap-4">
+              <div className="flex items-center justify-center size-11 rounded-full bg-emerald-100 dark:bg-emerald-900/40 shrink-0">
+                <ShieldCheck className="size-5 text-emerald-600" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-base font-semibold text-foreground">
+                  Email is enabled and managed by the platform
+                </h3>
+                <p className="text-sm text-muted-foreground max-w-2xl">
+                  Outgoing emails (transactional notifications, marketing campaigns, trial lifecycle messages) are sent through the platform&apos;s shared email relay. You don&apos;t need to configure any SMTP credentials or API keys — email just works.
+                </p>
+                <p className="text-xs text-muted-foreground pt-1">
+                  Need a custom sender domain or dedicated provider? Contact support to discuss enterprise options.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ─── Superadmin: full provider management UI below ─────────────────────
   return (
     <div className="space-y-6 w-full">
       {/* Header */}

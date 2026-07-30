@@ -243,7 +243,7 @@ const PLAN_DEFS: PlanDef[] = [
     code: 'starter',
     name: 'Starter',
     description:
-      'For solo professionals. CRM, jobs, estimates, invoicing, scheduling, dispatch board, GPS tracking, customer portal, digital signatures, online payments.',
+      'For solo professionals. CRM, jobs, estimates, invoicing, scheduling, dispatch board, customer portal, digital signatures, online payments.',
     monthlyPrice: 29,
     yearlyPrice: 290, // 2 months free
     originalMonthlyPrice: 49,
@@ -257,9 +257,12 @@ const PLAN_DEFS: PlanDef[] = [
       invoicing: true,
       scheduling: true,
       dispatchBoard: true,
-      gpsTracking: true,
+      // Issue 6: GPS Tracking is NOT available on Starter. It unlocks on
+      // Business (live technician map) and is referenced as a higher-tier
+      // differentiator on the home page pricing cards.
+      gpsTracking: false,
       customer360: true,
-      salesPipeline: true,
+      salesPipeline: false,
       reviews: true,
       knowledgeBase: true,
       documentCenter: true,

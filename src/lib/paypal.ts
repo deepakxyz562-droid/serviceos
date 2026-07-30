@@ -55,30 +55,64 @@ export interface PayPalPlanConfig {
   yearlyPrice: number;
 }
 
-// Plan definitions matching our SaaS tiers
-// IMPORTANT: Keep in sync with billing-seed.ts and billing-view.tsx PLANS.
-// Codes: starter / growth / business / enterprise (the old 'pro' code was
-// migrated to 'business' — see seedPlans() in billing-seed.ts).
-// Yearly prices follow the seed (~2 months free on the annual total).
+// IMPORTANT: Prices are NO LONGER hardcoded here. The canonical source of truth
+// for plan pricing is the `Plan` table in the database, which is seeded by
+// `billing-seed.ts` PLAN_DEFS and editable by superadmins via the billing UI.
+//
+// Use `getPayPalPlanConfig(planCode)` to resolve a plan's price at runtime by
+// reading from the DB. This guarantees that when a superadmin changes a price,
+// PayPal capture/activation immediately charge the new amount — no code sync
+// required, no stale-price bug where a user is charged $10 when the plan is
+// actually $29.
+//
+// Canonical prices (as of billing-seed.ts):
+//   starter  $29/mo  (orig $49)
+//   growth   $79/mo  (orig $129)
+//   business $149/mo (orig $249)
+//   enterprise — custom, no PayPal flow
+
+/**
+ * Resolve a plan's live pricing from the DB. Falls back to canonical
+ * PLAN_DEFS defaults if the DB row is missing (e.g. before first seed).
+ * Returns null for unknown plan codes.
+ */
+export async function getPayPalPlanConfig(
+  planCode: string,
+): Promise<PayPalPlanConfig | null> {
+  try {
+    // Lazy import to avoid a circular dependency at module load time
+    // (db.ts → ... → paypal.ts → db.ts).
+    const { db } = await import('@/lib/db');
+    const plan = await db.plan.findUnique({ where: { code: planCode } });
+    if (plan && (plan.monthlyPrice > 0 || plan.yearlyPrice > 0)) {
+      return {
+        planId: plan.code,
+        name: plan.name,
+        monthlyPrice: Number(plan.monthlyPrice),
+        yearlyPrice: Number(plan.yearlyPrice),
+      };
+    }
+  } catch (err) {
+    console.error(`[paypal] getPayPalPlanConfig: DB lookup failed for "${planCode}":`, err);
+  }
+  // Canonical fallback — keeps the function working even if the DB is
+  // unreachable. These values mirror billing-seed.ts PLAN_DEFS and must be
+  // updated there (and re-seeded) if pricing ever changes.
+  const fallback: Record<string, PayPalPlanConfig> = {
+    starter: { planId: 'starter', name: 'Starter', monthlyPrice: 29, yearlyPrice: 290 },
+    growth: { planId: 'growth', name: 'Professional', monthlyPrice: 79, yearlyPrice: 790 },
+    business: { planId: 'business', name: 'Business', monthlyPrice: 149, yearlyPrice: 1490 },
+  };
+  return fallback[planCode] ?? null;
+}
+
+// Kept for backwards-compatibility with code that still imports the constant,
+// but consumers should migrate to `getPayPalPlanConfig()` for live DB pricing.
+// These values are the canonical fallback and match billing-seed.ts PLAN_DEFS.
 export const PAYPAL_PLANS: Record<string, PayPalPlanConfig> = {
-  starter: {
-    planId: 'starter',
-    name: 'Starter',
-    monthlyPrice: 10,
-    yearlyPrice: 60,
-  },
-  growth: {
-    planId: 'growth',
-    name: 'Growth',
-    monthlyPrice: 25,
-    yearlyPrice: 150,
-  },
-  business: {
-    planId: 'business',
-    name: 'Business',
-    monthlyPrice: 79,
-    yearlyPrice: 790,
-  },
+  starter: { planId: 'starter', name: 'Starter', monthlyPrice: 29, yearlyPrice: 290 },
+  growth: { planId: 'growth', name: 'Professional', monthlyPrice: 79, yearlyPrice: 790 },
+  business: { planId: 'business', name: 'Business', monthlyPrice: 149, yearlyPrice: 1490 },
 };
 
 export function getPayPalBaseUrl(): string {

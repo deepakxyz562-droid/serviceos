@@ -5,7 +5,9 @@ import { getAuthUser } from '@/lib/auth';
 import {
   getPayPalSubscription,
   isPayPalConfigured,
+  getPayPalPlanConfig,
 } from '@/lib/paypal';
+import { getPlanByCode } from '@/lib/billing-seed';
 import { logBillingEvent } from '@/lib/billing-events';
 
 /**
@@ -109,38 +111,28 @@ export async function POST(request: NextRequest) {
 
     const cycle = billingCycle === 'yearly' ? 'yearly' : 'monthly';
 
-    // Plan details — keep in sync with billing-seed.ts and paypal.ts PAYPAL_PLANS
-    const planDetails: Record<
-      string,
-      { monthly: number; yearly: number; maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }
-    > = {
-      starter: {
-        monthly: 10,
-        yearly: 60,
-        maxUsers: 1,
-        maxJobs: 100,
-        maxWorkflows: 10,
-        features: { whatsappIntegration: true, customWorkflows: false, apiAccess: false, prioritySupport: false },
-      },
-      growth: {
-        monthly: 25,
-        yearly: 150,
-        maxUsers: 5,
-        maxJobs: 1000,
-        maxWorkflows: 50,
-        features: { whatsappIntegration: true, customWorkflows: true, apiAccess: false, prioritySupport: true },
-      },
-      pro: {
-        monthly: 50,
-        yearly: 300,
-        maxUsers: 999,
-        maxJobs: 99999,
-        maxWorkflows: 999,
-        features: { whatsappIntegration: true, customWorkflows: true, apiAccess: true, prioritySupport: true },
-      },
+    // ─── Live pricing from the DB (canonical source of truth) ───────────
+    // Previously this route hardcoded stale $10/$25/$50 prices + a dead 'pro'
+    // plan code in a local `planDetails` map. We now read the live price +
+    // feature flags + limits from the Plan table so superadmin price changes
+    // take effect immediately.
+    const planRow = await getPlanByCode(plan);
+    const planConfig = await getPayPalPlanConfig(plan);
+    if (!planRow || !planConfig) {
+      return NextResponse.json({ error: `Invalid plan: ${plan}` }, { status: 400 });
+    }
+    const price = cycle === 'yearly' ? planConfig.yearlyPrice : planConfig.monthlyPrice;
+
+    let planFeatures: Record<string, boolean> = {};
+    try {
+      planFeatures = planRow.featuresJson ? JSON.parse(planRow.featuresJson) : {};
+    } catch { /* keep empty */ }
+    const selected = {
+      maxUsers: planRow.maxUsers,
+      maxJobs: planRow.maxJobs,
+      maxWorkflows: planRow.maxWorkflows,
+      features: planFeatures,
     };
-    const selected = planDetails[plan];
-    const price = cycle === 'yearly' ? selected.yearly : selected.monthly;
 
     const now = new Date();
     const endDate = new Date(now);

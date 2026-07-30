@@ -248,13 +248,14 @@ export async function POST(request: NextRequest) {
       endDate.setMonth(endDate.getMonth() + 1);
     }
 
-    // Plan details for the local record (limits). Keep in sync with seed.
-    const planLimits: Record<string, { maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }> = {
-      starter: { maxUsers: 1, maxJobs: 100, maxWorkflows: 10, features: { whatsappIntegration: true, customWorkflows: false, apiAccess: false, prioritySupport: false } },
-      growth: { maxUsers: 5, maxJobs: 1000, maxWorkflows: 50, features: { whatsappIntegration: true, customWorkflows: true, apiAccess: false, prioritySupport: true } },
-      business: { maxUsers: 999, maxJobs: 99999, maxWorkflows: 999, features: { whatsappIntegration: true, customWorkflows: true, apiAccess: true, prioritySupport: true } },
-    };
-    const limits = planLimits[planCode] || planLimits.growth;
+    // Plan limits + features come from the live DB row (already fetched above
+    // as `plan`). Previously a hardcoded `planLimits` map here drifted out of
+    // sync with the catalog — e.g. it still listed maxJobs: 100 for Starter
+    // while the seed had 200. Reading from the DB row guarantees consistency.
+    let planFeatures: Record<string, boolean> = {};
+    try {
+      planFeatures = plan.featuresJson ? JSON.parse(plan.featuresJson) : {};
+    } catch { /* keep empty */ }
 
     await db.subscription.create({
       data: {
@@ -272,10 +273,10 @@ export async function POST(request: NextRequest) {
         paypalSubscriptionId: subData.id,
         paypalPlanId,
         paymentProvider: 'paypal',
-        maxUsers: limits.maxUsers,
-        maxJobs: limits.maxJobs,
-        maxWorkflows: limits.maxWorkflows,
-        featuresJson: JSON.stringify(limits.features),
+        maxUsers: plan.maxUsers,
+        maxJobs: plan.maxJobs,
+        maxWorkflows: plan.maxWorkflows,
+        featuresJson: JSON.stringify(planFeatures),
       },
     });
 

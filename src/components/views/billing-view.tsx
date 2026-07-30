@@ -51,7 +51,9 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
-import { WhatsAppCreditBanner } from '@/components/whatsapp-credit-banner';
+// WhatsAppCreditBanner import removed — component was deleted (Issue 5:
+// platform no longer provides WhatsApp; it's BYO Meta API only and hidden
+// until the user upgrades AND connects their own Meta API).
 import { PayPalCheckoutDialog } from '@/components/billing/paypal-checkout-dialog';
 import { PaymentMethodChooserDialog, type ChooserPlan } from '@/components/billing/payment-method-chooser-dialog';
 import { authFetch } from '@/lib/client-auth';
@@ -1002,19 +1004,10 @@ export function BillingView() {
             </div>
           )}
 
-          {/* WhatsApp Credit Banner for trial users */}
-          {(data.status === 'trial' || data.status === 'trialing') && (
-            <WhatsAppCreditBanner
-              onUpgradeClick={() => {
-                const currentPlanObj = effectivePlans.find(p => p.id === data.plan);
-                if (currentPlanObj) handleUpgrade(currentPlanObj);
-              }}
-              onConnectMetaClick={() => {
-                const event = new CustomEvent('navigate', { detail: 'integrations' })
-                window.dispatchEvent(event)
-              }}
-            />
-          )}
+          {/* WhatsApp Credit Banner removed — platform no longer provides
+              WhatsApp. WhatsApp is BYO (user connects own Meta API) and is
+              hidden entirely until the user upgrades AND connects their own
+              Meta API. See Issue 5. */}
 
           {/* Pending downgrade banner (Phase 3) */}
           {data.pendingDowngrade && (

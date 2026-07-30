@@ -55,18 +55,21 @@ function resolveWACreds(prov: {
  *
  * Resolution priority (when tenantId is provided):
  * 1. If credentialId is provided → use that specific Credential from DB
- * 2. Search CommunicationProvider for WhatsApp — tenant-scoped with platform fallback:
- *    2a. Tenant's own (non-platform) default WhatsApp provider
+ * 2. Search CommunicationProvider for WhatsApp — tenant's OWN providers only:
+ *    2a. Tenant's own default WhatsApp provider
  *    2b. Any tenant's own active WhatsApp provider
- *    2c. Platform (shared) WhatsApp provider (SuperAdmin-configured)
- *    2d. Legacy: any active WhatsApp CommunicationProvider
- * 3. Search legacy Credential vault for WhatsApp credentials
- * 4. Else → return simulated response
+ *    2c. Legacy: any active WhatsApp CommunicationProvider (still own-only;
+ *        we no longer fall back to a platform/shared provider)
+ * 3. Search legacy Credential vault for WhatsApp credentials (tenant-scoped)
+ * 4. Else → return simulated response (no real send)
  *
- * NO .env fallback — all credentials come from the database.
- * SuperAdmin configures platform WhatsApp via admin panel.
- * If user hasn't added their own Meta details, platform provider is used
- * (10 free trial credits for users without own WhatsApp).
+ * PLATFORM WHATSAPP REMOVED (Issue 5): The platform no longer provides a
+ * shared WhatsApp provider. WhatsApp is strictly BYO (user connects their own
+ * Meta Cloud API). If no tenant-owned credential is configured, messages are
+ * simulated — they are NOT sent. This prevents the "free WhatsApp trial"
+ * behaviour where tenants could send real messages on the platform's dime.
+ *
+ * The platform-provided channels are: Push, Email, and SMS only.
  */
 export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise<SendWhatsAppResult> {
   const { to, message, credentialId, type = 'text', templateName, templateLanguage, tenantId } = options
@@ -76,15 +79,20 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
   }
 
   // ── Credit gate ──────────────────────────────────────────────────────
+  // Still call checkWhatsAppCredits so the subscription's ownWhatsappConnected
+  // flag is respected (if the user hasn't connected their own Meta API, the
+  // gate returns allowed=false and we block here). With platform WhatsApp
+  // removed, there are no trial credits to exhaust — the gate is now purely a
+  // "is the user's own WhatsApp connected?" check.
   if (tenantId) {
     const creditStatus = await checkWhatsAppCredits(tenantId)
     if (!creditStatus.allowed) {
       console.warn(
-        `[WhatsApp BLOCKED] To: ${to}, Tenant: ${tenantId}, Reason: ${creditStatus.reason || 'credits exhausted'}`
+        `[WhatsApp BLOCKED] To: ${to}, Tenant: ${tenantId}, Reason: ${creditStatus.reason || 'own WhatsApp not connected'}`
       )
       return {
         success: false,
-        error: creditStatus.reason || 'WhatsApp credits exhausted. Connect your Meta Business Account to continue.',
+        error: creditStatus.reason || 'WhatsApp is not configured. Connect your own Meta Business Account to send WhatsApp messages.',
         credentialUsed: 'none',
       }
     }
@@ -109,7 +117,9 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
     } catch { /* fall through */ }
   }
 
-  // 2. CommunicationProvider resolution — tenant own → platform → legacy
+  // 2. CommunicationProvider resolution — tenant's OWN providers only.
+  //    Platform/shared providers (isPlatform: true) are deliberately skipped
+  //    because the platform no longer provides WhatsApp (Issue 5).
   if (!accessToken || !phoneNumberId) {
     try {
       // 2a. Tenant's own default WA provider
@@ -146,37 +156,12 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
         }
       }
 
-      // 2c. Platform (shared) WhatsApp provider — SuperAdmin-configured
-      if (!accessToken) {
-        let platformProvider = null
-        if (tenantId) {
-          platformProvider = await db.communicationProvider.findFirst({
-            where: { type: 'whatsapp', status: 'active', sendingEnabled: true, isPlatform: true, tenantId },
-            orderBy: { updatedAt: 'desc' },
-            include: { credential: true },
-          })
-        }
-        if (!platformProvider) {
-          platformProvider = await db.communicationProvider.findFirst({
-            where: { type: 'whatsapp', status: 'active', sendingEnabled: true, isPlatform: true },
-            orderBy: { updatedAt: 'desc' },
-            include: { credential: true },
-          })
-        }
-        if (platformProvider) {
-          const resolved = resolveWACreds(platformProvider)
-          if (resolved) {
-            accessToken = resolved.accessToken
-            phoneNumberId = resolved.phoneNumberId
-            credentialSource = `communicationProvider:${platformProvider.id}(${platformProvider.name}/platform)`
-          }
-        }
-      }
-
-      // 2d. Legacy fallback: any active WhatsApp provider
+      // 2c. Legacy fallback: any active WhatsApp provider that is NOT a
+      //     platform/shared provider. (Previously this fell back to platform
+      //     providers — that path is removed per Issue 5.)
       if (!accessToken) {
         const waProviders = await db.communicationProvider.findMany({
-          where: { type: 'whatsapp', status: 'active', sendingEnabled: true },
+          where: { type: 'whatsapp', status: 'active', sendingEnabled: true, isPlatform: false },
           orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
           include: { credential: true },
         })
@@ -195,11 +180,15 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
     }
   }
 
-  // 3. Legacy Credential vault
+  // 3. Legacy Credential vault (tenant-scoped — we filter by tenantId when
+  //    available so one tenant can't accidentally use another's credentials).
   if (!accessToken || !phoneNumberId) {
     try {
+      const where = tenantId
+        ? { OR: [{ type: 'whatsapp' }, { name: { contains: 'whatsapp' } }, { name: { contains: 'WhatsApp' } }], tenantId }
+        : { OR: [{ type: 'whatsapp' }, { name: { contains: 'whatsapp' } }, { name: { contains: 'WhatsApp' } }] }
       const whatsappCreds = await db.credential.findMany({
-        where: { OR: [{ type: 'whatsapp' }, { type: 'apiKey' }, { name: { contains: 'whatsapp' } }, { name: { contains: 'WhatsApp' } }] },
+        where,
         orderBy: { updatedAt: 'desc' },
       })
       for (const cred of whatsappCreds) {
@@ -215,8 +204,12 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
   }
 
   // 4. No credentials found → simulated
+  //    IMPORTANT: this is now a true no-op (no real send). Previously the
+  //    platform WhatsApp provider would have been used here. With platform
+  //    WhatsApp removed, we log + return simulated so the caller can show
+  //    "connect your own WhatsApp" in the UI.
   if (!accessToken || !phoneNumberId) {
-    console.log(`[WhatsApp SIMULATED] To: ${to}, Message: ${message.substring(0, 100)}...`)
+    console.log(`[WhatsApp SIMULATED — no own credentials] To: ${to}, Tenant: ${tenantId || 'none'}`)
     return {
       success: true,
       simulated: true,

@@ -26,7 +26,7 @@ import { toast } from 'sonner';
 import { useRealtime } from '@/hooks/use-realtime';
 import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 import { WhatsAppWorkflowTemplates } from '@/components/whatsapp/whatsapp-workflow-templates';
-import { WhatsAppCreditBanner } from '@/components/whatsapp-credit-banner';
+// WhatsAppCreditBanner import removed — component was deleted (Issue 5).
 import { WhatsAppSetupWizard } from '@/components/whatsapp/whatsapp-setup-wizard';
 import { WhatsAppTemplateCatalog } from '@/components/whatsapp/whatsapp-template-catalog';
 
@@ -561,19 +561,10 @@ export function WhatsAppView() {
         </div>
       </div>
 
-      {/* WhatsApp Credit Banner */}
-      <WhatsAppCreditBanner
-        onUpgradeClick={() => {
-          // Navigate to billing view
-          const event = new CustomEvent('navigate', { detail: 'billing' })
-          window.dispatchEvent(event)
-        }}
-        onConnectMetaClick={() => {
-          // Navigate to WhatsApp config / integrations
-          const event = new CustomEvent('navigate', { detail: 'integrations' })
-          window.dispatchEvent(event)
-        }}
-      />
+      {/* WhatsApp Credit Banner removed — platform no longer provides WhatsApp.
+          WhatsApp is BYO (user connects own Meta API). Until the user connects
+          their own Meta API, the WhatsApp view shows a connect-CTA instead of
+          a credit banner. See Issue 5. */}
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
