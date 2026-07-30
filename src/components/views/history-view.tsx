@@ -100,27 +100,16 @@ export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) =
   const fetchJobs = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch completed + soft-deleted jobs
+      // Fetch completed + soft-deleted jobs. The server now applies the
+      // same-day grace filter (history=true excludes completed-today jobs),
+      // so we no longer need to re-filter client-side. This keeps the Active
+      // list and History list in sync regardless of client clock / refetch
+      // races.
       const res = await fetch('/api/jobs?includeDeleted=true&history=true');
       if (res.ok) {
         const data = await res.json();
         const all = Array.isArray(data) ? data : [];
-        // Show completed or soft-deleted jobs — BUT apply same-day grace:
-        // a job completed today stays in the Active list (Jobs page) for the
-        // rest of the calendar day and only appears here tomorrow. Soft-deleted
-        // (archived) jobs always show regardless of completion date.
-        const now = new Date();
-        const isSameDay = (d: Date) =>
-          d.getFullYear() === now.getFullYear() &&
-          d.getMonth() === now.getMonth() &&
-          d.getDate() === now.getDate();
-        setJobs(all.filter((j: HistoryJob) => {
-          if (j.deletedAt) return true; // archived jobs always show
-          if (j.status !== 'completed') return false;
-          // Completed — check if it was completed today (grace period).
-          if (j.completedAt && isSameDay(new Date(j.completedAt))) return false;
-          return true; // completed before today → show in history
-        }));
+        setJobs(all);
       }
     } catch {
       setJobs([]);

@@ -481,6 +481,23 @@ interface LifecycleDataShape {
     endLat: number | null;
     endLng: number | null;
   } | null;
+  // Optional — only returned by the V1.5 /api/jobs/[id]/lifecycle endpoint.
+  // The older /api/jobs/lifecycle endpoint doesn't include this field, so it
+  // must be optional to keep both response shapes assignable to LifecycleDataShape.
+  completedRoute?: {
+    id: string;
+    startedAt: string;
+    endedAt: string | null;
+    arrivedAt: string | null;
+    status: string;
+    distanceMeters: number;
+    durationMinutes: number;
+    etaMinutes: number | null;
+    startLat: number | null;
+    startLng: number | null;
+    endLat: number | null;
+    endLng: number | null;
+  } | null;
 }
 
 /**
@@ -810,11 +827,14 @@ function GpsRouteSection({
   lifecycleData: LifecycleDataShape | null;
   onOpenRoute: () => void;
 }) {
-  const route = lifecycleData?.activeRoute;
-  // The active route is "in_progress"; completed routes are fetched on-demand.
-  // We also check the lifecycle timestamps to see if travel ever happened.
+  // Prefer the in-progress (active) route; fall back to the most recent
+  // completed route so finished jobs still show their real distance /
+  // duration / "View on Map" instead of "No travel recorded".
+  const route = lifecycleData?.activeRoute ?? lifecycleData?.completedRoute ?? null;
+  // Lifecycle timestamps tell us whether travel ever happened at all
+  // (travelStarted / arrived). The completed route object also counts.
   const ts = lifecycleData?.timestamps;
-  const travelHappened = !!(ts && (ts.travelStarted || ts.arrived));
+  const travelHappened = !!(ts && (ts.travelStarted || ts.arrived)) || !!lifecycleData?.completedRoute;
 
   if (!travelHappened && !route) {
     return (
@@ -1222,24 +1242,14 @@ export function JobsView() {
       const res = await fetch(`/api/jobs?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        // Client-side filter: hide soft-deleted jobs (shown in History tab).
-        // Completed jobs are excluded from the active list — EXCEPT when they
-        // were completed today (same-day grace): the tenant can still see and
-        // edit them on the Jobs page for the rest of the calendar day. They
-        // move to the History tab the next day.
+        // Server-side same-day grace: the Active endpoint now excludes
+        // completed jobs unless they were completed today, so they stay
+        // visible here for the rest of the calendar day and move to the
+        // History tab tomorrow. We keep a thin client-side safety net that
+        // also hides soft-deleted rows (defensive — the server already does
+        // this via includeDeleted=false).
         const allJobs = Array.isArray(data) ? data : [];
-        const now = new Date();
-        const isSameDay = (d: Date) =>
-          d.getFullYear() === now.getFullYear() &&
-          d.getMonth() === now.getMonth() &&
-          d.getDate() === now.getDate();
-        setJobs(allJobs.filter((j: Job) => {
-          if (j.deletedAt) return false;
-          if (j.status !== 'completed') return true;
-          // Completed today → keep visible in Active list.
-          const completedAt = j.completedAt || j.actualEndTime;
-          return completedAt ? isSameDay(new Date(completedAt)) : false;
-        }));
+        setJobs(allJobs.filter((j: Job) => !j.deletedAt));
       }
     } catch {
       setJobs([]);

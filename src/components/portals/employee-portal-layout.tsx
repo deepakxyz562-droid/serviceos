@@ -42,6 +42,8 @@ import {
   Receipt,
   Plus,
   X,
+  ArrowLeft,
+  BellRing,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -922,10 +924,10 @@ function PushEnableBanner() {
   };
 
   return (
-    <Card className="border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-900">
-      <CardContent className="p-4 flex items-start gap-3">
+    <Card className="border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-900 shadow-sm">
+      <CardContent className="p-4 flex flex-col sm:flex-row sm:items-start gap-3">
         <div className="size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center shrink-0">
-          <Bell className="size-5 text-emerald-600 dark:text-emerald-400" />
+          <BellRing className="size-5 text-emerald-600 dark:text-emerald-400" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-foreground">Get notified about new jobs</p>
@@ -933,12 +935,12 @@ function PushEnableBanner() {
             Enable push notifications so you receive an alert on this device the moment a job is assigned to you.
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700" onClick={handleEnable} disabled={busy}>
-            {busy ? <Loader2 className="size-3.5 mr-1.5 animate-spin" /> : <Bell className="size-3.5 mr-1.5" />}
+        <div className="flex items-center gap-2 shrink-0 self-stretch sm:self-start">
+          <Button size="sm" className="h-9 min-h-[44px] px-4 bg-emerald-600 hover:bg-emerald-700" onClick={handleEnable} disabled={busy}>
+            {busy ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <BellRing className="size-4 mr-1.5" />}
             Enable
           </Button>
-          <Button size="sm" variant="ghost" className="h-8 px-2 text-muted-foreground" onClick={handleDismiss} aria-label="Dismiss">
+          <Button size="sm" variant="ghost" className="h-9 min-h-[44px] w-9 px-0 text-muted-foreground" onClick={handleDismiss} aria-label="Dismiss">
             <X className="size-4" />
           </Button>
         </div>
@@ -1067,10 +1069,10 @@ function HomeView({
         </CardContent>
       </Card>
 
-      {/* Push-enable prompt — only shown if push is supported + VAPID is
-          configured + the employee hasn't yet granted notification
-          permission + they haven't dismissed this banner before. */}
-      <PushEnableBanner />
+      {/* Push-enable prompt is now hoisted to the main EmployeePortalLayout
+          so it shows across ALL sub-views (not just Home). Previously it was
+          only visible here on Home, so employees who landed on My Jobs or
+          Schedule first never saw the one-tap enable prompt. */}
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1692,7 +1694,22 @@ function JobDetailSheet({
           {/* Sticky header — stays visible at the top while the body scrolls.
               shrink-0 so it never collapses; bottom border separates it from
               the scrollable content below. */}
-          <SheetHeader className="shrink-0 sticky top-0 z-10 bg-background px-4 pt-4 pb-3 border-b border-border">
+          <SheetHeader className="shrink-0 sticky top-0 z-10 bg-background px-3 pt-3 pb-3 border-b border-border gap-2">
+            {/* App-like back button row — full-width, ≥44px touch target,
+                thumb-reachable on mobile. Mirrors the native pattern
+                (← Back) so employees intuitively know how to close the
+                sheet. The shadcn Sheet's default X (top-right) is too
+                small + easy to miss on a phone. */}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Back"
+              className="flex items-center gap-1 -ml-1 h-11 px-2 -mt-1 self-start rounded-lg text-sm font-medium text-foreground hover:bg-muted active:scale-[0.98] transition-colors"
+              style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
+            >
+              <ArrowLeft className="size-5" />
+              <span>Back</span>
+            </button>
             <div className="flex items-center gap-2 flex-wrap">
               {getStatusBadge(stage)}
               {stage === 'assigned' && (
@@ -3728,6 +3745,13 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
         {/* Content — extra bottom padding on mobile clears the fixed bottom tab bar */}
         <main className="flex-1 overflow-auto bg-muted/30 p-4 lg:p-6 pb-20 md:pb-6">
           <GpsStatusBanner />
+          {/* Push permission prompt — hoisted to the main layout so it shows
+              across ALL employee sub-views (not just Home). The banner
+              self-hides once permission is granted or the user dismisses it,
+              so it never lingers. This ensures an employee who lands on
+              "My Jobs" or "Schedule" first still gets the one-tap enable
+              prompt instead of silently missing push notifications. */}
+          <PushEnableBanner />
           {renderSubView()}
         </main>
       </div>

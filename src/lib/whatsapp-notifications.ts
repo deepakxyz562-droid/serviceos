@@ -5,6 +5,7 @@ import { deductWhatsAppCredit } from '@/lib/credit-management'
 import { createNotification } from '@/lib/notifications'
 import { sendWebPushToUser } from '@/lib/web-push-send'
 import { sendSmsMessage } from '@/lib/sms-send'
+import { sendEmail } from '@/lib/email-send'
 import { resolveTenantId } from '@/lib/owner-notifications'
 import { hasRecentPush, markPushSent } from '@/lib/lifecycle-push-dispatcher'
 
@@ -49,6 +50,15 @@ interface NotificationPayload {
   pushBody?: string
   /** Deep-link URL for in-app + push. Defaults to `/?view=jobs&job={jobId}`. */
   actionUrl?: string
+  /**
+   * Optional email recipient override. When provided, an email is sent via
+   * the configured EmailProvider (superadmin or tenant). When omitted, the
+   * email channel resolves the address from the Employee / User record.
+   * Set to an empty string to explicitly skip the email channel.
+   */
+  emailTo?: string
+  /** Optional HTML body for the email channel. Defaults to the `message` field wrapped in <pre>. */
+  emailHtml?: string
 }
 
 interface SendResult {
@@ -444,6 +454,164 @@ async function sendSmsChannel(
   }
 }
 
+// ── Channel: Email (uses the tenant's / superadmin's EmailProvider) ─────────
+// Sends a real email via the configured SMTP / Resend / SendGrid / SES /
+// Mailgun / Postmark / Brevo provider (resolved by email-send.ts). This is
+// the channel that delivers to the employee's inbox when WhatsApp/SMS aren't
+// configured or as an additional record. Falls back to simulated mode when
+// no provider is configured (so it never breaks the dispatch fan-out).
+async function sendEmailChannel(
+  payload: NotificationPayload,
+  tenantId: string | null,
+): Promise<void> {
+  // Resolve the recipient email:
+  //   1. Explicit payload.emailTo (when set to a non-empty string)
+  //   2. Employee.email (looked up from payload.employeeId)
+  //   3. Job.assignee → Employee.email (when only jobId is known)
+  //   4. User.email (when pushUserId / resolved userId is available)
+  let emailTo = payload.emailTo ?? ''
+
+  if (!emailTo && payload.employeeId) {
+    try {
+      const emp = await db.employee.findUnique({
+        where: { id: payload.employeeId },
+        select: { email: true, userId: true },
+      })
+      if (emp?.email) {
+        emailTo = emp.email
+      } else if (emp?.userId) {
+        const user = await db.user.findUnique({
+          where: { id: emp.userId },
+          select: { email: true },
+        })
+        if (user?.email) emailTo = user.email
+      }
+    } catch (e) {
+      console.warn('[sendJobNotification] email resolve (employee) failed:', e)
+    }
+  }
+
+  if (!emailTo && payload.jobId) {
+    try {
+      const job = await db.job.findUnique({
+        where: { id: payload.jobId },
+        select: { assigneeId: true },
+      })
+      if (job?.assigneeId) {
+        const emp = await db.employee.findUnique({
+          where: { id: job.assigneeId },
+          select: { email: true, userId: true },
+        })
+        if (emp?.email) {
+          emailTo = emp.email
+        } else if (emp?.userId) {
+          const user = await db.user.findUnique({
+            where: { id: emp.userId },
+            select: { email: true },
+          })
+          if (user?.email) emailTo = user.email
+        }
+      }
+    } catch (e) {
+      console.warn('[sendJobNotification] email resolve (job) failed:', e)
+    }
+  }
+
+  if (!emailTo) {
+    // No recipient email could be resolved — silently skip (non-fatal).
+    return
+  }
+
+  const subject = payload.subject || 'ServiceOS Notification'
+  // Build an HTML body. Prefer the caller-provided emailHtml; otherwise wrap
+  // the plain-text message in a simple <pre> block so line breaks render.
+  const html = payload.emailHtml
+    || `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px;">
+  <h2 style="margin: 0 0 16px 0; color: #059669;">${escapeHtml(subject)}</h2>
+  <pre style="white-space: pre-wrap; font-family: inherit; font-size: 14px; line-height: 1.5; color: #374151; margin: 0;">${escapeHtml(payload.message)}</pre>
+  ${payload.actionUrl || payload.jobId ? `<p style="margin-top: 24px;"><a href="${escapeHtml(payload.actionUrl || (payload.jobId ? `/?view=jobs&job=${payload.jobId}` : '/'))}" style="display: inline-block; padding: 10px 18px; background: #059669; color: #fff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 600;">Open in ServiceOS</a></p>` : ''}
+</div>`
+
+  try {
+    const result = await sendEmail({
+      to: emailTo,
+      subject,
+      html,
+      tenantId: tenantId || undefined,
+      usageType: 'transactional',
+    })
+
+    // NotificationLog for email
+    try {
+      await db.notificationLog.create({
+        data: {
+          type: 'email',
+          recipient: emailTo,
+          recipientName: payload.recipientName,
+          recipientRole: payload.recipientRole,
+          subject,
+          message: payload.message,
+          status: result.success ? 'sent' : 'failed',
+          externalId: result.messageId,
+          jobId: payload.jobId,
+          employeeId: payload.employeeId,
+          customerId: payload.customerId,
+          tenantId: tenantId || undefined,
+          metadataJson: JSON.stringify({
+            channel: 'email',
+            eventType: payload.eventType,
+            simulated: !!result.simulated,
+            providerUsed: result.providerUsed,
+            error: result.error,
+          }),
+        },
+      })
+    } catch (logError) {
+      console.error('Failed to create email NotificationLog:', logError)
+    }
+
+    // Also append to job.notificationLogJson so the job detail view shows the email send
+    if (payload.jobId) {
+      try {
+        const job = await db.job.findUnique({ where: { id: payload.jobId } })
+        if (job) {
+          const existingLogs: unknown[] = (() => {
+            try { return JSON.parse(job.notificationLogJson || '[]') } catch { return [] }
+          })()
+          existingLogs.push({
+            channel: 'email',
+            to: emailTo,
+            subject,
+            status: result.success ? 'sent' : 'failed',
+            externalId: result.messageId,
+            simulated: !!result.simulated,
+            error: result.error,
+            timestamp: new Date().toISOString(),
+          })
+          await db.job.update({
+            where: { id: payload.jobId },
+            data: { notificationLogJson: JSON.stringify(existingLogs) },
+          })
+        }
+      } catch (updateError) {
+        console.error('Failed to update job notificationLogJson (email):', updateError)
+      }
+    }
+  } catch (err) {
+    console.error('[sendJobNotification] email channel failed:', err)
+  }
+}
+
+/** Minimal HTML escaper so the composed email body is safe to inject. */
+function escapeHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 // ── Channel 3 + 4: In-app + Web Push (for users with accounts) ────────────
 //
 // DEDUP: The central lifecycle-push-dispatcher ALSO pushes to the assigned
@@ -515,7 +683,7 @@ async function sendInAppAndPushChannels(
 export async function sendJobNotification(
   payload: NotificationPayload,
 ): Promise<{ success: boolean; error?: string }> {
-  // Resolve the recipient userId + real tenantId up front so all 4 channels
+  // Resolve the recipient userId + real tenantId up front so all channels
   // can fire in parallel without serializing on the DB lookup.
   const { userId, tenantId: resolvedTenantId } = await resolveRecipientUserId(payload)
   const tenantId = resolvedTenantId
@@ -523,9 +691,18 @@ export async function sendJobNotification(
   // Fan out to all channels in parallel. Each is best-effort (own try/catch
   // inside). Promise.allSettled ensures one channel's rejection never short-
   // circuits the others or bubbles to the caller.
+  //
+  // Channels:
+  //   1. WhatsApp  — sendWhatsAppMessage() (simulated when no WhatsApp provider)
+  //   2. SMS       — sendSmsMessage() (SNS / Twilio / etc.)
+  //   3. Email     — sendEmail() (SMTP / Resend / SendGrid / SES / etc.)
+  //                  Resolves recipient from Employee.email or User.email.
+  //                  Uses the tenant's / superadmin's configured EmailProvider.
+  //   4 + 5. In-app + Web Push — only when a userId is resolved (employees/admins)
   const channels: Promise<unknown>[] = [
     sendWhatsAppChannel(payload),
     sendSmsChannel(payload, tenantId),
+    sendEmailChannel(payload, tenantId),
   ]
   if (userId && tenantId) {
     channels.push(sendInAppAndPushChannels(payload, userId, tenantId))
