@@ -91,9 +91,35 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (status) where.status = status
-    if (type) where.type = type
-    if (priority) where.priority = priority
+    // ── Multi-value filters ───────────────────────────────────────────
+    // Several callers (notably the Smart Dispatch Center in
+    // dispatch-view.tsx) pass a comma-separated list, e.g.
+    //   ?status=pending,assigned,scheduled
+    // Previously this was assigned verbatim (`where.status = status`),
+    // which made Prisma do an EXACT string match against the literal
+    // "pending,assigned,scheduled" — matching zero jobs. That broke the
+    // dispatch board: Pending/Assigned counts were always 0 even though
+    // jobs existed in the Jobs list, and a just-assigned job (status
+    // 'assigned') still wouldn't appear.
+    //
+    // Fix: split on comma and use `{ in: [...] }` when there's more than
+    // one value; keep the plain equality for the single-value case so
+    // existing callers (and Prisma query plans) are unaffected.
+    const splitList = (v: string | null) =>
+      v ? v.split(',').map(s => s.trim()).filter(Boolean) : []
+
+    const statusList = splitList(status)
+    if (statusList.length === 1) where.status = statusList[0]
+    else if (statusList.length > 1) where.status = { in: statusList }
+
+    const typeList = splitList(type)
+    if (typeList.length === 1) where.type = typeList[0]
+    else if (typeList.length > 1) where.type = { in: typeList }
+
+    const priorityList = splitList(priority)
+    if (priorityList.length === 1) where.priority = priorityList[0]
+    else if (priorityList.length > 1) where.priority = { in: priorityList }
+
     if (assigneeId) where.assigneeId = assigneeId
     if (customerId) where.customerId = customerId
     if (search) {
