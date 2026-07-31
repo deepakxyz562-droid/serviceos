@@ -1,9 +1,19 @@
 /**
- * Netlify Scheduled Function — Daily Cron Master
+ * Netlify Scheduled Function — Daily Cron Master (OPTIONAL)
  * ===============================================
  *
- * Runs every day at 09:00 UTC (~2:30 PM IST) and triggers ALL 5 ServiceOS
- * cron endpoints on the deployed Next.js site.
+ * ⚠️  NOTE: This file is ONLY relevant if you deploy to Netlify.
+ * If you deploy elsewhere (Vercel, Render, etc.), ignore this file and use
+ * the 3rd-party cron configs in `/cron-configs/` instead (cron-job.org or
+ * GitHub Actions).
+ *
+ * Runs every day at 09:00 UTC (~2:30 PM IST) and triggers ALL cron endpoints
+ * on the deployed Next.js site as a daily safety-net.
+ *
+ * IMPORTANT: This daily run is a SAFETY-NET only. The 4 high-frequency jobs
+ * (campaigns, scheduled-messages, scheduled-executions, appointment-reminders)
+ * need 15-min / 6-hour cadence. For those, use cron-job.org or GitHub Actions
+ * with the schedules defined in `/cron-configs/cron-job-org-import.json`.
  *
  * Why a single master function?
  *   - One cold start per day (cheaper, faster)
@@ -45,6 +55,11 @@ const CRON_ENDPOINTS = [
     name: 'pre-charge-reminder',
     path: '/api/cron/pre-charge-reminder',
     description: 'Sends pre-charge reminder before subscription renewal',
+  },
+  {
+    name: 'marketplace-settlement',
+    path: '/api/cron/marketplace-settlement',
+    description: 'Releases escrowed marketplace funds to providers once the linked Job is completed',
   },
   {
     name: 'renewal',
@@ -91,6 +106,11 @@ const CRON_ENDPOINTS = [
     name: 'appointment-reminders',
     path: '/api/cron/appointment-reminders',
     description: 'Schedules customer reminders for upcoming JobVisits based on teamReminder (1h / 24h / 2d)',
+  },
+  {
+    name: 'campaigns',
+    path: '/api/cron/campaigns',
+    description: 'Dispatches scheduled email campaigns whose scheduledAt has passed (15-min cadence on Vercel; daily safety-net here)',
   },
 ];
 

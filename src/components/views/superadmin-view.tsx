@@ -31,7 +31,7 @@ import {
   // New icons for the expanded enterprise nav
   LayoutGrid, Palette, Mail, MessageCircle, Bell, Lock,
   ListTodo, Terminal, LifeBuoy, ClipboardList, Languages,
-  ChevronLeft, X, LayoutList, Tags,
+  ChevronLeft, X, LayoutList, Tags, KeyRound,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -98,6 +98,7 @@ const EmailServicesSection = lazy(() => import('@/components/views/superadmin/se
 const SMSServicesSection = lazy(() => import('@/components/views/superadmin/sections/sms-services').then(m => ({ default: m.SMSServicesSection })));
 const WhatsAppProvidersSection = lazy(() => import('@/components/views/superadmin/sections/whatsapp-providers').then(m => ({ default: m.WhatsAppProvidersSection })));
 const PushNotificationsSection = lazy(() => import('@/components/views/superadmin/sections/push-notifications').then(m => ({ default: m.PushNotificationsSection })));
+const IntegrationCredentialsSection = lazy(() => import('@/components/views/superadmin/sections/integration-credentials').then(m => ({ default: m.IntegrationCredentialsSection })));
 const AuthenticationSection = lazy(() => import('@/components/views/superadmin/sections/authentication').then(m => ({ default: m.AuthenticationSection })));
 const SecurityCenterSection = lazy(() => import('@/components/views/superadmin/sections/security-center').then(m => ({ default: m.SecurityCenterSection })));
 const AbuseDetectionSection = lazy(() => import('@/components/views/superadmin/sections/abuse-detection').then(m => ({ default: m.AbuseDetectionSection })));
@@ -218,6 +219,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'sms-services', label: 'SMS Services', icon: MessageSquare },
       { key: 'whatsapp-providers', label: 'WhatsApp Providers', icon: MessageCircle },
       { key: 'push-notifications', label: 'Push Notifications', icon: Bell },
+      { key: 'integration-credentials', label: 'Integration Credentials', icon: KeyRound },
     ],
   },
   {
@@ -806,6 +808,7 @@ export function SuperAdminView() {
         {activeTab === 'sms-services' && <SMSServicesSection />}
         {activeTab === 'whatsapp-providers' && <WhatsAppProvidersSection />}
         {activeTab === 'push-notifications' && <PushNotificationsSection />}
+        {activeTab === 'integration-credentials' && <IntegrationCredentialsSection />}
         {activeTab === 'authentication' && <AuthenticationSection />}
         {activeTab === 'security-center' && <SecurityCenterSection />}
         {activeTab === 'abuse-detection' && <AbuseDetectionSection />}

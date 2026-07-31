@@ -1742,7 +1742,7 @@ model Conversation {
 
 model ChannelConfig {
   id              String   @id @default(cuid())
-  channel         String   // whatsapp, website, facebook, instagram, google_ads, justdial, email, sms
+  channel         String   // whatsapp, messenger, instagram, sms, email, livechat, webwidget, googlebusiness, teams, slack
   name            String   // Display name
   configJson      String   @default("{}")  // Channel-specific configuration (API keys, tokens, etc.)
   status          String   @default("active")  // active, inactive, error
@@ -1756,6 +1756,13 @@ model ChannelConfig {
   totalMessages   Int      @default(0)     // Total messages on this channel
   lastActivityAt  DateTime?
   lastError       String?
+  // ── Omnichannel v2 enrichment ──────────────────────────────────────────
+  channelType     String?  // messaging | email | web | voice
+  tier            String?  // one_click | oauth | manual
+  setupCompleted  Boolean  @default(false) // Whether the guided setup wizard finished
+  setupStep       Int      @default(0)     // Last completed step (0 = not started)
+  lastTestedAt    DateTime?
+  lastTestStatus  String?  // success | failed
   tenantId        String?
   workspaceId     String?
   createdAt       DateTime @default(now())
@@ -1764,6 +1771,27 @@ model ChannelConfig {
   @@index([channel])
   @@index([status])
   @@index([tenantId])
+}
+
+/// Superadmin-managed OAuth app credentials for channel providers (Meta, Google, Slack, etc.).
+/// These are platform-level credentials — tenants never see the client secret. Tenants only
+/// click "Connect with X" and authorize; the OAuth flow uses these credentials server-side.
+model IntegrationCredential {
+  id              String   @id @default(cuid())
+  provider        String   // whatsapp, messenger, instagram, googlebusiness, teams, slack
+  displayName     String   // Human label, e.g. "WhatsApp Cloud API"
+  clientId        String   // OAuth client ID (App ID / Consumer Key)
+  clientSecret    String   // OAuth client secret (encrypted at rest via app-level encryption)
+  scopes          String   @default("")  // Space-separated OAuth scopes
+  redirectUri     String?  // OAuth callback URL (defaults to /api/oauth/{provider}/callback)
+  additionalConfigJson String @default("{}") // Extra fields (e.g. Meta App Secret, Slack Signing Secret)
+  status          String   @default("active") // active, inactive
+  createdBy       String?  // SuperAdmin user ID
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([provider])
+  @@index([status])
 }
 
 model CustomerJourney {

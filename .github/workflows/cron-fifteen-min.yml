@@ -1,0 +1,27 @@
+# High-frequency cron jobs — runs every 15 minutes.
+# ⚠️  GitHub Actions free tier minimum is 5 min, but throttles aggressively.
+# For production, prefer cron-job.org for these 3 jobs.
+# Required repo secrets: APP_URL, CRON_SECRET
+
+name: Cron 15-Minute Jobs
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  campaigns:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST "${{ secrets.APP_URL }}/api/cron/campaigns" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+
+  scheduled-messages:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST "${{ secrets.APP_URL }}/api/cron/scheduled-messages" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+
+  scheduled-executions:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST "${{ secrets.APP_URL }}/api/cron/scheduled-executions" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"

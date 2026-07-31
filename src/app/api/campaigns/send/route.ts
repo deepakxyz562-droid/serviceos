@@ -398,32 +398,17 @@ async function dispatchToRecipient(
     }
   }
 
-  // ── SMS dispatch — uses WhatsApp provider as a stand-in (no real SMS infra) ──
+  // ── SMS dispatch — DISABLED for compliance ──────────────────────────────
+  // SMS campaigns are not supported. Bulk SMS without per-recipient TCPA
+  // consent tracking, STOP keyword handling, and time-of-day restrictions
+  // is a legal liability. Transactional SMS (appointment reminders, etc.)
+  // still works via the dedicated /api/sms/send route.
   if (channel === 'sms') {
-    if (!recipient.phone || !recipient.phone.trim()) {
-      return { ...baseLog, channel: 'sms', skipped: true, error: 'No phone number' }
-    }
-    const message = personalizeForRecipient(body.message || body.html || '', recipient)
-    const result = await sendWhatsAppMessage({
-      to: recipient.phone,
-      message,
-      tenantId: tenantId || undefined,
-    })
-
-    // Deduct credit after successful SMS (via WhatsApp) send
-    if (result.success && tenantId) {
-      await deductWhatsAppCredit(tenantId, 1).catch(err =>
-        console.error('[Campaign] Credit deduction failed:', err)
-      )
-    }
-
     return {
       ...baseLog,
       channel: 'sms',
-      success: result.success,
-      messageId: result.messageId,
-      simulated: result.simulated,
-      error: result.error,
+      skipped: true,
+      error: 'SMS campaigns are not supported. Use transactional SMS via /api/sms/send instead.',
     }
   }
 

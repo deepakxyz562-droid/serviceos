@@ -1,0 +1,106 @@
+{
+  "_comment": "cron-job.org bulk import config. Import these 12 jobs at https://cron-job.org. Set the URL to https://YOUR-DOMAIN.com/api/cron/{path} and add request header 'x-cron-secret: YOUR_CRON_SECRET'. All times are UTC.",
+  "_setup": "1) Generate CRON_SECRET: openssl rand -hex 32. 2) Set CRON_SECRET env var on your Next.js app. 3) Sign up at cron-job.org. 4) Create each job below with the specified schedule + URL + header. 5) Method: POST (or GET — all routes accept both).",
+  "jobs": [
+    {
+      "name": "marketplace-settlement",
+      "url": "https://YOUR-DOMAIN.com/api/cron/marketplace-settlement",
+      "schedule": "0 2 * * *",
+      "scheduleHuman": "Daily at 02:00 UTC",
+      "method": "GET",
+      "_comment": "Releases escrowed marketplace funds to providers"
+    },
+    {
+      "name": "trial-expire",
+      "url": "https://YOUR-DOMAIN.com/api/cron/trial-expire",
+      "schedule": "30 0 * * *",
+      "scheduleHuman": "Daily at 00:30 UTC",
+      "method": "POST",
+      "_comment": "Expires ended trials + sends trial-expired email"
+    },
+    {
+      "name": "trial-reminders",
+      "url": "https://YOUR-DOMAIN.com/api/cron/trial-reminders",
+      "schedule": "0 9 * * *",
+      "scheduleHuman": "Daily at 09:00 UTC",
+      "method": "POST",
+      "_comment": "Sends 3-day & 1-day trial-ending reminders"
+    },
+    {
+      "name": "renewal",
+      "url": "https://YOUR-DOMAIN.com/api/cron/renewal",
+      "schedule": "0 3 * * *",
+      "scheduleHuman": "Daily at 03:00 UTC",
+      "method": "POST",
+      "_comment": "Processes subscription renewals + downgrades"
+    },
+    {
+      "name": "pre-charge-reminder",
+      "url": "https://YOUR-DOMAIN.com/api/cron/pre-charge-reminder",
+      "schedule": "0 8 * * *",
+      "scheduleHuman": "Daily at 08:00 UTC",
+      "method": "POST",
+      "_comment": "Pre-charge warning email (reduces disputes)"
+    },
+    {
+      "name": "recurring-invoices",
+      "url": "https://YOUR-DOMAIN.com/api/cron/recurring-invoices",
+      "schedule": "0 1 * * *",
+      "scheduleHuman": "Daily at 01:00 UTC",
+      "method": "POST",
+      "_comment": "Generates & sends due recurring invoices"
+    },
+    {
+      "name": "recurring-jobs",
+      "url": "https://YOUR-DOMAIN.com/api/cron/recurring-jobs",
+      "schedule": "0 6 * * *",
+      "scheduleHuman": "Daily at 06:00 UTC",
+      "method": "POST",
+      "_comment": "Generates recurring jobs + JobVisits"
+    },
+    {
+      "name": "overdue-detector",
+      "url": "https://YOUR-DOMAIN.com/api/cron/overdue-detector",
+      "schedule": "0 8 * * *",
+      "scheduleHuman": "Daily at 08:00 UTC",
+      "method": "POST",
+      "_comment": "Marks overdue invoices + enqueues reminders"
+    },
+    {
+      "name": "campaigns",
+      "url": "https://YOUR-DOMAIN.com/api/cron/campaigns",
+      "schedule": "*/15 * * * *",
+      "scheduleHuman": "Every 15 minutes",
+      "method": "POST",
+      "_comment": "Dispatches scheduled email campaigns"
+    },
+    {
+      "name": "scheduled-messages",
+      "url": "https://YOUR-DOMAIN.com/api/cron/scheduled-messages",
+      "schedule": "*/15 * * * *",
+      "scheduleHuman": "Every 15 minutes",
+      "method": "POST",
+      "_comment": "Sends appointment/payment/overdue/follow-up reminders"
+    },
+    {
+      "name": "scheduled-executions",
+      "url": "https://YOUR-DOMAIN.com/api/cron/scheduled-executions",
+      "schedule": "*/15 * * * *",
+      "scheduleHuman": "Every 15 minutes",
+      "method": "POST",
+      "_comment": "Runs delayed workflow automations"
+    },
+    {
+      "name": "appointment-reminders",
+      "url": "https://YOUR-DOMAIN.com/api/cron/appointment-reminders",
+      "schedule": "0 */6 * * *",
+      "scheduleHuman": "Every 6 hours",
+      "method": "POST",
+      "_comment": "Schedules upcoming visit reminders"
+    }
+  ],
+  "_authHeader": {
+    "name": "x-cron-secret",
+    "value": "YOUR_CRON_SECRET"
+  }
+}

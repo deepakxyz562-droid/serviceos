@@ -6,6 +6,7 @@ import {
   getDaysRemaining,
 } from '@/lib/trial-lifecycle';
 import { logBillingEvent } from '@/lib/billing-events';
+import { verifyCronAuth } from '@/lib/cron-auth';
 
 /**
  * POST /api/cron/pre-charge-reminder
@@ -27,15 +28,8 @@ import { logBillingEvent } from '@/lib/billing-events';
  */
 export async function POST(request: NextRequest) {
   try {
-    const expectedSecret = process.env.CRON_SECRET || 'serviceos-cron-dev';
-    const providedSecret =
-      request.headers.get('x-cron-secret') ||
-      request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||
-      new URL(request.url).searchParams.get('secret') ||
-      '';
-    if (providedSecret !== expectedSecret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = verifyCronAuth(request);
+    if (!auth.ok) return auth.response;
 
     // Find tenants 0.5–1.5 days from trial end
     const tenants = await findTenantsInTrialWindow(0.5, 1.5);

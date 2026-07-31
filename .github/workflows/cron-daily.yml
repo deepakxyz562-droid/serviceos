@@ -1,0 +1,65 @@
+# Daily cron jobs — runs 8 daily jobs staggered across early morning UTC.
+# Required repo secrets: APP_URL, CRON_SECRET
+
+name: Cron Daily Jobs
+
+on:
+  schedule:
+    # Staggered to avoid all-at-once load:
+    - cron: '0 1 * * *'   # 01:00 UTC — recurring-invoices
+    - cron: '0 2 * * *'   # 02:00 UTC — marketplace-settlement
+    - cron: '30 0 * * *'  # 00:30 UTC — trial-expire
+    - cron: '0 3 * * *'   # 03:00 UTC — renewal
+    - cron: '0 6 * * *'   # 06:00 UTC — recurring-jobs
+    - cron: '0 8 * * *'   # 08:00 UTC — pre-charge-reminder + overdue-detector
+    - cron: '0 9 * * *'   # 09:00 UTC — trial-reminders
+  workflow_dispatch: {}
+
+jobs:
+  recurring-invoices:
+    if: github.event.schedule == '0 1 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST "${{ secrets.APP_URL }}/api/cron/recurring-invoices" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+
+  marketplace-settlement:
+    if: github.event.schedule == '0 2 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST "${{ secrets.APP_URL }}/api/cron/marketplace-settlement" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+
+  trial-expire:
+    if: github.event.schedule == '30 0 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST "${{ secrets.APP_URL }}/api/cron/trial-expire" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+
+  renewal:
+    if: github.event.schedule == '0 3 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST "${{ secrets.APP_URL }}/api/cron/renewal" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+
+  recurring-jobs:
+    if: github.event.schedule == '0 6 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST "${{ secrets.APP_URL }}/api/cron/recurring-jobs" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+
+  pre-charge-reminder:
+    if: github.event.schedule == '0 8 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST "${{ secrets.APP_URL }}/api/cron/pre-charge-reminder" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+
+  overdue-detector:
+    if: github.event.schedule == '0 8 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST "${{ secrets.APP_URL }}/api/cron/overdue-detector" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+
+  trial-reminders:
+    if: github.event.schedule == '0 9 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST "${{ secrets.APP_URL }}/api/cron/trial-reminders" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"

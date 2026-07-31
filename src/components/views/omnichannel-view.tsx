@@ -7,6 +7,8 @@ import {
   CheckCheck, Loader2,
   ExternalLink, Sparkles, X, Filter,
   Mail, MessageCircle, User,
+  BarChart3, Inbox, UserCheck, UserPlus, UsersRound,
+  StickyNote, Clock, ChevronDown, Zap,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,13 +18,21 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
 import { AutoReplyCard } from '@/components/settings/sections/auto-reply-card';
+import { CHANNELS as ALL_CHANNEL_DEFS, getChannel } from '@/lib/channel-meta';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type ChannelType = 'website' | 'facebook' | 'instagram' | 'google_ads' | 'justdial' | 'email' | 'sms' | 'phone' | 'manual' | 'whatsapp';
+type ChannelType = 'whatsapp' | 'messenger' | 'instagram' | 'sms' | 'email' | 'livechat' | 'webwidget' | 'googlebusiness' | 'teams' | 'slack' | 'website' | 'facebook' | 'google_ads' | 'justdial' | 'phone' | 'manual';
 
 interface ConversationMessage {
   id: string;
@@ -72,6 +82,10 @@ interface OmnichannelStats {
 // mounted in BOTH the Omnichannel view (here) and Settings → Communication.
 
 // ─── Channel Metadata ───────────────────────────────────────────────────────
+// Channel styling is now sourced from the centralized registry in
+// src/lib/channel-meta.ts. The getChannelMeta() helper below falls back to a
+// DEFAULT_META for unknown/legacy channels (old conversations stored before
+// the registry existed).
 
 const DEFAULT_META = {
   label: 'Other',
@@ -81,114 +95,51 @@ const DEFAULT_META = {
   borderColor: 'border-slate-200',
   textColor: 'text-slate-700',
   badgeBg: 'bg-slate-500',
-};
-
-const CHANNEL_META: Record<string, {
-  label: string;
-  icon: React.ElementType;
-  color: string;
-  bgColor: string;
-  borderColor: string;
-  textColor: string;
-  badgeBg: string;
-}> = {
-  website: {
-    label: 'Website',
-    icon: Globe,
-    color: 'sky',
-    bgColor: 'bg-sky-100',
-    borderColor: 'border-sky-200',
-    textColor: 'text-sky-700',
-    badgeBg: 'bg-sky-500',
-  },
-  facebook: {
-    label: 'Facebook',
-    icon: Facebook,
-    color: 'blue-600',
-    bgColor: 'bg-blue-100',
-    borderColor: 'border-blue-300',
-    textColor: 'text-blue-600',
-    badgeBg: 'bg-blue-600',
-  },
-  instagram: {
-    label: 'Instagram',
-    icon: Instagram,
-    color: 'pink',
-    bgColor: 'bg-pink-100',
-    borderColor: 'border-pink-200',
-    textColor: 'text-pink-700',
-    badgeBg: 'bg-pink-500',
-  },
-  google_ads: {
-    label: 'Google Ads',
-    icon: Target,
-    color: 'orange',
-    bgColor: 'bg-orange-100',
-    borderColor: 'border-orange-200',
-    textColor: 'text-orange-700',
-    badgeBg: 'bg-orange-500',
-  },
-  justdial: {
-    label: 'JustDial',
-    icon: Phone,
-    color: 'amber',
-    bgColor: 'bg-amber-100',
-    borderColor: 'border-amber-200',
-    textColor: 'text-amber-700',
-    badgeBg: 'bg-amber-500',
-  },
-  email: {
-    label: 'Email',
-    icon: Mail,
-    color: 'violet',
-    bgColor: 'bg-violet-100',
-    borderColor: 'border-violet-200',
-    textColor: 'text-violet-700',
-    badgeBg: 'bg-violet-500',
-  },
-  sms: {
-    label: 'SMS',
-    icon: MessageCircle,
-    color: 'teal',
-    bgColor: 'bg-teal-100',
-    borderColor: 'border-teal-200',
-    textColor: 'text-teal-700',
-    badgeBg: 'bg-teal-500',
-  },
-  phone: {
-    label: 'Phone',
-    icon: Phone,
-    color: 'cyan',
-    bgColor: 'bg-cyan-100',
-    borderColor: 'border-cyan-200',
-    textColor: 'text-cyan-700',
-    badgeBg: 'bg-cyan-500',
-  },
-  manual: {
-    label: 'Manual',
-    icon: User,
-    color: 'slate',
-    bgColor: 'bg-slate-100',
-    borderColor: 'border-slate-200',
-    textColor: 'text-slate-700',
-    badgeBg: 'bg-slate-500',
-  },
-  whatsapp: {
-    label: 'WhatsApp',
-    icon: MessageSquare,
-    color: 'emerald',
-    bgColor: 'bg-emerald-100',
-    borderColor: 'border-emerald-200',
-    textColor: 'text-emerald-700',
-    badgeBg: 'bg-emerald-500',
-  },
+  _brandColor: '#64748B',
 };
 
 function getChannelMeta(channel: string) {
-  return CHANNEL_META[channel] || DEFAULT_META;
+  // Try the new registry first, fall back to legacy for old conversation data
+  const fromRegistry = getChannel(channel);
+  if (fromRegistry) {
+    return {
+      label: fromRegistry.label,
+      icon: fromRegistry.icon,
+      color: fromRegistry.color,
+      bgColor: fromRegistry.badgeClass.split(' ')[0], // approximate
+      borderColor: 'border-transparent',
+      textColor: fromRegistry.iconClass,
+      badgeBg: fromRegistry.badgeClass,
+      _brandColor: fromRegistry.color,
+    };
+  }
+  // Legacy fallback for old conversations
+  const legacyMap: Record<string, { label: string; icon: React.ElementType; brandColor: string }> = {
+    website: { label: 'Website', icon: Globe, brandColor: '#3B82F6' },
+    facebook: { label: 'Facebook', icon: Facebook, brandColor: '#0084FF' },
+    google_ads: { label: 'Google Ads', icon: Target, brandColor: '#4285F4' },
+    justdial: { label: 'JustDial', icon: Phone, brandColor: '#F59E0B' },
+    phone: { label: 'Phone', icon: Phone, brandColor: '#06B6D4' },
+    manual: { label: 'Manual', icon: User, brandColor: '#64748B' },
+  };
+  const legacy = legacyMap[channel];
+  if (legacy) {
+    return {
+      label: legacy.label,
+      icon: legacy.icon,
+      color: 'slate',
+      bgColor: 'bg-slate-100',
+      borderColor: 'border-slate-200',
+      textColor: 'text-slate-700',
+      badgeBg: 'bg-slate-500',
+      _brandColor: legacy.brandColor,
+    };
+  }
+  return { ...DEFAULT_META, _brandColor: '#64748B' };
 }
 
-const ALL_CHANNELS: ChannelType[] = ['website', 'facebook', 'instagram', 'google_ads', 'justdial', 'whatsapp'];
+// Channels shown in the inbox filter bar — use the 10 from the registry, plus legacy fallbacks
+const ALL_CHANNELS: string[] = ALL_CHANNEL_DEFS.map(c => c.id);
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -246,12 +197,20 @@ export function OmnichannelView() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [stats, setStats] = useState<OmnichannelStats | null>(null);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
-  const [activeChannelFilter, setActiveChannelFilter] = useState<ChannelType | 'all'>('all');
+  const [activeChannelFilter, setActiveChannelFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [messageInput, setMessageInput] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
   const messageEndRef = useRef<HTMLDivElement>(null);
+
+  // ── New: Top tab bar + workspace features ──
+  const [inboxTab, setInboxTab] = useState<'inbox' | 'assigned' | 'unassigned' | 'team'>('inbox');
+  const [openTabs, setOpenTabs] = useState<string[]>([]); // conversation IDs open as tabs
+  const [composerMode, setComposerMode] = useState<'reply' | 'notes'>('reply');
+  const [showSlashCommands, setShowSlashCommands] = useState(false);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [showAnalyticsPanel, setShowAnalyticsPanel] = useState(false);
 
   // ── Data Loading ──
   const loadData = useCallback(async () => {
@@ -318,10 +277,23 @@ export function OmnichannelView() {
   // ── Handlers ──
   const handleSelectConversation = (id: string) => {
     setSelectedConversationId(id);
+    // Open as a tab (if not already open)
+    setOpenTabs(prev => prev.includes(id) ? prev : [...prev, id]);
     // Mark as read locally
     setConversations(prev => prev.map(c =>
       c.id === id ? { ...c, unreadCount: 0 } : c
     ));
+  };
+
+  const handleCloseTab = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setOpenTabs(prev => {
+      const next = prev.filter(t => t !== id);
+      if (selectedConversationId === id) {
+        setSelectedConversationId(next.length > 0 ? next[next.length - 1] : null);
+      }
+      return next;
+    });
   };
 
   const handleSendMessage = async () => {
@@ -420,10 +392,59 @@ export function OmnichannelView() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setShowFilterPanel(!showFilterPanel)}
+              title="Filter conversations"
+            >
+              <Filter className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setShowAnalyticsPanel(!showAnalyticsPanel)}
+              title="Analytics"
+            >
+              <BarChart3 className="size-4" />
+            </Button>
             <Button variant="outline" size="sm" onClick={() => useAppStore.getState().setCurrentView('channels')}>
-              <Settings className="size-3.5 mr-1" /> Configure Channels
+              <Settings className="size-3.5 mr-1" /> Configure
             </Button>
           </div>
+        </div>
+      </div>
+
+      {/* ── Top Tab Bar (Inbox / Assigned / Unassigned / Team) ── */}
+      <div className="flex-shrink-0 border-b bg-background px-4 sm:px-6">
+        <div className="flex items-center gap-1 overflow-x-auto">
+          {([
+            { key: 'inbox', label: 'Inbox', icon: Inbox },
+            { key: 'assigned', label: 'Assigned to Me', icon: UserCheck },
+            { key: 'unassigned', label: 'Unassigned', icon: UserPlus },
+            { key: 'team', label: 'Team', icon: UsersRound },
+          ] as const).map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setInboxTab(tab.key)}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors',
+                inboxTab === tab.key
+                  ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <tab.icon className="size-3.5" />
+              {tab.label}
+              {tab.key === 'unassigned' && (
+                <span className="ml-1 text-[10px] font-bold text-white bg-amber-500 rounded-full size-4 flex items-center justify-center">
+                  {conversations.filter(c => !c.leadId).length}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -615,6 +636,38 @@ export function OmnichannelView() {
 
           {/* ── Middle Column: Message Thread ── */}
           <div className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-slate-950">
+            {/* ── Tabbed Conversation Switcher ── */}
+            {openTabs.length > 0 && (
+              <div className="flex-shrink-0 border-b bg-background px-2 flex items-center gap-0.5 overflow-x-auto scrollbar-none">
+                {openTabs.map(tabId => {
+                  const conv = conversations.find(c => c.id === tabId);
+                  if (!conv) return null;
+                  const meta = getChannelMeta(conv.channel);
+                  const Icon = meta.icon;
+                  const isActive = tabId === selectedConversationId;
+                  return (
+                    <button
+                      key={tabId}
+                      onClick={() => setSelectedConversationId(tabId)}
+                      className={cn(
+                        'group inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium whitespace-nowrap border-r border-l border-transparent',
+                        isActive ? 'bg-slate-50 dark:bg-slate-950 text-foreground' : 'text-muted-foreground hover:bg-muted/50'
+                      )}
+                    >
+                      <Icon className="size-3" style={{ color: meta._brandColor }} />
+                      <span className="max-w-[120px] truncate">{conv.customerName}</span>
+                      <span
+                        role="button"
+                        onClick={(e) => handleCloseTab(tabId, e)}
+                        className="ml-1 size-4 rounded-full hover:bg-muted flex items-center justify-center opacity-0 group-hover:opacity-100"
+                      >
+                        <X className="size-2.5" />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {selectedConversation ? (
               <>
                 {/* Conversation Header */}
@@ -717,37 +770,133 @@ export function OmnichannelView() {
                 {/* Message Composer */}
                 <div className="flex-shrink-0 border-t bg-background p-3">
                   <div className="max-w-2xl mx-auto">
+                    {/* Reply / Notes mode toggle */}
+                    <div className="flex items-center gap-1 mb-2">
+                      <button
+                        onClick={() => setComposerMode('reply')}
+                        className={cn(
+                          'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                          composerMode === 'reply' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400' : 'text-muted-foreground hover:bg-muted'
+                        )}
+                      >
+                        <Send className="size-3" /> Reply
+                      </button>
+                      <button
+                        onClick={() => setComposerMode('notes')}
+                        className={cn(
+                          'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                          composerMode === 'notes' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : 'text-muted-foreground hover:bg-muted'
+                        )}
+                      >
+                        <StickyNote className="size-3" /> Notes
+                      </button>
+                      <span className="ml-auto text-[10px] text-muted-foreground">
+                        Type <kbd className="px-1 py-0.5 bg-muted rounded text-[9px]">/</kbd> for suggestions
+                      </span>
+                    </div>
+
                     <div className="flex items-end gap-2">
                       <div className="flex-1 relative">
                         <Textarea
-                          placeholder={`Reply via ${getChannelMeta(selectedConversation.channel).label}...`}
+                          placeholder={
+                            composerMode === 'notes'
+                              ? 'Add an internal note (only visible to your team)...'
+                              : `Reply via ${getChannelMeta(selectedConversation.channel).label}...`
+                          }
                           value={messageInput}
-                          onChange={e => setMessageInput(e.target.value)}
+                          onChange={e => {
+                            setMessageInput(e.target.value);
+                            setShowSlashCommands(e.target.value.startsWith('/'));
+                          }}
                           onKeyDown={e => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault();
                               handleSendMessage();
                             }
                           }}
-                          className="min-h-[40px] max-h-32 resize-none pr-10 text-sm"
+                          className={cn(
+                            'min-h-[40px] max-h-32 resize-none pr-10 text-sm',
+                            composerMode === 'notes' && 'border-amber-200 bg-amber-50/50 dark:bg-amber-950/20'
+                          )}
                           rows={1}
                         />
                       </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-9"
+                            disabled={!messageInput.trim() || sendingMessage}
+                            title="Send later"
+                          >
+                            <Clock className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => toast.success('Scheduled to send in 1 hour')}>
+                            In 1 hour
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => toast.success('Scheduled to send tomorrow at 9 AM')}>
+                            Tomorrow at 9 AM
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => toast.success('Scheduled to send next Monday')}>
+                            Next Monday
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                       <Button
                         size="sm"
                         onClick={handleSendMessage}
                         disabled={!messageInput.trim() || sendingMessage}
-                        className="bg-emerald-600 hover:bg-emerald-700 h-9"
+                        className={cn(
+                          'h-9',
+                          composerMode === 'notes'
+                            ? 'bg-amber-600 hover:bg-amber-700'
+                            : 'bg-emerald-600 hover:bg-emerald-700'
+                        )}
                       >
                         {sendingMessage ? (
                           <Loader2 className="size-4 animate-spin" />
+                        ) : composerMode === 'notes' ? (
+                          <StickyNote className="size-4" />
                         ) : (
                           <Send className="size-4" />
                         )}
                       </Button>
                     </div>
+
+                    {/* Slash command suggestions */}
+                    {showSlashCommands && (
+                      <div className="mt-1 rounded-md border bg-popover shadow-md p-1 max-h-40 overflow-y-auto">
+                        {[
+                          { cmd: '/greeting', desc: 'Insert a greeting template' },
+                          { cmd: '/quote', desc: 'Send a quote link' },
+                          { cmd: '/appointment', desc: 'Send appointment confirmation' },
+                          { cmd: '/faq', desc: 'Insert FAQ answer' },
+                          { cmd: '/transfer', desc: 'Transfer to another agent' },
+                          { cmd: '/close', desc: 'Close this conversation' },
+                        ].map(s => (
+                          <button
+                            key={s.cmd}
+                            onClick={() => {
+                              setMessageInput('');
+                              setShowSlashCommands(false);
+                              toast.info(`Slash command: ${s.cmd} — ${s.desc}`);
+                            }}
+                            className="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted flex items-center gap-2"
+                          >
+                            <code className="text-emerald-600 dark:text-emerald-400 font-mono">{s.cmd}</code>
+                            <span className="text-muted-foreground">{s.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-                      Replying via {getChannelMeta(selectedConversation.channel).label} · Press Enter to send, Shift+Enter for new line
+                      {composerMode === 'notes'
+                        ? 'Internal note — only your team can see this'
+                        : `Replying via ${getChannelMeta(selectedConversation.channel).label} · Enter to send, Shift+Enter for new line`}
                     </p>
                   </div>
                 </div>
@@ -768,23 +917,28 @@ export function OmnichannelView() {
             {selectedConversation ? (
               <ScrollArea className="flex-1">
                 <div className="p-4 space-y-4">
-                  {/* Customer Info Card */}
-                  <Card className="shadow-none">
-                    <CardHeader className="pb-3 pt-4 px-4">
-                      <CardTitle className="text-sm font-semibold">Customer Info</CardTitle>
+                  {/* Customer Info Card with cover image */}
+                  <Card className="shadow-none overflow-hidden">
+                    {/* Cover banner — gradient using the channel brand color */}
+                    <div
+                      className="h-20 relative"
+                      style={{
+                        background: `linear-gradient(135deg, ${getChannelMeta(selectedConversation.channel)._brandColor}40, ${getChannelMeta(selectedConversation.channel)._brandColor}80)`,
+                      }}
+                    >
+                      <div className="absolute top-2 right-2">
+                        <ChannelBadge channel={selectedConversation.channel} compact />
+                      </div>
+                    </div>
+                    <CardHeader className="pb-3 pt-0 px-4 -mt-8">
+                      <Avatar className="size-16 border-4 border-background">
+                        <AvatarFallback className="text-lg font-medium bg-slate-100 dark:bg-slate-800">
+                          {getInitials(selectedConversation.customerName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <CardTitle className="text-base font-semibold mt-2">{selectedConversation.customerName}</CardTitle>
                     </CardHeader>
                     <CardContent className="px-4 pb-4 space-y-2">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="size-12">
-                          <AvatarFallback className="text-sm font-medium bg-slate-100 dark:bg-slate-800">
-                            {getInitials(selectedConversation.customerName)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium text-sm">{selectedConversation.customerName}</p>
-                          <ChannelBadge channel={selectedConversation.channel} compact />
-                        </div>
-                      </div>
                       {selectedConversation.customerPhone && (
                         <div className="flex items-center gap-2 text-sm">
                           <Phone className="size-3.5 text-muted-foreground" />

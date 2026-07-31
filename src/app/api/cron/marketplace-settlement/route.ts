@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { logger, withRequestId } from '@/lib/logger';
 import { transferToProvider, StripePayoutError } from '@/lib/stripe';
+import { verifyCronAuth } from '@/lib/cron-auth';
 
 /**
  * GET /api/cron/marketplace-settlement
@@ -57,39 +58,8 @@ export async function GET(request: NextRequest) {
   const component = 'cron.marketplace-settlement';
 
   // ── 1. Auth ────────────────────────────────────────────────────────────
-  const expectedSecret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get('authorization') || '';
-  const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
-  const providedSecret =
-    bearerMatch?.[1] ||
-    new URL(request.url).searchParams.get('key') ||
-    '';
-
-  const isDev = process.env.NODE_ENV !== 'production';
-
-  if (!expectedSecret) {
-    if (isDev) {
-      logger.warn(
-        { component },
-        'CRON_SECRET not set — allowing marketplace-settlement cron in dev mode (no auth)',
-      );
-    } else {
-      logger.error(
-        { component },
-        'CRON_SECRET not set in production — refusing to run marketplace-settlement cron',
-      );
-      return NextResponse.json(
-        { error: 'Cron authentication not configured' },
-        { status: 401 },
-      );
-    }
-  } else if (providedSecret !== expectedSecret) {
-    logger.warn(
-      { component, hasHeader: !!bearerMatch, hasQuery: !!providedSecret },
-      'Unauthorized marketplace-settlement cron attempt',
-    );
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = verifyCronAuth(request);
+  if (!auth.ok) return auth.response;
 
   // ── 2. Find releasable escrow transactions ────────────────────────────
   // MarketplaceTransaction has a `jobId` FK but no Prisma relation to Job

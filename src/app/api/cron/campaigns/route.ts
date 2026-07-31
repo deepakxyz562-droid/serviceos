@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { resolveBroadcastAudience, personalizeForRecipient } from '@/lib/broadcast-audience'
 import { sendEmail, resolveSmtpConfig } from '@/lib/email-send'
 import { hasMarketingConsent } from '@/lib/email-consent'
+import { verifyCronAuth } from '@/lib/cron-auth'
 
 /**
  * POST /api/cron/campaigns
@@ -23,15 +24,8 @@ import { hasMarketingConsent } from '@/lib/email-consent'
  */
 
 export async function POST(request: NextRequest) {
-  const expectedSecret = process.env.CRON_SECRET || 'serviceos-cron-dev'
-  const providedSecret =
-    request.headers.get('x-cron-secret') ||
-    request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||
-    new URL(request.url).searchParams.get('secret') ||
-    ''
-  if (providedSecret !== expectedSecret) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const auth = verifyCronAuth(request)
+  if (!auth.ok) return auth.response
 
   const now = new Date()
   let processed = 0

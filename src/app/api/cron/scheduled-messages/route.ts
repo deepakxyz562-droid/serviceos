@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processDueScheduledMessages } from '@/lib/scheduled-messages';
+import { verifyCronAuth } from '@/lib/cron-auth';
 
 /**
  * POST /api/cron/scheduled-messages
@@ -16,17 +17,9 @@ import { processDueScheduledMessages } from '@/lib/scheduled-messages';
  */
 export async function POST(request: NextRequest) {
   try {
-    // ─── Auth: shared secret ───────────────────────────────────────────
-    const expectedSecret = process.env.CRON_SECRET || 'serviceos-cron-dev';
-    const providedSecret =
-      request.headers.get('x-cron-secret') ||
-      request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||
-      new URL(request.url).searchParams.get('secret') ||
-      '';
-
-    if (providedSecret !== expectedSecret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // ─── Auth: unified cron secret ─────────────────────────────────────
+    const auth = verifyCronAuth(request);
+    if (!auth.ok) return auth.response;
 
     const result = await processDueScheduledMessages();
 

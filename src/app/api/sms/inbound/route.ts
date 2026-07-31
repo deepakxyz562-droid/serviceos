@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { maybeAutoReply } from '@/lib/auto-reply'
+import { optOutSmsMarketing, optInSmsMarketing } from '@/lib/sms-consent'
 
 /**
  * POST /api/sms/inbound
@@ -66,6 +67,42 @@ export async function POST(request: NextRequest) {
     }
 
     const tenantId = phoneRow.tenantId || null
+
+    // ── 1b. STOP / HELP / START keyword handling (TCPA compliance) ────────
+    // Carriers require dedicated SMS numbers to honor these keywords:
+    //   STOP / UNSUBSCRIBE / CANCEL / END / QUIT  → opt-out (mark unsubscribed)
+    //   UNSTOP / START                            → opt-in (re-enable)
+    //   HELP                                      → return help info
+    // These must be handled BEFORE any auto-reply logic.
+    const upperBody = body.trim().toUpperCase()
+    const STOP_WORDS = ['STOP', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT', 'STOPALL', 'ARRET']
+    const START_WORDS = ['UNSTOP', 'START', 'YES']
+    const HELP_WORDS = ['HELP', 'INFO', 'AIDE']
+
+    if (STOP_WORDS.includes(upperBody)) {
+      // Opt the sender out of all SMS marketing
+      await optOutSmsMarketing(from, tenantId)
+      return new NextResponse(
+        '<Response><Message>You have been unsubscribed and will receive no further messages from this number. Reply UNSTOP to resubscribe.</Message></Response>',
+        { status: 200, headers: { 'Content-Type': 'text/xml' } },
+      )
+    }
+
+    if (START_WORDS.includes(upperBody)) {
+      // Re-enable marketing
+      await optInSmsMarketing(from, tenantId)
+      return new NextResponse(
+        '<Response><Message>You have been resubscribed. Reply STOP to unsubscribe again.</Message></Response>',
+        { status: 200, headers: { 'Content-Type': 'text/xml' } },
+      )
+    }
+
+    if (HELP_WORDS.includes(upperBody)) {
+      return new NextResponse(
+        '<Response><Message>Reply STOP to unsubscribe, UNSTOP to resubscribe. Msg rates may apply.</Message></Response>',
+        { status: 200, headers: { 'Content-Type': 'text/xml' } },
+      )
+    }
 
     // ── 3. Idempotency check on MessageSid ───────────────────────────────
     if (messageSid) {

@@ -1,0 +1,15 @@
+# Six-hourly cron job — runs appointment-reminders 4x per day.
+# Required repo secrets: APP_URL, CRON_SECRET
+
+name: Cron 6-Hourly Jobs
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  appointment-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST "${{ secrets.APP_URL }}/api/cron/appointment-reminders" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"

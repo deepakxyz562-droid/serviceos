@@ -154,7 +154,7 @@ export type TabKey =
   // PLATFORM
   | 'platform-settings' | 'plan-features' | 'plan-catalog' | 'theme-branding' | 'marketplace' | 'integrations' | 'ai-center' | 'menu-management'
   // COMMUNICATION
-  | 'email-services' | 'sms-services' | 'whatsapp-providers' | 'push-notifications'
+  | 'email-services' | 'sms-services' | 'whatsapp-providers' | 'push-notifications' | 'integration-credentials'
   // SECURITY
   | 'authentication' | 'security-center' | 'audit-logs' | 'abuse-detection'
   // OPERATIONS

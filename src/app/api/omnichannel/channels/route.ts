@@ -1,18 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
-
-// Default channel configs to auto-create when none exist
-const DEFAULT_CHANNELS = [
-  { channel: 'email', name: 'Email', status: 'active', isDefault: true, autoCreateLead: true },
-  { channel: 'sms', name: 'SMS', status: 'active', isDefault: false, autoCreateLead: true },
-  { channel: 'website', name: 'Website Forms', status: 'active', isDefault: true, autoCreateLead: true },
-  { channel: 'facebook', name: 'Facebook Messenger', status: 'inactive', isDefault: false, autoCreateLead: true },
-  { channel: 'instagram', name: 'Instagram DM', status: 'inactive', isDefault: false, autoCreateLead: true },
-  { channel: 'google_ads', name: 'Google Ads Lead Forms', status: 'inactive', isDefault: false, autoCreateLead: true },
-  { channel: 'justdial', name: 'JustDial', status: 'inactive', isDefault: false, autoCreateLead: true },
-  { channel: 'whatsapp', name: 'WhatsApp Business', status: 'active', isDefault: false, autoCreateLead: true },
-]
+import { DEFAULT_CHANNEL_SEED } from '@/lib/channel-meta'
 
 // GET /api/omnichannel/channels - List all channel configs in the format the frontend expects
 export async function GET(request: NextRequest) {
@@ -23,38 +12,41 @@ export async function GET(request: NextRequest) {
 
     const tenantId = authUser?.tenantId || null
 
-    // Build where clause scoped to tenant
     const where: Record<string, unknown> = {}
     if (tenantId) where.tenantId = tenantId
     if (status) where.status = status
 
-    // Check if any channels exist for this tenant
     const existingCount = await db.channelConfig.count({ where })
 
-    // Auto-create default channels if none exist
+    // Auto-create the 10 default channels if none exist
     if (existingCount === 0) {
       await db.channelConfig.createMany({
-        data: DEFAULT_CHANNELS.map((ch) => ({
-          ...ch,
+        data: DEFAULT_CHANNEL_SEED.map((ch) => ({
+          channel: ch.channel,
+          name: ch.name,
+          status: ch.status,
+          isDefault: ch.isDefault,
+          autoCreateLead: ch.autoCreateLead,
           configJson: '{}',
           autoReply: false,
           autoReplyMessage: '',
           leadSourceTag: '',
+          channelType: ch.channelType,
+          tier: ch.tier,
+          setupCompleted: ch.setupCompleted,
+          setupStep: ch.setupStep,
           tenantId,
         })),
       })
     }
 
-    // Fetch all channels (including newly created defaults)
     const channels = await db.channelConfig.findMany({
       where,
       orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
     })
 
-    // Transform to the format the frontend expects:
-    // { id, type, name, connected, config }
     const result = channels.map((ch) => {
-      let config: Record<string, string> = {}
+      let config: Record<string, unknown> = {}
       try {
         config = ch.configJson ? JSON.parse(ch.configJson) : {}
       } catch {
@@ -66,11 +58,16 @@ export async function GET(request: NextRequest) {
         type: ch.channel,
         name: ch.name,
         connected: ch.status === 'active',
+        setupCompleted: ch.setupCompleted,
+        setupStep: ch.setupStep,
+        tier: ch.tier,
+        channelType: ch.channelType,
+        lastTestedAt: ch.lastTestedAt,
+        lastTestStatus: ch.lastTestStatus,
         config,
       }
     })
 
-    // Return a flat array (the frontend expects ChannelConfig[], not { channels: [...] })
     return NextResponse.json(result)
   } catch (error) {
     console.error('[Omnichannel] Error listing channels:', error)
@@ -98,52 +95,56 @@ export async function POST(request: NextRequest) {
       webhookUrl,
       leadSourceTag,
       workspaceId,
+      setupCompleted,
+      setupStep,
+      lastTestStatus,
+      tier,
+      channelType,
     } = body
 
     if (!channel || !name) {
       return NextResponse.json(
         { error: 'channel and name are required' },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
     const tenantId = authUser?.tenantId || body.tenantId || null
-
-    // Normalize `connected` to `status`
     const resolvedStatus = status || (connected ? 'active' : 'inactive')
-
-    // Normalize `config` object to `configJson` string
     const resolvedConfigJson = configJson || (config ? JSON.stringify(config) : '{}')
 
-    // Check if a channel config already exists for this channel+tenant
     const existing = await db.channelConfig.findFirst({
-      where: {
-        channel,
-        tenantId,
-      },
+      where: { channel, tenantId },
     })
 
-    let result
+    const updateData: Record<string, unknown> = {
+      name,
+      configJson: resolvedConfigJson !== '{}' ? resolvedConfigJson : existing?.configJson || '{}',
+      status: resolvedStatus !== 'inactive' ? resolvedStatus : existing?.status || 'inactive',
+    }
+    if (isDefault !== undefined) updateData.isDefault = isDefault
+    if (autoCreateLead !== undefined) updateData.autoCreateLead = autoCreateLead
+    if (autoReply !== undefined) updateData.autoReply = autoReply
+    if (autoReplyMessage !== undefined) updateData.autoReplyMessage = autoReplyMessage
+    if (webhookUrl !== undefined) updateData.webhookUrl = webhookUrl
+    if (leadSourceTag !== undefined) updateData.leadSourceTag = leadSourceTag
+    if (workspaceId !== undefined) updateData.workspaceId = workspaceId
+    if (setupCompleted !== undefined) updateData.setupCompleted = setupCompleted
+    if (setupStep !== undefined) updateData.setupStep = setupStep
+    if (lastTestStatus !== undefined) {
+      updateData.lastTestStatus = lastTestStatus
+      updateData.lastTestedAt = new Date()
+    }
+    if (tier !== undefined) updateData.tier = tier
+    if (channelType !== undefined) updateData.channelType = channelType
 
+    let result
     if (existing) {
-      // Update existing config
       result = await db.channelConfig.update({
         where: { id: existing.id },
-        data: {
-          name,
-          configJson: resolvedConfigJson !== '{}' ? resolvedConfigJson : existing.configJson,
-          status: resolvedStatus !== 'inactive' ? resolvedStatus : existing.status,
-          isDefault: isDefault !== undefined ? isDefault : existing.isDefault,
-          autoCreateLead: autoCreateLead !== undefined ? autoCreateLead : existing.autoCreateLead,
-          autoReply: autoReply !== undefined ? autoReply : existing.autoReply,
-          autoReplyMessage: autoReplyMessage !== undefined ? autoReplyMessage : existing.autoReplyMessage,
-          webhookUrl: webhookUrl !== undefined ? webhookUrl : existing.webhookUrl,
-          leadSourceTag: leadSourceTag !== undefined ? leadSourceTag : existing.leadSourceTag,
-          workspaceId: workspaceId !== undefined ? workspaceId : existing.workspaceId,
-        },
+        data: updateData,
       })
     } else {
-      // Create new config
       result = await db.channelConfig.create({
         data: {
           channel,
@@ -158,23 +159,36 @@ export async function POST(request: NextRequest) {
           leadSourceTag: leadSourceTag || '',
           tenantId,
           workspaceId: workspaceId || null,
+          channelType: channelType || null,
+          tier: tier || null,
+          setupCompleted: setupCompleted || false,
+          setupStep: setupStep || 0,
+          ...(lastTestStatus !== undefined ? { lastTestStatus, lastTestedAt: new Date() } : {}),
         },
       })
     }
 
-    // Transform response to match frontend format
-    let configObj: Record<string, string> = {}
+    let configObj: Record<string, unknown> = {}
     try {
       configObj = result.configJson ? JSON.parse(result.configJson) : {}
     } catch { /* empty */ }
 
-    return NextResponse.json({
-      id: result.id,
-      type: result.channel,
-      name: result.name,
-      connected: result.status === 'active',
-      config: configObj,
-    }, { status: existing ? 200 : 201 })
+    return NextResponse.json(
+      {
+        id: result.id,
+        type: result.channel,
+        name: result.name,
+        connected: result.status === 'active',
+        setupCompleted: result.setupCompleted,
+        setupStep: result.setupStep,
+        tier: result.tier,
+        channelType: result.channelType,
+        lastTestedAt: result.lastTestedAt,
+        lastTestStatus: result.lastTestStatus,
+        config: configObj,
+      },
+      { status: existing ? 200 : 201 },
+    )
   } catch (error) {
     console.error('[Omnichannel] Error creating/updating channel:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
