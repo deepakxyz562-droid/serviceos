@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   LayoutDashboard,
   Briefcase,
@@ -2525,10 +2525,21 @@ function AttendanceView({ onShiftChange }: { onShiftChange?: (hasShift: boolean)
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Bug B fix: Track whether the first refresh() has completed. Without
+  // this, the onShiftChange effect below fires on initial mount with
+  // activeShift=null (before the API call resolves), which clobbers the
+  // parent EmployeePortalLayout's correct hasActiveShift=true state and
+  // leaves the PWA "Exit / Go Offline" button permanently disabled.
+  const hasInitializedRef = useRef(false);
+
   // Notify the parent layout whenever the active shift changes so the "Exit /
   // Go Offline" button in the avatar dropdown reflects reality immediately
   // (without waiting for the user to re-open the dropdown or switch apps).
   useEffect(() => {
+    // Skip the initial-mount invocation until the first refresh() has
+    // populated `activeShift` from the API — otherwise we'd push a
+    // stale `false` value up to the parent and disable the Exit button.
+    if (!hasInitializedRef.current) return;
     onShiftChange?.(!!activeShift && activeShift.status !== 'completed');
   }, [activeShift, onShiftChange]);
 
@@ -2578,14 +2589,29 @@ function AttendanceView({ onShiftChange }: { onShiftChange?: (hasShift: boolean)
         const data: TodayTotals = await todayRes.json();
         setActiveShift(data.activeShift ?? null);
         setTodayTotals(data);
+      } else {
+        // Bug D fix: surface the failure to the user instead of leaving
+        // the timer + Exit button silently stuck on stale state.
+        toast.error('Could not load your shift status.', {
+          description: 'Tap the refresh button to try again.',
+        });
       }
       if (weekRes.ok) {
         const weekData = await weekRes.json();
         setWeekHistory(weekData);
       }
     } catch {
-      // Silent — the empty state will show.
+      // Bug D fix: network/parse failures used to be silent — now we
+      // tell the user something went wrong so they can act on it.
+      toast.error('Could not load your shift status.', {
+        description: 'Check your connection and try again.',
+      });
     } finally {
+      // Mark initialized AFTER the first attempt (success OR failure) so
+      // the onShiftChange effect stops suppressing updates — subsequent
+      // activeShift changes (clock-in / clock-out) will correctly
+      // propagate to the parent layout's hasActiveShift state.
+      hasInitializedRef.current = true;
       setLoading(false);
       setRefreshing(false);
     }
@@ -3816,13 +3842,18 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
         const shift = data?.activeShift;
         setHasActiveShift(Boolean(shift && shift.status !== 'completed'));
       } else {
-        // Surface non-OK responses (e.g. 500 from a Supabase schema mismatch)
-        // to the console so the root cause is diagnosable instead of the
-        // button silently staying disabled with no explanation.
+        // Bug C fix: surface non-OK responses (e.g. 500 from a Supabase
+        // schema mismatch) to the user instead of leaving the Exit button
+        // silently disabled with no explanation. A retry action lets the
+        // user re-check without having to navigate away.
         console.warn('[Exit button] /api/employee/shift/today returned', res.status);
+        toast.error('Could not check clock-in status. Please reopen this menu to retry.');
       }
     } catch (err) {
+      // Bug C fix: network/parse failures used to be silent — now we
+      // tell the user something went wrong so they can act on it.
       console.warn('[Exit button] shift state fetch failed', err);
+      toast.error('Could not check clock-in status. Please reopen this menu to retry.');
     }
   }, []);
 

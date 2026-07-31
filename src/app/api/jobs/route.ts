@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth'
 import { notifyCustomerBookingConfirmed, notifyEmployeeJobAssigned } from '@/lib/whatsapp-notifications'
 import { dispatchJobEvent } from '@/lib/event-webhook-dispatcher'
 import { logActivity } from '@/lib/activity-log'
+import { EventBus } from '@/lib/event-bus'
 import { setDefaultResultOrder } from 'dns'
 
 // Force IPv4-first for server-side Nominatim fetches (same reason as the
@@ -394,6 +395,45 @@ export async function POST(request: NextRequest) {
             console.error('[EventWebhook] Background dispatch failed for job.assigned:', err)
           )
         }
+
+        // ── Restore EventBus emissions (regression fix) ──────────────
+        // Commit "3308534 integrate supabase" accidentally removed the
+        // EventBus.emit calls, leaving only the webhook dispatcher. That
+        // broke lifecycle-push-dispatcher (which listens on EventBus) so
+        // employees stopped receiving push notifications on job assignment.
+        // The ad-hoc notifyEmployeeJobAssigned path above is fragile and
+        // silently no-ops when Employee.userId is null. Emitting on EventBus
+        // routes through the central dispatcher which fans out to employee
+        // + owner/admins with proper tenant resolution.
+        const jobEventPayload = {
+          job: {
+            id: job.id,
+            jobNumber: job.jobNumber,
+            title: job.title,
+            status: job.status,
+            priority: job.priority,
+            type: job.type,
+            address: job.address,
+            customerName: job.customerName,
+            customerPhone: job.customerPhone,
+            assigneeName: job.assigneeName,
+            assigneePhone: job.assigneePhone,
+            workspaceId: job.workspaceId,
+          },
+          employee: employee ? { id: employee.id, name: employee.name, phone: employee.phone } : null,
+          customer: customer ? { name: customer.name, phone: customer.phone } : null,
+          resourceType: 'job' as const,
+          resourceId: job.id,
+        }
+        const eventCtx = { tenantId: job.workspaceId || undefined, workspaceId: job.workspaceId || undefined }
+        EventBus.emit('job.created', jobEventPayload, eventCtx).catch((err) =>
+          console.error('[EventBus] Failed to emit job.created:', err)
+        )
+        if (job.assigneeId && employee) {
+          EventBus.emit('job.assigned', jobEventPayload, eventCtx).catch((err) =>
+            console.error('[EventBus] Failed to emit job.assigned:', err)
+          )
+        }
       })
       .catch((e) => console.error('Failed to run post-create side-effects:', e))
 
@@ -498,6 +538,29 @@ export async function PUT(request: NextRequest) {
           )
           dispatchJobEvent('job.assigned', job, { employee, customer: null }).catch((err) =>
             console.error('[EventWebhook] Background dispatch failed for job.assigned:', err)
+          )
+          // ── Restore EventBus emission for re-assignment (regression fix) ──
+          EventBus.emit('job.assigned', {
+            job: {
+              id: job.id,
+              jobNumber: job.jobNumber,
+              title: job.title,
+              status: job.status,
+              priority: job.priority,
+              type: job.type,
+              address: job.address,
+              customerName: job.customerName,
+              customerPhone: job.customerPhone,
+              assigneeName: job.assigneeName,
+              assigneePhone: job.assigneePhone,
+              workspaceId: job.workspaceId,
+            },
+            employee: { id: employee.id, name: employee.name, phone: employee.phone },
+            customer: null,
+            resourceType: 'job',
+            resourceId: job.id,
+          }, { tenantId: job.workspaceId || undefined, workspaceId: job.workspaceId || undefined }).catch((err) =>
+            console.error('[EventBus] Failed to emit job.assigned (re-assign):', err)
           )
         })
         .catch((e) => console.error('[Jobs PUT] re-assign lookup failed:', e))

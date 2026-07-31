@@ -36,6 +36,12 @@ export async function GET() {
       where: { tenantId: auth.tenantId },
       include: { phoneNumbers: true, _count: { select: { calls: true } } },
       orderBy: { createdAt: 'desc' },
+      // NOTE (Phase R5): No `select` clause here — `...agent` spread below
+      // returns ALL columns including the new dedicated-column fields
+      // (afterHoursGreeting, backgroundNoiseEnabled, responseDelaySeconds,
+      // transferTarget, smsSendBackEnabled, smsSendBackTemplate,
+      // knownCallerGreetingTpl, trustedPhonesJson). Do not add a `select`
+      // without re-listing these or the UI's Routing & IVR tab will break.
     });
 
     // Try to enrich with live Vapi data (best-effort)
@@ -88,10 +94,31 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description, config } = body as {
+    const {
+      name,
+      description,
+      config,
+      // ── Phase R5 — dedicated-column fields (NOT inside configJson) ──
+      afterHoursGreeting,
+      backgroundNoiseEnabled,
+      responseDelaySeconds,
+      transferTarget,
+      smsSendBackEnabled,
+      smsSendBackTemplate,
+      knownCallerGreetingTpl,
+      trustedPhonesJson,
+    } = body as {
       name: string;
       description?: string;
       config?: Record<string, unknown>;
+      afterHoursGreeting?: string | null;
+      backgroundNoiseEnabled?: boolean;
+      responseDelaySeconds?: number;
+      transferTarget?: string | null;
+      smsSendBackEnabled?: boolean;
+      smsSendBackTemplate?: string | null;
+      knownCallerGreetingTpl?: string | null;
+      trustedPhonesJson?: string;
     };
 
     if (!name?.trim()) {
@@ -99,6 +126,38 @@ export async function POST(request: NextRequest) {
     }
 
     const cfg = config || {};
+
+    // Bug 4 fix: inject the tenant's Knowledge Base entries into the system
+    // prompt so the assistant can answer tenant-specific questions (pricing,
+    // policies, FAQs). KB lives at settings.aiAutoReply.knowledgeBase.entries
+    // (see src/components/settings/sections/ai-auto-reply-settings.tsx).
+    let kbText = '';
+    try {
+      const tenant = await db.tenant.findUnique({
+        where: { id: auth.tenantId },
+        select: { settingsJson: true },
+      });
+      const settings = tenant?.settingsJson ? JSON.parse(tenant.settingsJson) : {};
+      const entries = settings?.aiAutoReply?.knowledgeBase?.entries || [];
+      if (Array.isArray(entries) && entries.length > 0) {
+        kbText =
+          '\n\n## Knowledge Base\n' +
+          entries
+            .map(
+              (e: { question?: string; answer?: string }) =>
+                `Q: ${e.question || ''}\nA: ${e.answer || ''}`
+            )
+            .join('\n\n');
+      }
+    } catch (e) {
+      console.warn('[agents] Failed to load KB:', e);
+    }
+
+    const systemPromptContent =
+      (cfg.systemPrompt as string | undefined) ||
+      'You are a professional AI receptionist. Be friendly, concise, and helpful.';
+    const finalSystemPrompt = systemPromptContent + kbText;
+
     // Build Vapi assistant payload
     const vapiPayload: Record<string, unknown> = {
       name,
@@ -110,7 +169,7 @@ export async function POST(request: NextRequest) {
         messages: [
           {
             role: 'system',
-            content: cfg.systemPrompt || 'You are a professional AI receptionist. Be friendly, concise, and helpful.',
+            content: finalSystemPrompt,
           },
         ],
       },
@@ -119,6 +178,9 @@ export async function POST(request: NextRequest) {
       endCallMessage: cfg.endCallMessage || 'Thank you for calling. Have a great day!',
       silenceTimeoutSeconds: cfg.silenceTimeoutSeconds ?? 30,
       maxDurationSeconds: cfg.maxDurationSeconds ?? 600,
+      // ── Phase R5 — sync ambience + answering delay to Vapi ──
+      backgroundSound: backgroundNoiseEnabled ? 'office' : undefined,
+      responseDelaySeconds: typeof responseDelaySeconds === 'number' ? responseDelaySeconds : 0,
       // Server URL for function calling → our bridge
       serverUrl: getFunctionCallServerUrl(),
     };
@@ -147,6 +209,15 @@ export async function POST(request: NextRequest) {
         configJson: JSON.stringify(cfg),
         status: vapiAssistantId ? 'active' : 'draft',
         active: !!vapiAssistantId,
+        // ── Phase R5 — persist dedicated-column fields ──
+        afterHoursGreeting: afterHoursGreeting?.trim() ? afterHoursGreeting.trim() : null,
+        backgroundNoiseEnabled: backgroundNoiseEnabled ?? false,
+        responseDelaySeconds: typeof responseDelaySeconds === 'number' ? responseDelaySeconds : 0,
+        transferTarget: transferTarget?.trim() ? transferTarget.trim() : null,
+        smsSendBackEnabled: smsSendBackEnabled ?? false,
+        smsSendBackTemplate: smsSendBackTemplate?.trim() ? smsSendBackTemplate.trim() : null,
+        knownCallerGreetingTpl: knownCallerGreetingTpl?.trim() ? knownCallerGreetingTpl.trim() : null,
+        trustedPhonesJson: trustedPhonesJson ?? '[]',
       },
     });
 
@@ -168,12 +239,35 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const body = await request.json();
-    const { id, name, description, config, active } = body as {
+    const {
+      id,
+      name,
+      description,
+      config,
+      active,
+      // ── Phase R5 — dedicated-column fields (NOT inside configJson) ──
+      afterHoursGreeting,
+      backgroundNoiseEnabled,
+      responseDelaySeconds,
+      transferTarget,
+      smsSendBackEnabled,
+      smsSendBackTemplate,
+      knownCallerGreetingTpl,
+      trustedPhonesJson,
+    } = body as {
       id: string;
       name?: string;
       description?: string;
       config?: Record<string, unknown>;
       active?: boolean;
+      afterHoursGreeting?: string | null;
+      backgroundNoiseEnabled?: boolean;
+      responseDelaySeconds?: number;
+      transferTarget?: string | null;
+      smsSendBackEnabled?: boolean;
+      smsSendBackTemplate?: string | null;
+      knownCallerGreetingTpl?: string | null;
+      trustedPhonesJson?: string;
     };
 
     const existing = await db.aiAgent.findFirst({
@@ -190,11 +284,34 @@ export async function PATCH(request: NextRequest) {
         if (name) vapiUpdate.name = name;
         if (config) {
           if (config.systemPrompt) {
+            // Bug 4 fix (PATCH path): re-inject the tenant KB so editing the
+            // system prompt doesn't silently strip the knowledge base.
+            let patchKbText = '';
+            try {
+              const tenant = await db.tenant.findUnique({
+                where: { id: auth.tenantId },
+                select: { settingsJson: true },
+              });
+              const settings = tenant?.settingsJson ? JSON.parse(tenant.settingsJson) : {};
+              const entries = settings?.aiAutoReply?.knowledgeBase?.entries || [];
+              if (Array.isArray(entries) && entries.length > 0) {
+                patchKbText =
+                  '\n\n## Knowledge Base\n' +
+                  entries
+                    .map(
+                      (e: { question?: string; answer?: string }) =>
+                        `Q: ${e.question || ''}\nA: ${e.answer || ''}`
+                    )
+                    .join('\n\n');
+              }
+            } catch (e) {
+              console.warn('[agents PATCH] Failed to load KB:', e);
+            }
             vapiUpdate.model = {
               provider: config.modelProvider || 'openai',
               model: config.modelName || 'gpt-4o-mini',
               temperature: config.temperature ?? 0.4,
-              messages: [{ role: 'system', content: config.systemPrompt }],
+              messages: [{ role: 'system', content: config.systemPrompt + patchKbText }],
             };
           }
           if (config.firstMessage) vapiUpdate.firstMessage = config.firstMessage;
@@ -202,6 +319,13 @@ export async function PATCH(request: NextRequest) {
           if (config.voiceId) {
             vapiUpdate.voice = { provider: config.voiceProvider || 'elevenlabs', voiceId: config.voiceId };
           }
+        }
+        // ── Phase R5 — sync ambience + answering delay to Vapi ──
+        if (backgroundNoiseEnabled !== undefined) {
+          vapiUpdate.backgroundSound = backgroundNoiseEnabled ? 'office' : '';
+        }
+        if (responseDelaySeconds !== undefined) {
+          vapiUpdate.responseDelaySeconds = typeof responseDelaySeconds === 'number' ? responseDelaySeconds : 0;
         }
         await vapiUpdateAssistant(existing.vapiAssistantId, vapiUpdate as any);
       } catch (e) {
@@ -216,6 +340,25 @@ export async function PATCH(request: NextRequest) {
         ...(description !== undefined && { description }),
         ...(config && { configJson: JSON.stringify(config) }),
         ...(active !== undefined && { active, status: active ? 'active' : 'paused' }),
+        // ── Phase R5 — persist dedicated-column fields ──
+        ...(afterHoursGreeting !== undefined && {
+          afterHoursGreeting: typeof afterHoursGreeting === 'string' && afterHoursGreeting.trim() ? afterHoursGreeting.trim() : null,
+        }),
+        ...(backgroundNoiseEnabled !== undefined && { backgroundNoiseEnabled: !!backgroundNoiseEnabled }),
+        ...(responseDelaySeconds !== undefined && {
+          responseDelaySeconds: typeof responseDelaySeconds === 'number' ? responseDelaySeconds : 0,
+        }),
+        ...(transferTarget !== undefined && {
+          transferTarget: typeof transferTarget === 'string' && transferTarget.trim() ? transferTarget.trim() : null,
+        }),
+        ...(smsSendBackEnabled !== undefined && { smsSendBackEnabled: !!smsSendBackEnabled }),
+        ...(smsSendBackTemplate !== undefined && {
+          smsSendBackTemplate: typeof smsSendBackTemplate === 'string' && smsSendBackTemplate.trim() ? smsSendBackTemplate.trim() : null,
+        }),
+        ...(knownCallerGreetingTpl !== undefined && {
+          knownCallerGreetingTpl: typeof knownCallerGreetingTpl === 'string' && knownCallerGreetingTpl.trim() ? knownCallerGreetingTpl.trim() : null,
+        }),
+        ...(trustedPhonesJson !== undefined && { trustedPhonesJson: trustedPhonesJson ?? '[]' }),
       },
     });
 

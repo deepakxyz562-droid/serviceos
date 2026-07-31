@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { executeTool } from '@/lib/vapi-functions';
+import { EventBus } from '@/lib/event-bus';
 
 /**
  * Vapi Function-Call Bridge
@@ -108,6 +109,88 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Bug 3 fix: link the AiCall row to the newly-created Lead / set the
+    // outcomeType after a successful create_lead / book_appointment /
+    // submit_request. Fire-and-forget so a slow DB write doesn't block the
+    // Vapi response. The fields are bare String? (no Prisma @relation — soft
+    // FK, see Phase R2 worklog) so a direct `update` is safe on Supabase.
+    if (localCallId && result && typeof result === 'object') {
+      const r = result as { leadId?: string; bookingId?: string };
+      if (toolName === 'create_lead' && r.leadId) {
+        db.aiCall.update({
+          where: { id: localCallId },
+          data: { leadId: r.leadId, outcomeType: 'lead_created' },
+        }).catch(err => console.error('[function-call] Failed to link AiCall.leadId:', err));
+      } else if (toolName === 'book_appointment' && r.bookingId) {
+        db.aiCall.update({
+          where: { id: localCallId },
+          data: { outcomeType: 'booked' },
+        }).catch(err => console.error('[function-call] Failed to set outcomeType:', err));
+      } else if (toolName === 'submit_request' && r.leadId) {
+        // submit_request also creates a Lead — mirror the linkage so the call
+        // record shows where the request came from.
+        db.aiCall.update({
+          where: { id: localCallId },
+          data: { leadId: r.leadId, outcomeType: 'lead_created' },
+        }).catch(err => console.error('[function-call] Failed to link AiCall.leadId (submit_request):', err));
+      } else if (toolName === 'transfer_call') {
+        db.aiCall.update({
+          where: { id: localCallId },
+          data: { outcomeType: 'transferred' },
+        }).catch(err => console.error('[function-call] Failed to set outcomeType (transfer):', err));
+      }
+    }
+
+    // ── Emit ai_call.* events for successful lead/booking tool calls ──
+    // These events drive the lifecycle-push-dispatcher → in-app + web push
+    // notifications to the tenant owner/admins.
+    const resultObj = (result && typeof result === 'object') ? result as Record<string, any> : {};
+    const isSuccessful =
+      resultObj.success === true ||
+      (resultObj.success === undefined && (!!resultObj.leadId || !!resultObj.bookingId));
+
+    if (isSuccessful && tenantId && localCallId) {
+      const basePayload = {
+        call: {
+          id: localCallId,
+          customerPhone: call?.customer?.number,
+          assistantId: agentId,
+          tenantId,
+        },
+        toolName,
+        parameters,
+        result,
+        resourceType: 'ai_call',
+        resourceId: localCallId,
+      } as Record<string, any>;
+
+      if (toolName === 'create_lead' && resultObj.leadId) {
+        basePayload.leadId = resultObj.leadId;
+        EventBus.emit('ai_call.lead_created', basePayload, { tenantId })
+          .catch(err => console.error('[EventBus] ai_call.lead_created emit failed:', err));
+      } else if (toolName === 'book_appointment' && resultObj.bookingId) {
+        basePayload.bookingId = resultObj.bookingId;
+        EventBus.emit('ai_call.appointment_booked', basePayload, { tenantId })
+          .catch(err => console.error('[EventBus] ai_call.appointment_booked emit failed:', err));
+      }
+    }
+
+    // Vapi response shape:
+    //  - Normal tools: { result: <data> } — Vapi feeds `<data>` to the LLM
+    //    as the tool result.
+    //  - transfer_call (Bug 2 fix): the handler returns a pre-wrapped
+    //    `{ result: { type: 'transfer', destination, reason }, message }`
+    //    so Vapi recognises the transfer command (per Vapi docs). Pass it
+    //    through verbatim — wrapping it again would nest `result.result`
+    //    and Vapi would treat it as ordinary data the LLM narrates (the bug).
+    if (
+      result &&
+      typeof result === 'object' &&
+      'result' in (result as Record<string, unknown>) &&
+      'message' in (result as Record<string, unknown>)
+    ) {
+      return NextResponse.json(result);
+    }
     // Vapi expects the result wrapped in { result: ... }
     return NextResponse.json({ result });
   } catch (error) {

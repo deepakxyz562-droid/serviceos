@@ -95,6 +95,71 @@ export const AVAILABLE_TOOLS = [
       required: ['reason'],
     },
   },
+  {
+    name: 'lookup_appointment',
+    description: 'Look up upcoming appointments/bookings for a customer by their phone number',
+    parameters: {
+      type: 'object',
+      properties: {
+        phone: { type: 'string', description: 'Customer phone number in E.164 format' },
+      },
+      required: ['phone'],
+    },
+  },
+  {
+    name: 'cancel_appointment',
+    description: 'Cancel an existing appointment by booking ID',
+    parameters: {
+      type: 'object',
+      properties: {
+        bookingId: { type: 'string', description: 'The booking ID to cancel' },
+        reason: { type: 'string', description: 'Reason for cancellation' },
+      },
+      required: ['bookingId'],
+    },
+  },
+  {
+    name: 'reschedule_appointment',
+    description: 'Reschedule an existing appointment to a new date/time',
+    parameters: {
+      type: 'object',
+      properties: {
+        bookingId: { type: 'string' },
+        newDateTime: { type: 'string', description: 'ISO 8601 datetime string for the new appointment time' },
+      },
+      required: ['bookingId', 'newDateTime'],
+    },
+  },
+  {
+    name: 'submit_request',
+    description: 'Submit a work/service request from a caller. Creates a lead with request details for follow-up.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        phone: { type: 'string' },
+        email: { type: 'string' },
+        serviceType: { type: 'string', description: 'Type of service requested' },
+        description: { type: 'string', description: 'Details of the request' },
+        preferredDate: { type: 'string', description: 'Preferred appointment date (ISO 8601)' },
+      },
+      required: ['name', 'phone', 'description'],
+    },
+  },
+  {
+    name: 'create_follow_up_task',
+    description: 'Create a follow-up task for the team to contact a caller back',
+    parameters: {
+      type: 'object',
+      properties: {
+        callerName: { type: 'string' },
+        callerPhone: { type: 'string' },
+        reason: { type: 'string', description: 'Why follow-up is needed' },
+        dueDate: { type: 'string', description: 'ISO date for follow-up (optional)' },
+      },
+      required: ['callerName', 'callerPhone', 'reason'],
+    },
+  },
 ] as const;
 
 // ─── Tool handlers (business logic) ─────────────────────────────────────────
@@ -125,6 +190,16 @@ export async function executeTool(
       return handleGetServicePrices(parameters, ctx);
     case 'transfer_call':
       return handleTransferCall(parameters, ctx);
+    case 'lookup_appointment':
+      return handleLookupAppointment(parameters, ctx);
+    case 'cancel_appointment':
+      return handleCancelAppointment(parameters);
+    case 'reschedule_appointment':
+      return handleRescheduleAppointment(parameters);
+    case 'submit_request':
+      return handleSubmitRequest(parameters, ctx);
+    case 'create_follow_up_task':
+      return handleCreateFollowUpTask(parameters, ctx);
     default:
       return { error: `Unknown tool: ${toolName}` };
   }
@@ -252,11 +327,31 @@ async function handleCheckAvailability(params: Record<string, unknown>, ctx: Too
   };
 }
 
+// Map short day keys stored in Tenant.businessHoursJson (mon, tue, ...)
+// to the long-day keys returned by this tool (monday, tuesday, ...).
+const DAY_KEY_MAP: Record<string, string> = {
+  mon: 'monday',
+  tue: 'tuesday',
+  wed: 'wednesday',
+  thu: 'thursday',
+  fri: 'friday',
+  sat: 'saturday',
+  sun: 'sunday',
+  // Also accept long-day keys directly (defensive).
+  monday: 'monday',
+  tuesday: 'tuesday',
+  wednesday: 'wednesday',
+  thursday: 'thursday',
+  friday: 'friday',
+  saturday: 'saturday',
+  sunday: 'sunday',
+};
+
 async function handleGetBusinessHours(ctx: ToolContext) {
   const db = await getDb();
   const tenant = await db.tenant.findUnique({
     where: { id: ctx.tenantId },
-    select: { settingsJson: true, name: true },
+    select: { businessHoursJson: true, name: true },
   });
   let hours: Record<string, string> = {
     monday: '09:00-17:00',
@@ -268,8 +363,26 @@ async function handleGetBusinessHours(ctx: ToolContext) {
     sunday: 'Closed',
   };
   try {
-    const settings = JSON.parse(tenant?.settingsJson || '{}');
-    if (settings.businessHours) hours = { ...hours, ...settings.businessHours };
+    // Bug 1 fix: business hours live in a dedicated column
+    // (Tenant.businessHoursJson), NOT in settingsJson.businessHours.
+    // Shape: { mon: { open: '09:00', close: '17:00' }, ... } OR
+    // { monday: '09:00-17:00', ... } (legacy). Handle both.
+    const parsed = JSON.parse(tenant?.businessHoursJson || '{}');
+    if (parsed && typeof parsed === 'object') {
+      for (const [k, v] of Object.entries(parsed)) {
+        const longKey = DAY_KEY_MAP[k.toLowerCase()];
+        if (!longKey) continue;
+        if (v && typeof v === 'object' && ('open' in v || 'close' in v)) {
+          const open = (v as { open?: string }).open || '';
+          const close = (v as { close?: string }).close || '';
+          if (open && close) hours[longKey] = `${open}-${close}`;
+          else if (open) hours[longKey] = open;
+          else hours[longKey] = 'Closed';
+        } else if (typeof v === 'string') {
+          hours[longKey] = v || 'Closed';
+        }
+      }
+    }
   } catch { /* ignore */ }
   return { businessHours: hours };
 }
@@ -312,12 +425,225 @@ async function handleTransferCall(params: Record<string, unknown>, ctx: ToolCont
     if (settings.transferNumber) transferNumber = settings.transferNumber;
   } catch { /* ignore */ }
 
+  const reason = params.reason ? String(params.reason) : 'Escalation requested';
+
+  // Bug 2 fix: Vapi recognises a transfer command when the function-call
+  // response body is `{ result: { type: 'transfer', destination: '+1...' } }`.
+  // Returning a plain `{ action: 'transfer' }` JSON was just narrated by
+  // the LLM — it never actually triggered a call transfer. The function-call
+  // route passes this wrapper through verbatim when it sees a nested
+  // `result` + `message` pair (see route handler).
+  if (!transferNumber) {
+    return {
+      message: 'No transfer number configured. Please take a message and let the caller know the team will follow up.',
+    };
+  }
   return {
-    action: 'transfer',
-    target: transferNumber,
-    reason: params.reason,
-    message: transferNumber
-      ? `Transferring to ${transferNumber}`
-      : 'No transfer number configured. Please take a message.',
+    result: {
+      type: 'transfer',
+      destination: transferNumber, // E.164 phone number
+      reason,
+    },
+    // Human-readable message for the LLM to narrate before the transfer fires.
+    message: `Transferring you to ${transferNumber}. Please hold.`,
   };
+}
+
+// ─── New tools (Phase R4) ───────────────────────────────────────────────────
+
+async function handleLookupAppointment(params: Record<string, unknown>, ctx: ToolContext) {
+  const phone = params.phone ? String(params.phone) : '';
+  if (!phone) return { error: 'phone is required' };
+  const db = await getDb();
+  // Customer has no tenantId column — scope by phone alone, then tenant-scope
+  // the bookings themselves.
+  const customer = await db.customer.findFirst({
+    where: { phone },
+    select: { id: true, name: true },
+  });
+  if (!customer) {
+    return { appointments: [], count: 0, message: 'No customer found with that phone number.' };
+  }
+  // Use an allowlist (`in`) rather than a blocklist (`notIn`) — `notIn` is
+  // not supported by the Supabase REST adapter.
+  const bookings = await db.booking.findMany({
+    where: {
+      customerId: customer.id,
+      tenantId: ctx.tenantId,
+      scheduledAt: { gte: new Date() },
+      status: { in: ['pending', 'confirmed', 'rescheduled', 'in_progress'] },
+    },
+    orderBy: { scheduledAt: 'asc' },
+    take: 5,
+    // Booking has no `serviceType` field — `title` carries the appointment
+    // description (e.g. "AI Booked: Plumbing").
+    select: { id: true, scheduledAt: true, status: true, title: true, notes: true },
+  });
+  return {
+    customer: { name: customer.name, phone },
+    appointments: bookings,
+    count: bookings.length,
+  };
+}
+
+async function handleCancelAppointment(params: Record<string, unknown>) {
+  const bookingId = params.bookingId ? String(params.bookingId) : '';
+  if (!bookingId) return { error: 'bookingId is required' };
+  const db = await getDb();
+  const reason = params.reason ? String(params.reason) : '';
+  const booking = await db.booking
+    .update({
+      where: { id: bookingId },
+      data: {
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        cancellationReason: reason || 'Cancelled by AI Receptionist',
+        notes: `Cancelled by AI Receptionist${reason ? `. Reason: ${reason}` : ' (reason not specified)'}`,
+      },
+    })
+    .catch(() => null);
+  if (!booking) return { success: false, error: 'Booking not found or could not be updated' };
+  return { success: true, bookingId: booking.id, status: 'cancelled' };
+}
+
+async function handleRescheduleAppointment(params: Record<string, unknown>) {
+  const bookingId = params.bookingId ? String(params.bookingId) : '';
+  const newDateTime = params.newDateTime ? String(params.newDateTime) : '';
+  if (!bookingId || !newDateTime) return { error: 'bookingId and newDateTime are required' };
+  const newDate = new Date(newDateTime);
+  if (isNaN(newDate.getTime())) return { error: 'Invalid datetime format. Use ISO 8601.' };
+  const db = await getDb();
+  // Capture previous scheduledAt for the rescheduledFrom audit field.
+  const existing = await db.booking.findUnique({
+    where: { id: bookingId },
+    select: { scheduledAt: true },
+  }).catch(() => null);
+  if (!existing) return { success: false, error: 'Booking not found' };
+  const prevIso = existing.scheduledAt
+    ? (existing.scheduledAt instanceof Date
+        ? existing.scheduledAt.toISOString()
+        : String(existing.scheduledAt))
+    : null;
+  const booking = await db.booking
+    .update({
+      where: { id: bookingId },
+      data: {
+        scheduledAt: newDate,
+        status: 'rescheduled',
+        rescheduledFrom: prevIso,
+      },
+    })
+    .catch(() => null);
+  if (!booking) return { success: false, error: 'Booking not found' };
+  return { success: true, bookingId: booking.id, newDateTime: newDate.toISOString() };
+}
+
+async function handleSubmitRequest(params: Record<string, unknown>, ctx: ToolContext) {
+  const db = await getDb();
+  const name = String(params.name || '');
+  const phone = String(params.phone || '');
+  const description = String(params.description || '');
+  if (!name || !phone || !description) {
+    return { error: 'name, phone, and description are required' };
+  }
+  const email = params.email ? String(params.email) : undefined;
+  const serviceType = params.serviceType ? String(params.serviceType) : undefined;
+  const preferredDate = params.preferredDate ? String(params.preferredDate) : undefined;
+
+  // Dedupe by phone within tenant (mirrors handleCreateLead). If a Lead with
+  // this phone already exists, append the new request as a note rather than
+  // creating a duplicate.
+  const existing = await db.lead.findFirst({
+    where: { tenantId: ctx.tenantId, phone },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const noteEntry = {
+    text: `Service request: ${description}${serviceType ? ` [${serviceType}]` : ''}${preferredDate ? ` (preferred: ${preferredDate})` : ''}`,
+    source: 'ai_receptionist',
+    at: new Date().toISOString(),
+  };
+
+  if (existing) {
+    const existingNotes = (() => { try { return JSON.parse(existing.notesJson || '[]'); } catch { return []; } })();
+    existingNotes.push(noteEntry);
+    await db.lead.update({
+      where: { id: existing.id },
+      data: { notesJson: JSON.stringify(existingNotes) },
+    });
+    return { success: true, leadId: existing.id, message: 'Request added to existing lead. Team will follow up.' };
+  }
+
+  const lead = await db.lead.create({
+    data: {
+      tenantId: ctx.tenantId,
+      name,
+      phone,
+      email: email || null,
+      source: 'ai_receptionist',
+      status: 'new',
+      serviceType: serviceType || null,
+      description: noteEntry.text,
+      tagsJson: JSON.stringify(['ai-receptionist', 'request', 'voice-call']),
+    },
+  });
+
+  return { success: true, leadId: lead.id, message: 'Request submitted. Team will follow up.' };
+}
+
+async function handleCreateFollowUpTask(params: Record<string, unknown>, ctx: ToolContext) {
+  const db = await getDb();
+  const callerName = String(params.callerName || '');
+  const callerPhone = String(params.callerPhone || '');
+  const reason = String(params.reason || '');
+  if (!callerName || !callerPhone || !reason) {
+    return { error: 'callerName, callerPhone, and reason are required' };
+  }
+  const dueDate = params.dueDate ? String(params.dueDate) : undefined;
+
+  // Job has no tenantId column — resolve a workspaceId for the tenant.
+  // (If no workspace exists yet, leave null — the Job row is still created.)
+  let workspaceId: string | undefined;
+  try {
+    const ws = await db.workspace.findFirst({
+      where: { tenantId: ctx.tenantId },
+      select: { id: true },
+    });
+    workspaceId = ws?.id || undefined;
+  } catch { /* ignore — workspace model may be missing in some setups */ }
+
+  // Try to resolve a customerId by phone (best-effort).
+  let customerId: string | undefined;
+  try {
+    const customer = await db.customer.findFirst({
+      where: { phone: callerPhone },
+      select: { id: true },
+    });
+    customerId = customer?.id || undefined;
+  } catch { /* ignore */ }
+
+  const title = `Follow-up: ${callerName}`;
+  const scheduledAt = dueDate ? new Date(dueDate) : null;
+  const validScheduledAt = scheduledAt && !isNaN(scheduledAt.getTime()) ? scheduledAt : null;
+
+  try {
+    const job = await db.job.create({
+      data: {
+        title,
+        description: reason,
+        status: 'pending',
+        priority: 'medium',
+        type: 'task',
+        customerName: callerName,
+        customerPhone: callerPhone,
+        customerId: customerId || null,
+        scheduledAt: validScheduledAt,
+        notes: `Created by AI Receptionist. Caller: ${callerName} (${callerPhone}). Reason: ${reason}`,
+        workspaceId: workspaceId || null,
+      },
+    });
+    return { success: true, taskId: job.id, message: `Follow-up task created for ${callerName}.` };
+  } catch (e) {
+    return { success: false, error: 'Failed to create follow-up task', detail: (e as Error).message };
+  }
 }

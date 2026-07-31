@@ -17,6 +17,8 @@
  *   - employee.status_changed, employee.heartbeat
  *   - conversation.message_received, conversation.message_sent
  *   - customer.journey_stage_changed
+ *   - ai_call.started, ai_call.ended, ai_call.lead_created, ai_call.appointment_booked
+ *   - ai_billing.threshold_reached
  *
  * Usage:
  *   // Subscribe to events
@@ -50,6 +52,11 @@ export type ServiceEvent =
   | 'journey.en_route' | 'journey.in_progress' | 'journey.completed'
   | 'journey.review_requested' | 'journey.archived' | 'journey.cancelled'
   | 'journey.custom_action'
+  // ── AI Receptionist (Phase R3) ─────────────────────────────────
+  | 'ai_call.started' | 'ai_call.ended'
+  | 'ai_call.lead_created' | 'ai_call.appointment_booked'
+  // ── AI Receptionist Billing (Phase R7) ─────────────────────────
+  | 'ai_billing.threshold_reached'
 
 export interface EventPayload {
   event: ServiceEvent
@@ -109,6 +116,13 @@ export const SERVICE_EVENT_LABELS: Record<ServiceEvent, { label: string; descrip
   'journey.archived':             { label: 'Journey Archived',             description: 'Journey was archived',                    category: 'journey' },
   'journey.cancelled':            { label: 'Journey Cancelled',            description: 'Journey was cancelled',                   category: 'journey' },
   'journey.custom_action':        { label: 'Journey Custom Action',        description: 'Journey custom action triggered',        category: 'journey' },
+
+  // ── AI Receptionist (Phase R3) ─────────────────────────────────
+  'ai_call.started':            { label: 'AI Call Started',          description: 'An AI receptionist call started',           category: 'ai_call' },
+  'ai_call.ended':              { label: 'AI Call Ended',            description: 'An AI receptionist call ended',             category: 'ai_call' },
+  'ai_call.lead_created':       { label: 'AI Call Lead Created',     description: 'AI receptionist captured a new lead',       category: 'ai_call' },
+  'ai_call.appointment_booked': { label: 'AI Call Appointment Booked', description: 'AI receptionist booked an appointment',   category: 'ai_call' },
+  'ai_billing.threshold_reached': { label: 'AI Billing Threshold Reached', description: 'AI receptionist usage hit a billing threshold (75% / 100%)', category: 'ai_billing' },
 }
 
 // ─── Job Events Set ───────────────────────────────────────────────────────────

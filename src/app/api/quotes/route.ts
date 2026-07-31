@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const customerIdParam = searchParams.get('customerId');
+    const dealIdParam = searchParams.get('dealId');
 
     const where: Record<string, unknown> = {};
     if (user.tenantId && !user.isSuperAdmin) {
@@ -28,6 +29,13 @@ export async function GET(req: NextRequest) {
       where.customerId = user.id;
     } else if (customerIdParam) {
       where.customerId = customerIdParam;
+    }
+
+    // Optional filter by linked Deal — used by the Sales Pipeline view
+    // to fetch the just-created draft Quote after a Deal moves to the
+    // `quote_draft` stage.
+    if (dealIdParam) {
+      where.dealId = dealIdParam;
     }
 
     const quotes = await db.quote.findMany({
@@ -78,9 +86,45 @@ export async function POST(req: NextRequest) {
       title, description, customerId,
       services, addOns, discountType, discountValue, taxRate, validUntil,
       currency: quoteCurrency, tenantId: bodyTenantId,
+      dealId,
     } = body;
 
-    if (!title || !customerId) {
+    // ─── Pre-fill from linked Deal (optional) ────────────────────────────
+    // When `dealId` is provided (e.g. the user clicked "Create Quote" on
+    // a Deal in the Sales Pipeline), look up the Deal so we can pre-fill
+    // `customerId` / `leadId` / `currency` / `value` if the caller didn't
+    // supply them. This makes the Quote ↔ Deal link bi-directional:
+    //   - Deal → Quote: `ensureQuoteForDeal` (auto-create on stage change)
+    //   - Quote → Deal: this lookup + the `dealId` field on the new row
+    let resolvedCustomerId = customerId || null;
+    let resolvedLeadId: string | null = null;
+    let dealCurrency: string | null = null;
+    let dealTenantId: string | null = null;
+    if (dealId) {
+      try {
+        const deal = await db.deal.findUnique({
+          where: { id: dealId },
+          select: {
+            id: true,
+            currency: true,
+            customerId: true,
+            leadId: true,
+            tenantId: true,
+          },
+        });
+        if (deal) {
+          resolvedCustomerId = resolvedCustomerId || deal.customerId || null;
+          resolvedLeadId = deal.leadId || null;
+          dealCurrency = deal.currency || null;
+          dealTenantId = deal.tenantId || null;
+        }
+      } catch (dealErr) {
+        // Non-fatal — continue with whatever fields the caller supplied.
+        console.error('[Quotes POST] Failed to look up Deal for dealId:', dealId, dealErr);
+      }
+    }
+
+    if (!title || !resolvedCustomerId) {
       return NextResponse.json({ error: 'Title and customer are required' }, { status: 400 });
     }
 
@@ -105,7 +149,10 @@ export async function POST(req: NextRequest) {
       if (tenant?.currency) baseCurrency = tenant.currency;
     } catch { /* fallback */ }
 
-    const transactionCurrency = quoteCurrency || baseCurrency;
+    // Prefer the caller-supplied currency; fall back to the Deal's
+    // currency (when a Deal is linked); finally fall back to the
+    // tenant base currency.
+    const transactionCurrency = quoteCurrency || dealCurrency || baseCurrency;
     const exchangeRate = transactionCurrency === baseCurrency ? 1 : getExchangeRate(transactionCurrency, baseCurrency);
     const baseAmount = transactionCurrency === baseCurrency ? total : convertCurrency(total, transactionCurrency, baseCurrency, exchangeRate);
 
@@ -113,7 +160,9 @@ export async function POST(req: NextRequest) {
       data: {
         title,
         description: description || null,
-        customerId,
+        customerId: resolvedCustomerId,
+        leadId: resolvedLeadId,
+        dealId: dealId || null, // ← soft FK -> Deal.id
         itemsJson: JSON.stringify(servicesList),
         addOnsJson: JSON.stringify(addOnsList),
         subtotal,
@@ -128,7 +177,7 @@ export async function POST(req: NextRequest) {
         baseAmount,
         status: 'draft',
         validUntil: validUntil ? new Date(validUntil) : null,
-        tenantId: bodyTenantId || null,
+        tenantId: bodyTenantId || dealTenantId || null,
       },
     });
 

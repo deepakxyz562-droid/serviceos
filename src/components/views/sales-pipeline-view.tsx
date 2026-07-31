@@ -838,7 +838,11 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
     } else if (newStageKey === 'assessment_completed') {
       toast.success('Assessment marked as completed');
     } else if (newStageKey === 'quote_draft') {
-      toast.success('Moved to Draft — create a quote from the Quotes tab');
+      // The PUT /api/deals/[id] handler calls `ensureQuoteForDeal`
+      // server-side when stage transitions to `quote_draft`, so a draft
+      // Quote linked via `Quote.dealId` already exists by the time this
+      // toast fires. Tell the user where to find it.
+      toast.success('Draft quote created — open it in Quotes to edit and send.');
     } else if (newStageKey === 'quote_awaiting_response') {
       toast.success('Marked as sent / awaiting response');
     }
@@ -2544,8 +2548,9 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
           )}
           {dropAction?.newStageKey === 'quote_draft' && (
             <div className="rounded-md bg-amber-50 border border-amber-200 p-2 text-xs text-amber-700">
-              The deal will move to the Draft column. You can create the actual quote from
-              the Quotes view (linked via Quote.dealId).
+              The deal will move to the Draft column and a draft Quote will be auto-created
+              (linked via Quote.dealId). Use <strong>Create Quote</strong> to jump straight
+              into editing it, or <strong>Move to Draft</strong> to stay on the pipeline.
             </div>
           )}
           {dropAction?.newStageKey === 'quote_awaiting_response' && (
@@ -2560,9 +2565,18 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
             {dropAction?.newStageKey === 'quote_draft' && (
               <Button
                 variant="outline"
-                onClick={() => {
+                onClick={async () => {
+                  if (!dropAction) return;
+                  const { deal, newStageKey } = dropAction;
+                  // Confirm the move (triggers server-side
+                  // `ensureQuoteForDeal` via PUT /api/deals/[id]). This
+                  // auto-creates a draft Quote linked via Quote.dealId
+                  // so the user lands on an immediately-editable row.
+                  await handleMoveStage(deal.id, newStageKey);
+                  toast.success('Draft quote created — opening Quotes view…');
                   setCurrentView('quotes');
                   setDropAction(null);
+                  setDropActionDate('');
                 }}
               >
                 Create Quote

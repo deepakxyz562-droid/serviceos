@@ -22,6 +22,11 @@ import {
   Save,
   X,
   CheckCircle2,
+  Route,
+  PhoneForwarded,
+  Clock3,
+  ShieldCheck,
+  MessageCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,6 +36,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
@@ -64,6 +70,15 @@ interface Agent {
   lastCallAt: string | null;
   vapiAssistantId: string | null;
   config: Record<string, any>;
+  // ── Phase R5 — advanced call-handling fields (dedicated DB columns) ──
+  afterHoursGreeting?: string | null;
+  backgroundNoiseEnabled?: boolean;
+  responseDelaySeconds?: number;
+  transferTarget?: string | null;
+  smsSendBackEnabled?: boolean;
+  smsSendBackTemplate?: string | null;
+  knownCallerGreetingTpl?: string | null;
+  trustedPhonesJson?: string;
   phoneNumbers?: { id: string; phoneNumber: string; friendlyName: string | null }[];
   callsCount?: number;
 }
@@ -412,6 +427,33 @@ function AgentDialog({
     maxDurationSeconds: 600,
   });
 
+  // ── Phase R5 — dedicated-column fields (NOT inside configJson) ──
+  const [afterHoursGreeting, setAfterHoursGreeting] = useState('');
+  const [backgroundNoiseEnabled, setBackgroundNoiseEnabled] = useState(false);
+  const [responseDelaySeconds, setResponseDelaySeconds] = useState(0);
+  const [transferTarget, setTransferTarget] = useState('');
+  const [smsSendBackEnabled, setSmsSendBackEnabled] = useState(false);
+  const [smsSendBackTemplate, setSmsSendBackTemplate] = useState('');
+  const [knownCallerGreetingTpl, setKnownCallerGreetingTpl] = useState('');
+  const [trustedPhones, setTrustedPhones] = useState<string[]>([]);
+  const [trustedPhoneInput, setTrustedPhoneInput] = useState('');
+
+  const addTrustedPhone = () => {
+    const raw = trustedPhoneInput.trim().replace(/,$/, '').trim();
+    if (!raw) {
+      setTrustedPhoneInput('');
+      return;
+    }
+    if (!trustedPhones.includes(raw)) {
+      setTrustedPhones((prev) => [...prev, raw]);
+    }
+    setTrustedPhoneInput('');
+  };
+
+  const removeTrustedPhone = (phone: string) => {
+    setTrustedPhones((prev) => prev.filter((p) => p !== phone));
+  };
+
   useEffect(() => {
     if (agent) {
       const c = agent.config || {};
@@ -429,6 +471,21 @@ function AgentDialog({
         silenceTimeoutSeconds: c.silenceTimeoutSeconds ?? 30,
         maxDurationSeconds: c.maxDurationSeconds ?? 600,
       });
+      // ── Phase R5 — populate dedicated-column fields from agent record ──
+      setAfterHoursGreeting(agent.afterHoursGreeting || '');
+      setBackgroundNoiseEnabled(agent.backgroundNoiseEnabled ?? false);
+      setResponseDelaySeconds(agent.responseDelaySeconds ?? 0);
+      setTransferTarget(agent.transferTarget || '');
+      setSmsSendBackEnabled(agent.smsSendBackEnabled ?? false);
+      setSmsSendBackTemplate(agent.smsSendBackTemplate || '');
+      setKnownCallerGreetingTpl(agent.knownCallerGreetingTpl || '');
+      try {
+        const parsed = JSON.parse(agent.trustedPhonesJson || '[]');
+        setTrustedPhones(Array.isArray(parsed) ? parsed.filter((p) => typeof p === 'string') : []);
+      } catch {
+        setTrustedPhones([]);
+      }
+      setTrustedPhoneInput('');
       setTab('basic');
     } else {
       setForm({
@@ -445,6 +502,16 @@ function AgentDialog({
         silenceTimeoutSeconds: 30,
         maxDurationSeconds: 600,
       });
+      // ── Phase R5 — reset dedicated-column fields for new agent ──
+      setAfterHoursGreeting('');
+      setBackgroundNoiseEnabled(false);
+      setResponseDelaySeconds(0);
+      setTransferTarget('');
+      setSmsSendBackEnabled(false);
+      setSmsSendBackTemplate('');
+      setKnownCallerGreetingTpl('');
+      setTrustedPhones([]);
+      setTrustedPhoneInput('');
       setTab('basic');
     }
   }, [agent, open]);
@@ -486,11 +553,22 @@ function AgentDialog({
         silenceTimeoutSeconds: form.silenceTimeoutSeconds,
         maxDurationSeconds: form.maxDurationSeconds,
       };
+      // ── Phase R5 — send dedicated-column fields alongside configJson ──
+      const phase5Fields = {
+        afterHoursGreeting,
+        backgroundNoiseEnabled,
+        responseDelaySeconds: Number(responseDelaySeconds) || 0,
+        transferTarget,
+        smsSendBackEnabled,
+        smsSendBackTemplate,
+        knownCallerGreetingTpl,
+        trustedPhonesJson: JSON.stringify(trustedPhones),
+      };
       const url = '/api/vapi/agents';
       const method = agent ? 'PATCH' : 'POST';
       const body = agent
-        ? { id: agent.id, name: form.name, description: form.description, config }
-        : { name: form.name, description: form.description, config };
+        ? { id: agent.id, name: form.name, description: form.description, config, ...phase5Fields }
+        : { name: form.name, description: form.description, config, ...phase5Fields };
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -535,6 +613,9 @@ function AgentDialog({
             </TabsTrigger>
             <TabsTrigger value="advanced" className="gap-1.5 rounded-lg px-3 py-1.5 text-xs">
               <Sparkles className="size-3.5" /> Advanced
+            </TabsTrigger>
+            <TabsTrigger value="routing" className="gap-1.5 rounded-lg px-3 py-1.5 text-xs">
+              <Route className="size-3.5" /> Routing & IVR
             </TabsTrigger>
           </TabsList>
 
@@ -686,6 +767,41 @@ function AgentDialog({
                   <span>Creative (1)</span>
                 </div>
               </div>
+              <Separator />
+              {/* ── Phase R5 — voice ambience & answering delay ── */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="bg-noise" className="flex items-center gap-1.5">
+                      <Volume2 className="size-3.5" /> Background Noise
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Adds subtle call-center ambience for a more natural feel.
+                    </p>
+                  </div>
+                  <Switch
+                    id="bg-noise"
+                    checked={backgroundNoiseEnabled}
+                    onCheckedChange={setBackgroundNoiseEnabled}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="resp-delay" className="flex items-center gap-1.5">
+                  <Clock3 className="size-3.5" /> Answering Delay: {responseDelaySeconds}s
+                </Label>
+                <Slider
+                  id="resp-delay"
+                  min={0}
+                  max={15}
+                  step={1}
+                  value={[responseDelaySeconds]}
+                  onValueChange={(v) => setResponseDelaySeconds(Array.isArray(v) ? v[0] ?? 0 : 0)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Let the line ring briefly before the AI answers. Recommended: 0–10s.
+                </p>
+              </div>
             </TabsContent>
 
             {/* ─── Advanced tab ───────────────────────────────────── */}
@@ -724,6 +840,137 @@ function AgentDialog({
                   <li><code className="text-emerald-600">get_service_prices</code> — Quote service prices</li>
                   <li><code className="text-emerald-600">transfer_call</code> — Transfer to a human</li>
                 </ul>
+              </div>
+            </TabsContent>
+
+            {/* ─── Routing & IVR tab (Phase R5) ──────────────────── */}
+            <TabsContent value="routing" className="space-y-5 mt-0">
+              {/* After-Hours Greeting */}
+              <div className="space-y-2">
+                <Label htmlFor="after-hours" className="flex items-center gap-1.5">
+                  <Clock3 className="size-3.5" /> After-Hours Greeting
+                </Label>
+                <Textarea
+                  id="after-hours"
+                  value={afterHoursGreeting}
+                  onChange={(e) => setAfterHoursGreeting(e.target.value)}
+                  placeholder="You've reached us outside our business hours. Please leave a brief message and we'll call you back."
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Played when the call comes in outside your business hours. Leave blank to use the default greeting.
+                </p>
+              </div>
+
+              <Separator />
+
+              {/* Call Transfer / Escalation */}
+              <div className="space-y-2">
+                <Label htmlFor="transfer-target" className="flex items-center gap-1.5">
+                  <PhoneForwarded className="size-3.5" /> Transfer Target
+                </Label>
+                <Input
+                  id="transfer-target"
+                  value={transferTarget}
+                  onChange={(e) => setTransferTarget(e.target.value)}
+                  placeholder="+1 555-0100"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Phone number that escalation/transfer calls will be routed to.
+                </p>
+              </div>
+
+              <Separator />
+
+              {/* Known-Caller Greeting Template */}
+              <div className="space-y-2">
+                <Label htmlFor="known-caller-tpl">Known-Caller Greeting Template</Label>
+                <Input
+                  id="known-caller-tpl"
+                  value={knownCallerGreetingTpl}
+                  onChange={(e) => setKnownCallerGreetingTpl(e.target.value)}
+                  placeholder="Hi {name}, calling about your {service}?"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Template for personalized greetings when the caller's phone matches an existing customer. Variables: <code className="text-emerald-600">{'{name}'}</code>, <code className="text-emerald-600">{'{service}'}</code>, <code className="text-emerald-600">{'{phone}'}</code>.
+                </p>
+              </div>
+
+              <Separator />
+
+              {/* SMS Send-Back */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="sms-enabled" className="flex items-center gap-1.5">
+                      <MessageCircle className="size-3.5" /> SMS Send-Back
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Auto-text callers who hang up before the AI finishes answering.
+                    </p>
+                  </div>
+                  <Switch
+                    id="sms-enabled"
+                    checked={smsSendBackEnabled}
+                    onCheckedChange={setSmsSendBackEnabled}
+                  />
+                </div>
+                {smsSendBackEnabled && (
+                  <div className="space-y-2 border-l-2 border-emerald-200 dark:border-emerald-800 pl-3">
+                    <Label htmlFor="sms-template">Send-Back Message</Label>
+                    <Textarea
+                      id="sms-template"
+                      value={smsSendBackTemplate}
+                      onChange={(e) => setSmsSendBackTemplate(e.target.value)}
+                      placeholder="Hi, sorry we missed you! Reply here or call us back at..."
+                      rows={3}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Trusted Access (Allowlist) */}
+              <div className="space-y-2">
+                <Label htmlFor="trusted-phones" className="flex items-center gap-1.5">
+                  <ShieldCheck className="size-3.5" /> Trusted Caller Phones
+                </Label>
+                <Input
+                  id="trusted-phones"
+                  value={trustedPhoneInput}
+                  onChange={(e) => setTrustedPhoneInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ',') {
+                      e.preventDefault();
+                      addTrustedPhone();
+                    } else if (e.key === 'Backspace' && trustedPhoneInput === '' && trustedPhones.length > 0) {
+                      removeTrustedPhone(trustedPhones[trustedPhones.length - 1]);
+                    }
+                  }}
+                  onBlur={addTrustedPhone}
+                  placeholder="+1 555-0100  (press Enter to add)"
+                />
+                {trustedPhones.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {trustedPhones.map((phone) => (
+                      <Badge key={phone} variant="secondary" className="gap-1 pr-1 py-1">
+                        <span className="font-mono text-xs">{phone}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeTrustedPhone(phone)}
+                          className="rounded-full hover:bg-muted-foreground/20 p-0.5 transition-colors"
+                          aria-label={`Remove ${phone}`}
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  When set, the AI only answers calls from these numbers. Leave empty to answer all callers.
+                </p>
               </div>
             </TabsContent>
           </div>

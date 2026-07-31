@@ -532,6 +532,80 @@ function derivePushContent(event: ServiceEvent, data: Record<string, any>): Push
     case 'schedule.trigger':
       return { title: 'Schedule triggered', body: truncate(pick(data.name, data.description, 'scheduled event'), 200), url: '/', inAppType: 'reminder' }
 
+    // ── AI Receptionist events (Phase R3) ─────────────────────────
+    // These always push to the tenant owner + admins (operator visibility
+    // into AI call activity). Recipient resolution is handled by the same
+    // resolveOwnerRecipients() call that runs for every lifecycle event.
+    case 'ai_call.started': {
+      const c = data.call || {}
+      const phone = pick(c.customerPhone, data.customerPhone)
+      return {
+        title: 'Incoming call',
+        body: truncate(`AI Receptionist is answering a call from ${phone || 'unknown'}`, 200),
+        url: '/?view=ai-receptionist',
+        inAppType: 'ai_call_started',
+      }
+    }
+    case 'ai_call.ended': {
+      const c = data.call || {}
+      const dur = c.durationSec ?? data.durationSec ?? 0
+      const outcome = pick(c.outcomeType, data.outcomeType, 'unknown')
+      return {
+        title: 'Call ended',
+        body: truncate(`AI call finished — ${dur}s, outcome: ${outcome}`, 200),
+        url: '/?view=ai-call-history',
+        inAppType: 'ai_call_ended',
+      }
+    }
+    case 'ai_call.lead_created': {
+      return {
+        title: 'New lead from AI call',
+        body: 'AI Receptionist captured a new lead from a call',
+        url: data.leadId ? `/?view=leads&lead=${data.leadId}` : '/?view=leads',
+        inAppType: 'lead_assigned',
+      }
+    }
+    case 'ai_call.appointment_booked': {
+      return {
+        title: 'Appointment booked by AI',
+        body: 'AI Receptionist booked an appointment from a call',
+        url: data.bookingId ? `/?view=calendar&booking=${data.bookingId}` : '/?view=calendar',
+        inAppType: 'reminder',
+      }
+    }
+
+    // ── AI Receptionist Billing (Phase R7) ───────────────────────
+    // Emitted by the webhook's incrementBillingCounter() when a tenant's
+    // monthly AI call counter crosses 75% or 100% of callsLimit. Pushes
+    // to the tenant owner + admins via the standard resolveOwnerRecipients
+    // path so the operator knows to upgrade or pause before the AI stops
+    // answering.
+    case 'ai_billing.threshold_reached': {
+      const threshold = Number(data.threshold)
+      const callsUsed = Number(data.callsUsed ?? 0)
+      const callsLimit = Number(data.callsLimit ?? 0)
+      if (threshold >= 100) {
+        return {
+          title: 'AI Receptionist limit reached',
+          body: truncate(
+            `You've used all ${callsLimit} conversations this month. Upgrade your plan or pause to avoid overages.`,
+            200,
+          ),
+          url: '/?view=ai-receptionist',
+          inAppType: 'reminder',
+        }
+      }
+      return {
+        title: `AI Receptionist at ${threshold}% usage`,
+        body: truncate(
+          `You've used ${callsUsed} of ${callsLimit} conversations this month.`,
+          200,
+        ),
+        url: '/?view=ai-receptionist',
+        inAppType: 'reminder',
+      }
+    }
+
     default:
       return { title: 'Lifecycle update', body: truncate(event, 200), url: '/', inAppType: 'reminder' }
   }
@@ -724,6 +798,11 @@ const LIFECYCLE_EVENTS: ServiceEvent[] = [
   'journey.custom_action',
   // Misc
   'contract.renewed', 'schedule.trigger',
+  // AI Receptionist (Phase R3)
+  'ai_call.started', 'ai_call.ended',
+  'ai_call.lead_created', 'ai_call.appointment_booked',
+  // AI Receptionist Billing (Phase R7)
+  'ai_billing.threshold_reached',
 ]
 
 let registered = false

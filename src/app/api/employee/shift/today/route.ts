@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 import { resolveEmployee } from '../route';
+import { toISO, toTime } from '@/lib/date-utils';
 
 /**
  * GET /api/employee/shift/today
@@ -43,7 +44,19 @@ export async function GET() {
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    // All shifts that started today
+    // Active shift — query WITHOUT a date filter so overnight shifts (started
+    // yesterday, still active today) are correctly detected. The previous
+    // `clockIn >= startOfDay` filter excluded them, causing the PWA Exit
+    // button to stay permanently disabled for night-shift / on-call workers.
+    const activeShiftRow = await db.employeeShift.findFirst({
+      where: {
+        employeeId: employee.id,
+        status: { in: ['active', 'on_break'] },
+      },
+      orderBy: { clockIn: 'desc' },
+    });
+
+    // All shifts that started today (used for the totals aggregation below).
     const todayShifts = await db.employeeShift.findMany({
       where: {
         employeeId: employee.id,
@@ -52,7 +65,7 @@ export async function GET() {
       orderBy: { clockIn: 'desc' },
     });
 
-    const activeShift = todayShifts.find((s) => s.status === 'active' || s.status === 'on_break') || null;
+    const activeShift = activeShiftRow;
 
     // Totals from completed shifts + the live shift
     let workingMinutes = 0;
@@ -66,8 +79,12 @@ export async function GET() {
         totalMinutes += shift.totalMinutes || 0;
       } else {
         // Live shift — compute on the fly
+        // Supabase (PostgREST) returns DateTime columns as ISO strings,
+        // not Date objects — use toTime so this works on both SQLite and
+        // Supabase. See src/lib/date-utils.ts.
         const now = new Date();
-        const elapsed = Math.max(0, Math.round((now.getTime() - shift.clockIn.getTime()) / 60000));
+        const ci = toTime(shift.clockIn) ?? 0;
+        const elapsed = Math.max(0, Math.round((now.getTime() - ci) / 60000));
         let liveBreak = 0;
         try {
           const breaks = JSON.parse(shift.breaksJson || '[]') as Array<{
@@ -122,7 +139,13 @@ export async function GET() {
     const travelDistanceMeters = todayRoutes.reduce((sum, r) => sum + (r.distanceMeters || 0), 0);
 
     return NextResponse.json({
-      activeShift,
+      activeShift: activeShift ? {
+        id: activeShift.id,
+        clockIn: toISO(activeShift.clockIn),
+        clockOut: toISO(activeShift.clockOut),
+        status: activeShift.status,
+        breaksJson: activeShift.breaksJson,
+      } : null,
       shiftsToday: todayShifts.length,
       jobsAssignedToday,
       jobsCompletedToday,

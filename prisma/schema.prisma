@@ -4287,6 +4287,15 @@ model AiAgent {
   totalCalls      Int      @default(0)
   totalSeconds    Int      @default(0)
   lastCallAt      DateTime?
+  // ── Phase R2 — AI Receptionist (advanced call-handling config) ──
+  afterHoursGreeting      String?   // separate after-hours first message
+  backgroundNoiseEnabled  Boolean   @default(false)
+  responseDelaySeconds    Int       @default(0)  // answering delay
+  transferTarget          String?   // phone number for transfer/escalation
+  smsSendBackEnabled      Boolean   @default(false)
+  smsSendBackTemplate     String?
+  knownCallerGreetingTpl  String?   // template like "Hi {name}, calling about your {service}?"
+  trustedPhonesJson       String    @default("[]")  // allowlist of caller E.164 numbers
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -4394,6 +4403,14 @@ model AiCall {
   // Function calls made during the call
   functionCallsJson String @default("[]")
   endedReason     String?  // customer_ended | assistant_ended | timeout | error
+  // ── Phase R2 — AI Receptionist ──────────────────────────────────
+  recordingUrl        String?  // Vapi call.recordingUrl (captured in end-of-call-report)
+  stereoRecordingUrl  String?  // Vapi call.stereoRecordingUrl
+  tagsJson            String   @default("[]")  // [{label, color, at}]
+  outcomeType         String?  // booked | lead_created | transferred | info_only | missed | spam
+  timeSavedSec        Int      @default(0)
+  aiDisabled          Boolean  @default(false)  // per-conversation disable toggle
+  callerIdentifiedAs  String?  // customer | lead | unknown
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -4405,6 +4422,7 @@ model AiCall {
   @@index([assistantId])
   @@index([status])
   @@index([customerPhone])
+  @@index([outcomeType])
 }
 
 // ==========================================
@@ -5603,4 +5621,84 @@ model Referral {
 
   @@index([tenantId])
   @@index([status])
+}
+
+// ==========================================
+// AI RECEPTIONIST — PHASE R2 (Jobber-style)
+// ==========================================
+// These models extend the AiAgent/AiCall pair with IVR menus, escalation
+// policies, call tags, and per-tenant billing counters. The agentId / callId
+// fields are plain String soft-FKs (no Prisma @relation) to avoid coupling
+// to the AiAgent/AiCall lifecycle — same pattern as Customer↔Lead manual
+// joins elsewhere in the codebase.
+
+/// Interactive Voice Response (IVR) menu attached to an AiAgent.
+/// `entriesJson` is a JSON array of `{digit, action, target}` rows, e.g.
+/// `[{"digit":"1","action":"book","target":"booking_flow"},
+///   {"digit":"2","action":"transfer","target":"+14155551234"}]`.
+model AiIvrMenu {
+  id           String   @id @default(cuid())
+  tenantId     String?
+  agentId      String   // -> AiAgent.id (soft FK)
+  prompt       String   // "Press 1 to book, 2 for support..."
+  entriesJson  String   @default("[]")  // [{digit, action, target}]
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tenantId, agentId])
+}
+
+/// Escalation policy: when the assistant detects a trigger keyword in the
+/// transcript, take a transfer/sms/both action with a per-policy cooldown.
+model AiEscalationPolicy {
+  id               String   @id @default(cuid())
+  tenantId         String?
+  agentId          String   // -> AiAgent.id (soft FK)
+  triggerKeywords  String   // JSON array as string: ["emergency","complaint","refund"]
+  action           String   // transfer | sms | both
+  transferTarget   String?
+  smsTemplate      String?
+  smsRecipientId   String?  // Employee.userId to notify
+  cooldownMin      Int      @default(30)
+  enabled          Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([tenantId, agentId])
+}
+
+/// Discrete per-call tag rows (AiCall.tagsJson is the denormalized snapshot
+/// written at call-end; this table is the queryable / reportable copy).
+/// `label` is one of: general_inquiry | needs_action | request_created |
+/// assessment_scheduled | job_scheduled | took_a_message | spam |
+/// call_escalated.
+model AiCallTag {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  callId    String   // -> AiCall.id (soft FK)
+  label     String   // general_inquiry | needs_action | request_created | assessment_scheduled | job_scheduled | took_a_message | spam | call_escalated
+  color     String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, callId])
+  @@index([label])
+}
+
+/// Per-tenant monthly AI call billing counter. One row per tenant per
+/// billing cycle (monthStart). When `callsUsed >= callsLimit`, the worker
+/// sets `pausedAtLimit = true` and the assistant stops accepting new calls
+/// until the next cycle or a plan upgrade.
+model AiBillingCounter {
+  id            String   @id @default(cuid())
+  tenantId      String   @unique
+  monthStart    DateTime
+  callsUsed     Int      @default(0)
+  callsLimit    Int      @default(30)
+  pausedAtLimit Boolean  @default(false)
+  lastAlertAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([tenantId])
 }

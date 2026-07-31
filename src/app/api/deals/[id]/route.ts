@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { archiveLinkedQuoteAndRequest } from '@/lib/deal-auto-close'
+import { ensureQuoteForDeal } from '@/lib/deal-quote-sync'
 
 export async function GET(
   request: NextRequest,
@@ -161,6 +162,33 @@ export async function PUT(
           archiveErr,
         )
       }
+    }
+
+    // ─── Auto-create draft Quote on Deal → quote_draft (Task 4) ────────
+    // When a Deal's stage transitions to `quote_draft`, idempotently
+    // ensure a draft Quote exists for it. The helper:
+    //   - Returns the existing Quote if one is already linked (no dup).
+    //   - Otherwise creates a new draft Quote with the Deal's value /
+    //     currency / customer / lead pre-filled and `dealId` set.
+    //
+    // Best-effort / non-blocking: if the Quote creation fails for any
+    // reason (DB error, race condition), the Deal update still succeeds.
+    // The user can manually create a Quote from the Quotes view.
+    //
+    // This makes the Quote ↔ Deal link bi-directional:
+    //   - Deal → Quote: this hook (auto-create on stage change)
+    //   - Quote → Deal: `autoCloseDealAsWonByQuote` (auto-close on
+    //     Quote accepted) in `deal-auto-close.ts`
+    if (body.stage === 'quote_draft' && body.stage !== currentDeal.stage) {
+      // Fire-and-forget — never blocks the PUT response. The helper
+      // itself also never throws (it has its own try/catch), so this
+      // outer .catch() is just defense-in-depth.
+      ensureQuoteForDeal(deal.id).catch((quoteErr) => {
+        console.error(
+          '[DealsUpdate] ensureQuoteForDeal on quote_draft failed (non-blocking):',
+          quoteErr,
+        )
+      })
     }
 
     return NextResponse.json({ data: deal })

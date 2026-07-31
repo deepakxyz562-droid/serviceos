@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { toISO, toTime } from '@/lib/date-utils';
 
 /**
  * GET /api/employees/[id]/shifts
@@ -31,9 +32,9 @@ interface BreakEntry {
 interface ShiftRow {
   id: string;
   employeeId: string;
-  shiftDate: Date;
-  clockIn: Date;
-  clockOut: Date | null;
+  shiftDate: Date | string;
+  clockIn: Date | string;
+  clockOut: Date | string | null;
   breaksJson: string;
   totalMinutes: number;
   workingMinutes: number;
@@ -59,9 +60,9 @@ function serializeShift(shift: ShiftRow) {
   return {
     id: shift.id,
     employeeId: shift.employeeId,
-    shiftDate: shift.shiftDate.toISOString(),
-    clockIn: shift.clockIn.toISOString(),
-    clockOut: shift.clockOut ? shift.clockOut.toISOString() : null,
+    shiftDate: toISO(shift.shiftDate),
+    clockIn: toISO(shift.clockIn),
+    clockOut: toISO(shift.clockOut),
     breaks: safeParseJson<BreakEntry[]>(shift.breaksJson, []),
     totalMinutes: shift.totalMinutes,
     workingMinutes: shift.workingMinutes,
@@ -170,10 +171,13 @@ export async function GET(
     if (todayShift) {
       const now = new Date();
       const breaks = safeParseJson<BreakEntry[]>(todayShift.breaksJson, []);
-      const endTime = todayShift.clockOut ?? now;
-      const totalMinutes = Math.round(
-        (endTime.getTime() - todayShift.clockIn.getTime()) / 60000,
-      );
+      // Supabase (PostgREST) returns DateTime columns as ISO strings,
+      // not Date objects — use toTime so this works on both SQLite and
+      // Supabase. See src/lib/date-utils.ts.
+      const ci = toTime(todayShift.clockIn) ?? 0;
+      const co = toTime(todayShift.clockOut);
+      const endMs = co ?? now.getTime();
+      const totalMinutes = Math.round((endMs - ci) / 60000);
       let breakMs = 0;
       for (const b of breaks) {
         if (!b.start) continue;

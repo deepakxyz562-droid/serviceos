@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { toDate, toISO, toTime } from '@/lib/date-utils';
 
 /**
  * GET /api/time-tracking/team?period=today|week|month
@@ -57,7 +58,7 @@ function getPeriodRange(period: string): { start: Date; end: Date; label: string
   return { start, end, label };
 }
 
-function shiftLiveMinutes(shift: { clockIn: Date; clockOut: Date | null; breaksJson: string; status: string; totalMinutes: number; workingMinutes: number; breakMinutes: number }, now: Date) {
+function shiftLiveMinutes(shift: { clockIn: Date | string; clockOut: Date | string | null; breaksJson: string; status: string; totalMinutes: number; workingMinutes: number; breakMinutes: number }, now: Date) {
   if (shift.status === 'completed') {
     return {
       totalMinutes: shift.totalMinutes || 0,
@@ -65,8 +66,12 @@ function shiftLiveMinutes(shift: { clockIn: Date; clockOut: Date | null; breaksJ
       breakMinutes: shift.breakMinutes || 0,
     };
   }
-  const end = shift.clockOut ?? now;
-  const total = Math.round((end.getTime() - shift.clockIn.getTime()) / 60000);
+  // Supabase (PostgREST) returns DateTime columns as ISO strings, not
+  // Date objects — use toTime/toDate so this works on both SQLite and
+  // Supabase. See src/lib/date-utils.ts.
+  const ci = toTime(shift.clockIn) ?? 0;
+  const end = toDate(shift.clockOut) ?? now;
+  const total = Math.round((end.getTime() - ci) / 60000);
   const breaks = safeParseJson<BreakEntry[]>(shift.breaksJson, []);
   let breakMs = 0;
   for (const b of breaks) {
@@ -227,11 +232,11 @@ export async function GET(request: NextRequest) {
         currentShift: active
           ? {
               id: active.id,
-              clockIn: active.clockIn.toISOString(),
+              clockIn: toISO(active.clockIn),
               status: active.status,
             }
           : null,
-        lastClockIn: periodRows[0]?.clockIn?.toISOString?.() ?? null,
+        lastClockIn: toISO(periodRows[0]?.clockIn),
         today: { totalMinutes: tTotal, workingMinutes: tWork, breakMinutes: tBreak, shiftsCount: todayRows.length },
         period: { totalMinutes: pTotal, workingMinutes: pWork, breakMinutes: pBreak, shiftsCount: periodRows.length },
       };

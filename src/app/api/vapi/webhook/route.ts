@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { EventBus } from '@/lib/event-bus';
+import { sendSmsMessage } from '@/lib/sms-send';
 
 /**
  * Vapi Webhook Handler
@@ -50,6 +52,276 @@ async function resolveTenant(call: any): Promise<string | null> {
   return null;
 }
 
+/**
+ * Resolve whether a caller is a known Customer, a known Lead, or unknown.
+ * Used at the start of a call so the AI Receptionist UI can immediately
+ * surface "existing customer" vs. "new lead" context.
+ */
+async function resolveCallerIdentity(phone: string): Promise<'customer' | 'lead' | 'unknown' | null> {
+  if (!phone) return null;
+  try {
+    const customer = await db.customer.findFirst({
+      where: { phone },
+      select: { id: true },
+    });
+    if (customer) return 'customer';
+    const lead = await db.lead.findFirst({
+      where: { phone },
+      select: { id: true },
+    });
+    if (lead) return 'lead';
+    return 'unknown';
+  } catch (err) {
+    console.error('[Vapi Webhook] callerIdentifiedAs lookup failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Phase R8 — Trusted-access allowlist enforcement.
+ *
+ * Reads `AiAgent.trustedPhonesJson` (a JSON array of E.164 strings) and
+ * returns true if the caller's phone is in the list — OR if the allowlist
+ * is empty / unparseable (default-allow).
+ *
+ * NOTE: We can't directly stop Vapi from answering (that's configured on
+ * the Vapi assistant side). This check is used to flag the call with a
+ * tag so the dashboard shows which calls came from untrusted numbers.
+ */
+function isCallerTrusted(
+  trustedPhonesJson: string | null | undefined,
+  callerPhone: string | null | undefined,
+): boolean {
+  if (!trustedPhonesJson) return true; // no allowlist → allow all
+  try {
+    const list = JSON.parse(trustedPhonesJson);
+    if (!Array.isArray(list) || list.length === 0) return true; // empty → allow all
+    if (!callerPhone) return false; // list is set but caller unknown → untrusted
+    // Normalise both sides: strip whitespace, compare case-insensitively
+    const norm = (p: string) => p.replace(/[\s\-()]/g, '').toLowerCase();
+    const callerNorm = norm(callerPhone);
+    return list.some((entry) => typeof entry === 'string' && norm(entry) === callerNorm);
+  } catch {
+    return true; // parse error → don't block (fail open)
+  }
+}
+
+/**
+ * Phase R8 — Per-caller disable enforcement.
+ *
+ * If ANY previous AiCall from this phone has `aiDisabled: true`, the
+ * caller is considered disabled and the AI should not process the call.
+ *
+ * Returns the AiCall.id that disabled them (for audit), or null.
+ */
+async function findCallerDisabled(
+  callerPhone: string | null | undefined,
+): Promise<string | null> {
+  if (!callerPhone) return null;
+  try {
+    const disabledCall = await db.aiCall.findFirst({
+      where: { customerPhone: callerPhone, aiDisabled: true },
+      select: { id: true },
+    });
+    return disabledCall?.id ?? null;
+  } catch (err) {
+    console.error('[Vapi Webhook] caller-disabled lookup failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Phase R8 — Append a tag to AiCall.tagsJson.
+ *
+ * tagsJson shape: `[{label, color, at}]` (default `[]`).
+ * Idempotent — if a tag with the same label already exists, no-op.
+ * Returns the updated JSON string (or null if no change needed).
+ */
+function appendTag(
+  tagsJson: string | null | undefined,
+  label: string,
+  color: 'red' | 'amber' | 'emerald' | 'blue' | 'violet',
+): string {
+  let tags: Array<{ label: string; color: string; at: string }> = [];
+  try {
+    const parsed = JSON.parse(tagsJson || '[]');
+    if (Array.isArray(parsed)) tags = parsed;
+  } catch {
+    tags = [];
+  }
+  if (tags.some((t) => t.label === label)) return tagsJson || '[]';
+  tags.push({ label, color, at: new Date().toISOString() });
+  return JSON.stringify(tags);
+}
+
+/**
+ * Compute the call outcome from the accumulated function-call history
+ * (populated by the function-call bridge) + the endedReason + duration.
+ *
+ *   booked        — book_appointment tool returned success
+ *   lead_created  — create_lead tool returned a leadId
+ *   transferred   — transfer_call tool was invoked
+ *   missed        — call didn't connect (no-answer, customer-ended, 0s)
+ *   info_only     — fallback for answered calls with no tool activity
+ */
+type CallOutcome = 'booked' | 'lead_created' | 'transferred' | 'info_only' | 'missed' | 'spam';
+function computeOutcomeType(
+  functionCallsJson: string | null | undefined,
+  endedReason: string | null | undefined,
+  durationSec: number,
+): CallOutcome {
+  let calls: Array<{ name?: string; result?: any }> = [];
+  try {
+    calls = JSON.parse(functionCallsJson || '[]');
+  } catch {
+    calls = [];
+  }
+
+  const hasBooked = calls.some(
+    (c) => c.name === 'book_appointment' && c.result && c.result.success !== false,
+  );
+  if (hasBooked) return 'booked';
+
+  const hasLead = calls.some(
+    (c) => c.name === 'create_lead' && c.result && c.result.leadId,
+  );
+  if (hasLead) return 'lead_created';
+
+  const hasTransfer = calls.some((c) => c.name === 'transfer_call');
+  if (hasTransfer) return 'transferred';
+
+  const reason = (endedReason || '').toLowerCase();
+  if (reason.includes('no-answer') || reason.includes('customer-ended') || durationSec === 0) {
+    return 'missed';
+  }
+
+  return 'info_only';
+}
+
+/**
+ * Increment the tenant's monthly AI billing counter. Resets on month rollover.
+ * Non-blocking — caller wraps in .catch() so a failure here never breaks the
+ * webhook response.
+ *
+ * Also emits `ai_billing.threshold_reached` events at 75% and 100% of the
+ * tenant's callsLimit (Phase R7). The 75% alert is throttled by
+ * `lastAlertAt` (max once per 24h) so a tenant hovering around 75-99% doesn't
+ * get spammed. The 100% alert is fired every time a call lands at or above
+ * the limit (which is by definition at most once per month unless the limit
+ * is bumped down).
+ */
+async function incrementBillingCounter(tenantId: string): Promise<void> {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const existing = await db.aiBillingCounter.findFirst({ where: { tenantId } });
+
+  // Compute the post-increment callsUsed + post-update row state.
+  let callsUsed: number;
+  let callsLimit: number;
+  let rowId: string;
+  let effectiveMonthStart: Date;
+  let prevLastAlertAt: Date | null;
+
+  if (existing) {
+    const shouldReset = existing.monthStart.getTime() < monthStart.getTime();
+    callsUsed = shouldReset ? 1 : existing.callsUsed + 1;
+    callsLimit = existing.callsLimit;
+    rowId = existing.id;
+    effectiveMonthStart = shouldReset ? monthStart : existing.monthStart;
+    prevLastAlertAt = existing.lastAlertAt;
+    await db.aiBillingCounter.update({
+      where: { id: existing.id },
+      data: {
+        callsUsed,
+        monthStart: effectiveMonthStart,
+      },
+    });
+  } else {
+    callsUsed = 1;
+    callsLimit = 30;
+    effectiveMonthStart = monthStart;
+    prevLastAlertAt = null;
+    const created = await db.aiBillingCounter.create({
+      data: { tenantId, monthStart, callsUsed: 1, callsLimit: 30 },
+    });
+    rowId = created.id;
+  }
+
+  // ── Threshold alerts (fire-and-forget) ─────────────────────────────
+  if (callsLimit <= 0) return; // defensive guard against div-by-zero
+  const pct = callsUsed / callsLimit;
+
+  // 75% alert — throttle to once per 24h via lastAlertAt
+  if (pct >= 0.75 && pct < 1) {
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    if (!prevLastAlertAt || prevLastAlertAt.getTime() < twentyFourHoursAgo.getTime()) {
+      EventBus.emit(
+        'ai_billing.threshold_reached',
+        {
+          tenantId,
+          callsUsed,
+          callsLimit,
+          threshold: 75,
+        },
+        { tenantId },
+      ).catch(err => console.error('[billing] 75% alert emit failed:', err));
+      try {
+        await db.aiBillingCounter.update({
+          where: { id: rowId },
+          data: { lastAlertAt: now },
+        });
+      } catch (err) {
+        console.error('[billing] Failed to update lastAlertAt (75%):', err);
+      }
+    }
+  }
+
+  // 100% alert — fire every time the limit is hit (no throttle: the operator
+  // needs to know the AI is about to stop answering / overage is starting).
+  if (callsUsed >= callsLimit) {
+    EventBus.emit(
+      'ai_billing.threshold_reached',
+      {
+        tenantId,
+        callsUsed,
+        callsLimit,
+        threshold: 100,
+      },
+      { tenantId },
+    ).catch(err => console.error('[billing] 100% alert emit failed:', err));
+  }
+}
+
+/**
+ * Check if a tenant is currently paused at their monthly AI call limit.
+ *
+ * Returns true when ALL of the following are true:
+ *   - The tenant has an AiBillingCounter row.
+ *   - The row's monthStart is the current month (i.e. the counter hasn't been
+ *     reset by a month rollover — the reset happens lazily inside
+ *     incrementBillingCounter, so a stale counter from last month is NOT a
+ *     pause signal).
+ *   - pausedAtLimit === true AND callsUsed >= callsLimit.
+ *
+ * Used by handleStatusUpdate to log a billing-pause warning. The actual
+ * assistant deactivation (Vapi API call to set the assistant inactive) is a
+ * manual admin action for now — see the billing card on the AI Receptionist
+ * dashboard.
+ */
+async function isTenantPaused(tenantId: string | null | undefined): Promise<boolean> {
+  if (!tenantId) return false;
+  try {
+    const counter = await db.aiBillingCounter.findFirst({ where: { tenantId } });
+    if (!counter) return false;
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    if (counter.monthStart.getTime() < monthStart.getTime()) return false; // new month, not paused
+    return counter.pausedAtLimit && counter.callsUsed >= counter.callsLimit;
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     if (!verifySecret(request)) {
@@ -95,6 +367,67 @@ async function handleStatusUpdate(call: any) {
     return NextResponse.json({ received: true });
   }
 
+  // ── Phase R7: Billing pause check ──────────────────────────────────
+  // If the tenant is paused-at-limit, log a warning so the operator (via
+  // dev.log / monitoring) is aware that the AI should not be answering.
+  // The call is still recorded (the AiCall row is created below) so the
+  // operator has full audit history. True assistant deactivation (calling
+  // Vapi's API to flip the assistant to inactive) is a manual admin action
+  // for now — surfaced via the billing card on the AI Receptionist
+  // dashboard.
+  try {
+    const paused = await isTenantPaused(tenantId);
+    if (paused) {
+      console.warn(
+        `[billing] Tenant ${tenantId} is paused at limit — AI should not be answering (call ${call.id})`,
+      );
+    }
+  } catch (err) {
+    console.error('[billing] isTenantPaused check failed:', err);
+  }
+
+  // ── Step 4: Resolve callerIdentifiedAs at the start of the call ──
+  // Quick Customer/Lead lookup by phone so the UI can immediately surface
+  // "existing customer" vs. "new lead" context.
+  const customerPhone = call.customer?.number || call.customerPhone || null;
+  const callerIdentifiedAs = customerPhone ? await resolveCallerIdentity(customerPhone) : null;
+
+  // ── Phase R8 Step 1 & 3: Trusted-access allowlist + caller-disabled checks ──
+  // Resolve the agent (with the trusted-phones allowlist) so we can flag
+  // untrusted callers. Also look up whether this caller has been disabled
+  // via a previous AiCall.aiDisabled=true.
+  const agentForGuard = call.assistantId
+    ? await db.aiAgent.findFirst({
+        where: { vapiAssistantId: call.assistantId },
+        select: { id: true, trustedPhonesJson: true },
+      })
+    : null;
+
+  const isTrusted = isCallerTrusted(agentForGuard?.trustedPhonesJson, customerPhone);
+  const disabledByCallId = await findCallerDisabled(customerPhone);
+
+  if (!isTrusted) {
+    console.log(
+      `[webhook] Untrusted caller ${customerPhone} — AI will answer but call is flagged`,
+    );
+  }
+  if (disabledByCallId) {
+    console.log(
+      `[webhook] Caller ${customerPhone} is disabled (by AiCall ${disabledByCallId}) — AI will answer but call is flagged`,
+    );
+  }
+
+  // Pre-compute the tagsJson to persist on create OR update — only when at
+  // least one guard fired.
+  const guardTagsJson = (!isTrusted || disabledByCallId)
+    ? (() => {
+        let tags: Array<{ label: string; color: string; at: string }> = [];
+        if (!isTrusted) tags.push({ label: 'untrusted', color: 'red', at: new Date().toISOString() });
+        if (disabledByCallId) tags.push({ label: 'caller-disabled', color: 'red', at: new Date().toISOString() });
+        return JSON.stringify(tags);
+      })()
+    : null;
+
   const existing = await db.aiCall.findFirst({
     where: { vapiCallId: call.id },
   });
@@ -102,25 +435,41 @@ async function handleStatusUpdate(call: any) {
   const status = mapCallStatus(call.status);
   const data: Record<string, unknown> = {
     status,
-    ...(call.assistantId && { /* keep existing */ }),
-    ...(call.phoneNumberId && { /* keep existing */ }),
+    ...(callerIdentifiedAs && { callerIdentifiedAs }),
     ...(call.customer?.number && { customerPhone: call.customer.number }),
     ...(call.startedAt && { startedAt: new Date(call.startedAt) }),
     ...(call.endedAt && { endedAt: new Date(call.endedAt) }),
+    ...(guardTagsJson && { tagsJson: guardTagsJson }),
   };
 
+  let aiCallId: string | null = null;
+  let assistantIdLocal: string | null = null;
   if (existing) {
-    await db.aiCall.update({ where: { id: existing.id }, data });
+    // For update path, merge any new guard tags with existing tagsJson
+    let finalTagsJson = existing.tagsJson;
+    if (!isTrusted) {
+      finalTagsJson = appendTag(existing.tagsJson, 'untrusted', 'red');
+    }
+    if (disabledByCallId) {
+      finalTagsJson = appendTag(finalTagsJson, 'caller-disabled', 'red');
+    }
+    await db.aiCall.update({
+      where: { id: existing.id },
+      data: { ...data, ...(finalTagsJson !== existing.tagsJson && { tagsJson: finalTagsJson }) },
+    });
+    aiCallId = existing.id;
+    assistantIdLocal = existing.assistantId || null;
   } else {
     // Resolve agent + number for the new call
-    const agent = call.assistantId
-      ? await db.aiAgent.findFirst({ where: { vapiAssistantId: call.assistantId }, select: { id: true } })
-      : null;
+    const agent = agentForGuard
+      ?? (call.assistantId
+        ? await db.aiAgent.findFirst({ where: { vapiAssistantId: call.assistantId }, select: { id: true } })
+        : null);
     const number = call.phoneNumberId
       ? await db.aiPhoneNumber.findFirst({ where: { vapiNumberId: call.phoneNumberId }, select: { id: true } })
       : null;
 
-    await db.aiCall.create({
+    const created = await db.aiCall.create({
       data: {
         tenantId,
         vapiCallId: call.id,
@@ -131,9 +480,31 @@ async function handleStatusUpdate(call: any) {
         fromNumber: call.from || null,
         toNumber: call.to || null,
         customerPhone: call.customer?.number || null,
+        ...(callerIdentifiedAs ? { callerIdentifiedAs } : {}),
+        ...(guardTagsJson ? { tagsJson: guardTagsJson } : {}),
         startedAt: call.startedAt ? new Date(call.startedAt) : null,
       } as any,
     });
+    aiCallId = created.id;
+    assistantIdLocal = agent?.id || null;
+  }
+
+  // ── Step 5: Emit ai_call.started on call begin (in_progress / ringing) ──
+  if (aiCallId && (status === 'in_progress' || status === 'ringing')) {
+    EventBus.emit(
+      'ai_call.started',
+      {
+        call: {
+          id: aiCallId,
+          customerPhone,
+          assistantId: assistantIdLocal,
+          tenantId,
+        },
+        resourceType: 'ai_call',
+        resourceId: aiCallId,
+      },
+      { tenantId: tenantId || undefined },
+    ).catch(err => console.error('[EventBus] ai_call.started emit failed:', err));
   }
 
   return NextResponse.json({ received: true });
@@ -156,9 +527,30 @@ async function handleEndOfCall(call: any) {
   const summary = call.summary || call.analysis?.summary || null;
   const analysis = call.analysis || {};
 
+  const durationSec = call.durationSeconds || call.duration || 0;
+  const costUsd = call.cost || 0;
+  const endedReason = call.endedReason || call.endReason || null;
+  // ── Step 1: Capture recordingUrl + stereoRecordingUrl from Vapi payload ──
+  const recordingUrl = call.recordingUrl || null;
+  const stereoRecordingUrl = call.stereoRecordingUrl || null;
+
   const existing = await db.aiCall.findFirst({
     where: { vapiCallId: call.id },
   });
+
+  // ── Step 2: Compute outcomeType from the function-call history ──
+  const outcomeType = computeOutcomeType(
+    existing?.functionCallsJson,
+    endedReason,
+    durationSec,
+  );
+
+  // ── Step 3: Compute timeSavedSec (AI ~1.5x faster than a human) ──
+  const timeSavedSec = Math.round(durationSec * 1.5);
+
+  // Hoisted so the SMS send-back block (after the if/else) can read the
+  // assistantId regardless of which branch ran.
+  let resolvedAssistantIdForSms: string | null = null;
 
   if (existing) {
     await db.aiCall.update({
@@ -166,12 +558,16 @@ async function handleEndOfCall(call: any) {
       data: {
         status: 'ended',
         endedAt: call.endedAt ? new Date(call.endedAt) : new Date(),
-        endedReason: call.endedReason || call.endReason || null,
-        durationSec: call.durationSeconds || call.duration || 0,
-        costUsd: call.cost || 0,
+        endedReason,
+        durationSec,
+        costUsd,
         transcriptJson: JSON.stringify(transcript),
         summary,
         analysisJson: JSON.stringify(analysis),
+        recordingUrl,
+        stereoRecordingUrl,
+        outcomeType,
+        timeSavedSec,
       },
     });
 
@@ -181,11 +577,31 @@ async function handleEndOfCall(call: any) {
         where: { id: existing.assistantId },
         data: {
           totalCalls: { increment: 1 },
-          totalSeconds: { increment: call.durationSeconds || 0 },
+          totalSeconds: { increment: durationSec },
           lastCallAt: new Date(),
         },
       });
     }
+
+    // Track for SMS send-back below
+    resolvedAssistantIdForSms = existing.assistantId || null;
+
+    // ── Step 5: Emit ai_call.ended ──
+    EventBus.emit(
+      'ai_call.ended',
+      {
+        call: {
+          id: existing.id,
+          durationSec,
+          outcomeType,
+          costUsd,
+          tenantId,
+        },
+        resourceType: 'ai_call',
+        resourceId: existing.id,
+      },
+      { tenantId: tenantId || undefined },
+    ).catch(err => console.error('[EventBus] ai_call.ended emit failed:', err));
   } else {
     // Create the call record if we missed the status-update
     const agent = call.assistantId
@@ -195,7 +611,7 @@ async function handleEndOfCall(call: any) {
       ? await db.aiPhoneNumber.findFirst({ where: { vapiNumberId: call.phoneNumberId }, select: { id: true } })
       : null;
 
-    await db.aiCall.create({
+    const created = await db.aiCall.create({
       data: {
         tenantId,
         vapiCallId: call.id,
@@ -206,12 +622,16 @@ async function handleEndOfCall(call: any) {
         customerPhone: call.customer?.number || null,
         startedAt: call.startedAt ? new Date(call.startedAt) : null,
         endedAt: call.endedAt ? new Date(call.endedAt) : new Date(),
-        durationSec: call.durationSeconds || 0,
-        costUsd: call.cost || 0,
+        durationSec,
+        costUsd,
         transcriptJson: JSON.stringify(transcript),
         summary,
         analysisJson: JSON.stringify(analysis),
-        endedReason: call.endedReason || null,
+        endedReason,
+        recordingUrl,
+        stereoRecordingUrl,
+        outcomeType,
+        timeSavedSec,
       } as any,
     });
 
@@ -220,12 +640,89 @@ async function handleEndOfCall(call: any) {
         where: { id: agent.id },
         data: {
           totalCalls: { increment: 1 },
-          totalSeconds: { increment: call.durationSeconds || 0 },
+          totalSeconds: { increment: durationSec },
           lastCallAt: new Date(),
         },
       });
     }
+
+    // Track for SMS send-back below
+    resolvedAssistantIdForSms = agent?.id || null;
+
+    // ── Step 5: Emit ai_call.ended for the freshly-created record too ──
+    EventBus.emit(
+      'ai_call.ended',
+      {
+        call: {
+          id: created.id,
+          durationSec,
+          outcomeType,
+          costUsd,
+          tenantId,
+        },
+        resourceType: 'ai_call',
+        resourceId: created.id,
+      },
+      { tenantId: tenantId || undefined },
+    ).catch(err => console.error('[EventBus] ai_call.ended emit failed:', err));
   }
+
+  // ── Phase R8 Step 2: SMS send-back for missed calls ──
+  // If the call was "missed" (caller hung up before the AI could respond,
+  // or the call was very short) AND the agent has smsSendBackEnabled, send
+  // an SMS to the caller with the configured template. Non-blocking — a
+  // failure here must not break the webhook response.
+  //
+  // We resolve the assistantId + customerPhone for BOTH the update and the
+  // create branches: update branch uses `existing.*`, create branch uses
+  // the freshly-resolved `agent?.id` and `call.customer?.number`.
+  if (outcomeType === 'missed') {
+    const callerPhone = existing?.customerPhone || call.customer?.number || null;
+    const assistantIdForSms = resolvedAssistantIdForSms;
+    if (callerPhone && assistantIdForSms) {
+      try {
+        const agentForSms = await db.aiAgent.findFirst({
+          where: { id: assistantIdForSms },
+          select: { smsSendBackEnabled: true, smsSendBackTemplate: true },
+        });
+        if (agentForSms?.smsSendBackEnabled) {
+          const message =
+            agentForSms.smsSendBackTemplate?.trim() ||
+            'Hi, sorry we missed your call. How can we help you today?';
+          // Fire-and-forget SMS send. sendSmsMessage handles provider
+          // resolution (tenant → platform → env → simulated) internally.
+          sendSmsMessage({
+            to: callerPhone,
+            message,
+            tenantId,
+          })
+            .then((r) => {
+              if (r.success) {
+                console.log(
+                  `[webhook] SMS send-back sent to ${callerPhone} (provider=${r.provider || 'simulated'}, messageId=${r.messageId || '-'})`,
+                );
+              } else {
+                console.error(
+                  `[webhook] SMS send-back to ${callerPhone} failed:`,
+                  r.error || 'unknown error',
+                );
+              }
+            })
+            .catch((err) =>
+              console.error('[webhook] SMS send-back threw:', err),
+            );
+        }
+      } catch (err) {
+        console.error('[webhook] SMS send-back setup failed:', err);
+      }
+    }
+  }
+
+  // ── Step 7: Increment tenant's monthly AiBillingCounter (prep for Phase R7) ──
+  // Non-blocking — a failure here must not break the webhook response.
+  incrementBillingCounter(tenantId).catch(err =>
+    console.error('[webhook] Failed to increment AiBillingCounter:', err),
+  );
 
   return NextResponse.json({ received: true });
 }
