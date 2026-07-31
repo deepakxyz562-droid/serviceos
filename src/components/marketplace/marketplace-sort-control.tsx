@@ -28,6 +28,7 @@ import { useMarketplaceSearch, type MarketplaceSortKey } from './use-marketplace
 const SORTS: Array<{ key: MarketplaceSortKey; label: string }> = [
   { key: 'rating', label: 'Top rated' },
   { key: 'reviews', label: 'Most reviewed' },
+  { key: 'response', label: 'Fastest response' },
   { key: 'verified', label: 'Most verified' },
   { key: 'name', label: 'Name (A–Z)' },
 ];

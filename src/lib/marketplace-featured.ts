@@ -31,6 +31,8 @@ export interface TenantFeaturedSignals {
   // Date OR ISO string — the Supabase REST adapter returns ISO strings,
   // while direct Prisma returns Date objects. Consumers normalize via toDate().
   trialEndsAt: Date | string | null;
+  /** Marketplace listing tier — 'none' | 'free' | 'claimed_free' | 'claimed' | 'pro'. */
+  listingTier?: string | null;
 }
 
 export interface FeaturedListingRow {
@@ -182,6 +184,12 @@ export function computeCardType(
   now: Date = new Date(),
 ): MarketplaceCardType {
   if (hasFeaturedListing && isEligibleForFeatured(t, now)) return 'featured';
+  // Claimed-free tier: owner claimed the listing but pays nothing. They get a
+  // full card (avatar, stats, description, verification badges) so their claim
+  // effort is rewarded — but no Book Now / Get Quote (those are paywalled).
+  // The ProviderCard renders "Call to book" instead of booking CTAs for this tier.
   if (t.claimed && hasValidSubscription(t, now)) return 'normal-full';
+  if (t.listingTier === 'claimed_free' && t.claimed) return 'normal-full';
+  if (t.claimed && t.planStatus === 'trial' && hasValidSubscription(t, now)) return 'normal-full';
   return 'normal-minimal';
 }

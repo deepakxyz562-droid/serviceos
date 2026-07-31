@@ -335,9 +335,15 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
           <div className="relative max-w-sm flex-1 hidden sm:block">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search..."
+              placeholder="Search marketplace..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                // Pressing Enter navigates to the public marketplace with the query
+                if (e.key === 'Enter' && searchQuery.trim()) {
+                  window.location.href = `/marketplace?search=${encodeURIComponent(searchQuery.trim())}`;
+                }
+              }}
               className="pl-9 h-9 text-sm rounded-lg bg-muted/50 border-transparent focus-visible:bg-background focus-visible:border-border"
             />
           </div>

@@ -89,13 +89,21 @@ model Tenant {
   latitude              Float?
   longitude             Float?
   // Marketplace listing tier — drives what's shown on the public marketplace:
-  //   none     → not listed (default for businesses that haven't opted in)
-  //   free     → unclaimed seed listing (name, address, phone, rating, "Call Now" only — no booking)
-  //   claimed  → business owner claimed their listing and manages the profile
-  //   pro      → paid subscriber — "Book Now" + top placement + rich profile
+  //   none          → not listed (default for businesses that haven't opted in)
+  //   free          → unclaimed seed listing (name, address, phone, rating, "Call Now" only — no booking)
+  //   claimed_free  → owner claimed the listing but pays nothing (full card, "Call to book", no leads inbox)
+  //   claimed       → business owner claimed their listing and manages the profile
+  //   pro           → paid subscriber — "Book Now" + top placement + rich profile
   listingTier           String   @default("none")
   claimed               Boolean  @default(false)
   claimedAt             DateTime?
+  claimedById           String?  // User who owns the claim (links to User.id)
+  // Google Business Profile — user-pasted URL (link-only integration). When set
+  // AND googleBusinessVerified=true, we trust Google's verification and the
+  // claim flow can auto-approve. Rating/review counts stay on Tenant.rating /
+  // Tenant.reviewCount (optionally synced by an admin or future GBP API job).
+  googleBusinessProfileUrl String? @default("")
+  googleBusinessVerified   Boolean @default(false)
   tagline               String?  // short one-liner under business name
   description           String?  // long-form About text (min 100 chars for indexing)
   coverImage            String?  // hero/cover image URL
@@ -190,6 +198,9 @@ model Tenant {
   recurringJobSchedules RecurringJobSchedule[]
   scheduledMessages   ScheduledMessage[]
   scheduledExecutions ScheduledExecution[]
+  // Marketplace claim requests — a tenant can have many claim attempts
+  // (only one will be approved; the rest are rejected).
+  claimRequests       ClaimRequest[]
 
   @@index([slug])
   @@index([plan])
@@ -5820,4 +5831,59 @@ model AiBillingCounter {
   updatedAt     DateTime @updatedAt
 
   @@index([tenantId])
+}
+
+/// Marketplace business-claim request. Created when a user clicks
+/// "Claim this business" on an unclaimed provider detail page. The request
+/// records which verification method the user chose (phone/email/google/
+/// document), the verification payload, and the review state.
+///
+/// Flow:
+///   1. User clicks "Claim this business" → POST /api/marketplace/claim/request
+///      → ClaimRequest created with status='pending' (or 'auto_approved'
+///      for phone-OTP / email-code / Google GBP verification).
+///   2. Auto-approved → tenant.claimed=true, tenant.claimedById=user.id,
+///      tenant.claimedAt=now, tenant.listingTier='claimed_free'.
+///   3. Document-based → status stays 'pending' until SuperAdmin approves
+///      in Directory Listings → Claims tab.
+///   4. On approval → same ownership transfer as step 2.
+///   5. On rejection → status='rejected', claimant is notified, listing
+///      stays unclaimed.
+model ClaimRequest {
+  id                String   @id @default(cuid())
+  // The business being claimed (an existing Tenant row — usually an OSM seed
+  // with claimed=false, listingTier='free').
+  tenantId          String
+  // The user requesting the claim (must be authenticated).
+  claimantUserId    String
+  // Verification method chosen by the claimant:
+  //   phone     → OTP sent to the tenant's seeded phone number (instant)
+  //   email     → code sent to an email at the business domain (instant)
+  //   google    → connected Google Business Profile with matching name+address (instant)
+  //   document  → uploaded business license / utility bill (admin review)
+  verificationMethod String  // phone | email | google | document
+  // Method-specific payload (JSON):
+  //   phone    → { phoneLast4: string, otpVerifiedAt: ISO }
+  //   email    → { email: string, codeVerifiedAt: ISO }
+  //   google   → { gbpUrl: string, gbpName: string, gbpAddress: string, matchScore: number }
+  //   document → { documentUrls: string[], note?: string }
+  verificationData  String  @default("{}")
+  // Review state:
+  //   pending       → awaiting admin review (document method)
+  //   auto_approved → verified instantly, no admin action needed
+  //   approved      → admin manually approved a pending request
+  //   rejected      → admin rejected (or auto-reject on failed verification)
+  status            String  @default("pending")
+  // Optional reason for rejection (set by admin when status='rejected')
+  reviewNote        String?
+  reviewedById      String?
+  reviewedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([claimantUserId])
+  @@index([status])
 }

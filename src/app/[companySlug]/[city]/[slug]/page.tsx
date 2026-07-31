@@ -52,6 +52,8 @@ import {
   fetchFeaturedListingsMap,
   type MarketplaceCardType,
 } from '@/lib/marketplace-featured'
+import { getAuthUser } from '@/lib/auth'
+import { ClaimBusinessBanner } from '@/components/marketplace/claim-business-banner'
 
 // ── Route config ────────────────────────────────────────────────────────────
 // ISR: revalidate every 60 minutes so reviews / profile edits propagate
@@ -186,6 +188,13 @@ export default async function PublicBusinessHubPage({
     }
   }
   const isMinimalListing = cardType === 'normal-minimal'
+
+  // Get current user (if authenticated) to hide the claim banner for owners.
+  // This is a public page so most visitors won't be logged in — that's fine,
+  // the banner just shows to everyone except the current owner.
+  const currentUser = await getAuthUser()
+  const currentTenantId = currentUser?.tenantId ?? null
+  const showClaimBanner = !business.claimed && currentTenantId !== business.id
 
   // Parse JSON fields safely.
   const gallery: Array<{ url?: string; caption?: string }> = safeJson(business.galleryJson, [])
@@ -527,6 +536,20 @@ export default async function PublicBusinessHubPage({
             {/* Right: sticky CTA card + contact info */}
             <div className="lg:col-span-1">
               <div className="lg:sticky lg:top-20 space-y-4">
+                {/* Claim-this-business banner — only for unclaimed listings.
+                    Hides for the current owner (can't claim your own business). */}
+                {showClaimBanner ? (
+                  <ClaimBusinessBanner
+                    tenantId={business.id}
+                    tenantName={business.name}
+                    tenantPhone={business.phone}
+                    tenantEmail={business.email}
+                    tenantCity={business.city}
+                    tenantState={business.state}
+                    currentTenantId={currentTenantId}
+                  />
+                ) : null}
+
                 {/* Booking CTA — three rendering modes, kept consistent with
                     the marketplace browse grid's computeCardType() output:
                       • 'featured' / 'normal-full' (marketplaceOptIn && !isMinimalListing)

@@ -3,30 +3,31 @@
 /**
  * Google Business Profile Settings section.
  *
- * UI-only marketing-style card (no real Google OAuth) — matches the spec the
- * user provided verbatim:
- *   - Headline: "Get 3x more leads by improving your Google ranking"
- *   - 2-column stats: 42 leads (TODAY) vs 126 leads (With optimized profile, 12-month projection)
- *   - 3 benefit bullets with check icons
- *   - 2 CTA buttons: "Create Google Profile" (emerald primary) + "Connect Existing Profile" (outline)
- *   - Both CTAs open a "coming soon" dialog
+ * Link-only integration (Option 1 from the redesign proposal):
+ *   - User pastes their Google Business Profile URL into a text field.
+ *   - We save it to `tenant.googleBusinessProfileUrl`.
+ *   - We display the URL on their marketplace card (as a "View on Google" link).
+ *   - We do NOT call the GBP API (that requires Google app review + OAuth
+ *     consent screen — out of scope for now).
  *
- * Style follows the same pattern as company-settings.tsx (emerald accents,
- * `space-y-6` rhythm, Card + shadow-sm, mobile-first responsive, dark-mode).
+ * The user verifies their business on Google directly (Google mails them a
+ * postcard / calls them / video call). Once verified on Google, they can
+ * paste the URL here. If they used the Google verification method during
+ * the claim flow, `googleBusinessVerified` is already true.
+ *
+ * CTAs:
+ *   - "Go to Google Business Profile" → links to https://business.google.com
+ *     (opens in new tab — user creates/verifies their listing there)
+ *   - "Save URL" → saves the pasted URL to the tenant record
  */
 
-import { useState } from 'react';
-import { Check, Store, TrendingUp, ArrowRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Check, ExternalLink, Save, Loader2, ShieldCheck, Star } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 const BENEFITS = [
@@ -36,8 +37,51 @@ const BENEFITS = [
 ];
 
 export function GoogleBusinessProfileSettings() {
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [connectDialogOpen, setConnectDialogOpen] = useState(false);
+  const [gbpUrl, setGbpUrl] = useState('');
+  const [verified, setVerified] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // Load current tenant's GBP URL + verified flag
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch('/api/tenants/me?XTransformPort=3000', {
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setGbpUrl(data.googleBusinessProfileUrl ?? '');
+          setVerified(!!data.googleBusinessVerified);
+        }
+      } catch {
+        // ignore — non-critical
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  async function saveUrl() {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/tenants/me?XTransformPort=3000', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ googleBusinessProfileUrl: gbpUrl }),
+      });
+      if (res.ok) {
+        toast.success('Google Business Profile URL saved.');
+      } else {
+        toast.error('Failed to save URL.');
+      }
+    } catch {
+      toast.error('Network error.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6">
@@ -46,57 +90,68 @@ export function GoogleBusinessProfileSettings() {
         <CardContent className="space-y-6 p-6 sm:p-8">
           <div className="space-y-3">
             <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
-              <Store className="size-5 text-emerald-600 dark:text-emerald-400" />
+              <ShieldCheck className="size-5 text-emerald-600 dark:text-emerald-400" />
             </div>
             <h2 className="text-2xl font-semibold tracking-tight">
-              Get 3x more leads by improving your Google ranking
+              Connect your Google Business Profile
             </h2>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              Creating a Google business profile — or improving your existing one — with Jobber can
-              help you reach 3x more leads so you win more work.
+              Verify your business on Google to appear on Google Maps &amp; Search, then paste your profile URL here.
+              We&rsquo;ll display a &ldquo;View on Google&rdquo; link on your marketplace card so customers can see your Google rating and reviews.
             </p>
           </div>
 
-          {/* Stats: 2-column grid (stacks on mobile) */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* Left card: TODAY */}
-            <div className="rounded-xl border bg-card p-5">
-              <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                Today
-              </p>
-              <div className="mt-2 flex items-baseline gap-1.5">
-                <span className="text-4xl font-bold tracking-tight">42</span>
-                <span className="text-sm font-medium text-muted-foreground">leads</span>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">monthly leads</p>
+          {/* Verification status badge */}
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" /> Loading...
             </div>
+          ) : verified ? (
+            <Badge className="gap-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+              <Check className="size-3" /> Google-verified
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="gap-1 text-amber-700">
+              <Star className="size-3" /> Not yet connected
+            </Badge>
+          )}
 
-            {/* Right card: WITH OPTIMIZED PROFILE (emerald accent) */}
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900/40 dark:bg-emerald-900/15">
-              <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wider text-emerald-700 uppercase dark:text-emerald-300">
-                <TrendingUp className="size-3.5" />
-                With optimized profile
-              </p>
-              <div className="mt-2 flex items-baseline gap-1.5">
-                <span className="text-4xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300">
-                  126
-                </span>
-                <span className="text-sm font-medium text-emerald-700/80 dark:text-emerald-300/80">
-                  leads
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-emerald-700/80 dark:text-emerald-300/80">
-                12 month projection · monthly leads
-              </p>
+          {/* URL input + save */}
+          <div className="space-y-2">
+            <Label htmlFor="gbp-url">Your Google Business Profile URL</Label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                id="gbp-url"
+                placeholder="https://www.google.com/maps/place/..."
+                value={gbpUrl}
+                onChange={(e) => setGbpUrl(e.target.value)}
+                disabled={loading}
+              />
+              <Button
+                onClick={saveUrl}
+                disabled={saving || loading || !gbpUrl}
+                className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+              >
+                {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                Save URL
+              </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Don&rsquo;t have a Google Business Profile yet? Create one for free at{' '}
+              <a
+                href="https://business.google.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-0.5 font-medium text-emerald-600 hover:underline"
+              >
+                business.google.com
+                <ExternalLink className="size-3" />
+              </a>
+            </p>
           </div>
 
-          {/* Pitch paragraph + benefit bullets */}
+          {/* Benefits */}
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              We&apos;ll create an optimized Google listing for you to review, so you can attract
-              more high-quality leads.
-            </p>
             <ul className="space-y-2.5">
               {BENEFITS.map((benefit) => (
                 <li key={benefit} className="flex items-start gap-2.5">
@@ -109,71 +164,32 @@ export function GoogleBusinessProfileSettings() {
             </ul>
           </div>
 
-          {/* CTA buttons */}
+          {/* Primary CTA — go to Google */}
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Button
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => setCreateDialogOpen(true)}
+            <a
+              href="https://business.google.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
             >
-              Create Google Profile
-              <ArrowRight className="size-4" />
-            </Button>
-            <Button
-              variant="outline"
-              className="gap-1.5"
-              onClick={() => setConnectDialogOpen(true)}
-            >
-              Connect Existing Profile
-            </Button>
+              Go to Google Business Profile
+              <ExternalLink className="size-4" />
+            </a>
+          </div>
+
+          {/* How verification works (clarifies the user's confusion) */}
+          <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
+            <h3 className="font-semibold text-foreground">How Google verification works</h3>
+            <ol className="mt-2 space-y-1.5 text-xs text-muted-foreground">
+              <li>1. Go to <strong>business.google.com</strong> and sign in with your Google account.</li>
+              <li>2. Add your business (name, category, address, phone).</li>
+              <li>3. Google asks you to verify — by phone, email, postcard (5-14 days), or video call.</li>
+              <li>4. Once verified on Google, come back here and paste your profile URL above.</li>
+              <li>5. If you used &ldquo;Google Business Profile&rdquo; as your claim verification method on this marketplace, we&rsquo;ll auto-approve your claim.</li>
+            </ol>
           </div>
         </CardContent>
       </Card>
-
-      {/* Create Google Profile dialog — coming soon */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create Google Profile</DialogTitle>
-            <DialogDescription>
-              This feature will connect your Google Business Profile. Setup wizard coming soon.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => {
-                setCreateDialogOpen(false);
-                toast.info('Google Business Profile setup wizard is coming soon.');
-              }}
-            >
-              Got it
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Connect Existing Profile dialog — coming soon */}
-      <Dialog open={connectDialogOpen} onOpenChange={setConnectDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Connect Existing Profile</DialogTitle>
-            <DialogDescription>
-              This feature will connect your Google Business Profile. Setup wizard coming soon.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setConnectDialogOpen(false);
-                toast.info('Google Business Profile setup wizard is coming soon.');
-              }}
-            >
-              Got it
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

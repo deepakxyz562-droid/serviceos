@@ -84,6 +84,10 @@ export function MarketplaceBrowser({
   // Sort now lives in the shared Zustand store so the breadcrumb Sort
   // dropdown (rendered by the server page) and this grid stay in sync.
   const sort = useMarketplaceSearch((s) => s.sort);
+  // Trust filters (sidebar) — instant client-side filtering
+  const trustFullyVerified = useMarketplaceSearch((s) => s.trustFullyVerified);
+  const trustRatingHigh = useMarketplaceSearch((s) => s.trustRatingHigh);
+  const trustEmergency = useMarketplaceSearch((s) => s.trustEmergency);
   const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
   // Brief skeleton flash when filters change so the user sees the grid react.
   const [filtering, setFiltering] = React.useState(false);
@@ -122,12 +126,12 @@ export function MarketplaceBrowser({
     setFiltering(true);
     const t = setTimeout(() => setFiltering(false), 180);
     return () => clearTimeout(t);
-  }, [searchQuery, cityFilter, verticalFilter, industryFilter, sort]);
+  }, [searchQuery, cityFilter, verticalFilter, industryFilter, sort, trustFullyVerified, trustRatingHigh, trustEmergency]);
 
   // Reset visible count whenever the filtered set changes
   React.useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [searchQuery, cityFilter, verticalFilter, industryFilter, sort]);
+  }, [searchQuery, cityFilter, verticalFilter, industryFilter, sort, trustFullyVerified, trustRatingHigh, trustEmergency]);
 
   // ── Mirror filter state into the URL (replaceState, no reload) ─────────
   React.useEffect(() => {
@@ -193,6 +197,18 @@ export function MarketplaceBrowser({
           return false;
         }
       }
+      // Trust filters (sidebar)
+      if (trustFullyVerified) {
+        if (!(p.identityVerified && p.businessVerified && p.insuranceVerified && p.stripeConnected)) {
+          return false;
+        }
+      }
+      if (trustRatingHigh) {
+        if ((p.rating ?? 0) < 4.8) return false;
+      }
+      if (trustEmergency) {
+        if (!p.emergencyServiceAvailable) return false;
+      }
       return true;
     });
 
@@ -205,6 +221,13 @@ export function MarketplaceBrowser({
       switch (sort) {
         case 'reviews':
           return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
+        case 'response': {
+          // Fastest response first (lower minutes = faster). Nulls sort last.
+          const aResp = a.responseTimeMins ?? 9999;
+          const bResp = b.responseTimeMins ?? 9999;
+          if (aResp !== bResp) return aResp - bResp;
+          return (b.rating ?? 0) - (a.rating ?? 0);
+        }
         case 'name':
           return (a.name ?? '').localeCompare(b.name ?? '');
         case 'verified': {
@@ -232,7 +255,7 @@ export function MarketplaceBrowser({
     });
 
     return list;
-  }, [providers, searchQuery, cityFilter, verticalFilter, industryFilter, sort]);
+  }, [providers, searchQuery, cityFilter, verticalFilter, industryFilter, sort, trustFullyVerified, trustRatingHigh, trustEmergency]);
 
   const visible = filtered.slice(0, visibleCount);
   const hasMore = visibleCount < filtered.length;

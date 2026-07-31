@@ -32,6 +32,9 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
   }
 
   // Create tenant with onboardingCompleted=false so the SaaS wizard triggers.
+  // Set claimed=true + listingTier='claimed' so the new business renders as a
+  // full card on the marketplace (not an "Unclaimed" minimal card). This
+  // matches the email/password registration flow in /api/auth/register.
   const tenant = await db.tenant.create({
     data: {
       name: businessName,
@@ -42,6 +45,12 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
       trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
       onboardingCompleted: false,
       onboardingStep: 1,
+      claimed: true,
+      claimedAt: new Date(),
+      listingTier: 'claimed',
+      marketplaceOptIn: true,
+      marketplaceTermsAcceptedAt: new Date(),
+      publicProfileEnabled: true,
     },
   });
 

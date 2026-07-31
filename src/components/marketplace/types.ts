@@ -69,6 +69,16 @@ export interface ProviderListItem {
    * Used by the featured carousel to identify paid/active subscribers.
    */
   plan?: string | null;
+  /** Google Business Profile URL (user-pasted, link-only integration). */
+  googleBusinessProfileUrl?: string | null;
+  /** Google Business Profile verified flag. */
+  googleBusinessVerified?: boolean;
+  /** Total jobs completed by this provider (for the stats bar). */
+  jobsCount?: number;
+  /** Average response time in minutes (for the stats bar). */
+  responseTimeMins?: number | null;
+  /** Whether this provider offers 24/7 emergency service. */
+  emergencyServiceAvailable?: boolean;
 }
 
 export interface ProviderListResponse {

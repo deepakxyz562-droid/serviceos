@@ -5,59 +5,51 @@ import Link from 'next/link';
 import {
   Star,
   MapPin,
+  Briefcase,
+  Clock,
   BadgeCheck,
   ShieldCheck,
-  Sparkles,
-  ArrowRight,
+  Building2,
+  Umbrella,
+  CreditCard,
   Zap,
   Phone,
-  MessageSquareQuote,
+  ArrowRight,
   type LucideIcon,
 } from 'lucide-react';
-import { Card, CardContent, CardFooter } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getIndustry } from '@/lib/industry-catalog';
 import type { ProviderListItem, ProviderProfile } from './types';
 
 /**
- * ProviderCard (redesigned — OLX-style featured tag + 3 rendering modes)
- * --------------------------------------------------------------------
- * The card renders in one of three modes, driven by `provider.cardType`:
+ * ProviderCard — redesigned to match the slick-service-hub reference design.
  *
- *   - 'featured'       : full card with amber "Featured" tag + ring + sort-first
- *   - 'normal-full'    : full card (Book Now / Get Quote / services)
- *   - 'normal-minimal' : minimal card (name / phone / rating / "Call Now" only)
- *                        — used for seed data and expired-trial providers
+ * Layout (top to bottom):
+ *   • Identity row: avatar (initials) + name + verified badge | Claimed/Unclaimed pill
+ *   • Category • Location line (with icons)
+ *   • 3-column stats bar: rating | jobs done | avg response
+ *   • Description (2-line clamp)
+ *   • 4-gate verification badges: Identity | Business | Insurance | Payments
+ *   • Action row: 24/7 pill (if emergency) + Call now button + Details link
  *
- * The minimal mode is the OLX-style "unclaimed listing" treatment: no booking,
- * no quote, no services. Just enough info for a customer to call the business.
+ * Three rendering modes driven by `provider.cardType`:
+ *   - 'featured'       : full card + amber "Featured" ring + sort-first
+ *   - 'normal-full'    : full card (Call now + Details)
+ *   - 'normal-minimal' : minimal card (avatar, name, rating, "No phone on file" / Call now + Details)
+ *                        — used for unclaimed seed data
  */
 
 interface ProviderCardProps {
   provider: ProviderListItem | ProviderProfile;
-  /** Whether this provider is featured (gets a gold badge). */
   featured?: boolean;
-  /** Click handler — opens the provider profile view (legacy, used when no href). */
   onViewProfile?: (provider: ProviderListItem | ProviderProfile) => void;
-  /** Compact layout for horizontal scrollers (no services list). */
   compact?: boolean;
   className?: string;
-  /**
-   * Optional URL. When provided, "View Profile" and the card body link here.
-   * "Get Quote" links to the same URL with ?action=quote appended so the
-   * profile page can auto-open the quote dialog.
-   */
   href?: string;
 }
 
 function isProfile(p: ProviderListItem | ProviderProfile): p is ProviderProfile {
   return 'identityVerified' in p && 'gallery' in p;
-}
-
-function getServices(p: ProviderListItem | ProviderProfile) {
-  if ('services' in p && Array.isArray(p.services)) return p.services;
-  return [];
 }
 
 function buildInitials(name: string): string {
@@ -69,177 +61,117 @@ function buildInitials(name: string): string {
     .join('');
 }
 
-function RatingStars({ rating, size = 14 }: { rating: number; size?: number }) {
-  const rounded = Math.round(rating * 2) / 2;
+/**
+ * Deterministic avatar color from the provider name. Picks from a palette of
+ * soft pastel backgrounds + dark text colors so every provider gets a stable,
+ * visually distinct avatar without needing a stored image.
+ */
+function avatarColors(name: string): { bg: string; text: string } {
+  const palettes = [
+    { bg: 'bg-emerald-100 dark:bg-emerald-950/60', text: 'text-emerald-700 dark:text-emerald-300' },
+    { bg: 'bg-blue-100 dark:bg-blue-950/60', text: 'text-blue-700 dark:text-blue-300' },
+    { bg: 'bg-violet-100 dark:bg-violet-950/60', text: 'text-violet-700 dark:text-violet-300' },
+    { bg: 'bg-amber-100 dark:bg-amber-950/60', text: 'text-amber-700 dark:text-amber-300' },
+    { bg: 'bg-rose-100 dark:bg-rose-950/60', text: 'text-rose-700 dark:text-rose-300' },
+    { bg: 'bg-teal-100 dark:bg-teal-950/60', text: 'text-teal-700 dark:text-teal-300' },
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  }
+  return palettes[Math.abs(hash) % palettes.length];
+}
+
+interface VerificationGate {
+  label: string;
+  icon: LucideIcon;
+  passed: boolean;
+}
+
+function buildVerificationGates(p: ProviderListItem | ProviderProfile): VerificationGate[] {
+  const list = p as ProviderListItem;
+  const identity = isProfile(p) ? p.identityVerified : list.identityVerified ?? false;
+  const business = isProfile(p) ? p.businessVerified : list.businessVerified ?? false;
+  const insurance = isProfile(p) ? p.insuranceVerified : list.insuranceVerified ?? false;
+  const payments = isProfile(p) ? p.stripeConnected : list.stripeConnected ?? false;
+  return [
+    { label: 'Identity', icon: ShieldCheck, passed: identity },
+    { label: 'Business', icon: Building2, passed: business },
+    { label: 'Insurance', icon: Umbrella, passed: insurance },
+    { label: 'Payments', icon: CreditCard, passed: payments },
+  ];
+}
+
+function formatResponseTime(mins: number | null | undefined): string {
+  if (mins == null) return '—';
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+// ─── Verification gate badge (single pill in the 4-gate row) ──────────────────
+function GateBadge({ gate }: { gate: VerificationGate }) {
+  const Icon = gate.icon;
   return (
-    <div className="flex items-center gap-0.5" aria-label={`${rating.toFixed(1)} out of 5 stars`}>
-      {[1, 2, 3, 4, 5].map((n) => {
-        const Icon: LucideIcon = Star;
-        const filled = n <= Math.floor(rounded);
-        const half = !filled && n - 0.5 === rounded;
-        return (
-          <Icon
-            key={n}
-            style={{ width: size, height: size }}
-            className={cn(
-              'transition-colors',
-              filled || half ? 'fill-amber-400 text-amber-400' : 'fill-transparent text-muted-foreground/40',
-            )}
-          />
-        );
-      })}
+    <span
+      className={cn(
+        'inline-flex h-[26px] items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium',
+        gate.passed
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
+          : 'border-border bg-muted/40 text-muted-foreground',
+      )}
+      title={gate.passed ? `${gate.label} verified` : `${gate.label} not yet verified`}
+    >
+      <Icon className={cn('h-3 w-3', gate.passed ? 'text-emerald-600' : 'text-muted-foreground')} />
+      {gate.label}
+    </span>
+  );
+}
+
+// ─── 3-column stats bar (rating | jobs | response) ───────────────────────────
+function StatsBar({
+  rating,
+  reviewCount,
+  jobsCount,
+  responseTimeMins,
+}: {
+  rating: number;
+  reviewCount: number;
+  jobsCount: number;
+  responseTimeMins: number | null | undefined;
+}) {
+  const colClass = 'flex flex-col items-center justify-center px-2 py-2.5 min-w-0';
+  const valueClass = 'flex items-center gap-1 text-[13px] font-semibold text-foreground';
+  const labelClass = 'mt-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground';
+  return (
+    <div className="mt-3 grid grid-cols-3 divide-x divide-border border-y border-border bg-muted/40">
+      <div className={colClass}>
+        <span className={valueClass}>
+          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+          {rating > 0 ? rating.toFixed(1) : 'New'}
+        </span>
+        <span className={labelClass}>{reviewCount} review{reviewCount === 1 ? '' : 's'}</span>
+      </div>
+      <div className={colClass}>
+        <span className={valueClass}>
+          <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
+          {jobsCount > 0 ? jobsCount.toLocaleString() : '0'}
+        </span>
+        <span className={labelClass}>Jobs done</span>
+      </div>
+      <div className={colClass}>
+        <span className={valueClass}>
+          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+          {formatResponseTime(responseTimeMins)}
+        </span>
+        <span className={labelClass}>Avg response</span>
+      </div>
     </div>
   );
 }
 
-/**
- * Compute the pricing label for the card.
- *   • If any service has a basePrice > 0 → "From $X" (lowest)
- *   • Else → "Get a quote"
- */
-function getPricingLabel(
-  provider: ProviderListItem | ProviderProfile,
-): { label: string; subLabel?: string } {
-  const services = getServices(provider);
-  const prices = services
-    .map((s) => s.basePrice)
-    .filter((p): p is number => typeof p === 'number' && p > 0);
-  if (prices.length > 0) {
-    const lowest = Math.min(...prices);
-    const currency = (provider as ProviderListItem).currency || '$';
-    const symbol = currency === 'USD' || currency === 'CAD' ? '$' : currency + ' ';
-    return { label: `From ${symbol}${lowest}`, subLabel: 'est. starting price' };
-  }
-  // Fallback: call-out fee if set
-  const callOut = (provider as ProviderListItem).callOutFee;
-  if (typeof callOut === 'number' && callOut > 0) {
-    const currency = (provider as ProviderListItem).currency || '$';
-    const symbol = currency === 'USD' || currency === 'CAD' ? '$' : currency + ' ';
-    return { label: `Call-out ${symbol}${callOut}`, subLabel: 'service fee' };
-  }
-  return { label: 'Get a quote', subLabel: 'custom pricing' };
-}
-
-// ─── Minimal card (seed data / expired trial) ────────────────────────────────
-
-function MinimalProviderCard({
-  provider,
-  className,
-  href,
-}: {
-  provider: ProviderListItem;
-  className?: string;
-  href?: string;
-}) {
-  const rating = provider.rating ?? 0;
-  const reviewCount = provider.reviewCount ?? 0;
-  const industry = provider.industry;
-  const industryMeta = industry ? getIndustry(industry) : undefined;
-  const industryLabel = industryMeta?.name ?? industry ?? 'Service Provider';
-  const industryEmoji = industryMeta?.emoji ?? '🛠️';
-  const location = [provider.city, provider.state].filter(Boolean).join(', ');
-  const phone = provider.phone ?? null;
-
-  const profileHref = href ?? '#';
-
-  return (
-    <Card
-      className={cn(
-        'group relative flex h-full flex-col overflow-hidden py-0 transition-all hover:shadow-md',
-        className,
-      )}
-    >
-      <CardContent className="flex flex-1 flex-col gap-3 p-4">
-        {/* Header row: avatar + industry chip */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 text-sm font-bold text-slate-600 dark:from-slate-800 dark:to-slate-900 dark:text-slate-300">
-              {buildInitials(provider.name)}
-            </div>
-            <div className="min-w-0">
-              {href ? (
-                <Link href={profileHref} aria-label={`View ${provider.name} profile`}>
-                  <h3 className="line-clamp-1 text-sm font-semibold text-foreground transition-colors group-hover:text-emerald-700">
-                    {provider.name}
-                  </h3>
-                </Link>
-              ) : (
-                <h3 className="line-clamp-1 text-sm font-semibold text-foreground">
-                  {provider.name}
-                </h3>
-              )}
-              <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-                <span aria-hidden>{industryEmoji}</span>
-                <span className="truncate">{industryLabel}</span>
-              </div>
-            </div>
-          </div>
-          {/* "Unclaimed" pill — subtle, top-right */}
-          {!provider.claimed && (
-            <Badge variant="outline" className="shrink-0 text-[9px] uppercase tracking-wide text-muted-foreground">
-              Unclaimed
-            </Badge>
-          )}
-        </div>
-
-        {/* Rating + location row */}
-        <div className="flex items-center justify-between gap-2 text-xs">
-          {reviewCount > 0 ? (
-            <div className="flex items-center gap-1">
-              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-              <span className="font-semibold text-foreground">{rating.toFixed(1)}</span>
-              <span className="text-muted-foreground">({reviewCount})</span>
-            </div>
-          ) : (
-            <span className="text-muted-foreground italic">No reviews yet</span>
-          )}
-          {location ? (
-            <span className="flex items-center gap-1 text-muted-foreground truncate">
-              <MapPin className="h-3 w-3 shrink-0" />
-              <span className="truncate">{location}</span>
-            </span>
-          ) : null}
-        </div>
-
-        {provider.description ? (
-          <p className="line-clamp-2 text-xs text-muted-foreground leading-relaxed">
-            {provider.description}
-          </p>
-        ) : null}
-      </CardContent>
-
-      {/* Footer — "Call Now" only (no booking, no quote) */}
-      <CardFooter className="mt-auto gap-2 border-t bg-muted/20 px-4 py-2.5">
-        {phone ? (
-          <a
-            href={`tel:${phone.replace(/[^+\d]/g, '')}`}
-            className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md bg-emerald-600 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
-            aria-label={`Call ${provider.name}`}
-          >
-            <Phone className="h-3.5 w-3.5" />
-            Call Now
-          </a>
-        ) : (
-          <span className="inline-flex h-9 flex-1 items-center justify-center text-xs text-muted-foreground">
-            No phone available
-          </span>
-        )}
-        {href ? (
-          <Link
-            href={profileHref}
-            className="inline-flex h-9 items-center justify-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-            aria-label={`View ${provider.name} details`}
-          >
-            Details <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        ) : null}
-      </CardFooter>
-    </Card>
-  );
-}
-
-// ─── Full card (featured + normal-full) ──────────────────────────────────────
-
+// ─── Main card ────────────────────────────────────────────────────────────────
 export function ProviderCard({
   provider,
   featured,
@@ -248,17 +180,12 @@ export function ProviderCard({
   className,
   href,
 }: ProviderCardProps) {
-  // ── Route to minimal card if applicable ─────────────────────────────────
   const listItem = provider as ProviderListItem;
   const cardType = listItem.cardType;
+
+  // Minimal card for unclaimed seed data (no stats bar, no description, no gates)
   if (cardType === 'normal-minimal' && !isProfile(provider)) {
-    return (
-      <MinimalProviderCard
-        provider={listItem}
-        className={className}
-        href={href}
-      />
-    );
+    return <MinimalCard provider={listItem} className={className} href={href} onViewProfile={onViewProfile} />;
   }
 
   const rating = provider.rating ?? 0;
@@ -266,228 +193,311 @@ export function ProviderCard({
   const industry = provider.industry;
   const industryMeta = industry ? getIndustry(industry) : undefined;
   const industryLabel = industryMeta?.name ?? industry ?? 'Service Provider';
-  const industryEmoji = industryMeta?.emoji ?? '🛠️';
-
-  const isFeat = featured ?? !!listItem.featured;
-  const listFlags = provider as Partial<ProviderListItem>;
-  const identityVerified = isProfile(provider)
-    ? provider.identityVerified
-    : listFlags.identityVerified ?? true;
-  const businessVerified = isProfile(provider)
-    ? provider.businessVerified
-    : listFlags.businessVerified ?? true;
-  const insuranceVerified = isProfile(provider)
-    ? provider.insuranceVerified
-    : listFlags.insuranceVerified ?? true;
-  const stripeConnected = isProfile(provider)
-    ? provider.stripeConnected
-    : listFlags.stripeConnected ?? true;
-  const isVerified = identityVerified && businessVerified;
-  const isFullyVerified = identityVerified && businessVerified && insuranceVerified && stripeConnected;
-
   const location = [provider.city, provider.state].filter(Boolean).join(', ');
-  const cover = provider.coverImage;
-  const tagline = (provider as ProviderListItem).tagline ?? '';
-  const description = provider.description ?? tagline;
-  const pricing = getPricingLabel(provider);
+  const phone = listItem.phone ?? null;
+  const isFeat = featured ?? !!listItem.featured;
+  const isEmergency = provider.emergencyServiceAvailable ?? listItem.emergencyServiceAvailable ?? false;
+  const claimed = listItem.claimed ?? false;
+  const listingTier = listItem.listingTier ?? 'none';
+  const isClaimedFree = listingTier === 'claimed_free';
 
-  // Build URLs
+  const gates = buildVerificationGates(provider);
+  const allGatesPassed = gates.every((g) => g.passed);
+  const avatar = avatarColors(provider.name);
+
+  const description = provider.description ?? listItem.tagline ?? '';
   const profileHref = href ?? '#';
-  const quoteHref = href ? `${href}?action=quote` : '#';
+  const handleView = () => {
+    if (onViewProfile) onViewProfile(provider);
+  };
 
+  const jobsCount = listItem.jobsCount ?? 0;
+  const responseTimeMins = listItem.responseTimeMins ?? null;
+
+  return (
+    <article
+      className={cn(
+        'group flex flex-col rounded-xl border border-border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md',
+        isFeat && 'ring-2 ring-amber-300/70',
+        className,
+      )}
+    >
+      {/* ─── Identity row ──────────────────────────────────────────────────── */}
+      <div className="flex items-start gap-3 p-4 pb-3">
+        <span
+          className={cn(
+            'grid h-11 w-11 shrink-0 place-items-center rounded-lg text-sm font-bold uppercase',
+            avatar.bg,
+            avatar.text,
+          )}
+          aria-hidden
+        >
+          {buildInitials(provider.name)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {href ? (
+              <Link href={profileHref} aria-label={`View ${provider.name} profile`} className="min-w-0">
+                <h3 className="truncate text-[15px] font-semibold tracking-tight text-foreground transition-colors group-hover:text-emerald-700">
+                  {provider.name}
+                </h3>
+              </Link>
+            ) : (
+              <button type="button" onClick={handleView} className="min-w-0 text-left" aria-label={`View ${provider.name} profile`}>
+                <h3 className="truncate text-[15px] font-semibold tracking-tight text-foreground transition-colors group-hover:text-emerald-700">
+                  {provider.name}
+                </h3>
+              </button>
+            )}
+            {allGatesPassed ? (
+              <BadgeCheck
+                className="h-4 w-4 shrink-0 fill-amber-400 text-amber-500"
+                aria-label="Fully verified"
+              />
+            ) : null}
+          </div>
+          <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <Briefcase className="h-3 w-3 shrink-0" />
+            <span className="truncate">{industryLabel}</span>
+            {location ? (
+              <>
+                <span className="text-border-strong" aria-hidden>•</span>
+                <MapPin className="h-3 w-3 shrink-0" />
+                <span className="truncate">{location}</span>
+              </>
+            ) : null}
+          </p>
+        </div>
+        {/* Claimed / Unclaimed pill */}
+        <span
+          className={cn(
+            'shrink-0 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider',
+            claimed
+              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+              : 'bg-muted text-muted-foreground',
+          )}
+        >
+          {claimed ? 'Claimed' : 'Unclaimed'}
+        </span>
+      </div>
+
+      {/* ─── Stats bar (3 columns: rating | jobs | response) ───────────────── */}
+      {!compact ? (
+        <StatsBar
+          rating={rating}
+          reviewCount={reviewCount}
+          jobsCount={jobsCount}
+          responseTimeMins={responseTimeMins}
+        />
+      ) : null}
+
+      {/* ─── Description (2-line clamp) ────────────────────────────────────── */}
+      {description && !compact ? (
+        <p className="mx-4 mt-3 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
+          {description}
+        </p>
+      ) : null}
+
+      {/* ─── 4-gate verification badges ────────────────────────────────────── */}
+      {!compact ? (
+        <div className="mx-4 mt-3 flex flex-wrap gap-1.5">
+          {gates.map((g) => (
+            <GateBadge key={g.label} gate={g} />
+          ))}
+        </div>
+      ) : null}
+
+      {/* ─── Action row: 24/7 pill + Call now + Details ─────────────────────── */}
+      <div className="mt-auto flex items-center justify-between gap-2 p-4 pt-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {isEmergency ? (
+            <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+              <Zap className="h-3 w-3" />
+              24/7
+            </span>
+          ) : null}
+          {phone ? (
+            <a
+              href={`tel:${phone.replace(/[^+\d]/g, '')}`}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+              aria-label={`Call ${provider.name}`}
+            >
+              <Phone className="h-3.5 w-3.5" />
+              Call now
+            </a>
+          ) : (
+            <span className="text-xs italic text-muted-foreground">No phone on file</span>
+          )}
+        </div>
+        {href ? (
+          <Link
+            href={profileHref}
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-border bg-background px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-muted"
+            aria-label={`View ${provider.name} details`}
+          >
+            Details <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={handleView}
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-border bg-background px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-muted"
+            aria-label={`View ${provider.name} details`}
+          >
+            Details <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {/* ─── Claimed-free upgrade hint (subtle banner) ─────────────────────── */}
+      {isClaimedFree ? (
+        <div className="border-t border-dashed border-border bg-muted/20 px-4 py-2 text-center text-[11px] text-muted-foreground">
+          Claimed listing · Upgrade to receive online bookings
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+// ─── Minimal card (unclaimed seed data — no stats, no description, no gates) ─
+function MinimalCard({
+  provider,
+  className,
+  href,
+  onViewProfile,
+}: {
+  provider: ProviderListItem;
+  className?: string;
+  href?: string;
+  onViewProfile?: (provider: ProviderListItem | ProviderProfile) => void;
+}) {
+  const rating = provider.rating ?? 0;
+  const reviewCount = provider.reviewCount ?? 0;
+  const industry = provider.industry;
+  const industryMeta = industry ? getIndustry(industry) : undefined;
+  const industryLabel = industryMeta?.name ?? industry ?? 'Service Provider';
+  const location = [provider.city, provider.state].filter(Boolean).join(', ');
+  const phone = provider.phone ?? null;
+  const isEmergency = provider.emergencyServiceAvailable ?? false;
+  const profileHref = href ?? '#';
+  const avatar = avatarColors(provider.name);
   const handleView = () => {
     if (onViewProfile) onViewProfile(provider);
   };
 
   return (
-    <Card
+    <article
       className={cn(
-        'group relative flex h-full flex-col overflow-hidden py-0 transition-all hover:shadow-lg',
-        isFeat && 'ring-2 ring-amber-300/70',
+        'group flex flex-col rounded-xl border border-border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md',
         className,
       )}
     >
-      {/* Cover banner */}
-      <div className="relative h-32 w-full overflow-hidden bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-600 sm:h-36">
-        {cover ? (
-          <img
-            src={cover}
-            alt=""
-            className="h-full w-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-105"
-          />
-        ) : null}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-
-        {/* Top-left badges — Featured tag (OLX-style amber pill) */}
-        <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-          {isFeat ? (
-            <Badge className="gap-1 bg-amber-400 text-amber-950 shadow hover:bg-amber-400">
-              <Sparkles className="h-3 w-3" /> Featured
-            </Badge>
-          ) : null}
-          {provider.emergencyServiceAvailable ? (
-            <Badge className="gap-1 bg-rose-500 text-white shadow hover:bg-rose-500">
-              <Zap className="h-3 w-3" /> 24/7
-            </Badge>
-          ) : null}
-        </div>
-
-        {/* Top-right verification badge */}
-        {isVerified ? (
-          <div className="absolute right-3 top-3">
-            <Badge
-              className={
-                isFullyVerified
-                  ? 'gap-1 bg-white/95 text-emerald-700 shadow hover:bg-white/95'
-                  : 'gap-1 bg-white/90 text-amber-700 shadow hover:bg-white/90'
-              }
-            >
-              <BadgeCheck className="h-3.5 w-3.5" />
-              {isFullyVerified ? 'Verified' : 'Listed'}
-            </Badge>
+      {/* Identity row */}
+      <div className="flex items-start gap-3 p-4 pb-3">
+        <span
+          className={cn(
+            'grid h-11 w-11 shrink-0 place-items-center rounded-lg text-sm font-bold uppercase',
+            avatar.bg,
+            avatar.text,
+          )}
+          aria-hidden
+        >
+          {buildInitials(provider.name)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {href ? (
+              <Link href={profileHref} aria-label={`View ${provider.name} profile`} className="min-w-0">
+                <h3 className="truncate text-[15px] font-semibold tracking-tight text-foreground transition-colors group-hover:text-emerald-700">
+                  {provider.name}
+                </h3>
+              </Link>
+            ) : (
+              <button type="button" onClick={handleView} className="min-w-0 text-left" aria-label={`View ${provider.name} profile`}>
+                <h3 className="truncate text-[15px] font-semibold tracking-tight text-foreground transition-colors group-hover:text-emerald-700">
+                  {provider.name}
+                </h3>
+              </button>
+            )}
           </div>
-        ) : null}
+          <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <Briefcase className="h-3 w-3 shrink-0" />
+            <span className="truncate">{industryLabel}</span>
+            {location ? (
+              <>
+                <span className="text-border-strong" aria-hidden>•</span>
+                <MapPin className="h-3 w-3 shrink-0" />
+                <span className="truncate">{location}</span>
+              </>
+            ) : null}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          Unclaimed
+        </span>
       </div>
 
-      <CardContent className="flex flex-1 flex-col px-4 pb-3 pt-0">
-        {/* Avatar + industry chip */}
-        <div className="mb-3 flex items-end justify-between">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border-4 border-background bg-card text-lg font-bold text-emerald-700 shadow-sm -mt-8">
-            {buildInitials(provider.name)}
-          </div>
-          <div className="mb-1 flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-            <span aria-hidden>{industryEmoji}</span>
-            <span className="max-w-[110px] truncate">{industryLabel}</span>
-          </div>
-        </div>
-
-        {/* Rating row — prominent (TaskRabbit style) */}
-        <div className="mb-1.5 flex items-center gap-1.5">
-          <RatingStars rating={rating} size={15} />
-          <span className="text-sm font-bold text-foreground">{rating.toFixed(1)}</span>
-          <span className="text-xs text-muted-foreground">
-            ({reviewCount.toLocaleString()} review{reviewCount === 1 ? '' : 's'})
-          </span>
-        </div>
-
-        {/* Name — clickable link to profile */}
-        {href ? (
-          <Link
-            href={profileHref}
-            aria-label={`View ${provider.name} profile`}
-            className="block"
-          >
-            <h3 className="line-clamp-1 text-base font-semibold text-foreground transition-colors group-hover:text-emerald-700">
-              {provider.name}
-            </h3>
-          </Link>
+      {/* Minimal stats: just rating + reviews (single row, no dividers) */}
+      <div className="mx-4 mb-3 flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs">
+        {reviewCount > 0 ? (
+          <>
+            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+            <span className="font-semibold text-foreground">{rating.toFixed(1)}</span>
+            <span className="text-muted-foreground">({reviewCount} review{reviewCount === 1 ? '' : 's'})</span>
+          </>
         ) : (
-          <button
-            type="button"
-            onClick={handleView}
-            className="block w-full text-left"
-            aria-label={`View ${provider.name} profile`}
-          >
-            <h3 className="line-clamp-1 text-base font-semibold text-foreground transition-colors group-hover:text-emerald-700">
-              {provider.name}
-            </h3>
-          </button>
+          <span className="italic text-muted-foreground">No reviews yet</span>
         )}
+      </div>
 
-        {tagline ? (
-          <p className="mt-0.5 line-clamp-1 text-xs font-medium text-muted-foreground">
-            {tagline}
-          </p>
-        ) : null}
+      {/* 4-gate verification badges (all will show as "not yet verified" for seed data) */}
+      <div className="mx-4 mb-3 flex flex-wrap gap-1.5">
+        {buildVerificationGates(provider).map((g) => (
+          <GateBadge key={g.label} gate={g} />
+        ))}
+      </div>
 
-        {location ? (
-          <div className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{location}</span>
-          </div>
-        ) : null}
-
-        {/* Pricing — "From $X" or "Get a quote" */}
-        <div className="mt-2.5 flex items-baseline gap-1.5">
-          <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
-            {pricing.label}
-          </span>
-          {pricing.subLabel ? (
-            <span className="text-[11px] text-muted-foreground">{pricing.subLabel}</span>
+      {/* Action row */}
+      <div className="mt-auto flex items-center justify-between gap-2 p-4 pt-0">
+        <div className="flex min-w-0 items-center gap-2">
+          {isEmergency ? (
+            <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+              <Zap className="h-3 w-3" />
+              24/7
+            </span>
           ) : null}
+          {phone ? (
+            <a
+              href={`tel:${phone.replace(/[^+\d]/g, '')}`}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+              aria-label={`Call ${provider.name}`}
+            >
+              <Phone className="h-3.5 w-3.5" />
+              Call now
+            </a>
+          ) : (
+            <span className="text-xs italic text-muted-foreground">No phone on file</span>
+          )}
         </div>
-
-        {description && !compact ? (
-          <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{description}</p>
-        ) : null}
-
-        {/* Verification badges — compact row */}
-        {!compact ? (
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            {identityVerified ? (
-              <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50/60 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-                <ShieldCheck className="h-3 w-3" /> Identity
-              </Badge>
-            ) : null}
-            {businessVerified ? (
-              <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50/60 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-                <BadgeCheck className="h-3 w-3" /> Business
-              </Badge>
-            ) : null}
-            {insuranceVerified ? (
-              <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50/60 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-                <ShieldCheck className="h-3 w-3" /> Insured
-              </Badge>
-            ) : null}
-            {stripeConnected ? (
-              <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50/60 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-                <BadgeCheck className="h-3 w-3" /> Payments
-              </Badge>
-            ) : null}
-            {!isFullyVerified && isVerified ? (
-              <span className="text-[10px] text-muted-foreground">Verification in progress</span>
-            ) : null}
-          </div>
-        ) : null}
-      </CardContent>
-
-      {/* Footer — two buttons: View Profile + Get Quote */}
-      <CardFooter className="mt-auto gap-2 border-t bg-muted/30 px-4 py-2.5">
         {href ? (
           <Link
             href={profileHref}
-            className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-md border border-border bg-background text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-border bg-background px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-muted"
+            aria-label={`View ${provider.name} details`}
           >
-            View Profile <ArrowRight className="h-3.5 w-3.5" />
+            Details <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         ) : (
           <button
             type="button"
             onClick={handleView}
-            className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-md border border-border bg-background text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-border bg-background px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-muted"
+            aria-label={`View ${provider.name} details`}
           >
-            View Profile <ArrowRight className="h-3.5 w-3.5" />
+            Details <ArrowRight className="h-3.5 w-3.5" />
           </button>
         )}
-        {href ? (
-          <Link
-            href={quoteHref}
-            className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-md bg-emerald-600 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
-          >
-            <MessageSquareQuote className="h-3.5 w-3.5" />
-            Get Quote
-          </Link>
-        ) : (
-          <button
-            type="button"
-            onClick={handleView}
-            className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-md bg-emerald-600 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
-          >
-            <MessageSquareQuote className="h-3.5 w-3.5" />
-            Get Quote
-          </button>
-        )}
-      </CardFooter>
-    </Card>
+      </div>
+    </article>
   );
 }

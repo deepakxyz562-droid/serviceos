@@ -40,7 +40,7 @@
 import { create } from 'zustand';
 
 /** Sort keys kept in sync with MarketplaceBrowser.SORTS. */
-export type MarketplaceSortKey = 'rating' | 'reviews' | 'name' | 'verified';
+export type MarketplaceSortKey = 'rating' | 'reviews' | 'response' | 'name' | 'verified';
 
 interface MarketplaceSearchState {
   /** Raw text inside the keyword search <input> (instant, not debounced). */
@@ -49,9 +49,18 @@ interface MarketplaceSearchState {
   cityInput: string;
   /** Sort key shared between the breadcrumb dropdown and the grid. */
   sort: MarketplaceSortKey;
+  /** Trust filter: only show providers with all 4 verification gates passed. */
+  trustFullyVerified: boolean;
+  /** Trust filter: only show providers with rating >= 4.8. */
+  trustRatingHigh: boolean;
+  /** Trust filter: only show providers offering 24/7 emergency dispatch. */
+  trustEmergency: boolean;
   setSearchInput: (v: string) => void;
   setCityInput: (v: string) => void;
   setSort: (v: MarketplaceSortKey) => void;
+  toggleTrustFullyVerified: () => void;
+  toggleTrustRatingHigh: () => void;
+  toggleTrustEmergency: () => void;
 }
 
 export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
@@ -61,7 +70,13 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
   // SORTS array in MarketplaceBrowser). Kept here so the breadcrumb Sort
   // dropdown and the grid start in sync on first paint.
   sort: 'rating',
+  trustFullyVerified: false,
+  trustRatingHigh: false,
+  trustEmergency: false,
   setSearchInput: (v) => set({ searchInput: v }),
   setCityInput: (v) => set({ cityInput: v }),
   setSort: (v) => set({ sort: v }),
+  toggleTrustFullyVerified: () => set((s) => ({ trustFullyVerified: !s.trustFullyVerified })),
+  toggleTrustRatingHigh: () => set((s) => ({ trustRatingHigh: !s.trustRatingHigh })),
+  toggleTrustEmergency: () => set((s) => ({ trustEmergency: !s.trustEmergency })),
 }));
