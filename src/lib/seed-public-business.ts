@@ -36,8 +36,8 @@ interface IndustryDummy {
     slug: string
   }>
   reviews: Array<{ rating: number; comment: string; authorName: string }>
-  coverImage: string
-  logo: string
+  coverImage: string | null
+  logo: string | null
   gallery: Array<{ url: string; caption: string }>
   faqs: Array<{ question: string; answer: string }>
   serviceAreas: string[]
@@ -48,8 +48,8 @@ const GENERIC_DUMMY: IndustryDummy = {
   description: `We are a family-owned and operated service business serving the local community since 2009. Our team of licensed, insured, and background-checked professionals specializes in emergency repairs, installations, and maintenance services.
 
 We pride ourselves on honest pricing, on-time arrivals, and quality workmanship. Every job is backed by our 100% satisfaction guarantee. Call us today — we're available for emergencies.`,
-  coverImage: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=1200&h=400&fit=crop',
-  logo: 'https://images.unsplash.com/photo-1581092919535-90a3b3a8f80e?w=200&h=200&fit=crop',
+  coverImage: null,
+  logo: null,
   services: [
     {
       name: 'Emergency Service',
@@ -95,12 +95,7 @@ We pride ourselves on honest pricing, on-time arrivals, and quality workmanship.
     { rating: 5, comment: 'Best in town. Honest, on-time, and does excellent work. We use them for all our properties.', authorName: 'James R.' },
     { rating: 5, comment: 'Fixed the issue in 30 minutes. Friendly and professional.', authorName: 'Patricia B.' },
   ],
-  gallery: [
-    { url: 'https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=400&h=400&fit=crop', caption: 'Installation work' },
-    { url: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=400&fit=crop', caption: 'Service in progress' },
-    { url: 'https://images.unsplash.com/photo-1607400201515-c2c41c07d307?w=400&h=400&fit=crop', caption: 'Completed project' },
-    { url: 'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=400&h=400&fit=crop', caption: 'Repair work' },
-  ],
+  gallery: [],
   faqs: [
     { question: 'Do you offer 24/7 emergency service?', answer: 'Yes. We are available 24 hours a day, 7 days a week for emergencies. Call us anytime.' },
     { question: 'Are you licensed and insured?', answer: 'Yes. We are fully licensed and carry $2M general liability insurance.' },
@@ -164,7 +159,7 @@ function getIndustryDummy(industry?: string | null): IndustryDummy {
  * (name + longDescription rewritten; price/duration/category/slug kept
  * from the dummy baseline so pricing stays sensible).
  *
- * Dummy retains: coverImage, logo, gallery, serviceAreas, and any service
+ * Dummy retains: serviceAreas, and any service
  * the AI didn't cover (so we never lose a service because the AI skipped it).
  *
  * If `ai` is null (AI failed or wasn't called), returns the dummy verbatim.

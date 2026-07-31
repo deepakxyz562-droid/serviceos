@@ -417,6 +417,10 @@ export async function POST(request: NextRequest) {
     const insertedSamples: { name: string; industry: string; city: string }[] = [];
     const usedSlugs = new Set<string>();
 
+    // NOTE: No coverImage/logo/gallery is set on seeded tenants — image
+    // seeding was intentionally removed (was slow due to per-image downloads
+    // and relied on fragile Unsplash hotlinks that 404'd over time).
+    // ProviderCard renders a gradient banner fallback when coverImage is null.
     // Pre-compute slug + denormalized fields for every listing to insert.
     const prepared = toInsert.map((l) => {
       const ind = getIndustry(l.category);
