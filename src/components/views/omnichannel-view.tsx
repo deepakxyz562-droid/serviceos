@@ -27,8 +27,8 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
-import { AutoReplyCard } from '@/components/settings/sections/auto-reply-card';
 import { CHANNELS as ALL_CHANNEL_DEFS, getChannel } from '@/lib/channel-meta';
+// AutoReplyCard moved to channels-view.tsx (Channels & Credentials settings page).
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -67,6 +67,11 @@ interface Conversation {
   lead?: LeadInfo;
   messages: ConversationMessage[];
   autoLeadCreated?: boolean;
+  // Active assignee — surfaced by the conversations API via the
+  // ConversationAssignment join. The conversation card shows a UserCheck
+  // icon (emerald) when assigned, UserPlus (muted) when unassigned.
+  assigneeId?: string;
+  assigneeName?: string;
 }
 
 interface OmnichannelStats {
@@ -78,8 +83,8 @@ interface OmnichannelStats {
 }
 
 // Auto-Reply config types, defaults, and the AutoReplyCard component now live
-// in `src/components/settings/sections/auto-reply-card.tsx` so they can be
-// mounted in BOTH the Omnichannel view (here) and Settings → Communication.
+// in src/components/settings/sections/auto-reply-card.tsx and are rendered in
+// the Channels & Credentials settings page (channels-view.tsx), not here.
 
 // ─── Channel Metadata ───────────────────────────────────────────────────────
 // Channel styling is now sourced from the centralized registry in
@@ -296,6 +301,66 @@ export function OmnichannelView() {
     });
   };
 
+  // ── Assign / Unassign a conversation ──────────────────────────────────
+  // The icon button lives inside each conversation card. Clicking it:
+  //   - If unassigned → assigns to the current user (POST /assign)
+  //   - If assigned   → unassigns (DELETE /assign)
+  // The local state is updated optimistically so the icon flips immediately.
+  const [assignBusy, setAssignBusy] = useState<string | null>(null);
+
+  const handleToggleAssign = async (conv: Conversation, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (assignBusy) return;
+    setAssignBusy(conv.id);
+
+    const wasAssigned = !!conv.assigneeId;
+    // Optimistic update
+    setConversations(prev => prev.map(c =>
+      c.id === conv.id
+        ? wasAssigned
+          ? { ...c, assigneeId: undefined, assigneeName: undefined }
+          : { ...c, assigneeId: 'me', assigneeName: 'You' }
+        : c
+    ));
+
+    try {
+      const url = `/api/omnichannel/conversations/${conv.id}/assign`;
+      const res = wasAssigned
+        ? await fetch(url, { method: 'DELETE' })
+        : await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      // Update with the real assignment data from the server
+      if (!wasAssigned && data?.assignment) {
+        setConversations(prev => prev.map(c =>
+          c.id === conv.id
+            ? { ...c, assigneeId: data.assignment.agentId, assigneeName: data.assignment.agentName }
+            : c
+        ));
+      }
+      toast.success(wasAssigned ? 'Unassigned' : `Assigned to ${data?.assignment?.agentName || 'you'}`);
+    } catch (err) {
+      // Revert on error
+      setConversations(prev => prev.map(c =>
+        c.id === conv.id
+          ? wasAssigned
+            ? { ...c, assigneeId: conv.assigneeId, assigneeName: conv.assigneeName }
+            : { ...c, assigneeId: undefined, assigneeName: undefined }
+          : c
+      ));
+      toast.error(err instanceof Error ? err.message : 'Failed to update assignment');
+    } finally {
+      setAssignBusy(null);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!messageInput.trim() || !selectedConversation) return;
     const content = messageInput.trim();
@@ -499,8 +564,9 @@ export function OmnichannelView() {
         </div>
       </div>
 
-      {/* ── Auto-Reply Card ── */}
-      <AutoReplyCard />
+      {/* ── Auto-Reply Card ── MOVED to Channels & Credentials settings page.
+          The card now lives in src/components/views/channels-view.tsx so the
+          omnichannel inbox stays focused on conversations. */}
 
       {/* ── Empty State ── */}
       {isEmpty ? (
@@ -619,10 +685,36 @@ export function OmnichannelView() {
                                 </Badge>
                               )}
                               {conv.unreadCount > 0 && (
-                                <span className="ml-auto text-[10px] font-bold text-white bg-emerald-500 rounded-full size-5 flex items-center justify-center flex-shrink-0">
+                                <span className="text-[10px] font-bold text-white bg-emerald-500 rounded-full size-5 flex items-center justify-center flex-shrink-0">
                                   {conv.unreadCount}
                                 </span>
                               )}
+                              {/* Assign / Unassign icon — sits at the far right of the badge row.
+                                  Shows UserCheck (emerald) when assigned, UserPlus (muted) when
+                                  unassigned. Clicking toggles the assignment via the API. */}
+                              <button
+                                type="button"
+                                onClick={(e) => handleToggleAssign(conv, e)}
+                                disabled={assignBusy === conv.id}
+                                title={
+                                  conv.assigneeName
+                                    ? `Assigned to ${conv.assigneeName} — click to unassign`
+                                    : 'Click to assign to yourself'
+                                }
+                                className={cn(
+                                  'ml-auto size-6 rounded-full flex items-center justify-center transition-colors flex-shrink-0',
+                                  conv.assigneeId
+                                    ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:hover:bg-emerald-900'
+                                    : 'bg-muted text-muted-foreground hover:bg-muted/80',
+                                  assignBusy === conv.id && 'opacity-50 cursor-not-allowed'
+                                )}
+                              >
+                                {conv.assigneeId ? (
+                                  <UserCheck className="size-3.5" />
+                                ) : (
+                                  <UserPlus className="size-3.5" />
+                                )}
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -961,6 +1053,29 @@ export function OmnichannelView() {
                         )}>
                           {selectedConversation.status}
                         </Badge>
+                      </div>
+                      {/* Assignee row — shows who is handling this conversation.
+                          Includes a quick toggle button to assign/unassign. */}
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-muted-foreground">Assignee:</span>
+                        {selectedConversation.assigneeId ? (
+                          <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
+                            <UserCheck className="size-3 mr-1" />
+                            {selectedConversation.assigneeName || 'Assigned'}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
+                            Unassigned
+                          </Badge>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleAssign(selectedConversation, e)}
+                          disabled={assignBusy === selectedConversation.id}
+                          className="ml-auto text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-medium disabled:opacity-50"
+                        >
+                          {selectedConversation.assigneeId ? 'Unassign' : 'Assign to me'}
+                        </button>
                       </div>
                     </CardContent>
                   </Card>

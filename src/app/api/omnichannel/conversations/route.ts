@@ -66,6 +66,25 @@ export async function GET(request: NextRequest) {
     // Get inbox messages for each conversation
     const conversationIds = conversations.map((c) => c.conversationId)
 
+    // Fetch active assignments separately (ConversationAssignment.conversationId
+    // stores the Conversation.conversationId STRING field, not the id cuid —
+    // verified against the seed script which maps `c.conversationId`).
+    const convIdStrings = conversations.map((c) => c.conversationId)
+    const activeAssignments = convIdStrings.length > 0
+      ? await db.conversationAssignment.findMany({
+          where: { conversationId: { in: convIdStrings }, status: 'active' },
+          orderBy: { createdAt: 'desc' },
+          select: { conversationId: true, agentId: true, agentName: true },
+        })
+      : []
+    // Map: conversationId string → first active assignment (most recent wins)
+    const assignmentMap = new Map<string, { agentId: string; agentName: string | null }>()
+    for (const a of activeAssignments) {
+      if (!assignmentMap.has(a.conversationId)) {
+        assignmentMap.set(a.conversationId, { agentId: a.agentId, agentName: a.agentName })
+      }
+    }
+
     // Get all messages for these conversations (limited to recent 50 per conversation for performance)
     const allMessages = conversationIds.length > 0
       ? await db.inboxMessage.findMany({
@@ -151,6 +170,10 @@ export async function GET(request: NextRequest) {
         } : undefined,
         messages: transformedMessages,
         autoLeadCreated: !!autoLeadMsg,
+        // Active assignee (if any) — surfaces on the conversation card icon.
+        // Looked up from ConversationAssignment by conversationId string field.
+        assigneeId: assignmentMap.get(conv.conversationId)?.agentId || undefined,
+        assigneeName: assignmentMap.get(conv.conversationId)?.agentName || undefined,
       }
     })
 

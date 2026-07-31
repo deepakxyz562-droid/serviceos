@@ -668,7 +668,9 @@ export function TemplateStudioView() {
                 </CollapsibleContent>
               </Collapsible>
 
-              {/* WhatsApp section */}
+              {/* WhatsApp section — HIDDEN per user request (keep code dormant for future re-enable).
+                  To restore: uncomment this block + the 'wa-all' entry in the mobile nav below. */}
+              {/*
               <Collapsible open={waOpen} onOpenChange={setWaOpen}>
                 <CollapsibleTrigger asChild>
                   <button
@@ -694,6 +696,7 @@ export function TemplateStudioView() {
                   </div>
                 </CollapsibleContent>
               </Collapsible>
+              */}
 
               <Separator className="my-1" />
 
@@ -745,7 +748,8 @@ export function TemplateStudioView() {
           <div className="flex flex-1 overflow-x-auto">
             {([
               { key: 'email-all' as SidebarKey, label: 'Email', icon: Mail },
-              { key: 'wa-all' as SidebarKey, label: 'WhatsApp', icon: MessageSquare },
+              // WhatsApp hidden per user request — keep code dormant.
+              // { key: 'wa-all' as SidebarKey, label: 'WhatsApp', icon: MessageSquare },
               { key: 'import' as SidebarKey, label: 'Import', icon: ArrowDownToLine },
               { key: 'packs' as SidebarKey, label: 'Packs', icon: Package },
               { key: 'brand' as SidebarKey, label: 'Brand', icon: Palette },
@@ -828,6 +832,9 @@ export function TemplateStudioView() {
               </div>
               <ChevronRight className="size-4 text-muted-foreground transition-colors group-hover:text-emerald-600" />
             </button>
+            {/* WhatsApp template option — HIDDEN per user request.
+                To restore: uncomment this button. */}
+            {/*
             <button
               type="button"
               onClick={() => handleNewTemplate('whatsapp')}
@@ -842,6 +849,7 @@ export function TemplateStudioView() {
               </div>
               <ChevronRight className="size-4 text-muted-foreground transition-colors group-hover:text-emerald-600" />
             </button>
+            */}
           </div>
         </DialogContent>
       </Dialog>

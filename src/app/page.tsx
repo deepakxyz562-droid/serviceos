@@ -381,6 +381,23 @@ export default function HomePage() {
     const init = async () => {
       try {
         handleOAuthCallback();
+
+        // Deep-link from marketplace "List your business" CTA → auto-open auth.
+        // The CTA links to /?auth=register; we read it here and switch to the
+        // auth view so the user lands directly on the registration form.
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          if (params.get('auth') === 'register' || params.get('auth') === 'login') {
+            setUnauthView('auth');
+            // Strip the param so a refresh returns to the landing page.
+            params.delete('auth');
+            const cleanUrl = params.toString()
+              ? `${window.location.pathname}?${params.toString()}`
+              : window.location.pathname;
+            window.history.replaceState({}, '', cleanUrl);
+          }
+        }
+
         await checkSession();
       } catch (err) {
         console.error('Init error:', err);

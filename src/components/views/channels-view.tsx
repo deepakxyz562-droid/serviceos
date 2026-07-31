@@ -46,6 +46,7 @@ import {
   getChannel,
   type ChannelMeta,
 } from '@/lib/channel-meta'
+import { AutoReplyCard } from '@/components/settings/sections/auto-reply-card'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -141,6 +142,11 @@ export function ChannelsView() {
           ))}
         </div>
       )}
+
+      {/* Auto-Reply Configuration — moved here from the Omnichannel inbox view
+          so the inbox stays focused on conversations while all channel-level
+          configuration (including auto-reply) lives in this settings page. */}
+      <AutoReplyCard />
 
       {/* Wizard modal */}
       {wizardChannel && (

@@ -414,7 +414,7 @@ export default async function MarketplaceBrowsePage({
 
       {/* Trust bar — thin row of trust signals (TaskRabbit/Urban Company style) */}
       <section className="border-b bg-white/60 dark:bg-card/40">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-8 gap-y-2 px-4 py-3 text-sm sm:px-6">
+        <div className="flex w-full flex-wrap items-center justify-center gap-x-8 gap-y-2 px-4 py-3 text-sm sm:px-6 lg:px-8">
           <span className="flex items-center gap-1.5 text-muted-foreground">
             <ShieldCheck className="h-4 w-4 text-emerald-600" />
             <span className="font-medium text-foreground">Verified professionals</span>
@@ -442,7 +442,7 @@ export default async function MarketplaceBrowsePage({
         aria-label="Breadcrumb"
         className="border-b bg-muted/20"
       >
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-xs text-muted-foreground sm:px-6">
+        <div className="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-xs text-muted-foreground sm:px-6 lg:px-8">
           <ol className="flex flex-wrap items-center gap-1 min-w-0">
             <li className="flex items-center gap-1">
               <a href="/marketplace" className="inline-flex items-center gap-1 hover:text-foreground">
@@ -494,7 +494,7 @@ export default async function MarketplaceBrowsePage({
           Featured providers render in the SAME grid as regular providers,
           with an amber "Featured" tag on the card (OLX-style). No separate
           carousel section. */}
-      <div id="all-providers" className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-8 flex-1 scroll-mt-20">
+      <div id="all-providers" className="w-full px-4 sm:px-6 lg:px-8 py-8 flex-1 scroll-mt-20">
         <div className="lg:grid lg:grid-cols-[260px_1fr] lg:gap-8">
           {/* Sidebar — categories + trust filters + stats card (client component) */}
           <MarketplaceSidebar
@@ -589,7 +589,7 @@ export default async function MarketplaceBrowsePage({
 
       {/* Footer */}
       <footer className="border-t bg-background py-6">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-between sm:text-left">
+        <div className="w-full px-4 sm:px-6 lg:px-8 flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-between sm:text-left">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
               <Wrench className="h-3.5 w-3.5" />

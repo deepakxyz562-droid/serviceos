@@ -52,7 +52,7 @@ export function MarketplaceHeader({
   if (navigateOnSearch) {
     return (
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pt-[env(safe-area-inset-top,0px)]">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center gap-3 sm:gap-6">
             <Logo />
             <form
@@ -80,7 +80,7 @@ export function MarketplaceHeader({
   // Browse page — live filter (Zustand store drives MarketplaceBrowser)
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pt-[env(safe-area-inset-top,0px)]">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center gap-3 sm:gap-6">
           <Logo />
           <SearchBox
@@ -164,9 +164,12 @@ function SearchBox({
 }
 
 function ListBusinessCTA() {
+  // The registration flow is a client-side view state on the root page
+  // (unauthView = 'auth'), not a URL route. We link to /?auth=register and
+  // the root page reads this query param to auto-open the auth view.
   return (
     <Link
-      href="/auth/register"
+      href="/?auth=register"
       className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
     >
       List your business

@@ -170,6 +170,10 @@ function SeedTab() {
   const [count, setCount] = useState(50);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SeedResult | null>(null);
+  // Per-category progress tracking. When seeding, this holds the current
+  // category name + index + total so the UI can show a real progress bar
+  // instead of an indeterminate spinner.
+  const [progress, setProgress] = useState<{ current: number; total: number; catName: string } | null>(null);
 
   const toggleCat = (id: string) => {
     setSelectedCats((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
@@ -188,30 +192,104 @@ function SeedTab() {
     }
     setLoading(true);
     setResult(null);
-    try {
-      const res = await fetch('/api/superadmin/marketplace/seed', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          city: city.trim(),
-          country,
-          categories: selectedCats,
-          count,
-        }),
-      });
-      const data = (await res.json()) as SeedResult;
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || `HTTP ${res.status}`);
+    setProgress({ current: 0, total: selectedCats.length, catName: '' });
+
+    // Per-category count — distribute `count` evenly across selected cats.
+    const perCat = Math.max(5, Math.ceil(count / selectedCats.length));
+
+    const aggregate: SeedResult = {
+      success: true,
+      inserted: 0,
+      skipped: 0,
+      failed: 0,
+      total: 0,
+      osmElements: 0,
+      emptyCategories: [],
+      sample: [],
+    };
+    const errors: string[] = [];
+
+    for (let i = 0; i < selectedCats.length; i++) {
+      const catId = selectedCats[i];
+      const catName = getIndustry(catId)?.name ?? catId;
+      setProgress({ current: i, total: selectedCats.length, catName });
+
+      try {
+        const res = await fetch('/api/superadmin/marketplace/seed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            city: city.trim(),
+            country,
+            categories: [catId], // ONE category per request — avoids gateway timeouts
+            count: perCat,
+          }),
+        });
+
+        // ── Parse-safe JSON handling ──────────────────────────────────
+        // The old code did `await res.json()` directly. When the request
+        // exceeds the gateway/dev-server timeout, the platform returns a
+        // plain-text/HTML error body ("An error occurred...") which is NOT
+        // valid JSON → `res.json()` throws "Unexpected token 'A'" and masks
+        // the real timeout cause. We now read text first, try JSON.parse,
+        // and fall back to the raw text + HTTP status so the real error is
+        // visible.
+        const rawText = await res.text();
+        let data: SeedResult | { error?: string };
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          // Not JSON — likely a timeout/gateway error page.
+          const msg = rawText.slice(0, 200) || `HTTP ${res.status}`;
+          errors.push(`${catName}: ${msg}`);
+          aggregate.failed += perCat;
+          continue;
+        }
+
+        if (!res.ok || !(data as SeedResult).success) {
+          const errMsg = (data as { error?: string }).error || `HTTP ${res.status}`;
+          errors.push(`${catName}: ${errMsg}`);
+          aggregate.failed += perCat;
+          continue;
+        }
+
+        const d = data as SeedResult;
+        aggregate.inserted += d.inserted;
+        aggregate.skipped += d.skipped;
+        aggregate.failed += d.failed;
+        aggregate.total += d.total;
+        aggregate.osmElements = (aggregate.osmElements ?? 0) + (d.osmElements ?? 0);
+        if (d.emptyCategories?.length) {
+          aggregate.emptyCategories = [...(aggregate.emptyCategories ?? []), ...d.emptyCategories];
+        }
+        if (d.sample?.length && aggregate.sample.length < 10) {
+          aggregate.sample = [...aggregate.sample, ...d.sample].slice(0, 10);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        errors.push(`${catName}: ${msg}`);
+        aggregate.failed += perCat;
       }
-      setResult(data);
-      toast.success(`Seeded ${data.inserted} listings (${data.skipped} skipped, ${data.failed} failed)`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      toast.error(`Seeding failed: ${msg}`);
-      setResult({ success: false, inserted: 0, skipped: 0, failed: 0, total: 0, sample: [], error: msg });
-    } finally {
-      setLoading(false);
     }
+
+    setProgress({ current: selectedCats.length, total: selectedCats.length, catName: '' });
+
+    if (errors.length > 0) {
+      aggregate.error = errors.join('; ');
+      // Partial success if any inserts happened, else full failure.
+      if (aggregate.inserted === 0) {
+        aggregate.success = false;
+        toast.error(`Seeding failed: ${errors[0]}`);
+      } else {
+        toast.warning(`Seeded ${aggregate.inserted} listings, but ${errors.length} category(ies) had errors`);
+      }
+    } else {
+      toast.success(`Seeded ${aggregate.inserted} listings (${aggregate.skipped} skipped, ${aggregate.failed} failed)`);
+    }
+
+    setResult(aggregate);
+    setLoading(false);
+    setProgress(null);
   };
 
   return (
@@ -323,13 +401,22 @@ function SeedTab() {
           <CardTitle className="text-base">Result</CardTitle>
         </CardHeader>
         <CardContent>
-          {loading && (
+          {loading && progress && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />
-                Querying Overpass API... this may take 30–60 seconds.
+                {progress.catName
+                  ? `Seeding ${progress.catName}... (${progress.current + 1} of ${progress.total})`
+                  : `Starting... (${progress.current} of ${progress.total} categories)`}
               </div>
-              <Progress value={50} className="animate-pulse" />
+              <Progress
+                value={progress.total > 0 ? (progress.current / progress.total) * 100 : 0}
+                className="h-2"
+              />
+              <p className="text-xs text-muted-foreground">
+                Each category queries the Overpass API separately (~30–60s each). This avoids
+                gateway timeouts on multi-category runs.
+              </p>
             </div>
           )}
 

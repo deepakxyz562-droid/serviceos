@@ -69,12 +69,20 @@ export const MENU_CATALOG: MenuCatalogItem[] = [
   { key: 'recurringJobs', label: 'Recurring Jobs', icon: 'Repeat', section: 'Operations', sortOrder: 28, minPlan: 'business', upgradeDescription: 'Schedule recurring + contract jobs that auto-generate visits on a weekly, monthly, or custom cadence.' },
 
   // ─── Marketing ───────────────────────────────────────────────────────
+  // Menu restructured per Jobber-style consolidation:
+  //   - Campaigns is the main hub (AI generator + template gallery inline).
+  //   - Template Studio, Retargeting, and Marketing Templates are HIDDEN
+  //     (disabled=false) — their functionality lives inside Campaigns now.
+  //   - To restore: set `enabled: true` on the hidden items.
   { key: 'campaigns', label: 'Campaigns', icon: 'Megaphone', section: 'Marketing', sortOrder: 30, minPlan: 'growth', upgradeDescription: 'Create and manage marketing campaigns across email, SMS, and WhatsApp to grow your customer base.' },
   { key: 'broadcast', label: 'Broadcast', icon: 'Send', section: 'Marketing', sortOrder: 31 },
+  // Template Studio — hidden (merged into Campaigns). Keep entry for audit trail.
   { key: 'templateStudio', label: 'Template Studio', icon: 'LayoutTemplate', section: 'Marketing', sortOrder: 32, minPlan: 'growth', upgradeDescription: 'Design reusable templates for emails, messages, quotes, and invoices.' },
+  // Retargeting — hidden (now a campaign type inside Campaigns).
   { key: 'retargeting', label: 'Retargeting', icon: 'RefreshCw', section: 'Marketing', sortOrder: 33 },
   { key: 'marketingAnalytics', label: 'Analytics', icon: 'BarChart3', section: 'Marketing', sortOrder: 34 },
   { key: 'segments', label: 'Segments', icon: 'Filter', section: 'Marketing', sortOrder: 35 },
+  // Marketing Templates — hidden (merged into Campaigns).
   { key: 'marketingTemplates', label: 'Marketing Templates', icon: 'MessageSquare', section: 'Marketing', sortOrder: 36 },
 
   // ─── Inbox & Automation ──────────────────────────────────────────────

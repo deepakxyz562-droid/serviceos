@@ -291,7 +291,7 @@ export default async function PublicBusinessHubPage({
       <main className="flex-1">
         {/* Breadcrumb bar */}
         <div className="border-b bg-muted/20">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
+          <div className="w-full px-4 sm:px-6 lg:px-8 py-3">
             <Breadcrumbs items={breadcrumbItems} />
           </div>
         </div>
@@ -304,7 +304,7 @@ export default async function PublicBusinessHubPage({
             old /marketplace/[slug] page showed. */}
         {business.marketplaceOptIn ? (
           <div className="border-b bg-muted/20">
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4">
+            <div className="w-full px-4 sm:px-6 lg:px-8 py-4">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <TrustBadge
                   icon={ShieldCheck}
@@ -339,7 +339,7 @@ export default async function PublicBusinessHubPage({
         ) : null}
 
         {/* Main content grid */}
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
             {/* Left: content sections */}
             <div className="lg:col-span-2 space-y-12">
@@ -737,7 +737,7 @@ function PublicBusinessHero({
           />
         </div>
       ) : null}
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
           {/* Logo — hidden entirely when null (the flex container's
               `items-start sm:items-center` keeps the h1 vertically centered
