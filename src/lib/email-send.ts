@@ -1,5 +1,10 @@
 import nodemailer from 'nodemailer'
 import { db } from '@/lib/db'
+import {
+  createUnsubscribeToken,
+  injectTracking,
+  unsubscribeUrl,
+} from '@/lib/email-consent'
 
 export type ProviderType = 'smtp' | 'resend' | 'sendgrid' | 'ses' | 'mailgun' | 'postmark' | 'brevo'
 
@@ -27,6 +32,13 @@ export interface SendEmailOptions {
   usageType?: 'transactional' | 'marketing'
   // Tenant ID — when provided, prefer EmailProviders belonging to this tenant
   tenantId?: string
+  // ── Marketing tracking context (only used when usageType === 'marketing') ──
+  // When set, the sender persists a per-recipient EmailUnsubscribeToken, injects
+  // an open-pixel + click-redirect into the HTML, and adds the List-Unsubscribe
+  // + List-Unsubscribe-Post (One-Click) headers required by Gmail/Outlook.
+  campaignId?: string
+  recipientRefId?: string
+  recipientSource?: string
 }
 
 export interface SendEmailResult {
@@ -455,7 +467,8 @@ export async function resolveSmtpConfig(
  * Send an email via SMTP. Returns simulated success if no provider configured.
  */
 export async function sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
-  const { to, subject, html, text, providerId, credentialId, usageType, tenantId } = options
+  const { to, subject, html, text, providerId, credentialId, usageType, tenantId,
+          campaignId, recipientRefId, recipientSource } = options
 
   if (!to || !subject) {
     return { success: false, error: 'to and subject are required' }
@@ -550,13 +563,51 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
       auth: { user: config.user, pass: config.pass },
     })
 
+    // ── Marketing: generate a per-recipient tracking token, inject the open
+    //    pixel + click-redirect into the HTML, and add the List-Unsubscribe
+    //    headers (RFC 8058 One-Click) so Gmail/Outlook render an Unsubscribe
+    //    button and don't route the message to spam.
+    //    Transactional emails are sent as-is — no unsubscribe header, no pixel.
+    let trackingToken: string | null = null
+    let finalHtml = html || text
+    const mailHeaders: Record<string, string> = {}
+
+    if (usageType === 'marketing') {
+      try {
+        trackingToken = await createUnsubscribeToken({
+          campaignId,
+          recipientEmail: to,
+          recipientRefId,
+          recipientSource,
+          tenantId,
+        })
+        const unsubUrl = unsubscribeUrl(trackingToken)
+        // Resolve the {{unsubscribe_url}} / {{preferences_url}} merge tags now
+        // that we have a per-recipient token. injectTracking (next) will then
+        // wrap outbound links but skip the unsubscribe link itself.
+        if (finalHtml) {
+          finalHtml = finalHtml
+            .replace(/\{\{\s*unsubscribe_url\s*\}\}/gi, unsubUrl)
+            .replace(/\{\{\s*preferences_url\s*\}\}/gi, unsubUrl)
+        }
+        finalHtml = finalHtml ? injectTracking(finalHtml, trackingToken) : finalHtml
+        const unsubMailto = `mailto:${config.fromEmail}?subject=Unsubscribe`
+        mailHeaders['List-Unsubscribe'] = `<${unsubMailto}>, <${unsubUrl}>`
+        mailHeaders['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
+      } catch (tokErr) {
+        // Tracking is best-effort — never block a send on token creation.
+        console.warn('[Email] Failed to create tracking token (non-blocking):', tokErr)
+      }
+    }
+
     const info = await transporter.sendMail({
       from: `"${config.fromName}" <${config.fromEmail}>`,
       to,
       subject,
-      html: html || text,
+      html: finalHtml || text,
       text: text || undefined,
       replyTo: config.replyTo,
+      ...(Object.keys(mailHeaders).length ? { headers: mailHeaders } : {}),
     })
 
     // Update provider stats (best-effort)

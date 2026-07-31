@@ -487,58 +487,48 @@ async function sendWhatsApp(
 
 /**
  * Send an email notification.
- * Uses a simple SMTP/API approach. Currently supports:
- * - Resend API (if RESEND_API_KEY is set)
- * - Simulated mode (logs the email if no API key)
+ *
+ * Routes through the central `sendEmail()` from `@/lib/email-send` so the
+ * notification uses the tenant's configured EmailProvider (SMTP/Resend/
+ * SendGrid/SES/Mailgun/Postmark/Brevo) instead of the legacy direct-Resend
+ * path. This ensures:
+ *   - usageType='transactional' is set (so no List-Unsubscribe header /
+ *     tracking pixel is added — these are operational notifications, not
+ *     marketing).
+ *   - Quota tracking + provider stats apply uniformly.
+ *   - No bypass of the EmailProvider system (the previous implementation
+ *     used RESEND_API_KEY directly and ignored EmailProvider rows entirely).
+ *
+ * Falls back to simulated mode if no provider is configured.
  */
 async function sendEmail(
   to: string,
   subject: string,
-  body: string
+  body: string,
+  tenantId?: string
 ): Promise<SendResult> {
   if (!to) {
     return { success: false, error: 'No email address provided' }
   }
 
-  const resendApiKey = process.env.RESEND_API_KEY
-
-  if (resendApiKey) {
-    try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: process.env.EMAIL_FROM || 'ServiceOS <notifications@serviceos.app>',
-          to: [to],
-          subject,
-          html: body,
-        }),
-      })
-
-      const data = (await response.json()) as Record<string, any>
-
-      if (response.ok) {
-        return {
-          success: true,
-          externalId: data.id as string,
-        }
-      } else {
-        return {
-          success: false,
-          error: (data.message as string) || `Resend API error: ${response.status}`,
-        }
-      }
-    } catch (err) {
-      return { success: false, error: String(err) }
+  try {
+    const { sendEmail: sendEmailCentral } = await import('@/lib/email-send')
+    const result = await sendEmailCentral({
+      to,
+      subject,
+      html: body,
+      usageType: 'transactional',
+      tenantId,
+    })
+    return {
+      success: result.success,
+      externalId: result.messageId,
+      simulated: result.simulated,
+      error: result.error,
     }
+  } catch (err) {
+    return { success: false, error: String(err) }
   }
-
-  // No API key - simulate
-  console.log(`[NotificationOrchestrator] Email (simulated): to=${to}, subject="${subject}"`)
-  return { success: true, externalId: `sim_email_${Date.now()}`, simulated: true }
 }
 
 /**
@@ -800,7 +790,7 @@ export async function orchestrateNotification(
           attemptNumber = 1
         } else {
           const retryResult = await withRetry(
-            () => sendEmail(emailTo, subject || 'Notification', message),
+            () => sendEmail(emailTo, subject || 'Notification', message, request.context?.tenantId),
             maxRetries
           )
           sendResult = retryResult.result

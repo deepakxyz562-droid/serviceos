@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { authFetch } from '@/lib/client-auth';
 import { useDemoPageSize } from '@/hooks/use-demo-page-size';
+import { CAMPAIGN_TIMEZONES_GROUPED, detectBrowserTimezone } from '@/lib/timezones';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -62,11 +63,9 @@ interface Broadcast {
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
+// SMS & WhatsApp broadcast channels are disabled — email only (GDPR compliance).
 const BROADCAST_CHANNELS: { value: BroadcastChannel; label: string }[] = [
   { value: 'email', label: 'Email' },
-  { value: 'sms', label: 'SMS' },
-  { value: 'whatsapp', label: 'WhatsApp' },
-  { value: 'multi', label: 'Multi-channel' },
 ];
 
 const AUDIENCE_TYPES = [
@@ -285,7 +284,7 @@ export function BroadcastView() {
     name: '', type: 'promotional' as BroadcastType, channel: 'email' as BroadcastChannel,
     message: '', mediaUrl: '', ctaText: '', ctaUrl: '',
     audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '', customerIds: [] as string[],
-    scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
+    scheduleDate: '', scheduleTime: '', timezone: detectBrowserTimezone() || 'Europe/London',
     isRecurring: false, recurringInterval: 'weekly',
   });
   const [groups, setGroups] = useState<GroupOption[]>([]);
@@ -301,7 +300,7 @@ export function BroadcastView() {
     name: '', type: 'promotional' as BroadcastType, channel: 'email' as BroadcastChannel,
     message: '', mediaUrl: '', ctaText: '', ctaUrl: '',
     audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '', customerIds: [] as string[],
-    scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
+    scheduleDate: '', scheduleTime: '', timezone: detectBrowserTimezone() || 'Europe/London',
     isRecurring: false, recurringInterval: 'weekly',
   });
 
@@ -573,7 +572,7 @@ export function BroadcastView() {
         setCreateForm({
           name: '', type: 'promotional', channel: 'email', message: '', mediaUrl: '',
           ctaText: '', ctaUrl: '', audienceMode: 'all', audienceId: '', manualEmails: '', customerIds: [],
-          scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
+          scheduleDate: '', scheduleTime: '', timezone: detectBrowserTimezone() || 'Europe/London',
           isRecurring: false, recurringInterval: 'weekly',
         });
         toast.success('Broadcast created');
@@ -779,7 +778,7 @@ export function BroadcastView() {
       customerIds: derived.customerIds,
       scheduleDate: scheduled ? scheduled.toISOString().split('T')[0] : '',
       scheduleTime: scheduled ? scheduled.toTimeString().slice(0, 5) : '',
-      timezone: broadcast.timezone || 'Asia/Kolkata',
+      timezone: broadcast.timezone || detectBrowserTimezone() || 'Europe/London',
       isRecurring: broadcast.isRecurring,
       recurringInterval: broadcast.recurringInterval || 'weekly',
     });
@@ -1236,10 +1235,15 @@ export function BroadcastView() {
                 <Input type="time" value={createForm.scheduleTime} onChange={e => setCreateForm({ ...createForm, scheduleTime: e.target.value })} />
                 <Select value={createForm.timezone} onValueChange={v => setCreateForm({ ...createForm, timezone: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Asia/Kolkata">IST</SelectItem>
-                    <SelectItem value="America/New_York">EST</SelectItem>
-                    <SelectItem value="UTC">UTC</SelectItem>
+                  <SelectContent className="max-h-72">
+                    {CAMPAIGN_TIMEZONES_GROUPED.map((grp) => (
+                      <SelectGroup key={grp.group}>
+                        <SelectLabel>{grp.group}</SelectLabel>
+                        {grp.options.map((tz) => (
+                          <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1534,10 +1538,15 @@ export function BroadcastView() {
                 <Input type="time" value={editForm.scheduleTime} onChange={e => setEditForm({ ...editForm, scheduleTime: e.target.value })} />
                 <Select value={editForm.timezone} onValueChange={v => setEditForm({ ...editForm, timezone: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Asia/Kolkata">IST</SelectItem>
-                    <SelectItem value="America/New_York">EST</SelectItem>
-                    <SelectItem value="UTC">UTC</SelectItem>
+                  <SelectContent className="max-h-72">
+                    {CAMPAIGN_TIMEZONES_GROUPED.map((grp) => (
+                      <SelectGroup key={grp.group}>
+                        <SelectLabel>{grp.group}</SelectLabel>
+                        {grp.options.map((tz) => (
+                          <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

@@ -1329,6 +1329,13 @@ model Customer {
   portalEnabled               Boolean  @default(false)
   invitationStatus            String   @default("none")  // none | pending | accepted | disabled
 
+  // ── GDPR Marketing Consent (nullable: null = unknown/legacy, true = opt-in, false = opt-out) ──
+  marketingConsent            Boolean?
+  marketingConsentAt          DateTime?
+  marketingConsentSource      String?   // form_import | manual | checkout | unsubscribe_page | esp_webhook
+  marketingConsentIp          String?
+  unsubscribedAt              DateTime?
+
   workspace Workspace? @relation(fields: [workspaceId], references: [id])
   jobs      Job[]
   invoices  Invoice[]
@@ -2156,7 +2163,8 @@ model CampaignMessage {
   recipientPhone  String
   recipientName   String?
   recipientId     String?  // customerId
-  status          String   @default("pending")  // pending, sent, delivered, read, failed
+  recipientEmail  String?  // email-channel recipient address
+  status          String   @default("pending")  // pending, sent, delivered, read, clicked, bounced, complained, failed, unsubscribed
   externalId      String?
   sentAt          DateTime?
   deliveredAt     DateTime?
@@ -2164,6 +2172,9 @@ model CampaignMessage {
   repliedAt       DateTime?
   clickedAt       DateTime?
   convertedAt     DateTime?
+  bouncedAt       DateTime?
+  complainedAt    DateTime?
+  unsubscribedAt  DateTime?
   error           String?
   metadataJson    String   @default("{}")
   createdAt       DateTime @default(now())
@@ -2171,6 +2182,80 @@ model CampaignMessage {
   @@index([campaignId])
   @@index([status])
   @@index([recipientPhone])
+  @@index([recipientEmail])
+  @@index([externalId])
+}
+
+// ==========================================
+// Email Marketing Compliance & Tracking
+// ==========================================
+
+/// Signed token linking a marketing email to a (campaign, recipient) pair.
+/// Used for List-Unsubscribe one-click, the unsubscribe landing page, the
+/// open-pixel and the click-redirect endpoints.
+model EmailUnsubscribeToken {
+  id              String   @id @default(cuid())
+  token           String   @unique
+  campaignId      String?
+  recipientEmail  String
+  recipientRefId  String?   // Contact.id | Customer.id | null (manual)
+  recipientSource String?   // contact | customer | manual
+  tenantId        String?
+  usedAt          DateTime? // set when the recipient unsubscribes
+  createdAt       DateTime @default(now())
+
+  @@index([token])
+  @@index([recipientEmail])
+  @@index([campaignId])
+}
+
+/// Raw email engagement events (open / click / bounce / complaint / unsubscribe / delivered).
+/// Populated by the tracking endpoints and (future) the ESP webhook.
+model EmailEvent {
+  id              String   @id @default(cuid())
+  type            String   // open | click | bounce | complaint | unsubscribe | delivered
+  campaignId      String?
+  recipientEmail  String
+  token           String?
+  url             String?  // clicked URL (click events only)
+  userAgent       String?
+  ipAddress       String?
+  metadataJson    String   @default("{}")
+  tenantId        String?
+  createdAt       DateTime @default(now())
+
+  @@index([campaignId])
+  @@index([type])
+  @@index([recipientEmail])
+  @@index([createdAt])
+}
+
+/// GDPR Article 5(2) + Article 7(1) consent audit trail. Every opt-in or
+/// opt-out event for a recipient is recorded here, independent of the
+/// Customer/Contact table, so the history survives even if the recipient
+/// row is later deleted.
+///
+/// action: 'opt_in' | 'opt_out' | 'revoke_opt_out' | 'import' | 'legacy_grandfather'
+/// source: 'unsubscribe_page' | 'one_click_unsubscribe' | 'esp_webhook' |
+///         'manual_import' | 'signup_form' | 'admin_action' | 'legacy' | ...
+model MarketingConsentEvent {
+  id              String   @id @default(cuid())
+  action          String
+  source          String
+  recipientEmail  String
+  recipientRefId  String?   // Contact.id | Customer.id | null
+  recipientSource String?   // contact | customer | manual
+  campaignId      String?   // campaign that triggered the event (opt-out from email)
+  tenantId        String?
+  ipAddress       String?
+  userAgent       String?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+
+  @@index([recipientEmail])
+  @@index([action])
+  @@index([tenantId])
+  @@index([createdAt])
 }
 
 model CampaignTemplate {
@@ -2767,6 +2852,12 @@ model Contact {
   status          String   @default("active")  // active, bounced, unsubscribed, blocked
   emailVerified   Boolean  @default(false)
   phoneVerified   Boolean  @default(false)
+  // ── GDPR Marketing Consent (nullable: null = unknown/legacy, true = opt-in, false = opt-out) ──
+  marketingConsent       Boolean?
+  marketingConsentAt     DateTime?
+  marketingConsentSource String?
+  marketingConsentIp     String?
+  unsubscribedAt         DateTime?
   // Extensibility
   customFieldsJson String  @default("{}")
   avatarUrl       String?

@@ -67,12 +67,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
 
     // Whitelist + default the fields we accept. Prevents mass-assignment of
-    // unexpected keys and ensures `channel` is persisted (was previously dropped,
-    // causing all new campaigns to silently default to 'whatsapp').
-    const allowedChannels = ['email', 'sms', 'whatsapp', 'multi']
-    const channel = body.channel && allowedChannels.includes(body.channel)
-      ? body.channel
-      : 'email'
+    // unexpected keys. Channel is restricted to 'email' — SMS & WhatsApp
+    // campaign channels are disabled for GDPR/24h-window compliance. The DB
+    // column still accepts the legacy values for backward compatibility with
+    // existing rows, but no NEW campaign can be created with another channel.
+    const channel = 'email'
 
     // ── Compute live audience count so the list shows a real number, not 0 ──
     let totalRecipients = body.totalRecipients || 0

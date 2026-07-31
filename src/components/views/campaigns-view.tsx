@@ -13,8 +13,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -28,6 +28,7 @@ import { useAppStore } from '@/store/app-store';
 import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 import { CampaignProviderGate } from '@/components/marketing/campaign-provider-gate';
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status';
+import { CAMPAIGN_TIMEZONES_GROUPED, detectBrowserTimezone } from '@/lib/timezones';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -71,11 +72,10 @@ const CAMPAIGN_TYPES: { value: CampaignType; label: string }[] = [
   { value: 'follow_up', label: 'Follow-up' },
 ];
 
+// SMS & WhatsApp campaign channels are disabled for GDPR/24h-window
+// compliance. Only email campaigns are supported (Jobber-aligned).
 const CAMPAIGN_CHANNELS: { value: CampaignChannel; label: string }[] = [
   { value: 'email', label: 'Email' },
-  { value: 'sms', label: 'SMS' },
-  { value: 'whatsapp', label: 'WhatsApp' },
-  { value: 'multi', label: 'Multi-channel' },
 ];
 
 const AUDIENCE_TYPES = [
@@ -321,6 +321,35 @@ function getStatusColor(status: string) {
   return map[status] || 'bg-slate-100 text-slate-600';
 }
 
+// Phase 3: per-recipient tracking status colors (CampaignMessage.status).
+// Used by the Recipients tab in the Campaign Detail dialog.
+function getTrackingStatusColor(status: string): string {
+  switch (status) {
+    case 'sent': return 'text-sky-600 bg-sky-50 dark:bg-sky-950/30';
+    case 'delivered': return 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30';
+    case 'read': return 'text-purple-600 bg-purple-50 dark:bg-purple-950/30';
+    case 'clicked': return 'text-orange-600 bg-orange-50 dark:bg-orange-950/30';
+    case 'bounced':
+    case 'failed': return 'text-red-600 bg-red-50 dark:bg-red-950/30';
+    case 'complained': return 'text-red-700 bg-red-100 dark:bg-red-950/40';
+    case 'unsubscribed': return 'text-slate-600 bg-slate-100 dark:bg-slate-800/40';
+    default: return 'text-muted-foreground bg-muted/30';
+  }
+}
+
+// Phase 3: format a CampaignMessage timestamp as "Jul 31, 14:05".
+// Accepts string | Date | null | undefined. Returns '—' for falsy values.
+function formatTrackingTs(ts: unknown): string {
+  if (!ts) return '—';
+  try {
+    return new Date(ts as string).toLocaleString(undefined, {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return '—';
+  }
+}
+
 function getStatusIcon(status: string) {
   const map: Record<string, React.ReactNode> = {
     draft: <Clock className="size-3" />,
@@ -426,6 +455,21 @@ export function CampaignsView() {
 
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+
+  // ── Phase 3: Per-recipient tracking state (Recipients tab in Detail dialog) ──
+  // Populated from GET /api/campaigns/[id]/tracking. Recipients rows are kept
+  // loosely-typed (Record<string, unknown>) since the backend may add fields;
+  // we coerce values defensively when rendering.
+  const [trackingData, setTrackingData] = useState<{
+    recipients: Array<Record<string, unknown>>;
+    summary: Record<string, number>;
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  } | null>(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingStatus, setTrackingStatus] = useState<string>('');  // '' = all
+  const [trackingSearch, setTrackingSearch] = useState('');
+  const [trackingPage, setTrackingPage] = useState(1);
+
   const [isCreating, setIsCreating] = useState(false);
   const [groups, setGroups] = useState<GroupOption[]>([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
@@ -442,6 +486,8 @@ export function CampaignsView() {
     providerId: '',
   });
   const [isSendingNow, setIsSendingNow] = useState(false);
+  // Phase 3: Send Test button in the Send Now dialog footer.
+  const [isSendingTest, setIsSendingTest] = useState(false);
   const [emailProviders, setEmailProviders] = useState<EmailProvider[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   const [marketingConnected, setMarketingConnected] = useState<boolean | null>(null);
@@ -450,13 +496,13 @@ export function CampaignsView() {
     name: '', type: 'promotional' as CampaignType, channel: 'email' as CampaignChannel,
     audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '',
     messageContent: '', ctaText: '', ctaUrl: '', subject: '',
-    scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
+    scheduleDate: '', scheduleTime: '', timezone: detectBrowserTimezone() || 'Europe/London',
   });
   const [editForm, setEditForm] = useState({
     name: '', type: 'promotional' as CampaignType, channel: 'email' as CampaignChannel,
     audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '',
     messageContent: '', ctaText: '', ctaUrl: '', subject: '',
-    scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
+    scheduleDate: '', scheduleTime: '', timezone: detectBrowserTimezone() || 'Europe/London',
   });
 
   // ── Select Template dropdown state (Create/Edit dialogs) ──
@@ -558,6 +604,91 @@ export function CampaignsView() {
       setIsLoadingProviders(false);
     }
   }, []);
+
+  // ── Phase 3: Load per-recipient tracking (Recipients tab) ──
+  // Fetches GET /api/campaigns/[id]/tracking?status=&search=&page=&limit=50.
+  // Receives { campaign, recipients[], summary{}, pagination{} }. We only
+  // store recipients + summary + pagination — the campaign wrapper is unused
+  // (the Detail dialog already has the campaign via selectedCampaign).
+  const loadTracking = useCallback(async (
+    campaignId: string,
+    opts?: { status?: string; search?: string; page?: number },
+  ) => {
+    setTrackingLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (opts?.status) params.set('status', opts.status);
+      if (opts?.search) params.set('search', opts.search);
+      params.set('page', String(opts?.page ?? 1));
+      params.set('limit', '50');
+      const res = await authFetch(`/api/campaigns/${campaignId}/tracking?${params.toString()}`);
+      if (res.ok) {
+        const result = await res.json();
+        setTrackingData({
+          recipients: Array.isArray(result.recipients) ? result.recipients : [],
+          summary: (result.summary && typeof result.summary === 'object') ? result.summary : {},
+          pagination: result.pagination || { page: 1, limit: 50, total: 0, totalPages: 0 },
+        });
+      } else {
+        setTrackingData(null);
+      }
+    } catch {
+      setTrackingData(null);
+    } finally {
+      setTrackingLoading(false);
+    }
+  }, []);
+
+  // Has the campaign been (or is being) sent? Drives whether we bother
+  // hitting the tracking endpoint at all.
+  const campaignHasTracking = useCallback((c: Campaign | null): boolean => {
+    if (!c) return false;
+    return c.sentCount > 0 || c.status === 'completed' || c.status === 'running';
+  }, []);
+
+  // Reset all tracking state when the Detail dialog target changes. We do NOT
+  // call loadTracking here directly — the filter-dependent effects below will
+  // pick up the reset values and trigger the initial load. (This avoids a
+  // double-fetch when selectedCampaign changes while filters were already
+  // populated from a previous campaign.)
+  useEffect(() => {
+    setTrackingData(null);
+    setTrackingStatus('');
+    setTrackingSearch('');
+    setTrackingPage(1);
+  }, [selectedCampaign]);
+
+  // Reload tracking immediately when the status filter or page changes.
+  // Also fires on initial open (when selectedCampaign changes and the reset
+  // effect above clears the filters — the dep change triggers this effect).
+  // NOTE: trackingSearch is intentionally omitted from deps so that typing in
+  // the search box doesn't trigger an immediate (non-debounced) fetch — the
+  // debounced effect below handles search changes. When this effect DOES run
+  // (on status/page/campaign change), it reads the current trackingSearch
+  // value from the render scope, so it's never stale.
+  useEffect(() => {
+    if (!campaignHasTracking(selectedCampaign)) return;
+    loadTracking(selectedCampaign.id, {
+      status: trackingStatus,
+      search: trackingSearch,
+      page: trackingPage,
+    });
+  }, [selectedCampaign, trackingStatus, trackingPage]);
+
+  // Debounce the search input by 300ms (per Phase 3 spec). Only fires when
+  // trackingSearch changes; the cleanup cancels any pending fetch if the user
+  // keeps typing within the 300ms window.
+  useEffect(() => {
+    if (!campaignHasTracking(selectedCampaign)) return;
+    const t = setTimeout(() => {
+      loadTracking(selectedCampaign.id, {
+        status: trackingStatus,
+        search: trackingSearch,
+        page: trackingPage,
+      });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [trackingSearch]);
 
   // ── Load templates for the Select Template dropdown ──
   // Fetches from /api/campaign-templates (whatsapp/sms/multi) and/or
@@ -735,6 +866,50 @@ export function CampaignsView() {
     }
   };
 
+  // Phase 3: Send a single preview email via POST /api/campaigns/[id]/test-send.
+  // The preview is identical to a real blast (List-Unsubscribe header +
+  // open-pixel + click-redirect) but does NOT bump counters and does NOT
+  // create a CampaignMessage row. The `to` field defaults to the logged-in
+  // user's email when empty/omitted — we send `{ to: '' }` explicitly to
+  // exercise that default.
+  const handleSendTest = async () => {
+    if (!sendNowCampaign) return;
+    if (!sendNowForm.subject.trim() || !sendNowForm.html.trim()) {
+      toast.error('Subject and HTML body are required');
+      return;
+    }
+    setIsSendingTest(true);
+    try {
+      const res = await authFetch(`/api/campaigns/${sendNowCampaign.id}/test-send`, {
+        method: 'POST',
+        body: JSON.stringify({ to: '' }),  // server defaults to logged-in user
+      });
+      const data = await res.json().catch(() => ({}));
+
+      // Marketing provider gate — same 409 handling as handleSendNow.
+      if (res.status === 409 || data?.error === 'MARKETING_PROVIDER_REQUIRED') {
+        setMarketingConnected(false);
+        setShowSendNowDialog(false);
+        toast.error(
+          data?.message || 'Connect a marketing email provider before sending a test.',
+          { duration: 6000 },
+        );
+        return;
+      }
+
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Failed to send test email');
+        return;
+      }
+
+      toast.success(`Test email sent to ${data.sentTo}`);
+    } catch {
+      toast.error('Network error sending test email');
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
+
   const filteredCampaigns = campaigns.filter(c => {
     if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -762,11 +937,23 @@ export function CampaignsView() {
         body: JSON.stringify({
           name: `${campaign.name} (Copy)`,
           type: campaign.type,
-          channel: campaign.channel,
+          // Phase 3: force email-only (don't copy any legacy sms/whatsapp/multi
+          // channel that may exist on historical rows). The backend POST
+          // already clamps channel to 'email', but being explicit here makes
+          // the duplicate's nature obvious at the call site.
+          channel: 'email',
           audienceType: campaign.audienceType,
           audienceId: campaign.audienceId,
+          // audienceFiltersJson carries the stored email subject (set by the
+          // Create/Edit dialog when an email template was applied) — preserving
+          // it means the duplicate's Send Now dialog opens with the same subject.
           audienceFiltersJson: campaign.audienceFiltersJson || '{}',
           messageContent: campaign.messageContent,
+          ctaText: campaign.ctaText || undefined,
+          ctaUrl: campaign.ctaUrl || undefined,
+          timezone: campaign.timezone || 'UTC',
+          // NOTE: scheduledAt is intentionally NOT copied — the duplicate is a
+          // draft the user can re-schedule manually.
           status: 'draft',
         }),
       });
@@ -1302,15 +1489,19 @@ export function CampaignsView() {
                 <Input type="time" value={createForm.scheduleTime} onChange={e => setCreateForm({ ...createForm, scheduleTime: e.target.value })} />
                 <Select value={createForm.timezone} onValueChange={v => setCreateForm({ ...createForm, timezone: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Asia/Kolkata">IST (India)</SelectItem>
-                    <SelectItem value="America/New_York">EST (New York)</SelectItem>
-                    <SelectItem value="America/Chicago">CST (Chicago)</SelectItem>
-                    <SelectItem value="America/Los_Angeles">PST (LA)</SelectItem>
-                    <SelectItem value="UTC">UTC</SelectItem>
+                  <SelectContent className="max-h-72">
+                    {CAMPAIGN_TIMEZONES_GROUPED.map((grp) => (
+                      <SelectGroup key={grp.group}>
+                        <SelectLabel>{grp.group}</SelectLabel>
+                        {grp.options.map((tz) => (
+                          <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
             </div>
           </div>
           <DialogFooter>
@@ -1325,7 +1516,7 @@ export function CampaignsView() {
 
       {/* Campaign Detail Dialog */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedCampaign?.name}</DialogTitle>
             <DialogDescription>
@@ -1340,61 +1531,234 @@ export function CampaignsView() {
             </DialogDescription>
           </DialogHeader>
           {selectedCampaign && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div><span className="text-muted-foreground">Type:</span> <span className="font-medium">{selectedCampaign.type}</span></div>
-                <div><span className="text-muted-foreground">Audience:</span> <span className="font-medium">{getAudienceDisplayLabel(selectedCampaign)}</span></div>
-                <div><span className="text-muted-foreground">Channel:</span> <span className="font-medium">{selectedCampaign.channel}</span></div>
-                <div><span className="text-muted-foreground">Timezone:</span> <span className="font-medium">{selectedCampaign.timezone}</span></div>
-              </div>
-
-              {selectedCampaign.messageContent && (
-                <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-4">
-                  <p className="text-sm whitespace-pre-wrap">{selectedCampaign.messageContent}</p>
-                  {selectedCampaign.ctaText && (
-                    <Button size="sm" className="mt-3 bg-emerald-600 hover:bg-emerald-700 h-7 text-xs">
-                      {selectedCampaign.ctaText}
-                    </Button>
+            <Tabs defaultValue="overview" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="recipients">
+                  Recipients
+                  {trackingData?.pagination?.total != null && trackingData.pagination.total > 0 && (
+                    <Badge variant="secondary" className="ml-1.5 text-[10px] h-4 px-1">
+                      {trackingData.pagination.total}
+                    </Badge>
                   )}
-                </div>
-              )}
+                </TabsTrigger>
+              </TabsList>
 
-              <Separator />
-              <div>
-                <h4 className="font-medium text-sm mb-2">Campaign Analytics</h4>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: 'Sent', value: selectedCampaign.sentCount, color: 'text-sky-600' },
-                    { label: 'Delivered', value: selectedCampaign.deliveredCount, color: 'text-emerald-600' },
-                    { label: 'Read', value: selectedCampaign.readCount, color: 'text-purple-600' },
-                    { label: 'Clicked', value: selectedCampaign.clickedCount, color: 'text-orange-600' },
-                    { label: 'Replied', value: selectedCampaign.repliedCount, color: 'text-amber-600' },
-                    { label: 'Converted', value: selectedCampaign.convertedCount, color: 'text-green-600' },
-                  ].map(stat => (
-                    <Card key={stat.label} className="p-2 text-center">
-                      <p className={`text-lg font-bold ${stat.color}`}>{stat.value.toLocaleString()}</p>
-                      <p className="text-[10px] text-muted-foreground">{stat.label}</p>
-                    </Card>
-                  ))}
+              {/* ── Overview tab — existing metadata + analytics ── */}
+              <TabsContent value="overview">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div><span className="text-muted-foreground">Type:</span> <span className="font-medium">{selectedCampaign.type}</span></div>
+                    <div><span className="text-muted-foreground">Audience:</span> <span className="font-medium">{getAudienceDisplayLabel(selectedCampaign)}</span></div>
+                    <div><span className="text-muted-foreground">Channel:</span> <span className="font-medium">{selectedCampaign.channel}</span></div>
+                    <div><span className="text-muted-foreground">Timezone:</span> <span className="font-medium">{selectedCampaign.timezone}</span></div>
+                  </div>
+
+                  {selectedCampaign.messageContent && (
+                    <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-4">
+                      <p className="text-sm whitespace-pre-wrap">{selectedCampaign.messageContent}</p>
+                      {selectedCampaign.ctaText && (
+                        <Button size="sm" className="mt-3 bg-emerald-600 hover:bg-emerald-700 h-7 text-xs">
+                          {selectedCampaign.ctaText}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  <Separator />
+                  <div>
+                    <h4 className="font-medium text-sm mb-2">Campaign Analytics</h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: 'Sent', value: selectedCampaign.sentCount, color: 'text-sky-600' },
+                        { label: 'Delivered', value: selectedCampaign.deliveredCount, color: 'text-emerald-600' },
+                        { label: 'Read', value: selectedCampaign.readCount, color: 'text-purple-600' },
+                        { label: 'Clicked', value: selectedCampaign.clickedCount, color: 'text-orange-600' },
+                        { label: 'Replied', value: selectedCampaign.repliedCount, color: 'text-amber-600' },
+                        { label: 'Converted', value: selectedCampaign.convertedCount, color: 'text-green-600' },
+                      ].map(stat => (
+                        <Card key={stat.label} className="p-2 text-center">
+                          <p className={`text-lg font-bold ${stat.color}`}>{stat.value.toLocaleString()}</p>
+                          <p className="text-[10px] text-muted-foreground">{stat.label}</p>
+                        </Card>
+                      ))}
+                    </div>
+                    {selectedCampaign.sentCount > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <div>
+                          <div className="flex justify-between text-xs mb-1"><span>Delivery Rate</span><span>{Math.round(selectedCampaign.deliveredCount / selectedCampaign.sentCount * 100)}%</span></div>
+                          <Progress value={selectedCampaign.deliveredCount / selectedCampaign.sentCount * 100} className="h-2" />
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-xs mb-1"><span>Read Rate</span><span>{Math.round(selectedCampaign.readCount / selectedCampaign.sentCount * 100)}%</span></div>
+                          <Progress value={selectedCampaign.readCount / selectedCampaign.sentCount * 100} className="h-2" />
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-xs mb-1"><span>Conversion Rate</span><span>{Math.round(selectedCampaign.convertedCount / selectedCampaign.sentCount * 100)}%</span></div>
+                          <Progress value={selectedCampaign.convertedCount / selectedCampaign.sentCount * 100} className="h-2" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {selectedCampaign.sentCount > 0 && (
-                  <div className="mt-3 space-y-2">
-                    <div>
-                      <div className="flex justify-between text-xs mb-1"><span>Delivery Rate</span><span>{Math.round(selectedCampaign.deliveredCount / selectedCampaign.sentCount * 100)}%</span></div>
-                      <Progress value={selectedCampaign.deliveredCount / selectedCampaign.sentCount * 100} className="h-2" />
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1"><span>Read Rate</span><span>{Math.round(selectedCampaign.readCount / selectedCampaign.sentCount * 100)}%</span></div>
-                      <Progress value={selectedCampaign.readCount / selectedCampaign.sentCount * 100} className="h-2" />
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1"><span>Conversion Rate</span><span>{Math.round(selectedCampaign.convertedCount / selectedCampaign.sentCount * 100)}%</span></div>
-                      <Progress value={selectedCampaign.convertedCount / selectedCampaign.sentCount * 100} className="h-2" />
-                    </div>
+              </TabsContent>
+
+              {/* ── Recipients tab — per-recipient tracking (Phase 3) ── */}
+              <TabsContent value="recipients" className="space-y-3">
+                {/* Summary chips — count-by-status, only non-zero */}
+                {trackingData && Object.values(trackingData.summary).some(c => (c as number) > 0) && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {(['sent', 'delivered', 'read', 'clicked', 'bounced', 'complained', 'unsubscribed', 'failed'] as const).map(s => {
+                      const count = (trackingData.summary[s] as number) || 0;
+                      if (!count) return null;
+                      return (
+                        <Badge
+                          key={s}
+                          variant="secondary"
+                          className={`text-[10px] capitalize ${getTrackingStatusColor(s)}`}
+                        >
+                          {s}: {count}
+                        </Badge>
+                      );
+                    })}
                   </div>
                 )}
-              </div>
-            </div>
+
+                {/* Filter row — search + status filter (only shown when there's tracking) */}
+                {campaignHasTracking(selectedCampaign) && (
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Input
+                      placeholder="Search by email or name..."
+                      value={trackingSearch}
+                      onChange={e => {
+                        setTrackingSearch(e.target.value);
+                        setTrackingPage(1);  // reset to page 1 on new search
+                      }}
+                      className="h-8 text-xs flex-1"
+                    />
+                    <Select
+                      value={trackingStatus || 'all'}
+                      onValueChange={v => {
+                        setTrackingStatus(v === 'all' ? '' : v);
+                        setTrackingPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-xs sm:w-44">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="sent">Sent</SelectItem>
+                        <SelectItem value="delivered">Delivered</SelectItem>
+                        <SelectItem value="read">Read</SelectItem>
+                        <SelectItem value="clicked">Clicked</SelectItem>
+                        <SelectItem value="bounced">Bounced</SelectItem>
+                        <SelectItem value="complained">Complained</SelectItem>
+                        <SelectItem value="unsubscribed">Unsubscribed</SelectItem>
+                        <SelectItem value="failed">Failed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Recipients table / loading / empty state */}
+                {trackingLoading && (!trackingData || trackingData.recipients.length === 0) ? (
+                  <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 mr-2 animate-spin" /> Loading recipients...
+                  </div>
+                ) : !campaignHasTracking(selectedCampaign) ? (
+                  <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    No recipients yet — send the campaign to see per-recipient tracking.
+                  </div>
+                ) : !trackingData || trackingData.recipients.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    No recipients match the current filters.
+                  </div>
+                ) : (
+                  <>
+                    <ScrollArea className="max-h-80 rounded-md border">
+                      <table className="w-full text-xs">
+                        <thead className="bg-muted/50 sticky top-0 z-10">
+                          <tr>
+                            <th className="text-left p-2 font-medium">Recipient</th>
+                            <th className="text-left p-2 font-medium">Status</th>
+                            <th className="text-left p-2 font-medium whitespace-nowrap">Sent</th>
+                            <th className="text-left p-2 font-medium whitespace-nowrap">Delivered</th>
+                            <th className="text-left p-2 font-medium whitespace-nowrap">Read</th>
+                            <th className="text-left p-2 font-medium whitespace-nowrap">Clicked</th>
+                            <th className="text-left p-2 font-medium">Error</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {trackingData.recipients.map((r, idx) => {
+                            const status = String(r.status ?? '');
+                            const email = String(r.recipientEmail ?? '');
+                            const name = r.recipientName ? String(r.recipientName) : '';
+                            const showError = status === 'bounced' || status === 'failed';
+                            const rawError = showError && r.error ? String(r.error) : '';
+                            const truncatedError = rawError.length > 40 ? rawError.slice(0, 40) + '…' : rawError;
+                            return (
+                              <tr key={String(r.id ?? idx)} className="border-t">
+                                <td className="p-2 align-top">
+                                  <div className="font-medium break-all">{email || '—'}</div>
+                                  {name && <div className="text-muted-foreground">{name}</div>}
+                                </td>
+                                <td className="p-2 align-top">
+                                  <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium capitalize ${getTrackingStatusColor(status)}`}>
+                                    {status || '—'}
+                                  </span>
+                                </td>
+                                <td className="p-2 align-top whitespace-nowrap">{formatTrackingTs(r.sentAt)}</td>
+                                <td className="p-2 align-top whitespace-nowrap">{formatTrackingTs(r.deliveredAt)}</td>
+                                <td className="p-2 align-top whitespace-nowrap">{formatTrackingTs(r.readAt)}</td>
+                                <td className="p-2 align-top whitespace-nowrap">{formatTrackingTs(r.clickedAt)}</td>
+                                <td className="p-2 align-top max-w-[160px]">
+                                  {truncatedError ? (
+                                    <span className="text-red-600 dark:text-red-400 truncate block" title={rawError}>
+                                      {truncatedError}
+                                    </span>
+                                  ) : '—'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </ScrollArea>
+
+                    {/* Pagination */}
+                    {trackingData.pagination.totalPages > 1 && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          Page {trackingData.pagination.page} of {trackingData.pagination.totalPages}
+                          {' '}({trackingData.pagination.total} total)
+                        </span>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            disabled={trackingData.pagination.page <= 1 || trackingLoading}
+                            onClick={() => setTrackingPage(p => Math.max(1, p - 1))}
+                          >
+                            Prev
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            disabled={trackingData.pagination.page >= trackingData.pagination.totalPages || trackingLoading}
+                            onClick={() => setTrackingPage(p => p + 1)}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </TabsContent>
+            </Tabs>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDetailDialog(false)}>Close</Button>
@@ -1573,15 +1937,19 @@ export function CampaignsView() {
                 <Input type="time" value={editForm.scheduleTime} onChange={e => setEditForm({ ...editForm, scheduleTime: e.target.value })} />
                 <Select value={editForm.timezone} onValueChange={v => setEditForm({ ...editForm, timezone: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Asia/Kolkata">IST (India)</SelectItem>
-                    <SelectItem value="America/New_York">EST (New York)</SelectItem>
-                    <SelectItem value="America/Chicago">CST (Chicago)</SelectItem>
-                    <SelectItem value="America/Los_Angeles">PST (LA)</SelectItem>
-                    <SelectItem value="UTC">UTC</SelectItem>
+                  <SelectContent className="max-h-72">
+                    {CAMPAIGN_TIMEZONES_GROUPED.map((grp) => (
+                      <SelectGroup key={grp.group}>
+                        <SelectLabel>{grp.group}</SelectLabel>
+                        {grp.options.map((tz) => (
+                          <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
             </div>
           </div>
           <DialogFooter>
@@ -1747,14 +2115,37 @@ export function CampaignsView() {
           })()}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSendNowDialog(false)} disabled={isSendingNow}>
+            <Button
+              variant="outline"
+              onClick={() => setShowSendNowDialog(false)}
+              disabled={isSendingNow || isSendingTest}
+            >
               Cancel
+            </Button>
+            {/* Phase 3: Send Test — single preview email to the logged-in
+                user. Does NOT bump counters or create a CampaignMessage row. */}
+            <Button
+              variant="secondary"
+              onClick={handleSendTest}
+              disabled={
+                isSendingTest ||
+                isSendingNow ||
+                !sendNowForm.subject.trim() ||
+                !sendNowForm.html.trim()
+              }
+            >
+              {isSendingTest ? (
+                <><Loader2 className="size-4 mr-1.5 animate-spin" /> Sending...</>
+              ) : (
+                <><Mail className="size-4 mr-1.5" /> Send Test</>
+              )}
             </Button>
             <Button
               className="bg-sky-600 hover:bg-sky-700"
               onClick={handleSendNow}
               disabled={
                 isSendingNow ||
+                isSendingTest ||
                 !sendNowForm.subject.trim() ||
                 !sendNowForm.html.trim() ||
                 (sendNowCampaign ? buildEmailSendAudience(sendNowCampaign) === null : true)

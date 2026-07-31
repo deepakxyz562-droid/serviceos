@@ -145,7 +145,7 @@ const ownerNavSections: NavSection[] = [
   {
     title: 'Marketing',
     items: [
-      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
+      { view: 'campaigns', label: 'Email Campaigns', icon: Megaphone },
       { view: 'broadcast', label: 'Broadcast', icon: Send },
       { view: 'templateStudio', label: 'Template Studio', icon: LayoutTemplate },
       { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
@@ -255,7 +255,7 @@ const superadminNavSections: NavSection[] = [
   {
     title: 'Marketing',
     items: [
-      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
+      { view: 'campaigns', label: 'Email Campaigns', icon: Megaphone },
       { view: 'broadcast', label: 'Broadcast', icon: Send },
       { view: 'templateStudio', label: 'Template Studio', icon: LayoutTemplate },
       { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
@@ -333,7 +333,7 @@ function CreateMenu({ isMobile, leftSidebarOpen, onSelect }: CreateMenuProps) {
     { view: 'customers', entity: 'customer', label: 'New Customer', icon: Users },
     { view: 'jobs', entity: 'job', label: 'New Job', icon: Briefcase },
     { view: 'invoices', entity: 'invoice', label: 'New Invoice', icon: FileText },
-    { view: 'campaigns', entity: 'campaign', label: 'New Campaign', icon: Megaphone },
+    { view: 'campaigns', entity: 'campaign', label: 'New Email Campaign', icon: Megaphone },
   ];
 
   return (
