@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { toISOString } from '@/lib/date-utils';
+import { toISO } from '@/lib/date-utils';
 
 /**
  * POST /api/omnichannel/conversations/[id]/assign
@@ -71,7 +71,7 @@ export async function POST(
         agentId: assignment.agentId,
         agentName: assignment.agentName,
         status: assignment.status,
-        createdAt: toISOString(assignment.createdAt),
+        createdAt: toISO(assignment.createdAt),
       },
     });
   } catch (error) {
