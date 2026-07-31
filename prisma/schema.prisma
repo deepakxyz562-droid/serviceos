@@ -1385,6 +1385,11 @@ model Job {
   address            String?
   pickup             String?
   dropoff            String?
+  // ── Geocoded coordinates (for dispatch map pins) ──
+  // Populated by geocoding the job address on create/update.
+  // Used by the Live Dispatch map to show job location pins + route lines.
+  latitude           Float?
+  longitude          Float?
   scheduledAt        DateTime?
   scheduledTime      String?
   estimatedDuration  Int?

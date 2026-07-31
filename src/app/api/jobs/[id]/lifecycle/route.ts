@@ -301,6 +301,24 @@ export async function GET(
       // ignore
     }
 
+    // Find the most recent COMPLETED route for this job. When a job is
+    // finished, the active route's status flips to 'completed', so
+    // `activeRoute` is null. Without this fetch, the job-detail GPS card
+    // shows "No travel recorded" even though real distance/duration data
+    // exists in the RouteHistory table. We surface it as `completedRoute`
+    // so the client can render the actual travel summary + "View on Map".
+    let completedRoute: Awaited<ReturnType<typeof db.routeHistory.findFirst>> = null;
+    try {
+      if (!activeRoute) {
+        completedRoute = await db.routeHistory.findFirst({
+          where: { jobId: id, status: 'completed' },
+          orderBy: { startedAt: 'desc' },
+        });
+      }
+    } catch {
+      // ignore
+    }
+
     return NextResponse.json({
       jobId: job.id,
       status: job.status,
@@ -333,6 +351,22 @@ export async function GET(
             startLng: activeRoute.startLng,
             endLat: activeRoute.endLat,
             endLng: activeRoute.endLng,
+          }
+        : null,
+      completedRoute: completedRoute
+        ? {
+            id: completedRoute.id,
+            startedAt: completedRoute.startedAt,
+            endedAt: completedRoute.endedAt,
+            arrivedAt: completedRoute.arrivedAt,
+            status: completedRoute.status,
+            distanceMeters: completedRoute.distanceMeters,
+            durationMinutes: completedRoute.durationMinutes,
+            etaMinutes: completedRoute.etaMinutes,
+            startLat: completedRoute.startLat,
+            startLng: completedRoute.startLng,
+            endLat: completedRoute.endLat,
+            endLng: completedRoute.endLng,
           }
         : null,
     });
@@ -591,8 +625,11 @@ export async function POST(
 
       case 'start_travel': {
         // Create a RouteHistory record (in_progress).
+        // Await directly (not fireAndForget) so the row is actually persisted
+        // before we respond — silent fireAndForget failure was causing
+        // RouteHistory to never save, leading to "No travel recorded."
         if (employee) {
-          fireAndForget('route.start', async () => {
+          try {
             await db.routeHistory.create({
               data: {
                 tenantId: tenantId ?? 'unknown',
@@ -609,7 +646,10 @@ export async function POST(
                 ),
               },
             });
-          });
+          } catch (e) {
+            console.error('[lifecycle/start_travel] RouteHistory create failed:', e);
+            // non-fatal — the job status update already succeeded
+          }
         }
         // Notify customer: "Technician On Route"
         if (updatedJob.customerId && updatedJob.customerPhone) {
@@ -639,27 +679,35 @@ export async function POST(
 
       case 'arrive': {
         // Update RouteHistory (mark arrivedAt, status=completed).
+        // Await directly (not fireAndForget) so the update is actually
+        // persisted — silent fireAndForget failure was causing RouteHistory
+        // to stay 'in_progress', so completedRoute was never returned.
         if (employee) {
-          fireAndForget('route.complete', async () => {
+          try {
             const route = await db.routeHistory.findFirst({
               where: { employeeId: employee.id, jobId: job.id, status: 'in_progress' },
               orderBy: { startedAt: 'desc' },
             });
             if (route) {
-              const durationMs = now.getTime() - route.startedAt.getTime();
+              // Defensive: Supabase returns startedAt as ISO string, not Date.
+              const routeStartedAt = new Date(route.startedAt as unknown as string);
+              const durationMs = now.getTime() - routeStartedAt.getTime();
               await db.routeHistory.update({
                 where: { id: route.id },
                 data: {
                   endedAt: now,
                   arrivedAt: now,
                   status: 'completed',
-                  durationMinutes: Math.round(durationMs / 60000),
+                  durationMinutes: Math.max(1, Math.round(durationMs / 60000)),
                   endLat: latitude ?? route.endLat,
                   endLng: longitude ?? route.endLng,
                 },
               });
             }
-          });
+          } catch (e) {
+            console.error('[lifecycle/arrive] RouteHistory update failed:', e);
+            // non-fatal — the job status update already succeeded
+          }
         }
         // Notify admins of arrival.
         for (const admin of adminUsers) {

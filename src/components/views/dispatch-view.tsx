@@ -3,12 +3,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Radio, MapPin, Calendar, Clock, User, CheckCircle2,
-  Zap, RefreshCw, MessageCircle, Play,
-  Activity, Loader2, Eye,
-  ArrowRight, Filter, Sparkles, Star,
-  X, ChevronDown, Briefcase, Navigation,
+  RefreshCw, MessageCircle, Play,
+  Activity, Loader2,
+  ArrowRight, Sparkles, Star,
+  X, Briefcase,
+  PanelRightClose, PanelRightOpen, Locate, Layers,
+  Users, ChevronUp,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -20,11 +22,13 @@ import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { useRealtime, usePresence } from '@/hooks/use-realtime';
+import type { LiveTechnicianMapController } from '@/components/dispatch/live-technician-map';
 import dynamic from 'next/dynamic';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 
 // SSR-safe dynamic import: Leaflet needs `window`, so we disable SSR for the map.
 const LiveTechnicianMap = dynamic(
@@ -56,6 +60,10 @@ interface Job {
   assigneePhone?: string;
   createdAt: string;
   updatedAt: string;
+  // Geocoded job location (populated by POST /api/jobs via the geocoder).
+  // Used to render job pins on the Live Dispatch map.
+  latitude?: number | null;
+  longitude?: number | null;
   assignee?: { id: string; name: string; phone: string; role: string; status: string };
 }
 
@@ -225,9 +233,61 @@ export function DispatchView() {
   // Smart assign all
   const [smartAssignAllLoading, setSmartAssignAllLoading] = useState(false);
 
+  // ─── Map-first layout state ─────────────────────────────────────────
+  // Desktop: right side panel can be collapsed to give the map full width.
+  const [sidePanelOpen, setSidePanelOpen] = useState(true);
+  // Mobile: bottom sheet peek/expand state.
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  // Active tab in the side panel / bottom sheet (Job Queue vs Team).
+  const [panelTab, setPanelTab] = useState<'jobs' | 'team'>('jobs');
+  // Map basemap: 'streets' (OSM) or 'satellite' (Esri World Imagery).
+  const [mapLayer, setMapLayer] = useState<'streets' | 'satellite'>('streets');
+  // Followed technician ID — when set, the map pans to follow their GPS updates.
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string | null>(null);
+  // Imperative handle to the map (lets us forward gps.ping events + recenter
+  // + layer toggles without triggering a React re-render of the map).
+  const mapControllerRef = useRef<LiveTechnicianMapController | null>(null);
+
   // ─── Real-time presence ─────────────────────────────────────────────
   const employeeIds = useMemo(() => employees.map(e => e.id), [employees]);
   const presence = usePresence(employeeIds);
+
+  // Realtime socket connection for live updates. The `onGpsPing` callback
+  // forwards each live GPS ping directly to the map's imperative controller,
+  // which updates the matching technician marker in-place via
+  // `marker.setLatLng` — no full refetch, no marker flicker (Uber/Jobber-style).
+  const { connected: realtimeConnected } = useRealtime({
+    enabled: true,
+    onGpsPing: (data: any) => {
+      const empId = data?.employeeId;
+      const lat = data?.latitude;
+      const lng = data?.longitude;
+      if (typeof empId !== 'string') return;
+      if (typeof lat !== 'number' || typeof lng !== 'number') return;
+      mapControllerRef.current?.handleGpsPing({
+        employeeId: empId,
+        latitude: lat,
+        longitude: lng,
+        accuracy: data?.accuracy ?? null,
+        heading: data?.heading ?? null,
+        capturedAt: data?.capturedAt,
+      });
+      // Also update the local `employees` state so the Team panel shows the
+      // fresh coordinates + lastSeenAt. This is a cheap in-place update.
+      setEmployees((prev) =>
+        prev.map((e) =>
+          e.id === empId
+            ? {
+                ...e,
+                latitude: lat,
+                longitude: lng,
+                lastSeenAt: data?.capturedAt ?? new Date().toISOString(),
+              }
+            : e,
+        ),
+      );
+    },
+  });
 
   // ─── Fetch functions ─────────────────────────────────────────────────
   const fetchJobs = useCallback(async () => {
@@ -256,9 +316,6 @@ export function DispatchView() {
     await Promise.all([fetchJobs(), fetchEmployees()]);
     setIsRefreshing(false);
   }, [fetchJobs, fetchEmployees]);
-
-  // Realtime socket connection for live updates
-  const { connected: realtimeConnected, onlineEmployees } = useRealtime({ enabled: true });
 
   // Auto-refresh every 15 seconds
   useEffect(() => {
@@ -323,6 +380,39 @@ export function DispatchView() {
       ),
     [employees],
   );
+
+  // Active jobs with valid geocoded coordinates for the map.
+  // Includes any status that represents "live work in the field" so the map
+  // shows job pins for everything currently in flight (not just pending/assigned).
+  const activeJobsForMap = useMemo(() => {
+    const ACTIVE_STATUSES = new Set([
+      'pending',
+      'assigned',
+      'in_progress',
+      'en_route',
+      'scheduled',
+    ]);
+    return jobs
+      .filter((j) => ACTIVE_STATUSES.has(j.status))
+      .filter(
+        (j) =>
+          typeof j.latitude === 'number' &&
+          typeof j.longitude === 'number' &&
+          !Number.isNaN(j.latitude) &&
+          !Number.isNaN(j.longitude),
+      )
+      .map((j) => ({
+        id: j.id,
+        title: j.title,
+        status: j.status,
+        priority: j.priority,
+        latitude: j.latitude as number,
+        longitude: j.longitude as number,
+        assigneeId: j.assigneeId ?? null,
+        customerName: j.customerName,
+        address: j.address,
+      }));
+  }, [jobs]);
 
   // Unique service types from pending jobs
   const serviceTypes = [...new Set(pendingJobs.map(j => j.type).filter(Boolean))];
@@ -453,6 +543,24 @@ export function DispatchView() {
     setSelectedEmployee(employee);
     setShowEmployeeDialog(true);
   };
+
+  // ─── Map control handlers ─────────────────────────────────────────────
+
+  const handleRecenter = useCallback(() => {
+    mapControllerRef.current?.recenter();
+  }, []);
+
+  const handleToggleLayer = useCallback(() => {
+    setMapLayer((prev) => {
+      const next = prev === 'streets' ? 'satellite' : 'streets';
+      mapControllerRef.current?.setLayer(next);
+      return next;
+    });
+  }, []);
+
+  const handleTechnicianSelect = useCallback((techId: string | null) => {
+    setSelectedTechnicianId((prev) => (prev === techId ? null : techId));
+  }, []);
 
   // ─── Render: Job Card ────────────────────────────────────────────────
 
@@ -631,32 +739,252 @@ export function DispatchView() {
 
   // ─── Main Render ─────────────────────────────────────────────────────
 
+  // The side-panel content (Job Queue + Team tabs) is shared between the
+  // desktop right panel and the mobile bottom sheet — extracted into a
+  // helper so the markup is identical in both layouts.
+  const renderSidePanelContent = () => (
+    <Tabs
+      value={panelTab}
+      onValueChange={(v) => setPanelTab(v as 'jobs' | 'team')}
+      className="flex-1 flex flex-col min-h-0"
+    >
+      <div className="px-3 pt-3 shrink-0">
+        <TabsList className="w-full h-9">
+          <TabsTrigger value="jobs" className="text-xs flex-1 gap-1.5">
+            <Briefcase className="size-3.5" />
+            Jobs
+            <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+              {pendingJobs.length + assignedJobs.length}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="team" className="text-xs flex-1 gap-1.5">
+            <Users className="size-3.5" />
+            Team
+            <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+              {employees.length}
+            </Badge>
+          </TabsTrigger>
+        </TabsList>
+      </div>
+
+      {/* ─── Jobs tab ──────────────────────────────────────────────────── */}
+      <TabsContent value="jobs" className="flex-1 mt-0 min-h-0 data-[state=inactive]:hidden">
+        {/* Filters */}
+        <div className="px-3 py-2 border-b bg-muted/30">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+              <SelectTrigger className="h-7 text-xs w-[100px]">
+                <SelectValue placeholder="Priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Priority</SelectItem>
+                <SelectItem value="urgent">Urgent</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="h-7 text-xs w-[110px]">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {serviceTypes.map(type => (
+                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="h-7 text-xs w-[120px]"
+            />
+            {(priorityFilter !== 'all' || typeFilter !== 'all' || dateFilter) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs px-2"
+                onClick={() => { setPriorityFilter('all'); setTypeFilter('all'); setDateFilter(''); }}
+              >
+                <X className="size-3" /> Clear
+              </Button>
+            )}
+          </div>
+          {/* Pending / Assigned sub-tabs */}
+          <div className="flex items-center gap-1 mt-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[11px] px-2 hover:bg-muted"
+              onClick={() => setPanelTab('jobs')}
+            >
+              Pending <span className="ml-1 text-muted-foreground">({filteredPending.length})</span>
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[11px] px-2 hover:bg-muted"
+              onClick={() => setPanelTab('jobs')}
+            >
+              Assigned <span className="ml-1 text-muted-foreground">({filteredAssigned.length})</span>
+            </Button>
+          </div>
+        </div>
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="p-3 space-y-2.5">
+            {jobsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : filteredPending.length === 0 && filteredAssigned.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Briefcase className="size-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No jobs match these filters</p>
+              </div>
+            ) : (
+              <>
+                {filteredPending.length > 0 && (
+                  <div className="space-y-2.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-1">
+                      Pending · {filteredPending.length}
+                    </p>
+                    {filteredPending.map(renderJobCard)}
+                  </div>
+                )}
+                {filteredAssigned.length > 0 && (
+                  <div className="space-y-2.5 pt-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-1">
+                      Assigned · {filteredAssigned.length}
+                    </p>
+                    {filteredAssigned.map(renderJobCard)}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </ScrollArea>
+      </TabsContent>
+
+      {/* ─── Team tab ──────────────────────────────────────────────────── */}
+      <TabsContent value="team" className="flex-1 mt-0 min-h-0 data-[state=inactive]:hidden">
+        <div className="px-3 py-2 border-b bg-muted/30">
+          <div className="flex items-center gap-2">
+            <Select value={employeeStatusFilter} onValueChange={setEmployeeStatusFilter}>
+              <SelectTrigger className="h-7 text-xs w-[110px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="available">Available</SelectItem>
+                <SelectItem value="busy">Busy</SelectItem>
+                <SelectItem value="offline">Offline</SelectItem>
+                <SelectItem value="traveling">Traveling</SelectItem>
+                <SelectItem value="leave">On Leave</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground ml-auto">
+              <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-emerald-500" />{availableCount}</span>
+              <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-red-500" />{busyCount}</span>
+              <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-gray-400" />{offlineCount}</span>
+            </div>
+          </div>
+        </div>
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="p-3 space-y-2.5">
+            {employeesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : filteredEmployees.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <User className="size-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No employees found</p>
+              </div>
+            ) : (
+              [...filteredEmployees]
+                .sort((a, b) => {
+                  const order: Record<string, number> = { available: 0, traveling: 1, busy: 2, leave: 3, offline: 4 };
+                  return (order[a.status] ?? 5) - (order[b.status] ?? 5);
+                })
+                .map(renderEmployeeCard)
+            )}
+          </div>
+        </ScrollArea>
+      </TabsContent>
+    </Tabs>
+  );
+
   return (
     <div className="h-full flex flex-col">
-      {/* ─── Header ────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-xl bg-teal-600 shadow-lg shadow-teal-600/20">
-            <Radio className="size-5 text-white" />
+      {/* ─── Compact Header (single row) ──────────────────────────────── */}
+      <header className="flex items-center justify-between flex-wrap gap-2 mb-3 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center justify-center size-9 rounded-lg bg-teal-600 shadow-md shadow-teal-600/20 shrink-0">
+            <Radio className="size-4.5 text-white" />
           </div>
-          <div>
-            <h2 className="text-xl font-bold tracking-tight">Smart Dispatch Center</h2>
-            <p className="text-sm text-muted-foreground">
-              Advanced scheduling center for bulk assignment, workforce management, and route planning.
+          <div className="min-w-0">
+            <h2 className="text-base font-bold tracking-tight leading-tight truncate">Live Dispatch</h2>
+            <p className="text-[11px] text-muted-foreground leading-tight truncate">
+              Map-first view · live tracking · smart assignment
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Inline stats */}
+          <div className="hidden sm:flex items-center gap-2 mr-2 px-2 py-1 rounded-md bg-muted/50">
+            <span className="flex items-center gap-1 text-xs" title="Pending jobs">
+              <Briefcase className="size-3 text-amber-600" />
+              <span className="font-semibold">{pendingJobs.length}</span>
+              <span className="text-muted-foreground text-[10px]">pend</span>
+            </span>
+            <span className="text-muted-foreground/40">·</span>
+            <span className="flex items-center gap-1 text-xs" title="Assigned jobs">
+              <ArrowRight className="size-3 text-sky-600" />
+              <span className="font-semibold">{assignedJobs.length}</span>
+              <span className="text-muted-foreground text-[10px]">asgnd</span>
+            </span>
+            <span className="text-muted-foreground/40">·</span>
+            <span className="flex items-center gap-1 text-xs" title="Available technicians">
+              <CheckCircle2 className="size-3 text-emerald-600" />
+              <span className="font-semibold">{availableCount}</span>
+              <span className="text-muted-foreground text-[10px]">free</span>
+            </span>
+            <span className="text-muted-foreground/40">·</span>
+            <span className="flex items-center gap-1 text-xs" title="Busy technicians">
+              <Activity className="size-3 text-red-600" />
+              <span className="font-semibold">{busyCount}</span>
+              <span className="text-muted-foreground text-[10px]">busy</span>
+            </span>
+          </div>
+
+          {/* Live badge with pulsing green dot when realtime is connected */}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground px-2 py-1 rounded-md bg-muted/50">
-                  <div className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>Live</span>
+                <div
+                  className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border ${
+                    realtimeConnected
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/50 dark:border-emerald-800 dark:text-emerald-300'
+                      : 'bg-muted/50 border-border text-muted-foreground'
+                  }`}
+                >
+                  <span className="relative flex size-2">
+                    {realtimeConnected && (
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    )}
+                    <span className={`relative inline-flex size-2 rounded-full ${realtimeConnected ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                  </span>
+                  <span className="font-medium">{realtimeConnected ? 'Live' : 'Offline'}</span>
                 </div>
               </TooltipTrigger>
-              <TooltipContent>Auto-refreshing every 15s</TooltipContent>
+              <TooltipContent>
+                {realtimeConnected
+                  ? 'Realtime connected — GPS pings update markers live'
+                  : 'Realtime disconnected — falling back to 15s polling'}
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
 
@@ -667,8 +995,8 @@ export function DispatchView() {
             disabled={isRefreshing}
             className="h-8"
           >
-            <RefreshCw className={`size-3.5 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
+            <RefreshCw className={`size-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline ml-1">Refresh</span>
           </Button>
 
           <Button
@@ -678,282 +1006,158 @@ export function DispatchView() {
             disabled={smartAssignAllLoading || pendingJobs.length === 0}
           >
             {smartAssignAllLoading ? (
-              <Loader2 className="size-3.5 mr-1 animate-spin" />
+              <Loader2 className="size-3.5 animate-spin" />
             ) : (
-              <Sparkles className="size-3.5 mr-1" />
+              <Sparkles className="size-3.5" />
             )}
-            Smart Assign All
+            <span className="hidden md:inline ml-1">Smart Assign All</span>
+          </Button>
+
+          {/* Desktop: collapse/expand the right side panel */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSidePanelOpen((v) => !v)}
+            className="hidden lg:inline-flex h-8 w-8 p-0"
+            aria-label={sidePanelOpen ? 'Collapse side panel' : 'Expand side panel'}
+          >
+            {sidePanelOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
           </Button>
         </div>
-      </div>
+      </header>
 
-      {/* ─── Stats Bar ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <Card className="border shadow-sm">
-          <CardContent className="p-3 flex items-center gap-3">
-            <div className="flex items-center justify-center size-9 rounded-lg bg-amber-100">
-              <Briefcase className="size-4 text-amber-600" />
+      {/* ─── Map-first main area ────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col lg:flex-row gap-3 min-h-0">
+        {/* Map canvas (the centerpiece) */}
+        <div className="flex-1 relative min-h-[50vh] lg:min-h-0 rounded-lg overflow-hidden border border-border shadow-sm bg-muted/20">
+          {mapTechnicians.length === 0 && activeJobsForMap.length === 0 ? (
+            <div className="flex h-full w-full flex-col items-center justify-center bg-muted/30 px-6 py-8 text-center">
+              <MapPin className="size-10 mb-3 text-muted-foreground/50" />
+              <p className="text-sm font-medium text-foreground">No live locations to display</p>
+              <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                Technicians will appear here once they start GPS tracking from the employee app.
+                Job pins appear once a job address is geocoded.
+              </p>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Pending</p>
-              <p className="text-lg font-bold">{pendingJobs.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border shadow-sm">
-          <CardContent className="p-3 flex items-center gap-3">
-            <div className="flex items-center justify-center size-9 rounded-lg bg-blue-100">
-              <ArrowRight className="size-4 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Assigned</p>
-              <p className="text-lg font-bold">{assignedJobs.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border shadow-sm">
-          <CardContent className="p-3 flex items-center gap-3">
-            <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100">
-              <CheckCircle2 className="size-4 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Available</p>
-              <p className="text-lg font-bold">{availableCount}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border shadow-sm">
-          <CardContent className="p-3 flex items-center gap-3">
-            <div className="flex items-center justify-center size-9 rounded-lg bg-red-100">
-              <Activity className="size-4 text-red-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Busy</p>
-              <p className="text-lg font-bold">{busyCount}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          ) : (
+            <LiveTechnicianMap
+              employees={mapTechnicians}
+              jobs={activeJobsForMap}
+              selectedTechnicianId={selectedTechnicianId}
+              onTechnicianSelect={handleTechnicianSelect}
+              controllerRef={mapControllerRef}
+              className="absolute inset-0 h-full w-full"
+            />
+          )}
 
-      {/* ─── Split Panel + Live Map Layout ─────────────────────────────── */}
-      <div className="flex-1 flex flex-col gap-4 min-h-0">
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-0">
-        {/* ─── Left Panel: Job Queue ───────────────────────────────────── */}
-        <div className="lg:col-span-3 flex flex-col min-h-0">
-          <Card className="flex-1 flex flex-col min-h-0 border shadow-sm">
-            <CardHeader className="pb-3 shrink-0">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Briefcase className="size-4 text-teal-600" />
-                  Job Queue
-                  <Badge variant="secondary" className="text-xs">{pendingJobs.length + assignedJobs.length}</Badge>
-                </CardTitle>
-              </div>
-
-              {/* Filters */}
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <Filter className="size-3.5 text-muted-foreground" />
-                <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                  <SelectTrigger className="h-7 text-xs w-[110px]">
-                    <SelectValue placeholder="Priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Priority</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={typeFilter} onValueChange={setTypeFilter}>
-                  <SelectTrigger className="h-7 text-xs w-[120px]">
-                    <SelectValue placeholder="Service Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    {serviceTypes.map(type => (
-                      <SelectItem key={type} value={type}>{type}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="date"
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  className="h-7 text-xs w-[130px]"
-                />
-                {(priorityFilter !== 'all' || typeFilter !== 'all' || dateFilter) && (
+          {/* Map controls overlay (top-right) */}
+          <div className="absolute top-3 right-3 z-[1000] flex flex-col gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
                   <Button
-                    variant="ghost"
+                    variant="secondary"
                     size="sm"
-                    className="h-7 text-xs px-2"
-                    onClick={() => { setPriorityFilter('all'); setTypeFilter('all'); setDateFilter(''); }}
+                    onClick={handleRecenter}
+                    className="h-8 w-8 p-0 shadow-md bg-background/95 backdrop-blur"
+                    aria-label="Recenter map"
                   >
-                    <X className="size-3 mr-1" /> Clear
+                    <Locate className="size-4" />
                   </Button>
-                )}
-              </div>
-            </CardHeader>
+                </TooltipTrigger>
+                <TooltipContent side="left">Recenter on all technicians</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleToggleLayer}
+                    className="h-8 w-8 p-0 shadow-md bg-background/95 backdrop-blur"
+                    aria-label="Toggle map layer"
+                  >
+                    <Layers className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  {mapLayer === 'streets' ? 'Switch to satellite' : 'Switch to streets'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
 
-            <Separator />
-
-            <Tabs defaultValue="pending" className="flex-1 flex flex-col min-h-0">
-              <div className="px-4 pt-2 shrink-0">
-                <TabsList className="w-full h-8">
-                  <TabsTrigger value="pending" className="text-xs flex-1">
-                    Pending ({filteredPending.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="assigned" className="text-xs flex-1">
-                    Assigned ({filteredAssigned.length})
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              <TabsContent value="pending" className="flex-1 mt-0 min-h-0">
-                <ScrollArea className="h-full max-h-[calc(100vh-400px)]">
-                  <div className="p-4 space-y-3">
-                    {jobsLoading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : filteredPending.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <Briefcase className="size-8 mx-auto mb-2 opacity-30" />
-                        <p className="text-sm">No pending jobs</p>
-                        <p className="text-xs mt-1">All jobs have been assigned</p>
-                      </div>
-                    ) : (
-                      filteredPending.map(renderJobCard)
-                    )}
-                  </div>
-                </ScrollArea>
-              </TabsContent>
-
-              <TabsContent value="assigned" className="flex-1 mt-0 min-h-0">
-                <ScrollArea className="h-full max-h-[calc(100vh-400px)]">
-                  <div className="p-4 space-y-3">
-                    {filteredAssigned.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <ArrowRight className="size-8 mx-auto mb-2 opacity-30" />
-                        <p className="text-sm">No assigned jobs</p>
-                      </div>
-                    ) : (
-                      filteredAssigned.map(renderJobCard)
-                    )}
-                  </div>
-                </ScrollArea>
-              </TabsContent>
-            </Tabs>
-          </Card>
-        </div>
-
-        {/* ─── Right Panel: Employees ──────────────────────────────────── */}
-        <div className="lg:col-span-2 flex flex-col min-h-0">
-          <Card className="flex-1 flex flex-col min-h-0 border shadow-sm">
-            <CardHeader className="pb-3 shrink-0">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <User className="size-4 text-teal-600" />
-                  Team
-                  <Badge variant="secondary" className="text-xs">{employees.length}</Badge>
-                </CardTitle>
-              </div>
-
-              {/* Status filter */}
-              <div className="flex items-center gap-2 mt-2">
-                <Select value={employeeStatusFilter} onValueChange={setEmployeeStatusFilter}>
-                  <SelectTrigger className="h-7 text-xs w-[120px]">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="available">Available</SelectItem>
-                    <SelectItem value="busy">Busy</SelectItem>
-                    <SelectItem value="offline">Offline</SelectItem>
-                    <SelectItem value="traveling">Traveling</SelectItem>
-                    <SelectItem value="leave">On Leave</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {/* Mini status legend */}
-                <div className="flex items-center gap-3 text-[10px] text-muted-foreground ml-auto">
-                  <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-emerald-500" />{availableCount}</span>
-                  <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-red-500" />{busyCount}</span>
-                  <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-gray-400" />{offlineCount}</span>
-                </div>
-              </div>
-            </CardHeader>
-
-            <Separator />
-
-            <ScrollArea className="flex-1 max-h-[calc(100vh-380px)]">
-              <div className="p-4 space-y-3">
-                {employeesLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                  </div>
-                ) : filteredEmployees.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <User className="size-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">No employees found</p>
-                  </div>
-                ) : (
-                  // Sort: available first, then busy, then offline
-                  [...filteredEmployees]
-                    .sort((a, b) => {
-                      const order: Record<string, number> = { available: 0, traveling: 1, busy: 2, leave: 3, offline: 4 };
-                      return (order[a.status] ?? 5) - (order[b.status] ?? 5);
-                    })
-                    .map(renderEmployeeCard)
-                )}
-              </div>
-            </ScrollArea>
-          </Card>
-        </div>
-        </div>
-
-        {/* ─── Live Technician Map Panel ──────────────────────────────── */}
-        <Card className="h-[360px] lg:h-[420px] shrink-0 flex flex-col border shadow-sm">
-          <CardHeader className="pb-3 shrink-0">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <MapPin className="size-4 text-teal-600" />
-                Live Technician Map
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="text-xs">
-                  {mapTechnicians.length} of {employees.length} technicians on map
-                </Badge>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                        <div className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span>GPS live</span>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>Refreshes with team panel every 15s</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </div>
-          </CardHeader>
-          <Separator />
-          <CardContent className="flex-1 min-h-0 p-2 sm:p-3">
-            {mapTechnicians.length === 0 ? (
-              <div className="flex h-full w-full flex-col items-center justify-center rounded-md border border-dashed border-border bg-muted/30 px-6 py-8 text-center">
-                <MapPin className="size-8 mb-3 text-muted-foreground/50" />
-                <p className="text-sm font-medium text-foreground">No technician locations available</p>
-                <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-                  Technicians will appear here once they start GPS tracking from the employee app.
-                </p>
-              </div>
-            ) : (
-              <LiveTechnicianMap employees={mapTechnicians} className="h-full w-full" />
+          {/* Map info badges (top-left) */}
+          <div className="absolute top-3 left-3 z-[1000] flex flex-col gap-1.5">
+            <Badge variant="secondary" className="text-[10px] h-5 bg-background/95 backdrop-blur shadow-sm">
+              <MapPin className="size-3 mr-1 text-teal-600" />
+              {mapTechnicians.length} tech{mapTechnicians.length !== 1 ? 's' : ''}
+              <span className="text-muted-foreground mx-1">·</span>
+              {activeJobsForMap.length} job{activeJobsForMap.length !== 1 ? 's' : ''}
+            </Badge>
+            {selectedTechnicianId && (
+              <Badge
+                variant="secondary"
+                className="text-[10px] h-5 bg-teal-50 border-teal-200 text-teal-700 dark:bg-teal-950/80 dark:border-teal-800 dark:text-teal-300 cursor-pointer hover:bg-teal-100 dark:hover:bg-teal-900"
+                onClick={() => handleTechnicianSelect(null)}
+              >
+                Following · tap to stop
+              </Badge>
             )}
-          </CardContent>
-        </Card>
+          </div>
+
+          {/* Mobile: expand button to open the bottom sheet */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setMobileSheetOpen(true)}
+            className="lg:hidden absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] h-9 px-4 shadow-md bg-background/95 backdrop-blur"
+          >
+            <ChevronUp className="size-4 mr-1" />
+            View jobs &amp; team
+            <Badge variant="secondary" className="ml-2 text-[10px] h-4">
+              {pendingJobs.length + assignedJobs.length + employees.length}
+            </Badge>
+          </Button>
+        </div>
+
+        {/* Desktop: collapsible right side panel (~380px) */}
+        {sidePanelOpen && (
+          <aside className="hidden lg:flex w-[380px] shrink-0 flex-col min-h-0 rounded-lg border border-border shadow-sm bg-card overflow-hidden">
+            {renderSidePanelContent()}
+          </aside>
+        )}
       </div>
+
+      {/* Mobile: bottom sheet with Job Queue + Team */}
+      <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
+        <SheetContent
+          side="bottom"
+          className="h-[80vh] p-0 flex flex-col [&>button]:hidden"
+        >
+          <SheetHeader className="px-3 py-3 border-b shrink-0">
+            <div className="flex items-center justify-between">
+              <SheetTitle className="text-base font-semibold flex items-center gap-2">
+                <Radio className="size-4 text-teal-600" />
+                Dispatch Console
+              </SheetTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMobileSheetOpen(false)}
+                className="h-8 w-8 p-0"
+                aria-label="Close panel"
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+          </SheetHeader>
+          <div className="flex-1 min-h-0 flex flex-col">
+            {renderSidePanelContent()}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* ─── Assignment Dialog ─────────────────────────────────────────── */}
       <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>

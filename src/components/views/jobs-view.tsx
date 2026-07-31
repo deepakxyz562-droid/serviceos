@@ -837,6 +837,50 @@ function GpsRouteSection({
   const travelHappened = !!(ts && (ts.travelStarted || ts.arrived)) || !!lifecycleData?.completedRoute;
 
   if (!travelHappened && !route) {
+    // Fallback: even if no RouteHistory row exists (job completed via a
+    // path that didn't create one), show the check-in / check-out
+    // coordinates that were captured, instead of a bare "No travel recorded."
+    const hasCheckIn = typeof job.checkInLat === 'number' && typeof job.checkInLng === 'number';
+    const hasCheckOut = typeof job.checkOutLat === 'number' && typeof job.checkOutLng === 'number';
+    if (hasCheckIn || hasCheckOut) {
+      const mapsUrl = hasCheckIn && hasCheckOut
+        ? `https://www.google.com/maps/dir/${job.checkInLat},${job.checkInLng}/${job.checkOutLat},${job.checkOutLng}`
+        : `https://www.google.com/maps?q=${hasCheckIn ? `${job.checkInLat},${job.checkInLng}` : `${job.checkOutLat},${job.checkOutLng}`}`;
+      return (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <MapPin className="size-4 text-emerald-600" />
+            <span>Location captured for this job.</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {hasCheckIn && (
+              <div className="rounded-md bg-muted/40 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Check-in</p>
+                <p className="text-sm font-semibold text-foreground mt-0.5">
+                  {job.checkInLat!.toFixed(5)}, {job.checkInLng!.toFixed(5)}
+                </p>
+              </div>
+            )}
+            {hasCheckOut && (
+              <div className="rounded-md bg-muted/40 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Check-out</p>
+                <p className="text-sm font-semibold text-foreground mt-0.5">
+                  {job.checkOutLat!.toFixed(5)}, {job.checkOutLng!.toFixed(5)}
+                </p>
+              </div>
+            )}
+          </div>
+          <a
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center min-h-[44px] px-3 rounded-lg text-sm font-medium text-emerald-700 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+          >
+            <MapPinned className="size-4 mr-1.5" /> View on Map
+          </a>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <RouteIcon className="size-4" />

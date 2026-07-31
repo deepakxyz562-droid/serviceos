@@ -122,6 +122,52 @@ export async function transitionJob(
       }
     }
 
+    // ── Synthesize a RouteHistory row when transitioning to 'completed'.
+    // The state machine is a low-level primitive used by multiple completion
+    // paths. If GPS tracking was never started (no RouteHistory row exists),
+    // synthesize a completed RouteHistory from the job's check-in / check-out
+    // coordinates so the GPS & route tab on the detail page doesn't show
+    // "No travel recorded." even when coordinates were captured.
+    // (RouteHistory.employeeId is required — skip if no assignee. tenantId
+    // is required too.) Non-fatal: any DB error is logged but never breaks
+    // the transition.
+    if (toState === 'completed' && resolvedTenantId && job.assigneeId && (job.checkInLat || job.checkOutLat)) {
+      try {
+        const existingRoute = await db.routeHistory.findFirst({
+          where: { jobId: job.id },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (!existingRoute) {
+          const endTime = job.actualEndTime || job.completedAt || new Date();
+          const startTime = job.actualStartTime || job.scheduledAt || endTime;
+          await db.routeHistory.create({
+            data: {
+              tenantId: resolvedTenantId,
+              employeeId: job.assigneeId,
+              jobId: job.id,
+              startedAt: startTime,
+              endedAt: endTime,
+              pathJson: JSON.stringify([]),
+              distanceMeters: 0,
+              durationMinutes: Math.max(
+                0,
+                Math.round((new Date(endTime).getTime() - new Date(startTime).getTime()) / 60000),
+              ),
+              startLat: job.checkInLat ?? null,
+              startLng: job.checkInLng ?? null,
+              endLat: job.checkOutLat ?? job.checkInLat ?? null,
+              endLng: job.checkOutLng ?? job.checkInLng ?? null,
+              status: 'completed',
+              arrivedAt: endTime,
+            },
+          });
+        }
+      } catch (e) {
+        logger.error({ err: e, jobId, toState }, 'Failed to synthesize RouteHistory on state transition');
+        // non-fatal
+      }
+    }
+
     // Log the transition
     await db.jobStateTransition.create({
       data: {

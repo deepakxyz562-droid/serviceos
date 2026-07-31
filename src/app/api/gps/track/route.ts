@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { EventBus } from '@/lib/event-bus';
 
 /**
  * GPS Tracking
@@ -186,6 +187,27 @@ export async function POST(request: NextRequest) {
       });
     } catch (e) {
       console.error('[GPS POST] employee update failed:', e);
+    }
+
+    // 4. Emit gps.ping via EventBus so the realtime service can push the
+    //    updated location to the Live Dispatch map (Uber/Jobber-style live
+    //    tracking). Without this, the dispatch map only updates on manual
+    //    refresh. Fire-and-forget — never blocks the GPS ping response.
+    try {
+      EventBus.emit('gps.ping', {
+        employeeId,
+        jobId: jobId ?? null,
+        latitude,
+        longitude,
+        accuracy: accuracy ?? null,
+        heading: heading ?? null,
+        speed: speed ?? null,
+        capturedAt: now.toISOString(),
+        tenantId: tenantId ?? undefined,
+        workspaceId: employee.workspaceId ?? undefined,
+      }, { tenantId: tenantId ?? undefined, workspaceId: employee.workspaceId ?? undefined });
+    } catch (e) {
+      // non-fatal — GPS ping already saved
     }
 
     return NextResponse.json({ gps, routeUpdated });

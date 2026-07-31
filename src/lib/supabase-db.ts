@@ -141,6 +141,7 @@ const TABLE_MAP: Record<string, string> = {
   subscriptionPayment: 'SubscriptionPayment',
   billingEvent: 'BillingEvent',
   plan: 'Plan',
+  planFeatureMatrix: 'PlanFeatureMatrix',
   recurringInvoice: 'RecurringInvoice',
   paymentMethod: 'PaymentMethod',
   // ── E-Commerce ──

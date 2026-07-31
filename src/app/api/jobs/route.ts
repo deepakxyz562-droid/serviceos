@@ -4,6 +4,46 @@ import { getAuthUser } from '@/lib/auth'
 import { notifyCustomerBookingConfirmed, notifyEmployeeJobAssigned } from '@/lib/whatsapp-notifications'
 import { dispatchJobEvent } from '@/lib/event-webhook-dispatcher'
 import { logActivity } from '@/lib/activity-log'
+import { setDefaultResultOrder } from 'dns'
+
+// Force IPv4-first for server-side Nominatim fetches (same reason as the
+// geocode proxy route — IPv6 route is unreachable in this sandbox).
+setDefaultResultOrder('ipv4first')
+
+/**
+ * Geocode an address string using OpenStreetMap Nominatim.
+ * Returns { latitude, longitude } or null on failure.
+ * Best-effort: never throws — used as a background task after job creation.
+ */
+async function geocodeAddress(address: string): Promise<{ latitude: number; longitude: number } | null> {
+  try {
+    if (!address || address.trim().length < 3) return null;
+    const upstreamUrl =
+      'https://nominatim.openstreetmap.org/search?format=json' +
+      `&q=${encodeURIComponent(address)}` +
+      '&limit=1';
+    const res = await fetch(upstreamUrl, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': process.env.NOMINATIM_USER_AGENT || 'ServiceOS-Dispatch/1.0 (dispatch@serviceos.app)',
+      },
+      // Short timeout — geocoding is best-effort, don't hang the server.
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
+      return {
+        latitude: parseFloat(data[0].lat),
+        longitude: parseFloat(data[0].lon),
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Resolve a workspaceId for a new job.
@@ -302,6 +342,27 @@ export async function POST(request: NextRequest) {
     // Send WhatsApp notifications + event webhooks detached so the user
     // sees the new job in the list immediately. All errors are swallowed
     // and logged — they never affect the HTTP response.
+
+    // ── Geocode the job address (best-effort, background) ──
+    // Populates Job.latitude/longitude so the Live Dispatch map can show
+    // job pins + route lines. Non-fatal: if geocoding fails, the job is
+    // still created — it just won't have a pin on the map.
+    if (job.address) {
+      geocodeAddress(job.address)
+        .then((coords) => {
+          if (coords) {
+            return db.job.update({
+              where: { id: job.id },
+              data: { latitude: coords.latitude, longitude: coords.longitude },
+            });
+          }
+          return null;
+        })
+        .catch(() => {
+          // Silent — geocoding is best-effort
+        });
+    }
+
     const employeePromise = job.assigneeId
       ? db.employee.findUnique({ where: { id: job.assigneeId } })
       : Promise.resolve(null)

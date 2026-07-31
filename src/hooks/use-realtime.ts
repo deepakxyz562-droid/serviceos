@@ -94,6 +94,34 @@ interface UseRealtimeOptions {
   onJobUpdate?: (data: any) => void;
   onPresenceUpdate?: (data: any) => void;
   onChatTyping?: (data: any) => void;
+  /**
+   * Fires when a `gps.ping` event arrives via the realtime bridge.
+   *
+   * The /api/gps/track route emits `gps.ping` via the EventBus; the
+   * EventBus forwards it to the socket.io mini-service's `/broadcast`
+   * endpoint, which fans it out to all clients in the `tenant:<id>` room.
+   *
+   * Payload shape (see bridgeToRealtime in src/lib/event-bus.ts):
+   *   {
+   *     event: 'gps.ping',
+   *     timestamp: string,
+   *     tenantId: string,
+   *     data: {
+   *       employeeId: string,
+   *       jobId?: string | null,
+   *       latitude: number,
+   *       longitude: number,
+   *       accuracy?: number | null,
+   *       heading?: number | null,
+   *       speed?: number | null,
+   *       capturedAt: string,
+   *     }
+   *   }
+   *
+   * Consumers (e.g. the Live Dispatch map) use this to update the matching
+   * technician marker's position in-place — no full refetch needed.
+   */
+  onGpsPing?: (data: any) => void;
   enabled?: boolean;
 }
 
@@ -113,6 +141,7 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
     onJobUpdate,
     onPresenceUpdate,
     onChatTyping,
+    onGpsPing,
     enabled = true,
   } = options;
 
@@ -127,12 +156,14 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
   const onJobUpdateRef = useRef(onJobUpdate);
   const onPresenceUpdateRef = useRef(onPresenceUpdate);
   const onChatTypingRef = useRef(onChatTyping);
+  const onGpsPingRef = useRef(onGpsPing);
 
   useEffect(() => {
     onEmployeeStatusRef.current = onEmployeeStatus;
     onJobUpdateRef.current = onJobUpdate;
     onPresenceUpdateRef.current = onPresenceUpdate;
     onChatTypingRef.current = onChatTyping;
+    onGpsPingRef.current = onGpsPing;
   });
 
   // Initialize socket connection with graceful error handling
@@ -303,6 +334,28 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
     // Listen for chat typing indicators
     socket.on('chat-typing', (data: any) => {
       onChatTypingRef.current?.(data);
+    });
+
+    // Listen for live GPS pings from field technicians.
+    //
+    // The /api/gps/track route emits `gps.ping` via the EventBus, which the
+    // bridge in src/lib/event-bus.ts forwards to the socket.io mini-service
+    // as `{ event, timestamp, tenantId, data: { employeeId, latitude,
+    // longitude, ... } }`. The mini-service's `/broadcast` endpoint then
+    // emits this whole object as the `gps.ping` socket event to all clients
+    // in the tenant room.
+    //
+    // We accept both the wrapped shape (sent by the EventBus bridge) and a
+    // flat shape (defensive — in case a future emitter sends the fields
+    // directly) so the consumer always receives `{ employeeId, latitude,
+    // longitude, ... }`.
+    socket.on('gps.ping', (data: any) => {
+      const payload = data?.data ?? data;
+      if (!payload || typeof payload !== 'object') return;
+      const { employeeId: empId, latitude, longitude } = payload;
+      if (typeof empId !== 'string') return;
+      if (typeof latitude !== 'number' || typeof longitude !== 'number') return;
+      onGpsPingRef.current?.(payload);
     });
 
     // Handle initial online employees list from server

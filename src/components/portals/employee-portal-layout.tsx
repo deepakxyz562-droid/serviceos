@@ -44,6 +44,8 @@ import {
   X,
   ArrowLeft,
   BellRing,
+  RotateCw,
+  Route,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -2429,7 +2431,7 @@ function ScheduleView({ employeeId }: { employeeId: string }) {
 
 // ─── Sub-View: Attendance ───────────────────────────────────────────────────
 
-function AttendanceView() {
+function AttendanceView({ onLogout }: { onLogout?: () => void } = {}) {
   // ── Real shift state (V1.5) ──────────────────────────────────────────────
   // activeShift mirrors the EmployeeShift row from /api/employee/shift/today.
   interface ActiveShift {
@@ -2453,8 +2455,15 @@ function AttendanceView() {
   const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
   const [todayTotals, setTodayTotals] = useState<TodayTotals | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+
+  // Auth-ready flag: wait for the auth store to be hydrated before the first
+  // fetch. Mirrors OwnerTimesheet — without this, AttendanceView can mount
+  // before the JWT is in localStorage → 401 → empty state. The store is
+  // populated by /api/auth/me on app boot.
+  const isAuthed = useAppStore((s) => s.auth?.isAuthenticated === true);
 
   // GPS tracking — shared via context. Clock-in captures the current position
   // (triggers the browser permission prompt) and starts a 30s ping interval
@@ -2469,10 +2478,16 @@ function AttendanceView() {
     return () => clearInterval(id);
   }, [activeShift]);
 
-  // Pull today's shift + totals from the API.
+  // Pull today's shift + totals from the API. Has a 401 retry-once for the
+  // auth hydration race (same pattern as OwnerTimesheet).
   const refresh = useCallback(async () => {
     try {
-      const res = await authFetch('/api/employee/shift/today?XTransformPort=3000');
+      let res = await authFetch('/api/employee/shift/today?XTransformPort=3000');
+      if (res.status === 401) {
+        // Token may not have been written to localStorage yet — retry once.
+        await new Promise((r) => setTimeout(r, 400));
+        res = await authFetch('/api/employee/shift/today?XTransformPort=3000');
+      }
       if (res.ok) {
         const data: TodayTotals = await res.json();
         setActiveShift(data.activeShift ?? null);
@@ -2486,7 +2501,21 @@ function AttendanceView() {
   }, []);
 
   useEffect(() => {
+    // Don't fetch until the auth store is hydrated — avoids the 401 race.
+    if (!isAuthed) return;
     refresh();
+  }, [refresh, isAuthed]);
+
+  // Manual refresh handler — shows a brief loading spinner on the button
+  // without clobbering the page-level loading state.
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      // Tiny delay so the spinner is visible even on fast networks.
+      setTimeout(() => setRefreshing(false), 350);
+    }
   }, [refresh]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -2566,6 +2595,38 @@ function AttendanceView() {
   const isCheckedIn = !!activeShift && activeShift.status !== 'completed';
   const isOnBreak = activeShift?.status === 'on_break';
   const clockInTime = activeShift?.clockIn ? formatTime(activeShift.clockIn) : null;
+  // Check-out time for today's row — uses the activeShift.clockOut field which
+  // is set when the shift transitions to 'completed'. (The /today API only
+  // returns the live active/on_break shift, so when the shift is fully
+  // completed activeShift is null and we show "—".)
+  const clockOutTime = activeShift?.clockOut ? formatTime(activeShift.clockOut) : null;
+
+  // Active break start — parsed from breaksJson. This is the time the current
+  // (in-progress) break began, used in the "On break since …" subtitle. Before
+  // this fix the UI showed `new Date()` i.e. the current wall-clock time,
+  // which was misleading (it ticked every render and never matched the real
+  // break start recorded server-side).
+  const breakStartStr = (() => {
+    if (!isOnBreak || !activeShift?.breaksJson) return null;
+    try {
+      const breaks = JSON.parse(activeShift.breaksJson) as Array<{
+        start: string;
+        end: string | null;
+      }>;
+      const activeBreak = breaks.find((b) => !b.end);
+      return activeBreak ? formatTime(activeBreak.start) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  // Travel distance today — formatted as "X.X km" for ≥1km, else "Y m".
+  const travelDistanceStr = (() => {
+    const meters = todayTotals?.travelDistanceMeters ?? 0;
+    if (meters <= 0) return '0 m';
+    if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
+    return `${Math.round(meters)} m`;
+  })();
 
   // Live elapsed time since clockIn (respects breaks)
   const liveTotalMin = activeShift?.clockIn
@@ -2635,6 +2696,40 @@ function AttendanceView() {
           : 'bg-gradient-to-br from-slate-700 to-slate-800 text-white'
       )}>
         <CardContent className="p-6">
+          {/* Top-right controls: Refresh + Exit. Both have min-h-[44px] touch
+              targets and `touch-manipulation` for low-latency taps on mobile
+              (avoids the 300ms tap delay). Ghost-on-gradient styling keeps
+              them legible without breaking the visual hierarchy of the
+              check-in card. */}
+          <div className="flex justify-end gap-2 -mt-2 mb-3">
+            <Button
+              onClick={handleRefresh}
+              variant="ghost"
+              size="sm"
+              disabled={refreshing}
+              className="min-h-[44px] px-3 text-white/90 hover:bg-white/15 hover:text-white touch-manipulation"
+              aria-label="Refresh attendance data"
+            >
+              {refreshing ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RotateCw className="size-4" />
+              )}
+              <span className="ml-1.5">Refresh</span>
+            </Button>
+            {onLogout && (
+              <Button
+                onClick={onLogout}
+                variant="ghost"
+                size="sm"
+                className="min-h-[44px] px-3 text-red-50 hover:bg-red-500/30 hover:text-white touch-manipulation"
+                aria-label="Exit employee portal"
+              >
+                <LogOut className="size-4" />
+                <span className="ml-1.5">Exit</span>
+              </Button>
+            )}
+          </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h3 className="text-lg font-semibold">
@@ -2645,7 +2740,7 @@ function AttendanceView() {
               <p className="text-sm opacity-80 mt-1">
                 {isCheckedIn
                   ? (isOnBreak
-                      ? `On break since ${clockInTime ? formatTime(new Date().toISOString()) : ''} — take your time.`
+                      ? `On break since ${breakStartStr ?? clockInTime ?? ''} — take your time.`
                       : `Checked in at ${clockInTime} — have a productive day!`)
                   : 'Check in to mark your attendance for today.'}
               </p>
@@ -2749,8 +2844,11 @@ function AttendanceView() {
         </CardContent>
       </Card>
 
-      {/* Today's summary (server-authoritative) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Today's summary (server-authoritative). 6 cards: Worked, Break,
+          Jobs Completed, Status, Travel Distance, Shifts Today. The last two
+          surface travelDistanceMeters and shiftsToday from the /today API,
+          which were returned but never displayed. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-emerald-600">
@@ -2781,6 +2879,25 @@ function AttendanceView() {
               {isCheckedIn ? 'Active' : 'Clocked out'}
             </p>
             <p className="text-xs text-muted-foreground mt-1">Current Status</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="flex items-center justify-center gap-1.5">
+              <Route className="size-4 text-rose-600" />
+              <p className="text-2xl font-bold text-rose-600">
+                {travelDistanceStr}
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Travel Distance</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-indigo-600">
+              {todayTotals?.shiftsToday ?? 0}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Shifts Today</p>
           </CardContent>
         </Card>
       </div>
@@ -2815,11 +2932,7 @@ function AttendanceView() {
                         {isToday && clockInTime ? clockInTime : '—'}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
-                        {isToday && !isCheckedIn && todayTotals?.activeShift === null
-                          ? (todayTotalMin > 0 ? '—' : '—')
-                          : isToday && !isCheckedIn
-                            ? 'Clocked out'
-                            : '—'}
+                        {isToday && clockOutTime ? clockOutTime : '—'}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
                         {isToday && isCheckedIn
@@ -3660,7 +3773,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
       case 'schedule':
         return <ScheduleView employeeId={employeeId} />;
       case 'attendance':
-        return <AttendanceView />;
+        return <AttendanceView onLogout={onLogout} />;
       case 'inbox':
         return <InboxView />;
       case 'profile':

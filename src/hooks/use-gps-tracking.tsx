@@ -85,49 +85,41 @@ export function GpsTrackingProvider({
   const [gpsActive, setGpsActive] = useState(false);
   const [locationDenied, setLocationDenied] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const lastPingRef = useRef<number>(0);
   const jobIdRef = useRef<string | null>(null);
 
   const gpsSupported =
     typeof navigator !== 'undefined' && 'geolocation' in navigator;
 
-  // ── Core ping: captures position and POSTs to /api/gps/track ──────────
+  // ── Core ping: POSTs a position to /api/gps/track ─────────────────────
+  // Throttled to max once per 5s to avoid overwhelming the server when
+  // watchPosition fires rapidly. The first ping after startTracking is
+  // always sent immediately (lastPingRef reset to 0).
   const sendPing = useCallback(
-    (jid?: string | null) => {
-      if (!employeeId || !gpsSupported) return;
-      const tagJobId = jid !== undefined ? jid : jobIdRef.current;
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude, accuracy, heading, speed } = pos.coords;
-          fetch('/api/gps/track?XTransformPort=3000', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              employeeId,
-              jobId: tagJobId ?? undefined,
-              latitude,
-              longitude,
-              accuracy,
-              heading,
-              speed,
-            }),
-          }).catch(() => {
-            // Silent — offline pings are lost (acceptable for V1.5)
-          });
-        },
-        (err) => {
-          if (err.code === err.PERMISSION_DENIED) {
-            setLocationDenied(true);
-            setGpsActive(false);
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current);
-              intervalRef.current = null;
-            }
-          }
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
-      );
+    (latitude: number, longitude: number, accuracy?: number, heading?: number | null, speed?: number | null) => {
+      if (!employeeId) return;
+      const now = Date.now();
+      if (now - lastPingRef.current < 5000) return; // throttle: min 5s between pings
+      lastPingRef.current = now;
+      const tagJobId = jobIdRef.current;
+      fetch('/api/gps/track?XTransformPort=3000', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId,
+          jobId: tagJobId ?? undefined,
+          latitude,
+          longitude,
+          accuracy,
+          heading: heading ?? undefined,
+          speed: speed ?? undefined,
+        }),
+      }).catch(() => {
+        // Silent — offline pings are lost (acceptable for V1.5)
+      });
     },
-    [employeeId, gpsSupported],
+    [employeeId],
   );
 
   // ── captureOnce: one-shot position (triggers permission prompt) ───────
@@ -155,28 +147,93 @@ export function GpsTrackingProvider({
     }
   }, [gpsSupported]);
 
-  // ── startTracking: 30s interval pings ─────────────────────────────────
+  // ── startTracking: continuous watchPosition + 15s fallback interval ───
+  // Uses navigator.geolocation.watchPosition for smooth real-time movement
+  // (Uber/Jobber-style live tracking). watchPosition fires whenever the
+  // device detects movement, giving sub-second updates on mobile. A 15s
+  // fallback interval ensures pings continue even if watchPosition stalls
+  // (e.g., device sleeps). Pings are throttled to max 1 per 5s in sendPing.
   const startTracking = useCallback(
     (jobId?: string) => {
       if (!employeeId || !gpsSupported) return;
       // Stop any existing tracking first.
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
       jobIdRef.current = jobId ?? null;
+      lastPingRef.current = 0; // reset throttle so first ping is immediate
       setGpsActive(true);
       setLocationDenied(false);
-      // Send an immediate ping, then repeat every 30s.
-      sendPing(jobId ?? null);
-      intervalRef.current = setInterval(() => sendPing(), 30000);
-      toast.success('GPS tracking started — pinging every 30s');
+
+      // Immediate one-shot ping for instant feedback on the map.
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy, heading, speed } = pos.coords;
+          sendPing(latitude, longitude, accuracy ?? undefined, heading, speed);
+        },
+        (err) => {
+          if (err.code === err.PERMISSION_DENIED) {
+            setLocationDenied(true);
+            setGpsActive(false);
+          }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
+      );
+
+      // watchPosition: fires on movement — smooth live tracking.
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy, heading, speed } = pos.coords;
+          sendPing(latitude, longitude, accuracy ?? undefined, heading, speed);
+        },
+        (err) => {
+          if (err.code === err.PERMISSION_DENIED) {
+            setLocationDenied(true);
+            setGpsActive(false);
+            if (watchIdRef.current !== null) {
+              navigator.geolocation.clearWatch(watchIdRef.current);
+              watchIdRef.current = null;
+            }
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+            }
+          }
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
+      );
+
+      // 15s fallback interval: ensures pings continue even if watchPosition
+      // stalls (device sleep, poor GPS signal).
+      intervalRef.current = setInterval(() => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const { latitude, longitude, accuracy, heading, speed } = pos.coords;
+            sendPing(latitude, longitude, accuracy ?? undefined, heading, speed);
+          },
+          () => {
+            // Silent — watchPosition is the primary source
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
+        );
+      }, 15000);
+
+      toast.success('Live GPS tracking started');
     },
     [employeeId, gpsSupported, sendPing],
   );
 
-  // ── stopTracking: clear interval ──────────────────────────────────────
+  // ── stopTracking: clear watch + interval ──────────────────────────────
   const stopTracking = useCallback(() => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -188,6 +245,10 @@ export function GpsTrackingProvider({
   // Cleanup on unmount.
   useEffect(() => {
     return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;

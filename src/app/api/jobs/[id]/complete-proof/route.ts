@@ -127,6 +127,52 @@ export async function POST(
       },
     });
 
+    // ─── Synthesize a RouteHistory row if none exists for this job ───
+    // The complete-proof path is hit by employees completing jobs from the
+    // portal. If GPS tracking was never started (no start_travel action),
+    // no RouteHistory row exists, so the GPS & route tab shows "No travel
+    // recorded." even when check-in / check-out coordinates were captured.
+    // Synthesize a completed RouteHistory from those coordinates so the GPS
+    // tab has something to render. (employeeId is required on RouteHistory —
+    // skip if no assignee. tenantId is required too — user.tenantId was
+    // validated above.) Non-fatal: never breaks the completion flow.
+    try {
+      if (job.assigneeId && user.tenantId && (job.checkInLat || job.checkOutLat)) {
+        const existingRoute = await db.routeHistory.findFirst({
+          where: { jobId: job.id },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (!existingRoute) {
+          const endTime = updatedJob.actualEndTime || updatedJob.completedAt || new Date();
+          const startTime = job.actualStartTime || job.scheduledAt || endTime;
+          await db.routeHistory.create({
+            data: {
+              tenantId: user.tenantId,
+              employeeId: job.assigneeId,
+              jobId: job.id,
+              startedAt: startTime,
+              endedAt: endTime,
+              pathJson: JSON.stringify([]),
+              distanceMeters: 0,
+              durationMinutes: Math.max(
+                0,
+                Math.round((new Date(endTime).getTime() - new Date(startTime).getTime()) / 60000),
+              ),
+              startLat: job.checkInLat ?? null,
+              startLng: job.checkInLng ?? null,
+              endLat: job.checkOutLat ?? job.checkInLat ?? null,
+              endLng: job.checkOutLng ?? job.checkInLng ?? null,
+              status: 'completed',
+              arrivedAt: endTime,
+            },
+          });
+        }
+      }
+    } catch (e) {
+      console.error('[complete-proof] Failed to synthesize RouteHistory:', e);
+      // non-fatal — completion already succeeded
+    }
+
     // ─── Update employee: set back to available, increment completedJobs ───
     // Only mark as 'available' if the employee has no OTHER active jobs.
     if (job.assigneeId) {

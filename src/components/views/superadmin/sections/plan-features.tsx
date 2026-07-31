@@ -53,6 +53,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionHeader } from '@/components/views/superadmin/_shared';
 import { authFetch } from '@/lib/api';
+import { useAppStore } from '@/store/app-store';
 import {
   PLAN_TIERS,
   PLAN_TIER_LEGEND,
@@ -113,12 +114,27 @@ export function PlanFeaturesSection() {
   const queryClient = useQueryClient();
   const [optimistic, setOptimistic] = useState<Record<string, Record<string, boolean>> | null>(null);
 
+  // Auth-ready flag: wait for the auth store to be hydrated before the first
+  // fetch. Without this, this section can mount and immediately fire
+  // `authFetch` — but on the very first mount after login/navigation, the JWT
+  // may not yet be in localStorage, causing the request to 401 and leave the
+  // matrix in an error state. The auth store is populated by `/api/auth/me`
+  // on app boot; once it's populated, we know the token is available.
+  const isAuthed = useAppStore((s) => s.auth?.isAuthenticated === true);
+
   const queryKey = useMemo(() => ['superadmin', 'plan-features'] as const, []);
 
   const { data, isLoading, isError, refetch } = useQuery<PlanFeaturesResponse>({
     queryKey,
+    enabled: isAuthed,
     queryFn: async () => {
-      const res = await authFetch('/api/superadmin/plan-features');
+      let res = await authFetch('/api/superadmin/plan-features');
+      // Retry once on 401 — the token may not have been written to
+      // localStorage yet when the first request fired (auth hydration race).
+      if (res.status === 401) {
+        await new Promise((r) => setTimeout(r, 400));
+        res = await authFetch('/api/superadmin/plan-features');
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to load plan features');

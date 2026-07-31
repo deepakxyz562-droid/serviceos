@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveEmployee } from '@/app/api/employee/shift/route';
 import { validateJobCompletionProof } from '@/lib/job-completion-validation';
 import { EventBus } from '@/lib/event-bus';
+import { setLifecycleTimestamp } from '@/lib/job-lifecycle';
 
 /**
  * fireAndForget — runs a promise in the background, logging any rejection.
@@ -108,6 +109,7 @@ export async function POST(
             status: 'assigned',
             assignmentStatus: 'accepted',
             notificationLogJson: logJson,
+            metadataJson: setLifecycleTimestamp(job.metadataJson, 'accepted', now),
           },
           include: { assignee: true, customer: true },
         });
@@ -149,6 +151,7 @@ export async function POST(
             checkInLat: typeof latitude === 'number' ? latitude : job.checkInLat,
             checkInLng: typeof longitude === 'number' ? longitude : job.checkInLng,
             notificationLogJson: logJson,
+            metadataJson: setLifecycleTimestamp(job.metadataJson, 'travelStarted', now),
           },
           include: { assignee: true, customer: true },
         });
@@ -205,6 +208,7 @@ export async function POST(
             notificationLogJson: logJson,
             checkInLat: typeof latitude === 'number' ? latitude : job.checkInLat,
             checkInLng: typeof longitude === 'number' ? longitude : job.checkInLng,
+            metadataJson: setLifecycleTimestamp(job.metadataJson, 'arrived', now),
           },
           include: { assignee: true, customer: true },
         });
@@ -427,9 +431,57 @@ export async function POST(
             checkOutLat: typeof latitude === 'number' ? latitude : job.checkOutLat,
             checkOutLng: typeof longitude === 'number' ? longitude : job.checkOutLng,
             notificationLogJson: logJson,
+            metadataJson: setLifecycleTimestamp(job.metadataJson, 'completed', now),
           },
           include: { assignee: true, customer: true },
         });
+
+        // ── Synthesize a RouteHistory row if none exists for this job.
+        // If the employee completed the job without ever starting GPS
+        // tracking (no start_travel action), no RouteHistory row exists.
+        // Synthesize a completed RouteHistory from check-in / check-out
+        // coordinates so the GPS & route tab shows travel data instead of
+        // "No travel recorded." Non-fatal: never breaks the completion flow.
+        try {
+          if (user.tenantId && employee.id && (job.checkInLat || job.checkOutLat || (typeof latitude === 'number' ? latitude : null))) {
+            const existingRoute = await db.routeHistory.findFirst({
+              where: { jobId: job.id },
+              orderBy: { createdAt: 'desc' },
+            });
+            if (!existingRoute) {
+              const endTime = updatedJob.actualEndTime || updatedJob.completedAt || now;
+              const startTime = job.actualStartTime || job.scheduledAt || endTime;
+              const startLat = job.checkInLat ?? (typeof latitude === 'number' ? latitude : null);
+              const startLng = job.checkInLng ?? (typeof longitude === 'number' ? longitude : null);
+              const endLat = (typeof latitude === 'number' ? latitude : null) ?? job.checkOutLat ?? job.checkInLat ?? null;
+              const endLng = (typeof longitude === 'number' ? longitude : null) ?? job.checkOutLng ?? job.checkInLng ?? null;
+              await db.routeHistory.create({
+                data: {
+                  tenantId: user.tenantId,
+                  employeeId: employee.id,
+                  jobId: job.id,
+                  startedAt: startTime,
+                  endedAt: endTime,
+                  pathJson: JSON.stringify([]),
+                  distanceMeters: 0,
+                  durationMinutes: Math.max(
+                    0,
+                    Math.round((new Date(endTime).getTime() - new Date(startTime).getTime()) / 60000),
+                  ),
+                  startLat,
+                  startLng,
+                  endLat,
+                  endLng,
+                  status: 'completed',
+                  arrivedAt: endTime,
+                },
+              });
+            }
+          }
+        } catch (e) {
+          console.error('[employee/lifecycle/complete] Failed to synthesize RouteHistory:', e);
+          // non-fatal — completion already succeeded
+        }
 
         // Increment employee completedJobs + set status back to available if no other active jobs
         const otherActiveJobs = await db.job.count({

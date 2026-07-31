@@ -39,6 +39,7 @@ const IOSInstallBanner = dynamic(
   { ssr: false, loading: () => null }
 );
 
+import { authFetch } from '@/lib/client-auth';
 import { useAppStore } from '@/store/app-store';
 
 type UnauthView = 'landing' | 'auth';
@@ -210,7 +211,13 @@ export default function HomePage() {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
-      const response = await fetch('/api/auth/me?XTransformPort=3000', { signal: controller.signal });
+      // Use authFetch so the Bearer JWT is sent alongside the HTTP-only
+      // cookie. getAuthUser() checks the cookie first, then the Bearer
+      // header — so if either credential is still valid, the session is
+      // recognized. Without this, a plain fetch() relies ONLY on the
+      // cookie, and when the cookie is expired the API returns {user: null}
+      // even if a valid JWT is sitting in localStorage.
+      const response = await authFetch('/api/auth/me?XTransformPort=3000', { signal: controller.signal });
       clearTimeout(timeoutId);
       if (response.ok) {
         const data = await response.json();
@@ -264,8 +271,30 @@ export default function HomePage() {
           return;
         }
       }
+      // ── Explicit "no session" from the API ──────────────────────────────
+      // /api/auth/me returns HTTP 200 with {user: null} when NEITHER the
+      // cookie NOR the Bearer JWT is valid (both expired, or never set).
+      // This is a deliberate "no session" signal — DIFFERENT from a network
+      // failure. Falling through to the localStorage fallback here would
+      // restore a stale session with an expired token, leaving the user in
+      // a "logged-in-but-broken" state where every authenticated API call
+      // 401s (the root cause of the OwnerTimesheet
+      // "Failed to load team timesheet" bug).
+      //
+      // Instead: clear any stale auth and let the user see the login page.
+      // The localStorage fallback below is gated to ONLY the catch branch
+      // (genuine network failure / abort).
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('serviceos_auth');
+        localStorage.removeItem('serviceos_token');
+      }
+      setAuth({ isAuthenticated: false, user: null, tenant: null });
+      return;
     } catch {
-      // API failed or timed out, fall back to localStorage
+      // Network error / abort / timeout — ONLY here do we fall back to the
+      // localStorage session restore. An explicit {user: null} response
+      // (handled above) must NOT trigger this fallback, because that would
+      // trust a stale JWT that the backend just rejected.
     }
 
     try {

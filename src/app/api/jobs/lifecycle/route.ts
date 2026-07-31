@@ -447,6 +447,53 @@ export async function POST(request: NextRequest) {
           include: { assignee: true, customer: true, resource: true },
         })
 
+        // ── Synthesize a RouteHistory row if none exists for this job.
+        // Many jobs are completed via this legacy /api/jobs/lifecycle endpoint
+        // without ever starting GPS tracking — the GPS & route tab then shows
+        // "No travel recorded for this job yet." even though check-in /
+        // check-out coordinates were captured. This synthesizes a completed
+        // RouteHistory row from those coordinates so the GPS tab has something
+        // to render. (employeeId is required on RouteHistory — skip if no
+        // assignee. tenantId is required too — use user.tenantId since Job
+        // has no tenantId column.) Non-fatal: any DB error is logged but
+        // never breaks the completion flow.
+        try {
+          if (user.tenantId && job.assigneeId && (job.checkInLat || job.checkOutLat)) {
+            const existingRoute = await db.routeHistory.findFirst({
+              where: { jobId: job.id },
+              orderBy: { createdAt: 'desc' },
+            });
+            if (!existingRoute) {
+              const endTime = updatedJob.actualEndTime || updatedJob.completedAt || new Date();
+              const startTime = job.actualStartTime || job.scheduledAt || endTime;
+              await db.routeHistory.create({
+                data: {
+                  tenantId: user.tenantId,
+                  employeeId: job.assigneeId,
+                  jobId: job.id,
+                  startedAt: startTime,
+                  endedAt: endTime,
+                  pathJson: JSON.stringify([]),
+                  distanceMeters: 0,
+                  durationMinutes: Math.max(
+                    0,
+                    Math.round((new Date(endTime).getTime() - new Date(startTime).getTime()) / 60000),
+                  ),
+                  startLat: job.checkInLat ?? null,
+                  startLng: job.checkInLng ?? null,
+                  endLat: job.checkOutLat ?? job.checkInLat ?? null,
+                  endLng: job.checkOutLng ?? job.checkInLng ?? null,
+                  status: 'completed',
+                  arrivedAt: endTime,
+                },
+              });
+            }
+          }
+        } catch (e) {
+          console.error('[jobs/lifecycle] Failed to synthesize RouteHistory:', e);
+          // non-fatal — completion already succeeded
+        }
+
         // Notify customer that job is completed (background)
         if (job.customerPhone) {
           fireAndForget('customer complete notification', notifyCustomerJobCompleted(updatedJob, { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone }))

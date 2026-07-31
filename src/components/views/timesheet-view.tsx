@@ -607,6 +607,23 @@ function OwnerTimesheet() {
         await new Promise((r) => setTimeout(r, 400));
         res = await authFetch(`/api/time-tracking/team?period=${period}`);
       }
+      // ── Persistent 401 after retry ──────────────────────────────────────
+      // If the second request is STILL 401, this is NOT a hydration race —
+      // the JWT is genuinely expired (or the session was wrongly restored
+      // from a stale localStorage). Don't toast "Failed to load team
+      // timesheet" in a loop and leave the user stuck in a
+      // "logged-in-but-broken" state. Instead, clear the stale auth
+      // (store + localStorage) and force a full page reload to `/` so the
+      // user lands on the login page and can re-authenticate.
+      if (res.status === 401) {
+        useAppStore.getState().clearAuth();
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('serviceos_auth');
+          localStorage.removeItem('serviceos_token');
+          window.location.href = '/';
+        }
+        return;
+      }
       if (!res.ok) throw new Error('Failed to load team timesheet');
       const data = await res.json();
       setTeam(data.team || []);
