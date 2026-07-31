@@ -44,8 +44,8 @@ import {
   X,
   ArrowLeft,
   BellRing,
-  RotateCw,
-  Route,
+  DoorOpen,
+  RefreshCw,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -698,9 +698,74 @@ function usePushAutoSubscribe() {
         const vapidKey = await getVapidPublicKey();
         if (cancelled || !vapidKey) return;
 
-        const reg = await navigator.serviceWorker.ready;
+        // ── SW.ready with a 10s timeout ──────────────────────────────────
+        // On iOS Safari (PWA), `navigator.serviceWorker.ready` can hang
+        // indefinitely when a new SW is installing but hasn't yet activated.
+        // Previously this blocked the whole auto-subscribe flow silently. We
+        // race it against a 10s timeout so we give up cleanly instead of
+        // hanging forever (the next visibilitychange will retry).
+        const reg = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise<ServiceWorkerRegistration | null>((resolve) =>
+            setTimeout(() => resolve(null), 10_000)
+          ),
+        ]);
+        if (cancelled || !reg) {
+          console.warn('[push] serviceWorker.ready timed out (10s) — will retry on visibility');
+          return;
+        }
+
         const existing = await reg.pushManager.getSubscription();
-        if (cancelled || existing) return; // already subscribed
+
+        // ── Server-side subscription verification (iOS PWA fix) ───────────
+        // When the Service Worker updates (e.g. v3 → v4), iOS/APNs SILENTLY
+        // invalidates existing PushSubscriptions. The browser still reports
+        // a "valid" local subscription (`existing` is non-null), but the
+        // server's PushSubscription row has been deactivated (APNs returned
+        // 410 Gone on the last send). Without this check, the hook returned
+        // early and the employee NEVER received pushes again — even after
+        // re-granting permission. We now ask the server: "do I have ANY
+        // active subscription?" If the answer is 0, we unsubscribe the stale
+        // local subscription and create a fresh one.
+        let serverActiveCount: number | null = null;
+        try {
+          const statusRes = await authFetch(
+            '/api/notifications/push/subscribe?XTransformPort=3000',
+          );
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            serverActiveCount =
+              typeof statusData?.activeSubscriptions === 'number'
+                ? statusData.activeSubscriptions
+                : null;
+          }
+        } catch {
+          // Non-fatal — fall through to the existing-subscription path.
+        }
+
+        if (cancelled) return;
+
+        if (existing && serverActiveCount && serverActiveCount > 0) {
+          // Local subscription exists AND the server confirms it's active —
+          // nothing to do.
+          return;
+        }
+
+        // Either:
+        //  (a) no local subscription, OR
+        //  (b) local subscription exists but server reports 0 active
+        //      → the local sub is stale (iOS SW-update invalidation).
+        // In case (b), unsubscribe the stale local sub first so we can
+        // create a brand-new one. `pushManager.subscribe()` would otherwise
+        // return the existing (stale) subscription.
+        if (existing && (serverActiveCount === 0)) {
+          try {
+            await existing.unsubscribe();
+            console.info('[push] Unsubscribed stale local subscription (server reports 0 active — iOS SW-update invalidation)');
+          } catch {
+            // ignore — subscribe() will still try
+          }
+        }
 
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
@@ -717,9 +782,9 @@ function usePushAutoSubscribe() {
         // Persist server-side so the backend can actually send pushes.
         // Retry once on 401 — the token may not have been written to
         // localStorage yet when the employee portal first mounts (auth
-        // hydration race). Without this retry, the subscription is silently
-        // dropped and the employee never receives pushes (the PushSubscription
-        // table stays empty even though permission was granted).
+        // hydration race). Increased delay from 500ms → 1500ms because the
+        // 500ms window was too short on iOS Safari (PWA) where the auth
+        // store hydrates slower due to SW warmup.
         let subRes = await authFetch('/api/notifications/push/subscribe?XTransformPort=3000', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -730,8 +795,8 @@ function usePushAutoSubscribe() {
           }),
         });
         if (subRes.status === 401) {
-          // Wait briefly for the auth store to hydrate, then retry once.
-          await new Promise((r) => setTimeout(r, 500));
+          // Wait for the auth store to hydrate, then retry once.
+          await new Promise((r) => setTimeout(r, 1500));
           subRes = await authFetch('/api/notifications/push/subscribe?XTransformPort=3000', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2431,7 +2496,7 @@ function ScheduleView({ employeeId }: { employeeId: string }) {
 
 // ─── Sub-View: Attendance ───────────────────────────────────────────────────
 
-function AttendanceView({ onLogout }: { onLogout?: () => void } = {}) {
+function AttendanceView() {
   // ── Real shift state (V1.5) ──────────────────────────────────────────────
   // activeShift mirrors the EmployeeShift row from /api/employee/shift/today.
   interface ActiveShift {
@@ -2458,12 +2523,24 @@ function AttendanceView({ onLogout }: { onLogout?: () => void } = {}) {
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-
-  // Auth-ready flag: wait for the auth store to be hydrated before the first
-  // fetch. Mirrors OwnerTimesheet — without this, AttendanceView can mount
-  // before the JWT is in localStorage → 401 → empty state. The store is
-  // populated by /api/auth/me on app boot.
-  const isAuthed = useAppStore((s) => s.auth?.isAuthenticated === true);
+  // Week history — populated from /api/employee/shift/week so the "This Week"
+  // table shows real per-day check-in/out + hours instead of all "—".
+  const [weekHistory, setWeekHistory] = useState<{
+    days: Array<{
+      date: string;
+      weekday: string;
+      isToday: boolean;
+      totalWorkingMinutes: number;
+      totalBreakMinutes: number;
+      totalMinutes: number;
+      firstClockIn: string | null;
+      lastClockOut: string | null;
+      shifts: Array<{ id: string; status: string; category: string }>;
+    }>;
+    weekTotalWorkingMinutes: number;
+    weekTotalBreakMinutes: number;
+    weekTotalMinutes: number;
+  } | null>(null);
 
   // GPS tracking — shared via context. Clock-in captures the current position
   // (triggers the browser permission prompt) and starts a 30s ping interval
@@ -2478,44 +2555,39 @@ function AttendanceView({ onLogout }: { onLogout?: () => void } = {}) {
     return () => clearInterval(id);
   }, [activeShift]);
 
-  // Pull today's shift + totals from the API. Has a 401 retry-once for the
-  // auth hydration race (same pattern as OwnerTimesheet).
+  // Pull today's shift + totals from the API, plus the 7-day week history.
   const refresh = useCallback(async () => {
     try {
-      let res = await authFetch('/api/employee/shift/today?XTransformPort=3000');
-      if (res.status === 401) {
-        // Token may not have been written to localStorage yet — retry once.
-        await new Promise((r) => setTimeout(r, 400));
-        res = await authFetch('/api/employee/shift/today?XTransformPort=3000');
-      }
-      if (res.ok) {
-        const data: TodayTotals = await res.json();
+      // Fetch today's totals + week history in parallel for speed.
+      const [todayRes, weekRes] = await Promise.all([
+        authFetch('/api/employee/shift/today?XTransformPort=3000'),
+        authFetch('/api/employee/shift/week?XTransformPort=3000'),
+      ]);
+      if (todayRes.ok) {
+        const data: TodayTotals = await todayRes.json();
         setActiveShift(data.activeShift ?? null);
         setTodayTotals(data);
+      }
+      if (weekRes.ok) {
+        const weekData = await weekRes.json();
+        setWeekHistory(weekData);
       }
     } catch {
       // Silent — the empty state will show.
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    // Don't fetch until the auth store is hydrated — avoids the 401 race.
-    if (!isAuthed) return;
-    refresh();
-  }, [refresh, isAuthed]);
-
-  // Manual refresh handler — shows a brief loading spinner on the button
-  // without clobbering the page-level loading state.
-  const handleRefresh = useCallback(async () => {
+  // Manual refresh button handler — shows a spinner on the button.
+  const handleManualRefresh = useCallback(async () => {
     setRefreshing(true);
-    try {
-      await refresh();
-    } finally {
-      // Tiny delay so the spinner is visible even on fast networks.
-      setTimeout(() => setRefreshing(false), 350);
-    }
+    await refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    refresh();
   }, [refresh]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -2595,38 +2667,6 @@ function AttendanceView({ onLogout }: { onLogout?: () => void } = {}) {
   const isCheckedIn = !!activeShift && activeShift.status !== 'completed';
   const isOnBreak = activeShift?.status === 'on_break';
   const clockInTime = activeShift?.clockIn ? formatTime(activeShift.clockIn) : null;
-  // Check-out time for today's row — uses the activeShift.clockOut field which
-  // is set when the shift transitions to 'completed'. (The /today API only
-  // returns the live active/on_break shift, so when the shift is fully
-  // completed activeShift is null and we show "—".)
-  const clockOutTime = activeShift?.clockOut ? formatTime(activeShift.clockOut) : null;
-
-  // Active break start — parsed from breaksJson. This is the time the current
-  // (in-progress) break began, used in the "On break since …" subtitle. Before
-  // this fix the UI showed `new Date()` i.e. the current wall-clock time,
-  // which was misleading (it ticked every render and never matched the real
-  // break start recorded server-side).
-  const breakStartStr = (() => {
-    if (!isOnBreak || !activeShift?.breaksJson) return null;
-    try {
-      const breaks = JSON.parse(activeShift.breaksJson) as Array<{
-        start: string;
-        end: string | null;
-      }>;
-      const activeBreak = breaks.find((b) => !b.end);
-      return activeBreak ? formatTime(activeBreak.start) : null;
-    } catch {
-      return null;
-    }
-  })();
-
-  // Travel distance today — formatted as "X.X km" for ≥1km, else "Y m".
-  const travelDistanceStr = (() => {
-    const meters = todayTotals?.travelDistanceMeters ?? 0;
-    if (meters <= 0) return '0 m';
-    if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
-    return `${Math.round(meters)} m`;
-  })();
 
   // Live elapsed time since clockIn (respects breaks)
   const liveTotalMin = activeShift?.clockIn
@@ -2659,20 +2699,48 @@ function AttendanceView({ onLogout }: { onLogout?: () => void } = {}) {
   const todayWorkingMin = todayTotals?.workingMinutes ?? 0;
   const todayBreakMin = todayTotals?.breakMinutes ?? 0;
   const todayTotalMin = todayTotals?.totalMinutes ?? 0;
+  const travelDistanceMeters = todayTotals?.travelDistanceMeters ?? 0;
 
-  // This week's days (display only — without a 7-day API, we mark today and
-  // leave the rest as "—"). When the API adds a 7-day history endpoint, this
-  // table will be populated from it.
-  const thisWeekDays = Array.from({ length: 7 }, (_, i) => {
+  // Compute the CURRENT break's start time (the latest open break in
+  // breaksJson). Previously the "On break since X" text used `new Date()`
+  // (current time) instead of the actual break start — a clear bug. We now
+  // parse the breaks JSON and find the last entry with `end == null`.
+  const currentBreakStart = useMemo(() => {
+    if (!activeShift?.breaksJson) return null;
+    try {
+      const breaks = JSON.parse(activeShift.breaksJson) as Array<{
+        start: string;
+        end: string | null;
+      }>;
+      // Find the last break that has no `end` (i.e. still running).
+      for (let i = breaks.length - 1; i >= 0; i--) {
+        if (!breaks[i].end) {
+          return formatTime(breaks[i].start);
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }, [activeShift?.breaksJson]);
+
+  // Week history days — from the /api/employee/shift/week response. Falls
+  // back to an empty 7-day skeleton if the API hasn't returned yet.
+  const thisWeekDays = weekHistory?.days ?? Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     const dayOfWeek = d.getDay();
     const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     d.setDate(d.getDate() + mondayOffset + i);
     return {
-      name: d.toLocaleDateString('en-US', { weekday: 'short' }),
-      date: d,
+      date: d.toISOString().slice(0, 10),
+      weekday: d.toLocaleDateString('en-US', { weekday: 'short' }),
       isToday: d.toDateString() === new Date().toDateString(),
-      isPast: d < new Date(new Date().setHours(0, 0, 0, 0)),
+      totalWorkingMinutes: 0,
+      totalBreakMinutes: 0,
+      totalMinutes: 0,
+      firstClockIn: null as string | null,
+      lastClockOut: null as string | null,
+      shifts: [] as Array<{ id: string; status: string; category: string }>,
     };
   });
 
@@ -2696,40 +2764,6 @@ function AttendanceView({ onLogout }: { onLogout?: () => void } = {}) {
           : 'bg-gradient-to-br from-slate-700 to-slate-800 text-white'
       )}>
         <CardContent className="p-6">
-          {/* Top-right controls: Refresh + Exit. Both have min-h-[44px] touch
-              targets and `touch-manipulation` for low-latency taps on mobile
-              (avoids the 300ms tap delay). Ghost-on-gradient styling keeps
-              them legible without breaking the visual hierarchy of the
-              check-in card. */}
-          <div className="flex justify-end gap-2 -mt-2 mb-3">
-            <Button
-              onClick={handleRefresh}
-              variant="ghost"
-              size="sm"
-              disabled={refreshing}
-              className="min-h-[44px] px-3 text-white/90 hover:bg-white/15 hover:text-white touch-manipulation"
-              aria-label="Refresh attendance data"
-            >
-              {refreshing ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <RotateCw className="size-4" />
-              )}
-              <span className="ml-1.5">Refresh</span>
-            </Button>
-            {onLogout && (
-              <Button
-                onClick={onLogout}
-                variant="ghost"
-                size="sm"
-                className="min-h-[44px] px-3 text-red-50 hover:bg-red-500/30 hover:text-white touch-manipulation"
-                aria-label="Exit employee portal"
-              >
-                <LogOut className="size-4" />
-                <span className="ml-1.5">Exit</span>
-              </Button>
-            )}
-          </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h3 className="text-lg font-semibold">
@@ -2740,7 +2774,7 @@ function AttendanceView({ onLogout }: { onLogout?: () => void } = {}) {
               <p className="text-sm opacity-80 mt-1">
                 {isCheckedIn
                   ? (isOnBreak
-                      ? `On break since ${breakStartStr ?? clockInTime ?? ''} — take your time.`
+                      ? `On break since ${currentBreakStart ?? clockInTime ?? ''} — take your time.`
                       : `Checked in at ${clockInTime} — have a productive day!`)
                   : 'Check in to mark your attendance for today.'}
               </p>
@@ -2844,11 +2878,25 @@ function AttendanceView({ onLogout }: { onLogout?: () => void } = {}) {
         </CardContent>
       </Card>
 
-      {/* Today's summary (server-authoritative). 6 cards: Worked, Break,
-          Jobs Completed, Status, Travel Distance, Shifts Today. The last two
-          surface travelDistanceMeters and shiftsToday from the /today API,
-          which were returned but never displayed. */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+      {/* Today's summary (server-authoritative) + Refresh button */}
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-medium text-muted-foreground">Today&apos;s Summary</h3>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleManualRefresh}
+          disabled={refreshing}
+          className="h-7"
+        >
+          {refreshing ? (
+            <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+          ) : (
+            <RefreshCw className="size-3.5 mr-1.5" />
+          )}
+          Refresh
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-emerald-600">
@@ -2870,43 +2918,41 @@ function AttendanceView({ onLogout }: { onLogout?: () => void } = {}) {
             <p className="text-2xl font-bold text-sky-600">
               {todayTotals?.jobsCompletedToday ?? 0}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Jobs Completed Today</p>
+            <p className="text-xs text-muted-foreground mt-1">Jobs Done Today</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-violet-600">
+              {travelDistanceMeters > 0
+                ? `${(travelDistanceMeters / 1000).toFixed(1)} km`
+                : '—'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Travel Today</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-slate-600 dark:text-slate-300">
               {isCheckedIn ? 'Active' : 'Clocked out'}
             </p>
             <p className="text-xs text-muted-foreground mt-1">Current Status</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="flex items-center justify-center gap-1.5">
-              <Route className="size-4 text-rose-600" />
-              <p className="text-2xl font-bold text-rose-600">
-                {travelDistanceStr}
-              </p>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Travel Distance</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-indigo-600">
-              {todayTotals?.shiftsToday ?? 0}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Shifts Today</p>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* This week overview */}
+      {/* This week overview — populated from /api/employee/shift/week */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">This Week</CardTitle>
-          <CardDescription>Your attendance for the current week</CardDescription>
+          <CardDescription>
+            Your attendance for the current week
+            {weekHistory && (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                · Total: <strong className="text-foreground">{formatDuration(weekHistory.weekTotalWorkingMinutes)}</strong>
+              </span>
+            )}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -2922,33 +2968,32 @@ function AttendanceView({ onLogout }: { onLogout?: () => void } = {}) {
               </TableHeader>
               <TableBody>
                 {thisWeekDays.map((day) => {
-                  const isToday = day.isToday;
                   return (
-                    <TableRow key={day.name}>
+                    <TableRow key={day.date}>
                       <TableCell className="font-medium">
-                        {day.name} {isToday ? '(Today)' : ''}
+                        {day.weekday} {day.isToday ? '(Today)' : ''}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
-                        {isToday && clockInTime ? clockInTime : '—'}
+                        {day.firstClockIn ?? (day.isToday && clockInTime ? clockInTime : '—')}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
-                        {isToday && clockOutTime ? clockOutTime : '—'}
+                        {day.isToday && isCheckedIn
+                          ? '—'
+                          : (day.lastClockOut ?? (day.isToday && !isCheckedIn && day.totalMinutes > 0 ? 'Clocked out' : '—'))}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
-                        {isToday && isCheckedIn
+                        {day.isToday && isCheckedIn
                           ? formatDuration(liveTotalMin)
-                          : isToday && !isCheckedIn && todayTotalMin > 0
-                            ? formatDuration(todayTotalMin)
-                            : '—'}
+                          : (day.totalMinutes > 0 ? formatDuration(day.totalWorkingMinutes || day.totalMinutes) : '—')}
                       </TableCell>
                       <TableCell>
-                        {isToday
+                        {day.isToday
                           ? (isCheckedIn
                               ? (isOnBreak ? getStatusBadge('On Break') : getStatusBadge('Present'))
-                              : (todayTotalMin > 0 ? getStatusBadge('Present') : getStatusBadge('Today')))
-                          : day.isPast
-                            ? getStatusBadge('Absent')
-                            : getStatusBadge('Today')
+                              : (day.totalMinutes > 0 ? getStatusBadge('Present') : getStatusBadge('Today')))
+                          : day.totalMinutes > 0
+                            ? getStatusBadge('Present')
+                            : getStatusBadge('Absent')
                         }
                       </TableCell>
                     </TableRow>
@@ -3740,6 +3785,79 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
   // portal mount. All failures are swallowed — this never blocks the UI.
   usePushAutoSubscribe();
 
+  // ── Exit / Go Offline (Issue 5) ────────────────────────────────────────
+  // The "Exit" action clocks out the employee's active shift + stops GPS
+  // tracking WITHOUT logging them out of the app. The user explicitly asked
+  // for this to be separate from the Logout button (which stays as Logout).
+  // We fetch the current shift on mount + when the dropdown opens so the
+  // button label reflects reality ("Exit / Go Offline" when clocked in,
+  // "You're offline" when no active shift). The button is always visible so
+  // the employee can find it quickly from any sub-view.
+  const { stopTracking } = useGpsTracking();
+  const [hasActiveShift, setHasActiveShift] = useState(false);
+  const [exitLoading, setExitLoading] = useState(false);
+
+  const refreshShiftState = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/employee/shift/today?XTransformPort=3000');
+      if (res.ok) {
+        const data = await res.json();
+        const shift = data?.activeShift;
+        setHasActiveShift(Boolean(shift && shift.status !== 'completed'));
+      }
+    } catch {
+      // silent — the button just won't show the "active" state
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshShiftState();
+    // Re-check when the user returns to the PWA (they may have clocked in
+    // from another device, or the admin may have clocked them out).
+    const onVis = () => {
+      if (document.visibilityState === 'visible') refreshShiftState();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [refreshShiftState]);
+
+  const handleExitClockOut = useCallback(async () => {
+    if (exitLoading) return;
+    setExitLoading(true);
+    try {
+      if (!hasActiveShift) {
+        toast.info("You're already offline", {
+          description: 'No active shift to clock out.',
+        });
+        return;
+      }
+      const res = await authFetch('/api/employee/shift?XTransformPort=3000', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clockout' }),
+      });
+      if (res.ok) {
+        // Stop GPS tracking — the employee is now offline.
+        stopTracking();
+        setHasActiveShift(false);
+        toast.success('Clocked out — you are now offline', {
+          description: 'Your shift has ended. You can still browse the app.',
+        });
+      } else if (res.status === 404) {
+        // Shift was already clocked out (maybe by the admin) — sync state.
+        setHasActiveShift(false);
+        toast.info("You're already offline");
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Failed to clock out' }));
+        toast.error(err.error || 'Failed to clock out');
+      }
+    } catch {
+      toast.error('Network error — please try again');
+    } finally {
+      setExitLoading(false);
+    }
+  }, [exitLoading, hasActiveShift, stopTracking]);
+
   const handleViewChange = (view: EmployeeSubView) => {
     setActiveView(view);
     setMobileSidebarOpen(false);
@@ -3773,7 +3891,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
       case 'schedule':
         return <ScheduleView employeeId={employeeId} />;
       case 'attendance':
-        return <AttendanceView onLogout={onLogout} />;
+        return <AttendanceView />;
       case 'inbox':
         return <InboxView />;
       case 'profile':
@@ -3867,7 +3985,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
                   <ChevronDown className="size-3.5 text-muted-foreground hidden sm:block" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem onClick={() => setActiveView('profile')}>
                   <UserCircle className="size-4 mr-2" />
                   Profile
@@ -3877,6 +3995,28 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
                   Inbox
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                {/* Exit / Go Offline — clocks out the active shift WITHOUT
+                    logging the employee out of the app (Issue 5). Kept
+                    visually distinct from Logout: amber tint + DoorOpen icon
+                    + a live status hint so the employee knows whether they
+                    are currently on-shift. */}
+                <DropdownMenuItem
+                  onClick={handleExitClockOut}
+                  disabled={exitLoading || !hasActiveShift}
+                  className={hasActiveShift
+                    ? 'text-amber-700 dark:text-amber-400 focus:text-amber-700'
+                    : 'text-muted-foreground'}
+                >
+                  {exitLoading ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <DoorOpen className="size-4 mr-2" />
+                  )}
+                  <span className="flex-1">Exit / Go Offline</span>
+                  {hasActiveShift && (
+                    <span className="ml-2 size-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  )}
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={onLogout} className="text-red-600 focus:text-red-600">
                   <LogOut className="size-4 mr-2" />
                   Logout

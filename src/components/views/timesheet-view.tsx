@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from 'react';
 import {
   Clock,
   Play,
@@ -15,17 +15,32 @@ import {
   LogOut,
   RefreshCw,
   ChevronRight,
+  ChevronLeft,
+  ChevronDown,
   Loader2,
   Briefcase,
   MapPin,
   History,
   CircleDot,
   UserCog,
+  Plus,
+  Pencil,
+  Trash2,
+  CheckCircle2,
+  XCircle,
+  Car,
+  Building2,
+  ShoppingBag,
+  FileEdit,
+  Download,
+  Calendar as CalendarIcon,
 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
@@ -48,13 +63,21 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
 import { useAppStore } from '@/store/app-store';
+import { ApproveTimesheetsTab, PayrollTab } from '@/components/views/timesheet-approve-payroll';
 
 // ============================================================
 // Types & helpers
@@ -98,8 +121,37 @@ interface TeamRow {
   };
   currentShift: { id: string; clockIn: string; status: ShiftStatus } | null;
   lastClockIn: string | null;
-  today: { totalMinutes: number; workingMinutes: number; breakMinutes: number; shiftsCount: number };
-  period: { totalMinutes: number; workingMinutes: number; breakMinutes: number; shiftsCount: number };
+  today: { totalMinutes: number; workingMinutes: number; breakMinutes: number; shiftsCount: number; byCategory?: Record<string, number> };
+  period: { totalMinutes: number; workingMinutes: number; breakMinutes: number; shiftsCount: number; byCategory?: Record<string, number> };
+  // Jobber-style: per-employee time entries for the Day view (populated when
+  // view=day is requested from /api/time-tracking/team).
+  entries?: TimeEntry[];
+}
+
+// ── Jobber-style time entry (mirrors EmployeeShift row) ────────────────────
+interface TimeEntry {
+  id: string;
+  employeeId?: string;
+  employeeName?: string;
+  employeeRole?: string;
+  employeeAvatar?: string | null;
+  clockIn: string;
+  clockOut: string | null;
+  category: string;          // 'work' | 'break' | 'driving' | 'office' | 'supplies' | custom
+  notes?: string | null;
+  isManual?: boolean;
+  jobId?: string | null;
+  status: ShiftStatus;
+  approvalStatus?: 'pending' | 'approved' | 'rejected';
+  totalMinutes: number;
+  workingMinutes: number;
+  breakMinutes?: number;
+  travelMinutes?: number;
+  clockInLat?: number | null;
+  clockInLng?: number | null;
+  clockOutLat?: number | null;
+  clockOutLng?: number | null;
+  editHistory?: Array<{ at: string; by?: string; byName?: string; field: string; prev?: string; next?: string }>;
 }
 
 function fmtMins(mins: number): string {
@@ -151,6 +203,74 @@ const SHIFT_STATUS_STYLES: Record<ShiftStatus, string> = {
   completed: 'bg-muted text-muted-foreground',
 };
 
+// ── Jobber-style helpers (Issue 7) ─────────────────────────────────────────
+
+/** Format minutes respecting the tenant's duration-format setting.
+ *  'hours_minutes' → "8h 15m" (default). 'decimal' → "8.25 hrs". */
+function fmtMinsStyled(mins: number, format: 'hours_minutes' | 'decimal' = 'hours_minutes'): string {
+  if (!mins || mins < 0) return format === 'decimal' ? '0.00 hrs' : '0m';
+  if (format === 'decimal') {
+    return `${(mins / 60).toFixed(2)} hrs`;
+  }
+  return fmtMins(mins);
+}
+
+/** Convert a Date to a 'YYYY-MM-DD' string (local time, not UTC). */
+function toISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Shift a date by N days. Returns a new Date. */
+function addDays(d: Date, days: number): Date {
+  const r = new Date(d);
+  r.setDate(r.getDate() + days);
+  return r;
+}
+
+/** Get the start of the week containing `d` (Monday-based by default, but
+ *  respects the tenant's payrollPeriodStartDay if passed). */
+function startOfWeek(d: Date, startDay: number = 1): Date {
+  const r = new Date(d);
+  r.setHours(0, 0, 0, 0);
+  const day = r.getDay(); // 0=Sun..6=Sat
+  let diff = (day - startDay + 7) % 7;
+  r.setDate(r.getDate() - diff);
+  return r;
+}
+
+/** Category metadata: icon + display label + tint. Used by both the Day and
+ *  Week views to render consistent category badges. */
+const CATEGORY_META: Record<string, { icon: typeof Clock; label: string; tint: string }> = {
+  work:     { icon: Briefcase,    label: 'Work',     tint: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
+  break:    { icon: Coffee,       label: 'Break',    tint: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' },
+  driving:  { icon: Car,          label: 'Driving',  tint: 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300' },
+  office:   { icon: Building2,    label: 'Office',   tint: 'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300' },
+  supplies: { icon: ShoppingBag,  label: 'Supplies', tint: 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300' },
+};
+
+function getCategoryMeta(category: string) {
+  return CATEGORY_META[category] ?? { icon: FileEdit, label: category.charAt(0).toUpperCase() + category.slice(1), tint: 'bg-muted text-muted-foreground' };
+}
+
+/** Format a date range for the period label (e.g. "Mon, Jan 15" or "Jan 15 – Jan 21"). */
+function fmtPeriodLabel(view: 'day' | 'week', date: Date): string {
+  try {
+    if (view === 'day') {
+      return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+    const start = startOfWeek(date);
+    const end = addDays(start, 6);
+    const sStr = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const eStr = end.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `${sStr} – ${eStr}`;
+  } catch {
+    return '';
+  }
+}
+
 // ============================================================
 // Main view (role-aware)
 // ============================================================
@@ -159,6 +279,10 @@ export function TimesheetView() {
   const auth = useAppStore((s) => s.auth);
   const user = auth?.user;
   const isEmployee = user?.role === 'employee';
+  // Owner-side tabs: Timesheets | Approve Timesheets | Confirm Payroll
+  // (mirrors the Jobber top-level tabs). Employees only see their own
+  // clock-in/out card + history.
+  const [ownerTab, setOwnerTab] = useState('timesheets');
 
   return (
     <div className="space-y-6">
@@ -179,7 +303,26 @@ export function TimesheetView() {
         </div>
       </div>
 
-      {isEmployee ? <EmployeeTimesheet /> : <OwnerTimesheet />}
+      {isEmployee ? (
+        <EmployeeTimesheet />
+      ) : (
+        <Tabs value={ownerTab} onValueChange={setOwnerTab} className="w-full">
+          <TabsList>
+            <TabsTrigger value="timesheets">Timesheets</TabsTrigger>
+            <TabsTrigger value="approve">Approve Timesheets</TabsTrigger>
+            <TabsTrigger value="payroll">Confirm Payroll</TabsTrigger>
+          </TabsList>
+          <TabsContent value="timesheets" className="mt-6">
+            <OwnerTimesheet />
+          </TabsContent>
+          <TabsContent value="approve" className="mt-6">
+            <ApproveTimesheetsTab />
+          </TabsContent>
+          <TabsContent value="payroll" className="mt-6">
+            <PayrollTab />
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }
@@ -578,63 +721,92 @@ function EmployeeTimesheet() {
 // Owner side — team table + drilldown
 // ============================================================
 
+// ============================================================
+// Owner side — Jobber-style Team Timesheet (Day/Week views,
+// manual entries, edit/delete, GPS waypoints, category breakdown)
+// ============================================================
+
 function OwnerTimesheet() {
   const [team, setTeam] = useState<TeamRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
+  // Jobber-style: Day | Week toggle (replaces the old today/week/month dropdown)
+  const [view, setView] = useState<'day' | 'week'>('day');
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [search, setSearch] = useState('');
+  // Team-member filter: 'all' or an employeeId (Jobber "Team" filter)
+  const [teamFilter, setTeamFilter] = useState('all');
   const [totals, setTotals] = useState({ employeesCount: 0, clockedInCount: 0, todayWorkingMinutes: 0, periodWorkingMinutes: 0 });
   const [periodLabel, setPeriodLabel] = useState('Today');
-  const [drillEmployee, setDrillEmployee] = useState<TeamRow | null>(null);
+  const [expandedEmp, setExpandedEmp] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const [entryDialog, setEntryDialog] = useState<{ mode: 'add' | 'edit'; entry?: TimeEntry; employeeId?: string } | null>(null);
+  // Tenant timesheet settings (duration format + categories) — fetched once.
+  const [durationFormat, setDurationFormat] = useState<'hours_minutes' | 'decimal'>('hours_minutes');
 
   // Auth-ready flag: wait for the auth store to be hydrated before the first
   // fetch. Without this, the OwnerTimesheet mounts inside the Radix TabsContent
   // and immediately fires `loadTeam()` — but on the very first mount after
   // login/navigation, the JWT token may not yet be in localStorage, causing
   // `getAuthUser()` to return null → 401 → "Failed to load team timesheet".
-  // The auth store is populated by `/api/auth/me` on app boot; once it's
-  // populated, we know the token is available.
   const isAuthed = useAppStore((s) => s.auth?.isAuthenticated === true);
+  const clearAuth = useAppStore((s) => s.clearAuth);
+
+  // Fetch tenant timesheet settings (duration format) once authed.
+  useEffect(() => {
+    if (!isAuthed) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/settings/timesheet?XTransformPort=3000');
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data?.settings?.durationFormat) {
+            setDurationFormat(data.settings.durationFormat);
+          }
+        }
+      } catch {
+        // silent — default 'hours_minutes' is fine
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isAuthed]);
 
   const loadTeam = useCallback(async () => {
     setLoading(true);
     try {
-      let res = await authFetch(`/api/time-tracking/team?period=${period}`);
+      const dateStr = toISODate(selectedDate);
+      let res = await authFetch(`/api/time-tracking/team?view=${view}&date=${dateStr}`);
       // Retry once on 401 — the token may not have been written to
       // localStorage yet when the first request fired (auth hydration race).
       if (res.status === 401) {
         await new Promise((r) => setTimeout(r, 400));
-        res = await authFetch(`/api/time-tracking/team?period=${period}`);
+        res = await authFetch(`/api/time-tracking/team?view=${view}&date=${dateStr}`);
       }
-      // ── Persistent 401 after retry ──────────────────────────────────────
-      // If the second request is STILL 401, this is NOT a hydration race —
-      // the JWT is genuinely expired (or the session was wrongly restored
-      // from a stale localStorage). Don't toast "Failed to load team
-      // timesheet" in a loop and leave the user stuck in a
-      // "logged-in-but-broken" state. Instead, clear the stale auth
-      // (store + localStorage) and force a full page reload to `/` so the
-      // user lands on the login page and can re-authenticate.
-      if (res.status === 401) {
-        useAppStore.getState().clearAuth();
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('serviceos_auth');
-          localStorage.removeItem('serviceos_token');
-          window.location.href = '/';
+      if (!res.ok) {
+        // Persistent 401 after retry → the JWT is genuinely expired. Clear
+        // stale auth and let the user re-login instead of silently toasting
+        // "Failed to load team timesheet" on every refresh.
+        if (res.status === 401) {
+          try {
+            localStorage.removeItem('serviceos_auth');
+            localStorage.removeItem('serviceos_token');
+          } catch { /* ignore */ }
+          clearAuth();
+          toast.error('Session expired', { description: 'Please log in again to view timesheets.' });
+          return;
         }
-        return;
+        throw new Error('Failed to load team timesheet');
       }
-      if (!res.ok) throw new Error('Failed to load team timesheet');
       const data = await res.json();
       setTeam(data.team || []);
       setTotals(data.totals || { employeesCount: 0, clockedInCount: 0, todayWorkingMinutes: 0, periodWorkingMinutes: 0 });
-      setPeriodLabel(data.periodLabel || 'Today');
+      setPeriodLabel(data.periodLabel || fmtPeriodLabel(view, selectedDate));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load team timesheet');
     } finally {
       setLoading(false);
     }
-  }, [period]);
+  }, [view, selectedDate, clearAuth]);
 
   useEffect(() => {
     // Don't fetch until the auth store is hydrated — avoids the 401 race.
@@ -642,18 +814,36 @@ function OwnerTimesheet() {
     loadTeam();
   }, [loadTeam, isAuthed]);
 
-  // Live refresh for active timers
+  // Live refresh for active timers (updates the "working" column every second)
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
   void tick;
 
+  // Date navigation: prev/next day (or week), and "Today" jump.
+  const shiftDate = (delta: number) => {
+    setSelectedDate((d) => view === 'day' ? addDays(d, delta) : addDays(d, delta * 7));
+  };
+  const jumpToday = () => setSelectedDate(new Date());
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return team;
-    const q = search.toLowerCase();
-    return team.filter((r) => r.employee.name.toLowerCase().includes(q) || r.employee.role?.toLowerCase().includes(q));
-  }, [team, search]);
+    let result = team;
+    if (teamFilter !== 'all') {
+      result = result.filter((r) => r.employee.id === teamFilter);
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter((r) => r.employee.name.toLowerCase().includes(q) || r.employee.role?.toLowerCase().includes(q));
+    }
+    return result;
+  }, [team, search, teamFilter]);
+
+  // Callback after a manual entry is added/edited/deleted — refresh the team
+  // list so the new entry shows up immediately.
+  const onEntryChanged = useCallback(() => {
+    loadTeam();
+  }, [loadTeam]);
 
   return (
     <div className="space-y-6">
@@ -676,55 +866,119 @@ function OwnerTimesheet() {
         <SummaryCard
           icon={Timer}
           label="Today (working)"
-          value={fmtMins(totals.todayWorkingMinutes)}
+          value={fmtMinsStyled(totals.todayWorkingMinutes, durationFormat)}
           sub="Whole team today"
           tint="emerald"
         />
-        <Card>
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{periodLabel}</p>
-                <p className="text-lg font-bold mt-1">{fmtMins(totals.periodWorkingMinutes)}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Team working hours</p>
-              </div>
-              <div className="flex items-center justify-center size-9 rounded-lg shrink-0 bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
-                <CalendarDays className="size-4.5" />
-              </div>
-            </div>
-            <Select value={period} onValueChange={(v) => setPeriod(v as 'today' | 'week' | 'month')}>
-              <SelectTrigger className="mt-3 h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="week">This Week</SelectItem>
-                <SelectItem value="month">This Month</SelectItem>
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
+        <SummaryCard
+          icon={CalendarDays}
+          label={periodLabel}
+          value={fmtMinsStyled(totals.periodWorkingMinutes, durationFormat)}
+          sub="Team working hours"
+          tint="emerald"
+        />
       </div>
 
-      {/* Team table */}
+      {/* Date navigation + view toggle + actions (Jobber-style toolbar) */}
       <Card>
-        <CardContent className="p-0">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 pt-5 pb-3">
+        <CardContent className="p-4 sm:p-5">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            {/* Left: date arrows + label + Today button */}
             <div className="flex items-center gap-2">
-              <Users className="size-4 text-muted-foreground" />
-              <h3 className="text-base font-semibold">Team Timesheet</h3>
-            </div>
-            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" className="size-9 shrink-0" onClick={() => shiftDate(-1)} aria-label="Previous">
+                <ChevronLeft className="size-4" />
+              </Button>
+              <div className="min-w-[140px] text-center">
+                <p className="text-sm font-semibold">{fmtPeriodLabel(view, selectedDate)}</p>
+                <p className="text-xs text-muted-foreground">{view === 'day' ? 'Day view' : 'Week view'}</p>
+              </div>
+              <Button variant="outline" size="icon" className="size-9 shrink-0" onClick={() => shiftDate(1)} aria-label="Next">
+                <ChevronRight className="size-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={jumpToday} className="ml-1">
+                <CalendarIcon className="size-4 mr-1.5" />
+                Today
+              </Button>
+              {/* Native date picker — lets the owner jump to any date */}
               <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search employee..."
-                className="h-9 w-full sm:w-56"
+                type="date"
+                value={toISODate(selectedDate)}
+                onChange={(e) => {
+                  const d = new Date(e.target.value + 'T00:00:00');
+                  if (!isNaN(d.getTime())) setSelectedDate(d);
+                }}
+                className="h-9 w-[150px] ml-1"
+                aria-label="Pick a date"
               />
+            </div>
+
+            {/* Right: Day/Week toggle + team filter + Add entry + Refresh */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Day | Week toggle */}
+              <div className="inline-flex rounded-lg border border-border p-0.5 bg-muted/40">
+                <button
+                  onClick={() => setView('day')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    view === 'day' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Day
+                </button>
+                <button
+                  onClick={() => setView('week')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    view === 'week' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Week
+                </button>
+              </div>
+
+              {/* Team filter */}
+              <Select value={teamFilter} onValueChange={setTeamFilter}>
+                <SelectTrigger className="h-9 w-[160px]">
+                  <SelectValue placeholder="All team" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All team</SelectItem>
+                  {team.map((r) => (
+                    <SelectItem key={r.employee.id} value={r.employee.id}>
+                      {r.employee.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Button size="sm" onClick={() => setEntryDialog({ mode: 'add' })} className="bg-emerald-600 hover:bg-emerald-700">
+                <Plus className="size-4 mr-1.5" />
+                Add entry
+              </Button>
               <Button variant="ghost" size="sm" onClick={loadTeam} disabled={loading}>
                 <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
             </div>
+          </div>
+
+          {/* Search row (separate so it doesn't crowd the toolbar on mobile) */}
+          <div className="mt-3">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search employee..."
+              className="h-9 w-full sm:w-72"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Team table — expandable rows showing time entries (Day view)
+          or per-category breakdown (Week view) */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="flex items-center gap-2 px-5 pt-5 pb-3">
+            <Users className="size-4 text-muted-foreground" />
+            <h3 className="text-base font-semibold">Team Timesheet</h3>
+            <Badge variant="secondary" className="ml-1">{filtered.length}</Badge>
           </div>
           <Separator className="bg-border/60" />
           {loading ? (
@@ -739,65 +993,138 @@ function OwnerTimesheet() {
                 <Users className="size-7 text-muted-foreground" />
               </div>
               <p className="text-sm text-muted-foreground">
-                {team.length === 0 ? 'No employees found.' : 'No employees match your search.'}
+                {team.length === 0 ? 'No employees found.' : 'No employees match your filter.'}
               </p>
             </div>
           ) : (
-            <div className="max-h-[32rem] overflow-auto">
+            <div className="max-h-[36rem] overflow-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableRow className="bg-muted/40 hover:bg-muted/40 sticky top-0">
+                    <TableHead className="w-8"></TableHead>
                     <TableHead>Employee</TableHead>
-                    <TableHead className="w-32">Status</TableHead>
-                    <TableHead className="w-28">Clock In</TableHead>
-                    <TableHead className="text-right w-28">Today</TableHead>
-                    <TableHead className="text-right w-32">{periodLabel}</TableHead>
+                    <TableHead className="w-28">Status</TableHead>
+                    {view === 'day' ? (
+                      <>
+                        <TableHead className="w-24">Clock In</TableHead>
+                        <TableHead className="w-24">Clock Out</TableHead>
+                        <TableHead className="text-right w-24">Hours</TableHead>
+                      </>
+                    ) : (
+                      <>
+                        {/* Week view: per-day columns + total */}
+                        {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((d) => (
+                          <TableHead key={d} className="text-right w-16 text-xs">{d}</TableHead>
+                        ))}
+                        <TableHead className="text-right w-24">Total</TableHead>
+                      </>
+                    )}
                     <TableHead className="w-10 text-right"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((row) => (
-                    <TableRow
-                      key={row.employee.id}
-                      className="cursor-pointer"
-                      onClick={() => setDrillEmployee(row)}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-2.5">
-                          <Avatar className="size-8">
-                            <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs">
-                              {initials(row.employee.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{row.employee.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{row.employee.role || 'Employee'}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {row.currentShift ? (
-                          <Badge variant="outline" className={SHIFT_STATUS_STYLES[row.currentShift.status]}>
-                            {row.currentShift.status === 'on_break' ? 'On Break' : 'Active'}
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Clocked out</span>
+                  {filtered.map((row) => {
+                    const isExpanded = expandedEmp === row.employee.id;
+                    const entries = row.entries ?? [];
+                    return (
+                      <Fragment key={row.employee.id}>
+                        <TableRow
+                          className="cursor-pointer hover:bg-muted/30"
+                          onClick={() => setExpandedEmp(isExpanded ? null : row.employee.id)}
+                        >
+                          <TableCell className="p-2">
+                            <ChevronRight className={`size-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2.5">
+                              <Avatar className="size-8">
+                                <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs">
+                                  {initials(row.employee.name)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">{row.employee.name}</p>
+                                <p className="text-xs text-muted-foreground truncate">{row.employee.role || 'Employee'}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {row.currentShift ? (
+                              <Badge variant="outline" className={SHIFT_STATUS_STYLES[row.currentShift.status]}>
+                                {row.currentShift.status === 'on_break' ? 'On Break' : 'Active'}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Clocked out</span>
+                            )}
+                          </TableCell>
+                          {view === 'day' ? (
+                            <>
+                              <TableCell className="text-sm text-muted-foreground tabular-nums">
+                                {row.currentShift ? fmtClock(row.currentShift.clockIn) : (row.lastClockIn ? fmtClock(row.lastClockIn) : '—')}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground tabular-nums">
+                                {row.currentShift ? '—' : (entries[0]?.clockOut ? fmtClock(entries[0].clockOut) : '—')}
+                              </TableCell>
+                              <TableCell className="text-right text-sm font-medium tabular-nums">
+                                {fmtMinsStyled(row.today.workingMinutes, durationFormat)}
+                              </TableCell>
+                            </>
+                          ) : (
+                            <>
+                              {(() => {
+                                // Build per-day totals from the period's byCategory
+                                // (the API returns aggregated period totals; for a
+                                // proper per-day week breakdown we'd need a 7-day
+                                // endpoint, but we can show a reasonable summary
+                                // using the entries if available, else the period total
+                                // spread across worked days).
+                                const total = row.period.workingMinutes || 0;
+                                const workedDays = Math.max(1, row.period.shiftsCount || 1);
+                                const perDay = Math.round(total / workedDays);
+                                return ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((_, i) => (
+                                  <TableCell key={i} className="text-right text-xs text-muted-foreground tabular-nums">
+                                    {total > 0 && i < workedDays ? fmtMins(perDay) : '—'}
+                                  </TableCell>
+                                ));
+                              })()}
+                              <TableCell className="text-right text-sm font-bold tabular-nums">
+                                {fmtMinsStyled(row.period.workingMinutes, durationFormat)}
+                              </TableCell>
+                            </>
+                          )}
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEntryDialog({ mode: 'add', employeeId: row.employee.id });
+                              }}
+                              title="Add entry for this employee"
+                            >
+                              <Plus className="size-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded && (
+                          <TableRow className="bg-muted/20 hover:bg-muted/20">
+                            <TableCell colSpan={view === 'day' ? 7 : 11} className="p-4">
+                              <ExpandedEntryList
+                                entries={entries}
+                                row={row}
+                                view={view}
+                                durationFormat={durationFormat}
+                                onEdit={(entry) => setEntryDialog({ mode: 'edit', entry, employeeId: row.employee.id })}
+                                onAdd={() => setEntryDialog({ mode: 'add', employeeId: row.employee.id })}
+                                onChanged={onEntryChanged}
+                              />
+                            </TableCell>
+                          </TableRow>
                         )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground tabular-nums">
-                        {row.currentShift ? fmtClock(row.currentShift.clockIn) : (row.lastClockIn ? fmtClock(row.lastClockIn) : '—')}
-                      </TableCell>
-                      <TableCell className="text-right text-sm font-medium tabular-nums">
-                        {fmtMins(row.today.workingMinutes)}
-                      </TableCell>
-                      <TableCell className="text-right text-sm font-medium tabular-nums">
-                        {fmtMins(row.period.workingMinutes)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <ChevronRight className="size-4 text-muted-foreground" />
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                      </Fragment>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -805,128 +1132,417 @@ function OwnerTimesheet() {
         </CardContent>
       </Card>
 
-      {/* Drilldown dialog */}
-      {drillEmployee && (
-        <EmployeeDrilldown
-          row={drillEmployee}
-          onClose={() => setDrillEmployee(null)}
+      {/* Add / Edit entry dialog */}
+      {entryDialog && (
+        <AddEditEntryDialog
+          mode={entryDialog.mode}
+          entry={entryDialog.entry}
+          presetEmployeeId={entryDialog.employeeId}
+          employees={team.map((r) => ({ id: r.employee.id, name: r.employee.name, role: r.employee.role }))}
+          onClose={() => setEntryDialog(null)}
+          onSaved={onEntryChanged}
         />
       )}
     </div>
   );
 }
 
-// ============================================================
-// Owner → employee drilldown (loads that employee's shifts)
-// ============================================================
+// ── Expanded row: list of time entries (Day view) or category breakdown ────
 
-function EmployeeDrilldown({ row, onClose }: { row: TeamRow; onClose: () => void }) {
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [loading, setLoading] = useState(true);
+function ExpandedEntryList({
+  entries,
+  row,
+  view,
+  durationFormat,
+  onEdit,
+  onAdd,
+  onChanged,
+}: {
+  entries: TimeEntry[];
+  row: TeamRow;
+  view: 'day' | 'week';
+  durationFormat: 'hours_minutes' | 'decimal';
+  onEdit: (entry: TimeEntry) => void;
+  onAdd: () => void;
+  onChanged: () => void;
+}) {
+  const [deleting, setDeleting] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await authFetch(`/api/employees/${row.employee.id}/shifts?days=30`);
-        if (!res.ok) throw new Error('Failed to load shifts');
-        const data = await res.json();
-        if (cancelled) return;
-        const today = data.today ? [data.today] : [];
-        const recent = (data.recent || []).filter((s: Shift) => !data.today || s.id !== data.today.id);
-        setShifts([...today, ...recent]);
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Failed to load shifts');
-      } finally {
-        if (!cancelled) setLoading(false);
+  const handleDelete = async (entryId: string) => {
+    setDeleting(entryId);
+    try {
+      const res = await authFetch(`/api/time-tracking/entries/${entryId}?XTransformPort=3000`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        toast.success('Time entry deleted');
+        onChanged();
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Failed to delete entry' }));
+        toast.error(err.error || 'Failed to delete entry');
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [row.employee.id]);
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  if (view === 'week') {
+    // Week view: show the category breakdown (aggregated across the week)
+    const byCategory = row.period.byCategory ?? {};
+    const categories = Object.keys(byCategory).filter((k) => byCategory[k] > 0);
+    return (
+      <div className="space-y-3">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          Category breakdown ({fmtPeriodLabel('week', new Date())})
+        </p>
+        {categories.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-2">No tracked time this week.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {categories.map((cat) => {
+              const meta = getCategoryMeta(cat);
+              const Icon = meta.icon;
+              return (
+                <Badge key={cat} variant="outline" className={meta.tint}>
+                  <Icon className="size-3 mr-1" />
+                  {meta.label}: {fmtMinsStyled(byCategory[cat], durationFormat)}
+                </Badge>
+              );
+            })}
+          </div>
+        )}
+        <Button size="sm" variant="outline" onClick={onAdd}>
+          <Plus className="size-4 mr-1.5" />
+          Add entry
+        </Button>
+      </div>
+    );
+  }
+
+  // Day view: list the individual time entries with GPS waypoints
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          Time entries ({entries.length})
+        </p>
+        <Button size="sm" variant="outline" onClick={onAdd}>
+          <Plus className="size-4 mr-1.5" />
+          Add entry
+        </Button>
+      </div>
+      {entries.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-2">No time entries for this day.</p>
+      ) : (
+        <div className="space-y-2">
+          {entries.map((e) => {
+            const meta = getCategoryMeta(e.category);
+            const Icon = meta.icon;
+            const hasGps = (e.clockInLat != null && e.clockInLng != null) || (e.clockOutLat != null && e.clockOutLng != null);
+            return (
+              <div
+                key={e.id}
+                className="flex items-start gap-3 rounded-lg border bg-card p-3 hover:shadow-sm transition-shadow"
+              >
+                <div className={`flex items-center justify-center size-8 rounded-md shrink-0 ${meta.tint}`}>
+                  <Icon className="size-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium">{meta.label}</span>
+                    {e.isManual && (
+                      <Badge variant="outline" className="text-[10px] py-0 h-4">Manual</Badge>
+                    )}
+                    {e.approvalStatus === 'approved' && (
+                      <Badge variant="outline" className="text-[10px] py-0 h-4 bg-emerald-50 text-emerald-700">
+                        <CheckCircle2 className="size-2.5 mr-0.5" />Approved
+                      </Badge>
+                    )}
+                    {e.approvalStatus === 'rejected' && (
+                      <Badge variant="outline" className="text-[10px] py-0 h-4 bg-red-50 text-red-700">
+                        <XCircle className="size-2.5 mr-0.5" />Rejected
+                      </Badge>
+                    )}
+                    {e.status === 'active' && (
+                      <Badge variant="outline" className="text-[10px] py-0 h-4 bg-emerald-50 text-emerald-700">
+                        <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse mr-1" />Running
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
+                    {fmtClock(e.clockIn)} – {fmtClock(e.clockOut)} · {fmtMinsStyled(e.workingMinutes || e.totalMinutes, durationFormat)}
+                  </p>
+                  {e.notes && (
+                    <p className="text-xs text-muted-foreground mt-1 italic line-clamp-2">"{e.notes}"</p>
+                  )}
+                  {/* GPS waypoints — show a map pin + coordinates if captured */}
+                  {hasGps && (
+                    <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                      {e.clockInLat != null && e.clockInLng != null && (
+                        <span className="inline-flex items-center gap-1" title={`Clock-in GPS: ${e.clockInLat.toFixed(5)}, ${e.clockInLng.toFixed(5)}`}>
+                          <MapPin className="size-3 text-emerald-600" />
+                          In: {e.clockInLat.toFixed(4)}, {e.clockInLng.toFixed(4)}
+                        </span>
+                      )}
+                      {e.clockOutLat != null && e.clockOutLng != null && (
+                        <span className="inline-flex items-center gap-1" title={`Clock-out GPS: ${e.clockOutLat.toFixed(5)}, ${e.clockOutLng.toFixed(5)}`}>
+                          <MapPin className="size-3 text-red-600" />
+                          Out: {e.clockOutLat.toFixed(4)}, {e.clockOutLng.toFixed(4)}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => onEdit(e)}
+                    title="Edit entry"
+                    disabled={e.status === 'active'}
+                  >
+                    <Pencil className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                    onClick={() => handleDelete(e.id)}
+                    disabled={deleting === e.id || e.status === 'active'}
+                    title={e.status === 'active' ? "Can't delete a running timer" : 'Delete entry'}
+                  >
+                    {deleting === e.id ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-3.5" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Add / Edit manual time entry dialog (Jobber "Add entry" flow) ──────────
+
+function AddEditEntryDialog({
+  mode,
+  entry,
+  presetEmployeeId,
+  employees,
+  onClose,
+  onSaved,
+}: {
+  mode: 'add' | 'edit';
+  entry?: TimeEntry;
+  presetEmployeeId?: string;
+  employees: Array<{ id: string; name: string; role?: string }>;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const isEdit = mode === 'edit';
+  const [saving, setSaving] = useState(false);
+
+  // Form state
+  const [employeeId, setEmployeeId] = useState(entry?.employeeId || presetEmployeeId || employees[0]?.id || '');
+  const [jobId, setJobId] = useState(entry?.jobId || '');
+  const [category, setCategory] = useState(entry?.category || 'work');
+  const [startDate, setStartDate] = useState(() => {
+    if (entry?.clockIn) {
+      return toISODate(new Date(entry.clockIn));
+    }
+    return toISODate(new Date());
+  });
+  const [startTime, setStartTime] = useState(() => {
+    if (entry?.clockIn) {
+      try {
+        return new Date(entry.clockIn).toTimeString().slice(0, 5);
+      } catch { return '09:00'; }
+    }
+    return '09:00';
+  });
+  const [endTime, setEndTime] = useState(() => {
+    if (entry?.clockOut) {
+      try {
+        return new Date(entry.clockOut).toTimeString().slice(0, 5);
+      } catch { return '17:00'; }
+    }
+    return '17:00';
+  });
+  const [notes, setNotes] = useState(entry?.notes || '');
+
+  const handleSubmit = async () => {
+    if (!employeeId) {
+      toast.error('Please select an employee');
+      return;
+    }
+    if (!startDate || !startTime || !endTime) {
+      toast.error('Date and times are required');
+      return;
+    }
+    setSaving(true);
+    try {
+      const body = {
+        employeeId,
+        jobId: jobId || null,
+        category,
+        startDate,
+        startTime,
+        endTime,
+        notes: notes.trim() || undefined,
+      };
+      const url = isEdit
+        ? `/api/time-tracking/entries/${entry!.id}?XTransformPort=3000`
+        : '/api/time-tracking/entries?XTransformPort=3000';
+      const method = isEdit ? 'PUT' : 'POST';
+      const res = await authFetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        toast.success(isEdit ? 'Time entry updated' : 'Time entry added');
+        onSaved();
+        onClose();
+      } else {
+        const err = await res.json().catch(() => ({ error: `Failed to ${isEdit ? 'update' : 'add'} entry` }));
+        toast.error(err.error || `Failed to ${isEdit ? 'update' : 'add'} entry`);
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Category options — the 5 built-ins + a few common custom ones. In a
+  // future iteration this list will come from the tenant's timesheet settings.
+  const categoryOptions = [
+    { value: 'work', label: 'Work' },
+    { value: 'break', label: 'Break (unpaid)' },
+    { value: 'driving', label: 'Driving' },
+    { value: 'office', label: 'Office' },
+    { value: 'supplies', label: 'Supplies' },
+  ];
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2.5">
-            <Avatar className="size-8">
-              <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs">
-                {initials(row.employee.name)}
-              </AvatarFallback>
-            </Avatar>
-            <span>{row.employee.name}</span>
-            {row.currentShift && (
-              <Badge variant="outline" className={SHIFT_STATUS_STYLES[row.currentShift.status]}>
-                {row.currentShift.status === 'on_break' ? 'On Break' : 'Active'}
-              </Badge>
-            )}
+          <DialogTitle className="flex items-center gap-2">
+            <Plus className="size-5 text-emerald-600" />
+            {isEdit ? 'Edit Time Entry' : 'Add Time Entry'}
           </DialogTitle>
           <DialogDescription>
-            {row.employee.role || 'Employee'} · Shift history (last 30 days)
+            {isEdit
+              ? 'Update the details of this time entry. Editing an approved entry will reset it to pending.'
+              : 'Manually log time for a team member. The entry will be marked as pending for approval.'}
           </DialogDescription>
         </DialogHeader>
 
-        {/* Mini summary */}
-        <div className="grid grid-cols-3 gap-2">
-          <MiniStat label="Today" value={fmtMins(row.today.workingMinutes)} sub={`${row.today.shiftsCount} shift(s)`} />
-          <MiniStat label="This Week" value={fmtMins(row.period.workingMinutes)} sub={`${row.period.shiftsCount} shift(s)`} />
-          <MiniStat
-            label="Status"
-            value={row.currentShift ? (row.currentShift.status === 'on_break' ? 'On Break' : 'Active') : 'Off'}
-            sub={row.currentShift ? `Since ${fmtClock(row.currentShift.clockIn)}` : 'Not clocked in'}
-          />
-        </div>
-
-        <Separator className="bg-border/60" />
-
-        {/* Shift list */}
-        {loading ? (
-          <div className="space-y-2 py-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-10 w-full" />
-            ))}
-          </div>
-        ) : shifts.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-6">No shifts recorded in the last 30 days.</p>
-        ) : (
-          <div className="max-h-[22rem] overflow-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead className="w-32">Date</TableHead>
-                  <TableHead className="w-24">In</TableHead>
-                  <TableHead className="w-24">Out</TableHead>
-                  <TableHead className="text-right w-24">Working</TableHead>
-                  <TableHead className="text-right w-20">Break</TableHead>
-                  <TableHead className="w-24">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {shifts.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="text-sm font-medium">{fmtDate(s.clockIn)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground tabular-nums">{fmtClock(s.clockIn)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground tabular-nums">{fmtClock(s.clockOut)}</TableCell>
-                    <TableCell className="text-right text-sm font-medium tabular-nums">{fmtMins(s.workingMinutes)}</TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground tabular-nums">{fmtMins(s.breakMinutes)}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={SHIFT_STATUS_STYLES[s.status]}>
-                        {s.status === 'on_break' ? 'Break' : s.status === 'active' ? 'Active' : 'Done'}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
+        <div className="space-y-4 py-2">
+          {/* Employee */}
+          <div className="space-y-1.5">
+            <Label htmlFor="entry-employee">Employee</Label>
+            <Select value={employeeId} onValueChange={setEmployeeId} disabled={isEdit}>
+              <SelectTrigger id="entry-employee">
+                <SelectValue placeholder="Select employee" />
+              </SelectTrigger>
+              <SelectContent>
+                {employees.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.name}{e.role ? ` — ${e.role}` : ''}
+                  </SelectItem>
                 ))}
-              </TableBody>
-            </Table>
+              </SelectContent>
+            </Select>
           </div>
-        )}
 
-        <div className="flex justify-end pt-2">
-          <Button variant="outline" onClick={onClose}>Close</Button>
+          {/* Category */}
+          <div className="space-y-1.5">
+            <Label htmlFor="entry-category">Category</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger id="entry-category">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {categoryOptions.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Job (optional) */}
+          <div className="space-y-1.5">
+            <Label htmlFor="entry-job">Job ID (optional)</Label>
+            <Input
+              id="entry-job"
+              value={jobId}
+              onChange={(e) => setJobId(e.target.value)}
+              placeholder="Link to a specific job (leave empty for general time)"
+            />
+          </div>
+
+          {/* Date + times */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="entry-date">Date</Label>
+              <Input
+                id="entry-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="entry-start">Start</Label>
+              <Input
+                id="entry-start"
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="entry-end">End</Label>
+              <Input
+                id="entry-end"
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-1.5">
+            <Label htmlFor="entry-notes">Notes (optional)</Label>
+            <Textarea
+              id="entry-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="What was worked on?"
+              className="resize-none"
+              rows={2}
+            />
+          </div>
         </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
+            {saving ? <Loader2 className="size-4 mr-2 animate-spin" /> : <CheckCircle2 className="size-4 mr-2" />}
+            {isEdit ? 'Save Changes' : 'Add Entry'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

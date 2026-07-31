@@ -39,10 +39,36 @@ const IOSInstallBanner = dynamic(
   { ssr: false, loading: () => null }
 );
 
-import { authFetch } from '@/lib/client-auth';
 import { useAppStore } from '@/store/app-store';
+import { authFetch } from '@/lib/client-auth';
 
 type UnauthView = 'landing' | 'auth';
+
+/**
+ * Quick client-side JWT expiry check (does NOT verify signature — that's the
+ * server's job). Decodes the `exp` claim and returns true if it's in the past
+ * or within a 30s safety margin. Used by `checkSession` to refuse trusting a
+ * stale `isAuthenticated:true` from localStorage when the token itself is
+ * expired. Returns false for malformed tokens (let the server reject them).
+ */
+function isTokenLikelyExpired(token: string): boolean {
+  if (!token || typeof token !== 'string') return true;
+  const parts = token.split('.');
+  if (parts.length !== 3) return true;
+  try {
+    // JWT payload is base64url — convert to base64, pad, then decode.
+    let payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (payloadB64.length % 4) payloadB64 += '=';
+    const payloadJson = atob(payloadB64);
+    const payload = JSON.parse(payloadJson) as { exp?: number };
+    if (typeof payload.exp !== 'number') return false; // no exp claim — trust server
+    // 30s clock-skew safety margin.
+    const nowSec = Math.floor(Date.now() / 1000);
+    return payload.exp < nowSec + 30;
+  } catch {
+    return false; // malformed — let the API call decide
+  }
+}
 
 /**
  * Detect a platform-level admin (SuperAdmin) — a user who manages the
@@ -211,13 +237,16 @@ export default function HomePage() {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
-      // Use authFetch so the Bearer JWT is sent alongside the HTTP-only
-      // cookie. getAuthUser() checks the cookie first, then the Bearer
-      // header — so if either credential is still valid, the session is
-      // recognized. Without this, a plain fetch() relies ONLY on the
-      // cookie, and when the cookie is expired the API returns {user: null}
-      // even if a valid JWT is sitting in localStorage.
-      const response = await authFetch('/api/auth/me?XTransformPort=3000', { signal: controller.signal });
+      // Use authFetch so the Bearer token is sent alongside the cookie.
+      // Plain fetch() only sent the cookie — when the cookie expired but the
+      // user still had a (also expired) JWT in localStorage, /api/auth/me
+      // returned 200 with {user:null}, and the old code then fell through to
+      // localStorage and trusted `isAuthenticated:true`, leaving the user in
+      // a zombie-auth state where every subsequent API call 401'd. This is the
+      // root cause of "Failed to load team timesheet" + plan-features blanks.
+      const response = await authFetch('/api/auth/me?XTransformPort=3000', {
+        signal: controller.signal,
+      });
       clearTimeout(timeoutId);
       if (response.ok) {
         const data = await response.json();
@@ -234,11 +263,6 @@ export default function HomePage() {
             useAppStore.getState().setCurrentView('superadmin');
           }
           // Trigger SaaS onboarding wizard if the tenant hasn't completed it.
-          // This covers the Google OAuth redirect path: Google callback
-          // creates a tenant with onboardingCompleted=false and redirects to
-          // /?google_login=success — without this check, checkSession would
-          // set auth and render AppLayout (dashboard) instead of the wizard.
-          // (handleAuthSuccess already does this for email/password logins.)
           if (
             data.tenant &&
             !data.tenant.onboardingCompleted &&
@@ -248,8 +272,6 @@ export default function HomePage() {
           ) {
             setShowOnboarding(true);
           } else if (isPlatformAdmin(data.user)) {
-            // Defensive: ensure no stale onboarding flag survives a session
-            // restore for platform admins.
             setShowOnboarding(false);
           }
           if (typeof window !== 'undefined') {
@@ -270,73 +292,90 @@ export default function HomePage() {
           }
           return;
         }
+        // /api/auth/me returned 200 with {user: null} — the session cookie
+        // AND/OR the Bearer token is expired/invalid. The server has
+        // authoritatively told us "you are not logged in". Do NOT fall
+        // through to localStorage (which may hold a stale `isAuthenticated:
+        // true` from a previous session) — that's the zombie-auth bug.
+        // Clear any stale auth + token and let the landing page render.
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.removeItem('serviceos_auth');
+            localStorage.removeItem('serviceos_token');
+          } catch {
+            // localStorage unavailable — nothing to clear
+          }
+        }
+        clearAuth();
+        return;
       }
-      // ── Explicit "no session" from the API ──────────────────────────────
-      // /api/auth/me returns HTTP 200 with {user: null} when NEITHER the
-      // cookie NOR the Bearer JWT is valid (both expired, or never set).
-      // This is a deliberate "no session" signal — DIFFERENT from a network
-      // failure. Falling through to the localStorage fallback here would
-      // restore a stale session with an expired token, leaving the user in
-      // a "logged-in-but-broken" state where every authenticated API call
-      // 401s (the root cause of the OwnerTimesheet
-      // "Failed to load team timesheet" bug).
-      //
-      // Instead: clear any stale auth and let the user see the login page.
-      // The localStorage fallback below is gated to ONLY the catch branch
-      // (genuine network failure / abort).
+      // Non-200 (e.g. 401) — same treatment: don't trust stale localStorage.
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('serviceos_auth');
-        localStorage.removeItem('serviceos_token');
+        try {
+          localStorage.removeItem('serviceos_auth');
+          localStorage.removeItem('serviceos_token');
+        } catch {
+          // ignore
+        }
       }
-      setAuth({ isAuthenticated: false, user: null, tenant: null });
+      clearAuth();
       return;
     } catch {
-      // Network error / abort / timeout — ONLY here do we fall back to the
-      // localStorage session restore. An explicit {user: null} response
-      // (handled above) must NOT trigger this fallback, because that would
-      // trust a stale JWT that the backend just rejected.
+      // API failed or timed out (network error / abort). In this case ONLY,
+      // it's reasonable to fall back to localStorage so an offline-first PWA
+      // still works. But we must verify the stored token isn't obviously
+      // expired before trusting it.
     }
 
+    // Network-failure fallback ONLY (not the "server said no" path).
     try {
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem('serviceos_auth');
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (parsed.isAuthenticated && parsed.user) {
-            setAuth({
-              isAuthenticated: true,
-              user: parsed.user,
-              tenant: parsed.tenant || null,
-            });
-            // Auto-redirect based on role (for admin/superadmin in AppLayout)
-            if (parsed.user.role === 'customer' || parsed.isCustomer) {
-              // Customer portal layout handled by page.tsx based on role
-            } else if (isPlatformAdmin(parsed.user)) {
-              useAppStore.getState().setCurrentView('superadmin');
+          // Defensive: verify the JWT is not expired before trusting it.
+          // A stale `isAuthenticated:true` with an expired token is the
+          // exact bug that caused the timesheet + plan-features failures.
+          if (parsed.isAuthenticated && parsed.user && parsed.token) {
+            if (!isTokenLikelyExpired(parsed.token)) {
+              setAuth({
+                isAuthenticated: true,
+                user: parsed.user,
+                tenant: parsed.tenant || null,
+              });
+              if (parsed.user.role === 'customer' || parsed.isCustomer) {
+                // Customer portal layout handled by page.tsx based on role
+              } else if (isPlatformAdmin(parsed.user)) {
+                useAppStore.getState().setCurrentView('superadmin');
+              }
+              if (
+                parsed.tenant &&
+                !parsed.tenant.onboardingCompleted &&
+                !isPlatformAdmin(parsed.user) &&
+                parsed.user.role !== 'customer' &&
+                parsed.user.role !== 'employee'
+              ) {
+                setShowOnboarding(true);
+              } else if (isPlatformAdmin(parsed.user)) {
+                setShowOnboarding(false);
+              }
+              return;
             }
-            // Trigger SaaS onboarding wizard if tenant hasn't completed it
-            // (covers localStorage session-restore path — same bug fix as the
-            // /api/auth/me branch above).
-            if (
-              parsed.tenant &&
-              !parsed.tenant.onboardingCompleted &&
-              !isPlatformAdmin(parsed.user) &&
-              parsed.user.role !== 'customer' &&
-              parsed.user.role !== 'employee'
-            ) {
-              setShowOnboarding(true);
-            } else if (isPlatformAdmin(parsed.user)) {
-              // Defensive: clear any stale onboarding flag for platform admins.
-              setShowOnboarding(false);
+            // Token is expired — clear the stale auth so the user sees login.
+            try {
+              localStorage.removeItem('serviceos_auth');
+              localStorage.removeItem('serviceos_token');
+            } catch {
+              // ignore
             }
-            return;
+            clearAuth();
           }
         }
       }
     } catch {
       // localStorage read failed
     }
-  }, [setAuth, setShowOnboarding]);
+  }, [setAuth, setShowOnboarding, clearAuth]);
 
   useEffect(() => {
     const init = async () => {

@@ -1385,11 +1385,6 @@ model Job {
   address            String?
   pickup             String?
   dropoff            String?
-  // ── Geocoded coordinates (for dispatch map pins) ──
-  // Populated by geocoding the job address on create/update.
-  // Used by the Live Dispatch map to show job location pins + route lines.
-  latitude           Float?
-  longitude          Float?
   scheduledAt        DateTime?
   scheduledTime      String?
   estimatedDuration  Int?
@@ -3899,6 +3894,12 @@ model JobChecklist {
 }
 
 // 10. EmployeeShift — tracks employee work shifts with break tracking.
+//      Doubles as the unified time-entry table (Jobber-style): every tracked
+//      interval (visit timer, general timer, manual entry) is one row, with
+//      `category` distinguishing the kind of time (work, break, driving,
+//      office, supplies, + tenant-defined custom labels) and `jobId` linking
+//      visit-timer entries to a specific job. This keeps the migration small
+//      (no new model) while still supporting the full Jobber timesheet UX.
 model EmployeeShift {
   id              String   @id @default(cuid())
   tenantId        String
@@ -3925,8 +3926,35 @@ model EmployeeShift {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  // ── Jobber-style time-entry fields (Issue 7) ────────────────────────────
+  // `category` distinguishes the kind of time tracked: 'work' (default,
+  // including visit timers), 'break' (unpaid), 'driving', 'office',
+  // 'supplies', or any tenant-defined custom label (e.g. 'training').
+  // Default 'work' keeps every legacy row backwards-compatible.
+  category        String   @default("work")
+  // `jobId` links a visit-timer / job-specific entry to a Job. Nullable so
+  // general timers (travel, breaks, shop time) have null here. Kept loose
+  // (no FK relation) to avoid cascade-delete surprises on job removal.
+  jobId           String?
+  // `isManual` flags entries added by an admin/owner from the Timesheets page
+  // (vs. real timer-generated entries). Used by the edit-history + approval
+  // flows so reviewers can spot manually logged time.
+  isManual        Boolean  @default(false)
+  // `approvalStatus` drives the Approve Timesheets tab: 'pending' (default),
+  // 'approved', 'rejected'. Only completed shifts are eligible for approval.
+  approvalStatus  String   @default("pending")
+  // `approvedBy` / `approvedAt` record who approved/rejected and when.
+  approvedBy      String?
+  approvedAt      DateTime?
+  // `editHistoryJson` stores up to 100 edit entries as JSON:
+  // [{at, by, field, prev, next}]. Mirrors Jobber's per-entry activity log.
+  editHistoryJson String   @default("[]")
+
   @@index([tenantId, employeeId, shiftDate])
   @@index([tenantId, status])
+  @@index([tenantId, approvalStatus])
+  @@index([tenantId, category])
+  @@index([jobId])
 }
 
 // 11. JobTimeEntry — tracks time spent on a specific job (start/pause/resume/complete).

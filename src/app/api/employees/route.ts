@@ -197,6 +197,11 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Employee ID is required' }, { status: 400 })
     }
 
+    const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
     const body = await request.json()
     const {
       name,
@@ -219,6 +224,42 @@ export async function PUT(request: NextRequest) {
       longitude,
       workspaceId,
     } = body
+
+    // If the email is being changed, verify the NEW email isn't already taken
+    // by a DIFFERENT User BEFORE updating the Employee — otherwise the
+    // Employee.email and linked User.email drift apart, and the employee can't
+    // log in with the new email. We do this check first so we can return a
+    // clean 409 instead of a 500 from Prisma's unique constraint.
+    if (email !== undefined) {
+      const normalizedEmail = (email || '').trim().toLowerCase()
+      if (normalizedEmail) {
+        // Find the employee first (need its linked userId).
+        const existingEmp = await db.employee.findUnique({
+          where: { id },
+          select: { userId: true, email: true },
+        })
+        if (!existingEmp) {
+          return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
+        }
+        // Only check for conflict if the email is actually changing.
+        const currentEmail = (existingEmp.email || '').trim().toLowerCase()
+        if (normalizedEmail !== currentEmail && existingEmp.userId) {
+          // Does another User already own this email?
+          // findFirst (NOT findUnique on email) — the Supabase REST adapter
+          // can't resolve `@unique` lookup by non-id columns reliably.
+          const conflict = await db.user.findFirst({
+            where: { email: normalizedEmail },
+            select: { id: true },
+          })
+          if (conflict && conflict.id !== existingEmp.userId) {
+            return NextResponse.json(
+              { error: 'Another user already uses this email address', code: 'EMAIL_IN_USE' },
+              { status: 409 }
+            )
+          }
+        }
+      }
+    }
 
     const employee = await db.employee.update({
       where: { id },
@@ -245,6 +286,41 @@ export async function PUT(request: NextRequest) {
         ...(onLeaveUntil !== undefined && { onLeaveUntil: onLeaveUntil ? new Date(onLeaveUntil) : null }),
       },
     })
+
+    // Sync the linked User's email + name so the employee can log in with the
+    // new email. Previously, editing an employee's email updated only the
+    // Employee row — the linked User row kept the OLD email, so the employee
+    // could never log in with the "new" email shown in the UI. We update the
+    // User only when the email actually changed AND a linked userId exists.
+    if (email !== undefined && employee.userId) {
+      const normalizedEmail = (email || '').trim().toLowerCase()
+      const existingUser = await db.user.findUnique({
+        where: { id: employee.userId },
+        select: { email: true, name: true },
+      }).catch(() => null)
+      if (existingUser) {
+        const currentUserEmail = (existingUser.email || '').trim().toLowerCase()
+        if (normalizedEmail && normalizedEmail !== currentUserEmail) {
+          await db.user.update({
+            where: { id: employee.userId },
+            data: {
+              email: normalizedEmail,
+              ...(name ? { name } : {}),
+            },
+          }).catch((syncErr: unknown) => {
+            // Log but don't fail the whole request — the Employee update
+            // already succeeded. The admin can retry the email change.
+            console.error('[employees PUT] User email sync failed:', syncErr)
+          })
+        } else if (name && existingUser.name !== name) {
+          // Name-only sync (email unchanged).
+          await db.user.update({
+            where: { id: employee.userId },
+            data: { name },
+          }).catch(() => null)
+        }
+      }
+    }
 
     cache.invalidateByPrefix('employees:')
 

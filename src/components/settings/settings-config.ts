@@ -222,6 +222,15 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     fullWidth: true,
     keywords: ['quotes', 'jobs', 'invoices', 'visit titles', 'payment terms', 'reminders', 'chemical tracking', 'work settings'],
   },
+  {
+    id: 'timesheet-settings',
+    label: 'Timesheet Settings',
+    icon: 'Clock',
+    description: 'Duration format, payroll period, timer categories (Break, Driving, Office, Supplies + custom)',
+    group: 'team',
+    fullWidth: true,
+    keywords: ['timesheet', 'time tracking', 'duration format', 'payroll', 'timers', 'break', 'driving', 'office', 'supplies', 'clock in', 'clock out'],
+  },
 
   // ─── Schedule ───────────────────────────────────────────────────────────
   {

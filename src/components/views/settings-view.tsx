@@ -74,6 +74,7 @@ import { BillingSettings } from '@/components/settings/sections/billing-settings
 import { GoogleBusinessProfileSettings } from '@/components/settings/sections/google-business-profile-settings';
 import { DedicatedPhoneSettings } from '@/components/settings/sections/dedicated-phone-settings';
 import { WorkSettings } from '@/components/settings/sections/work-settings';
+import { TimesheetSettings } from '@/components/settings/sections/timesheet-settings';
 import { AiAutoReplySettings } from '@/components/settings/sections/ai-auto-reply-settings';
 import { PaymentIntegrationsSettings } from '@/components/settings/sections/payment-integrations-settings';
 import { GenericPlaceholder } from '@/components/settings/sections/generic-placeholder';
@@ -573,6 +574,8 @@ export function SettingsView() {
       // ─── Phase 3: newly built DB-backed settings sections ───────────────
       case 'work-settings':
         return <WorkSettings />;
+      case 'timesheet-settings':
+        return <TimesheetSettings />;
       case 'ai-auto-reply':
         return <AiAutoReplySettings />;
       case 'payment-integrations':

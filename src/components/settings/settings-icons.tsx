@@ -44,6 +44,7 @@ import {
   ScrollText,
   History,
   LifeBuoy,
+  Clock,
 } from 'lucide-react';
 
 export const SETTINGS_ICON_MAP: Record<string, LucideIcon> = {
@@ -83,6 +84,7 @@ export const SETTINGS_ICON_MAP: Record<string, LucideIcon> = {
   ScrollText,
   History,
   LifeBuoy,
+  Clock,
 };
 
 export function getSettingsIcon(name: string): LucideIcon {

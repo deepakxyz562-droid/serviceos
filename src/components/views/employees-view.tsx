@@ -294,7 +294,14 @@ function getStatusDot(status: string): string {
 }
 
 function apiUrl(path: string) {
-  return `${path}?XTransformPort=3000`;
+  // Use '&' when the path already has a '?' (e.g. '/api/employees?id=123'),
+  // otherwise '?'. The old code always used '?', producing URLs like
+  // '/api/employees?id=abc?XTransformPort=3000' (double '?'), which Next.js
+  // parsed as `id="abc?XTransformPort=3000"` → Prisma "Record not found"
+  // → 500 "Failed to update employee". This mirrors `addTransformPort()` in
+  // src/lib/api.ts so all callsites stay consistent.
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}XTransformPort=3000`;
 }
 
 function getInvitationBadge(status?: string) {
@@ -561,7 +568,10 @@ export function EmployeesView() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(apiUrl('/api/employees'));
+      // Use authFetch so the Bearer token is sent. Plain fetch() relied on
+      // the session cookie alone, which fails on cross-origin/cookieless
+      // contexts (e.g. Vercel preview deploys, Safari ITP).
+      const res = await authFetch(apiUrl('/api/employees'));
       if (res.ok) {
         const data = await res.json();
         setEmployees(Array.isArray(data) ? data : []);
@@ -743,7 +753,7 @@ export function EmployeesView() {
         ? formSkills.split(',').map((s) => s.trim()).filter(Boolean)
         : [];
 
-      const res = await fetch(apiUrl('/api/employees'), {
+      const res = await authFetch(apiUrl('/api/employees'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -787,7 +797,7 @@ export function EmployeesView() {
         ? formSkills.split(',').map((s) => s.trim()).filter(Boolean)
         : [];
 
-      const res = await fetch(apiUrl(`/api/employees?id=${editingEmployee.id}`), {
+      const res = await authFetch(apiUrl(`/api/employees?id=${editingEmployee.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -821,7 +831,7 @@ export function EmployeesView() {
 
   const handleDelete = async (id: string) => {
     try {
-      const res = await fetch(apiUrl(`/api/employees?id=${id}`), {
+      const res = await authFetch(apiUrl(`/api/employees?id=${id}`), {
         method: 'DELETE',
       });
       if (res.ok) {
