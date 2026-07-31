@@ -20,7 +20,6 @@
 
 import bcrypt from 'bcryptjs';
 import { db } from '../src/lib/db';
-import { pickStockPhotoUrl } from '../src/lib/seed-stock-photos';
 
 // ─── Provider definitions ───────────────────────────────────────────────────
 
@@ -52,7 +51,7 @@ interface ProviderSeed {
   currency: string;
   phone: string;
   email: string;
-  coverImage: string;
+  coverImage: string | null;
   gallery: { url: string; caption: string }[];
   businessHours: Record<string, { open: string; close: string } | null>;
   serviceAreas: string[];
@@ -79,31 +78,6 @@ interface ProviderSeed {
   featured?: { type: string; priority: number };
 }
 
-// Stock cover images sourced from the verified seed-stock-photos library
-// (src/lib/seed-stock-photos.ts). All 15 photo IDs are HTTP-200 verified.
-// Previously this map held 6 broken/placeholder Unsplash IDs (hvac, electrical,
-// automotive, pest, roofing, locksmith) that returned 404 — now unified through
-// pickStockPhotoUrl() which only returns verified URLs and falls back to a
-// safe default for any industry not in the map.
-// To durably host these (S3/local FS) instead of hotlinking, call
-// downloadAndUploadCover(industry, index, slug) from the same library.
-const COVER = {
-  plumbing: pickStockPhotoUrl('plumbing', 0),
-  hvac: pickStockPhotoUrl('hvac', 0),
-  electrical: pickStockPhotoUrl('electrical', 0),
-  cleaning: pickStockPhotoUrl('cleaning', 0),
-  landscaping: pickStockPhotoUrl('landscaping', 0),
-  pest: pickStockPhotoUrl('pest-control', 0),
-  roofing: pickStockPhotoUrl('roofing', 0),
-  painting: pickStockPhotoUrl('painting', 0),
-  locksmith: pickStockPhotoUrl('locksmith', 0),
-  appliance: pickStockPhotoUrl('appliance-repair', 0),
-  pool: pickStockPhotoUrl('pool-spa', 0),
-  automotive: pickStockPhotoUrl('automotive', 0),
-};
-
-const GALLERY_ITEM = (url: string, caption: string) => ({ url, caption });
-
 const STD_BUSINESS_HOURS = {
   mon: { open: '08:00', close: '18:00' },
   tue: { open: '08:00', close: '18:00' },
@@ -129,12 +103,8 @@ const PROVIDERS: ProviderSeed[] = [
     currency: 'USD',
     phone: '+1-212-555-0142',
     email: 'owner@metrohvac.com',
-    coverImage: COVER.hvac,
-    gallery: [
-      GALLERY_ITEM(COVER.hvac, 'HVAC installation in progress'),
-      GALLERY_ITEM('https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=600&h=400&fit=crop', 'Rooftop unit repair'),
-      GALLERY_ITEM('https://images.unsplash.com/photo-1581094288338-2314dddb7ece?w=600&h=400&fit=crop', 'Furnace maintenance'),
-    ],
+    coverImage: null,
+    gallery: [],
     businessHours: STD_BUSINESS_HOURS,
     serviceAreas: ['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'],
     faqs: [
@@ -211,12 +181,8 @@ const PROVIDERS: ProviderSeed[] = [
     currency: 'USD',
     phone: '+1-312-555-0198',
     email: 'owner@eliteplumbing.com',
-    coverImage: COVER.plumbing,
-    gallery: [
-      GALLERY_ITEM(COVER.plumbing, 'Bathroom plumbing installation'),
-      GALLERY_ITEM('https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=600&h=400&fit=crop', 'Kitchen sink repair'),
-      GALLERY_ITEM('https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=400&fit=crop', 'Water heater install'),
-    ],
+    coverImage: null,
+    gallery: [],
     businessHours: STD_BUSINESS_HOURS,
     serviceAreas: ['Chicago', 'Evanston', 'Oak Park', 'Naperville', 'Schaumburg'],
     faqs: [
@@ -289,12 +255,8 @@ const PROVIDERS: ProviderSeed[] = [
     currency: 'USD',
     phone: '+1-310-555-0177',
     email: 'owner@brightsparkelectric.com',
-    coverImage: COVER.electrical,
-    gallery: [
-      GALLERY_ITEM(COVER.electrical, 'Electrical panel upgrade'),
-      GALLERY_ITEM('https://images.unsplash.com/photo-1621905251189-08b45d6a3b2f?w=600&h=400&fit=crop', 'EV charger install'),
-      GALLERY_ITEM('https://images.unsplash.com/photo-1554907984-15263bfd63bd?w=600&h=400&fit=crop', 'Recessed lighting'),
-    ],
+    coverImage: null,
+    gallery: [],
     businessHours: STD_BUSINESS_HOURS,
     serviceAreas: ['Los Angeles', 'Santa Monica', 'Pasadena', 'Glendale', 'Burbank'],
     faqs: [
@@ -364,12 +326,8 @@ const PROVIDERS: ProviderSeed[] = [
     currency: 'USD',
     phone: '+1-713-555-0233',
     email: 'owner@freshstartcleaning.com',
-    coverImage: COVER.cleaning,
-    gallery: [
-      GALLERY_ITEM(COVER.cleaning, 'Kitchen deep clean'),
-      GALLERY_ITEM('https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&h=400&fit=crop', 'Living room cleaning'),
-      GALLERY_ITEM('https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=600&h=400&fit=crop', 'Office cleaning'),
-    ],
+    coverImage: null,
+    gallery: [],
     businessHours: STD_BUSINESS_HOURS,
     serviceAreas: ['Houston', 'Sugar Land', 'The Woodlands', 'Katy', 'Pearland'],
     faqs: [
@@ -437,12 +395,8 @@ const PROVIDERS: ProviderSeed[] = [
     currency: 'USD',
     phone: '+1-602-555-0166',
     email: 'owner@greenthumblawns.com',
-    coverImage: COVER.landscaping,
-    gallery: [
-      GALLERY_ITEM(COVER.landscaping, 'Desert landscape design'),
-      GALLERY_ITEM('https://images.unsplash.com/photo-1558904541-efa843a96f01?w=600&h=400&fit=crop', 'Hardscaping project'),
-      GALLERY_ITEM('https://images.unsplash.com/photo-1599619351208-3e6c839d6828?w=600&h=400&fit=crop', 'Lawn maintenance'),
-    ],
+    coverImage: null,
+    gallery: [],
     businessHours: STD_BUSINESS_HOURS,
     serviceAreas: ['Phoenix', 'Scottsdale', 'Tempe', 'Mesa', 'Glendale'],
     faqs: [
@@ -509,11 +463,8 @@ const PROVIDERS: ProviderSeed[] = [
     currency: 'USD',
     phone: '+1-305-555-0124',
     email: 'owner@shieldpest.com',
-    coverImage: COVER.pest,
-    gallery: [
-      GALLERY_ITEM(COVER.pest, 'Pest control treatment'),
-      GALLERY_ITEM('https://images.unsplash.com/photo-1584395636220-2e3e3e3e3e3e?w=600&h=400&fit=crop', 'Termite inspection'),
-    ],
+    coverImage: null,
+    gallery: [],
     businessHours: STD_BUSINESS_HOURS,
     serviceAreas: ['Miami', 'Fort Lauderdale', 'Hialeah', 'Coral Gables', 'Doral'],
     faqs: [
@@ -579,11 +530,8 @@ const PROVIDERS: ProviderSeed[] = [
     currency: 'USD',
     phone: '+1-303-555-0188',
     email: 'owner@summitroofing.com',
-    coverImage: COVER.roofing,
-    gallery: [
-      GALLERY_ITEM(COVER.roofing, 'Asphalt shingle installation'),
-      GALLERY_ITEM('https://images.unsplash.com/photo-1632759145355-8b8f3e3e3e3e?w=600&h=400&fit=crop', 'Metal roof install'),
-    ],
+    coverImage: null,
+    gallery: [],
     businessHours: STD_BUSINESS_HOURS,
     serviceAreas: ['Denver', 'Aurora', 'Lakewood', 'Boulder', 'Castle Rock'],
     faqs: [
@@ -651,11 +599,8 @@ const PROVIDERS: ProviderSeed[] = [
     currency: 'USD',
     phone: '+1-206-555-0145',
     email: 'owner@premierpainting.com',
-    coverImage: COVER.painting,
-    gallery: [
-      GALLERY_ITEM(COVER.painting, 'Interior painting'),
-      GALLERY_ITEM('https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=600&h=400&fit=crop', 'Exterior painting'),
-    ],
+    coverImage: null,
+    gallery: [],
     businessHours: STD_BUSINESS_HOURS,
     serviceAreas: ['Seattle', 'Bellevue', 'Redmond', 'Kirkland', 'Tacoma'],
     faqs: [
@@ -721,10 +666,8 @@ const PROVIDERS: ProviderSeed[] = [
     currency: 'USD',
     phone: '+1-404-555-0199',
     email: 'owner@rapidlockout.com',
-    coverImage: COVER.locksmith,
-    gallery: [
-      GALLERY_ITEM(COVER.locksmith, 'Mobile locksmith van'),
-    ],
+    coverImage: null,
+    gallery: [],
     businessHours: {
       mon: { open: '00:00', close: '23:59' },
       tue: { open: '00:00', close: '23:59' },
@@ -798,10 +741,8 @@ const PROVIDERS: ProviderSeed[] = [
     currency: 'USD',
     phone: '+1-214-555-0177',
     email: 'owner@applianceMD.com',
-    coverImage: COVER.appliance,
-    gallery: [
-      GALLERY_ITEM(COVER.appliance, 'Refrigerator repair'),
-    ],
+    coverImage: null,
+    gallery: [],
     businessHours: STD_BUSINESS_HOURS,
     serviceAreas: ['Dallas', 'Plano', 'Frisco', 'Garland', 'Irving'],
     faqs: [
@@ -867,10 +808,8 @@ const PROVIDERS: ProviderSeed[] = [
     currency: 'USD',
     phone: '+1-702-555-0122',
     email: 'owner@crystalbluepools.com',
-    coverImage: COVER.pool,
-    gallery: [
-      GALLERY_ITEM(COVER.pool, 'Pool cleaning service'),
-    ],
+    coverImage: null,
+    gallery: [],
     businessHours: STD_BUSINESS_HOURS,
     serviceAreas: ['Las Vegas', 'Henderson', 'North Las Vegas', 'Summerlin', 'Spring Valley'],
     faqs: [
@@ -935,10 +874,8 @@ const PROVIDERS: ProviderSeed[] = [
     currency: 'USD',
     phone: '+1-619-555-0155',
     email: 'owner@mobilemechanicpros.com',
-    coverImage: COVER.automotive,
-    gallery: [
-      GALLERY_ITEM(COVER.automotive, 'Mobile mechanic at work'),
-    ],
+    coverImage: null,
+    gallery: [],
     businessHours: STD_BUSINESS_HOURS,
     serviceAreas: ['San Diego', 'Chula Vista', 'Oceanside', 'Escondido', 'Carlsbad'],
     faqs: [
