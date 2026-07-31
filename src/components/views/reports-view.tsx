@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart3,
@@ -26,6 +26,8 @@ import {
   Bot,
   AlertTriangle,
   RefreshCw,
+  Trophy,
+  XCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -66,6 +68,7 @@ import {
 import { toast } from 'sonner';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { authFetch, apiUrl } from '@/lib/api';
+import { useAppStore } from '@/store/app-store';
 
 // ============================================================
 // API Response Types (mirror /api/analytics shapes)
@@ -152,6 +155,83 @@ interface JourneyAnalyticsResponse {
   scheduledActionsPending: number;
   avgJourneyTimeHours: number;
 }
+
+// ============================================================
+// Sales Outcomes (Phase 6 — Sales Pipeline report)
+// ============================================================
+
+interface SalesOutcomeRow {
+  id: string;
+  title: string;
+  stage: string;
+  value: number;
+  currency: string;
+  customerName: string | null;
+  customerPhone: string | null;
+  leadId: string | null;
+  convertedJobId: string | null;
+  lossReason: string | null;
+  createdAt: string | null;
+  closedAt: string | null;
+  type: 'won' | 'lost';
+}
+
+interface SalesOutcomesResponse {
+  outcomes: SalesOutcomeRow[];
+  totals: {
+    wonValue: number;
+    lostValue: number;
+    wonCount: number;
+    lostCount: number;
+    winRate: number;
+  };
+}
+
+// Date-range presets for the Sales Pipeline tab. Maps the dropdown value
+// to a { from, to } pair of YYYY-MM-DD strings used in the API query.
+const SALES_OUTCOMES_RANGE_PRESETS: Record<
+  string,
+  { label: string; from: string; to: string }
+> = (() => {
+  const today = new Date();
+  const toISO = (d: Date) => d.toISOString().slice(0, 10);
+  const shift = (days: number) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + days);
+    return d;
+  };
+  const startOfWeek = (d: Date) => {
+    const out = new Date(d);
+    const day = out.getDay();
+    // Monday-first: Sun(0)→6, Mon(1)→0, …
+    const diff = (day + 6) % 7;
+    out.setDate(out.getDate() - diff);
+    out.setHours(0, 0, 0, 0);
+    return out;
+  };
+  const startOfMonth = (d: Date) => {
+    const out = new Date(d.getFullYear(), d.getMonth(), 1);
+    return out;
+  };
+  const startOfYear = (d: Date) => new Date(d.getFullYear(), 0, 1);
+
+  return {
+    week: { label: 'Last week', from: toISO(shift(-7)), to: toISO(today) },
+    '30d': { label: 'Last 30 days', from: toISO(shift(-30)), to: toISO(today) },
+    month: { label: 'Last month', from: toISO(shift(-30)), to: toISO(today) },
+    this_month: {
+      label: 'This month',
+      from: toISO(startOfMonth(today)),
+      to: toISO(today),
+    },
+    year: { label: 'This year', from: toISO(startOfYear(today)), to: toISO(today) },
+    '12m': { label: 'Last 12 months', from: toISO(shift(-365)), to: toISO(today) },
+    all: { label: 'All time', from: '2000-01-01', to: toISO(today) },
+    // 'custom' is a sentinel — when selected, the user manually picks
+    // from/to via the date inputs below the dropdown.
+    custom: { label: 'Custom range', from: toISO(shift(-30)), to: toISO(today) },
+  };
+})();
 
 // ============================================================
 // Chart Configs
@@ -428,6 +508,51 @@ export function ReportsView() {
   const [dateRange, setDateRange] = useState('30d');
   const [activeTab, setActiveTab] = useState('overview');
 
+  // ─── Sales Outcomes (Phase 6) — separate filters ───────────────────
+  // The Sales Pipeline tab has its own date-range presets (Last week,
+  // Last 30 days, …, Custom range) and a type filter (All | Won | Lost).
+  // These don't share state with the global `dateRange` because the
+  // presets are different (e.g. "This year", "All time", "Custom range"
+  // aren't available in the global dropdown).
+  const [salesOutcomesRange, setSalesOutcomesRange] = useState('30d');
+  const [salesOutcomesType, setSalesOutcomesType] = useState<'all' | 'won' | 'lost'>('all');
+  const [salesOutcomesCustomFrom, setSalesOutcomesCustomFrom] = useState(
+    SALES_OUTCOMES_RANGE_PRESETS['30d'].from,
+  );
+  const [salesOutcomesCustomTo, setSalesOutcomesCustomTo] = useState(
+    SALES_OUTCOMES_RANGE_PRESETS['30d'].to,
+  );
+
+  // ─── Cross-view pending tab + filter (Phase 6) ─────────────────────
+  // When the user clicks the Won / Lost summary box on the Sales Pipeline
+  // view, the pending tab + sales-outcomes type are stashed in the global
+  // store before navigating. We consume them on mount and clear them so a
+  // refresh doesn't re-apply the filter. Mirrors the pendingCreate pattern.
+  const pendingReportsTab = useAppStore((s) => s.pendingReportsTab);
+  const pendingReportsSalesOutcomesType = useAppStore((s) => s.pendingReportsSalesOutcomesType);
+  const setPendingReportsTab = useAppStore((s) => s.setPendingReportsTab);
+  const setPendingReportsSalesOutcomesType = useAppStore((s) => s.setPendingReportsSalesOutcomesType);
+
+  // Consume the pending cross-view tab + filter on mount / when they change.
+  // This is the standard "consume a pending value from an external store"
+  // pattern (mirrors the pendingCreate pattern in app-store.ts). Calling
+  // setState in an effect IS necessary here because the pending values
+  // are set BEFORE ReportsView mounts (the Sales Pipeline view sets them,
+  // then navigates). Without this effect, the pending values would never
+  // be consumed.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (pendingReportsTab) {
+      setActiveTab(pendingReportsTab);
+      setPendingReportsTab(null);
+    }
+    if (pendingReportsSalesOutcomesType) {
+      setSalesOutcomesType(pendingReportsSalesOutcomesType);
+      setPendingReportsSalesOutcomesType(null);
+    }
+  }, [pendingReportsTab, pendingReportsSalesOutcomesType]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   // ─── Fetch all 7 metrics in parallel via TanStack Query ─────────
   const overviewQuery = useQuery<OverviewResponse>({
     queryKey: ['reports', 'overview', dateRange],
@@ -492,6 +617,34 @@ export function ReportsView() {
       if (!res.ok) throw new Error('Failed to fetch journey analytics');
       return res.json() as Promise<JourneyAnalyticsResponse>;
     },
+  });
+
+  // ─── Sales Outcomes (Phase 6) — fetched on tab open ───────────────
+  // The Sales Pipeline tab needs its own date range (presets differ from
+  // the global dropdown) and a type filter (all / won / lost). The query
+  // is `enabled: activeTab === 'salesPipeline'` so it doesn't fire on
+  // initial load when the user is on Overview.
+  const salesOutcomesRangeParams = useMemo(() => {
+    if (salesOutcomesRange === 'custom') {
+      return { from: salesOutcomesCustomFrom, to: salesOutcomesCustomTo };
+    }
+    const preset = SALES_OUTCOMES_RANGE_PRESETS[salesOutcomesRange] || SALES_OUTCOMES_RANGE_PRESETS['30d'];
+    return { from: preset.from, to: preset.to };
+  }, [salesOutcomesRange, salesOutcomesCustomFrom, salesOutcomesCustomTo]);
+
+  const salesOutcomesQuery = useQuery<SalesOutcomesResponse>({
+    queryKey: ['reports', 'sales_outcomes', salesOutcomesRangeParams.from, salesOutcomesRangeParams.to, salesOutcomesType],
+    queryFn: async () => {
+      const qs = new URLSearchParams({
+        from: salesOutcomesRangeParams.from,
+        to: salesOutcomesRangeParams.to,
+        type: salesOutcomesType,
+      });
+      const res = await authFetch(apiUrl(`/api/reports/sales-outcomes?${qs.toString()}`));
+      if (!res.ok) throw new Error('Failed to fetch sales outcomes');
+      return res.json() as Promise<SalesOutcomesResponse>;
+    },
+    enabled: activeTab === 'salesPipeline',
   });
 
   // ─── Derived: overview ─────────────────────────────────────────
@@ -773,6 +926,7 @@ export function ReportsView() {
           <TabsTrigger value="leads" className="text-xs">Leads</TabsTrigger>
           <TabsTrigger value="whatsapp" className="text-xs">WhatsApp</TabsTrigger>
           <TabsTrigger value="journey" className="text-xs">Journey</TabsTrigger>
+          <TabsTrigger value="salesPipeline" className="text-xs">Sales Pipeline</TabsTrigger>
         </TabsList>
 
         {/* ═══════════════════════════════════════════════════════════
@@ -2103,6 +2257,249 @@ export function ReportsView() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* ═══════════════════════════════════════════════════════════
+            TAB 7: SALES PIPELINE / SALES OUTCOMES (Phase 6)
+        ═══════════════════════════════════════════════════════════ */}
+        <TabsContent value="salesPipeline" className="space-y-6 mt-4">
+          {/* ── Header ─────────────────────────────────────────────────── */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
+                <TrendingUp className="size-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold tracking-tight">Sales Outcomes</h2>
+                <p className="text-sm text-muted-foreground">
+                  Track your closed opportunities and win rate
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Date range preset */}
+              <Select
+                value={salesOutcomesRange}
+                onValueChange={(v) => {
+                  setSalesOutcomesRange(v);
+                  // When picking a preset (not custom), sync the custom
+                  // date inputs so toggling to 'custom' later starts from
+                  // the same range.
+                  const preset = SALES_OUTCOMES_RANGE_PRESETS[v];
+                  if (preset && v !== 'custom') {
+                    setSalesOutcomesCustomFrom(preset.from);
+                    setSalesOutcomesCustomTo(preset.to);
+                  }
+                }}
+              >
+                <SelectTrigger className="w-[170px] h-9">
+                  <Calendar className="size-3.5 mr-1.5 text-muted-foreground" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="week">Last week</SelectItem>
+                  <SelectItem value="30d">Last 30 days</SelectItem>
+                  <SelectItem value="month">Last month</SelectItem>
+                  <SelectItem value="this_month">This month</SelectItem>
+                  <SelectItem value="year">This year</SelectItem>
+                  <SelectItem value="12m">Last 12 months</SelectItem>
+                  <SelectItem value="all">All time</SelectItem>
+                  <SelectItem value="custom">Custom range</SelectItem>
+                </SelectContent>
+              </Select>
+              {/* Type filter */}
+              <Select
+                value={salesOutcomesType}
+                onValueChange={(v) =>
+                  setSalesOutcomesType(v as 'all' | 'won' | 'lost')
+                }
+              >
+                <SelectTrigger className="w-[120px] h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="won">Won</SelectItem>
+                  <SelectItem value="lost">Lost</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => salesOutcomesQuery.refetch()}
+                disabled={salesOutcomesQuery.isFetching}
+              >
+                <RefreshCw
+                  className={`size-3.5 mr-1.5 ${salesOutcomesQuery.isFetching ? 'animate-spin' : ''}`}
+                />
+                Refresh
+              </Button>
+            </div>
+          </div>
+
+          {/* ── Custom range date inputs (only shown when 'custom' is selected) ── */}
+          {salesOutcomesRange === 'custom' && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground">From</label>
+                <input
+                  type="date"
+                  value={salesOutcomesCustomFrom}
+                  onChange={(e) => setSalesOutcomesCustomFrom(e.target.value)}
+                  className="h-9 px-3 rounded-md border border-input bg-background text-sm"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground">To</label>
+                <input
+                  type="date"
+                  value={salesOutcomesCustomTo}
+                  onChange={(e) => setSalesOutcomesCustomTo(e.target.value)}
+                  className="h-9 px-3 rounded-md border border-input bg-background text-sm"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── Summary cards (4) ──────────────────────────────────────── */}
+          {/* Total Won Value (emerald) | Total Lost Value (red) |
+              Win Rate (blue) | Total Closed (gray) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {salesOutcomesQuery.isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)
+            ) : (
+              <>
+                <StatCard
+                  label="Total Won Value"
+                  value={formatCompact(salesOutcomesQuery.data?.totals.wonValue ?? 0)}
+                  icon={Trophy}
+                  iconBg="bg-emerald-50"
+                  iconColor="text-emerald-600"
+                  subtitle={`${salesOutcomesQuery.data?.totals.wonCount ?? 0} deal${(salesOutcomesQuery.data?.totals.wonCount ?? 0) === 1 ? '' : 's'} won`}
+                />
+                <StatCard
+                  label="Total Lost Value"
+                  value={formatCompact(salesOutcomesQuery.data?.totals.lostValue ?? 0)}
+                  icon={XCircle}
+                  iconBg="bg-red-50"
+                  iconColor="text-red-600"
+                  subtitle={`${salesOutcomesQuery.data?.totals.lostCount ?? 0} deal${(salesOutcomesQuery.data?.totals.lostCount ?? 0) === 1 ? '' : 's'} lost`}
+                />
+                <StatCard
+                  label="Win Rate"
+                  value={`${salesOutcomesQuery.data?.totals.winRate ?? 0}%`}
+                  icon={Target}
+                  iconBg="bg-blue-50"
+                  iconColor="text-blue-600"
+                  subtitle={`${(salesOutcomesQuery.data?.totals.wonCount ?? 0) + (salesOutcomesQuery.data?.totals.lostCount ?? 0)} closed total`}
+                />
+                <StatCard
+                  label="Total Closed"
+                  value={formatNumber(
+                    (salesOutcomesQuery.data?.totals.wonCount ?? 0) +
+                      (salesOutcomesQuery.data?.totals.lostCount ?? 0),
+                  )}
+                  icon={CheckCircle2}
+                  iconBg="bg-gray-100"
+                  iconColor="text-gray-600"
+                  subtitle="won + lost in range"
+                />
+              </>
+            )}
+          </div>
+
+          {/* ── Outcomes table ─────────────────────────────────────────── */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Closed Opportunities</CardTitle>
+              <CardDescription>
+                Sorted by closed date (most recent first)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {salesOutcomesQuery.isLoading ? (
+                <TableSkeleton />
+              ) : salesOutcomesQuery.isError ? (
+                <ErrorBanner onRetry={() => salesOutcomesQuery.refetch()} />
+              ) : (salesOutcomesQuery.data?.outcomes ?? []).length === 0 ? (
+                <EmptyHint message="No closed opportunities in this period." />
+              ) : (
+                <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                  <Table>
+                    <TableHeader className="bg-muted/40 sticky top-0 z-10">
+                      <TableRow className="hover:bg-muted/40">
+                        <TableHead className="min-w-[180px]">Deal Title</TableHead>
+                        <TableHead className="min-w-[140px]">Client</TableHead>
+                        <TableHead className="min-w-[110px]">Created</TableHead>
+                        <TableHead className="min-w-[110px]">Closed</TableHead>
+                        <TableHead className="min-w-[90px]">Type</TableHead>
+                        <TableHead className="min-w-[110px] text-right">Value</TableHead>
+                        <TableHead className="min-w-[180px]">Lost Reason</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(salesOutcomesQuery.data?.outcomes ?? []).map((row) => (
+                        <TableRow key={row.id}>
+                          <TableCell className="font-medium">
+                            {row.title || 'Untitled deal'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="text-sm">
+                                {row.customerName || '—'}
+                              </span>
+                              {row.customerPhone && (
+                                <span className="text-xs text-muted-foreground">
+                                  {row.customerPhone}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {row.createdAt
+                              ? new Date(row.createdAt).toLocaleDateString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                })
+                              : '—'}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {row.closedAt
+                              ? new Date(row.closedAt).toLocaleDateString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                })
+                              : '—'}
+                          </TableCell>
+                          <TableCell>
+                            {row.type === 'won' ? (
+                              <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-emerald-200">
+                                Won
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200">
+                                Lost
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-medium tabular-nums">
+                            {format(row.value)}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {row.type === 'lost'
+                              ? row.lossReason || 'No reason provided'
+                              : '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
+import { archiveLinkedQuoteAndRequest } from '@/lib/deal-auto-close'
 
 export async function GET(
   request: NextRequest,
@@ -133,6 +134,32 @@ export async function PUT(
       } catch (leadErr) {
         console.error('[DealsUpdate] Failed to sync Lead.status with Deal.stage:', leadErr)
         // Non-fatal — the Deal update still succeeded.
+      }
+    }
+
+    // ─── Auto-archive linked Quote / JobRequest on Deal Lost (Phase 6) ─
+    // When a Deal's stage transitions to 'lost', archive the linked
+    // Quote(s) (status → 'rejected') and JobRequest(s) (status →
+    // 'cancelled') so they don't show up as "active" in the marketplace.
+    //
+    // Best-effort / non-blocking: if the archive fails for any reason
+    // (no linked Quote / JobRequest, DB error), the Deal update still
+    // succeeds. The user can manually archive the Quote / JobRequest
+    // via their respective views.
+    //
+    // The helper finds the Quote(s) + JobRequest(s) via `Quote.leadId`
+    // (joined through `Quote.jobRequestId` for the JobRequest lookup).
+    // It skips Quotes / JobRequests already in a "closed" status
+    // (rejected / expired / accepted) to avoid clobbering marketplace
+    // state.
+    if (body.stage === 'lost' && body.stage !== currentDeal.stage && currentDeal.leadId) {
+      try {
+        await archiveLinkedQuoteAndRequest(currentDeal.leadId)
+      } catch (archiveErr) {
+        console.error(
+          '[DealsUpdate] auto-archive Quote/Request on Deal Lost failed (non-blocking):',
+          archiveErr,
+        )
       }
     }
 

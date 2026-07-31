@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
+import { ensureDealsForTenant } from '@/lib/lead-deal-sync'
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,16 +17,38 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
 
+    // ─── Closed-deal filtering (Phase-4 Kanban summary boxes) ─────────────
+    // `includeClosed=false`  → exclude won/lost deals entirely (active pipeline only).
+    // `closedSinceDays=N`    → include ALL active deals PLUS closed (won/lost) deals
+    //                          whose closedAt is within the last N days. Used by the
+    //                          Won/Lost 30-day summary boxes at the top of the Kanban.
+    // Default (neither set) → return every deal regardless of stage (legacy behavior).
+    //
+    // Stage keys 'won' and 'lost' are the built-in closed stages seeded by Phase-3;
+    // even if a tenant adds custom closed stages, the defaults always exist.
+    const includeClosed = searchParams.get('includeClosed') !== 'false'
+    const closedSinceDaysRaw = searchParams.get('closedSinceDays')
+    const closedSinceDays =
+      closedSinceDaysRaw && Number.isFinite(parseInt(closedSinceDaysRaw))
+        ? parseInt(closedSinceDaysRaw)
+        : null
+    const CLOSED_STAGE_KEYS = ['won', 'lost']
+
     // ─── Tenant scoping ──────────────────────────────────────────
     // The caller's tenantId is the source of truth — never trust a
     // tenantId passed via query params (cross-tenant data leak).
     // Super-admins may pass ?tenantId= to scope to a specific tenant.
     const where: Record<string, unknown> = {}
+    let effectiveTenantId: string | null = null
     if (user.isSuperAdmin) {
       const queryTenantId = searchParams.get('tenantId')
-      if (queryTenantId) where.tenantId = queryTenantId
+      if (queryTenantId) {
+        where.tenantId = queryTenantId
+        effectiveTenantId = queryTenantId
+      }
     } else if (user.tenantId) {
       where.tenantId = user.tenantId
+      effectiveTenantId = user.tenantId
     } else {
       // Authenticated user without a tenant — return empty rather than
       // accidentally leaking unscoped deals.
@@ -35,20 +58,108 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    if (stage) where.stage = stage
+    // ─── Lazy Safety Net: ensure every Lead has a linked Deal ────────
+    // Catches orphans missed by the EventBus listener (e.g. if the
+    // listener was down at ingestion time, or the Lead was created
+    // before the sync layer was deployed). Awaits with try/catch so it
+    // never fails the request — worst case the pipeline renders with
+    // N fewer Deals this round, and the next GET /api/deals call will
+    // finish the backfill (idempotent).
+    //
+    // Performance note: `ensureDealsForTenant` is O(leads + deals) reads
+    // + O(orphans) writes. For most tenants (< 1k leads) this is a few
+    // ms; for very large tenants (10k+ leads) it can take a second or
+    // two on the first call after deploy, but subsequent calls are
+    // near-instant (all Leads already have Deals → just two findMany
+    // round-trips + zero writes).
+    if (effectiveTenantId) {
+      try {
+        await ensureDealsForTenant(effectiveTenantId)
+      } catch (syncErr) {
+        // Non-fatal — log and continue. The pipeline will render with
+        // whatever Deals exist; the next GET call retries the sync.
+        console.error('[DealsList] Lazy safety net ensureDealsForTenant failed:', syncErr)
+      }
+    }
+
+    if (stage) {
+      where.stage = stage
+    } else if (!includeClosed) {
+      // Exclude closed (won/lost) deals entirely.
+      // Uses the `NOT` operator (Supabase-safe — see supabase-db.ts applyWhereFilters)
+      // instead of `{ notIn: [...] }` which isn't handled by the PostgREST adapter.
+      where.NOT = { stage: { in: CLOSED_STAGE_KEYS } }
+    }
     if (assigneeId) where.assigneeId = assigneeId
 
     const skip = (page - 1) * limit
 
-    const [data, total] = await Promise.all([
-      db.deal.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      }),
-      db.deal.count({ where }),
-    ])
+    // ─── Supabase-safe closed-deal inclusion ──────────────────────────
+    // When `closedSinceDays=N` is set, we want:
+    //   (active deals, any closedAt)  ∪  (closed deals, closedAt >= N days ago)
+    //
+    // PostgREST can't express "(stage NOT IN closed) OR (stage IN closed AND
+    // closedAt >= cutoff)" in a single typed Prisma where-clause (the adapter
+    // doesn't translate `notIn` inside `OR`, nor nested `AND` inside `OR`).
+    // So we split into two findMany queries and merge the results in JS.
+    //
+    // The pagination `count` reflects the merged set so the client can show
+    // accurate totals. Limit/skip apply to the merged set (active deals
+    // first, then closed), which matches the Kanban's natural left-to-right
+    // ordering (active columns before the "Closed" section).
+    let data: Awaited<ReturnType<typeof db.deal.findMany>>
+    let total: number
+
+    if (closedSinceDays !== null && includeClosed && !stage) {
+      const cutoff = new Date(Date.now() - closedSinceDays * 24 * 60 * 60 * 1000)
+
+      // Base where for both branches (tenant scoping + optional assignee).
+      const baseWhere = { ...where }
+      // Strip any NOT clause we set above so the two branches can compose
+      // their own stage filter cleanly.
+      delete (baseWhere as Record<string, unknown>).NOT
+
+      const activeWhere: Record<string, unknown> = {
+        ...baseWhere,
+        NOT: { stage: { in: CLOSED_STAGE_KEYS } },
+      }
+      const closedWhere: Record<string, unknown> = {
+        ...baseWhere,
+        stage: { in: CLOSED_STAGE_KEYS },
+        closedAt: { gte: cutoff },
+      }
+
+      const [activeDeals, closedDeals, activeCount, closedCount] = await Promise.all([
+        db.deal.findMany({
+          where: activeWhere,
+          orderBy: { createdAt: 'desc' },
+        }),
+        db.deal.findMany({
+          where: closedWhere,
+          orderBy: { closedAt: 'desc' },
+        }),
+        db.deal.count({ where: activeWhere }),
+        db.deal.count({ where: closedWhere }),
+      ])
+
+      // Merge: active deals first (already sorted by createdAt desc), then
+      // closed deals (sorted by closedAt desc). Apply pagination to the
+      // merged array.
+      const merged = [...activeDeals, ...closedDeals]
+      total = activeCount + closedCount
+      data = merged.slice(skip, skip + limit)
+    } else {
+      // Standard single-query path (no closedSinceDays filter).
+      ;[data, total] = await Promise.all([
+        db.deal.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+        }),
+        db.deal.count({ where }),
+      ])
+    }
 
     // ─── Manual Lead join (HubSpot model) ─────────────────────────────
     // The Deal model stores `leadId` as a plain String (no Prisma @relation),
@@ -63,9 +174,28 @@ export async function GET(request: NextRequest) {
         })
       : []
     const leadMap = new Map(leads.map((l) => [l.id, l]))
+
+    // ─── Open task counts per deal (Phase-5 card badge) ───────────────
+    // Single extra findMany + manual grouping (PostgREST adapter doesn't
+    // support `groupBy`). For each visible deal we attach an `openTaskCount`
+    // integer — the Kanban card renders a small `CheckSquare + N` badge when
+    // this is > 0. Only OPEN tasks (completedAt IS NULL) are counted.
+    const dealIds = data.map((d) => d.id)
+    const openTasks = dealIds.length > 0
+      ? await db.pipelineTask.findMany({
+          where: { dealId: { in: dealIds }, completedAt: null },
+          select: { dealId: true },
+        })
+      : []
+    const openTaskCountMap = new Map<string, number>()
+    for (const t of openTasks) {
+      openTaskCountMap.set(t.dealId, (openTaskCountMap.get(t.dealId) ?? 0) + 1)
+    }
+
     const dataWithLeads = data.map((d) => ({
       ...d,
       lead: d.leadId ? (leadMap.get(d.leadId) ?? null) : null,
+      openTaskCount: openTaskCountMap.get(d.id) ?? 0,
     }))
 
     return NextResponse.json({

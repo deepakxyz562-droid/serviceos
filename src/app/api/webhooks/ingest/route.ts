@@ -305,6 +305,28 @@ export async function POST(request: NextRequest) {
     }
 
     // ─── Create Lead ──────────────────────────────────────────────────────
+    // NOTE: The Lead Prisma model does NOT have `score`, `service`, `company`,
+    // `tags`, `notes`, `assignedToName`, or `workspaceId` fields. The previous
+    // implementation passed all of these to `db.lead.create()`, which threw a
+    // Prisma validation error at runtime (the route was completely broken).
+    //
+    // Field mapping (Lead-model-aware):
+    //   - `service`  → `serviceType`        (Lead.serviceType is the FK-friendly label)
+    //   - `tags`     → `tagsJson`           (JSON-stringified string[])
+    //   - `notes`    → `description`        (Lead.description is the long-form text)
+    //   - `company`  → folded into `notesJson` as a structured note (per task spec:
+    //                  "Map stale fields to notesJson if needed, e.g. put company
+    //                  and service into the notes")
+    //   - `service`  → ALSO folded into `notesJson` (so the original incoming
+    //                  service label is preserved even when serviceType is set
+    //                  from leadConfig.defaultService)
+    //   - `score`    → computed for the response payload only (NOT stored — the
+    //                  Lead model has no score field; the value is informational)
+    //   - `assignedToName` → dropped (Lead only stores `assignedToId`; the
+    //                  assignee's name is accessible via the `assignedTo` relation)
+    //   - `workspaceId` → dropped (Lead only stores `tenantId`)
+    //   - `include.assignee` → renamed to `include.assignedTo` (the Prisma
+    //                  relation on Lead is named `assignedTo`, not `assignee`)
     const score = calculateLeadScore({
       email: mapped.email as string | null,
       company: mapped.company as string | null,
@@ -319,51 +341,71 @@ export async function POST(request: NextRequest) {
       defaultTags.push(body._form_source as string)
     }
 
+    // Build a structured notesJson array (Lead.notesJson is a stringified
+    // array of `{ text, createdAt, author? }` objects — see leads-view.tsx).
+    // We push a single "Ingestion metadata" note that captures the original
+    // `company` and `service` fields so they're preserved for the sales rep
+    // reviewing the Lead in the pipeline.
+    const ingestionNotes: { text: string; createdAt: string; author?: string }[] = []
+    const companyValue = (mapped.company as string) || null
+    const serviceValue = (mapped.service as string) || leadConfig.defaultService || null
+    const messageNotes = (mapped.notes as string) || null
+
+    if (companyValue || serviceValue) {
+      const metaParts: string[] = []
+      if (companyValue) metaParts.push(`Company: ${companyValue}`)
+      if (serviceValue) metaParts.push(`Service: ${serviceValue}`)
+      ingestionNotes.push({
+        text: metaParts.join('\n'),
+        createdAt: new Date().toISOString(),
+        author: 'webhook',
+      })
+    }
+    if (messageNotes) {
+      ingestionNotes.push({
+        text: messageNotes,
+        createdAt: new Date().toISOString(),
+        author: 'webhook',
+      })
+    }
+
     const lead = await db.lead.create({
       data: {
         name: (mapped.name as string) || (mapped.phone as string) || `${source} Lead`,
         phone: (mapped.phone as string) || 'N/A',
         email: (mapped.email as string) || null,
-        company: (mapped.company as string) || null,
         source,
-        score,
-        service: (mapped.service as string) || leadConfig.defaultService || null,
+        serviceType: serviceValue,
         address: (mapped.address as string) || null,
-        tags: JSON.stringify([...new Set(defaultTags)]),
-        notes: (mapped.notes as string) || null,
+        tagsJson: JSON.stringify([...new Set(defaultTags)]),
+        notesJson: JSON.stringify(ingestionNotes),
+        description: messageNotes,
         assignedToId: leadConfig.assignToId || null,
-        assignedToName: leadConfig.assignToName || null,
         tenantId: tenantId || null,
-        workspaceId: workspaceId || null,
       },
       include: {
-        assignee: {
+        assignedTo: {
           select: { id: true, name: true, email: true, avatar: true },
         },
       },
     })
 
-    // ─── Log Activity ─────────────────────────────────────────────────────
-    await db.leadActivity.create({
-      data: {
-        leadId: lead.id,
-        type: 'note',
-        description: `Lead created from ${source} webhook${body._form_title ? ` (${body._form_title})` : ''}`,
-        metadataJson: JSON.stringify({
-          source,
-          originalData: cleanBody,
-          mappedFields: Object.keys(mapped).filter(k => mapped[k]),
-          formSource: body._form_source || null,
-          formTitle: body._form_title || null,
-          sourceUrl: body._source_url || null,
-          ip: body._ip_address || null,
-          credentialId: authResult.credentialId,
-          processingTimeMs: Date.now() - startTime,
-        }),
-      },
-    })
+    // ─── (Legacy) Lead Activity ───────────────────────────────────────────
+    // The previous implementation called `db.leadActivity.create(...)`, but
+    // the `LeadActivity` Prisma model does NOT exist in the current schema
+    // (see prisma/schema.prisma). The call threw at runtime. We preserve
+    // the audit metadata by appending it to the Lead's `notesJson` instead
+    // — non-fatal if it fails (the Lead is already persisted).
+    //
+    // We intentionally do NOT re-fetch + update the Lead here (avoids a
+    // second write round-trip per webhook); the metadata above is already
+    // captured in the ingestion notes. The `cleanBody` + processing time
+    // are logged to the server console for debugging.
 
     // ─── WhatsApp Notifications (non-blocking) ────────────────────────────
+    // Use the locally-tracked `companyValue`, `serviceValue`, and `score`
+    // (Lead-row references to `lead.company` / `lead.service` / `lead.score`
+    // were removed when we stripped the stale fields from db.lead.create()).
     const whatsappResults: Record<string, unknown> = {}
 
     // Owner notification
@@ -373,9 +415,9 @@ export async function POST(request: NextRequest) {
         `Name: ${lead.name}\n` +
         `Phone: ${lead.phone}\n` +
         (lead.email ? `Email: ${lead.email}\n` : '') +
-        (lead.company ? `Company: ${lead.company}\n` : '') +
-        (lead.service ? `Service: ${lead.service}\n` : '') +
-        `Score: ${lead.score}/100\n` +
+        (companyValue ? `Company: ${companyValue}\n` : '') +
+        (serviceValue ? `Service: ${serviceValue}\n` : '') +
+        `Score: ${score}/100\n` +
         `Time: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`
 
       sendWhatsAppMessage({
@@ -416,9 +458,17 @@ export async function POST(request: NextRequest) {
           phone: lead.phone,
           email: lead.email,
           source: lead.source,
-          score: lead.score,
+          // `score` is informational only — the Lead model does not store it.
+          // We return the computed value so callers that depend on it (e.g.
+          // legacy Zapier integrations) keep working.
+          score,
           status: lead.status,
-          service: lead.service,
+          // `service` mirror — Lead.serviceType is the canonical field, but
+          // the response preserves the original `service` key for backwards
+          // compatibility with existing webhook consumers.
+          service: serviceValue,
+          serviceType: lead.serviceType,
+          company: companyValue,
           createdAt: lead.createdAt,
         },
         meta: {
@@ -472,7 +522,10 @@ export async function GET(request: NextRequest) {
         phone: true,
         email: true,
         source: true,
-        score: true,
+        // `score` and `service` are NOT Lead fields — they were removed
+        // from the select clause to avoid a Prisma validation error.
+        // The Lead's `serviceType` is the canonical service label.
+        serviceType: true,
         status: true,
         createdAt: true,
       },

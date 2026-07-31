@@ -1,29 +1,17 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode, type CSSProperties } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Target, Plus, Search, RefreshCw, Phone, Mail, MapPin,
   MoreHorizontal, Pencil, Trash2, Eye, MessageCircle,
-  ArrowRight, Filter, GripVertical, Clock, TrendingUp,
-  DollarSign, Users, BarChart3, LayoutGrid,
+  ArrowRight, Filter, Clock, TrendingUp,
+  DollarSign, Users, BarChart3,
   List, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft,
   ChevronRight, CheckCircle2, X, Send, StickyNote,
   CalendarDays, Briefcase, AlertCircle, User, UserPlus,
   Loader2, ArrowLeft, ImagePlus, Link2, Paperclip, Camera,
   FileText, ImageIcon, ClipboardList, Truck, Info,
-  Move,
 } from 'lucide-react';
-import {
-  DndContext, DragOverlay, PointerSensor, TouchSensor, KeyboardSensor,
-  useSensor, useSensors, closestCorners,
-  type DragStartEvent, type DragEndEvent,
-  useDroppable,
-} from '@dnd-kit/core';
-import {
-  SortableContext, useSortable, sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -268,7 +256,16 @@ const STATUS_BAR_COLORS: Record<string, string> = {
   proposal: '#f97316',
 };
 
+// Source labels + color palette. Covers every value the codebase writes
+// (webform / jotform / typeform / google-forms / ai_receptionist /
+// google_ads / meta_ads / lead_discovery / public_booking / public_quote /
+// public_request / hosted_link / form / embed / api / webhook / email /
+// sms / phone / justdial / marketplace) plus the original 8
+// (website / whatsapp / wordpress / google / facebook / instagram /
+// referral / manual). Unknown values fall through to a neutral badge in
+// `renderSourceBadge` so the UI never breaks.
 const SOURCE_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string }> = {
+  // ─── Original 8 ────────────────────────────────────────────────────
   website: { label: 'Website', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
   whatsapp: { label: 'WhatsApp', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
   wordpress: { label: 'WordPress', color: 'text-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200' },
@@ -277,6 +274,39 @@ const SOURCE_CONFIG: Record<string, { label: string; color: string; bgColor: str
   instagram: { label: 'Instagram', color: 'text-pink-700', bgColor: 'bg-pink-50', borderColor: 'border-pink-200' },
   referral: { label: 'Referral', color: 'text-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200' },
   manual: { label: 'Manual', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' },
+
+  // ─── Web forms (blue) ──────────────────────────────────────────────
+  webform: { label: 'Web Form', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+  jotform: { label: 'JotForm', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+  typeform: { label: 'Typeform', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+  'google-forms': { label: 'Google Forms', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+  form: { label: 'Form', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+  embed: { label: 'Embed', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+  hosted_link: { label: 'Hosted Link', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+
+  // ─── AI / automation (purple / emerald) ────────────────────────────
+  ai_receptionist: { label: 'AI Receptionist', color: 'text-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200' },
+  lead_discovery: { label: 'Lead Discovery', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
+
+  // ─── Public inbound pages (emerald) ────────────────────────────────
+  public_booking: { label: 'Public Booking', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
+  public_quote: { label: 'Public Quote', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
+  public_request: { label: 'Public Request', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
+
+  // ─── Paid acquisition (red / blue) ─────────────────────────────────
+  google_ads: { label: 'Google Ads', color: 'text-red-700', bgColor: 'bg-red-50', borderColor: 'border-red-200' },
+  meta_ads: { label: 'Meta Ads', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+
+  // ─── Marketplaces & directories (amber) ────────────────────────────
+  justdial: { label: 'JustDial', color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-200' },
+  marketplace: { label: 'Marketplace', color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-200' },
+
+  // ─── System / programmatic (gray) ──────────────────────────────────
+  api: { label: 'API', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' },
+  webhook: { label: 'Webhook', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' },
+  email: { label: 'Email', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' },
+  sms: { label: 'SMS', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' },
+  phone: { label: 'Phone', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' },
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; dotColor: string }> = {
@@ -1157,8 +1187,10 @@ export function LeadsView() {
   const [totalLeads, setTotalLeads] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
-  // View state
-  const [activeView, setActiveView] = useState<'kanban' | 'table'>('kanban');
+  // View state — Leads page is list (table) view only. The inline drag-and-drop
+  // Kanban was removed in favour of the dedicated Deal-based SalesPipelineView
+  // (sidebar → CRM → Pipeline). activeTab (List | Analytics) below still allows
+  // switching between the table and the analytics dashboard.
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -1377,18 +1409,6 @@ export function LeadsView() {
     });
     return sorted;
   }, [leads, sortField, sortDirection]);
-
-  // ============================================================
-  // Kanban grouped leads (5 columns)
-  // ============================================================
-
-  const kanbanGroups = useMemo(() => {
-    const groups: Record<string, Lead[]> = {};
-    for (const status of KANBAN_STATUSES) {
-      groups[status] = leads.filter((l) => mapToKanbanStatus(l.status) === status);
-    }
-    return groups;
-  }, [leads]);
 
   // ============================================================
   // Analytics (Analytics tab) — derived from analyticsLeads
@@ -1615,74 +1635,14 @@ export function LeadsView() {
   };
 
   // ============================================================
-  // Drag-and-drop (Kanban board)
+  // Drag-and-drop (Kanban board) — REMOVED
   // ============================================================
-
-  // Sensors — PointerSensor covers mouse + trackpad. TouchSensor is added
-  // with a small delay + movement tolerance so taps still register as clicks
-  // (opens the detail dialog) instead of starting a drag. KeyboardSensor
-  // keeps the board accessible (space to pick up, arrows to move, enter to
-  // drop).
-  const dndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 180, tolerance: 8 },
-    }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
-
-  const activeDragLead = activeDragId
-    ? leads.find((l) => l.id === activeDragId) || null
-    : null;
-
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    setActiveDragId(String(event.active.id));
-  }, []);
-
-  const handleDragEnd = useCallback(
-    async (event: DragEndEvent) => {
-      setActiveDragId(null);
-      const { active, over } = event;
-      if (!over) return;
-
-      const leadId = String(active.id);
-      const newStatus = String(over.id);
-
-      // `over.id` is the droppable stage id (the column). Bail if it isn't a
-      // known stage — this guards against dropping on a stray element.
-      if (!KANBAN_STATUSES.includes(newStatus as typeof KANBAN_STATUSES[number])) return;
-
-      const lead = leads.find((l) => l.id === leadId);
-      if (!lead) return;
-
-      // No-op if dropped back on its own column.
-      if (mapToKanbanStatus(lead.status) === newStatus) return;
-
-      // Optimistic update — move the card immediately so the UI feels instant.
-      // We patch the local `leads` array in place; the server round-trip will
-      // either confirm (fetchLeads refreshes with canonical data) or revert.
-      const prevLeads = leads;
-      setLeads((cur) =>
-        cur.map((l) => (l.id === leadId ? { ...l, status: newStatus } : l)),
-      );
-      if (selectedLead?.id === leadId) {
-        setSelectedLead((cur) => (cur ? { ...cur, status: newStatus } : cur));
-      }
-
-      try {
-        await handleStatusChange(leadId, newStatus);
-      } catch {
-        // Revert on failure (network or server error).
-        setLeads(prevLeads);
-        if (selectedLead?.id === leadId) {
-          setSelectedLead((cur) => (cur ? { ...cur, status: lead.status } : cur));
-        }
-      }
-    },
-    [leads, selectedLead, handleStatusChange],
-  );
+  // The inline Lead-status Kanban (DndContext + SortableContext + Droppable
+  // columns) lived here. It was removed because the Deal-based
+  // SalesPipelineView (sidebar → CRM → Pipeline) is now the single source
+  // of truth for the sales pipeline. The Leads page is list (table) view
+  // only — `handleStatusChange` is still used by the Lead detail dialog's
+  // status picker to move a single Lead across stages.
 
   const openEditLead = (lead: Lead) => {
     setEditingLead(lead);
@@ -1861,256 +1821,13 @@ export function LeadsView() {
   };
 
   // ============================================================
-  // Render: Loading skeletons
+  // Render: Kanban board — REMOVED
   // ============================================================
-
-  const renderKanbanSkeletons = () => (
-    <div className="flex gap-4 overflow-x-auto pb-4">
-      {KANBAN_STATUSES.map((status) => (
-        <div key={status} className="min-w-[260px] w-[260px] shrink-0">
-          <div className={`rounded-t-lg p-3 ${STATUS_CONFIG[status].headerBg}`}>
-            <Skeleton className="h-4 w-20 bg-white/20" />
-          </div>
-          <div className="bg-muted/30 rounded-b-lg border border-t-0 p-3 space-y-3">
-            {[1, 2].map((i) => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="p-3 space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
-                  <Skeleton className="h-3 w-2/3" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-
-  // ============================================================
-  // Render: Kanban card
-  // ============================================================
-
-  const renderKanbanCard = (lead: Lead, draggable = true) => {
-    const isClosed = lead.status === 'won' || lead.status === 'lost';
-    const stageConfig = getStatusConfig(lead.status);
-
-    const card = (
-      <Card
-        className={cn(
-          'group relative overflow-hidden transition-all duration-200',
-          'hover:shadow-lg hover:-translate-y-0.5',
-          'border-l-4',
-          stageConfig.borderColor,
-          isClosed && 'opacity-90',
-          // Subtle stage tint so closed cards read differently from active ones
-          lead.status === 'won' && 'bg-emerald-50/40',
-          lead.status === 'lost' && 'bg-red-50/40',
-        )}
-      >
-        <CardContent className="p-3 space-y-2">
-          {/* Header row — name + drag handle + menu */}
-          <div className="flex items-start justify-between gap-1.5">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <span className={cn('size-2 rounded-full shrink-0', PRIORITY_CONFIG[lead.priority]?.dotColor || 'bg-gray-400')} />
-                <h4 className="font-semibold text-sm truncate leading-tight">{lead.name}</h4>
-              </div>
-              {lead.title && (
-                <p className="text-xs text-emerald-700 truncate mt-0.5 font-medium">{lead.title}</p>
-              )}
-            </div>
-
-            {/* Drag handle — always visible on touch, hover on desktop.
-                stopPropagation so clicking it never triggers the card click. */}
-            {draggable && (
-              <div
-                className={cn(
-                  'shrink-0 p-0.5 rounded text-muted-foreground/50',
-                  'opacity-60 lg:opacity-0 lg:group-hover:opacity-60',
-                  'lg:group-hover:text-muted-foreground',
-                  'cursor-grab active:cursor-grabbing',
-                  'transition-opacity',
-                )}
-                onPointerDown={(e) => e.stopPropagation()}
-                title="Drag to move"
-              >
-                <GripVertical className="size-4" />
-              </div>
-            )}
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    'h-6 w-6 shrink-0',
-                    'opacity-60 lg:opacity-0 lg:group-hover:opacity-100',
-                    'transition-opacity',
-                  )}
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal className="size-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                {!['won', 'lost'].includes(lead.status) && (
-                  <DropdownMenuItem onClick={() => openConvertDialog(lead)}>
-                    <ArrowRight className="size-3.5 mr-2" /> Convert to Job
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={() => openEditLead(lead)}>
-                  <Pencil className="size-3.5 mr-2" /> Edit
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onClick={() => openDeleteDialog(lead)}>
-                  <Trash2 className="size-3.5 mr-2" /> Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          {/* Phone */}
-          <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <Phone className="size-3 shrink-0" />
-            <span className="truncate">{lead.phone}</span>
-          </p>
-
-          {/* Badges: source + service */}
-          <div className="flex flex-wrap items-center gap-1">
-            {renderSourceBadge(lead.source)}
-            {lead.serviceType && (
-              <Badge variant="secondary" className="text-[10px] h-5">
-                {getServiceTypeLabel(lead.serviceType)}
-              </Badge>
-            )}
-          </div>
-
-          {/* Value + footer */}
-          <div className="flex items-center justify-between pt-1.5 border-t">
-            {lead.value > 0 ? (
-              <span className="flex items-center gap-0.5 text-sm font-bold text-emerald-700">
-                <DollarSign className="size-3.5" />
-                {formatCompact(lead.value)}
-              </span>
-            ) : (
-              <span className="text-[11px] text-muted-foreground/60">No value</span>
-            )}
-            {!isClosed ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-5 text-[10px] px-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                onClick={(e) => { e.stopPropagation(); openConvertDialog(lead); }}
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                <ArrowRight className="size-3 mr-0.5" /> Convert
-              </Button>
-            ) : lead.status === 'won' && lead.job ? (
-              <Badge variant="outline" className="text-[10px] h-4 bg-emerald-50 text-emerald-700 border-emerald-200">
-                <CheckCircle2 className="size-2.5 mr-0.5" /> Job
-              </Badge>
-            ) : (
-              <span className="text-[10px] text-muted-foreground/60 flex items-center gap-0.5">
-                <Clock className="size-2.5" /> {formatDateShort(lead.createdAt)}
-              </span>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    );
-
-    if (!draggable) return card;
-
-    return (
-      <SortableLeadCard id={lead.id} onClick={() => openLeadDetail(lead)}>
-        {card}
-      </SortableLeadCard>
-    );
-  };
-
-  // ============================================================
-  // Render: Kanban board (drag-and-drop)
-  // ============================================================
-
-  const renderKanbanBoard = () => {
-    if (loading) return renderKanbanSkeletons();
-
-    if (leads.length === 0) {
-      return (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Target className="h-12 w-12 text-muted-foreground/40 mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-1">No leads yet</h3>
-          <p className="text-sm text-muted-foreground max-w-md">
-            Create your first lead to start tracking it through your pipeline.
-          </p>
-        </div>
-      );
-    }
-
-    return (
-      <DndContext
-        sensors={dndSensors}
-        collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        {/* Mobile hint */}
-        <p className="lg:hidden text-xs text-muted-foreground mb-2 flex items-center gap-1">
-          <Move className="size-3" /> Drag cards between columns · swipe to see all stages →
-        </p>
-
-        {/* Horizontal scroll container with snap on mobile */}
-        <div className="overflow-x-auto pb-4 -mx-1 px-1">
-          <div className="flex gap-3 min-w-max lg:min-w-0 lg:w-full">
-            {KANBAN_STATUSES.map((status) => {
-              const config = STATUS_CONFIG[status];
-              const columnLeads = kanbanGroups[status] || [];
-              const columnValue = columnLeads.reduce((sum, l) => sum + (l.value || 0), 0);
-
-              return (
-                <DroppableStatusColumn
-                  key={status}
-                  status={status}
-                  label={config.label}
-                  headerBg={config.headerBg}
-                  accent={config.dotColor}
-                  count={columnLeads.length}
-                  valueLabel={columnValue > 0 ? formatCompact(columnValue) : null}
-                >
-                  <SortableContext
-                    items={columnLeads.map((l) => l.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <div className="space-y-2 p-2 min-h-[120px]">
-                      {columnLeads.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground/50 border border-dashed rounded-md">
-                          <Move className="size-4 mb-1 opacity-40" />
-                          <p className="text-[11px]">Drop here</p>
-                        </div>
-                      ) : (
-                        columnLeads.map((lead) => renderKanbanCard(lead, true))
-                      )}
-                    </div>
-                  </SortableContext>
-                </DroppableStatusColumn>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Drag overlay — the ghost card that follows the cursor/finger */}
-        <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
-          {activeDragLead ? (
-            <div className="w-[260px] rotate-2 shadow-xl opacity-95">
-              {renderKanbanCard(activeDragLead, false)}
-            </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
-    );
-  };
+  // The inline drag-and-drop Kanban (`renderKanbanBoard`,
+  // `renderKanbanCard`, `renderKanbanSkeletons`) lived here. Removed
+  // because the Deal-based SalesPipelineView (sidebar → CRM → Pipeline)
+  // is now the single source of truth for the sales pipeline. The Leads
+  // page renders the table view only — see renderTableView() below.
 
   // ============================================================
   // Render: Table view
@@ -2565,16 +2282,17 @@ export function LeadsView() {
           </DialogHeader>
 
           <div className="space-y-5">
-            {/* Top action row — switch to the Pipeline tab to move the linked
-                Deal's stage. Placed near the top so it's reachable without
-                scrolling past the rest of the detail body. */}
+            {/* Top action row — jump to the dedicated Sales Pipeline view
+                (sidebar → CRM → Pipeline) to move the linked Deal's stage.
+                Placed near the top so it's reachable without scrolling past
+                the rest of the detail body. */}
             <div className="flex justify-end">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
                   setShowDetailDialog(false);
-                  setActiveTab('pipeline');
+                  setGlobalView('salesPipeline');
                 }}
                 className="gap-2"
               >
@@ -3948,35 +3666,24 @@ export function LeadsView() {
                 <RefreshCw className="size-3.5 mr-1" /> Refresh
               </Button>
             </div>
-            {/* View toggle (Kanban / Table) */}
-            <div className="flex items-center border rounded-lg p-0.5">
-              <Button
-                variant={activeView === 'kanban' ? 'default' : 'ghost'}
-                size="sm"
-                className={cn(
-                  'h-8 px-3 text-xs',
-                  activeView === 'kanban' && 'bg-emerald-600 hover:bg-emerald-700'
-                )}
-                onClick={() => setActiveView('kanban')}
-              >
-                <LayoutGrid className="size-3.5 mr-1" /> Kanban
-              </Button>
-              <Button
-                variant={activeView === 'table' ? 'default' : 'ghost'}
-                size="sm"
-                className={cn(
-                  'h-8 px-3 text-xs',
-                  activeView === 'table' && 'bg-emerald-600 hover:bg-emerald-700'
-                )}
-                onClick={() => setActiveView('table')}
-              >
-                <List className="size-3.5 mr-1" /> Table
-              </Button>
-            </div>
+            {/* View toggle (Kanban / Table) — REMOVED.
+                The inline Kanban was removed in favour of the Deal-based
+                SalesPipelineView (sidebar → CRM → Pipeline). The Leads page
+                is table view only — see renderTableView() below. A "Pipeline"
+                shortcut button takes the user to the dedicated Pipeline view. */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-3 text-xs gap-1.5"
+              onClick={() => setGlobalView('salesPipeline')}
+              title="Open the Sales Pipeline board"
+            >
+              <BarChart3 className="size-3.5" /> Open Pipeline
+            </Button>
           </div>
 
-          {/* View Content (Kanban board or Table) */}
-          {activeView === 'kanban' ? renderKanbanBoard() : renderTableView()}
+          {/* View Content — table view only (Kanban moved to Pipeline page) */}
+          {renderTableView()}
         </TabsContent>
 
         {/* ─── Analytics Tab (stat cards + charts) ──────────────── */}
@@ -3996,107 +3703,10 @@ export function LeadsView() {
 }
 
 // ============================================================
-// DnD helper components (module-level so hooks run cleanly)
+// DnD helper components — REMOVED
 // ============================================================
-
-/**
- * Sortable wrapper around a lead card. Uses @dnd-kit's `useSortable` so the
- * card can be dragged and dropped onto any `DroppableStatusColumn`.
- *
- * The `onClick` fires only for genuine clicks (the sensors' activation
- * constraints filter out drag-starts), so it's safe to open the detail
- * dialog here. `touch-none` is required so the browser doesn't hijack the
- * touch gesture for scrolling while the user is trying to drag.
- */
-function SortableLeadCard({
-  id,
-  children,
-  onClick,
-}: {
-  id: string;
-  children: ReactNode;
-  onClick: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-
-  const style: CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.35 : 1,
-    zIndex: isDragging ? 50 : undefined,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      onClick={onClick}
-      className="touch-none select-none"
-    >
-      {children}
-    </div>
-  );
-}
-
-/**
- * A droppable Kanban column. The droppable id is the canonical status string
- * (e.g. "new_lead", "won") — `handleDragEnd` reads it directly from
- * `over.id` to know which stage the card was dropped on.
- *
- * Visual feedback: when a card is dragged over this column, the column gets
- * a highlighted ring + tinted background so the user knows exactly where the
- * drop will land.
- */
-function DroppableStatusColumn({
-  status,
-  label,
-  headerBg,
-  accent,
-  count,
-  valueLabel,
-  children,
-}: {
-  status: string;
-  label: string;
-  headerBg: string;
-  accent: string;
-  count: number;
-  valueLabel: string | null;
-  children: ReactNode;
-}) {
-  const { isOver, setNodeRef } = useDroppable({ id: status });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        // Mobile: ~78vw so 1.5 columns are visible (signals horizontal scroll).
-        // Desktop: fixed 280px, or flex-1 to fill available width.
-        'w-[78vw] sm:w-[260px] lg:w-[280px] lg:flex-1 shrink-0',
-        'rounded-xl border bg-muted/20 transition-all duration-200',
-        isOver && 'ring-2 ring-emerald-400 ring-offset-1 bg-emerald-50/50 scale-[1.01]',
-      )}
-    >
-      {/* Column header */}
-      <div className={cn('rounded-t-xl px-3 py-2.5 flex items-center justify-between', headerBg)}>
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={cn('size-2.5 rounded-full shrink-0 ring-2 ring-white/40', accent)} />
-          <span className="font-semibold text-sm text-white truncate">{label}</span>
-          <Badge className="bg-white/25 text-white border-0 text-xs hover:bg-white/25 shrink-0">
-            {count}
-          </Badge>
-        </div>
-        {valueLabel && (
-          <span className="text-xs text-white/80 font-medium shrink-0">{valueLabel}</span>
-        )}
-      </div>
-
-      {/* Column body */}
-      <div className="rounded-b-xl p-1 max-h-[calc(100vh-320px)] overflow-y-auto overflow-x-hidden">
-        {children}
-      </div>
-    </div>
-  );
-}
+// `SortableLeadCard` and `DroppableStatusColumn` (the @dnd-kit wrappers
+// used by the inline Lead-status Kanban) lived here. Removed together
+// with `renderKanbanBoard` / `renderKanbanCard` / `renderKanbanSkeletons`
+// above — the Deal-based SalesPipelineView (sidebar → CRM → Pipeline)
+// is now the single source of truth for the sales pipeline.

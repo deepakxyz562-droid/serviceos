@@ -35,5 +35,23 @@ export async function register() {
     // operator knows push is broken.
     console.error('[instrumentation] Failed to register lifecycle push handlers:', err)
   }
+
+  // ── Lead-Deal Sync Listener ───────────────────────────────────────────
+  // Registers an EventBus listener on `lead.created` that auto-creates a
+  // linked Deal for every new Lead (regardless of which of the ~15
+  // ingestion endpoints created it). Non-invasive — zero changes to the
+  // ingestion endpoints. See src/lib/lead-deal-sync.ts for the full
+  // architecture and src/lib/lead-deal-sync-listener.ts for the listener.
+  try {
+    const { registerLeadDealSyncListener } = await import(
+      '@/lib/lead-deal-sync-listener'
+    )
+    registerLeadDealSyncListener()
+  } catch (err) {
+    // Non-fatal — Leads will still be created; they just won't get a
+    // linked Deal until the lazy safety net in GET /api/deals runs or the
+    // admin backfill endpoint is invoked.
+    console.error('[instrumentation] Failed to register lead-deal sync listener:', err)
+  }
 }
 

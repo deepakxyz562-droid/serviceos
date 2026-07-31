@@ -2496,9 +2496,12 @@ function ScheduleView({ employeeId }: { employeeId: string }) {
 
 // ─── Sub-View: Attendance ───────────────────────────────────────────────────
 
-function AttendanceView() {
+function AttendanceView({ onShiftChange }: { onShiftChange?: (hasShift: boolean) => void }) {
   // ── Real shift state (V1.5) ──────────────────────────────────────────────
   // activeShift mirrors the EmployeeShift row from /api/employee/shift/today.
+  // onShiftChange notifies the parent layout (EmployeePortalLayout) whenever
+  // the shift state changes, so the "Exit / Go Offline" button in the avatar
+  // dropdown stays in sync with clock-in/out actions performed here.
   interface ActiveShift {
     id: string;
     clockIn: string;
@@ -2521,6 +2524,14 @@ function AttendanceView() {
   const [todayTotals, setTodayTotals] = useState<TodayTotals | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Notify the parent layout whenever the active shift changes so the "Exit /
+  // Go Offline" button in the avatar dropdown reflects reality immediately
+  // (without waiting for the user to re-open the dropdown or switch apps).
+  useEffect(() => {
+    onShiftChange?.(!!activeShift && activeShift.status !== 'completed');
+  }, [activeShift, onShiftChange]);
+
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   // Week history — populated from /api/employee/shift/week so the "This Week"
@@ -3804,9 +3815,14 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
         const data = await res.json();
         const shift = data?.activeShift;
         setHasActiveShift(Boolean(shift && shift.status !== 'completed'));
+      } else {
+        // Surface non-OK responses (e.g. 500 from a Supabase schema mismatch)
+        // to the console so the root cause is diagnosable instead of the
+        // button silently staying disabled with no explanation.
+        console.warn('[Exit button] /api/employee/shift/today returned', res.status);
       }
-    } catch {
-      // silent — the button just won't show the "active" state
+    } catch (err) {
+      console.warn('[Exit button] shift state fetch failed', err);
     }
   }, []);
 
@@ -3891,7 +3907,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
       case 'schedule':
         return <ScheduleView employeeId={employeeId} />;
       case 'attendance':
-        return <AttendanceView />;
+        return <AttendanceView onShiftChange={setHasActiveShift} />;
       case 'inbox':
         return <InboxView />;
       case 'profile':
@@ -3974,7 +3990,11 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
 
             {/* Avatar dropdown — on mobile show avatar only (hide the
                 chevron to save horizontal space). */}
-            <DropdownMenu>
+            {/* Refresh shift state every time the dropdown opens so the
+                "Exit / Go Offline" button reflects the latest clock-in/out —
+                the user may have clocked in from the Attendance view moments
+                ago and the parent layout's hasActiveShift may be stale. */}
+            <DropdownMenu onOpenChange={(open) => { if (open) refreshShiftState(); }}>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="h-9 px-1.5 sm:px-2 gap-1.5 sm:gap-2">
                   <Avatar className="size-7">

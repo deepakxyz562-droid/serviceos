@@ -795,7 +795,16 @@ function OwnerTimesheet() {
           toast.error('Session expired', { description: 'Please log in again to view timesheets.' });
           return;
         }
-        throw new Error('Failed to load team timesheet');
+        // Surface the real server error (e.g. Prisma schema mismatch on
+        // Supabase: "column \"category\" of relation \"EmployeeShift\" does
+        // not exist") so the user/developer can diagnose the root cause
+        // instead of seeing a generic "Failed to load team timesheet".
+        let serverMsg = '';
+        try {
+          const errBody = await res.json();
+          serverMsg = errBody?.error || '';
+        } catch { /* non-JSON body */ }
+        throw new Error(serverMsg || `Failed to load team timesheet (HTTP ${res.status})`);
       }
       const data = await res.json();
       setTeam(data.team || []);

@@ -73,6 +73,17 @@ interface AppState {
   // This avoids the user having to click the in-view "New X" button twice.
   pendingCreate: 'lead' | 'customer' | 'job' | 'invoice' | 'campaign' | null;
   setPendingCreate: (entity: 'lead' | 'customer' | 'job' | 'invoice' | 'campaign' | null) => void;
+
+  // ── Cross-view Reports tab + filter signal (Phase 6) ────────────────
+  // When the user clicks the Won / Lost summary box on the Sales Pipeline
+  // view, we stash the target tab + sales-outcomes type filter here, switch
+  // to the Reports view, and ReportsView consumes it on mount (sets the
+  // active tab + salesOutcomesType, then clears it). Mirrors the
+  // pendingCreate pattern.
+  pendingReportsTab: string | null;
+  setPendingReportsTab: (tab: string | null) => void;
+  pendingReportsSalesOutcomesType: 'all' | 'won' | 'lost' | null;
+  setPendingReportsSalesOutcomesType: (t: 'all' | 'won' | 'lost' | null) => void;
 }
 
 // Shape of the data passed from a Lead into the New Job form.
@@ -153,4 +164,10 @@ export const useAppStore = create<AppState>((set) => ({
   // Cross-view "New X" create signal
   pendingCreate: null,
   setPendingCreate: (entity) => set({ pendingCreate: entity }),
+
+  // Cross-view Reports tab + filter signal (Phase 6)
+  pendingReportsTab: null,
+  setPendingReportsTab: (tab) => set({ pendingReportsTab: tab }),
+  pendingReportsSalesOutcomesType: null,
+  setPendingReportsSalesOutcomesType: (t) => set({ pendingReportsSalesOutcomesType: t }),
 }));

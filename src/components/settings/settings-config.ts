@@ -119,11 +119,11 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   {
     id: 'crm',
     label: 'CRM',
-    icon: 'Users',
-    description: 'Lead pipeline, opportunity stages, customer types, tags, segments, custom fields',
+    icon: 'Kanban',
+    description: 'Pipeline stages, lost reasons, lead sources, salesperson assignment rules',
     group: 'business',
     fullWidth: true,
-    keywords: ['leads', 'pipeline', 'opportunities', 'stages', 'segments', 'tags'],
+    keywords: ['leads', 'pipeline', 'opportunities', 'stages', 'lost reasons', 'lead sources', 'salesperson', 'assignment', 'crm'],
   },
   {
     id: 'jobs-scheduling',

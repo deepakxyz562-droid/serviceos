@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { EventBus } from '@/lib/event-bus';
 import { getAuthUser } from '@/lib/auth';
+import {
+  autoCloseDealAsWonByQuote,
+  autoCloseDealAsWonByLead,
+} from '@/lib/deal-auto-close';
 
 /**
  * POST /api/jobs/create
@@ -200,6 +204,61 @@ export async function POST(request: NextRequest) {
       });
     } catch (eventErr) {
       console.error('[JobsCreate] Failed to emit job.created event:', eventErr);
+    }
+
+    // ─── Auto-close linked Deal as 'won' (Phase 6) ───────────────────
+    // When a Job is created from a Quote (body.quoteId is set) OR from a
+    // Lead (body.leadId is set), automatically move the linked Deal to
+    // the 'won' stage + stamp `closedAt` + `convertedJobId` + create a
+    // DealStageHistory entry + sync the Lead's status to 'won'.
+    //
+    // Strategy:
+    //   1. If `body.quoteId` is provided: link the Quote to the new Job
+    //      (`Quote.jobId = newJob.id`) and call `autoCloseDealAsWonByQuote`
+    //      which finds the Deal via `Quote.dealId` (or `Deal.leadId`
+    //      fallback).
+    //   2. Else if `body.leadId` is provided: call `autoCloseDealAsWonByLead`
+    //      which finds the Deal via `Deal.leadId` directly.
+    //
+    // Best-effort / non-blocking: if the Deal update fails for any
+    // reason (no linked Deal, DB error, race condition), the Job
+    // creation still succeeds. The Deal can be moved to 'won' manually
+    // via the Sales Pipeline view.
+    const quoteIdRaw = typeof body.quoteId === 'string' ? body.quoteId.trim() : '';
+    const leadIdRaw = typeof body.leadId === 'string' ? body.leadId.trim() : '';
+
+    if (quoteIdRaw) {
+      try {
+        // Link the Quote to the new Job (so the Quote → Job relation is
+        // established even if the caller didn't update the Quote separately).
+        await db.quote.update({
+          where: { id: quoteIdRaw },
+          data: { jobId: job.id },
+        });
+      } catch (quoteLinkErr) {
+        console.error(
+          '[JobsCreate] Failed to link Quote to new Job (non-blocking):',
+          quoteLinkErr,
+        );
+      }
+
+      try {
+        await autoCloseDealAsWonByQuote(quoteIdRaw, job.id, user.id);
+      } catch (dealErr) {
+        console.error(
+          '[JobsCreate] auto-close Deal as won (by quote) failed (non-blocking):',
+          dealErr,
+        );
+      }
+    } else if (leadIdRaw) {
+      try {
+        await autoCloseDealAsWonByLead(leadIdRaw, job.id, user.id);
+      } catch (dealErr) {
+        console.error(
+          '[JobsCreate] auto-close Deal as won (by lead) failed (non-blocking):',
+          dealErr,
+        );
+      }
     }
 
     return NextResponse.json(

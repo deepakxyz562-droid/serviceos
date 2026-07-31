@@ -122,6 +122,11 @@ const ownerNavSections: NavSection[] = [
   {
     title: 'CRM',
     items: [
+      // Pipeline is the primary sales view — a Deal-based drag-and-drop
+      // Kanban. Sits above Leads so it's the first CRM destination users
+      // reach. (Lead-based inline Kanban was removed from leads-view.tsx —
+      // Pipeline is now the single source of truth for the sales board.)
+      { view: 'salesPipeline', label: 'Pipeline', icon: Kanban },
       { view: 'leads', label: 'Leads', icon: Target },
       { view: 'customers', label: 'Customers', icon: Users },
       { view: 'reviews', label: 'Reviews', icon: Star },
@@ -233,6 +238,7 @@ const superadminNavSections: NavSection[] = [
   {
     title: 'CRM',
     items: [
+      { view: 'salesPipeline', label: 'Pipeline', icon: Kanban },
       { view: 'leads', label: 'Leads', icon: Target },
       { view: 'customers', label: 'Customers', icon: Users },
     ],

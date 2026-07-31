@@ -855,6 +855,7 @@ model Quote {
   tenantId      String?
   customerId    String?
   leadId        String?
+  dealId        String?  // soft FK -> Deal.id (link quote → opportunity in the sales pipeline)
   jobRequestId String?  // -> JobRequest.id (if created from a quote request)
   jobId         String? // -> Job.id (when a quote is linked/converted to a job)
   validUntil    DateTime?
@@ -872,6 +873,7 @@ model Quote {
   @@index([status])
   @@index([customerId])
   @@index([jobId])
+  @@index([dealId])
 }
 
 // ==========================================
@@ -2509,6 +2511,7 @@ model Deal {
   expectedCloseDate DateTime?
   closedAt        DateTime?
   lossReason      String?
+  convertedJobId  String?   // hard FK -> Job.id (set when Deal is won + converted to a Job)
   tenantId        String?
   workspaceId     String?
   createdAt       DateTime  @default(now())
@@ -2518,6 +2521,43 @@ model Deal {
   @@index([assigneeId])
   @@index([customerId])
   @@index([tenantId])
+  @@index([convertedJobId])
+}
+
+// --- Pipeline configuration (customizable stages per tenant) ---
+
+model PipelineStage {
+  id           String   @id @default(cuid())
+  tenantId     String?
+  key          String   // unique within tenant: 'new_request', 'assessment_scheduled', 'custom_1', etc.
+  label        String   // display name: "New Request", "Assessment Scheduled"
+  section      String   @default("request") // 'request' | 'quote' | 'closed'
+  sortOrder    Int      @default(0)
+  isSystem     Boolean  @default(false) // true for built-in Jobber-style stages (can't delete)
+  isClosedWon  Boolean  @default(false) // marks the "won" stage
+  isClosedLost Boolean  @default(false) // marks the "lost" stage
+  color        String?  // optional hex color for the column header
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantId, key])
+  @@index([tenantId, sortOrder])
+}
+
+model PipelineTask {
+  id           String    @id @default(cuid())
+  dealId       String
+  title        String
+  instructions String?
+  ownerId      String?   // userId of the assigned team member
+  dueDate      DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  tenantId     String?
+
+  @@index([dealId, completedAt])
+  @@index([tenantId, ownerId])
 }
 
 model DealStageHistory {

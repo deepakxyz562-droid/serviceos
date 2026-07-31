@@ -323,40 +323,58 @@ export async function POST(request: NextRequest) {
 
           customerId = customer.id
 
-          // Calculate lead score
+          // Calculate lead score (informational only — the Lead model does
+          // NOT have a `score` field; the value is computed for use in the
+          // response payload and for downstream scoring/qualification flows).
           const score = calculateLeadScore({ email, source: 'whatsapp' })
 
+          // ── Build a structured notesJson entry that captures the WhatsApp
+          // chatbot context (session id, requested service, preferred date).
+          // The previous implementation called `db.leadActivity.create(...)`
+          // to log this, but the `LeadActivity` Prisma model does NOT exist
+          // in the current schema — the call threw at runtime and broke the
+          // entire lead-creation flow. We now persist the same metadata
+          // inside Lead.notesJson (a stringified array of
+          // `{ text, createdAt, author? }` objects — see leads-view.tsx).
+          const chatbotNotes: { text: string; createdAt: string; author?: string }[] = []
+          const noteParts: string[] = ['Lead captured via WhatsApp chatbot']
+          if (collectedData.service) noteParts.push(`Service: ${collectedData.service}`)
+          if (collectedData.date) noteParts.push(`Preferred date: ${collectedData.date}`)
+          if (session?.id) noteParts.push(`Session: ${session.id}`)
+          chatbotNotes.push({
+            text: noteParts.join('\n'),
+            createdAt: new Date().toISOString(),
+            author: 'whatsapp-chatbot',
+          })
+
           // Create lead
+          // NOTE: Lead model has NO `score`, `service`, or `workspaceId`
+          // fields. We map:
+          //   - `service`  → `serviceType`  (Lead.serviceType is the canonical label)
+          //   - `score`    → computed above; NOT stored (Lead has no score field)
+          //   - `workspaceId` → dropped (Lead only stores `tenantId`)
           const lead = await db.lead.create({
             data: {
               name,
               phone,
               email: email ?? null,
               source: 'whatsapp',
-              score,
-              service: service ?? null,
+              serviceType: service ?? null,
               address: address ?? null,
               customerId: customer.id,
               tenantId: session.tenantId,
-              workspaceId: workspaceId ?? null,
+              notesJson: JSON.stringify(chatbotNotes),
             },
           })
 
           leadId = lead.id
 
-          // Create lead activity
-          await db.leadActivity.create({
-            data: {
-              leadId: lead.id,
-              type: 'whatsapp',
-              description: 'Lead captured via WhatsApp chatbot',
-              metadataJson: JSON.stringify({
-                sessionId: session.id,
-                service: collectedData.service,
-                preferredDate: collectedData.date,
-              }),
-            },
-          })
+          // (Legacy) Lead Activity — REMOVED
+          // The previous implementation called `db.leadActivity.create(...)`
+          // here, but the `LeadActivity` Prisma model does NOT exist in the
+          // current schema (see prisma/schema.prisma). The call threw at
+          // runtime and prevented lead creation from ever succeeding. The
+          // audit metadata is now persisted in `Lead.notesJson` above.
 
           // Link lead to the session
           await db.whatsAppLeadSession.update({

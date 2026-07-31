@@ -554,37 +554,54 @@ function applyWhereFilters(
     if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
       const op = value as WhereOperator;
 
+      // IMPORTANT: use independent `if` blocks (NOT `else if`) so that a
+      // compound filter like { gte: start, lte: end } applies BOTH bounds.
+      // The previous `else if` chain silently dropped `lte` when `gte` was
+      // present, causing the team timesheet API to fetch all shifts from
+      // `periodStart` onward with no upper bound on the Supabase adapter.
       if (op.equals !== undefined) {
         if (op.equals === null) { query.is(field, null); }
         else { query.eq(field, op.equals as string | number | boolean); }
-      } else if (op.not !== undefined) {
+      }
+      if (op.not !== undefined) {
         if (op.not === null) { query.not(field, 'is', null); }
         else { query.neq(field, op.not as string | number | boolean); }
-      } else if (op.in !== undefined) {
+      }
+      if (op.in !== undefined) {
         query.in(field, op.in as (string | number | boolean)[]);
-      } else if (op.contains !== undefined) {
+      }
+      if (op.contains !== undefined) {
         query.ilike(field, `%${op.contains}%`);
-      } else if (op.startsWith !== undefined) {
+      }
+      if (op.startsWith !== undefined) {
         query.ilike(field, `${op.startsWith}%`);
-      } else if (op.endsWith !== undefined) {
+      }
+      if (op.endsWith !== undefined) {
         query.ilike(field, `%${op.endsWith}`);
-      } else if (op.gt !== undefined) {
+      }
+      if (op.gt !== undefined) {
         const val = op.gt instanceof Date ? op.gt.toISOString() : op.gt;
         query.gt(field, val as string | number);
-      } else if (op.gte !== undefined) {
+      }
+      if (op.gte !== undefined) {
         const val = op.gte instanceof Date ? op.gte.toISOString() : op.gte;
         query.gte(field, val as string | number);
-      } else if (op.lt !== undefined) {
+      }
+      if (op.lt !== undefined) {
         const val = op.lt instanceof Date ? op.lt.toISOString() : op.lt;
         query.lt(field, val as string | number);
-      } else if (op.lte !== undefined) {
+      }
+      if (op.lte !== undefined) {
         const val = op.lte instanceof Date ? op.lte.toISOString() : op.lte;
         query.lte(field, val as string | number);
-      } else if (op.isSet === true) {
+      }
+      if (op.isSet === true) {
         query.not(field, 'is', null);
-      } else if (op.isSet === false) {
+      }
+      if (op.isSet === false) {
         query.is(field, null);
-      } else if (op.is !== undefined) {
+      }
+      if (op.is !== undefined) {
         if (op.is === null) { query.is(field, null); }
         else { query.eq(field, op.is as string | number | boolean); }
       }
