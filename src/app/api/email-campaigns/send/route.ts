@@ -7,6 +7,7 @@ import {
   resolveTenantId,
   personalizeForRecipient,
 } from '@/lib/broadcast-audience'
+import { hasMarketingConsent } from '@/lib/email-consent'
 
 interface SendCampaignBody {
   name: string
@@ -235,13 +236,17 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      // Skip unsubscribed contacts (customers are always 'active' per the resolver)
-      if (recipient.status === 'unsubscribed') {
+      // ── GDPR consent gate ──
+      // Skip recipients who have opted out (status='unsubscribed', an explicit
+      // marketingConsent=false, or a non-null unsubscribedAt). Legacy records
+      // with marketingConsent=null are still allowed (grandfathered) so the
+      // migration to consent tracking does not zero out the emailable audience.
+      if (!hasMarketingConsent(recipient)) {
         results.push({
           contactId: recipient.refId,
           email: recipient.email,
           success: false,
-          error: 'Contact unsubscribed',
+          error: 'Recipient opted out of marketing email',
         })
         skippedCount++
         continue
@@ -261,7 +266,41 @@ export async function POST(request: NextRequest) {
         credentialId: body.credentialId,
         usageType: 'marketing',
         tenantId: user.tenantId || undefined,
+        // ── Marketing tracking context ──
+        // sendEmail uses these to persist an EmailUnsubscribeToken, inject the
+        // open-pixel + click-redirect, and add the List-Unsubscribe header.
+        campaignId: body.campaignId,
+        recipientRefId: recipient.refId,
+        recipientSource: recipient.source,
       })
+
+      // ── Persist a CampaignMessage row for recipient-level tracking ──
+      // The open-pixel / click-redirect / unsubscribe endpoints look up this
+      // row by (campaignId, recipientEmail) to update readAt / clickedAt.
+      if (body.campaignId && sendResult.success) {
+        try {
+          await db.campaignMessage.create({
+            data: {
+              campaignId: body.campaignId,
+              recipientPhone: recipient.phone || recipient.email || '',
+              recipientEmail: recipient.email,
+              recipientName: recipient.name || null,
+              recipientId: recipient.source === 'customer' ? recipient.refId : null,
+              status: 'sent',
+              externalId: sendResult.messageId || null,
+              sentAt: new Date(),
+              metadataJson: JSON.stringify({
+                recipientSource: recipient.source,
+                recipientRefId: recipient.refId,
+                providerUsed: sendResult.providerUsed,
+                simulated: sendResult.simulated || false,
+              }),
+            },
+          })
+        } catch {
+          /* non-fatal — tracking row is best-effort */
+        }
+      }
 
       // Log each send (don't set customerId — Contact and Customer are different models)
       try {

@@ -16,6 +16,10 @@ export interface BroadcastRecipient {
   city?: string | null
   country?: string | null
   status?: string | null
+  /** GDPR marketing consent — null = legacy/unknown (treated as allowed), false = opt-out, true = opt-in */
+  marketingConsent?: boolean | null
+  /** Timestamp of last explicit unsubscribe (null = never) */
+  unsubscribedAt?: Date | string | null
 }
 
 export interface ResolveAudienceParams {
@@ -182,6 +186,7 @@ export async function resolveBroadcastAudience(
         select: {
           id: true, name: true, email: true, phone: true,
           company: true, city: true, country: true, status: true,
+          marketingConsent: true, unsubscribedAt: true,
         },
       })
       for (const c of contacts) {
@@ -196,6 +201,8 @@ export async function resolveBroadcastAudience(
           city: c.city || null,
           country: c.country || null,
           status: c.status || null,
+          marketingConsent: c.marketingConsent,
+          unsubscribedAt: c.unsubscribedAt,
         })
       }
     } catch {
@@ -238,6 +245,7 @@ export async function resolveBroadcastAudience(
         select: {
           id: true, name: true, email: true, phone: true,
           address: true,
+          marketingConsent: true, unsubscribedAt: true,
         },
       })
       for (const c of customers) {
@@ -251,7 +259,11 @@ export async function resolveBroadcastAudience(
           company: null,
           city: null,
           country: null,
-          status: 'active',
+          // Customers have no `status` field — derive a synthetic status from
+          // the consent fields so the send route's consent gate works uniformly.
+          status: c.unsubscribedAt ? 'unsubscribed' : 'active',
+          marketingConsent: c.marketingConsent,
+          unsubscribedAt: c.unsubscribedAt,
         })
       }
     } catch {
@@ -278,6 +290,8 @@ export async function resolveBroadcastAudience(
         email: e,
         phone: null,
         status: 'active',
+        marketingConsent: null,
+        unsubscribedAt: null,
       })
     }
   }

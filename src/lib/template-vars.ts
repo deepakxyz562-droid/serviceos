@@ -85,6 +85,24 @@ export const VARIABLE_CATEGORIES: VariableCategory[] = [
     ],
   },
   {
+    name: 'Compliance',
+    icon: 'ShieldCheck',
+    variables: [
+      {
+        key: 'unsubscribe_url',
+        label: 'Unsubscribe Link',
+        example: 'https://serviceos.cc/api/public/unsubscribe?t=...',
+        description: 'Per-recipient unsubscribe URL (marketing emails only). Always include this in campaign footers for GDPR/CAN-SPAM compliance.',
+      },
+      {
+        key: 'preferences_url',
+        label: 'Email Preferences Link',
+        example: 'https://serviceos.cc/preferences?t=...',
+        description: 'Per-recipient preferences page (marketing emails only).',
+      },
+    ],
+  },
+  {
     name: 'Employee',
     icon: 'HardHat',
     variables: [

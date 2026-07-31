@@ -4,14 +4,15 @@
  * CampaignProviderGate
  * ---------------------
  * Modal gate that blocks the Campaigns / Email Campaigns views until the
- * tenant has connected their OWN active providers for all 3 channels:
- * SMS, Email, and WhatsApp. Platform-shared providers (isPlatform=true)
- * are intentionally NOT counted — campaigns require the tenant's own
+ * tenant has connected their OWN active Email provider. SMS & WhatsApp
+ * campaign channels are disabled (GDPR / 24h-window compliance), so only
+ * Email is checked. Platform-shared providers (isPlatform=true) are
+ * intentionally NOT counted — campaigns require the tenant's own
  * credentials for reliable delivery and compliance.
  *
  * Behaviour:
  *   - On mount, fetches /api/campaigns/provider-status.
- *   - If `allConfigured === true` → renders null (no modal).
+ *   - If `status.email.configured === true` → renders null (no modal).
  *   - If `sessionStorage.campaign_gate_dismissed === '1'` → renders null
  *     for the rest of the browser session (re-appears next session).
  *   - Otherwise renders a non-dismissible shadcn Dialog (overlay-click +
@@ -37,9 +38,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
   AlertTriangle,
-  MessageSquare,
   Mail,
-  MessageCircle,
   Check,
   X,
   ArrowRight,
@@ -120,8 +119,8 @@ export function CampaignProviderGate({ onConfigure }: CampaignProviderGateProps)
       return
     }
     if (status) {
-      const anyConfigured = status.sms.configured || status.email.configured || status.whatsapp.configured
-      // Only block if NO channels are configured at all.
+      const anyConfigured = status.email.configured
+      // Only block if email is not configured.
       if (!anyConfigured) {
         setOpen(true)
       } else {
@@ -136,29 +135,17 @@ export function CampaignProviderGate({ onConfigure }: CampaignProviderGateProps)
   if (isLoading || dismissed || !status) {
     return null
   }
-  const anyConfigured = status.sms.configured || status.email.configured || status.whatsapp.configured
+  const anyConfigured = status.email.configured
   if (anyConfigured) {
     return null
   }
 
   const channels = [
     {
-      key: 'sms' as const,
-      label: 'SMS',
-      icon: MessageSquare,
-      ...status.sms,
-    },
-    {
       key: 'email' as const,
       label: 'Email',
       icon: Mail,
       ...status.email,
-    },
-    {
-      key: 'whatsapp' as const,
-      label: 'WhatsApp',
-      icon: MessageCircle,
-      ...status.whatsapp,
     },
   ]
 
@@ -195,24 +182,23 @@ export function CampaignProviderGate({ onConfigure }: CampaignProviderGateProps)
               <AlertTriangle className="size-5 text-white" />
             </div>
             <div className="min-w-0">
-              <DialogTitle>Configure Your Communication Channels</DialogTitle>
+              <DialogTitle>Connect Your Email Provider</DialogTitle>
               <DialogDescription className="mt-1">
-                Required before using campaigns
+                Required before sending campaigns
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Before using campaigns, connect at least one of your own SMS, Email, or
-          WhatsApp providers. Platform-shared providers are not available for
-          campaign sending — you need your own credentials for reliable delivery
-          and compliance. Each channel is independent: configure the ones you
-          want to use.
+          Campaigns are sent through your own email service provider (SMTP, Resend,
+          SendGrid, Amazon SES, Mailgun, Postmark, or Brevo) for reliable delivery
+          and GDPR compliance. We provide transactional email infrastructure only —
+          marketing campaigns use your connected provider.
         </p>
 
-        {/* 3-column status grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Email-only status card */}
+        <div className="grid grid-cols-1 gap-3">
           {channels.map((ch) => {
             const Icon = ch.icon
             const ok = ch.configured

@@ -10,6 +10,7 @@ import {
   personalizeForRecipient,
   type BroadcastRecipient,
 } from '@/lib/broadcast-audience'
+import { hasMarketingConsent } from '@/lib/email-consent'
 
 interface SendBroadcastBody {
   // Identification
@@ -80,6 +81,25 @@ export async function POST(request: NextRequest) {
     }
 
     const channel = body.channel || (campaign?.channel as SendBroadcastBody['channel']) || 'email'
+
+    // ── Email-only enforcement ──────────────────────────────────────────────
+    // SMS & WhatsApp campaign channels are disabled for compliance:
+    //   - SMS had no real transport (it called sendWhatsAppMessage as a stand-in)
+    //   - WhatsApp campaigns violate the 24h customer-service window rule
+    //   - Neither had GDPR/opt-out consent tracking
+    // Transactional WhatsApp/SMS (quotes, invoices, reminders) still works via
+    // their dedicated senders (whatsapp-notifications.ts etc.) — only the
+    // bulk-campaign path is restricted to email.
+    if (channel !== 'email') {
+      return NextResponse.json(
+        {
+          error: 'CHANNEL_NOT_SUPPORTED',
+          message:
+            'SMS and WhatsApp campaigns are no longer supported. Only email campaigns are available — they support GDPR-compliant unsubscribe tracking and engagement analytics. Transactional WhatsApp/SMS messages (quotes, invoices, reminders) are unaffected.',
+        },
+        { status: 409 },
+      )
+    }
 
     // ── Credit check for WhatsApp/SMS/Multi channel ────────────────────────
     if ((channel === 'whatsapp' || channel === 'sms' || channel === 'multi') && user.tenantId) {
@@ -286,8 +306,9 @@ async function dispatchToRecipient(
     if (!recipient.email || !recipient.email.trim()) {
       return { ...baseLog, channel: 'email', skipped: true, error: 'No email address' }
     }
-    if (recipient.status === 'unsubscribed') {
-      return { ...baseLog, channel: 'email', skipped: true, error: 'Contact unsubscribed' }
+    // ── GDPR consent gate ──
+    if (!hasMarketingConsent(recipient)) {
+      return { ...baseLog, channel: 'email', skipped: true, error: 'Recipient opted out of marketing email' }
     }
     const subject = personalizeForRecipient(body.subject || '', recipient)
     const html = personalizeForRecipient(body.html || '', recipient)
@@ -302,7 +323,37 @@ async function dispatchToRecipient(
       credentialId: body.credentialId,
       usageType: 'marketing',
       tenantId: tenantId || undefined,
+      // ── Marketing tracking context ──
+      campaignId: body.campaignId,
+      recipientRefId: recipient.refId,
+      recipientSource: recipient.source,
     })
+
+    // ── Persist a CampaignMessage row for recipient-level tracking ──
+    if (body.campaignId && result.success) {
+      try {
+        await db.campaignMessage.create({
+          data: {
+            campaignId: body.campaignId,
+            recipientPhone: recipient.phone || recipient.email || '',
+            recipientEmail: recipient.email,
+            recipientName: recipient.name || null,
+            recipientId: recipient.source === 'customer' ? recipient.refId : null,
+            status: 'sent',
+            externalId: result.messageId || null,
+            sentAt: new Date(),
+            metadataJson: JSON.stringify({
+              recipientSource: recipient.source,
+              recipientRefId: recipient.refId,
+              providerUsed: result.providerUsed,
+              simulated: result.simulated || false,
+            }),
+          },
+        })
+      } catch {
+        /* non-fatal */
+      }
+    }
 
     return {
       ...baseLog,
