@@ -122,7 +122,7 @@ interface TeamRow {
   currentShift: { id: string; clockIn: string; status: ShiftStatus } | null;
   lastClockIn: string | null;
   today: { totalMinutes: number; workingMinutes: number; breakMinutes: number; shiftsCount: number; byCategory?: Record<string, number> };
-  period: { totalMinutes: number; workingMinutes: number; breakMinutes: number; shiftsCount: number; byCategory?: Record<string, number> };
+  period: { totalMinutes: number; workingMinutes: number; breakMinutes: number; shiftsCount: number; byCategory?: Record<string, number>; byDay?: number[] };
   // Jobber-style: per-employee time entries for the Day view (populated when
   // view=day is requested from /api/time-tracking/team).
   entries?: TimeEntry[];
@@ -1075,24 +1075,18 @@ function OwnerTimesheet() {
                                 {row.currentShift ? '—' : (entries[0]?.clockOut ? fmtClock(entries[0].clockOut) : '—')}
                               </TableCell>
                               <TableCell className="text-right text-sm font-medium tabular-nums">
-                                {fmtMinsStyled(row.today.workingMinutes, durationFormat)}
+                                {fmtMinsStyled(row.period.workingMinutes, durationFormat)}
                               </TableCell>
                             </>
                           ) : (
                             <>
                               {(() => {
-                                // Build per-day totals from the period's byCategory
-                                // (the API returns aggregated period totals; for a
-                                // proper per-day week breakdown we'd need a 7-day
-                                // endpoint, but we can show a reasonable summary
-                                // using the entries if available, else the period total
-                                // spread across worked days).
-                                const total = row.period.workingMinutes || 0;
-                                const workedDays = Math.max(1, row.period.shiftsCount || 1);
-                                const perDay = Math.round(total / workedDays);
-                                return ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((_, i) => (
+                                // Per-day breakdown from the API (Mon..Sun).
+                                // Falls back to '—' for days with no tracked time.
+                                const byDay = row.period.byDay;
+                                return [0, 1, 2, 3, 4, 5, 6].map((i) => (
                                   <TableCell key={i} className="text-right text-xs text-muted-foreground tabular-nums">
-                                    {total > 0 && i < workedDays ? fmtMins(perDay) : '—'}
+                                    {byDay && byDay[i] > 0 ? fmtMins(byDay[i]) : '—'}
                                   </TableCell>
                                 ));
                               })()}
