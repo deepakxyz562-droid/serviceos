@@ -94,6 +94,7 @@ import { BillingView } from '@/components/views/billing-view';
 import { ExpensesView } from '@/components/views/expenses-view';
 import { CustomerPortalView } from '@/components/views/customer-portal-view';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAppStore } from '@/store/app-store';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -434,7 +435,23 @@ const PLACEHOLDER_CONFIGS: Record<string, {
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export function SettingsView() {
-  const [activeSection, setActiveSection] = useState('company');
+  // Consume any pending deep-link target section (e.g. when the user clicked
+  // "Configure AI Voice" on the AI Receptionist view). Falls back to 'company'
+  // when no pending section is set. Cleared after consumption so a refresh
+  // returns to the default 'company' section.
+  const pendingSettingsSection = useAppStore((s) => s.pendingSettingsSection);
+  const setPendingSettingsSection = useAppStore((s) => s.setPendingSettingsSection);
+  const [activeSection, setActiveSection] = useState(
+    () => pendingSettingsSection || 'company',
+  );
+
+  // Clear the pending signal once consumed so a subsequent refresh or
+  // settings open doesn't re-target the same section unexpectedly.
+  useEffect(() => {
+    if (pendingSettingsSection) {
+      setPendingSettingsSection(null);
+    }
+  }, [pendingSettingsSection, setPendingSettingsSection]);
 
   // Shared tenant snapshot — Marketplace section needs tenantId/industry/slug
   // for its URL preview. Company section owns its own form state but calls

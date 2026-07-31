@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { toTime } from '@/lib/date-utils';
 import {
   computeEmployeeMetrics,
   resolvePeriod,
@@ -152,8 +153,12 @@ export async function GET(
       // Duration: completedAt - createdAt (proxy for assignedAt)
       let durationMinutes: number | null = null;
       if (j.completedAt && j.createdAt) {
-        const diff = (j.completedAt.getTime() - j.createdAt.getTime()) / 60000;
-        if (diff >= 0 && diff < 60 * 24 * 30) durationMinutes = Math.round(diff);
+        const completedMs = toTime(j.completedAt);
+        const createdMs = toTime(j.createdAt);
+        if (completedMs != null && createdMs != null) {
+          const diff = (completedMs - createdMs) / 60000;
+          if (diff >= 0 && diff < 60 * 24 * 30) durationMinutes = Math.round(diff);
+        }
       }
       return {
         id: j.id,

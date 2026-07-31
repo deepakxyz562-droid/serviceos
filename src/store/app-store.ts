@@ -84,6 +84,14 @@ interface AppState {
   setPendingReportsTab: (tab: string | null) => void;
   pendingReportsSalesOutcomesType: 'all' | 'won' | 'lost' | null;
   setPendingReportsSalesOutcomesType: (t: 'all' | 'won' | 'lost' | null) => void;
+
+  // ── Cross-view Settings deep-link signal ───────────────────────────
+  // When the user clicks "Configure AI Voice" on the AI Receptionist view,
+  // we stash the target settings section id (e.g. 'ai') here, switch to the
+  // Settings view, and SettingsView consumes it on mount (sets the active
+  // section, then clears it). Mirrors the pendingReportsTab pattern.
+  pendingSettingsSection: string | null;
+  setPendingSettingsSection: (section: string | null) => void;
 }
 
 // Shape of the data passed from a Lead into the New Job form.
@@ -170,4 +178,8 @@ export const useAppStore = create<AppState>((set) => ({
   setPendingReportsTab: (tab) => set({ pendingReportsTab: tab }),
   pendingReportsSalesOutcomesType: null,
   setPendingReportsSalesOutcomesType: (t) => set({ pendingReportsSalesOutcomesType: t }),
+
+  // Cross-view Settings deep-link signal
+  pendingSettingsSection: null,
+  setPendingSettingsSection: (section) => set({ pendingSettingsSection: section }),
 }));

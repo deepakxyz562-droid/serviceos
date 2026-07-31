@@ -353,12 +353,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   // ─── AI ─────────────────────────────────────────────────────────────────
   {
     id: 'ai',
-    label: 'AI Agent',
+    label: 'AI Configuration',
     icon: 'Sparkles',
-    description: 'AI Assistant, AI Dispatcher, AI Pricing, AI Quote Generator, AI Email Writer, AI Knowledge Base, AI Voice Agent, usage & credits',
+    description: 'AI Voice provider (Vapi.ai BYOK), AI Assistant, AI Dispatcher, AI Pricing, AI Quote Generator, AI Email Writer, AI Knowledge Base, usage & credits',
     group: 'ai',
     existingTab: 'aivoice',
-    keywords: ['ai', 'assistant', 'dispatcher', 'pricing', 'quote', 'email writer', 'knowledge base', 'voice', 'vapi', 'agent'],
+    keywords: ['ai', 'assistant', 'dispatcher', 'pricing', 'quote', 'email writer', 'knowledge base', 'voice', 'vapi', 'agent', 'configuration', 'receptionist'],
   },
 
   // ─── Account & Billing ──────────────────────────────────────────────────

@@ -189,6 +189,7 @@ export function AiReceptionistView() {
   const [tab, setTab] = useState<'dashboard' | 'agents' | 'history'>('dashboard');
   const { auth } = useAppStore();
   const setActiveView = useAppStore((s) => s.setActiveView);
+  const setPendingSettingsSection = useAppStore((s) => s.setPendingSettingsSection);
 
   // Admin-only: owners + admins can edit billing settings; employees are
   // read-only. Super-admins without a tenantId can't reach this view (no
@@ -399,7 +400,10 @@ export function AiReceptionistView() {
                 size="sm"
                 variant="outline"
                 className="h-7 gap-1.5"
-                onClick={() => setActiveView('settings')}
+                onClick={() => {
+                  setPendingSettingsSection('ai');
+                  setActiveView('settings');
+                }}
               >
                 <Sparkles className="size-3.5" />
                 Upgrade
@@ -424,9 +428,12 @@ export function AiReceptionistView() {
                 Phone numbers (for both SMS and AI voice) are managed in Inbox &amp; Automation → Phone Numbers.
               </p>
             </div>
-            <Button size="sm" variant="outline" className="shrink-0 gap-1.5" onClick={() => setActiveView('settings')}>
+            <Button size="sm" variant="outline" className="shrink-0 gap-1.5" onClick={() => {
+              setPendingSettingsSection('ai');
+              setActiveView('settings');
+            }}>
               <SettingsIcon className="size-3.5" />
-              Configure
+              Configure AI Voice
             </Button>
           </CardContent>
         </Card>
@@ -505,9 +512,12 @@ export function AiReceptionistView() {
         />
         <QuickAction
           icon={<SettingsIcon className="size-5" />}
-          title="Settings"
+          title="AI Voice Settings"
           description="Vapi API key & webhook"
-          onClick={() => setActiveView('settings')}
+          onClick={() => {
+            setPendingSettingsSection('ai');
+            setActiveView('settings');
+          }}
         />
       </div>
 

@@ -13,6 +13,7 @@
 
 import { db } from '@/lib/db';
 import { getLifecycleTimestamps } from '@/lib/job-lifecycle';
+import { toTime } from '@/lib/date-utils';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -152,11 +153,15 @@ export async function computeEmployeeMetrics(
   let completionMinutesCount = 0;
   for (const job of completedJobs) {
     if (job.completedAt && job.createdAt) {
-      const diffMin = (job.completedAt.getTime() - job.createdAt.getTime()) / 60000;
-      if (diffMin >= 0 && diffMin < 60 * 24 * 30) {
-        // sanity: ignore >30d outliers
-        completionMinutesSum += diffMin;
-        completionMinutesCount++;
+      const completedMs = toTime(job.completedAt);
+      const createdMs = toTime(job.createdAt);
+      if (completedMs != null && createdMs != null) {
+        const diffMin = (completedMs - createdMs) / 60000;
+        if (diffMin >= 0 && diffMin < 60 * 24 * 30) {
+          // sanity: ignore >30d outliers
+          completionMinutesSum += diffMin;
+          completionMinutesCount++;
+        }
       }
     }
   }
@@ -185,8 +190,8 @@ export async function computeEmployeeMetrics(
     });
     if (ts.arrived) {
       const arrivedAt = new Date(ts.arrived).getTime();
-      const scheduledAt = job.scheduledAt.getTime();
-      if (arrivedAt > scheduledAt) {
+      const scheduledMs = toTime(job.scheduledAt);
+      if (scheduledMs != null && arrivedAt > scheduledMs) {
         lateArrivals++;
       }
     }
