@@ -34,6 +34,13 @@ export async function GET(request: NextRequest) {
         : null
     const CLOSED_STAGE_KEYS = ['won', 'lost']
 
+    // ─── Archived-deal filtering (Pipeline Redesign Phase 1) ─────────────
+    // By default, archived deals are EXCLUDED from the Kanban (they only
+    // surface in the "Completed Workspace" / Reports view). Pass
+    // `?includeArchived=true` to include them (used by the completed-deals
+    // table modal and the Reports → Sales Pipeline tab).
+    const includeArchived = searchParams.get('includeArchived') === 'true'
+
     // ─── Tenant scoping ──────────────────────────────────────────
     // The caller's tenantId is the source of truth — never trust a
     // tenantId passed via query params (cross-tenant data leak).
@@ -92,6 +99,16 @@ export async function GET(request: NextRequest) {
     }
     if (assigneeId) where.assigneeId = assigneeId
 
+    // ── Archived filter (Pipeline Redesign Phase 1) ─────────────────────
+    // When includeArchived=false (default), exclude deals with archivedAt set.
+    // We use `NOT: { archivedAt: { not: null } }` because the Supabase
+    // adapter doesn't directly support `{ archivedAt: null }` in all paths
+    // (it's safer to express "not (archivedAt is not null)" = "archivedAt is null").
+    // Actually `archivedAt: null` IS supported — let's use the direct form.
+    if (!includeArchived) {
+      where.archivedAt = null
+    }
+
     const skip = (page - 1) * limit
 
     // ─── Supabase-safe closed-deal inclusion ──────────────────────────
@@ -118,6 +135,13 @@ export async function GET(request: NextRequest) {
       // Strip any NOT clause we set above so the two branches can compose
       // their own stage filter cleanly.
       delete (baseWhere as Record<string, unknown>).NOT
+
+      // ── Archived filter applies to both branches (Phase 1) ──────────
+      // Archived deals are excluded from both active and closed sets unless
+      // ?includeArchived=true is explicitly passed.
+      if (!includeArchived) {
+        ;(baseWhere as Record<string, unknown>).archivedAt = null
+      }
 
       const activeWhere: Record<string, unknown> = {
         ...baseWhere,

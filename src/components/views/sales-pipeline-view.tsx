@@ -7,6 +7,7 @@ import {
   History, Calendar, User, Phone, Mail, X,
   Filter, Clock, ArrowRight, Trophy, XCircle, AlertCircle,
   Sparkles, CheckSquare, Trash,
+  Archive, ArchiveRestore,
 } from 'lucide-react';
 import {
   DndContext, DragOverlay, PointerSensor, KeyboardSensor,
@@ -51,6 +52,21 @@ import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import {
   format, parseISO, subDays, subMonths, startOfMonth, startOfYear, differenceInDays,
 } from 'date-fns';
+import { WonSummaryWidget } from '@/components/pipeline/won-summary-widget';
+import { LostSummaryWidget } from '@/components/pipeline/lost-summary-widget';
+import {
+  CompletedDealsDialog,
+  type CompletedDealsType,
+} from '@/components/pipeline/completed-deals-dialog';
+import { JobStatusChip } from '@/components/pipeline/job-status-chip';
+import { PipelineKpiRow } from '@/components/pipeline/pipeline-kpi-row';
+import { AttentionStrip } from '@/components/pipeline/attention-strip';
+import { SmartEmptyState } from '@/components/pipeline/smart-empty-state';
+import { ViewSwitcher } from '@/components/pipeline/view-switcher';
+import { PipelineTableView } from '@/components/pipeline/views/pipeline-table-view';
+import { PipelineTimelineView } from '@/components/pipeline/views/pipeline-timeline-view';
+import { PipelineCalendarView } from '@/components/pipeline/views/pipeline-calendar-view';
+import { PipelineAnalyticsView } from '@/components/pipeline/views/pipeline-analytics-view';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -87,6 +103,15 @@ interface Deal {
   workspaceId?: string | null;
   createdAt: string;
   updatedAt: string;
+  // ── Pipeline Redesign (Phase 1) ──
+  // archivedAt: when set, the deal is hidden from the Kanban and only
+  // surfaces in the Completed Workspace / Reports view.
+  archivedAt?: string | null;
+  // jobCancelledAt: set when the linked Job (via convertedJobId) is
+  // cancelled. Surfaces a red "⚠ Job cancelled" badge on the Won card.
+  jobCancelledAt?: string | null;
+  // convertedJobId: hard FK → Job.id (set when Deal is won + converted).
+  convertedJobId?: string | null;
   stageHistory?: StageHistoryEntry[];
   // Linked Lead (HubSpot model) — populated by /api/deals GET & [id] GET
   // via `include: { lead: { select: ... } }`.
@@ -264,6 +289,12 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
   const [dealToConvert, setDealToConvert] = useState<Deal | null>(null);
   const [converting, setConverting] = useState(false);
 
+  // ─── Pipeline Redesign (Phase 1): Completed Deals dialog ───────────────
+  // Opens when the user clicks "View All →" on the Won/Lost Summary widgets.
+  // `completedDialogType` controls the initial filter (won/lost/all).
+  const [completedDialogOpen, setCompletedDialogOpen] = useState(false);
+  const [completedDialogType, setCompletedDialogType] = useState<CompletedDealsType>('won');
+
   // ─── Phase-4: Mark as Lost flow ────────────────────────────────────────
   const [markLostDeal, setMarkLostDeal] = useState<Deal | null>(null);
   const [lostReason, setLostReason] = useState<string>('');
@@ -307,6 +338,10 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
 
   // ─── Current user name (used as `createdBy` on notes) ──────────────────
   const currentUserName = useAppStore((s) => s.auth?.user?.name) as string | undefined;
+
+  // ── Pipeline Redesign (Phase 3/4): density + view mode from store ──
+  const pipelineDensity = useAppStore((s) => s.pipelineDensity) ?? 'comfortable';
+  const pipelineViewMode = useAppStore((s) => s.pipelineViewMode) ?? 'kanban';
 
   // ─── DnD sensors ───────────────────────────────────────────────────────
   const sensors = useSensors(
@@ -420,6 +455,19 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
     (key: string): PipelineStage | undefined => stages.find((s) => s.key === key),
     [stages],
   );
+
+  // ── Phase 4: stageLabels as a Record (for Table/Analytics views) ────
+  // Pre-computes a { [stageKey]: label } map so the Table + Analytics views
+  // can do O(1) lookups instead of O(n) `.find()` per row.
+  const stageByKeyReduce = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const s of stages) map[s.key] = s.label;
+    // Merge legacy labels as fallback
+    for (const [k, v] of Object.entries(LEGACY_STAGE_LABELS)) {
+      if (!map[k]) map[k] = v;
+    }
+    return map;
+  }, [stages]);
 
   /** Map legacy deal.stage keys to their Phase-3 equivalent for display. */
   const normalizeStage = useCallback(
@@ -589,6 +637,14 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
 
   const won30dValue = useMemo(() => won30d.reduce((s, d) => s + d.value, 0), [won30d]);
   const lost30dValue = useMemo(() => lost30d.reduce((s, d) => s + d.value, 0), [lost30d]);
+
+  // ─── Pipeline Redesign (Phase 1): Won deals needing attention ──────────
+  // Won deals whose linked job was cancelled (Deal.jobCancelledAt is set).
+  // Surfaced as a red "⚠ N need attention" indicator on the Won Summary widget.
+  const wonNeedsAttentionCount = useMemo(
+    () => won30d.filter((d) => d.jobCancelledAt).length,
+    [won30d],
+  );
 
   // ─── Stats (filter-aware) ──────────────────────────────────────────────
   const activeStageKeys = useMemo(() => activeStages.map((s) => s.key), [activeStages]);
@@ -905,6 +961,30 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
       }
     } catch {
       // keep the partial deal
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
+  // ─── Pipeline Redesign (Phase 1): Open deal by ID ─────────────────────
+  // Used by the CompletedDealsDialog's onOpenDeal callback when the deal
+  // isn't in the local `deals` array (e.g. an archived deal that was
+  // hidden from the Kanban). Fetches the full deal by ID and opens the
+  // detail Sheet.
+  const handleOpenDealById = async (dealId: string) => {
+    setPanelTab('details');
+    setLoadingDetail(true);
+    try {
+      const res = await authFetch(`/api/deals/${dealId}?XTransformPort=3000`);
+      if (res.ok) {
+        const json = await res.json();
+        const full: Deal = json.data ?? json;
+        setSelectedDeal(full);
+      } else {
+        toast.error('Deal not found');
+      }
+    } catch {
+      toast.error('Network error loading deal');
     } finally {
       setLoadingDetail(false);
     }
@@ -1241,9 +1321,21 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
           )}
           <div className="flex items-start justify-between gap-2 pr-3">
             <h5 className="font-medium text-sm line-clamp-2">{deal.title}</h5>
-            {converted && (
-              <Badge variant="secondary" className="text-[9px] h-4 shrink-0">Job</Badge>
-            )}
+            <div className="flex items-center gap-1 shrink-0">
+              {converted && (
+                <Badge variant="secondary" className="text-[9px] h-4">Job</Badge>
+              )}
+              {/* ── Phase 1: Job cancelled badge on won cards ── */}
+              {isWon && deal.jobCancelledAt && (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] h-4 bg-red-50 text-red-700 border-red-300"
+                  title="Linked job was cancelled — needs attention"
+                >
+                  ⚠
+                </Badge>
+              )}
+            </div>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-emerald-600">
@@ -1386,6 +1478,8 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
               <RefreshCw className={cn('size-4 mr-1.5', loading && 'animate-spin')} />
               Refresh
             </Button>
+            {/* ── Phase 4: View Switcher ── */}
+            <ViewSwitcher />
             <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
               <Plus className="size-4 mr-1.5" /> New Lead
             </Button>
@@ -1574,24 +1668,17 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
         )}
       </div>
 
-      {/* Stats (filter-aware) */}
+      {/* ─── Pipeline Redesign (Phase 2): KPI Row + Attention Strip ───────
+          Replaces the old vertical KPI list with a horizontal row of 5 cards
+          (Pipeline / Forecast / Won / Active / Win Rate) + an exception-based
+          Attention Strip that surfaces alerts (jobs cancelled, invoices
+          overdue, quotes expiring, etc.). Both are fetched from cached API
+          endpoints (60s TTL) — zero extra PostgREST calls on cache hit. */}
       {!embedded && (
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
-          {[
-            { label: 'Pipeline Value', value: formatMoney(totalPipelineValue), color: 'text-blue-600', icon: DollarSign },
-            { label: 'Weighted Value', value: formatMoney(weightedPipeline), color: 'text-purple-600', icon: TrendingUp },
-            { label: 'Won Revenue', value: formatMoney(wonValue), color: 'text-emerald-600', icon: BarChart3 },
-            { label: 'Active Deals', value: String(activeDealsCount), color: 'text-orange-600', icon: Briefcase },
-          ].map((stat) => (
-            <Card key={stat.label} className="p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-                <stat.icon className={cn('size-4', stat.color)} />
-              </div>
-              <p className={cn('text-lg font-bold', stat.color)}>{stat.value}</p>
-            </Card>
-          ))}
-        </div>
+        <>
+          <PipelineKpiRow refreshKey={deals.length} />
+          <AttentionStrip refreshKey={deals.length} />
+        </>
       )}
 
       {/* Revenue Forecast (filter-aware) */}
@@ -1631,22 +1718,44 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
         </div>
       )}
 
-      {/* Empty State */}
+      {/* Empty State — Phase 2: SmartEmptyState */}
       {!loading && deals.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Briefcase className="h-12 w-12 text-muted-foreground/40 mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-1">No leads in your pipeline yet.</h3>
-          <p className="text-sm text-muted-foreground max-w-md">
-            Click &quot;New Lead&quot; to add your first lead.
-          </p>
-          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
-            <Plus className="size-4 mr-1.5" /> New Lead
-          </Button>
-        </div>
+        <SmartEmptyState
+          variant="page"
+          icon={Briefcase}
+          title="No leads in your pipeline yet"
+          description="Click 'New Lead' to add your first lead and start tracking your sales pipeline."
+          actionLabel="New Lead"
+          onAction={() => setShowCreateDialog(true)}
+        />
       )}
 
-      {/* Kanban Board with DnD */}
-      {!loading && deals.length > 0 && (
+      {/* ─── Pipeline Redesign (Phase 4): Alternative view modes ──────────
+          When pipelineViewMode !== 'kanban', render the selected view
+          (Table / Timeline / Calendar / Analytics) instead of the Kanban.
+          The Kanban is still the default and the most interactive view. */}
+      {!loading && deals.length > 0 && pipelineViewMode === 'table' && (
+        <PipelineTableView
+          deals={filteredDeals}
+          stageLabels={stageByKeyReduce}
+          onRowClick={(deal) => handleSelectDeal(deal as Deal)}
+        />
+      )}
+
+      {!loading && pipelineViewMode === 'timeline' && (
+        <PipelineTimelineView onEventClick={(id) => handleOpenDealById(id)} />
+      )}
+
+      {!loading && pipelineViewMode === 'calendar' && (
+        <PipelineCalendarView onEventClick={(id) => handleOpenDealById(id)} />
+      )}
+
+      {!loading && pipelineViewMode === 'analytics' && (
+        <PipelineAnalyticsView stageLabels={stageByKeyReduce} />
+      )}
+
+      {/* Kanban Board with DnD (default view) */}
+      {!loading && deals.length > 0 && pipelineViewMode === 'kanban' && (
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -1661,20 +1770,39 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
             </div>
           </div>
 
-          {/* Closed section separator */}
+          {/* ─── Pipeline Redesign (Phase 1): Won/Lost Summary Widgets ───────
+              REPLACES the old Won/Lost Kanban columns. Instead of rendering
+              100+ cards in a column, we show a compact summary widget with
+              count + revenue + "needs attention" indicator. The user clicks
+              "View All →" to open the Completed Deals table modal. */}
           {closedStages.length > 0 && (
             <>
-              <div className="flex items-center gap-3 py-2">
+              <div className="flex items-center gap-3 py-2 mt-2">
                 <Separator className="flex-1" />
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Closed
+                  Completed
                 </span>
                 <Separator className="flex-1" />
               </div>
-              <div className="overflow-x-auto pb-4">
-                <div className="flex gap-4 min-w-max">
-                  {closedStages.map((stage) => renderStageColumn(stage, true))}
-                </div>
+              <div className="flex gap-4 pb-4 flex-wrap">
+                <WonSummaryWidget
+                  count={won30d.length}
+                  revenue={won30dValue}
+                  formattedRevenue={formatMoney(won30dValue)}
+                  needsAttentionCount={wonNeedsAttentionCount}
+                  onViewAll={() => {
+                    setCompletedDialogType('won');
+                    setCompletedDialogOpen(true);
+                  }}
+                />
+                <LostSummaryWidget
+                  count={lost30d.length}
+                  formattedRevenue={formatMoney(lost30dValue)}
+                  onViewAll={() => {
+                    setCompletedDialogType('lost');
+                    setCompletedDialogOpen(true);
+                  }}
+                />
               </div>
             </>
           )}
@@ -1855,6 +1983,28 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
                       </div>
                     )}
 
+                    {/* ── Pipeline Redesign (Phase 1): Job Cancelled warning ── */}
+                    {selectedDeal.jobCancelledAt && (
+                      <div className="rounded-md bg-red-50 border border-red-300 p-2.5 text-xs text-red-700 flex items-start gap-2">
+                        <AlertCircle className="size-4 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-semibold">Job was cancelled</p>
+                          <p className="text-[11px] mt-0.5 text-red-600">
+                            The job linked to this won deal was cancelled. Review and decide:
+                            reopen as Lost, or acknowledge and leave as Won.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Pipeline Redesign (Phase 1): Archived indicator ── */}
+                    {selectedDeal.archivedAt && (
+                      <div className="rounded-md bg-muted border border-muted-foreground/20 p-2 text-xs text-muted-foreground flex items-center gap-2">
+                        <Archive className="size-3.5 shrink-0" />
+                        <span>This deal is archived. Unarchive to return it to the active pipeline.</span>
+                      </div>
+                    )}
+
                     <Separator />
                     <div className="flex flex-wrap gap-2 pt-1">
                       <Button variant="outline" size="sm" onClick={() => openEditDialog(selectedDeal)}>
@@ -1878,6 +2028,47 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
                           onClick={() => setDealToConvert(selectedDeal)}
                         >
                           <JobIcon className="size-3.5 mr-1" /> Convert to Job
+                        </Button>
+                      )}
+                      {/* ── Pipeline Redesign (Phase 1): Archive / Unarchive ── */}
+                      {isClosedDeal(selectedDeal) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              const method = selectedDeal.archivedAt ? 'DELETE' : 'POST';
+                              const res = await authFetch(
+                                `/api/deals/${selectedDeal.id}/archive?XTransformPort=3000`,
+                                { method },
+                              );
+                              if (res.ok) {
+                                toast.success(
+                                  selectedDeal.archivedAt ? 'Deal unarchived' : 'Deal archived',
+                                );
+                                // Update local state + reload deals
+                                setSelectedDeal({
+                                  ...selectedDeal,
+                                  archivedAt: selectedDeal.archivedAt ? null : new Date().toISOString(),
+                                });
+                                loadDeals();
+                              } else {
+                                toast.error('Failed to update archive status');
+                              }
+                            } catch {
+                              toast.error('Network error');
+                            }
+                          }}
+                        >
+                          {selectedDeal.archivedAt ? (
+                            <>
+                              <ArchiveRestore className="size-3.5 mr-1" /> Unarchive
+                            </>
+                          ) : (
+                            <>
+                              <Archive className="size-3.5 mr-1" /> Archive
+                            </>
+                          )}
                         </Button>
                       )}
                       <Button
@@ -2021,6 +2212,36 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
           )}
         </SheetContent>
       </Sheet>
+
+      {/* ─── Pipeline Redesign (Phase 1): Completed Deals Dialog ───────────
+          Opens when the user clicks "View All →" on the Won/Lost Summary
+          widgets. Shows a paginated, searchable table of won/lost deals. */}
+      <CompletedDealsDialog
+        open={completedDialogOpen}
+        onOpenChange={setCompletedDialogOpen}
+        initialType={completedDialogType}
+        onOpenDeal={(dealId) => {
+          // Close the dialog and open the deal detail Sheet.
+          // We need to fetch the full deal (with stageHistory) to populate
+          // the Sheet — the completed-deals endpoint returns a subset.
+          setCompletedDialogOpen(false);
+          // Find the deal in the local `deals` array first (avoids a fetch
+          // if the deal is still loaded in the Kanban).
+          const localDeal = deals.find((d) => d.id === dealId);
+          if (localDeal) {
+            handleSelectDeal(localDeal);
+          } else {
+            // Not in local array — fetch it. Use the same pattern as
+            // handleSelectDeal but with the dealId.
+            handleOpenDealById(dealId);
+          }
+        }}
+        onArchiveChange={() => {
+          // Refresh the Kanban deals list so archived deals disappear from
+          // the active board and the Won/Lost widget counts update.
+          loadDeals();
+        }}
+      />
 
       {/* ─── AI Insights Drawer (Phase-5) ────────────────────────────────── */}
       <Sheet

@@ -3542,6 +3542,43 @@ export function LeadsView() {
 
   return (
     <div className="space-y-6 w-full">
+      {/* ─── Pipeline Redesign (Phase 1): Deprecation banner ────────────
+          This legacy Leads view is deprecated in favor of the modern Sales
+          Pipeline view (which has Won/Lost summary widgets, deal cards,
+          drag-and-drop, etc.). We keep the file for backward compatibility
+          but surface a clear banner nudging users to the new Pipeline. */}
+      <div className="rounded-md bg-amber-50 border border-amber-200 p-3 flex items-start gap-3">
+        <Info className="size-4 shrink-0 mt-0.5 text-amber-600" />
+        <div className="flex-1">
+          <p className="text-sm font-medium text-amber-800">
+            This Leads view is deprecated
+          </p>
+          <p className="text-xs text-amber-700 mt-0.5">
+            Use the Sales Pipeline for a modern Kanban with Won/Lost summary
+            widgets, deal cards, and drag-and-drop stages.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-amber-300 text-amber-700 hover:bg-amber-100 text-xs h-7"
+          onClick={() => {
+            // Navigate to the Sales Pipeline view via the app store
+            try {
+              const event = new CustomEvent('navigate-to-view', {
+                detail: 'salesPipeline',
+              });
+              window.dispatchEvent(event);
+            } catch {
+              // Best-effort navigation — the user can also click the nav item.
+            }
+          }}
+        >
+          Go to Pipeline
+          <ArrowRight className="size-3 ml-1" />
+        </Button>
+      </div>
+
       {/* ─── Form page takes over when adding/editing a lead ───────── */}
       {formMode === 'form' ? (
         renderLeadFormPage()

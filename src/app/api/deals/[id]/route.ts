@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { archiveLinkedQuoteAndRequest } from '@/lib/deal-auto-close'
 import { ensureQuoteForDeal } from '@/lib/deal-quote-sync'
+import { clearJobCancelledFlag } from '@/lib/deal-archive'
 
 export async function GET(
   request: NextRequest,
@@ -101,10 +102,28 @@ export async function PUT(
       updateData.closedAt = null
     }
 
+    // ── Defensive: clear jobCancelledAt on fresh won (Phase 1) ──────────
+    // If a Deal is being moved to 'won' (fresh win, not already won), clear
+    // any stale jobCancelledAt flag from a prior cancelled job. This handles
+    // the edge case where a Deal was won → job cancelled → Deal reopened →
+    // re-won: the old flag should not persist.
+    if (body.stage === 'won' && currentDeal.stage !== 'won') {
+      updateData.jobCancelledAt = null
+    }
+
     const deal = await db.deal.update({
       where: { id },
       data: updateData,
     })
+
+    // ── Also clear the flag via the helper (belt + suspenders) ──────────
+    // The helper logs errors without throwing. We call it AFTER the update
+    // succeeds so a failure here doesn't block the Deal stage change.
+    if (body.stage === 'won' && currentDeal.stage !== 'won' && currentDeal.jobCancelledAt) {
+      clearJobCancelledFlag(id).catch((err) => {
+        console.error('[DealsUpdate] clearJobCancelledFlag failed (non-blocking):', err)
+      })
+    }
 
     // If stage changed, create a stage history entry
     if (body.stage && body.stage !== currentDeal.stage) {

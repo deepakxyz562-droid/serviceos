@@ -1479,6 +1479,11 @@ model Job {
   // ── Soft delete: when set, the job is hidden from the active list but kept
   // in "Job History" for audit. Permanent delete = hard DELETE from DB. ──
   deletedAt          DateTime?
+  // ── Pipeline redesign (Phase 1) ──
+  // cancelledAt: set when Job.status transitions to 'cancelled'. Indexed so
+  // the pipeline "Attention Center" can efficiently query cancelled jobs.
+  // Enables the Deal.jobCancelledAt sync (see src/lib/deal-archive.ts).
+  cancelledAt        DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -1504,6 +1509,7 @@ model Job {
   @@index([scheduledAt])
   @@index([workspaceId])
   @@index([recurringScheduleId])
+  @@index([cancelledAt])
 }
 
 model ContactList {
@@ -2643,6 +2649,16 @@ model Deal {
   closedAt        DateTime?
   lossReason      String?
   convertedJobId  String?   // hard FK -> Job.id (set when Deal is won + converted to a Job)
+  // ── Pipeline redesign (Phase 1) ──
+  // archivedAt: when set, the Deal is hidden from the active Kanban and only
+  // surfaces in the "Completed Workspace" / Reports view. Auto-set by cron
+  // 14 days after closedAt, or manually via the "Archive" button on the card.
+  archivedAt      DateTime?
+  // jobCancelledAt: set when the linked Job (via convertedJobId) is cancelled.
+  // Surfaces a red "⚠ Job cancelled" badge on the Won card so sales reps can
+  // see that a "won" deal's underlying job fell through. Rep decides next step
+  // (reopen as Lost, or acknowledge + leave as Won).
+  jobCancelledAt  DateTime?
   tenantId        String?
   workspaceId     String?
   createdAt       DateTime  @default(now())
@@ -2653,6 +2669,7 @@ model Deal {
   @@index([customerId])
   @@index([tenantId])
   @@index([convertedJobId])
+  @@index([archivedAt])
 }
 
 // --- Pipeline configuration (customizable stages per tenant) ---

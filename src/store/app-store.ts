@@ -102,6 +102,15 @@ interface AppState {
   // section, then clears it). Mirrors the pendingReportsTab pattern.
   pendingSettingsSection: string | null;
   setPendingSettingsSection: (section: string | null) => void;
+
+  // ── Pipeline Redesign (Phase 3): Kanban density + view mode ────────
+  // Density controls card padding/font-size (comfortable/compact/dense).
+  // View mode controls which layout is shown (kanban/table/timeline/calendar/
+  // analytics) — added now for Phase 4 use.
+  pipelineDensity: 'comfortable' | 'compact' | 'dense';
+  setPipelineDensity: (d: 'comfortable' | 'compact' | 'dense') => void;
+  pipelineViewMode: 'kanban' | 'table' | 'timeline' | 'calendar' | 'analytics';
+  setPipelineViewMode: (m: 'kanban' | 'table' | 'timeline' | 'calendar' | 'analytics') => void;
 }
 
 // Shape of the data passed from a Lead into the New Job form.
@@ -194,4 +203,10 @@ export const useAppStore = create<AppState>((set) => ({
   // Cross-view Settings deep-link signal
   pendingSettingsSection: null,
   setPendingSettingsSection: (section) => set({ pendingSettingsSection: section }),
+
+  // Pipeline Redesign (Phase 3): Kanban density + view mode
+  pipelineDensity: 'comfortable',
+  setPipelineDensity: (d) => set({ pipelineDensity: d }),
+  pipelineViewMode: 'kanban',
+  setPipelineViewMode: (m) => set({ pipelineViewMode: m }),
 }));

@@ -5,6 +5,7 @@ import { logActivity } from '@/lib/activity-log';
 import { getAuthUser } from '@/lib/auth';
 import { autoRecordAssetServiceHistory } from '@/lib/asset-service-history';
 import { validateJobCompletionProof } from '@/lib/job-completion-validation';
+import { reopenDealOnJobCancel } from '@/lib/deal-archive';
 
 export async function GET(
   request: NextRequest,
@@ -206,6 +207,34 @@ export async function PUT(
         where: { id: existingJob.assigneeId },
         data: { status: 'available' },
       });
+    }
+
+    // ── Pipeline Redesign (Phase 1): Job cancel → Deal sync ────────────
+    // When a Job is cancelled, stamp `Job.cancelledAt = now()` (indexed for
+    // efficient querying by the Attention Center) AND call
+    // `reopenDealOnJobCancel(jobId)` which sets `Deal.jobCancelledAt = now()`
+    // on the linked Deal. The Deal stays in 'won' (rep decides next step)
+    // but shows a red "⚠ Job cancelled" badge in the Won Summary widget.
+    //
+    // Only fires on the FIRST transition to 'cancelled' (guarded by
+    // `existingJob.status !== 'cancelled'`) so we don't double-stamp.
+    if (body.status === 'cancelled' && existingJob.status !== 'cancelled') {
+      updateData.cancelledAt = new Date();
+      // Fire-and-forget — never blocks the Job update response. The helper
+      // itself never throws (it has its own try/catch), so this outer .catch()
+      // is just defense-in-depth.
+      reopenDealOnJobCancel(id).catch((err) => {
+        console.error('[JobsUpdate] reopenDealOnJobCancel failed (non-blocking):', err);
+      });
+    }
+
+    // ── Clear cancelledAt if status moves AWAY from 'cancelled' ────────
+    // E.g. a tenant re-opens a cancelled job to fix a mistake. The Deal's
+    // jobCancelledAt is NOT auto-cleared here (the rep decides whether to
+    // reopen as Lost or leave as Won with the badge). They can clear it
+    // manually by re-winning the Deal.
+    if (body.status && body.status !== 'cancelled' && existingJob.status === 'cancelled') {
+      updateData.cancelledAt = null;
     }
 
     const job = await db.job.update({

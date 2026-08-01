@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { reopenDealOnJobCancel } from '@/lib/deal-archive';
 
 type BulkAction = 'delete' | 'softDelete' | 'updateStatus' | 'updatePriority' | 'assign';
 
@@ -139,11 +140,31 @@ export async function POST(request: NextRequest) {
         }
 
         case 'updateStatus': {
+          // ── Pipeline Redesign (Phase 1): stamp cancelledAt on cancel ──
+          // When bulk-cancelling jobs, set `cancelledAt = now()` so the
+          // Attention Center can efficiently query cancelled jobs. Also
+          // fire-and-forget the Deal sync (reopenDealOnJobCancel) for each
+          // affected job — sets Deal.jobCancelledAt on linked won deals.
+          const isBulkCancel = body.status === 'cancelled';
           const res = await db.job.updateMany({
             where: { id: { in: ownedIds } },
-            data: { status: body.status! },
+            data: {
+              status: body.status!,
+              ...(isBulkCancel ? { cancelledAt: new Date() } : {}),
+            },
           });
           success = res.count;
+
+          // ── Sync Deal.jobCancelledAt for each cancelled job ──────────
+          // Fire-and-forget — never blocks the bulk response. The helper
+          // is idempotent and never throws.
+          if (isBulkCancel) {
+            for (const jid of ownedIds) {
+              reopenDealOnJobCancel(jid).catch((err) => {
+                console.error(`[jobs/bulk] reopenDealOnJobCancel failed for job ${jid} (non-blocking):`, err);
+              });
+            }
+          }
           break;
         }
 

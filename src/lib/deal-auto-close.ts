@@ -169,13 +169,19 @@ async function moveDealToWon(
   // Only set convertedJobId when a jobId was passed in — passing `null`
   // would clobber an existing convertedJobId that was set by a prior
   // Job-create flow, which we don't want.
+  //
+  // Pipeline Redesign (Phase 1): also clear `jobCancelledAt` on fresh won.
+  // This handles the edge case where a Deal was won → job cancelled → Deal
+  // reopened → re-won: the old jobCancelledAt flag should not persist.
   const updateData: {
     stage: string
     closedAt: Date
     convertedJobId?: string
+    jobCancelledAt: null
   } = {
     stage: DEAL_STAGE_WON,
     closedAt: now,
+    jobCancelledAt: null,
   }
   if (jobId) {
     updateData.convertedJobId = jobId
