@@ -489,7 +489,7 @@ export function OmnichannelView() {
   const isEmpty = conversations.length === 0;
 
   return (
-    <div className="flex h-full max-h-full overflow-hidden">
+    <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* ── Empty State ── */}
       {isEmpty ? (
         <div className="flex flex-1 flex-col items-center justify-center py-16 px-4 text-center">
@@ -510,7 +510,7 @@ export function OmnichannelView() {
             All 3 columns start at the same Y position (aligned top borders).
             Left + right sidebars scroll independently; center chat input
             is pinned and never scrolls away. */
-        <div className="flex flex-1 min-h-0 overflow-hidden w-full h-full">
+        <div className="flex flex-1 min-h-0 overflow-hidden w-full">
           {/* ── Left Column: Conversation List ── */}
           <div className="w-80 flex-shrink-0 border-r bg-background flex flex-col hidden md:flex min-h-0">
             {/* Top Tab Bar (Inbox / Assigned / Unassigned / Team) — moved here
@@ -594,7 +594,7 @@ export function OmnichannelView() {
             </div>
 
             {/* Conversation List */}
-            <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1 min-h-0">
               {filteredConversations.length === 0 ? (
                 <div className="p-6 text-center text-sm text-muted-foreground">
                   <Filter className="size-8 mx-auto mb-2 opacity-50" />
@@ -791,7 +791,7 @@ export function OmnichannelView() {
                 </div>
 
                 {/* Messages */}
-                <ScrollArea className="flex-1 px-4 py-4">
+                <ScrollArea className="flex-1 min-h-0 px-4 py-4">
                   <div className="max-w-2xl mx-auto space-y-3">
                     {selectedConversation.messages.length === 0 ? (
                       <div className="text-center py-8 text-sm text-muted-foreground">
@@ -997,7 +997,7 @@ export function OmnichannelView() {
               independently when content overflows. */}
           <div className="w-72 flex-shrink-0 border-l bg-background hidden lg:flex flex-col min-h-0">
             {selectedConversation ? (
-              <ScrollArea className="flex-1">
+              <ScrollArea className="flex-1 min-h-0">
                 <div className="p-4 space-y-4">
                   {/* Customer Info Card with cover image */}
                   <Card className="shadow-none overflow-hidden">

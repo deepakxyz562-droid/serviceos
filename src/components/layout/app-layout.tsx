@@ -386,7 +386,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
           className={cn(
             'flex-1 overflow-auto animate-fade-in',
             isFullHeight
-              ? 'p-0 overflow-hidden'
+              ? 'flex flex-col min-h-0 p-0 overflow-hidden'
               : isMobile
                 ? 'p-3 sm:p-4 bg-background pb-[calc(4rem+env(safe-area-inset-bottom,0px))]'
                 : 'p-4 lg:p-6 bg-background',
