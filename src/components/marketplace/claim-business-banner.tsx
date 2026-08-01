@@ -7,13 +7,20 @@ import { ClaimBusinessModal } from './claim-business-modal';
 /**
  * ClaimBusinessBanner
  * --------------------
- * A client-side banner shown on the provider detail page when the business is
- * unclaimed. Displays "Are you the owner? Claim this business" and opens the
- * ClaimBusinessModal wizard when clicked.
+ * A subtle, compact link (not a big banner) shown on the provider detail
+ * page ONLY to authenticated non-owner users. Opens the ClaimBusinessModal
+ * wizard when clicked.
  *
- * The banner is hidden when:
- *   - The business is already claimed
- *   - The current user is the owner of this business (they can't claim their own)
+ * Design rationale: marketplace seed data (OSM imports) all have
+ * `claimed=false`. Showing a big colored "Claim this business!" banner on
+ * every listing looks spammy and unprofessional. Instead, we render a small
+ * text link that's discoverable but unobtrusive.
+ *
+ * The component is hidden when:
+ *   - The business is already claimed (page-level guard)
+ *   - The current user is the owner (can't claim your own)
+ *   - The visitor is anonymous (page-level guard — they'd need to register
+ *     first anyway)
  */
 interface ClaimBusinessBannerProps {
   tenantId: string;
@@ -22,7 +29,7 @@ interface ClaimBusinessBannerProps {
   tenantEmail?: string | null;
   tenantCity?: string | null;
   tenantState?: string | null;
-  /** Current user's tenantId (to hide the banner for the owner). */
+  /** Current user's tenantId (to hide the link for the owner). */
   currentTenantId?: string | null;
 }
 
@@ -37,36 +44,20 @@ export function ClaimBusinessBanner({
 }: ClaimBusinessBannerProps) {
   const [open, setOpen] = React.useState(false);
 
-  // Hide the banner if the current user is the owner of this business
+  // Hide if the current user is the owner of this business
   if (currentTenantId === tenantId) return null;
 
   return (
     <>
-      <div className="mb-4 overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 dark:border-emerald-900 dark:from-emerald-950/40 dark:to-teal-950/40">
-        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900">
-              <ShieldCheck className="h-5 w-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">
-                Are you the owner of {tenantName}?
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Claim this listing to update your info, respond to reviews, and receive leads — free.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
-          >
-            Claim this business
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-800 hover:underline dark:text-emerald-400 dark:hover:text-emerald-300"
+      >
+        <ShieldCheck className="h-3.5 w-3.5" />
+        Are you the owner? Claim this business
+        <ChevronRight className="h-3 w-3" />
+      </button>
 
       <ClaimBusinessModal
         open={open}

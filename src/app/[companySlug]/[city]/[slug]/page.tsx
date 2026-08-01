@@ -56,9 +56,12 @@ import { getAuthUser } from '@/lib/auth'
 import { ClaimBusinessBanner } from '@/components/marketplace/claim-business-banner'
 
 // ── Route config ────────────────────────────────────────────────────────────
-// ISR: revalidate every 60 minutes so reviews / profile edits propagate
-// without forcing every visitor to wait for a DB query.
-export const revalidate = 3600
+// This page calls getAuthUser() (which reads cookies/headers) to customize
+// the view for logged-in owners. That opts the route into dynamic rendering,
+// so we MUST set `dynamic = 'force-dynamic'` — leaving `revalidate` alone
+// with cookies() causes a Next.js build/runtime conflict that makes the
+// page fail to load in production.
+export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 
 // ── Metadata ────────────────────────────────────────────────────────────────
@@ -190,11 +193,21 @@ export default async function PublicBusinessHubPage({
   const isMinimalListing = cardType === 'normal-minimal'
 
   // Get current user (if authenticated) to hide the claim banner for owners.
-  // This is a public page so most visitors won't be logged in — that's fine,
-  // the banner just shows to everyone except the current owner.
-  const currentUser = await getAuthUser()
-  const currentTenantId = currentUser?.tenantId ?? null
-  const showClaimBanner = !business.claimed && currentTenantId !== business.id
+  // Wrapped in try/catch — this is a PUBLIC page and must NEVER crash if the
+  // auth cookie is malformed, expired, or the JWT secret is misconfigured.
+  // The claim link only shows to authenticated non-owner users, so if auth
+  // fails we just treat the visitor as anonymous (no claim link).
+  let currentTenantId: string | null = null
+  try {
+    const currentUser = await getAuthUser()
+    currentTenantId = currentUser?.tenantId ?? null
+  } catch {
+    currentTenantId = null
+  }
+  // Only show the claim link to AUTHENTICATED users who are NOT the owner.
+  // Anonymous visitors don't see it — they'd need to register first anyway,
+  // and showing it on every listing looks spammy.
+  const showClaimLink = !!currentTenantId && !business.claimed && currentTenantId !== business.id
 
   // Parse JSON fields safely.
   const gallery: Array<{ url?: string; caption?: string }> = safeJson(business.galleryJson, [])
@@ -536,9 +549,12 @@ export default async function PublicBusinessHubPage({
             {/* Right: sticky CTA card + contact info */}
             <div className="lg:col-span-1">
               <div className="lg:sticky lg:top-20 space-y-4">
-                {/* Claim-this-business banner — only for unclaimed listings.
-                    Hides for the current owner (can't claim your own business). */}
-                {showClaimBanner ? (
+                {/* Claim-this-business link — only for AUTHENTICATED non-owner
+                    users. Anonymous visitors don't see it (they'd need to
+                    register first). Kept as a subtle text link instead of a
+                    big colored banner so it doesn't look spammy on every
+                    unclaimed listing. */}
+                {showClaimLink ? (
                   <ClaimBusinessBanner
                     tenantId={business.id}
                     tenantName={business.name}
@@ -1014,11 +1030,11 @@ function buildOpeningHours(
   })
 }
 
-// ── generateStaticParams (empty — fully dynamic with ISR) ───────────────────
+// ── generateStaticParams (empty — fully dynamic) ───────────────────────────
 // We deliberately don't pre-render any business pages at build time because
-// the set of businesses is dynamic and potentially huge. ISR with
-// revalidate=3600 (1 hour) gives us near-real-time freshness without
-// per-request DB hits for popular pages.
+// the set of businesses is dynamic and potentially huge. The page uses
+// `dynamic = 'force-dynamic'` (because it calls getAuthUser/cookies) so every
+// request is server-rendered on-demand.
 
 export async function generateStaticParams() {
   return []
