@@ -13,7 +13,7 @@ import { randomUUID } from 'crypto';
  *
  *   Phase 1: Schema Discovery      — read Prisma DMMF (0 queries)
  *   Phase 2: Table Sweep           — findMany + count on every model (~4s)
- *   Phase 3: Bug Regression Suite  — 7 targeted probes for the exact bug
+ *   Phase 3: Bug Regression Suite  — 8 targeted probes for the exact bug
  *                                     shapes that caused ~3,218 errors
  *   Phase 4: CRUD Operation Matrix — create/find/update/upsert/delete cycle
  *   Phase 5: Filter + Relation Mx  — AND, OR, nested, Date, composite, include
@@ -481,6 +481,61 @@ async function phase3BugRegression(): Promise<PhaseResult> {
     }
   }
 
+  // ── Bug #8: createMany() missing auto-updatedAt (Tenant.updatedAt NOT NULL) ──
+  // Old createMany() only auto-generated `id` and relied on DB-level DEFAULT
+  // clauses for timestamps. But many Supabase tables (Tenant, Customer, Job,
+  // Lead, etc.) have `updatedAt` as NOT NULL with NO default → 23502 error.
+  // Fix: createMany() now auto-adds createdAt/updatedAt (mirrors create()).
+  // This probe creates 2 Plan rows via createMany() WITHOUT passing
+  // timestamps, then verifies the rows exist with updatedAt populated.
+  // Plan is used because it has `updatedAt @updatedAt` (AuditLog does not).
+  {
+    const planCodePrefix = `__hc_cmany_${marker}__`;
+    cleanup.push(async () => {
+      try {
+        await db.plan.deleteMany({ where: { code: { startsWith: planCodePrefix } } }).catch(() => {});
+      } catch {
+        /* ignore */
+      }
+    });
+
+    try {
+      const { result, ms } = await timed(async () => {
+        // Intentionally do NOT pass createdAt/updatedAt — the adapter must
+        // auto-add them, otherwise Supabase rejects with 23502.
+        return await db.plan.createMany({
+          data: [
+            { code: `${planCodePrefix}_1`, name: 'HC createMany test 1', monthlyPrice: 0, yearlyPrice: 0 },
+            { code: `${planCodePrefix}_2`, name: 'HC createMany test 2', monthlyPrice: 0, yearlyPrice: 0 },
+          ],
+        });
+      });
+      // Verify rows were actually created and have updatedAt populated
+      const created = await db.plan.findMany({
+        where: { code: { startsWith: planCodePrefix } },
+        take: 5,
+      });
+      const count = (result as { count?: number })?.count ?? 0;
+      const allHaveUpdatedAt = Array.isArray(created) && created.length === 2 &&
+        created.every((r: Record<string, unknown>) => r.updatedAt != null);
+      probes.push({
+        id: 'bug-8',
+        name: 'Plan.createMany (auto-updatedAt on bulk insert)',
+        status: count === 2 && allHaveUpdatedAt ? 'pass' : 'fail',
+        ms,
+        detail: { count, rowsFound: created?.length ?? 0, allHaveUpdatedAt },
+      });
+    } catch (err) {
+      probes.push({
+        id: 'bug-8',
+        name: 'Plan.createMany (auto-updatedAt on bulk insert)',
+        status: 'fail',
+        ms: 0,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   // ── Cleanup all test data ──
   await Promise.allSettled(cleanup.map((fn) => fn()));
 
@@ -489,7 +544,7 @@ async function phase3BugRegression(): Promise<PhaseResult> {
 
   return {
     phase: 3,
-    name: 'Bug Regression Suite (7 bugs)',
+    name: 'Bug Regression Suite (8 bugs)',
     status: failed === 0 ? 'pass' : passed > 0 ? 'partial' : 'fail',
     ms: Date.now() - start,
     probes,

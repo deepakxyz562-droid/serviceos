@@ -210,9 +210,9 @@ const MISSING_TABLES = new Set<string>([
 ]);
 
 // Tables that do NOT have an `updatedAt` column in Supabase.
-// The create() method auto-adds `updatedAt` to all inserts, but these tables
-// don't have that column, so PostgREST will reject it. Listing them here lets
-// us skip the auto-add and avoid an unnecessary retry round-trip.
+// Both create() and createMany() auto-add `updatedAt` to all inserts, but
+// these tables don't have that column, so PostgREST will reject it. Listing
+// them here lets us skip the auto-add and avoid an unnecessary retry round-trip.
 const TABLES_WITHOUT_UPDATED_AT = new Set<string>([
   'ImageLibrary',
   'BrandKit',
@@ -1273,14 +1273,28 @@ class SupabaseModel {
     const rows = Array.isArray(options.data) ? options.data : [options.data];
     if (rows.length === 0) return { count: 0 };
 
-    // Only auto-generate the id. Don't add createdAt/updatedAt because many
-    // tables (ContactGroup, ContactTag, etc.) don't have those columns.
-    // The DB-level DEFAULT clauses handle timestamp defaults (e.g. addedAt
-    // with @default(now()) becomes DEFAULT now() in Postgres).
+    // Auto-generate the id, and auto-set createdAt/updatedAt — mirroring
+    // create()'s logic. Previously this method relied on DB-level DEFAULT
+    // clauses for timestamps, but many Supabase tables (Tenant, Customer,
+    // Job, Lead, etc.) have `updatedAt` as NOT NULL with NO default, so a
+    // bulk insert without an explicit `updatedAt` value fails with a 23502
+    // not-null violation (Bug #8 — caused 5 errors in marketplace seed).
+    // For tables in TABLES_WITHOUT_UPDATED_AT (ContactGroup, ContactTag,
+    // Execution, etc.), we skip updatedAt; the retry loop below strips
+    // createdAt if the table doesn't have that column either.
     const baseRows = rows.map((row) => {
       const s = serializeData(row);
       if (!('id' in s) || s.id === undefined || s.id === null) {
         s.id = nanoid(25);
+      }
+      // Auto-set createdAt if not provided (same as create())
+      if (!('createdAt' in s) && !('created_at' in s)) {
+        s.createdAt = new Date().toISOString();
+      }
+      // Auto-set updatedAt if not provided — but only for tables that
+      // actually have this column (mirrors create() logic).
+      if (!('updatedAt' in s) && !('updated_at' in s) && !TABLES_WITHOUT_UPDATED_AT.has(this.tableName)) {
+        s.updatedAt = new Date().toISOString();
       }
       return s;
     });
