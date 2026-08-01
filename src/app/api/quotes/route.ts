@@ -4,9 +4,12 @@ import { toISOString } from '@/lib/utils';
 import { getExchangeRate, convertCurrency } from '@/lib/currency';
 import { getAuthUser } from '@/lib/auth';
 import { EventBus } from '@/lib/event-bus';
+import { requireCrmTenant } from '@/lib/require-crm-tenant';
 
 export async function GET(req: NextRequest) {
   try {
+    const crmGuard = await requireCrmTenant(req);
+    if (crmGuard) return crmGuard;
     const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -81,6 +84,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const crmGuard = await requireCrmTenant(req);
+    if (crmGuard) return crmGuard;
     const body = await req.json();
     const {
       title, description, customerId,

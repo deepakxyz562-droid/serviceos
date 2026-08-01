@@ -6,6 +6,7 @@ import { getExchangeRate, convertCurrency } from '@/lib/currency';
 import { generateInvoiceNumber } from '@/lib/invoice-automation';
 import { logActivity } from '@/lib/activity-log';
 import { EventBus } from '@/lib/event-bus';
+import { requireCrmTenant } from '@/lib/require-crm-tenant';
 
 /**
  * Resolves a tenant ID from the auth user, falling back to the first tenant
@@ -45,6 +46,8 @@ async function resolveTenantId(authUser: Awaited<ReturnType<typeof getAuthUser>>
  */
 export async function GET(request: NextRequest) {
   try {
+    const crmGuard = await requireCrmTenant(request);
+    if (crmGuard) return crmGuard;
     const authUser = await getAuthUser();
 
     const { searchParams } = new URL(request.url);
@@ -157,6 +160,8 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const crmGuard = await requireCrmTenant(request);
+    if (crmGuard) return crmGuard;
     const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });

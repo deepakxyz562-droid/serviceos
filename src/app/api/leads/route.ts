@@ -5,10 +5,13 @@ import { EventBus } from '@/lib/event-bus';
 import { sendEmail } from '@/lib/email-send';
 import { notifyOwner } from '@/lib/owner-notifications';
 import { logActivity } from '@/lib/activity-log';
+import { requireCrmTenant } from '@/lib/require-crm-tenant';
 
 // GET /api/leads - List leads with optional status filter
 export async function GET(request: NextRequest) {
   try {
+    const crmGuard = await requireCrmTenant(request);
+    if (crmGuard) return crmGuard;
     const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -101,6 +104,8 @@ export async function GET(request: NextRequest) {
 // POST /api/leads - Create a new lead
 export async function POST(request: NextRequest) {
   try {
+    const crmGuard = await requireCrmTenant(request);
+    if (crmGuard) return crmGuard;
     const authUser = await getAuthUser();
 
     const body = await request.json();

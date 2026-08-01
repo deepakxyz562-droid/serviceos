@@ -2,12 +2,15 @@ import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activity-log'
+import { requireCrmTenant } from '@/lib/require-crm-tenant'
 
 // GET /api/customers — list customers for the authenticated user's tenant
 // Scopes results to the logged-in user's workspace/tenant so cross-tenant
 // data never leaks. Supports optional ?search= query.
 export async function GET(request: NextRequest) {
   try {
+    const crmGuard = await requireCrmTenant(request);
+    if (crmGuard) return crmGuard;
     const user = await getAuthUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -64,6 +67,8 @@ export async function GET(request: NextRequest) {
 // the slug lookup chain Customer→Workspace→Tenant was broken).
 export async function POST(request: NextRequest) {
   try {
+    const crmGuard = await requireCrmTenant(request);
+    if (crmGuard) return crmGuard;
     const user = await getAuthUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

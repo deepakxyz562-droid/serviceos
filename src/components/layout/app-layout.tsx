@@ -97,6 +97,7 @@ const LeadDiscoveryView = lazy(() => import('@/components/views/lead-discovery-v
 const JourneyAutomationView = lazy(() => import('@/components/views/journey-automation-view').then(m => ({ default: m.JourneyAutomationView })));
 const MarketplaceView = lazy(() => import('@/components/views/marketplace-view').then(m => ({ default: m.MarketplaceView })));
 const ProviderMarketplaceDashboard = lazy(() => import('@/components/marketplace/provider-marketplace-dashboard').then(m => ({ default: m.ProviderMarketplaceDashboard })));
+const ListingProviderDashboard = lazy(() => import('@/components/marketplace/listing-provider-dashboard').then(m => ({ default: m.ListingProviderDashboard })));
 const EnterpriseView = lazy(() => import('@/components/views/enterprise-view').then(m => ({ default: m.EnterpriseView })));
 const AiCampaignGeneratorView = lazy(() => import('@/components/views/ai-campaign-generator-view').then(m => ({ default: m.AiCampaignGeneratorView })));
 const WebviewEngineView = lazy(() => import('@/components/views/webview-engine-view').then(m => ({ default: m.WebviewEngineView })));
@@ -128,6 +129,29 @@ const SuperAdminView = lazy(() => import('@/components/views/superadmin-view').t
 // Help & Support Center
 const HelpCenterView = lazy(() => import('@/components/views/help-center-view').then(m => ({ default: m.HelpCenterView })));
 const HelpAdminView = lazy(() => import('@/components/views/help-admin-view').then(m => ({ default: m.HelpAdminView })));
+
+// ─── Smart marketplace dashboard wrapper ────────────────────────────────────
+// Picks the right dashboard based on the tenant's signupMode:
+//   - listing_only / claimed_free → ListingProviderDashboard (2-tab minimal)
+//   - everything else             → ProviderMarketplaceDashboard (6-tab CRM)
+function MarketplaceDashboardRouter() {
+  const auth = useAppStore((s) => s.auth);
+  const isListingOnly =
+    (auth?.tenant as any)?.signupMode === 'listing_only' ||
+    (auth?.tenant as any)?.listingTier === 'claimed_free';
+  if (isListingOnly) {
+    return (
+      <Suspense fallback={<ViewLoader />}>
+        <ListingProviderDashboard />
+      </Suspense>
+    );
+  }
+  return (
+    <Suspense fallback={<ViewLoader />}>
+      <ProviderMarketplaceDashboard />
+    </Suspense>
+  );
+}
 
 // ─── View mapping ───────────────────────────────────────────────────────────
 
@@ -316,9 +340,28 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ onLogout }: AppLayoutProps) {
-  const { currentView, darkMode } = useAppStore();
+  const { currentView, darkMode, setCurrentView, auth } = useAppStore();
   const isMobile = useIsMobile();
   const trialStatus = useTrialStatus();
+
+  // ─── Listing-only guard ──────────────────────────────────────────────────
+  // Tenants with signupMode='listing_only' (or listingTier='claimed_free')
+  // only have access to: marketplaceDashboard, serviceCatalog, billing,
+  // settings, helpCenter. If they somehow land on a CRM view (e.g. stale
+  // currentView from a previous CRM session before downgrade), redirect them
+  // to their marketplace dashboard. This is a UI guard; the API layer
+  // enforces the same restriction with 403 responses (see require-crm-tenant).
+  const isListingOnlyTenant =
+    (auth?.tenant as any)?.signupMode === 'listing_only' ||
+    (auth?.tenant as any)?.listingTier === 'claimed_free';
+  const listingAllowedViews = new Set([
+    'marketplaceDashboard', 'serviceCatalog', 'billing', 'settings', 'helpCenter',
+  ]);
+  useEffect(() => {
+    if (isListingOnlyTenant && !listingAllowedViews.has(currentView)) {
+      setCurrentView('marketplaceDashboard');
+    }
+  }, [isListingOnlyTenant, currentView, setCurrentView, listingAllowedViews]);
 
   // Sync dark mode to <html> so that <body> (which carries `bg-background`
   // but lives outside this wrapper) also picks up the dark background vars.
@@ -332,8 +375,14 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     return () => { root.classList.remove('dark'); };
   }, [darkMode]);
 
-  // Resolve the active view component
-  const ActiveView = viewComponents[currentView] || DashboardView;
+  // Resolve the active view component.
+  // For `marketplaceDashboard`, use the smart router that picks between
+  // ListingProviderDashboard (listing-only) and ProviderMarketplaceDashboard
+  // (CRM) based on the tenant's signupMode.
+  const ActiveView =
+    currentView === 'marketplaceDashboard'
+      ? MarketplaceDashboardRouter
+      : viewComponents[currentView] || DashboardView;
 
   // Canvas view needs no padding for full-screen editor.
   // Omnichannel inbox also needs no padding — it's a full-height 3-column

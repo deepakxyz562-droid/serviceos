@@ -2,9 +2,12 @@ import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { resolveBroadcastAudience } from '@/lib/broadcast-audience'
+import { requireCrmTenant } from '@/lib/require-crm-tenant'
 
 export async function GET(request: NextRequest) {
   try {
+    const crmGuard = await requireCrmTenant(request);
+    if (crmGuard) return crmGuard;
     const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -64,6 +67,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const crmGuard = await requireCrmTenant(request);
+    if (crmGuard) return crmGuard;
     const body = await request.json()
 
     // Whitelist + default the fields we accept. Prevents mass-assignment of
