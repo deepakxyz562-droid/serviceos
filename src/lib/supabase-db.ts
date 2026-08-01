@@ -465,6 +465,107 @@ interface DeleteManyOptions {
   where?: WhereInput;
 }
 
+// ── Helper: Convert a value to a PostgREST OR-clause literal ───────────────
+//
+// PostgREST OR clauses are built as a single string like
+//   "name.ilike.%search%,phone.eq.555"
+// where every value is stringified inline. Date instances MUST be converted
+// to ISO 8601 here — using Date.toString() produces
+//   "Sat Aug 01 2026 12:29:08 GMT+0000 (Coordinated Universal Time)"
+// which PostgreSQL rejects with error 22007 (invalid input syntax for type
+// timestamp). This was the source of 201 logged errors before this fix.
+function toOrLiteral(v: unknown): string {
+  if (v instanceof Date) return v.toISOString();
+  if (v === null) return 'null';
+  return String(v);
+}
+
+// ── Helper: Build one PostgREST OR-clause fragment from a Prisma condition ─
+//
+// Returns either:
+//   - a single condition string (e.g. "name.ilike.%search%") when the entry
+//     has exactly one leaf condition, OR
+//   - a parenthesized AND group (e.g. "(name.eq.x,city.eq.y)") when the entry
+//     has multiple fields or contains a nested `AND` array — so they're
+//     AND-ed together inside the outer OR.
+//   - null if the condition is empty.
+//
+// PostgREST or() syntax:
+//   or('a.eq.1,b.eq.2')              → a=1 OR b=2
+//   or('(a.eq.1,b.eq.2),(c.eq.3)')   → (a=1 AND b=2) OR c=3
+//
+// Recurses into nested `AND`/`OR` arrays so Prisma shapes like
+//   { OR: [{ AND: [{ name: 'x' }, { city: 'y' }] }] }
+// correctly become or('(name.eq.x,city.eq.y)').
+//
+// BUG HISTORY:
+//   - Nested `AND` inside `OR` was previously not recognized — the handler
+//     fell through to the array branch and emitted `AND.in.([object Object])`
+//     → PostgREST 400 "column Tenant.AND does not exist" (22 logged errors).
+//   - Date values in `gt`/`gte`/`lt`/`lte` were stringified via template
+//     literals → Date.toString() → 22007 timestamp parse errors (201 logged).
+function buildOrConditionPart(cond: WhereInput): string | null {
+  const parts: string[] = [];
+  for (const [orField, orValue] of Object.entries(cond)) {
+    if (orValue === undefined) continue;
+
+    // Nested AND → each sub-condition becomes a part (AND-ed via parens)
+    if (orField === 'AND' && Array.isArray(orValue)) {
+      for (const innerCond of orValue as WhereInput[]) {
+        const innerPart = buildOrConditionPart(innerCond);
+        if (innerPart) parts.push(innerPart);
+      }
+      continue;
+    }
+    // Nested OR → flatten (A OR (B OR C) ≡ A OR B OR C)
+    if (orField === 'OR' && Array.isArray(orValue)) {
+      for (const innerCond of orValue as WhereInput[]) {
+        const innerPart = buildOrConditionPart(innerCond);
+        if (innerPart) parts.push(innerPart);
+      }
+      continue;
+    }
+
+    // Operator object: { contains, startsWith, equals, gt, gte, lt, lte, in, ... }
+    if (orValue !== null && typeof orValue === 'object' && !Array.isArray(orValue) && !(orValue instanceof Date)) {
+      const op = orValue as WhereOperator;
+      if (op.contains !== undefined) {
+        parts.push(`${orField}.ilike.%${op.contains}%`);
+      } else if (op.startsWith !== undefined) {
+        parts.push(`${orField}.ilike.${op.startsWith}%`);
+      } else if (op.endsWith !== undefined) {
+        parts.push(`${orField}.ilike.%${op.endsWith}`);
+      } else if (op.equals !== undefined) {
+        if (op.equals === null) parts.push(`${orField}.is.null`);
+        else parts.push(`${orField}.eq.${toOrLiteral(op.equals)}`);
+      } else if (op.gt !== undefined) {
+        parts.push(`${orField}.gt.${toOrLiteral(op.gt)}`);
+      } else if (op.gte !== undefined) {
+        parts.push(`${orField}.gte.${toOrLiteral(op.gte)}`);
+      } else if (op.lt !== undefined) {
+        parts.push(`${orField}.lt.${toOrLiteral(op.lt)}`);
+      } else if (op.lte !== undefined) {
+        parts.push(`${orField}.lte.${toOrLiteral(op.lte)}`);
+      } else if (op.in !== undefined) {
+        parts.push(`${orField}.in.(${(op.in as (string | number | boolean)[]).map(toOrLiteral).join(',')})`);
+      }
+    } else if (orValue === null) {
+      parts.push(`${orField}.is.null`);
+    } else if (orValue instanceof Date) {
+      parts.push(`${orField}.eq.${orValue.toISOString()}`);
+    } else if (Array.isArray(orValue)) {
+      parts.push(`${orField}.in.(${orValue.map(toOrLiteral).join(',')})`);
+    } else {
+      parts.push(`${orField}.eq.${toOrLiteral(orValue)}`);
+    }
+  }
+
+  if (parts.length === 0) return null;
+  if (parts.length === 1) return parts[0];
+  // Multiple parts → wrap in parens so they're AND-ed inside the outer OR.
+  return `(${parts.join(',')})`;
+}
+
 // ── Helper: Map Prisma where clause to Supabase filters ────────────────────
 
 function applyWhereFilters(
@@ -482,46 +583,16 @@ function applyWhereFilters(
     }
     if (field === 'OR' && Array.isArray(value)) {
       // PostgREST supports OR filters with parenthesized syntax:
-      // .or('name.ilike.%search%,phone.ilike.%search%')
-      // We build this from the Prisma OR array
+      //   .or('name.ilike.%search%,phone.ilike.%search%')
+      // We build this from the Prisma OR array using buildOrConditionPart(),
+      // which correctly handles nested AND arrays and Date→ISO conversion.
+      // (Previously this inline loop produced 3 distinct bug classes — see
+      // buildOrConditionPart docstring for the full history.)
       const orConditions = value as WhereInput[];
       const orParts: string[] = [];
       for (const cond of orConditions) {
-        for (const [orField, orValue] of Object.entries(cond)) {
-          if (orValue === undefined) continue;
-          if (orValue !== null && typeof orValue === 'object' && !Array.isArray(orValue) && !(orValue instanceof Date)) {
-            const op = orValue as WhereOperator;
-            if (op.contains !== undefined) {
-              orParts.push(`${orField}.ilike.%${op.contains}%`);
-            } else if (op.startsWith !== undefined) {
-              orParts.push(`${orField}.ilike.${op.startsWith}%`);
-            } else if (op.endsWith !== undefined) {
-              orParts.push(`${orField}.ilike.%${op.endsWith}`);
-            } else if (op.equals !== undefined) {
-              if (op.equals === null) {
-                orParts.push(`${orField}.is.null`);
-              } else {
-                orParts.push(`${orField}.eq.${op.equals}`);
-              }
-            } else if (op.gt !== undefined) {
-              orParts.push(`${orField}.gt.${op.gt}`);
-            } else if (op.gte !== undefined) {
-              orParts.push(`${orField}.gte.${op.gte}`);
-            } else if (op.lt !== undefined) {
-              orParts.push(`${orField}.lt.${op.lt}`);
-            } else if (op.lte !== undefined) {
-              orParts.push(`${orField}.lte.${op.lte}`);
-            } else if (op.in !== undefined) {
-              orParts.push(`${orField}.in.(${(op.in as (string | number | boolean)[]).join(',')})`);
-            }
-          } else if (orValue === null) {
-            orParts.push(`${orField}.is.null`);
-          } else if (Array.isArray(orValue)) {
-            orParts.push(`${orField}.in.(${orValue.join(',')})`);
-          } else {
-            orParts.push(`${orField}.eq.${orValue}`);
-          }
-        }
+        const part = buildOrConditionPart(cond);
+        if (part) orParts.push(part);
       }
       if (orParts.length > 0) {
         query.or(orParts.join(','));
@@ -687,6 +758,83 @@ function serializeData(data: Record<string, unknown>, currentRow?: Record<string
     }
   }
   return result;
+}
+
+// ── Helper: Flatten Prisma composite-unique `where` clauses ────────────────
+//
+// Prisma encodes a composite unique key (e.g. `@@unique([tenantId, featureKey])`)
+// as a nested object under a synthesized key name:
+//
+//   where: { tenantId_featureKey: { tenantId: 'abc', featureKey: 'x' } }
+//
+// PostgREST has no notion of composite keys — it expects individual column
+// filters. This helper detects the composite-key shape (an object value where
+// a primitive is expected) and flattens it back into primitive entries:
+//
+//   { tenantId_featureKey: { tenantId: 'abc', featureKey: 'x' } }
+//     → { tenantId: 'abc', featureKey: 'x' }
+//
+// It also returns the underlying column names so upsert() can build a correct
+// `onConflict` string ("tenantId,featureKey" instead of the bogus
+// "tenantId_featureKey" which PostgREST would interpret as a literal column).
+//
+// Bug history: without this, FeatureFlag.upsert() sent
+// `on_conflict=tenantId_featureKey` → PostgREST 400 ("column
+// tenantId_featureKey does not exist"). Same shape caused 84 logged errors.
+
+interface FlattenedWhere {
+  flat: Record<string, unknown>;
+  /** Column names that make up the unique constraint, in declaration order. */
+  uniqueColumns: string[];
+}
+
+function flattenCompositeWhere(where: Record<string, unknown>): FlattenedWhere {
+  const flat: Record<string, unknown> = {};
+  let uniqueColumns: string[] = [];
+
+  for (const [key, value] of Object.entries(where)) {
+    if (value === undefined) continue;
+
+    // Prisma composite-unique shape: the value is a non-null, non-Date,
+    // non-array plain object whose keys are real column names.
+    // (e.g. { tenantId_featureKey: { tenantId: 'abc', featureKey: 'x' } })
+    if (
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      !(value instanceof Date)
+    ) {
+      const inner = value as Record<string, unknown>;
+      const innerKeys = Object.keys(inner);
+      // Only flatten if the inner object has at least 2 keys (a composite) AND
+      // none of them look like Prisma operators ({ equals, in, gt, ... }).
+      // A single-key object with an operator value should stay as-is so the
+      // main applyWhereFilters loop can handle it.
+      const looksLikeOperatorObject = innerKeys.some((k) =>
+        ['equals', 'not', 'in', 'notIn', 'contains', 'startsWith', 'endsWith',
+         'gt', 'gte', 'lt', 'lte', 'isSet', 'is'].includes(k)
+      );
+      if (innerKeys.length >= 2 && !looksLikeOperatorObject) {
+        // Composite unique — flatten it. Capture the column order from the
+        // inner object so onConflict matches the unique index declaration.
+        uniqueColumns = innerKeys;
+        for (const [col, colVal] of Object.entries(inner)) {
+          if (colVal !== undefined) flat[col] = colVal;
+        }
+        continue;
+      }
+    }
+
+    // Primitive value (string/number/boolean/null) or single-key operator
+    // object like { equals: 'x' } — keep as a filter on `key` directly.
+    flat[key] = value;
+    // For single-column uniques, `key` IS the column name.
+    if (!uniqueColumns.includes(key)) {
+      uniqueColumns.push(key);
+    }
+  }
+
+  return { flat, uniqueColumns };
 }
 
 // ── Helper: Get table name for a model ─────────────────────────────────────
@@ -963,7 +1111,10 @@ class SupabaseModel {
     }
     let query = this.client.from(this.tableName).select(selectStr);
 
-    for (const [field, value] of Object.entries(where)) {
+    // Flatten composite-unique where (e.g. { tenantId_featureKey: {...} }
+    // → { tenantId: '...', featureKey: '...' }) so we filter on real columns.
+    const { flat: flatWhere } = flattenCompositeWhere(where);
+    for (const [field, value] of Object.entries(flatWhere)) {
       if (value !== undefined) {
         query.eq(field, value as string | number | boolean);
       }
@@ -1244,6 +1395,10 @@ class SupabaseModel {
 
     const { where, data, include } = options;
 
+    // Flatten composite-unique where (e.g. { tenantId_featureKey: {...} }
+    // → { tenantId: '...', featureKey: '...' }) so we filter on real columns.
+    const { flat: flatWhere } = flattenCompositeWhere(where);
+
     // Check if data contains any Prisma atomic operations (increment, decrement, etc.)
     // that require knowing the current row values. If so, fetch the current row first.
     let currentRow: Record<string, unknown> | undefined;
@@ -1255,7 +1410,7 @@ class SupabaseModel {
     if (hasAtomicOp) {
       try {
         const fetchQuery = this.client.from(this.tableName).select('*');
-        for (const [field, value] of Object.entries(where)) {
+        for (const [field, value] of Object.entries(flatWhere)) {
           if (value !== undefined) {
             fetchQuery.eq(field, value as string | number | boolean);
           }
@@ -1280,7 +1435,7 @@ class SupabaseModel {
 
     let query = this.client.from(this.tableName).update(serialized).select('*');
 
-    for (const [field, value] of Object.entries(where)) {
+    for (const [field, value] of Object.entries(flatWhere)) {
       if (value !== undefined) {
         query.eq(field, value as string | number | boolean);
       }
@@ -1302,7 +1457,7 @@ class SupabaseModel {
       delete serialized[badCol];
       retryCount++;
       let retryQuery = this.client.from(this.tableName).update(serialized).select('*');
-      for (const [field, value] of Object.entries(where)) {
+      for (const [field, value] of Object.entries(flatWhere)) {
         if (value !== undefined) {
           retryQuery.eq(field, value as string | number | boolean);
         }
@@ -1330,44 +1485,56 @@ class SupabaseModel {
       throw new Error(`[SupabaseDB] Table ${this.tableName} not in Supabase`);
     }
 
-    const { where, create, update } = options;
-    const merged = { ...create, ...update };
-    const serialized = serializeData(merged);
-    const uniqueColumns = Object.keys(where);
+    const { where, create, update, include } = options;
 
-    let { data: result, error } = await this.client
-      .from(this.tableName)
-      .upsert(serialized, { onConflict: uniqueColumns.join(',') })
-      .select('*')
-      .single();
+    // Flatten composite-unique where (e.g. { tenantId_featureKey: {...} }
+    // → { tenantId: '...', featureKey: '...' }). This was Bug #4 — PostgREST
+    // received on_conflict=tenantId_featureKey and 400'd because no such
+    // column exists (the real unique index is on (tenantId, featureKey)).
+    const { flat: flatWhere } = flattenCompositeWhere(where);
 
-    // Resilient retry loop: strip any column PostgREST rejects.
-    let retryCount = 0;
-    while (error && retryCount < 4) {
-      const msg = error.message || '';
-      const missingColMatch = msg.match(
-        /(?:Could not find the ['`"]?(\w+)['`"]? column of|column "(\w+)" of relation)/
-      );
-      if (!missingColMatch) break;
-      const badCol = missingColMatch[1] || missingColMatch[2];
-      if (!badCol || !(badCol in serialized)) break;
-      delete serialized[badCol];
-      retryCount++;
-      const retry = await this.client
-        .from(this.tableName)
-        .upsert(serialized, { onConflict: uniqueColumns.join(',') })
-        .select('*')
-        .single();
-      result = retry.data;
-      error = retry.error;
+    // Manual upsert: find first, then create or update.
+    //
+    // We DON'T use PostgREST's native upsert (INSERT ... ON CONFLICT DO UPDATE)
+    // because of three bugs that collectively caused ~3,000 logged errors:
+    //
+    //   1. Plan.id NOT NULL (1,512 errors): PostgREST upsert requires `id` in
+    //      the payload for the INSERT path, but auto-generating id would
+    //      OVERWRITE the existing id on the UPDATE path (breaking FK
+    //      references for tables like Tenant).
+    //   2. Tenant.updatedAt NOT NULL (256 errors): same auto-timestamp issue
+    //      — needed for INSERT, can't blindly set on UPDATE.
+    //   3. NOT NULL violations on INSERT don't trigger the ON CONFLICT
+    //      clause, so the whole statement fails even when the row exists
+    //      and should be updated.
+    //
+    // The 2-query approach (find + create/update) is slightly slower but
+    // always correct. create() auto-generates id + timestamps; update()
+    // auto-sets updatedAt and never touches id. Both have retry loops for
+    // bad columns.
+
+    let findQuery = this.client.from(this.tableName).select('id');
+    for (const [field, value] of Object.entries(flatWhere)) {
+      if (value !== undefined) {
+        findQuery = findQuery.eq(field, value as string | number | boolean);
+      }
+    }
+    const { data: existing, error: findErr } = await findQuery.limit(1).maybeSingle();
+
+    if (findErr) {
+      console.error(`[SupabaseDB] upsert find error on ${this.tableName}:`, findErr.message);
+      // Fall through to create — if the table has a deeper issue, create()
+      // will surface a clearer error.
     }
 
-    if (error) {
-      console.error(`[SupabaseDB] upsert error on ${this.tableName}:`, error.message);
-      throw new Error(`Failed to upsert ${this.tableName}: ${error.message}`);
+    if (existing) {
+      // Row exists → UPDATE (id is preserved, not in update payload)
+      return this.update({ where: flatWhere, data: update, include });
+    } else {
+      // Row doesn't exist → CREATE (create() auto-generates id, createdAt,
+      // updatedAt and has the bad-column retry loop)
+      return this.create({ data: create, include });
     }
-
-    return result;
   }
 
   async delete(options: DeleteOptions): Promise<unknown> {
@@ -1378,7 +1545,10 @@ class SupabaseModel {
     const { where } = options;
     let query = this.client.from(this.tableName).delete();
 
-    for (const [field, value] of Object.entries(where)) {
+    // Flatten composite-unique where (e.g. { tenantId_featureKey: {...} }
+    // → { tenantId: '...', featureKey: '...' }) so we filter on real columns.
+    const { flat: flatWhere } = flattenCompositeWhere(where);
+    for (const [field, value] of Object.entries(flatWhere)) {
       if (value !== undefined) {
         query.eq(field, value as string | number | boolean);
       }

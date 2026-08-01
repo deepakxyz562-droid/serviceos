@@ -32,15 +32,25 @@ export async function GET(
     const { id } = await params;
 
     // Fetch the conversation to get the customer's phone + tenant.
+    //
+    // BUG FIX: previously this selected `customerEmail: true` directly from
+    // the Conversation table, but Conversation has no such column (the schema
+    // only has customerPhone, customerName, customerWhatsappId). Every call
+    // to this route 400'd with "column Conversation.customerEmail does not
+    // exist" (14 logged errors). The email now comes from the related
+    // Customer record via `include`.
     const conv = await db.conversation.findUnique({
       where: { id },
       select: {
         id: true,
         customerName: true,
         customerPhone: true,
-        customerEmail: true,
+        customerId: true,
         tenantId: true,
         leadId: true,
+      },
+      include: {
+        customer: { select: { email: true } },
       },
     });
 
@@ -49,7 +59,7 @@ export async function GET(
     }
 
     const phone = conv.customerPhone;
-    const email = conv.customerEmail;
+    const email = conv.customer?.email ?? null;
     const tenantId = conv.tenantId;
 
     // ── Build parallel queries for stats + recent items ──
