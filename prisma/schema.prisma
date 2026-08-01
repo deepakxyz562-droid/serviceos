@@ -98,6 +98,13 @@ model Tenant {
   claimed               Boolean  @default(false)
   claimedAt             DateTime?
   claimedById           String?  // User who owns the claim (links to User.id)
+  // Signup path chosen by the user on the Step 0 decision screen (shown
+  // after registration, before onboarding):
+  //   null         → user hasn't picked yet (fresh registration) → show Step 0
+  //   'crm_trial'  → full CRM + 14-day trial → full 4-step onboarding wizard
+  //   'listing_only' → free marketplace listing only (no CRM trial) → mini
+  //                  1-step onboarding wizard + simplified provider dashboard
+  signupMode            String?
   // Google Business Profile — user-pasted URL (link-only integration). When set
   // AND googleBusinessVerified=true, we trust Google's verification and the
   // claim flow can auto-approve. Rating/review counts stay on Tenant.rating /

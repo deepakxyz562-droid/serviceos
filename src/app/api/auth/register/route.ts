@@ -216,6 +216,8 @@ export async function POST(request: NextRequest) {
           trialEndsAt: tenant.trialEndsAt,
           onboardingCompleted: tenant.onboardingCompleted,
           onboardingStep: tenant.onboardingStep,
+          listingTier: tenant.listingTier,
+          signupMode: tenant.signupMode,
         },
       },
       { status: 201 }

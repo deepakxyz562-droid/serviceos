@@ -195,8 +195,6 @@ export default async function PublicBusinessHubPage({
   // Get current user (if authenticated) to hide the claim banner for owners.
   // Wrapped in try/catch — this is a PUBLIC page and must NEVER crash if the
   // auth cookie is malformed, expired, or the JWT secret is misconfigured.
-  // The claim link only shows to authenticated non-owner users, so if auth
-  // fails we just treat the visitor as anonymous (no claim link).
   let currentTenantId: string | null = null
   try {
     const currentUser = await getAuthUser()
@@ -204,10 +202,11 @@ export default async function PublicBusinessHubPage({
   } catch {
     currentTenantId = null
   }
-  // Only show the claim link to AUTHENTICATED users who are NOT the owner.
-  // Anonymous visitors don't see it — they'd need to register first anyway,
-  // and showing it on every listing looks spammy.
-  const showClaimLink = !!currentTenantId && !business.claimed && currentTenantId !== business.id
+  // Show the claim link on EVERY unclaimed listing — to both authenticated
+  // non-owner users AND anonymous visitors. Anonymous visitors see a sign-in
+  // gate when they click (handled inside ClaimBusinessBanner). The owner of
+  // the business never sees it (can't claim your own).
+  const showClaimLink = !business.claimed && currentTenantId !== business.id
 
   // Parse JSON fields safely.
   const gallery: Array<{ url?: string; caption?: string }> = safeJson(business.galleryJson, [])
@@ -563,6 +562,7 @@ export default async function PublicBusinessHubPage({
                     tenantCity={business.city}
                     tenantState={business.state}
                     currentTenantId={currentTenantId}
+                    isAuthenticated={!!currentTenantId}
                   />
                 ) : null}
 

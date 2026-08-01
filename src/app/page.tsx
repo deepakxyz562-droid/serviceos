@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -16,6 +16,14 @@ const AuthPage = dynamic(
 );
 const SaaSOnboarding = dynamic(
   () => import('@/components/onboarding/saas-onboarding').then(m => ({ default: m.SaaSOnboarding })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
+const SignupModeSelector = dynamic(
+  () => import('@/components/onboarding/signup-mode-selector').then(m => ({ default: m.SignupModeSelector })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
+const ListingOnboarding = dynamic(
+  () => import('@/components/onboarding/listing-onboarding').then(m => ({ default: m.ListingOnboarding })),
   { ssr: false, loading: () => <ViewLoader /> }
 );
 const AppLayout = dynamic(
@@ -127,6 +135,23 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [unauthView, setUnauthView] = useState<UnauthView>('landing');
   const [error, setError] = useState<string | null>(null);
+
+  // Capture the `returnUrl` query param (set by the marketplace claim-this-
+  // business sign-in gate) so we can redirect back to the provider detail
+  // page after the visitor registers / logs in. Stored in a ref because it
+  // must survive the URL-stripping replaceState below and be read once in
+  // onAuthSuccess — it is NOT reactive state.
+  const returnUrlRef = useRef<string | null>(null);
+
+  // Which onboarding screen to show for a tenant whose onboarding isn't
+  // complete yet:
+  //   null             → not showing any onboarding screen
+  //   'mode_selector'  → Step 0 decision screen (signupMode is null)
+  //   'saas'           → full 4-step SaaSOnboarding wizard (signupMode='crm_trial')
+  //   'listing'        → mini 1-step ListingOnboarding wizard (signupMode='listing_only')
+  const [onboardingView, setOnboardingView] = useState<
+    null | 'mode_selector' | 'saas' | 'listing'
+  >(null);
 
   // Handle Google OAuth callback URL parameters.
   // NOTE: The old `?google_onboarding=true` param is no longer used — Google
@@ -262,7 +287,9 @@ export default function HomePage() {
           } else if (isPlatformAdmin(data.user)) {
             useAppStore.getState().setCurrentView('superadmin');
           }
-          // Trigger SaaS onboarding wizard if the tenant hasn't completed it.
+          // Trigger onboarding if the tenant hasn't completed it. Decide
+          // WHICH screen based on signupMode (Step 0 / SaaS wizard / listing
+          // mini wizard). Platform admins / customers / employees skip it.
           if (
             data.tenant &&
             !data.tenant.onboardingCompleted &&
@@ -270,9 +297,18 @@ export default function HomePage() {
             data.user.role !== 'customer' &&
             data.user.role !== 'employee'
           ) {
-            setShowOnboarding(true);
+            const sm = (data.tenant as any)?.signupMode as string | null | undefined;
+            if (sm === 'listing_only') {
+              setOnboardingView('listing');
+            } else if (sm === 'crm_trial') {
+              setOnboardingView('saas');
+            } else {
+              setOnboardingView('mode_selector');
+            }
+            setShowOnboarding(false);
           } else if (isPlatformAdmin(data.user)) {
             setShowOnboarding(false);
+            setOnboardingView(null);
           }
           if (typeof window !== 'undefined') {
             // Preserve existing token if available, or update with new one
@@ -355,9 +391,18 @@ export default function HomePage() {
                 parsed.user.role !== 'customer' &&
                 parsed.user.role !== 'employee'
               ) {
-                setShowOnboarding(true);
+                const sm = (parsed.tenant as any)?.signupMode as string | null | undefined;
+                if (sm === 'listing_only') {
+                  setOnboardingView('listing');
+                } else if (sm === 'crm_trial') {
+                  setOnboardingView('saas');
+                } else {
+                  setOnboardingView('mode_selector');
+                }
+                setShowOnboarding(false);
               } else if (isPlatformAdmin(parsed.user)) {
                 setShowOnboarding(false);
+                setOnboardingView(null);
               }
               return;
             }
@@ -382,15 +427,23 @@ export default function HomePage() {
       try {
         handleOAuthCallback();
 
-        // Deep-link from marketplace "List your business" CTA → auto-open auth.
-        // The CTA links to /?auth=register; we read it here and switch to the
-        // auth view so the user lands directly on the registration form.
+        // Deep-link from marketplace "List your business" CTA, or from the
+        // claim-this-business sign-in gate → auto-open auth. The CTA links to
+        // /?auth=register (or /?auth=login); we read it here and switch to the
+        // auth view so the user lands directly on the form.
+        // The optional `returnUrl` param (set by the claim sign-in gate) is
+        // captured into a ref so onAuthSuccess can redirect back to the
+        // provider detail page after a successful login / registration.
         if (typeof window !== 'undefined') {
           const params = new URLSearchParams(window.location.search);
           if (params.get('auth') === 'register' || params.get('auth') === 'login') {
+            const ru = params.get('returnUrl');
+            if (ru) returnUrlRef.current = ru;
             setUnauthView('auth');
-            // Strip the param so a refresh returns to the landing page.
+            // Strip the auth + returnUrl params so a refresh returns to the
+            // landing page. returnUrl is already safely in the ref.
             params.delete('auth');
+            params.delete('returnUrl');
             const cleanUrl = params.toString()
               ? `${window.location.pathname}?${params.toString()}`
               : window.location.pathname;
@@ -573,28 +626,58 @@ export default function HomePage() {
       if (user?.role === 'customer') {
         // Customer logged in via WhatsApp OTP — layout is handled by page.tsx
         setShowOnboarding(false);
+        setOnboardingView(null);
         toast.success('Welcome to your customer portal!');
       } else if (user?.role === 'employee') {
         // Employee logged in — layout is handled by page.tsx
         setShowOnboarding(false);
+        setOnboardingView(null);
         toast.success('Welcome to your portal!');
       } else if (isPlatformAdmin(user)) {
         // SuperAdmin / platform admin — redirect to superadmin dashboard.
         // Explicitly clear any stale onboarding flag so the wizard can never
         // appear for a platform admin (it is a tenant-only flow).
         setShowOnboarding(false);
+        setOnboardingView(null);
         useAppStore.getState().setCurrentView('superadmin');
         toast.success('Welcome, Super Admin!');
       } else if (!tenant || !tenant.onboardingCompleted) {
         // New user without a tenant — OR an existing tenant that hasn't
-        // finished onboarding yet. The PATCH /api/tenants/[id] endpoint
-        // detects the `onboardingCompleted: true` transition and auto-
-        // populates the public Business Hub defaults at that moment.
-        setShowOnboarding(true);
+        // finished onboarding yet. Decide WHICH onboarding screen to show
+        // based on the tenant's signupMode:
+        //   null / undefined → Step 0 decision screen (fresh registration)
+        //   'crm_trial'      → full 4-step SaaSOnboarding wizard
+        //   'listing_only'   → mini 1-step ListingOnboarding wizard
+        const sm = (tenant as any)?.signupMode as string | null | undefined;
+        if (sm === 'listing_only') {
+          setOnboardingView('listing');
+        } else if (sm === 'crm_trial') {
+          setOnboardingView('saas');
+        } else {
+          setOnboardingView('mode_selector');
+        }
+        setShowOnboarding(false); // we use onboardingView, not showOnboarding
         toast.success('Welcome to ServiceOS! Let\'s set up your workspace.');
       } else {
         setShowOnboarding(false);
+        setOnboardingView(null);
         toast.success('Welcome to ServiceOS!');
+      }
+
+      // If the user arrived via the claim-this-business sign-in gate, they
+      // have a returnUrl pointing back to the provider detail page. Redirect
+      // them there now (after auth, before the app layout renders) so they
+      // can complete the claim. This runs for authenticated non-customer /
+      // non-employee / non-superadmin users whose onboarding is already
+      // complete — for those still needing onboarding, the returnUrl is
+      // preserved in the ref and consumed after onboarding finishes.
+      const ru = returnUrlRef.current;
+      if (ru && typeof window !== 'undefined') {
+        returnUrlRef.current = null;
+        // Use a short timeout so the auth state + toasts settle before nav.
+        setTimeout(() => {
+          window.location.href = ru;
+        }, 600);
       }
     },
     [setAuth, setShowOnboarding]
@@ -627,16 +710,74 @@ export default function HomePage() {
     );
   }
 
-  // The SaaS onboarding wizard is a TENANT-only flow. Platform admins
-  // (SuperAdmin), customers, and employees must never see it — even if the
-  // `showOnboarding` flag is somehow true (stale state, race condition, or a
-  // previous non-admin session in the same tab). This role check is the
-  // final safety net on top of the explicit setShowOnboarding(false) calls.
+  // Onboarding screens (Step 0 mode selector / SaaS wizard / listing mini
+  // wizard) are TENANT-only flows. Platform admins, customers, and employees
+  // must never see them. This role check is the final safety net on top of
+  // the explicit setOnboardingView(null) calls elsewhere.
   const isPlatformAdminUser = isPlatformAdmin(auth.user);
   const isPortalRoleUser =
     auth.user?.role === 'customer' ||
     (auth.user as any)?.isCustomer ||
     auth.user?.role === 'employee';
+  if (
+    onboardingView &&
+    auth.isAuthenticated &&
+    !isPlatformAdminUser &&
+    !isPortalRoleUser
+  ) {
+    // Step 0: signup mode decision screen
+    if (onboardingView === 'mode_selector') {
+      return (
+        <>
+          <SignupModeSelector
+            tenant={auth.tenant as any}
+            user={auth.user as any}
+            onChooseCrm={() => setOnboardingView('saas')}
+            onChooseListing={() => setOnboardingView('listing')}
+          />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
+    // Full 4-step SaaS onboarding wizard (CRM trial path)
+    if (onboardingView === 'saas') {
+      return (
+        <>
+          <SaaSOnboarding
+            tenant={auth.tenant}
+            user={auth.user}
+            onComplete={() => {
+              setShowOnboarding(false);
+              setOnboardingView(null);
+            }}
+          />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
+    // Mini 1-step listing onboarding wizard (listing-only path)
+    if (onboardingView === 'listing') {
+      return (
+        <>
+          <ListingOnboarding
+            tenant={auth.tenant as any}
+            user={auth.user as any}
+            onComplete={() => {
+              setOnboardingView(null);
+              // Land the listing-only provider on their marketplace dashboard
+              useAppStore.getState().setCurrentView('marketplaceDashboard');
+            }}
+          />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
+  }
+  // Legacy safety net: if showOnboarding is somehow still true (stale state
+  // from before the onboardingView refactor), fall back to the SaaS wizard.
   if (
     showOnboarding &&
     auth.isAuthenticated &&

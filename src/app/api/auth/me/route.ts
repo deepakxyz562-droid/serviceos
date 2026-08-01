@@ -102,6 +102,8 @@ export async function GET() {
               trialEndsAt: tenant.trialEndsAt,
               onboardingCompleted: tenant.onboardingCompleted,
               onboardingStep: tenant.onboardingStep,
+              listingTier: tenant.listingTier,
+              signupMode: tenant.signupMode,
               settingsJson: tenant.settingsJson,
               createdAt: tenant.createdAt,
             }
@@ -167,6 +169,8 @@ export async function GET() {
             trialEndsAt: user.tenant.trialEndsAt,
             onboardingCompleted: user.tenant.onboardingCompleted,
             onboardingStep: user.tenant.onboardingStep,
+            listingTier: user.tenant.listingTier,
+            signupMode: user.tenant.signupMode,
             settingsJson: user.tenant.settingsJson,
             createdAt: user.tenant.createdAt,
           }
