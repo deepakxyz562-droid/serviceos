@@ -5,7 +5,7 @@ import {
   Megaphone, Plus, Search, Play, Pause, Copy, Eye, Calendar,
   Users, Send, BarChart3, Clock, CheckCircle2, XCircle,
   MessageSquare, TrendingUp, Loader2, Trash2, Pencil,
-  Mail, AlertTriangle, Plug, ArrowRight,
+  Mail, AlertTriangle, Plug, ArrowRight, LayoutTemplate,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -1208,9 +1208,14 @@ export function CampaignsView() {
             <p className="text-sm text-muted-foreground">Multi-channel campaign engine</p>
           </div>
         </div>
-        <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
-          <Plus className="size-4 mr-1.5" /> Create Campaign
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setActiveView('templateStudio')}>
+            <LayoutTemplate className="size-4 mr-1.5" /> Template Studio
+          </Button>
+          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
+            <Plus className="size-4 mr-1.5" /> Create Campaign
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}

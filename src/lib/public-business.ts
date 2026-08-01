@@ -27,6 +27,7 @@ export interface PublicBusinessData {
   state: string | null
   phone: string | null
   whatsappPhone: string | null
+  email: string | null
   address: string | null
   country: string
   currency: string
@@ -247,6 +248,7 @@ async function buildPublicBusinessData(
     state: tenant.state,
     phone: tenant.phone,
     whatsappPhone: tenant.whatsappPhone,
+    email: tenant.email,
     address: tenant.address,
     country: tenant.country,
     currency: tenant.currency,

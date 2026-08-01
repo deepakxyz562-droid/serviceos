@@ -8,7 +8,7 @@ import {
   ExternalLink, Sparkles, X, Filter,
   Mail, MessageCircle, User,
   BarChart3, Inbox, UserCheck, UserPlus, UsersRound,
-  StickyNote, Clock, ChevronDown, Zap,
+  StickyNote, Clock, ChevronDown, Zap, ChevronRight, Star, Briefcase, Contact as ContactIcon,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -217,6 +217,35 @@ export function OmnichannelView() {
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [showAnalyticsPanel, setShowAnalyticsPanel] = useState(false);
 
+  // ── Customer Context (right panel stats grid + accordions) ──
+  // Fetched when a conversation is selected. Powers the reference-design
+  // stats grid (Reviews/Jobs/Contacts) + "Survey Results" (reviews) +
+  // "Case History" (jobs) accordions in the contact profile panel.
+  const [customerContext, setCustomerContext] = useState<{
+    stats: { reviews: number; jobs: number; contacts: number };
+    reviews: Array<{
+      id: string;
+      rating: number;
+      comment: string | null;
+      authorName: string | null;
+      source: string;
+      createdAt: string;
+    }>;
+    jobs: Array<{
+      id: string;
+      title: string;
+      status: string;
+      priority: string;
+      scheduledAt: string | null;
+      quotedAmount: number | null;
+      jobNumber: string | null;
+      createdAt: string;
+    }>;
+  } | null>(null);
+  const [contextLoading, setContextLoading] = useState(false);
+  const [showSurveyResults, setShowSurveyResults] = useState(true);
+  const [showCaseHistory, setShowCaseHistory] = useState(true);
+
   // ── Data Loading ──
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -261,6 +290,33 @@ export function OmnichannelView() {
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [selectedConversationId, conversations]);
+
+  // Fetch customer context (stats + reviews + jobs) when a conversation is
+  // selected. Powers the right-panel stats grid + accordions. Defensive —
+  // any error just leaves customerContext null and the panel renders without
+  // the stats section.
+  useEffect(() => {
+    if (!selectedConversationId) {
+      setCustomerContext(null);
+      return;
+    }
+    let cancelled = false;
+    setContextLoading(true);
+    fetch(`${API_BASE}/conversations/${selectedConversationId}/customer-context`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (!cancelled && data && data.stats) {
+          setCustomerContext(data);
+        }
+      })
+      .catch(() => {
+        // Silent — panel renders without stats
+      })
+      .finally(() => {
+        if (!cancelled) setContextLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedConversationId]);
 
   // ── Derived Data ──
   const filteredConversations = conversations.filter(c => {
@@ -1121,6 +1177,168 @@ export function OmnichannelView() {
                       </CardContent>
                     </Card>
                   )}
+
+                  {/* ── Stats Grid (Reviews / Jobs / Contacts) ──
+                      Reference design maps social stats (Tweets/Followers/
+                      Following) to our CRM data: Reviews, Jobs, Contacts. */}
+                  <Card className="shadow-none">
+                    <CardContent className="px-4 py-3">
+                      {contextLoading ? (
+                        <div className="flex items-center justify-center py-2">
+                          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div className="flex flex-col items-center gap-0.5 py-1">
+                            <Star className="size-3.5 text-amber-500 mb-0.5" />
+                            <span className="text-lg font-bold text-foreground">
+                              {customerContext?.stats.reviews ?? 0}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Reviews</span>
+                          </div>
+                          <div className="flex flex-col items-center gap-0.5 py-1 border-x">
+                            <Briefcase className="size-3.5 text-emerald-500 mb-0.5" />
+                            <span className="text-lg font-bold text-foreground">
+                              {customerContext?.stats.jobs ?? 0}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Jobs</span>
+                          </div>
+                          <div className="flex flex-col items-center gap-0.5 py-1">
+                            <ContactIcon className="size-3.5 text-sky-500 mb-0.5" />
+                            <span className="text-lg font-bold text-foreground">
+                              {customerContext?.stats.contacts ?? 0}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Contacts</span>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* ── Survey Results Accordion (→ customer Reviews) ── */}
+                  <Card className="shadow-none">
+                    <button
+                      type="button"
+                      onClick={() => setShowSurveyResults(!showSurveyResults)}
+                      className="w-full flex items-center justify-between px-4 pt-4 pb-2 text-left"
+                    >
+                      <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+                        <Star className="size-3.5 text-amber-500" />
+                        Survey Results
+                        {customerContext && customerContext.reviews.length > 0 && (
+                          <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-1">
+                            {customerContext.reviews.length}
+                          </Badge>
+                        )}
+                      </CardTitle>
+                      <ChevronRight className={cn(
+                        'size-4 text-muted-foreground transition-transform',
+                        showSurveyResults && 'rotate-90'
+                      )} />
+                    </button>
+                    {showSurveyResults && (
+                      <CardContent className="px-4 pb-4 space-y-2">
+                        {!customerContext || customerContext.reviews.length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-2 text-center">
+                            No reviews yet
+                          </p>
+                        ) : (
+                          customerContext.reviews.map(r => (
+                            <div key={r.id} className="rounded-md border p-2.5 space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-foreground">
+                                  {r.authorName || 'Verified Customer'}
+                                </span>
+                                <div className="flex items-center gap-0.5">
+                                  {Array.from({ length: 5 }).map((_, i) => (
+                                    <Star
+                                      key={i}
+                                      className={cn(
+                                        'size-2.5',
+                                        i < r.rating
+                                          ? 'fill-amber-400 text-amber-400'
+                                          : 'text-muted-foreground/30'
+                                      )}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              {r.comment && (
+                                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
+                                  {r.comment}
+                                </p>
+                              )}
+                              <p className="text-[10px] text-muted-foreground">
+                                {new Date(r.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                {r.source !== 'internal' && <span className="ml-1">· via {r.source}</span>}
+                              </p>
+                            </div>
+                          ))
+                        )}
+                      </CardContent>
+                    )}
+                  </Card>
+
+                  {/* ── Case History Accordion (→ past Jobs) ── */}
+                  <Card className="shadow-none">
+                    <button
+                      type="button"
+                      onClick={() => setShowCaseHistory(!showCaseHistory)}
+                      className="w-full flex items-center justify-between px-4 pt-4 pb-2 text-left"
+                    >
+                      <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+                        <Briefcase className="size-3.5 text-emerald-500" />
+                        Case History
+                        {customerContext && customerContext.jobs.length > 0 && (
+                          <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-1">
+                            {customerContext.jobs.length}
+                          </Badge>
+                        )}
+                      </CardTitle>
+                      <ChevronRight className={cn(
+                        'size-4 text-muted-foreground transition-transform',
+                        showCaseHistory && 'rotate-90'
+                      )} />
+                    </button>
+                    {showCaseHistory && (
+                      <CardContent className="px-4 pb-4 space-y-2">
+                        {!customerContext || customerContext.jobs.length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-2 text-center">
+                            No job history
+                          </p>
+                        ) : (
+                          customerContext.jobs.map(j => (
+                            <div key={j.id} className="rounded-md border p-2.5 space-y-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-medium text-foreground truncate flex-1">
+                                  {j.title}
+                                </span>
+                                <Badge variant="outline" className={cn(
+                                  'text-[9px] px-1.5 h-4 whitespace-nowrap',
+                                  j.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400' :
+                                  j.status === 'cancelled' ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-950 dark:text-red-400' :
+                                  'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400'
+                                )}>
+                                  {j.status}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                                <span>
+                                  {j.jobNumber ? `#${j.jobNumber} · ` : ''}
+                                  {new Date(j.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                                </span>
+                                {j.quotedAmount != null && j.quotedAmount > 0 && (
+                                  <span className="font-medium text-foreground">
+                                    ₹{j.quotedAmount.toLocaleString('en-IN')}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </CardContent>
+                    )}
+                  </Card>
 
                   {/* Channel Info Card */}
                   <Card className="shadow-none">

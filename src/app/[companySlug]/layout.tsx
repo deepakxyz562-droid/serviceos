@@ -3,12 +3,15 @@ import type { Metadata } from 'next'
 /**
  * Layout for all /{companySlug}/* routes.
  *
- * These are ALL auth-gated routes (admin login, customer login, employee login,
- * accept-invite). They must NEVER be indexed by search engines — they're
- * tenant-specific auth screens, not content pages.
+ * Most routes here are auth-gated screens (admin login, customer login,
+ * employee login, accept-invite) that should never be indexed.
  *
- * The public-facing business hub lives at /{industry}/{city}/{slug} (a
- * different route tree) so it's NOT affected by this noindex.
+ * However, the public-facing business hub also lives under this route tree
+ * at /{industry}/{city}/{slug}. That page sets its own `robots` metadata in
+ * generateMetadata() (based on the "rich enough" indexability rule), which
+ * takes precedence over this layout-level default. So we set a conservative
+ * noindex here as the fallback, and the public page overrides it when the
+ * business profile is rich enough to index.
  */
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
