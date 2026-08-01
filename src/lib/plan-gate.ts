@@ -16,6 +16,7 @@
 
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { cache } from '@/lib/cache';
 import {
   resolvePlanTier,
   isFeatureEnabledForPlan,
@@ -37,13 +38,21 @@ export async function getCurrentUserPlanTier(): Promise<PlanTier | null> {
   if (!user) return null;
   if (!user.tenantId) return null;
 
+  // Cache tenant plan lookup for 60s. This fires on every feature-gated
+  // request; caching cuts 2 PostgREST calls per check to 0 on hit.
+  const cacheKey = `plan-tier:${user.tenantId}`;
+  const cached = cache.get<PlanTier>(cacheKey);
+  if (cached) return cached;
+
   try {
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
       select: { plan: true, planStatus: true },
     });
     if (!tenant) return null;
-    return resolvePlanTier(tenant.plan || 'starter', tenant.planStatus || 'active');
+    const tier = resolvePlanTier(tenant.plan || 'starter', tenant.planStatus || 'active');
+    cache.set(cacheKey, tier, 60_000); // 60s TTL
+    return tier;
   } catch (err) {
     console.warn('[plan-gate] getCurrentUserPlanTier: tenant lookup failed:', err);
     return null;
@@ -84,13 +93,22 @@ export async function requirePlanFeature(
   let plan: string = 'starter';
   let planStatus: string = 'active';
   try {
-    const tenant = await db.tenant.findUnique({
-      where: { id: user.tenantId },
-      select: { plan: true, planStatus: true },
-    });
-    if (tenant) {
-      plan = tenant.plan || 'starter';
-      planStatus = tenant.planStatus || 'active';
+    // Cache tenant plan+status for 60s — same rationale as above.
+    const cacheKey = `plan-status:${user.tenantId}`;
+    const cached = cache.get<{ plan: string; planStatus: string }>(cacheKey);
+    if (cached) {
+      plan = cached.plan;
+      planStatus = cached.planStatus;
+    } else {
+      const tenant = await db.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: { plan: true, planStatus: true },
+      });
+      if (tenant) {
+        plan = tenant.plan || 'starter';
+        planStatus = tenant.planStatus || 'active';
+        cache.set(cacheKey, { plan, planStatus }, 60_000);
+      }
     }
   } catch (err) {
     console.warn(`[plan-gate] tenant lookup failed for feature "${featureKey}":`, err);

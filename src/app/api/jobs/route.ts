@@ -1,12 +1,20 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
+import { cache } from '@/lib/cache'
 import { notifyCustomerBookingConfirmed, notifyEmployeeJobAssigned } from '@/lib/whatsapp-notifications'
 import { dispatchJobEvent } from '@/lib/event-webhook-dispatcher'
 import { logActivity } from '@/lib/activity-log'
 import { EventBus } from '@/lib/event-bus'
 import { setDefaultResultOrder } from 'dns'
 import { requireCrmTenant } from '@/lib/require-crm-tenant'
+
+// Cache jobs GET for 30s per tenant+filter combo. The dashboard polls jobs
+// regularly; without caching each poll = 4 PostgREST calls (workspace +
+// job.findMany + 3 relation includes). Cache is busted on POST/PUT via
+// `cache.invalidateByPrefix('jobs:${tenantId}:')`. Search queries are NOT
+// cached (dynamic results).
+const JOBS_TTL = 30_000;
 
 // Force IPv4-first for server-side Nominatim fetches (same reason as the
 // geocode proxy route — IPv6 route is unreachable in this sandbox).
@@ -114,6 +122,19 @@ export async function GET(request: NextRequest) {
     // includeDeleted=true (or unset) → return soft-deleted jobs too (backward
     // compat — most callers client-side filter them anyway).
     const excludeDeleted = searchParams.get('includeDeleted') === 'false'
+
+    // ── Cache lookup (skip for search queries — results are too dynamic) ──
+    // Cache key includes tenantId + all filter params so different views
+    // (Active vs History vs Dispatch) get separate cache entries.
+    if (!search && user.tenantId) {
+      const cacheKey = `jobs:${user.tenantId}:${status || ''}:${type || ''}:${priority || ''}:${assigneeId || ''}:${customerId || ''}:${historyMode ? 'h' : 'a'}:${excludeDeleted ? 'xd' : 'ad'}:${searchParams.get('tenantId') || ''}`;
+      const cached = cache.get<unknown>(cacheKey);
+      if (cached !== undefined) {
+        return NextResponse.json(cached);
+      }
+      // Store the cache key so we can set it after the query succeeds.
+      (request as unknown as { _jobsCacheKey?: string })._jobsCacheKey = cacheKey;
+    }
 
     const where: Record<string, unknown> = {}
 
@@ -236,6 +257,8 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
         take: 200,
       })
+      const cacheKey = (request as unknown as { _jobsCacheKey?: string })._jobsCacheKey;
+      if (cacheKey) cache.set(cacheKey, historyJobs, JOBS_TTL);
       return NextResponse.json(historyJobs)
     }
 
@@ -249,6 +272,8 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
+    const cacheKey = (request as unknown as { _jobsCacheKey?: string })._jobsCacheKey;
+    if (cacheKey) cache.set(cacheKey, jobs, JOBS_TTL);
     return NextResponse.json(jobs)
   } catch (error) {
     console.error('Error fetching jobs:', error)
@@ -480,6 +505,11 @@ export async function POST(request: NextRequest) {
       console.error('[Jobs POST] Failed to log activity:', logErr)
     }
 
+    // Bust jobs cache for this tenant (new job changes all lists)
+    if (authUser?.tenantId) {
+      cache.invalidateByPrefix(`jobs:${authUser.tenantId}:`);
+    }
+
     return NextResponse.json(job, { status: 201 })
   } catch (error) {
     console.error('Error creating job:', error)
@@ -495,6 +525,8 @@ export async function PUT(request: NextRequest) {
     if (!id) {
       return NextResponse.json({ error: 'Job ID is required' }, { status: 400 })
     }
+
+    const putAuthUser = await getAuthUser();
 
     // ── Detect assignee change (re-assignment) so we can notify the new
     // assignee. We snapshot the old assigneeId BEFORE the update; if it
@@ -583,6 +615,11 @@ export async function PUT(request: NextRequest) {
       } catch (e) {
         console.error('Failed to dispatch job.cancelled webhook:', e)
       }
+    }
+
+    // Bust jobs cache for this tenant (updated job changes all lists)
+    if (putAuthUser?.tenantId) {
+      cache.invalidateByPrefix(`jobs:${putAuthUser.tenantId}:`);
     }
 
     return NextResponse.json(job)

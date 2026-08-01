@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { cache } from '@/lib/cache';
+
+// Cache unread-count for 30s. This endpoint is polled every 60s by the
+// header bell badge (header.tsx). With 1000 users polling, that's 1000
+// PostgREST calls/min. Caching at 30s TTL halves the load (every other
+// poll hits cache). Cache is busted when notifications are marked read
+// (via cache.invalidateByPrefix('unread:userId')).
+const UNREAD_TTL = 30_000;
 
 /**
  * GET /api/notifications/unread-count
@@ -21,6 +29,12 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: 'Tenant context required' }, { status: 400 });
     }
 
+    const cacheKey = `unread:${user.id}`;
+    const cached = cache.get<number>(cacheKey);
+    if (cached !== undefined) {
+      return NextResponse.json({ unreadCount: cached });
+    }
+
     const unreadCount = await db.appNotification.count({
       where: {
         tenantId: user.tenantId,
@@ -30,6 +44,7 @@ export async function GET(_request: NextRequest) {
       },
     });
 
+    cache.set(cacheKey, unreadCount, UNREAD_TTL);
     return NextResponse.json({ unreadCount });
   } catch (error) {
     console.error('[notifications] unread-count GET failed:', error);

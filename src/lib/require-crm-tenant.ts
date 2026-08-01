@@ -33,6 +33,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { cache } from '@/lib/cache';
+
+// Cache tenant signup-mode lookups for 60s. requireCrmTenant() is called
+// on EVERY CRM API request (jobs, leads, customers, quotes, invoices,
+// campaigns, etc.) — without caching, 1000 CRM users = 1000 extra
+// PostgREST calls/min just for this guard. signupMode/listingTier change
+// rarely (only on plan upgrade/downgrade), so 60s TTL is safe. Bust by
+// calling `cache.invalidateByPrefix('signup-mode:')` after tenant PUT.
+const SIGNUP_MODE_TTL = 60_000;
 
 /**
  * Returns a 403 NextResponse if the authenticated user's tenant is on the
@@ -41,7 +50,8 @@ import { db } from '@/lib/db';
  *
  * Fetches the tenant's signupMode + listingTier from the DB (not the JWT)
  * so a downgrade from CRM → listing_only is immediately enforced even if
- * the user's token still carries stale tenant data.
+ * the user's token still carries stale tenant data. Cached for 60s to
+ * avoid a DB round-trip on every CRM request.
  */
 export async function requireCrmTenant(
   _request: NextRequest
@@ -54,13 +64,21 @@ export async function requireCrmTenant(
       return null;
     }
 
-    const tenant = await db.tenant.findUnique({
-      where: { id: authUser.tenantId },
-      select: {
-        signupMode: true,
-        listingTier: true,
-      },
-    });
+    const cacheKey = `signup-mode:${authUser.tenantId}`;
+    let tenant = cache.get<{ signupMode: string | null; listingTier: string | null }>(cacheKey);
+
+    if (!tenant) {
+      tenant = await db.tenant.findUnique({
+        where: { id: authUser.tenantId },
+        select: {
+          signupMode: true,
+          listingTier: true,
+        },
+      });
+      if (tenant) {
+        cache.set(cacheKey, tenant, SIGNUP_MODE_TTL);
+      }
+    }
 
     if (!tenant) {
       // Tenant doesn't exist — let the caller handle the 404.

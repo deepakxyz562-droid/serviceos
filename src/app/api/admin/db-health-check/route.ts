@@ -19,10 +19,22 @@ import { randomUUID } from 'crypto';
  *   Phase 5: Filter + Relation Mx  — AND, OR, nested, Date, composite, include
  *
  * Query params:
- *   ?phase=all       (default) — run all phases
- *   ?phase=2         — run only phase 2
- *   ?phase=3,4,5     — run phases 3, 4, and 5
- *   ?phase=regression — alias for phase 3
+ *   ?phase=all        (default) — run all phases (~250 requests)
+ *   ?phase=lite       — skip Phase 2 table sweep (~40 requests, fast)
+ *   ?phase=quick      — only bug regression + CRUD (~35 requests, fastest)
+ *   ?phase=regression — only bug regression suite (~25 requests)
+ *   ?phase=2          — run only phase 2 (table sweep)
+ *   ?phase=3,4,5      — run phases 3, 4, and 5
+ *
+ * Request cost guide (Supabase PostgREST API calls):
+ *   Phase 1:   0 requests (in-memory Prisma DMMF)
+ *   Phase 2: 202 requests (1 findMany per model — count() removed to halve cost)
+ *   Phase 3:  ~25 requests (8 bug probes with create+verify+cleanup)
+ *   Phase 4:  ~12 requests (6 CRUD probes)
+ *   Phase 5:  ~10 requests (7 filter probes)
+ *   Total ?phase=all:    ~250 requests
+ *   Total ?phase=lite:    ~40 requests (recommended for daily checks)
+ *   Total ?phase=quick:   ~35 requests (fastest meaningful check)
  *
  * Output: one JSON report with per-probe pass/fail + timing + a unique
  * `logMarker` UUID for correlating with Supabase postgres_logs.
@@ -179,10 +191,12 @@ async function phase2TableSweep(): Promise<PhaseResult> {
       }
 
       const { result, ms } = await timed(async () => {
-        // findMany with take:1 to check table exists + get column shape
+        // findMany with take:1 to check table exists + get column shape.
+        // We intentionally do NOT call count() — that would double the
+        // request count (202 extra requests) for marginal value. If you
+        // need row counts, run ?phase=2 separately on a specific table.
         const records = await modelClient.findMany({ take: 1 });
-        const count = await modelClient.count();
-        return { records: records as Record<string, unknown>[], count: count as number };
+        return { records: records as Record<string, unknown>[] };
       });
 
       // If we got a row, compare response columns against Prisma scalar fields
@@ -199,11 +213,10 @@ async function phase2TableSweep(): Promise<PhaseResult> {
       const hasMissingCols = missingColumns.length > 0;
       return {
         id: modelName,
-        name: `findMany + count on ${modelName}`,
+        name: `findMany on ${modelName}`,
         status: hasMissingCols ? 'fail' : 'pass',
         ms,
         detail: {
-          rowCount: result.count,
           hasRows: result.records.length > 0,
           missingColumns: hasMissingCols ? missingColumns : undefined,
         },
@@ -211,7 +224,7 @@ async function phase2TableSweep(): Promise<PhaseResult> {
     } catch (err) {
       return {
         id: modelName,
-        name: `findMany + count on ${modelName}`,
+        name: `findMany on ${modelName}`,
         status: 'fail',
         ms: 0,
         error: err instanceof Error ? err.message : String(err),
@@ -939,6 +952,11 @@ const PHASE_ALIASES: Record<string, number[]> = {
   sweep: [2],
   crud: [4],
   filters: [5],
+  // lite = skip Phase 2 (table sweep). Only ~40 requests instead of ~250.
+  // Use this for quick daily checks. Use ?phase=all for the full audit.
+  lite: [1, 3, 4, 5],
+  // quick = only bug regression + CRUD. ~35 requests. Fastest meaningful check.
+  quick: [3, 4],
   all: [1, 2, 3, 4, 5],
 };
 
@@ -959,7 +977,7 @@ export async function GET(request: NextRequest) {
 
   if (requestedPhases.length === 0) {
     return NextResponse.json(
-      { error: `Invalid phase parameter: "${phaseParam}". Use: all, 1, 2, 3, 4, 5, regression, sweep, crud, filters` },
+      { error: `Invalid phase parameter: "${phaseParam}". Use: all, lite, quick, 1, 2, 3, 4, 5, regression, sweep, crud, filters` },
       { status: 400 },
     );
   }

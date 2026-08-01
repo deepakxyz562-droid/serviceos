@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { db } from '@/lib/db';
+import { cache } from '@/lib/cache';
 
 // ─── Feature catalogue ───────────────────────────────────────────────────────
 
@@ -348,6 +349,14 @@ export async function isFeatureEnabledForPlan(
   featureKey: string,
   planTier: PlanTier,
 ): Promise<boolean> {
+  // ── Cache check: feature flags rarely change (only on plan upgrade or
+  // superadmin matrix edit). Cache for 60s to cut 1 PostgREST call per
+  // gated request to 0 on hit. Invalidated by `invalidatePlanCache()`
+  // (called from subscription webhooks + superadmin matrix routes).
+  const cacheKey = `plan-feature:${planTier}:${featureKey}`;
+  const cached = cache.get<boolean>(cacheKey);
+  if (cached !== undefined) return cached;
+
   // Fast path — row already exists in the DB.
   try {
     const existing = await db.planFeatureMatrix.findUnique({
@@ -356,7 +365,10 @@ export async function isFeatureEnabledForPlan(
       },
       select: { enabled: true },
     });
-    if (existing) return existing.enabled;
+    if (existing) {
+      cache.set(cacheKey, existing.enabled, 60_000);
+      return existing.enabled;
+    }
   } catch (err) {
     // The table may not exist yet on some Supabase setups or during `next
     // build` module evaluation. Fall through to the default-matrix lookup
@@ -388,7 +400,33 @@ export async function isFeatureEnabledForPlan(
     console.warn(`[plan-features] PlanFeatureMatrix upsert failed for (${planTier}, ${featureKey}):`, err);
   }
 
+  cache.set(cacheKey, defaultValue, 60_000);
   return defaultValue;
+}
+
+/**
+ * Invalidate cached plan-feature lookups for a tenant or a specific
+ * (planTier, featureKey) pair. Call this when:
+ *   - A tenant upgrades/downgrades their plan (subscription webhook)
+ *   - A superadmin edits the PlanFeatureMatrix table
+ *   - A superadmin changes a tenant's plan manually
+ *
+ * If `planTier` is omitted, invalidates ALL plan-feature cache entries
+ * (use this after bulk matrix edits). If `featureKey` is omitted,
+ * invalidates all features for the given tier.
+ */
+export function invalidatePlanCache(planTier?: PlanTier, featureKey?: string): void {
+  if (!planTier) {
+    cache.invalidateByPrefix('plan-feature:');
+    cache.invalidateByPrefix('plan-tier:');
+    cache.invalidateByPrefix('plan-status:');
+    return;
+  }
+  if (!featureKey) {
+    cache.invalidateByPrefix(`plan-feature:${planTier}:`);
+  } else {
+    cache.invalidate(`plan-feature:${planTier}:${featureKey}`);
+  }
 }
 
 /**
