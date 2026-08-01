@@ -12,6 +12,7 @@
  *     URL and 301-redirects when the URL segments don't match the DB.
  */
 
+import { cache } from 'react'
 import { db } from '@/lib/db'
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas'
 import { getIndustryKit, durationToMinutes } from '@/lib/industry-kits'
@@ -129,7 +130,12 @@ const SITE_URL = 'https://serviceos.cc'
  * industry/city segments don't match the DB values, the caller should
  * 301-redirect to the canonical URL.
  */
-export async function getPublicBusinessByUrl(
+// Wrapped in React.cache() so the generateMetadata() call and the page body
+// call — which both run during a single request for /{industry}/{city}/{slug}
+// — share one DB round-trip instead of duplicating the tenant.findFirst +
+// service.count queries. React.cache() deduplicates by argument identity
+// within a single request render.
+export const getPublicBusinessByUrl = cache(async function getPublicBusinessByUrl(
   industrySeg: string,
   citySeg: string,
   slugSeg: string,
@@ -167,7 +173,7 @@ export async function getPublicBusinessByUrl(
   const canonicalUrl = `${SITE_URL}/${expectedIndustry}/${expectedCity}/${tenant.slug}`
   const business = await buildPublicBusinessData(tenant, canonicalUrl)
   return { business, needsRedirect: false, canonicalUrl }
-}
+})
 
 /**
  * Resolve a tenant by slug only (used by /b/[slug] short URL → redirect).

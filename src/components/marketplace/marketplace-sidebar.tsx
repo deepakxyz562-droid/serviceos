@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Building2, ShieldCheck, Star, Zap, CheckCircle2 } from 'lucide-react';
+import { Building2, ShieldCheck, Star, Zap, CheckCircle2, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMarketplaceSearch } from './use-marketplace-search';
 import type { ProviderListItem } from './types';
@@ -67,9 +67,18 @@ export function MarketplaceSidebar({
 
   return (
     <aside className="hidden lg:block">
-      <div className="sticky top-20 space-y-5">
-        {/* ─── Categories ─────────────────────────────────────────────────── */}
-        <div>
+      {/* Sticky container: fills the viewport height below the header and
+          holds two regions — a scrollable middle (categories / trust filters /
+          stats) and a pinned footer (trust badges) that is always visible.
+          max-h uses 9rem (not 6rem) to account for the marketplace header +
+          breadcrumb bar that sit above the grid on initial load — without
+          that headroom the footer would be pushed past the viewport bottom
+          and its last items would be clipped. */}
+      <div className="sticky top-20 flex max-h-[calc(100vh-9rem)] flex-col gap-3">
+        {/* ─── Scrollable content region ──────────────────────────────────── */}
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1 marketplace-sidebar-scroll">
+          {/* ─── Categories ─────────────────────────────────────────────── */}
+          <div>
           <h2 className="mb-2 border-b border-border pb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             Categories
           </h2>
@@ -178,6 +187,33 @@ export function MarketplaceSidebar({
             <Stat label="Escrow-protected" value={`${escrowPct}%`} />
             <Stat label="Median response" value={medianResponseLabel} />
           </dl>
+        </div>
+        </div>
+
+        {/* ─── Trust badges footer (pinned, always visible) ────────────────
+            Moved here from the full-width trust bar that sat above the
+            breadcrumb nav. Compact vertical list so it fits a 260px sidebar
+            without truncation, and stays visible while the categories /
+            filters / stats above scroll independently. */}
+        <div className="flex-shrink-0 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+          <ul className="space-y-1.5">
+            <li className="flex items-center gap-2 text-[11px]">
+              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+              <span className="font-medium text-foreground">Verified professionals</span>
+            </li>
+            <li className="flex items-center gap-2 text-[11px]">
+              <Wallet className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+              <span className="font-medium text-foreground">Escrow-protected payments</span>
+            </li>
+            <li className="flex items-center gap-2 text-[11px]">
+              <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />
+              <span className="font-medium text-foreground">Real customer reviews</span>
+            </li>
+            <li className="flex items-center gap-2 text-[11px]">
+              <Zap className="h-3.5 w-3.5 shrink-0 text-rose-500" />
+              <span className="font-medium text-foreground">24/7 emergency dispatch</span>
+            </li>
+          </ul>
         </div>
       </div>
     </aside>

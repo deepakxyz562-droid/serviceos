@@ -142,16 +142,23 @@ export default async function PublicBusinessHubPage({
     notFound()
   }
 
-  // Fetch services + reviews in parallel. For marketplace providers, also
-  // fetch certifications (the marketplace-only extra). Non-marketplace
-  // businesses skip the certifications query entirely.
+  // Fetch services + reviews + certifications + featured-listing in parallel.
+  // Running all four queries concurrently (instead of awaiting services/reviews/
+  // certifications first, then featuredMap separately) cuts the total data-fetch
+  // window from ~4 sequential round-trips to ~1. For marketplace providers we
+  // also fetch certifications + the featured-listing row; non-marketplace
+  // businesses resolve those two as empty/absent so no extra query runs.
   const certificationsPromise = business.marketplaceOptIn
     ? getMarketplaceCertifications(business.id)
     : Promise.resolve<PublicCertificationData[]>([])
-  const [services, reviews, certifications] = await Promise.all([
+  const featuredPromise = business.marketplaceOptIn
+    ? fetchFeaturedListingsMap([business.id]).catch(() => null)
+    : Promise.resolve(null)
+  const [services, reviews, certifications, featuredMap] = await Promise.all([
     getPublicServices(business.id),
     getPublicReviews(business.id, 10),
     certificationsPromise,
+    featuredPromise,
   ])
 
   // ── Compute the marketplace card type for this business ──────────────────
@@ -166,7 +173,6 @@ export default async function PublicBusinessHubPage({
   let cardType: MarketplaceCardType = 'normal-minimal'
   if (business.marketplaceOptIn) {
     try {
-      const featuredMap = await fetchFeaturedListingsMap([business.id])
       cardType = computeCardType(
         {
           claimed: business.claimed,
@@ -174,7 +180,7 @@ export default async function PublicBusinessHubPage({
           planStatus: business.planStatus,
           trialEndsAt: business.trialEndsAt,
         },
-        featuredMap.has(business.id),
+        featuredMap ? featuredMap.has(business.id) : false,
       )
     } catch {
       // If the FeaturedListing lookup fails, fall back to a plan-only check

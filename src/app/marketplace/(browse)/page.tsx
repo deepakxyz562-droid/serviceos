@@ -14,12 +14,8 @@ import {
 import {
   Wrench,
   Search,
-  ShieldCheck,
   Home as HomeIcon,
   ChevronRight,
-  Wallet,
-  Star,
-  Zap,
 } from 'lucide-react';
 
 // Render dynamically — no ISR. Seed/featured/trial changes from SuperAdmin
@@ -411,28 +407,6 @@ export default async function MarketplaceBrowsePage({
       <h1 className="sr-only">
         ServiceOS Marketplace — Find Trusted Local Service Professionals
       </h1>
-
-      {/* Trust bar — thin row of trust signals (TaskRabbit/Urban Company style) */}
-      <section className="border-b bg-white/60 dark:bg-card/40">
-        <div className="flex w-full flex-wrap items-center justify-center gap-x-8 gap-y-2 px-4 py-3 text-sm sm:px-6 lg:px-8">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <ShieldCheck className="h-4 w-4 text-emerald-600" />
-            <span className="font-medium text-foreground">Verified professionals</span>
-          </span>
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <Wallet className="h-4 w-4 text-emerald-600" />
-            <span className="font-medium text-foreground">Escrow-protected payments</span>
-          </span>
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-            <span className="font-medium text-foreground">Real customer reviews</span>
-          </span>
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <Zap className="h-4 w-4 text-rose-500" />
-            <span className="font-medium text-foreground">24/7 emergency dispatch</span>
-          </span>
-        </div>
-      </section>
 
       {/* Breadcrumbs (visible) — left side breadcrumb items, right side Sort dropdown.
           The Sort control is a client component that shares its state with

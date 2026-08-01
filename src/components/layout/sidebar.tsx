@@ -788,10 +788,19 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         </Avatar>
         {isExpandedMode && (
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+            <p
+              className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate"
+              title={auth.user?.name || 'Demo User'}
+            >
               {auth.user?.name || 'Demo User'}
             </p>
-            <p className="text-xs text-slate-500 dark:text-slate-500 truncate">
+            {/* Email: allow wrapping (break-all) instead of truncating so the
+                full address is always visible — previously the long email was
+                clipped with an ellipsis, hiding data the user needs to see. */}
+            <p
+              className="text-xs text-slate-500 dark:text-slate-500 break-all leading-tight"
+              title={auth.user?.email || 'demo@serviceos.cc'}
+            >
               {auth.user?.email || 'demo@serviceos.cc'}
             </p>
           </div>
