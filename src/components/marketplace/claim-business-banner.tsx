@@ -12,6 +12,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { useAppStore } from '@/store/app-store';
 
 /**
  * ClaimBusinessBanner
@@ -29,6 +30,20 @@ import { Button } from '@/components/ui/button';
  *
  * Previously this was a tiny text link that was too easy to miss. Now it's
  * a compact but discoverable bordered card.
+ *
+ * Auth state resolution
+ * ----------------------
+ * This component no longer takes `currentTenantId` / `isAuthenticated` as
+ * props from the server. Instead it reads from the shared Zustand app-store,
+ * which is hydrated by `<MarketplaceHeader>` on mount via a single cached
+ * `/api/auth/me` fetch (30s TTL — Task ID 8). This lets the page drop the
+ * `getAuthUser()` call that previously forced `dynamic = 'force-dynamic'`,
+ * so the page can now be statically generated with `revalidate = 60` and
+ * served from the data cache.
+ *
+ * While `authHydrated` is false (initial mount, fetch in-flight), the
+ * component renders `null` — the banner pops in once auth state is known.
+ * This avoids flashing the "Claim this business" CTA to a logged-in owner.
  */
 interface ClaimBusinessBannerProps {
   tenantId: string;
@@ -36,11 +51,6 @@ interface ClaimBusinessBannerProps {
   tenantEmail?: string | null;
   tenantCity?: string | null;
   tenantState?: string | null;
-  /** Current user's tenantId (to hide the link for the owner). */
-  currentTenantId?: string | null;
-  /** Whether the current visitor is authenticated. When false, a sign-in
-   *  gate dialog is shown before the claim wizard. */
-  isAuthenticated?: boolean;
   /** Whether the business is already claimed. When true, renders the
    *  "Verified owner" notice instead of the claim CTA. */
   isClaimed?: boolean;
@@ -52,12 +62,29 @@ export function ClaimBusinessBanner({
   tenantEmail,
   tenantCity,
   tenantState,
-  currentTenantId,
-  isAuthenticated = false,
   isClaimed = false,
 }: ClaimBusinessBannerProps) {
   const [claimOpen, setClaimOpen] = React.useState(false);
   const [signInGateOpen, setSignInGateOpen] = React.useState(false);
+
+  // Read auth state from the shared Zustand store. The MarketplaceHeader
+  // fires /api/auth/me on mount and populates this store, so we don't need
+  // a separate fetch here (and even if we did, /api/auth/me is cached 30s
+  // server-side — Task ID 8).
+  const auth = useAppStore((s) => s.auth);
+  const authHydrated = useAppStore((s) => s.authHydrated);
+
+  const isAuthenticated = !!auth?.isAuthenticated;
+  const currentTenantId: string | null =
+    (auth?.tenant as { id?: string } | null)?.id ?? null;
+
+  // While the auth state is still being fetched (header hasn't resolved
+  // /api/auth/me yet), render nothing. The banner will appear once we know
+  // for sure whether the visitor is the owner (hidden) or not (shown).
+  // Worst case: ~50-100ms on first paint, then the banner pops in. This is
+  // far better than forcing the whole page to be dynamic just to know the
+  // auth state at render time.
+  if (!authHydrated) return null;
 
   // Hide if the current user is the owner of this business
   if (currentTenantId === tenantId) return null;

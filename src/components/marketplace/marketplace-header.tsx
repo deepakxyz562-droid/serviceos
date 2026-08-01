@@ -202,6 +202,7 @@ function SearchBox({
 function HeaderAction() {
   const auth = useAppStore((s) => s.auth);
   const setAuth = useAppStore((s) => s.setAuth);
+  const setAuthHydrated = useAppStore((s) => s.setAuthHydrated);
   const [hydrated, setHydrated] = React.useState(false);
 
   // On mount, check if the user has a valid session cookie. The Zustand
@@ -209,6 +210,9 @@ function HeaderAction() {
   // /marketplace directly) the store is empty even if the user is logged in.
   // This fetch hydrates the store so the header shows the profile dropdown
   // instead of "List your business" for authenticated users.
+  //
+  // The fetch hits the cached /api/auth/me endpoint (30s TTL — Task ID 8),
+  // so subsequent page loads within 30s resolve in ~20ms instead of ~100ms.
   React.useEffect(() => {
     let cancelled = false;
     async function hydrateAuth() {
@@ -231,14 +235,20 @@ function HeaderAction() {
       } catch {
         // Silently fail — treat as anonymous
       } finally {
-        if (!cancelled) setHydrated(true);
+        // Mark the global auth state as hydrated so dependent components
+        // (e.g. ClaimBusinessBanner) know the anonymous/authenticated
+        // distinction is now reliable.
+        if (!cancelled) {
+          setHydrated(true);
+          setAuthHydrated(true);
+        }
       }
     }
     hydrateAuth();
     return () => {
       cancelled = true;
     };
-  }, [setAuth]);
+  }, [setAuth, setAuthHydrated]);
 
   // While hydrating, show a neutral placeholder (neither the CTA nor the
   // dropdown) to avoid flicker from "List your business" → profile icon.

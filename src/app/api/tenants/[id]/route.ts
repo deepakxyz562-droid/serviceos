@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
-import { applyHubDefaultsToTenant } from '@/lib/public-business';
+import { applyHubDefaultsToTenant, revalidatePublicBusiness } from '@/lib/public-business';
 import { computeProfileCompletion } from '@/lib/marketplace-eligibility';
 import { seedTenantDefaults } from '@/lib/seed-tenant-defaults';
 
@@ -299,7 +299,7 @@ export async function PUT(
       : tenant;
 
     // Revalidate the public Business Hub page so ISR picks up the changes
-    // immediately (the page exports `revalidate = 3600` but we force a refresh
+    // immediately (the page exports `revalidate = 60` but we force a refresh
     // on save so the owner sees their edits instantly).
     try {
       const industrySeg = mapIndustryToUrlSlug(finalTenant?.industry ?? tenant.industry);
@@ -312,6 +312,15 @@ export async function PUT(
       revalidatePath('/sitemap.xml');
     } catch {
       // revalidatePath can throw in some edge runtime contexts — non-fatal
+    }
+
+    // Bust the unstable_cache-tagged public-business data layer (Task ID 10):
+    // tenant profile, services, reviews, certifications. Without this, the
+    // page would serve stale data for up to 120s (the unstable_cache TTL).
+    try {
+      revalidatePublicBusiness(id);
+    } catch {
+      // revalidateTag can throw in some edge runtime contexts — non-fatal
     }
 
     return NextResponse.json({
@@ -604,6 +613,14 @@ export async function PATCH(
       }
     } catch {
       // revalidatePath can throw in some edge runtime contexts — non-fatal
+    }
+
+    // Bust the unstable_cache-tagged public-business data layer (Task ID 10)
+    // so the next visitor sees the updated profile immediately.
+    try {
+      revalidatePublicBusiness(id);
+    } catch {
+      // revalidateTag can throw in some edge runtime contexts — non-fatal
     }
 
     return NextResponse.json({

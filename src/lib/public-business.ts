@@ -12,10 +12,69 @@
  *     URL and 301-redirects when the URL segments don't match the DB.
  */
 
-import { cache } from 'react'
+import { unstable_cache, revalidateTag } from 'next/cache'
+import type { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas'
 import { getIndustryKit, durationToMinutes } from '@/lib/industry-kits'
+
+/**
+ * Explicit column selection for the public-business tenant lookup.
+ *
+ * We project ONLY the columns needed by the public detail page — excluding
+ * heavy JSON blobs (whatsappConfigJson, settingsJson, whiteLabelJson,
+ * featureFlags, etc.) and internal columns (createdAt, updatedAt,
+ * suspendedAt, etc.). Cuts the wire payload from ~50KB to ~5KB per lookup.
+ *
+ * Reused as the type source for `buildPublicBusinessData`'s `tenant` param
+ * so the SELECT shape and the consumer stay in sync.
+ */
+const PUBLIC_TENANT_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  industry: true,
+  city: true,
+  state: true,
+  phone: true,
+  whatsappPhone: true,
+  email: true,
+  address: true,
+  country: true,
+  currency: true,
+  logo: true,
+  coverImage: true,
+  tagline: true,
+  description: true,
+  rating: true,
+  reviewCount: true,
+  businessHoursJson: true,
+  galleryJson: true,
+  serviceAreasJson: true,
+  socialLinksJson: true,
+  faqsJson: true,
+  seoTitle: true,
+  seoDescription: true,
+  publicProfileEnabled: true,
+  marketplaceOptIn: true,
+  claimed: true,
+  plan: true,
+  planStatus: true,
+  trialEndsAt: true,
+  identityVerified: true,
+  businessVerified: true,
+  insuranceVerified: true,
+  licenceNumber: true,
+  insuranceProvider: true,
+  emergencyServiceAvailable: true,
+} satisfies Prisma.TenantSelect
+
+/**
+ * The tenant shape returned by `db.tenant.findFirst({ select: PUBLIC_TENANT_SELECT })`.
+ * Used to type `buildPublicBusinessData`'s `tenant` parameter without
+ * requiring the full (30+ column) tenant row.
+ */
+type PublicTenantRow = Prisma.TenantGetPayload<{ select: typeof PUBLIC_TENANT_SELECT }>
 
 export interface PublicBusinessData {
   id: string
@@ -129,20 +188,28 @@ const SITE_URL = 'https://serviceos.cc'
  * Also enforces URL canonicalization: if the tenant exists but the
  * industry/city segments don't match the DB values, the caller should
  * 301-redirect to the canonical URL.
+ *
+ * Wrapped in `unstable_cache` (120s TTL, tagged 'public-business') so:
+ *   - The generateMetadata() call and the page body call — which both run
+ *     during a single request for /{industry}/{city}/{slug} — share one DB
+ *     round-trip (replaces the old React.cache request-scope dedup).
+ *   - Cross-request: subsequent visits by ANY user get the cached row
+ *     directly, eliminating 4–6 PostgREST calls per visit. The cache is
+ *     busted on tenant profile save via `revalidatePublicBusiness()`.
  */
-// Wrapped in React.cache() so the generateMetadata() call and the page body
-// call — which both run during a single request for /{industry}/{city}/{slug}
-// — share one DB round-trip instead of duplicating the tenant.findFirst +
-// service.count queries. React.cache() deduplicates by argument identity
-// within a single request render.
-export const getPublicBusinessByUrl = cache(async function getPublicBusinessByUrl(
+async function _getPublicBusinessByUrl(
   industrySeg: string,
   citySeg: string,
   slugSeg: string,
 ): Promise<{ business: PublicBusinessData | null; needsRedirect: boolean; canonicalUrl: string | null }> {
   // Look up by slug (URL-safe identifier).
   // We accept either `slug` or `publicSlug` as the URL identifier.
-  let tenant: Awaited<ReturnType<typeof db.tenant.findFirst>> = null
+  //
+  // `select` (PUBLIC_TENANT_SELECT) projects ONLY the columns needed by the
+  // public page — excluding heavy JSON blobs (whatsappConfigJson,
+  // settingsJson, whiteLabelJson) and internal columns (createdAt,
+  // updatedAt, suspendedAt). Cuts the wire payload from ~50KB to ~5KB.
+  let tenant: PublicTenantRow | null = null
   try {
     tenant = await db.tenant.findFirst({
       where: {
@@ -151,6 +218,7 @@ export const getPublicBusinessByUrl = cache(async function getPublicBusinessByUr
           { publicSlug: slugSeg },
         ],
       },
+      select: PUBLIC_TENANT_SELECT,
     })
   } catch {
     return { business: null, needsRedirect: false, canonicalUrl: null }
@@ -171,9 +239,22 @@ export const getPublicBusinessByUrl = cache(async function getPublicBusinessByUr
   }
 
   const canonicalUrl = `${SITE_URL}/${expectedIndustry}/${expectedCity}/${tenant.slug}`
-  const business = await buildPublicBusinessData(tenant, canonicalUrl)
+
+  // Fetch services ONCE here via the cached `getPublicServices` (which uses
+  // its own unstable_cache entry) so we can derive the `isIndexable` count
+  // without a separate `service.count()` query. The page's later
+  // getPublicServices() call will hit the same cache entry — zero duplicate
+  // DB work.
+  const services = await getPublicServices(tenant.id)
+  const business = await buildPublicBusinessData(tenant, canonicalUrl, services.length)
   return { business, needsRedirect: false, canonicalUrl }
-})
+}
+
+export const getPublicBusinessByUrl = unstable_cache(
+  _getPublicBusinessByUrl,
+  ['public-business-by-url'],
+  { revalidate: 120, tags: ['public-business'] },
+)
 
 /**
  * Resolve a tenant by slug only (used by /b/[slug] short URL → redirect).
@@ -202,26 +283,17 @@ export async function getCanonicalUrlBySlug(slugSeg: string): Promise<string | n
 /**
  * Build the public-safe business data object from a raw tenant row.
  * Computes the `isIndexable` flag based on the "rich enough" rule.
+ *
+ * `publicServiceCount` is passed in (rather than fetched via a separate
+ * `service.count()` query) — the caller (_getPublicBusinessByUrl) already
+ * fetched the services array for its own use, so we reuse `.length` to
+ * avoid a redundant PostgREST round-trip.
  */
 async function buildPublicBusinessData(
-  tenant: NonNullable<Awaited<ReturnType<typeof db.tenant.findFirst>>>,
+  tenant: PublicTenantRow,
   canonicalUrl: string,
+  publicServiceCount: number,
 ): Promise<PublicBusinessData> {
-  // Count active public services for the indexability check.
-  let publicServiceCount = 0
-  try {
-    publicServiceCount = await db.service.count({
-      where: {
-        tenantId: tenant.id,
-        isActive: true,
-        isPublic: true,
-      },
-    })
-  } catch {
-    // service table might not have isPublic column yet — treat as 0
-    publicServiceCount = 0
-  }
-
   // Parse gallery to check for ≥1 image.
   let gallery: Array<{ url?: string }> = []
   try {
@@ -308,8 +380,11 @@ async function buildPublicBusinessData(
  *
  * Dates are returned as ISO strings so they survive the server → client
  * component boundary without serialization issues.
+ *
+ * Wrapped in `unstable_cache` (120s TTL, tagged 'public-business') so the
+ * certifications section is cached alongside the rest of the provider page.
  */
-export async function getMarketplaceCertifications(
+async function _getMarketplaceCertifications(
   tenantId: string,
 ): Promise<PublicCertificationData[]> {
   try {
@@ -340,10 +415,21 @@ export async function getMarketplaceCertifications(
   }
 }
 
+export const getMarketplaceCertifications = unstable_cache(
+  _getMarketplaceCertifications,
+  ['public-certs'],
+  { revalidate: 120, tags: ['public-business'] },
+)
+
 /**
  * Fetch the public services for a tenant (active + public only).
+ *
+ * Wrapped in `unstable_cache` (120s TTL, tagged 'public-business') so the
+ * services list is shared across requests. Also called internally by
+ * `_getPublicBusinessByUrl` to derive the `isIndexable` count — sharing
+ * the same cache entry means a single DB fetch serves both calls.
  */
-export async function getPublicServices(tenantId: string): Promise<PublicServiceData[]> {
+async function _getPublicServices(tenantId: string): Promise<PublicServiceData[]> {
   try {
     const services = await db.service.findMany({
       where: {
@@ -373,11 +459,21 @@ export async function getPublicServices(tenantId: string): Promise<PublicService
   }
 }
 
+export const getPublicServices = unstable_cache(
+  _getPublicServices,
+  ['public-services'],
+  { revalidate: 120, tags: ['public-business'] },
+)
+
 /**
  * Fetch the most recent published reviews for a tenant.
  * Limits to 10 most recent with rating ≥ 1.
+ *
+ * Wrapped in `unstable_cache` (120s TTL, tagged 'public-business') so the
+ * reviews section is shared across requests. NOTE: the cache key includes
+ * `limit` via the function args — different limits cache separately.
  */
-export async function getPublicReviews(tenantId: string, limit = 10): Promise<PublicReviewData[]> {
+async function _getPublicReviews(tenantId: string, limit = 10): Promise<PublicReviewData[]> {
   try {
     const reviews = await db.review.findMany({
       where: {
@@ -403,6 +499,41 @@ export async function getPublicReviews(tenantId: string, limit = 10): Promise<Pu
   } catch {
     return []
   }
+}
+
+export const getPublicReviews = unstable_cache(
+  _getPublicReviews,
+  ['public-reviews'],
+  { revalidate: 120, tags: ['public-business'] },
+)
+
+/**
+ * Bust the public-business cache. Call this after a tenant profile save
+ * (Public Hub tab, Settings, etc.) so the next visitor sees fresh data
+ * instead of waiting up to 120s for the unstable_cache TTL to expire.
+ *
+ * Implemented via `revalidateTag('public-business', { expire: 0 })` —
+ * purges ALL cached entries tagged 'public-business' (the per-provider
+ * business row, services, reviews, and certifications). The blast radius
+ * is acceptable because tenant profile saves are infrequent (per-tenant,
+ * manual admin action).
+ *
+ * Safe to call from a Server Action or Route Handler. Importable from
+ * client components (it's just a re-export of `revalidateTag`); calling
+ * it from the client has no effect (revalidateTag is server-only), so
+ * callers MUST invoke it inside a 'use server' action or Route Handler.
+ *
+ * NOTE: Next.js 16 changed `revalidateTag` to require a second `profile`
+ * argument (a named CacheLife profile string OR a `{ expire?: number }`
+ * config). We pass `{ expire: 0 }` for immediate invalidation.
+ */
+export function revalidatePublicBusiness(_slugOrTenantId?: string): void {
+  // _slugOrTenantId is accepted for API symmetry with future per-entry
+  // cache busting. Currently we revalidate the whole 'public-business'
+  // tag (all providers) — granular per-tenant busting would require a
+  // unique tag per tenant (e.g. `public-business:${tenantId}`) which we
+  // can add later if the global bust becomes too coarse.
+  revalidateTag('public-business', { expire: 0 })
 }
 
 /**

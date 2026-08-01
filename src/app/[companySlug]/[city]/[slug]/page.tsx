@@ -52,16 +52,17 @@ import {
   fetchFeaturedListingsMap,
   type MarketplaceCardType,
 } from '@/lib/marketplace-featured'
-import { getAuthUser } from '@/lib/auth'
 import { ClaimBusinessBanner } from '@/components/marketplace/claim-business-banner'
 
 // ── Route config ────────────────────────────────────────────────────────────
-// This page calls getAuthUser() (which reads cookies/headers) to customize
-// the view for logged-in owners. That opts the route into dynamic rendering,
-// so we MUST set `dynamic = 'force-dynamic'` — leaving `revalidate` alone
-// with cookies() causes a Next.js build/runtime conflict that makes the
-// page fail to load in production.
-export const dynamic = 'force-dynamic'
+// This page no longer reads cookies/headers at render time — the
+// `ClaimBusinessBanner` was refactored to fetch auth state on the client
+// (via the shared Zustand store hydrated by MarketplaceHeader). That lets
+// the page use ISR with a 60s revalidate window instead of
+// `dynamic = 'force-dynamic'`. Combined with the unstable_cache-tagged
+// data layer in src/lib/public-business.ts (120s TTL), the page is now
+// served from the data cache on repeat visits — zero DB queries.
+export const revalidate = 60
 export const dynamicParams = true
 
 // ── Metadata ────────────────────────────────────────────────────────────────
@@ -198,22 +199,14 @@ export default async function PublicBusinessHubPage({
   }
   const isMinimalListing = cardType === 'normal-minimal'
 
-  // Get current user (if authenticated) to hide the claim banner for owners.
-  // Wrapped in try/catch — this is a PUBLIC page and must NEVER crash if the
-  // auth cookie is malformed, expired, or the JWT secret is misconfigured.
-  let currentTenantId: string | null = null
-  try {
-    const currentUser = await getAuthUser()
-    currentTenantId = currentUser?.tenantId ?? null
-  } catch {
-    currentTenantId = null
-  }
-  // Show the claim/verified-owner banner on EVERY listing (claimed or not):
-  //   • Unclaimed → "Are you the owner? Claim this business" CTA banner
-  //   • Claimed   → "✓ Verified owner" notice
-  // The owner of the business never sees it (hidden inside ClaimBusinessBanner
-  // via currentTenantId === tenantId check).
-  const showClaimBanner = currentTenantId !== business.id
+  // Note: auth state is no longer fetched server-side. The ClaimBusinessBanner
+  // component reads auth state from the shared Zustand store (hydrated by
+  // MarketplaceHeader on mount via /api/auth/me). This lets the page stay
+  // statically renderable + cached (no cookies/headers access at render
+  // time). The banner renders `null` while auth state is still loading and
+  // once hydrated, decides whether to show itself based on the tenant.id
+  // match. Logged-in owners never see the banner; anonymous visitors and
+  // authenticated non-owners see the appropriate variant.
 
   // Parse JSON fields safely.
   const gallery: Array<{ url?: string; caption?: string }> = safeJson(business.galleryJson, [])
@@ -427,6 +420,11 @@ export default async function PublicBusinessHubPage({
                             alt={img.caption || `${business.name} project ${i + 1}`}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             loading={i < 3 ? 'eager' : 'lazy'}
+                            // Square gallery thumbnails — 400px is plenty for
+                            // the 3-up grid on desktop. Supabase transforms
+                            // resize on the server, saving 80–95% bandwidth.
+                            maxWidth={400}
+                            maxHeight={400}
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-muted-foreground">
@@ -558,19 +556,19 @@ export default async function PublicBusinessHubPage({
                 {/* Claim / Verified-owner banner — shown to ALL non-owner
                     visitors. Unclaimed listings show a "Claim this business"
                     CTA; claimed listings show a "✓ Verified owner" notice.
-                    Anonymous visitors get a sign-in gate when they click. */}
-                {showClaimBanner ? (
-                  <ClaimBusinessBanner
-                    tenantId={business.id}
-                    tenantName={business.name}
-                    tenantEmail={business.email}
-                    tenantCity={business.city}
-                    tenantState={business.state}
-                    currentTenantId={currentTenantId}
-                    isAuthenticated={!!currentTenantId}
-                    isClaimed={!!business.claimed}
-                  />
-                ) : null}
+                    Anonymous visitors get a sign-in gate when they click.
+                    Auth state is resolved client-side via the shared Zustand
+                    store (hydrated by MarketplaceHeader on mount) — the banner
+                    renders `null` until auth state is known, then shows itself
+                    for non-owners. */}
+                <ClaimBusinessBanner
+                  tenantId={business.id}
+                  tenantName={business.name}
+                  tenantEmail={business.email}
+                  tenantCity={business.city}
+                  tenantState={business.state}
+                  isClaimed={!!business.claimed}
+                />
 
                 {/* Booking CTA — three rendering modes, kept consistent with
                     the marketplace browse grid's computeCardType() output:
@@ -755,7 +753,13 @@ function PublicBusinessHero({
             src={business.coverImage}
             alt={`${business.name} cover`}
             className="w-full h-full object-cover"
-            loading="eager"
+            // LCP image — eager + high priority. Cover is rendered at up to
+            // 1920px wide × 224px tall on desktop; 1200×400 gives Supabase
+            // a sane target (cover resize crops to fit) while staying well
+            // below the original 2-5MB upload size.
+            priority
+            maxWidth={1200}
+            maxHeight={400}
           />
         </div>
       ) : null}
@@ -767,7 +771,15 @@ function PublicBusinessHero({
               logo URL doesn't render a broken-image icon. */}
           {business.logo && (
             <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl overflow-hidden bg-muted shrink-0 border">
-              <SafeImage src={business.logo} alt={`${business.name} logo`} className="w-full h-full object-cover" />
+              <SafeImage
+                src={business.logo}
+                alt={`${business.name} logo`}
+                className="w-full h-full object-cover"
+                // Logo is rendered at 64–80px. 200×200 gives retina screens
+                // a crisp 2x source without over-fetching.
+                maxWidth={200}
+                maxHeight={200}
+              />
             </div>
           )}
           <div className="flex-1">
@@ -830,7 +842,15 @@ function ServiceCard({
     <div className="rounded-lg border bg-card text-card-foreground overflow-hidden hover:shadow-md transition-shadow">
       {service.image && (
         <div className="h-32 w-full bg-muted overflow-hidden">
-          <SafeImage src={service.image} alt={service.name} className="w-full h-full object-cover" loading="lazy" />
+          <SafeImage
+            src={service.image}
+            alt={service.name}
+            className="w-full h-full object-cover"
+            loading="lazy"
+            // Service card thumbnails render at ~400px wide × 128px tall.
+            maxWidth={400}
+            maxHeight={200}
+          />
         </div>
       )}
       <div className="p-4">

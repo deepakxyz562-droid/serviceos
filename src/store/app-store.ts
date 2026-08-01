@@ -13,7 +13,17 @@ interface AuthState {
 interface AppState {
   // Auth
   auth: AuthState;
+  /**
+   * True once the initial /api/auth/me fetch (fired by MarketplaceHeader on
+   * mount) has resolved — either with a session (auth.isAuthenticated=true)
+   * or anonymously (auth.isAuthenticated=false). Until this is true, client
+   * components cannot reliably know whether the visitor is the owner of a
+   * given business. Used by ClaimBusinessBanner to suppress rendering while
+   * the auth state is still unknown.
+   */
+  authHydrated: boolean;
   setAuth: (auth: AuthState) => void;
+  setAuthHydrated: (hydrated: boolean) => void;
   clearAuth: () => void;
 
   // Active view (primary naming)
@@ -122,8 +132,10 @@ const initialAuthState: AuthState = {
 export const useAppStore = create<AppState>((set) => ({
   // Auth
   auth: initialAuthState,
+  authHydrated: false,
   setAuth: (auth: AuthState) => set({ auth }),
-  clearAuth: () => set({ auth: initialAuthState }),
+  setAuthHydrated: (hydrated: boolean) => set({ authHydrated: hydrated }),
+  clearAuth: () => set({ auth: initialAuthState, authHydrated: true }),
 
   // Active view — both naming conventions point to the same state
   activeView: 'dashboard',
