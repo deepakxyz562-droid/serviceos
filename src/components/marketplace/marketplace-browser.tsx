@@ -122,16 +122,17 @@ export function MarketplaceBrowser({
     // the first time this component mounts, not on every store change.
   }, []);
 
-  // ── Flash skeleton on filter change ────────────────────────────────────
+  // ── Flash skeleton on filter change & reset pagination ─────────────────
   React.useEffect(() => {
-    setFiltering(true);
+    const r = requestAnimationFrame(() => {
+      setFiltering(true);
+      setVisibleCount(PAGE_SIZE);
+    });
     const t = setTimeout(() => setFiltering(false), 180);
-    return () => clearTimeout(t);
-  }, [searchQuery, cityFilter, verticalFilter, industryFilter, sort, trustFullyVerified, trustRatingHigh, trustEmergency]);
-
-  // Reset visible count whenever the filtered set changes
-  React.useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
+    return () => {
+      cancelAnimationFrame(r);
+      clearTimeout(t);
+    };
   }, [searchQuery, cityFilter, verticalFilter, industryFilter, sort, trustFullyVerified, trustRatingHigh, trustEmergency]);
 
   // ── Mirror filter state into the URL (replaceState, no reload) ─────────
@@ -352,7 +353,7 @@ export function MarketplaceBrowser({
   };
 
   return (
-    <div>
+    <div className="pl-4 pr-3 sm:pr-3 lg:pr-3 py-4">
       {/* The search bar now lives in the hero (MarketplaceHeroSearch) and
           shares its input state via the useMarketplaceSearch Zustand store.
           Typing in the hero instantly filters the grid below — no reload,
@@ -462,7 +463,7 @@ export function MarketplaceBrowser({
       ) : (
         <div
           className={cn(
-            'grid min-h-[420px] gap-5 sm:grid-cols-2 xl:grid-cols-3 transition-opacity duration-150',
+            'grid min-h-[420px] gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 transition-opacity duration-150',
             filtering && 'opacity-50 pointer-events-none',
           )}
         >

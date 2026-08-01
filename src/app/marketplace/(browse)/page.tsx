@@ -380,7 +380,7 @@ export default async function MarketplaceBrowsePage({
   const bcIndustryName = industryFilter ? getIndustry(industryFilter)?.name : null;
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="fixed inset-0 h-full w-full flex flex-col overflow-hidden bg-background">
       {/* JSON-LD structured data for SEO */}
       <script
         type="application/ld+json"
@@ -391,86 +391,22 @@ export default async function MarketplaceBrowsePage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
 
-      {/* Header — shared with the provider detail page. Sticky, single row:
-          logo on the left (links to /marketplace), form-based search on the
-          right (GETs to /marketplace?search=...&city=...). The form's
-          `defaultValue`s are pre-filled from the current URL search params so
-          a deep link like /marketplace?search=plumbing shows the user's
-          query in the box on page load. */}
-      <MarketplaceHeader
-        initialSearch={params.search ?? ''}
-        initialCity={params.city ?? ''}
-      />
+      {/* FIXED TOP HEADER */}
+      <div className="shrink-0 z-30 border-b border-border bg-background">
+        <MarketplaceHeader
+          initialSearch={params.search ?? ''}
+          initialCity={params.city ?? ''}
+        />
 
-      {/* Visually-hidden h1 for SEO/accessibility (hero section was removed
-          per design decision, but the page still needs a single h1). */}
-      <h1 className="sr-only">
-        ServiceOS Marketplace — Find Trusted Local Service Professionals
-      </h1>
+        <h1 className="sr-only">
+          ServiceOS Marketplace — Find Trusted Local Service Professionals
+        </h1>
+      </div>
 
-      {/* Breadcrumbs (visible) — left side breadcrumb items, right side Sort dropdown.
-          The Sort control is a client component that shares its state with
-          MarketplaceBrowser via the useMarketplaceSearch Zustand store, so
-          picking a sort here instantly re-sorts the grid below. */}
-      <nav
-        aria-label="Breadcrumb"
-        className="border-b bg-muted/20"
-      >
-        <div className="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-xs text-muted-foreground sm:px-6 lg:px-8">
-          <ol className="flex flex-wrap items-center gap-1 min-w-0">
-            <li className="flex items-center gap-1">
-              <a href="/marketplace" className="inline-flex items-center gap-1 hover:text-foreground">
-                <HomeIcon className="h-3.5 w-3.5" /> Home
-              </a>
-              <ChevronRight className="h-3 w-3" />
-            </li>
-            <li className="flex items-center gap-1">
-              <a href="/marketplace" className="hover:text-foreground">Marketplace</a>
-              {bcVerticalName || bcIndustryName || params.city ? (
-                <ChevronRight className="h-3 w-3" />
-              ) : null}
-            </li>
-            {bcVerticalName ? (
-              <li className="flex items-center gap-1">
-                <a
-                  href={`/marketplace?vertical=${verticalFilter}`}
-                  className="hover:text-foreground"
-                >
-                  {bcVerticalName}
-                </a>
-                {bcIndustryName || params.city ? <ChevronRight className="h-3 w-3" /> : null}
-              </li>
-            ) : null}
-            {bcIndustryName ? (
-              <li className="flex items-center gap-1">
-                <a
-                  href={`/marketplace?industry=${industryFilter}`}
-                  className="hover:text-foreground"
-                >
-                  {bcIndustryName}
-                </a>
-                {params.city ? <ChevronRight className="h-3 w-3" /> : null}
-              </li>
-            ) : null}
-            {params.city ? (
-              <li className="flex items-center gap-1">
-                <span className="font-medium text-foreground">{params.city}</span>
-              </li>
-            ) : null}
-          </ol>
-          {/* Sort dropdown — desktop only (hidden on mobile where the
-              breadcrumb wraps). State is shared with the grid via Zustand. */}
-          <MarketplaceSortControl />
-        </div>
-      </nav>
-
-      {/* Main grid: sidebar + provider cards.
-          Featured providers render in the SAME grid as regular providers,
-          with an amber "Featured" tag on the card (OLX-style). No separate
-          carousel section. */}
-      <div id="all-providers" className="w-full px-4 sm:px-6 lg:px-8 py-8 flex-1 scroll-mt-20">
-        <div className="lg:grid lg:grid-cols-[260px_1fr] lg:gap-8">
-          {/* Sidebar — categories + trust filters + stats card (client component) */}
+      {/* MAIN BODY AREA — Left sidebar fixed, right provider cards list ONLY scrolls */}
+      <div id="all-providers" className="flex-1 min-h-0 w-full overflow-hidden">
+        <div className="h-full w-full flex overflow-hidden">
+          {/* Sidebar — categories + trust filters + stats card (Fixed left sidebar) */}
           <MarketplaceSidebar
             providers={providers}
             verticals={VERTICALS}
@@ -478,10 +414,59 @@ export default async function MarketplaceBrowsePage({
             activeIndustry={industryFilter}
           />
 
-          {/* Main column — client-side interactive browser */}
-          <div>
-            {/* <noscript> fallback — plain HTML GET form so non-JS users can still search.
-                The MarketplaceBrowser client component replaces this on hydration. */}
+          {/* Main column — ONLY THIS PROVIDER LIST AREA SCROLLS */}
+          <main className="flex-1 h-full overflow-y-auto pb-12 scroll-smooth">
+            {/* FIXED/STICKY BREADCRUMB & SORT FILTER BAR — INSIDE LISTING AREA */}
+            <nav
+              aria-label="Breadcrumb"
+              className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border pb-2.5 pt-1 mb-4 pl-4 pr-3 sm:pr-3 lg:pr-3 py-4 "
+            >
+              <div className="flex w-full flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <ol className="flex flex-wrap items-center gap-1 min-w-0">
+                  <li className="flex items-center gap-1">
+                    <a href="/marketplace" className="inline-flex items-center gap-1 hover:text-foreground">
+                      <HomeIcon className="h-3.5 w-3.5" /> Home
+                    </a>
+                    <ChevronRight className="h-3 w-3" />
+                  </li>
+                  <li className="flex items-center gap-1">
+                    <a href="/marketplace" className="hover:text-foreground">Marketplace</a>
+                    {bcVerticalName || bcIndustryName || params.city ? (
+                      <ChevronRight className="h-3 w-3" />
+                    ) : null}
+                  </li>
+                  {bcVerticalName ? (
+                    <li className="flex items-center gap-1">
+                      <a
+                        href={`/marketplace?vertical=${verticalFilter}`}
+                        className="hover:text-foreground"
+                      >
+                        {bcVerticalName}
+                      </a>
+                      {bcIndustryName || params.city ? <ChevronRight className="h-3 w-3" /> : null}
+                    </li>
+                  ) : null}
+                  {bcIndustryName ? (
+                    <li className="flex items-center gap-1">
+                      <a
+                        href={`/marketplace?industry=${industryFilter}`}
+                        className="hover:text-foreground"
+                      >
+                        {bcIndustryName}
+                      </a>
+                      {params.city ? <ChevronRight className="h-3 w-3" /> : null}
+                    </li>
+                  ) : null}
+                  {params.city ? (
+                    <li className="flex items-center gap-1">
+                      <span className="font-medium text-foreground">{params.city}</span>
+                    </li>
+                  ) : null}
+                </ol>
+                <MarketplaceSortControl />
+              </div>
+            </nav>
+
             <noscript>
               <div className="mx-auto mb-8 max-w-2xl">
                 <form
@@ -542,7 +527,7 @@ export default async function MarketplaceBrowsePage({
             )}
 
             {/* SEO footer copy */}
-            <div className="mt-12 rounded-xl border border-border bg-muted/20 p-5 text-sm text-muted-foreground leading-relaxed">
+            <div className="mt-12 rounded-xl border border-border bg-muted/20 p-5 text-sm text-muted-foreground leading-relaxed mr-3 ml-3 sm:mr-3 sm:ml-3 lg:mr-3 lg:ml-3">
               <h2 className="text-base font-semibold text-foreground mb-2">
                 About the ServiceOS Marketplace
               </h2>
@@ -557,41 +542,31 @@ export default async function MarketplaceBrowsePage({
                 describe your problem and let our AI route you to the right professional.
               </p>
             </div>
-          </div>
+
+            {/* Footer embedded at the end of the scrollable list column */}
+            <footer className="mt-10 border-t bg-background py-6 pl-4 pr-3 sm:pr-3 lg:pr-3 py-4 ">
+              <div className="w-full flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-between sm:text-left">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+                    <Wrench className="h-3.5 w-3.5" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">ServiceOS Marketplace</p>
+                    <p className="text-xs text-muted-foreground">AI Marketplace & Operating System for Local Service Businesses</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <a href="/" className="hover:text-foreground">← ServiceOS Home</a>
+                  <a href="/#pricing" className="hover:text-foreground">For businesses</a>
+                  <a href="/#ai-receptionist" className="hover:text-foreground">AI Receptionist</a>
+                  <a href="/contact-us" className="hover:text-foreground">Contact</a>
+                  <span>© {new Date().getFullYear()} ServiceOS</span>
+                </div>
+              </div>
+            </footer>
+          </main>
         </div>
       </div>
-
-      {/* Footer
-          Fix C: `mt-auto` pins the footer to the bottom of the flex column
-          root (`min-h-screen flex flex-col`). The main content div above
-          already has `flex-1`, which SHOULD push the footer down — but
-          during rapid height transitions (filter changes, infinite-scroll
-          batch loads) the browser can briefly compute a shorter main
-          content height before the next paint, causing the footer to
-          float up for a frame. `mt-auto` is a defensive pin that tells
-          the flexbox layout "always push this element to the bottom
-          regardless of sibling heights", eliminating the 1-frame footer
-          float that users perceived as "footer pushing". */}
-      <footer className="mt-auto border-t bg-background py-6">
-        <div className="w-full px-4 sm:px-6 lg:px-8 flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-between sm:text-left">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
-              <Wrench className="h-3.5 w-3.5" />
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-foreground">ServiceOS Marketplace</p>
-              <p className="text-xs text-muted-foreground">AI Marketplace & Operating System for Local Service Businesses</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <a href="/" className="hover:text-foreground">← ServiceOS Home</a>
-            <a href="/#pricing" className="hover:text-foreground">For businesses</a>
-            <a href="/#ai-receptionist" className="hover:text-foreground">AI Receptionist</a>
-            <a href="/contact-us" className="hover:text-foreground">Contact</a>
-            <span>© {new Date().getFullYear()} ServiceOS</span>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
