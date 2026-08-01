@@ -7,7 +7,7 @@ import {
   CheckCheck, Loader2,
   ExternalLink, Sparkles, X, Filter,
   Mail, MessageCircle, User,
-  BarChart3, Inbox, UserCheck, UserPlus, UsersRound,
+  BarChart3, Inbox, UserCheck, UserPlus,
   StickyNote, Clock, ChevronDown, Zap, ChevronRight, Star, Briefcase, Contact as ContactIcon,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -210,7 +210,7 @@ export function OmnichannelView() {
   const messageEndRef = useRef<HTMLDivElement>(null);
 
   // ── New: Top tab bar + workspace features ──
-  const [inboxTab, setInboxTab] = useState<'inbox' | 'assigned' | 'unassigned' | 'team'>('inbox');
+  const [inboxTab, setInboxTab] = useState<'inbox' | 'assigned' | 'unassigned'>('inbox');
   const [openTabs, setOpenTabs] = useState<string[]>([]); // conversation IDs open as tabs
   const [composerMode, setComposerMode] = useState<'reply' | 'notes'>('reply');
   const [showSlashCommands, setShowSlashCommands] = useState(false);
@@ -324,14 +324,12 @@ export function OmnichannelView() {
     //   inbox       → all conversations
     //   assigned    → assigned to current user (assigneeId set)
     //   unassigned  → no assignee
-    //   team        → all conversations (team view — same as inbox for now)
     const auth = useAppStore.getState();
     const currentUserId = auth.user?.id ?? '';
     const matchesTab =
       inboxTab === 'inbox' ||
       (inboxTab === 'assigned' && !!c.assigneeId && c.assigneeId === currentUserId) ||
-      (inboxTab === 'unassigned' && !c.assigneeId) ||
-      inboxTab === 'team';
+      (inboxTab === 'unassigned' && !c.assigneeId);
     const matchesChannel = activeChannelFilter === 'all' || c.channel === activeChannelFilter;
     const matchesSearch = searchQuery === '' ||
       c.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -513,7 +511,7 @@ export function OmnichannelView() {
         <div className="flex flex-1 min-h-0 overflow-hidden w-full">
           {/* ── Left Column: Conversation List ── */}
           <div className="w-80 flex-shrink-0 border-r bg-background flex flex-col hidden md:flex min-h-0">
-            {/* Top Tab Bar (Inbox / Assigned / Unassigned / Team) — moved here
+            {/* Top Tab Bar (Inbox / Assigned / Unassigned) — moved here
                 from the full-width header to save vertical space. */}
             <div className="flex-shrink-0 border-b bg-background">
               <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-none px-1">
@@ -521,7 +519,6 @@ export function OmnichannelView() {
                   { key: 'inbox', label: 'Inbox', icon: Inbox },
                   { key: 'assigned', label: 'Assigned', icon: UserCheck },
                   { key: 'unassigned', label: 'Unassigned', icon: UserPlus },
-                  { key: 'team', label: 'Team', icon: UsersRound },
                 ] as const).map(tab => (
                   <button
                     key={tab.key}
