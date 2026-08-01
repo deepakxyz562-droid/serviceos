@@ -2,8 +2,30 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Wrench, Search, MapPin } from 'lucide-react';
+import {
+  Wrench,
+  Search,
+  MapPin,
+  LayoutDashboard,
+  Store,
+  Settings,
+  LogOut,
+  ChevronDown,
+} from 'lucide-react';
 import { useMarketplaceSearch } from './use-marketplace-search';
+import { useAppStore } from '@/store/app-store';
+import {
+  Avatar,
+  AvatarFallback,
+} from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 /**
  * MarketplaceHeader
@@ -70,7 +92,7 @@ export function MarketplaceHeader({
                 navigateOnSearch
               />
             </form>
-            <ListBusinessCTA />
+            <HeaderAction />
           </div>
         </div>
       </header>
@@ -89,7 +111,7 @@ export function MarketplaceHeader({
             cityValue={cityInput}
             onCityChange={setCityInput}
           />
-          <ListBusinessCTA />
+          <HeaderAction />
         </div>
       </div>
     </header>
@@ -163,16 +185,100 @@ function SearchBox({
   );
 }
 
-function ListBusinessCTA() {
-  // The registration flow is a client-side view state on the root page
-  // (unauthView = 'auth'), not a URL route. We link to /?auth=register and
-  // the root page reads this query param to auto-open the auth view.
+/**
+ * HeaderAction
+ * -------------
+ * Shows different content depending on auth state:
+ *   • Anonymous  → "List your business" CTA button (links to /?auth=register)
+ *   • Logged in  → User profile avatar + dropdown menu with quick links:
+ *                    - My Dashboard (marketplaceDashboard for listing-only, dashboard for CRM)
+ *                    - My Marketplace Listing (marketplaceDashboard)
+ *                    - Settings
+ *                    - Sign Out
+ *
+ * The dropdown avoids the confusion of showing "List your business" to a
+ * user who already has an account and a listing.
+ */
+function HeaderAction() {
+  const auth = useAppStore((s) => s.auth);
+
+  // Anonymous visitor → show the CTA
+  if (!auth?.isAuthenticated) {
+    return (
+      <Link
+        href="/?auth=register"
+        className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+      >
+        List your business
+      </Link>
+    );
+  }
+
+  // Authenticated → show profile dropdown
+  const userName = auth.user?.name || auth.user?.email || 'User';
+  const initials = (auth.user?.name || auth.user?.email || 'U')
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  const isListingOnly =
+    (auth.tenant as any)?.signupMode === 'listing_only' ||
+    (auth.tenant as any)?.listingTier === 'claimed_free';
+  const dashboardLabel = isListingOnly ? 'My Listing' : 'Dashboard';
+  const dashboardView = isListingOnly ? 'marketplaceDashboard' : 'dashboard';
+
   return (
-    <Link
-      href="/?auth=register"
-      className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
-    >
-      List your business
-    </Link>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-2 sm:px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+          aria-label="Account menu"
+        >
+          <Avatar className="size-7">
+            <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs font-semibold dark:bg-emerald-950 dark:text-emerald-300">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <span className="hidden sm:inline max-w-[100px] truncate">{userName.split(' ')[0]}</span>
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="min-w-0">
+          <p className="text-sm font-medium text-foreground truncate">{userName}</p>
+          {auth.user?.email && (
+            <p className="text-xs text-muted-foreground truncate">{auth.user.email}</p>
+          )}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href={`/?view=${dashboardView}`} className="cursor-pointer">
+            <LayoutDashboard className="mr-2 h-4 w-4" />
+            {dashboardLabel}
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/?view=marketplaceDashboard" className="cursor-pointer">
+            <Store className="mr-2 h-4 w-4" />
+            Marketplace Listing
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/?view=settings" className="cursor-pointer">
+            <Settings className="mr-2 h-4 w-4" />
+            Settings
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/?logout=1" className="cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600">
+            <LogOut className="mr-2 h-4 w-4" />
+            Sign Out
+          </Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

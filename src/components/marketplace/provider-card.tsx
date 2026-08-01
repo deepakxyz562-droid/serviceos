@@ -203,6 +203,15 @@ export function ProviderCard({
 
   const gates = buildVerificationGates(provider);
   const allGatesPassed = gates.every((g) => g.passed);
+
+  // ── Claim status badge logic ──
+  //   Verified    → claimed AND all 4 verification gates passed (emerald)
+  //   Unclaimed   → not claimed (muted gray)
+  //   (hidden)    → claimed but NOT yet verified — show no badge (per Q1 decision:
+  //                 hide "Claimed" if not verified, so visitors don't mistake an
+  //                 unverified claim for a verified business)
+  const showVerifiedBadge = claimed && allGatesPassed;
+  const showUnclaimedBadge = !claimed;
   const avatar = avatarColors(provider.name);
 
   const description = provider.description ?? listItem.tagline ?? '';
@@ -268,18 +277,20 @@ export function ProviderCard({
             ) : null}
           </p>
         </div>
-        {/* Claimed / Unclaimed pill — visible to all visitors so they can
-            tell at a glance whether a listing is owner-verified. */}
-        <span
-          className={cn(
-            'shrink-0 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider',
-            claimed
-              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
-              : 'bg-muted text-muted-foreground',
-          )}
-        >
-          {claimed ? 'Claimed' : 'Unclaimed'}
-        </span>
+        {/* Claim status badge — 3-state logic:
+              Verified  → claimed + all verification gates passed (emerald, with check icon)
+              Unclaimed → not claimed (muted gray)
+              (hidden)  → claimed but not verified — no badge shown */}
+        {showVerifiedBadge ? (
+          <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+            <BadgeCheck className="h-3 w-3" />
+            Verified
+          </span>
+        ) : showUnclaimedBadge ? (
+          <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Unclaimed
+          </span>
+        ) : null}
       </div>
 
       {/* ─── Stats bar (3 columns: rating | jobs | response) ───────────────── */}
@@ -433,10 +444,30 @@ function MinimalCard({
             ) : null}
           </p>
         </div>
-        {/* Unclaimed pill — visible to all visitors */}
-        <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-          Unclaimed
-        </span>
+        {/* Claim status — same 3-state logic as the full card. MinimalCard
+            is only used for unclaimed seed data, so this renders "Unclaimed",
+            but the conditional keeps it consistent if data ever changes. */}
+        {(() => {
+          const gates = buildVerificationGates(provider);
+          const allPassed = gates.every((g) => g.passed);
+          const cl = provider.claimed ?? false;
+          if (cl && allPassed) {
+            return (
+              <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                <BadgeCheck className="h-3 w-3" />
+                Verified
+              </span>
+            );
+          }
+          if (!cl) {
+            return (
+              <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Unclaimed
+              </span>
+            );
+          }
+          return null;
+        })()}
       </div>
 
       {/* Minimal stats: just rating + reviews (single row, no dividers) */}

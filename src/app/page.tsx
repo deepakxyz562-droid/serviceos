@@ -142,6 +142,10 @@ export default function HomePage() {
   // must survive the URL-stripping replaceState below and be read once in
   // onAuthSuccess — it is NOT reactive state.
   const returnUrlRef = useRef<string | null>(null);
+  // Ref to the latest handleLogout callback, so the ?logout=1 effect (which
+  // runs on mount, before handleLogout is defined) can call it without a
+  // stale closure. Updated on every render via the effect below.
+  const handleLogoutRef = useRef<(() => void) | null>(null);
 
   // Which onboarding screen to show for a tenant whose onboarding isn't
   // complete yet:
@@ -465,6 +469,28 @@ export default function HomePage() {
   // When an authenticated admin/owner clicks one, we switch to that view
   // and strip the param so a refresh doesn't re-trigger it.
   //
+  // ─── Handle ?logout=1 deep link (from marketplace header dropdown) ────────
+  // When a logged-in user clicks "Sign Out" from the marketplace header
+  // dropdown, the link goes to /?logout=1. This effect detects that param
+  // and triggers the logout flow. Runs even if auth is already false (so a
+  // stale logout link still clears localStorage and lands on the marketplace).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('logout') !== '1') return;
+
+    // Strip the param so it doesn't re-trigger on refresh
+    params.delete('logout');
+    const remaining = params.toString();
+    const newUrl = remaining
+      ? `${window.location.pathname}?${remaining}`
+      : window.location.pathname;
+    window.history.replaceState({}, '', newUrl);
+
+    // Trigger the actual logout
+    handleLogoutRef.current?.();
+  }, []);
+
   // This runs AFTER auth is confirmed (auth.isAuthenticated is true) so the
   // AppLayout is mounted and ready to receive setCurrentView. We deliberately
   // skip this for customer / employee / superadmin roles — their layouts
@@ -548,6 +574,12 @@ export default function HomePage() {
     setUnauthView('landing');
     toast.success('You have been signed out');
   }, [clearAuth]);
+
+  // Keep the handleLogoutRef in sync so the ?logout=1 deep-link effect can
+  // call the latest handleLogout without a stale closure.
+  useEffect(() => {
+    handleLogoutRef.current = handleLogout;
+  }, [handleLogout]);
 
   const handleShowAuth = useCallback(() => {
     setUnauthView('auth');

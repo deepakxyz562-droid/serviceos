@@ -208,11 +208,12 @@ export default async function PublicBusinessHubPage({
   } catch {
     currentTenantId = null
   }
-  // Show the claim link on EVERY unclaimed listing — to both authenticated
-  // non-owner users AND anonymous visitors. Anonymous visitors see a sign-in
-  // gate when they click (handled inside ClaimBusinessBanner). The owner of
-  // the business never sees it (can't claim your own).
-  const showClaimLink = !business.claimed && currentTenantId !== business.id
+  // Show the claim/verified-owner banner on EVERY listing (claimed or not):
+  //   • Unclaimed → "Are you the owner? Claim this business" CTA banner
+  //   • Claimed   → "✓ Verified owner" notice
+  // The owner of the business never sees it (hidden inside ClaimBusinessBanner
+  // via currentTenantId === tenantId check).
+  const showClaimBanner = currentTenantId !== business.id
 
   // Parse JSON fields safely.
   const gallery: Array<{ url?: string; caption?: string }> = safeJson(business.galleryJson, [])
@@ -554,12 +555,11 @@ export default async function PublicBusinessHubPage({
             {/* Right: sticky CTA card + contact info */}
             <div className="lg:col-span-1">
               <div className="lg:sticky lg:top-20 space-y-4">
-                {/* Claim-this-business link — only for AUTHENTICATED non-owner
-                    users. Anonymous visitors don't see it (they'd need to
-                    register first). Kept as a subtle text link instead of a
-                    big colored banner so it doesn't look spammy on every
-                    unclaimed listing. */}
-                {showClaimLink ? (
+                {/* Claim / Verified-owner banner — shown to ALL non-owner
+                    visitors. Unclaimed listings show a "Claim this business"
+                    CTA; claimed listings show a "✓ Verified owner" notice.
+                    Anonymous visitors get a sign-in gate when they click. */}
+                {showClaimBanner ? (
                   <ClaimBusinessBanner
                     tenantId={business.id}
                     tenantName={business.name}
@@ -569,6 +569,7 @@ export default async function PublicBusinessHubPage({
                     tenantState={business.state}
                     currentTenantId={currentTenantId}
                     isAuthenticated={!!currentTenantId}
+                    isClaimed={!!business.claimed}
                   />
                 ) : null}
 

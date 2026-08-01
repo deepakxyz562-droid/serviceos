@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ShieldCheck, ChevronRight, LogIn } from 'lucide-react';
+import { ShieldCheck, ChevronRight, LogIn, BadgeCheck, Store } from 'lucide-react';
 import { ClaimBusinessModal } from './claim-business-modal';
 import {
   Dialog,
@@ -16,20 +16,19 @@ import { Button } from '@/components/ui/button';
 /**
  * ClaimBusinessBanner
  * --------------------
- * A subtle, compact link (not a big banner) shown on the provider detail
- * page to ANY visitor when the business is unclaimed — authenticated
- * non-owner users AND anonymous visitors.
+ * Shown on the provider detail page. Two modes:
  *
- *   • Authenticated non-owner → clicking opens the ClaimBusinessModal wizard
- *     directly (phone / email / Google / document verification).
- *   • Anonymous visitor → clicking opens a small "Sign in to claim" dialog
- *     that directs them to register/login first, then return to claim.
- *   • The owner of the business → never sees the link (can't claim own).
+ *   1. Unclaimed listing (claimed=false) → shows a visible bordered banner
+ *      card "Are you the owner? Claim this business" with a CTA button.
+ *      • Authenticated non-owner → clicking opens the ClaimBusinessModal wizard.
+ *      • Anonymous visitor → clicking opens a "Sign in to claim" dialog.
+ *      • The owner of the business → never sees it (can't claim own).
  *
- * Design rationale: marketplace seed data (OSM imports) all have
- * `claimed=false`. Showing a big colored "Claim this business!" banner on
- * every listing looks spammy and unprofessional. Instead, we render a small
- * text link that's discoverable but unobtrusive.
+ *   2. Claimed listing (claimed=true) → shows a small "✓ Verified owner"
+ *      notice so visitors know the listing is owner-managed (not seed data).
+ *
+ * Previously this was a tiny text link that was too easy to miss. Now it's
+ * a compact but discoverable bordered card.
  */
 interface ClaimBusinessBannerProps {
   tenantId: string;
@@ -43,6 +42,9 @@ interface ClaimBusinessBannerProps {
   /** Whether the current visitor is authenticated. When false, a sign-in
    *  gate dialog is shown before the claim wizard. */
   isAuthenticated?: boolean;
+  /** Whether the business is already claimed. When true, renders the
+   *  "Verified owner" notice instead of the claim CTA. */
+  isClaimed?: boolean;
 }
 
 export function ClaimBusinessBanner({
@@ -54,6 +56,7 @@ export function ClaimBusinessBanner({
   tenantState,
   currentTenantId,
   isAuthenticated = false,
+  isClaimed = false,
 }: ClaimBusinessBannerProps) {
   const [claimOpen, setClaimOpen] = React.useState(false);
   const [signInGateOpen, setSignInGateOpen] = React.useState(false);
@@ -69,16 +72,43 @@ export function ClaimBusinessBanner({
     }
   }
 
+  // ── Already claimed → show "Verified owner" notice ──
+  if (isClaimed) {
+    return (
+      <div className="mb-3 flex items-center gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-900 dark:bg-emerald-950/40">
+        <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">
+            Verified owner
+          </p>
+          <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+            This listing is managed by the business owner.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Unclaimed → show claim CTA banner ──
   return (
     <>
       <button
         type="button"
         onClick={handleClick}
-        className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-800 hover:underline dark:text-emerald-400 dark:hover:text-emerald-300"
+        className="mb-3 flex w-full items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-left transition-colors hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-950/60"
       >
-        <ShieldCheck className="h-3.5 w-3.5" />
-        Are you the owner? Claim this business
-        <ChevronRight className="h-3 w-3" />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
+          <Store className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">
+            Are you the owner?
+          </p>
+          <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+            Claim this business to manage your profile, respond to reviews, and receive customer leads.
+          </p>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
       </button>
 
       {/* Full claim wizard — only for authenticated users */}

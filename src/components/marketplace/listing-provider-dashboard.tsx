@@ -32,6 +32,8 @@ import {
   MapPin,
   Phone,
   Mail,
+  Wrench,
+  Info,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -49,6 +51,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useAppStore } from '@/store/app-store';
 import { PublicHubTab } from '@/components/settings/public-hub-tab';
+import { ServiceCatalogView } from '@/components/views/service-catalog-view';
 import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 import {
@@ -156,6 +159,9 @@ export function ListingProviderDashboard() {
           <TabsTrigger value="page" className="gap-1.5">
             <Store className="size-3.5" /> Marketplace Page
           </TabsTrigger>
+          <TabsTrigger value="services" className="gap-1.5">
+            <Wrench className="size-3.5" /> Services
+          </TabsTrigger>
           <TabsTrigger value="settings" className="gap-1.5">
             <Settings className="size-3.5" /> Settings
           </TabsTrigger>
@@ -176,7 +182,30 @@ export function ListingProviderDashboard() {
           )}
         </TabsContent>
 
-        {/* Tab 2: Settings (business name, phone, category, city, deactivate) */}
+        {/* Tab 2: Services — listing-only users can create/edit services.
+            Services appear on their public marketplace page. They are NOT
+            bookable until the user upgrades to CRM (the booking panel only
+            renders for claimed + valid-subscription tenants). This lets
+            listing users showcase what they offer without receiving online
+            bookings. */}
+        <TabsContent value="services" className="mt-4">
+          <Card className="mb-3 border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30">
+            <CardContent className="p-3 flex items-start gap-2.5">
+              <Info className="size-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-blue-900 dark:text-blue-100">
+                  Services you add appear on your public marketplace page.
+                </p>
+                <p className="text-[11px] text-blue-700 dark:text-blue-300 mt-0.5">
+                  Online booking is disabled on the free plan — customers will call you to book. Upgrade to CRM to enable online bookings and quote requests.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          <ServiceCatalogView />
+        </TabsContent>
+
+        {/* Tab 3: Settings (business name, phone, category, city, deactivate) */}
         <TabsContent value="settings" className="mt-4">
           {loadingSnap ? (
             <div className="flex items-center justify-center py-12 text-muted-foreground">

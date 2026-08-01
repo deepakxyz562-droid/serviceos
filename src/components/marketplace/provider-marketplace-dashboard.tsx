@@ -398,6 +398,136 @@ function LoadingState({ lines = 3 }: { lines?: number }) {
   );
 }
 
+// ─── Marketing banner (CRM users) ───────────────────────────────────────────
+// Rotates through plan-upgrade and feature-adoption CTAs. Dismissible per
+// session (state held in module-level variable so it stays dismissed across
+// tab switches but resets on full page reload).
+let _marketingBannerDismissed = false;
+
+function MarketingBanner({
+  onNavigate,
+  tenant,
+}: {
+  onNavigate: (view: string) => void;
+  tenant: any;
+}) {
+  const [dismissed, setDismissed] = useState(_marketingBannerDismissed);
+
+  // Pick the most relevant banner based on the tenant's current plan.
+  //   - starter plan → upsell to growth (unlock more features)
+  //   - growth/business → upsell to enterprise (AI Receptionist, API access)
+  //   - trial → convert to paid (most urgent)
+  //   - enterprise / unknown → feature adoption (omnichannel, AI)
+  const plan = tenant?.plan || 'starter';
+  const planStatus = tenant?.planStatus || 'trial';
+
+  const banner = (() => {
+    if (planStatus === 'trial') {
+      return {
+        icon: Clock,
+        title: 'Your free trial is active',
+        desc: "Don't lose access to dispatch, invoicing, and AI tools. Pick a plan before your trial ends.",
+        cta: 'Choose a plan',
+        view: 'billing',
+        accent: 'amber',
+      };
+    }
+    if (plan === 'starter') {
+      return {
+        icon: TrendingUp,
+        title: 'Unlock unlimited jobs & quotes',
+        desc: 'Upgrade to Growth for unlimited dispatch, quote inbox, and marketing automation.',
+        cta: 'Upgrade to Growth',
+        view: 'billing',
+        accent: 'emerald',
+      };
+    }
+    if (plan === 'growth' || plan === 'business') {
+      return {
+        icon: Crown,
+        title: 'Scale with Enterprise',
+        desc: 'Get AI Receptionist, API access, white-label branding, and priority support.',
+        cta: 'Explore Enterprise',
+        view: 'billing',
+        accent: 'violet',
+      };
+    }
+    // enterprise or unknown — feature adoption
+    return {
+      icon: Zap,
+      title: 'Activate your AI Receptionist',
+      desc: 'Never miss a call again. Set up 24/7 AI-powered call answering in minutes — free with your plan.',
+      cta: 'Set up AI Receptionist',
+      view: 'aiReceptionist',
+      accent: 'emerald',
+    };
+  })();
+
+  const Icon = banner.icon;
+  const accentClasses: Record<string, { bg: string; icon: string; title: string; desc: string; btn: string }> = {
+    emerald: {
+      bg: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30',
+      icon: 'bg-emerald-600 text-white',
+      title: 'text-emerald-900 dark:text-emerald-100',
+      desc: 'text-emerald-700 dark:text-emerald-300',
+      btn: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+    },
+    amber: {
+      bg: 'from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30',
+      icon: 'bg-amber-600 text-white',
+      title: 'text-amber-900 dark:text-amber-100',
+      desc: 'text-amber-700 dark:text-amber-300',
+      btn: 'bg-amber-600 hover:bg-amber-700 text-white',
+    },
+    violet: {
+      bg: 'from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30',
+      icon: 'bg-violet-600 text-white',
+      title: 'text-violet-900 dark:text-violet-100',
+      desc: 'text-violet-700 dark:text-violet-300',
+      btn: 'bg-violet-600 hover:bg-violet-700 text-white',
+    },
+  };
+  const ac = accentClasses[banner.accent] || accentClasses.emerald;
+
+  function handleDismiss() {
+    _marketingBannerDismissed = true;
+    setDismissed(true);
+  }
+
+  if (dismissed) return null;
+
+  return (
+    <Card className={cn('border-0 bg-gradient-to-r overflow-hidden', ac.bg)}>
+      <CardContent className="p-4 flex items-center gap-3">
+        <div className={cn('size-10 rounded-lg flex items-center justify-center shrink-0', ac.icon)}>
+          <Icon className="size-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className={cn('font-semibold text-sm', ac.title)}>{banner.title}</p>
+          <p className={cn('text-xs mt-0.5', ac.desc)}>{banner.desc}</p>
+        </div>
+        <Button
+          size="sm"
+          className={cn('shrink-0 gap-1.5', ac.btn)}
+          onClick={() => onNavigate(banner.view)}
+        >
+          {banner.cta}
+          <ChevronRight className="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="shrink-0 h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+          onClick={handleDismiss}
+          aria-label="Dismiss"
+        >
+          ×
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Eligibility card (8 gates + profile completion bar) ────────────────────
 
 const GATE_META: Array<{
@@ -2117,6 +2247,11 @@ export function ProviderMarketplaceDashboard() {
           </p>
         </div>
       </div>
+
+      {/* ── Marketing banner — promotes plan upgrade & feature adoption ──
+          Dismissible per-session. Only shows for CRM users (listing-only
+          users get their own upsell banner in ListingProviderDashboard). */}
+      <MarketingBanner onNavigate={navigate} tenant={tenant} />
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="w-full sm:w-auto overflow-x-auto h-auto flex-wrap">

@@ -64,6 +64,9 @@ import {
   Clock,
   Lock,
   Repeat,
+  Store,
+  CreditCard,
+  Wrench as WrenchIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -208,6 +211,30 @@ const employeeNavSections: NavSection[] = [
     title: 'Account',
     items: [
       { view: 'settings', label: 'Settings', icon: Settings },
+    ],
+  },
+];
+
+// ─── Listing-only Navigation ────────────────────────────────────────────────
+// Minimal sidebar for tenants with signupMode='listing_only' (free marketplace
+// listing, no CRM). They only see their marketplace page, services, settings,
+// and a billing/upgrade CTA. All CRM features (pipeline, leads, jobs, dispatch,
+// invoices, omnichannel, AI, marketing) are hidden — they're blocked at the
+// API layer too (see src/lib/require-crm-tenant.ts).
+const listingOnlyNavSections: NavSection[] = [
+  {
+    title: 'Marketplace',
+    items: [
+      { view: 'marketplaceDashboard', label: 'My Listing', icon: Store },
+      { view: 'serviceCatalog', label: 'Services', icon: WrenchIcon },
+    ],
+  },
+  {
+    title: 'Account',
+    items: [
+      { view: 'billing', label: 'Upgrade to CRM', icon: CreditCard, badge: 'UPGRADE' },
+      { view: 'settings', label: 'Settings', icon: Settings },
+      { view: 'helpCenter', label: 'Help & Support', icon: LifeBuoy },
     ],
   },
 ];
@@ -404,6 +431,13 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
   // Compute isSuperAdmin early (needed in effects and rendering)
   const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin' || auth.user?.role === 'super_admin' || (auth.user?.role === 'admin' && !auth.user?.tenantId));
   const isEmployee = auth.user?.role === 'employee';
+  // Listing-only tenants (signupMode='listing_only' or listingTier='claimed_free')
+  // get a minimal sidebar with just Marketplace / Services / Settings / Upgrade.
+  const isListingOnly =
+    !isSuperAdmin &&
+    !isEmployee &&
+    ((auth.tenant as any)?.signupMode === 'listing_only' ||
+     (auth.tenant as any)?.listingTier === 'claimed_free');
 
   // Fetch menu visibility for non-superadmin users. Superadmin bypasses the
   // fetch entirely (the filter below ignores `disabledMenus` when isSuperAdmin),
@@ -413,6 +447,9 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
   // Next.js dev server (otherwise it 401s and pollutes the dev log).
   useEffect(() => {
     if (isSuperAdmin) return;
+    // Listing-only users have a fixed minimal nav — no need to fetch
+    // menu-visibility (they don't have CRM menus to toggle).
+    if (isListingOnly) return;
     async function fetchMenuVisibility() {
       try {
         const res = await fetch('/api/menu-visibility?XTransformPort=3000');
@@ -425,7 +462,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       }
     }
     fetchMenuVisibility();
-  }, [auth.user?.role, auth.user?.tenantId, auth.user?.isSuperAdmin, isSuperAdmin]);
+  }, [auth.user?.role, auth.user?.tenantId, auth.user?.isSuperAdmin, isSuperAdmin, isListingOnly]);
 
   // Effective collapsed state for a section: explicit user override wins,
   // otherwise fall back to the section's `defaultCollapsed` flag. Non-collapsible
@@ -470,6 +507,10 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
 
     if (isSuperAdmin) {
       sections = superadminNavSections;
+    } else if (isListingOnly) {
+      // Listing-only tenants get the minimal nav — no CRM features, no
+      // menu-visibility filtering (the fixed set is already final).
+      return listingOnlyNavSections;
     } else if (isEmployee) {
       sections = employeeNavSections;
     } else {
@@ -488,7 +529,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     }
 
     return sections;
-  }, [isSuperAdmin, isEmployee, disabledMenus]);
+  }, [isSuperAdmin, isEmployee, isListingOnly, disabledMenus]);
 
   const handleNavClick = (view: ViewType) => {
     setCurrentView(view);

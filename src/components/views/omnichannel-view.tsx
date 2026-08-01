@@ -628,10 +628,11 @@ export function OmnichannelView() {
                             </div>
                           </div>
 
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0 overflow-hidden">
+                            {/* Name + time row — name truncates, time pinned right */}
+                            <div className="flex items-center justify-between gap-2 min-w-0">
                               <span className={cn(
-                                'text-sm font-medium truncate',
+                                'text-sm font-medium truncate min-w-0 flex-1',
                                 conv.unreadCount > 0 ? 'font-bold' : ''
                               )}>
                                 {conv.customerName}
@@ -642,27 +643,33 @@ export function OmnichannelView() {
                             </div>
 
                             {conv.customerPhone && (
-                              <p className="text-[11px] text-muted-foreground truncate">{conv.customerPhone}</p>
+                              <p className="text-[11px] text-muted-foreground truncate mt-0.5">{conv.customerPhone}</p>
                             )}
 
-                            <div className="flex items-center gap-2 mt-0.5">
+                            {/* Last message — truncates in available width */}
+                            <div className="flex items-center gap-2 mt-0.5 min-w-0">
                               <p className={cn(
-                                'text-xs truncate flex-1',
+                                'text-xs truncate flex-1 min-w-0',
                                 conv.unreadCount > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'
                               )}>
                                 {conv.lastMessage}
                               </p>
                             </div>
 
-                            <div className="flex items-center gap-1.5 mt-1.5">
-                              <ChannelBadge channel={conv.channel} compact />
+                            {/* Badges row — each badge flex-shrink-0 so they
+                                never get squeezed/clipped; the row itself
+                                wraps if too many badges. */}
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap min-w-0">
+                              <span className="flex-shrink-0">
+                                <ChannelBadge channel={conv.channel} compact />
+                              </span>
                               {conv.lead && (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 flex-shrink-0 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
                                   <Sparkles className="size-2.5 mr-0.5" /> Lead
                                 </Badge>
                               )}
                               {conv.status === 'closed' && (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700">
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 flex-shrink-0 bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700">
                                   Closed
                                 </Badge>
                               )}
@@ -764,12 +771,14 @@ export function OmnichannelView() {
                           {getInitials(selectedConversation.customerName)}
                         </AvatarFallback>
                       </Avatar>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-semibold">{selectedConversation.customerName}</h3>
-                          <ChannelBadge channel={selectedConversation.channel} compact />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <h3 className="text-sm font-semibold truncate min-w-0">{selectedConversation.customerName}</h3>
+                          <span className="flex-shrink-0">
+                            <ChannelBadge channel={selectedConversation.channel} compact />
+                          </span>
                         </div>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground truncate">
                           {selectedConversation.customerPhone || selectedConversation.customerEmail || getChannelMeta(selectedConversation.channel).label}
                         </p>
                       </div>
@@ -1015,19 +1024,19 @@ export function OmnichannelView() {
                           {getInitials(selectedConversation.customerName)}
                         </AvatarFallback>
                       </Avatar>
-                      <CardTitle className="text-base font-semibold mt-2">{selectedConversation.customerName}</CardTitle>
+                      <CardTitle className="text-base font-semibold mt-2 truncate">{selectedConversation.customerName}</CardTitle>
                     </CardHeader>
-                    <CardContent className="px-4 pb-4 space-y-2">
+                    <CardContent className="px-4 pb-4 space-y-2 overflow-hidden">
                       {selectedConversation.customerPhone && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Phone className="size-3.5 text-muted-foreground" />
-                          <span>{selectedConversation.customerPhone}</span>
+                        <div className="flex items-center gap-2 text-sm min-w-0">
+                          <Phone className="size-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="truncate">{selectedConversation.customerPhone}</span>
                         </div>
                       )}
                       {selectedConversation.customerEmail && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Globe className="size-3.5 text-muted-foreground" />
-                          <span>{selectedConversation.customerEmail}</span>
+                        <div className="flex items-center gap-2 text-sm min-w-0">
+                          <Globe className="size-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="truncate">{selectedConversation.customerEmail}</span>
                         </div>
                       )}
                       <div className="flex items-center gap-2 text-sm">
