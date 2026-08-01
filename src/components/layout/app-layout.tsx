@@ -335,8 +335,13 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   // Resolve the active view component
   const ActiveView = viewComponents[currentView] || DashboardView;
 
-  // Canvas view needs no padding for full-screen editor
+  // Canvas view needs no padding for full-screen editor.
+  // Omnichannel inbox also needs no padding — it's a full-height 3-column
+  // layout that should fill the entire content area below the app header
+  // with zero gaps, so the conversation list / chat / profile panel all
+  // align flush with the top and sides.
   const isCanvas = currentView === 'canvas';
+  const isFullHeight = isCanvas || currentView === 'omnichannel';
 
   // ─── Full-takeover console: SuperAdmin owns the entire viewport ─────────
   // The superadmin shell has its OWN top bar + left sidebar + bottom status
@@ -380,8 +385,8 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
         <main
           className={cn(
             'flex-1 overflow-auto animate-fade-in',
-            isCanvas
-              ? 'p-0'
+            isFullHeight
+              ? 'p-0 overflow-hidden'
               : isMobile
                 ? 'p-3 sm:p-4 bg-background pb-[calc(4rem+env(safe-area-inset-bottom,0px))]'
                 : 'p-4 lg:p-6 bg-background',

@@ -320,12 +320,24 @@ export function OmnichannelView() {
 
   // ── Derived Data ──
   const filteredConversations = conversations.filter(c => {
+    // inboxTab filtering (moved into left sidebar):
+    //   inbox       → all conversations
+    //   assigned    → assigned to current user (assigneeId set)
+    //   unassigned  → no assignee
+    //   team        → all conversations (team view — same as inbox for now)
+    const auth = useAppStore.getState();
+    const currentUserId = auth.user?.id ?? '';
+    const matchesTab =
+      inboxTab === 'inbox' ||
+      (inboxTab === 'assigned' && !!c.assigneeId && c.assigneeId === currentUserId) ||
+      (inboxTab === 'unassigned' && !c.assigneeId) ||
+      inboxTab === 'team';
     const matchesChannel = activeChannelFilter === 'all' || c.channel === activeChannelFilter;
     const matchesSearch = searchQuery === '' ||
       c.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.lastMessage.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (c.customerPhone?.includes(searchQuery) ?? false);
-    return matchesChannel && matchesSearch;
+    return matchesTab && matchesChannel && matchesSearch;
   });
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId) ?? null;
@@ -477,156 +489,10 @@ export function OmnichannelView() {
   const isEmpty = conversations.length === 0;
 
   return (
-    <div className="flex flex-col h-full max-h-full">
-      {/* ── Header ── */}
-      <div className="flex-shrink-0 border-b bg-background px-4 py-3 sm:px-6">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
-              <MessageSquare className="size-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold tracking-tight">Omnichannel Inbox</h2>
-              <p className="text-sm text-muted-foreground">All leads, one inbox</p>
-            </div>
-          </div>
-
-          {/* Stats Summary */}
-          <div className="hidden md:flex items-center gap-4">
-            <div className="flex items-center gap-2 text-sm">
-              <Users className="size-4 text-muted-foreground" />
-              <span className="font-semibold">{stats?.totalConversations ?? 0}</span>
-              <span className="text-muted-foreground">conversations</span>
-            </div>
-            <Separator orientation="vertical" className="h-5" />
-            <div className="flex items-center gap-2 text-sm">
-              <Sparkles className="size-4 text-emerald-500" />
-              <span className="font-semibold">{stats?.leadsToday ?? 0}</span>
-              <span className="text-muted-foreground">leads today</span>
-            </div>
-            <Separator orientation="vertical" className="h-5" />
-            <div className="flex items-center gap-2 text-sm">
-              <Wifi className="size-4 text-sky-500" />
-              <span className="font-semibold">{stats?.activeChannels ?? 0}</span>
-              <span className="text-muted-foreground">active channels</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={() => setShowFilterPanel(!showFilterPanel)}
-              title="Filter conversations"
-            >
-              <Filter className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={() => setShowAnalyticsPanel(!showAnalyticsPanel)}
-              title="Analytics"
-            >
-              <BarChart3 className="size-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => useAppStore.getState().setCurrentView('channels')}>
-              <Settings className="size-3.5 mr-1" /> Configure
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Top Tab Bar (Inbox / Assigned / Unassigned / Team) ── */}
-      <div className="flex-shrink-0 border-b bg-background px-4 sm:px-6">
-        <div className="flex items-center gap-1 overflow-x-auto">
-          {([
-            { key: 'inbox', label: 'Inbox', icon: Inbox },
-            { key: 'assigned', label: 'Assigned to Me', icon: UserCheck },
-            { key: 'unassigned', label: 'Unassigned', icon: UserPlus },
-            { key: 'team', label: 'Team', icon: UsersRound },
-          ] as const).map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setInboxTab(tab.key)}
-              className={cn(
-                'inline-flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors',
-                inboxTab === tab.key
-                  ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <tab.icon className="size-3.5" />
-              {tab.label}
-              {tab.key === 'unassigned' && (
-                <span className="ml-1 text-[10px] font-bold text-white bg-amber-500 rounded-full size-4 flex items-center justify-center">
-                  {conversations.filter(c => !c.leadId).length}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Channel Filter Bar ── */}
-      <div className="flex-shrink-0 border-b bg-background/95 px-4 sm:px-6 py-2">
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
-          <button
-            onClick={() => setActiveChannelFilter('all')}
-            className={cn(
-              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
-              activeChannelFilter === 'all'
-                ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            )}
-          >
-            All
-            <span className={cn(
-              'text-xs px-1.5 py-0.5 rounded-full',
-              activeChannelFilter === 'all' ? 'bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-900' : 'bg-slate-200 dark:bg-slate-700'
-            )}>
-              {conversations.length}
-            </span>
-          </button>
-
-          {ALL_CHANNELS.map(ch => {
-            const meta = getChannelMeta(ch);
-            const Icon = meta.icon;
-            const count = channelCounts[ch as ChannelType];
-            const isActive = activeChannelFilter === ch;
-            return (
-              <button
-                key={ch}
-                onClick={() => setActiveChannelFilter(ch)}
-                className={cn(
-                  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
-                  isActive
-                    ? cn(meta.bgColor, meta.textColor, 'border', meta.borderColor)
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                )}
-              >
-                <Icon className="size-3.5" />
-                {meta.label}
-                <span className={cn(
-                  'text-xs px-1.5 py-0.5 rounded-full',
-                  isActive ? cn(meta.bgColor, meta.textColor) : 'bg-slate-200 dark:bg-slate-700'
-                )}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Auto-Reply Card ── MOVED to Channels & Credentials settings page.
-          The card now lives in src/components/views/channels-view.tsx so the
-          omnichannel inbox stays focused on conversations. */}
-
+    <div className="flex h-full max-h-full overflow-hidden">
       {/* ── Empty State ── */}
       {isEmpty ? (
-        <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+        <div className="flex flex-1 flex-col items-center justify-center py-16 px-4 text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <MessageSquare className="h-6 w-6 text-muted-foreground" />
           </div>
@@ -639,29 +505,92 @@ export function OmnichannelView() {
           </Button>
         </div>
       ) : (
-        /* ── 3-Column Layout ── */
-        <div className="flex flex-1 min-h-0 overflow-hidden">
+        /* ── 3-Column Layout ──
+            Fills 100% height from below the app header to viewport bottom.
+            All 3 columns start at the same Y position (aligned top borders).
+            Left + right sidebars scroll independently; center chat input
+            is pinned and never scrolls away. */
+        <div className="flex flex-1 min-h-0 overflow-hidden w-full h-full">
           {/* ── Left Column: Conversation List ── */}
-          <div className="w-80 flex-shrink-0 border-r bg-background flex flex-col hidden md:flex">
-            {/* Search */}
-            <div className="p-3 border-b">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <div className="w-80 flex-shrink-0 border-r bg-background flex flex-col hidden md:flex min-h-0">
+            {/* Top Tab Bar (Inbox / Assigned / Unassigned / Team) — moved here
+                from the full-width header to save vertical space. */}
+            <div className="flex-shrink-0 border-b bg-background">
+              <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-none px-1">
+                {([
+                  { key: 'inbox', label: 'Inbox', icon: Inbox },
+                  { key: 'assigned', label: 'Assigned', icon: UserCheck },
+                  { key: 'unassigned', label: 'Unassigned', icon: UserPlus },
+                  { key: 'team', label: 'Team', icon: UsersRound },
+                ] as const).map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setInboxTab(tab.key)}
+                    className={cn(
+                      'inline-flex items-center gap-1 px-2.5 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors',
+                      inboxTab === tab.key
+                        ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <tab.icon className="size-3" />
+                    {tab.label}
+                    {tab.key === 'unassigned' && (
+                      <span className="ml-0.5 text-[10px] font-bold text-white bg-amber-500 rounded-full size-4 flex items-center justify-center">
+                        {conversations.filter(c => !c.leadId).length}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Search + 3 action buttons in one compact row */}
+            <div className="flex-shrink-0 border-b bg-background p-2 flex items-center gap-1.5">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
                 <Input
-                  placeholder="Search conversations..."
+                  placeholder="Search..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-8 h-9 text-sm"
+                  className="pl-8 h-8 text-xs pr-6"
                 />
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
-                    <X className="size-3.5" />
+                    <X className="size-3" />
                   </button>
                 )}
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 flex-shrink-0"
+                onClick={() => setShowFilterPanel(!showFilterPanel)}
+                title="Filter conversations"
+              >
+                <Filter className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 flex-shrink-0"
+                onClick={() => setShowAnalyticsPanel(!showAnalyticsPanel)}
+                title="Analytics"
+              >
+                <BarChart3 className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 flex-shrink-0"
+                onClick={() => useAppStore.getState().setCurrentView('channels')}
+                title="Configure channels"
+              >
+                <Settings className="size-3.5" />
+              </Button>
             </div>
 
             {/* Conversation List */}
@@ -782,8 +711,11 @@ export function OmnichannelView() {
             </ScrollArea>
           </div>
 
-          {/* ── Middle Column: Message Thread ── */}
-          <div className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-slate-950">
+          {/* ── Middle Column: Message Thread ──
+              Fills 100% height between app header and viewport bottom.
+              Conversation tabs pinned top (flex-shrink-0), messages scroll
+              (flex-1 overflow-y-auto), input pinned bottom (flex-shrink-0). */}
+          <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-slate-50 dark:bg-slate-950">
             {/* ── Tabbed Conversation Switcher ── */}
             {openTabs.length > 0 && (
               <div className="flex-shrink-0 border-b bg-background px-2 flex items-center gap-0.5 overflow-x-auto scrollbar-none">
@@ -1060,8 +992,10 @@ export function OmnichannelView() {
             )}
           </div>
 
-          {/* ── Right Column: Details Panel ── */}
-          <div className="w-72 flex-shrink-0 border-l bg-background hidden lg:flex flex-col">
+          {/* ── Right Column: Details Panel ──
+              Aligned with left + center columns (same top Y). Scrolls
+              independently when content overflows. */}
+          <div className="w-72 flex-shrink-0 border-l bg-background hidden lg:flex flex-col min-h-0">
             {selectedConversation ? (
               <ScrollArea className="flex-1">
                 <div className="p-4 space-y-4">
