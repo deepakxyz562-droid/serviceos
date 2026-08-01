@@ -13,7 +13,7 @@ export default function MarketplaceLoading() {
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
+        <div className="flex h-14 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2">
             <Skeleton className="h-8 w-8 rounded-lg" />
             <Skeleton className="h-4 w-24" />
@@ -25,7 +25,7 @@ export default function MarketplaceLoading() {
       {/* Hero */}
       <section className="relative overflow-hidden border-b">
         <div className="absolute inset-0 -z-10 bg-gradient-to-br from-emerald-50 via-teal-50/40 to-cyan-50 dark:from-emerald-950/30 dark:via-teal-950/20 dark:to-cyan-950/20" />
-        <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16 text-center">
+        <div className="w-full max-w-5xl px-4 py-12 sm:px-6 sm:py-16 text-center mx-auto">
           <Skeleton className="mx-auto h-6 w-64 rounded-full" />
           <Skeleton className="mx-auto mt-4 h-10 w-3/4 max-w-2xl" />
           <Skeleton className="mx-auto mt-3 h-5 w-2/3 max-w-xl" />
@@ -35,7 +35,7 @@ export default function MarketplaceLoading() {
       </section>
 
       {/* Main grid */}
-      <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-8 flex-1">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-8 flex-1">
         <div className="lg:grid lg:grid-cols-[260px_1fr] lg:gap-8">
           {/* Sidebar skeleton */}
           <aside className="hidden lg:block">

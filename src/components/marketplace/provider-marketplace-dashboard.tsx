@@ -57,6 +57,7 @@ import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
+import { ListingProviderDashboard } from '@/components/marketplace/listing-provider-dashboard';
 
 // ─── API helpers ────────────────────────────────────────────────────────────
 
@@ -2079,12 +2080,26 @@ function EmergencyStatusTracker({
 export function ProviderMarketplaceDashboard() {
   const [tab, setTab] = useState<string>('overview');
   const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const tenant = useAppStore((s) => s.auth?.tenant);
 
   // Cross-view navigation: switches to the named sidebar view (e.g. 'billing',
   // 'settings'). Used by the eligibility card's per-gate CTAs.
   const navigate = useCallback((view: string) => {
     setCurrentView(view as any);
   }, [setCurrentView]);
+
+  // Listing-only providers (signupMode='listing_only' / listingTier=
+  // 'claimed_free') get the simplified 2-tab dashboard instead of the full
+  // 6-tab CRM dashboard. They can upgrade to CRM from the upsell banner.
+  // NOTE: this early return must come AFTER all hook calls (useState,
+  // useAppStore, useCallback above) to respect the Rules of Hooks.
+  const isListingOnly =
+    tenant?.signupMode === 'listing_only' ||
+    tenant?.listingTier === 'claimed_free';
+
+  if (isListingOnly) {
+    return <ListingProviderDashboard />;
+  }
 
   const showOptInTab = tab === 'opt-in';
 
