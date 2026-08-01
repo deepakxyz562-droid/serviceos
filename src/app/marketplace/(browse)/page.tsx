@@ -412,6 +412,7 @@ export default async function MarketplaceBrowsePage({
             verticals={VERTICALS}
             activeVertical={verticalFilter}
             activeIndustry={industryFilter}
+            verticalGroups={verticalGroups}
           />
 
           {/* Main column — ONLY THIS PROVIDER LIST AREA SCROLLS */}

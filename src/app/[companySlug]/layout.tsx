@@ -1,22 +1,27 @@
-import type { Metadata } from 'next'
-
 /**
  * Layout for all /{companySlug}/* routes.
  *
- * Most routes here are auth-gated screens (admin login, customer login,
- * employee login, accept-invite) that should never be indexed.
+ * This layout wraps TWO kinds of pages:
  *
- * However, the public-facing business hub also lives under this route tree
- * at /{industry}/{city}/{slug}. That page sets its own `robots` metadata in
- * generateMetadata() (based on the "rich enough" indexability rule), which
- * takes precedence over this layout-level default. So we set a conservative
- * noindex here as the fallback, and the public page overrides it when the
- * business profile is rich enough to index.
+ *   1. Auth-gated screens (login, employee, accept-invite) — these live
+ *      under the `(auth)` route group which has its OWN layout that sets
+ *      `robots: { index: false, follow: false }`. They must never be
+ *      indexed.
+ *
+ *   2. The public-facing business hub at /{industry}/{city}/{slug} — this
+ *      page sets its own `robots` metadata in generateMetadata() based on
+ *      the "rich enough" indexability rule (isIndexable). It should be
+ *      indexable when the profile is rich enough.
+ *
+ * We deliberately do NOT set a blanket `robots: noindex` here anymore.
+ * Previously, a conservative noindex fallback was set at this level, with
+ * the expectation that the public page's generateMetadata() would override
+ * it. That worked but was fragile — any future code path where the public
+ * page didn't explicitly set `robots` would silently be blocked from
+ * indexing. Now the noindex is scoped precisely to the auth route group,
+ * and the public page is indexable by default (controlled by its own
+ * generateMetadata).
  */
-export const metadata: Metadata = {
-  robots: { index: false, follow: false },
-}
-
 export default function CompanySlugLayout({
   children,
 }: {

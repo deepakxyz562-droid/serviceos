@@ -11,7 +11,7 @@ import { CompanyLoginPageClient } from '@/components/auth/company-login-page-cli
  * Resolves the slug, renders an emerald-accented enterprise auth card, and
  * submits credentials via /api/auth/company-login with role='admin'.
  *
- * noindex is set in [companySlug]/layout.tsx (auth routes must never be indexed).
+ * noindex is set in [companySlug]/(auth)/layout.tsx (auth routes must never be indexed).
  */
 export default function CompanyLoginPage() {
   return (

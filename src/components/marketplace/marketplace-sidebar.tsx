@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Building2, ShieldCheck, Star, Zap, CheckCircle2, Wallet } from 'lucide-react';
+import { Building2, ShieldCheck, Star, Zap, CheckCircle2, Wallet, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMarketplaceSearch } from './use-marketplace-search';
 import type { ProviderListItem } from './types';
@@ -13,24 +13,40 @@ import { getIndustry, VERTICALS } from '@/lib/industry-catalog';
  * -------------------
  * Left sidebar for the marketplace browse page. Three sections:
  *
- *   1. CATEGORIES — vertical filter links (server-crawlable <a> tags) with
- *      live provider counts. Active vertical is highlighted.
+ *   1. CATEGORIES — vertical filter with COLLAPSIBLE subcategories (industries).
+ *      Clicking a vertical name instantly filters the grid (client-side, no
+ *      page reload) via the shared Zustand store. Clicking the chevron toggles
+ *      the subcategory list. Each subcategory (industry) is also an instant
+ *      filter. The <a> hrefs remain for SEO crawlability (progressive
+ *      enhancement: without JS, the link navigates normally; with JS,
+ *      preventDefault + store update = instant filter).
+ *
  *   2. TRUST FILTERS — three toggle checkboxes (Fully verified only /
  *      Rating 4.8+ / 24/7 emergency dispatch) that instantly filter the grid
  *      via the shared Zustand store.
+ *
  *   3. STATS CARD — "Four-gate verification" explainer with 4 network metrics
  *      (active providers, avg rating, escrow-protected, median response).
- *
- * This is a client component because the trust filters write to the Zustand
- * store. The category links stay as plain <a> tags so search engines can
- * crawl the facet URLs.
  */
+
+export interface SidebarIndustry {
+  id: string;
+  name: string;
+  emoji: string;
+}
+
+export interface SidebarVerticalGroup {
+  vertical: { id: string; name: string; icon: string; description: string };
+  industries: SidebarIndustry[];
+}
 
 interface MarketplaceSidebarProps {
   providers: ProviderListItem[];
   verticals: readonly Array<{ id: string; name: string; icon: string; description: string }>;
   activeVertical: string | null;
   activeIndustry: string | null;
+  /** Pre-computed vertical → industries groups (from the server page). */
+  verticalGroups?: SidebarVerticalGroup[];
 }
 
 export function MarketplaceSidebar({
@@ -38,6 +54,7 @@ export function MarketplaceSidebar({
   verticals,
   activeVertical,
   activeIndustry,
+  verticalGroups,
 }: MarketplaceSidebarProps) {
   const trustFullyVerified = useMarketplaceSearch((s) => s.trustFullyVerified);
   const trustRatingHigh = useMarketplaceSearch((s) => s.trustRatingHigh);
@@ -45,6 +62,21 @@ export function MarketplaceSidebar({
   const toggleTrustFullyVerified = useMarketplaceSearch((s) => s.toggleTrustFullyVerified);
   const toggleTrustRatingHigh = useMarketplaceSearch((s) => s.toggleTrustRatingHigh);
   const toggleTrustEmergency = useMarketplaceSearch((s) => s.toggleTrustEmergency);
+
+  // Vertical/industry filter state from the shared store (instant filtering).
+  const storeVertical = useMarketplaceSearch((s) => s.verticalFilter);
+  const storeIndustry = useMarketplaceSearch((s) => s.industryFilter);
+  const selectVertical = useMarketplaceSearch((s) => s.selectVertical);
+  const selectIndustry = useMarketplaceSearch((s) => s.selectIndustry);
+  const expandedVerticals = useMarketplaceSearch((s) => s.expandedVerticals);
+  const toggleVerticalExpanded = useMarketplaceSearch((s) => s.toggleVerticalExpanded);
+
+  // The store is the source of truth for the active filter. On the very first
+  // render (before the browser component seeds the store from URL params), we
+  // fall back to the server-provided activeVertical/activeIndustry props so
+  // the sidebar highlights the correct item during SSR + initial hydration.
+  const currentVertical = storeVertical ?? activeVertical;
+  const currentIndustry = storeIndustry ?? activeIndustry;
 
   // Compute network stats from the full provider list
   const totalProviders = providers.length;
@@ -65,6 +97,17 @@ export function MarketplaceSidebar({
     : 0;
   const medianResponseLabel = medianResponse < 60 ? `${medianResponse}m` : `${Math.floor(medianResponse / 60)}h`;
 
+  // Helper: count providers in a vertical
+  const countForVertical = (verticalId: string) =>
+    providers.filter((p) => {
+      const meta = p.industry ? getIndustry(p.industry) : undefined;
+      return meta?.vertical === verticalId;
+    }).length;
+
+  // Helper: count providers in an industry
+  const countForIndustry = (industryId: string) =>
+    providers.filter((p) => (p.industry ?? '').toLowerCase().trim() === industryId).length;
+
   return (
     <aside className="hidden lg:flex w-[280px] shrink-0 h-full flex-col gap-3 overflow-hidden select-none pl-3 sm:pl-3 lg:pl-3 py-4 pr-3 border-r border-border/40">
       {/* ─── Scrollable content region ──────────────────────────────────── */}
@@ -78,9 +121,13 @@ export function MarketplaceSidebar({
             <li>
               <Link
                 href="/marketplace"
+                onClick={(e) => {
+                  e.preventDefault();
+                  selectVertical(null);
+                }}
                 className={cn(
                   'flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors',
-                  !activeVertical && !activeIndustry
+                  !currentVertical && !currentIndustry
                     ? 'bg-emerald-50 font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                 )}
@@ -92,28 +139,97 @@ export function MarketplaceSidebar({
               </Link>
             </li>
             {verticals.map((vertical) => {
-              const count = providers.filter((p) => {
-                const meta = p.industry ? getIndustry(p.industry) : undefined;
-                return meta?.vertical === vertical.id;
-              }).length;
-              const active = activeVertical === vertical.id;
+              const count = countForVertical(vertical.id);
+              const isActive = currentVertical === vertical.id && !currentIndustry;
+              const isActiveWithIndustry = currentVertical === vertical.id && !!currentIndustry;
+              // A vertical is expanded if the user explicitly toggled it OR if
+              // it's the active vertical (auto-expand so the user sees their
+              // current subcategory context).
+              const isExpanded = expandedVerticals[vertical.id] ?? isActiveWithIndustry ?? false;
+              // Find the industries for this vertical from the pre-computed groups.
+              const group = verticalGroups?.find((g) => g.vertical.id === vertical.id);
+              const industries = group?.industries ?? [];
+
               return (
                 <li key={vertical.id}>
-                  <Link
-                    href={`/marketplace?vertical=${vertical.id}`}
-                    className={cn(
-                      'flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors',
-                      active
-                        ? 'bg-emerald-50 font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                    )}
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span aria-hidden className="text-base">{vertical.icon}</span>
-                      <span className="truncate">{vertical.name}</span>
-                    </span>
-                    <span className="shrink-0 text-xs">{count}</span>
-                  </Link>
+                  <div className="flex items-stretch">
+                    {/* Main vertical link — click filters by this vertical */}
+                    <Link
+                      href={`/marketplace?vertical=${vertical.id}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        selectVertical(vertical.id);
+                      }}
+                      className={cn(
+                        'flex flex-1 items-center justify-between rounded-md px-3 py-2 text-sm transition-colors min-w-0',
+                        isActive
+                          ? 'bg-emerald-50 font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                          : isActiveWithIndustry
+                            ? 'font-medium text-foreground'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                      )}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span aria-hidden className="text-base shrink-0">{vertical.icon}</span>
+                        <span className="truncate">{vertical.name}</span>
+                      </span>
+                      <span className="shrink-0 text-xs ml-2">{count}</span>
+                    </Link>
+                    {/* Expand/collapse chevron — only show if this vertical has industries */}
+                    {industries.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleVerticalExpanded(vertical.id);
+                        }}
+                        aria-label={isExpanded ? `Collapse ${vertical.name} subcategories` : `Expand ${vertical.name} subcategories`}
+                        aria-expanded={isExpanded}
+                        className="flex items-center justify-center w-7 shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                      >
+                        <ChevronRight
+                          className={cn(
+                            'h-4 w-4 transition-transform duration-150',
+                            isExpanded && 'rotate-90',
+                          )}
+                        />
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {/* Subcategory (industry) list — shown when expanded */}
+                  {isExpanded && industries.length > 0 ? (
+                    <ul className="mt-0.5 mb-1 ml-4 space-y-0.5 border-l border-border/60 pl-2">
+                      {industries.map((ind) => {
+                        const indCount = countForIndustry(ind.id);
+                        const indActive = currentIndustry === ind.id;
+                        return (
+                          <li key={ind.id}>
+                            <Link
+                              href={`/marketplace?vertical=${vertical.id}&industry=${ind.id}`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                selectIndustry(ind.id, vertical.id);
+                              }}
+                              className={cn(
+                                'flex items-center justify-between rounded-md px-2.5 py-1.5 text-[13px] transition-colors',
+                                indActive
+                                  ? 'bg-emerald-50 font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                              )}
+                            >
+                              <span className="flex min-w-0 items-center gap-1.5">
+                                <span aria-hidden className="text-xs">{ind.emoji}</span>
+                                <span className="truncate">{ind.name}</span>
+                              </span>
+                              <span className="shrink-0 text-[11px] text-muted-foreground/70">{indCount}</span>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
                 </li>
               );
             })}

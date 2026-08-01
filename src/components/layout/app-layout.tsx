@@ -1,6 +1,6 @@
 'use client';
 
-import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect } from 'react';
+import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect, useState } from 'react';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AppSidebar } from '@/components/layout/sidebar';
@@ -379,14 +379,54 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     return () => { root.classList.remove('dark'); };
   }, [darkMode]);
 
-  // Resolve the active view component.
-  // For `marketplaceDashboard`, use the smart router that picks between
-  // ListingProviderDashboard (listing-only) and ProviderMarketplaceDashboard
-  // (CRM) based on the tenant's signupMode.
-  const ActiveView =
-    currentView === 'marketplaceDashboard'
-      ? MarketplaceDashboardRouter
-      : viewComponents[currentView] || DashboardView;
+  // ─── Keep-alive view cache (Tier 2 performance fix) ─────────────────────
+  // Instead of unmounting the previous view on every menu switch, we keep
+  // the last N visited views mounted in hidden divs. Switching back to a
+  // previously-visited view is INSTANT — no re-mount, no re-fetch, no
+  // spinner. Only the active view is visible; inactive cached views are
+  // `display: none`.
+  //
+  // This solves the "one menu to another menu click is too slow" issue.
+  // Combined with the prefetch-on-hover in the sidebar (Tier 1), view
+  // switching is now near-instantaneous for all subsequent visits.
+  //
+  // Implementation: we use the "adjusting state when a prop changes" pattern
+  // from the React docs. When currentView changes, we update the viewHistory
+  // state SYNCHRONOUSLY during render (not in useEffect). React re-renders
+  // immediately with the new state, without a commit phase. This is the
+  // recommended pattern and avoids both set-state-in-effect and ref-during-
+  // render lint errors.
+  // See: https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const MAX_CACHED_VIEWS = 5;
+  const [viewHistory, setViewHistory] = useState<string[]>([currentView]);
+
+  // If currentView has changed (or is not at the end of the history),
+  // synchronously update the history during render. React will immediately
+  // re-render with the new state — no extra commit, no cascading renders.
+  if (viewHistory[viewHistory.length - 1] !== currentView) {
+    const filtered = viewHistory.filter(v => v !== currentView);
+    const next = [...filtered, currentView];
+    setViewHistory(
+      next.length > MAX_CACHED_VIEWS
+        ? next.slice(next.length - MAX_CACHED_VIEWS)
+        : next,
+    );
+  }
+  const effectiveHistory = viewHistory;
+
+  // Helper: render a view by ID. Handles the special marketplaceDashboard
+  // case (uses a router component, not a lazy component).
+  const renderView = (viewId: string) => {
+    if (viewId === 'marketplaceDashboard') {
+      return <MarketplaceDashboardRouter />;
+    }
+    const Component = viewComponents[viewId] || DashboardView;
+    return <Component />;
+  };
+
+  // Helper: check if a view needs full-height layout (no padding).
+  const isViewFullHeight = (viewId: string) =>
+    viewId === 'canvas' || viewId === 'omnichannel';
 
   // Canvas view needs no padding for full-screen editor.
   // Omnichannel inbox also needs no padding — it's a full-height 3-column
@@ -445,11 +485,38 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
                 : 'p-4 lg:p-6 bg-background',
           )}
         >
-          <ViewErrorBoundary>
-            <Suspense fallback={<ViewLoader />}>
-              <ActiveView />
-            </Suspense>
-          </ViewErrorBoundary>
+          {/* ── Keep-alive view cache ──────────────────────────────────────
+              Render ALL visited views, but only show the active one. Hidden
+              views stay mounted (preserving their state + scroll position +
+              data) so switching back is instant. Each view gets its own
+              ErrorBoundary + Suspense so a crash in one view doesn't take
+              down the others, and a slow chunk load only shows a spinner
+              for the ACTIVE view (hidden views load silently). */}
+          {effectiveHistory.map(viewId => {
+            const isActive = viewId === currentView;
+            const viewIsFullHeight = isViewFullHeight(viewId);
+            return (
+              <div
+                key={viewId}
+                className={cn(
+                  // Active: visible. For full-height views, use flex-1 to
+                  // fill the main area. For normal views, no extra class
+                  // (block layout, sizes to content, main scrolls).
+                  // Inactive: hidden (display: none, but stays mounted).
+                  isActive
+                    ? viewIsFullHeight ? 'flex-1 min-h-0 flex flex-col' : ''
+                    : 'hidden',
+                )}
+                aria-hidden={!isActive}
+              >
+                <ViewErrorBoundary>
+                  <Suspense fallback={isActive ? <ViewLoader /> : null}>
+                    {renderView(viewId)}
+                  </Suspense>
+                </ViewErrorBoundary>
+              </div>
+            );
+          })}
         </main>
 
         {/* Mobile bottom nav — `position: fixed; bottom: 0` so it touches the

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '@/store/app-store';
 import { useBelowLg } from '@/hooks/use-mobile';
+import { prefetchView } from '@/lib/view-prefetch';
 import type { ViewType } from '@/types/workflow';
 import {
   LayoutDashboard,
@@ -624,6 +625,8 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       <button
         key={item.view}
         onClick={() => handleNavClick(item.view)}
+        onMouseEnter={() => prefetchView(item.view)}
+        onFocus={() => prefetchView(item.view)}
         className={cn(
           'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150',
           isMobile || leftSidebarOpen ? 'h-9 px-3 gap-3' : 'h-9 justify-center',

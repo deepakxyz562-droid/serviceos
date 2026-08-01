@@ -39,7 +39,7 @@ import {
 import { ProviderCard } from './provider-card';
 import { useMarketplaceSearch, type MarketplaceSortKey } from './use-marketplace-search';
 import type { ProviderListItem } from './types';
-import { getIndustry } from '@/lib/industry-catalog';
+import { getIndustry, VERTICALS } from '@/lib/industry-catalog';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import { cn } from '@/lib/utils';
 
@@ -80,8 +80,13 @@ export function MarketplaceBrowser({
   // Debounced filter values (local) — derived from the shared store inputs.
   const [searchQuery, setSearchQuery] = React.useState(initialFilters.search ?? '');
   const [cityFilter, setCityFilter] = React.useState(initialFilters.city ?? '');
-  const [verticalFilter, setVerticalFilter] = React.useState(initialFilters.vertical ?? null);
-  const [industryFilter, setIndustryFilter] = React.useState(initialFilters.industry ?? null);
+  // verticalFilter / industryFilter now live in the shared Zustand store so
+  // the sidebar can update them instantly (client-side, no page reload).
+  // We seed them from URL params on first mount below.
+  const verticalFilter = useMarketplaceSearch((s) => s.verticalFilter);
+  const industryFilter = useMarketplaceSearch((s) => s.industryFilter);
+  const selectVertical = useMarketplaceSearch((s) => s.selectVertical);
+  const selectIndustry = useMarketplaceSearch((s) => s.selectIndustry);
   // Sort now lives in the shared Zustand store so the breadcrumb Sort
   // dropdown (rendered by the server page) and this grid stay in sync.
   const sort = useMarketplaceSearch((s) => s.sort);
@@ -109,14 +114,36 @@ export function MarketplaceBrowser({
   }, [cityInput]);
 
   // Seed the shared store from URL params on first mount so a deep-link
-  // like /marketplace?search=plumbing pre-fills the hero search box. Runs
-  // after hydration to avoid a server/client value mismatch.
+  // like /marketplace?search=plumbing pre-fills the hero search box. Also
+  // seeds vertical/industry filters from the URL so deep-links like
+  // /marketplace?vertical=home-property&industry=hvac work. Runs after
+  // hydration to avoid a server/client value mismatch.
   React.useEffect(() => {
     if (initialFilters.search && !searchInput) {
       setSearchInput(initialFilters.search);
     }
     if (initialFilters.city && !cityInput) {
       setCityInput(initialFilters.city);
+    }
+    // Seed vertical/industry from URL only if the store doesn't already
+    // have a value (avoids overwriting a user's in-progress filter on a
+    // React re-mount).
+    if (initialFilters.vertical && !verticalFilter) {
+      selectVertical(initialFilters.vertical);
+    }
+    if (initialFilters.industry && !industryFilter) {
+      // We need the parent vertical for the industry. If the URL has both,
+      // use the vertical from the URL. Otherwise, derive it from the
+      // industry catalog.
+      const parentVertical = initialFilters.vertical
+        ? initialFilters.vertical
+        : (() => {
+            const meta = getIndustry(initialFilters.industry);
+            return meta?.vertical ?? null;
+          })();
+      if (parentVertical) {
+        selectIndustry(initialFilters.industry, parentVertical);
+      }
     }
     // Intentionally run once on mount — we only want to seed from the URL
     // the first time this component mounts, not on every store change.
@@ -150,13 +177,12 @@ export function MarketplaceBrowser({
     window.history.replaceState({}, '', url.toString());
   }, [searchQuery, cityFilter, verticalFilter, industryFilter]);
 
-  // NOTE: sidebar vertical/industry links are NOT intercepted. They're
-  // server-rendered <a> tags with real crawlable hrefs (e.g.
-  // /marketplace?vertical=home-property). Letting them navigate normally
-  // means the server re-renders the sidebar with the active vertical's
-  // sub-industries expanded — which is important UX. The search input,
-  // city input, sort, and load-more are all client-side instant (no
-  // reload), which is what Issue 2 asked for.
+  // NOTE: sidebar vertical/industry links are NOW intercepted client-side.
+  // The sidebar uses onClick handlers that call selectVertical() /
+  // selectIndustry() in the Zustand store — the grid re-filters instantly
+  // with NO page reload. The <a> tags remain as crawlable hrefs for SEO
+  // (progressive enhancement: without JS, the link navigates normally;
+  // with JS, preventDefault + store update = instant filter).
 
   // ── Compute filtered + sorted list ─────────────────────────────────────
   const filtered = React.useMemo(() => {
@@ -330,16 +356,21 @@ export function MarketplaceBrowser({
     });
   if (verticalFilter) {
     const v = verticalFilter;
+    const vName = VERTICALS.find((vv) => vv.id === v)?.name ?? v;
     activeChips.push({
-      label: `Vertical: ${v}`,
-      onClear: () => setVerticalFilter(null),
+      label: `Category: ${vName}`,
+      onClear: () => selectVertical(null),
     });
   }
   if (industryFilter) {
     const meta = getIndustry(industryFilter);
     activeChips.push({
-      label: `Industry: ${meta?.name ?? industryFilter}`,
-      onClear: () => setIndustryFilter(null),
+      label: `Subcategory: ${meta?.name ?? industryFilter}`,
+      onClear: () => {
+        // Clearing the industry filter keeps the vertical filter active
+        // (the user is still browsing within that vertical).
+        selectVertical(verticalFilter);
+      },
     });
   }
 
@@ -348,8 +379,7 @@ export function MarketplaceBrowser({
     setSearchQuery('');
     setCityInput('');
     setCityFilter('');
-    setVerticalFilter(null);
-    setIndustryFilter(null);
+    selectVertical(null);
   };
 
   return (
