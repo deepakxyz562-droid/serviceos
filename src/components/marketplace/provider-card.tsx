@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getIndustry } from '@/lib/industry-catalog';
+import { useAppStore } from '@/store/app-store';
 import type { ProviderListItem, ProviderProfile } from './types';
 
 /**
@@ -201,6 +202,10 @@ export function ProviderCard({
   const listingTier = listItem.listingTier ?? 'none';
   const isClaimedFree = listingTier === 'claimed_free';
 
+  // Auth check — Claimed/Unclaimed pills only show to authenticated users.
+  // Anonymous marketplace visitors shouldn't see internal claim status.
+  const isAuthenticated = useAppStore((s) => s.auth.isAuthenticated);
+
   const gates = buildVerificationGates(provider);
   const allGatesPassed = gates.every((g) => g.passed);
   const avatar = avatarColors(provider.name);
@@ -268,17 +273,20 @@ export function ProviderCard({
             ) : null}
           </p>
         </div>
-        {/* Claimed / Unclaimed pill */}
-        <span
-          className={cn(
-            'shrink-0 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider',
-            claimed
-              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
-              : 'bg-muted text-muted-foreground',
-          )}
-        >
-          {claimed ? 'Claimed' : 'Unclaimed'}
-        </span>
+        {/* Claimed / Unclaimed pill — only visible to authenticated users.
+            Anonymous marketplace visitors don't see internal claim status. */}
+        {isAuthenticated ? (
+          <span
+            className={cn(
+              'shrink-0 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider',
+              claimed
+                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+                : 'bg-muted text-muted-foreground',
+            )}
+          >
+            {claimed ? 'Claimed' : 'Unclaimed'}
+          </span>
+        ) : null}
       </div>
 
       {/* ─── Stats bar (3 columns: rating | jobs | response) ───────────────── */}
@@ -349,8 +357,8 @@ export function ProviderCard({
         )}
       </div>
 
-      {/* ─── Claimed-free upgrade hint (subtle banner) ─────────────────────── */}
-      {isClaimedFree ? (
+      {/* ─── Claimed-free upgrade hint (subtle banner) — auth only ──────────── */}
+      {isAuthenticated && isClaimedFree ? (
         <div className="border-t border-dashed border-border bg-muted/20 px-4 py-2 text-center text-[11px] text-muted-foreground">
           Claimed listing · Upgrade to receive online bookings
         </div>
@@ -381,6 +389,8 @@ function MinimalCard({
   const isEmergency = provider.emergencyServiceAvailable ?? false;
   const profileHref = href ?? '#';
   const avatar = avatarColors(provider.name);
+  // Auth check — Unclaimed pill only shows to authenticated users.
+  const isAuthenticated = useAppStore((s) => s.auth.isAuthenticated);
   const handleView = () => {
     if (onViewProfile) onViewProfile(provider);
   };
@@ -432,9 +442,12 @@ function MinimalCard({
             ) : null}
           </p>
         </div>
-        <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-          Unclaimed
-        </span>
+        {/* Unclaimed pill — only visible to authenticated users */}
+        {isAuthenticated ? (
+          <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Unclaimed
+          </span>
+        ) : null}
       </div>
 
       {/* Minimal stats: just rating + reviews (single row, no dividers) */}

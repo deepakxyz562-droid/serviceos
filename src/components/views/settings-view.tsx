@@ -619,7 +619,7 @@ export function SettingsView() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="w-full">
       {/* Page header — shows the active section's icon + label + description */}
       <header className="mb-6">
         <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2.5">
@@ -642,7 +642,7 @@ export function SettingsView() {
           activeSectionId={activeSection}
           onSelect={setActiveSection}
         />
-        <main className={cn('flex-1 min-w-0', activeConfig?.fullWidth ? '' : 'max-w-4xl')}>
+        <main className="flex-1 min-w-0">
           {renderActiveSection()}
         </main>
       </div>
