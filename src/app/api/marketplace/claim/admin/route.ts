@@ -7,21 +7,29 @@
  *   { requestId: string, action: 'approve'|'reject', reviewNote?: string }
  *
  * On approve:
- *   - Set tenant.claimed = true, claimedById = claim.claimantUserId,
- *     claimedAt = now, listingTier = 'claimed_free'.
- *   - Set claimRequest.status = 'approved', reviewedById, reviewedAt, reviewNote.
+ *   - Generate a completionToken (single-use, for the registration link).
+ *   - Set tenant.claimed = true, claimedById, claimedAt, listingTier='claimed_free'.
+ *   - Set claimRequest.status = 'approved', completionToken, reviewedById, reviewedAt.
+ *   - Send CLAIM_APPROVED email to claimantEmail with the registration link.
  *
  * On reject:
  *   - Set claimRequest.status = 'rejected', reviewedById, reviewedAt, reviewNote.
  *   - Tenant stays unclaimed.
+ *   - Send CLAIM_REJECTED email to claimantEmail (no registration link).
  *
  * Auth: requires authenticated user with role 'superadmin'.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, getAppUrl } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import {
+  generateClaimToken,
+  sendClaimApprovedEmail,
+  sendClaimRejectedEmail,
+  type ClaimEmailContext,
+} from '@/lib/claim-emails';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +62,9 @@ export async function POST(request: NextRequest) {
 
     const claim = await db.claimRequest.findUnique({
       where: { id: requestId },
+      include: {
+        tenant: { select: { id: true, name: true } },
+      },
     });
     if (!claim) {
       return NextResponse.json({ error: 'Claim request not found' }, { status: 404 });
@@ -64,15 +75,26 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    if (!claim.claimantEmail) {
+      return NextResponse.json(
+        { error: 'Claim has no claimant email — cannot notify the user' },
+        { status: 400 },
+      );
+    }
+
+    const appUrl = getAppUrl(request);
 
     if (action === 'approve') {
+      // Generate a single-use completion token for the registration link
+      const completionToken = generateClaimToken();
+
       await db.$transaction([
         db.tenant.update({
           where: { id: claim.tenantId },
           data: {
             claimed: true,
             claimedAt: new Date(),
-            claimedById: claim.claimantUserId,
+            claimedById: claim.claimantUserId || undefined,
             listingTier: 'claimed_free',
           },
         }),
@@ -80,17 +102,35 @@ export async function POST(request: NextRequest) {
           where: { id: requestId },
           data: {
             status: 'approved',
+            completionToken,
             reviewedById: user.id,
             reviewedAt: new Date(),
             reviewNote: reviewNote ?? null,
           },
         }),
       ]);
+
+      // Send approval email with the registration link
+      const emailCtx: ClaimEmailContext = {
+        businessName: claim.tenant.name,
+        claimantEmail: claim.claimantEmail,
+        requestId: claim.id,
+        completionToken,
+        appUrl,
+      };
+      await sendClaimApprovedEmail(emailCtx);
+
+      logger.info(
+        { component: 'claim-admin', requestId, action: 'approve' },
+        'Claim approved — email sent to claimant',
+      );
+
       return NextResponse.json({
         status: 'approved',
-        message: 'Claim approved. Ownership transferred to the claimant.',
+        message: 'Claim approved. Approval email sent to the claimant.',
       });
     } else {
+      // ── Reject ──────────────────────────────────────────────────────────
       await db.claimRequest.update({
         where: { id: requestId },
         data: {
@@ -100,9 +140,25 @@ export async function POST(request: NextRequest) {
           reviewNote: reviewNote ?? null,
         },
       });
+
+      // Send rejection email (no registration link)
+      const emailCtx: ClaimEmailContext = {
+        businessName: claim.tenant.name,
+        claimantEmail: claim.claimantEmail,
+        requestId: claim.id,
+        appUrl,
+        reviewNote: reviewNote ?? null,
+      };
+      await sendClaimRejectedEmail(emailCtx);
+
+      logger.info(
+        { component: 'claim-admin', requestId, action: 'reject' },
+        'Claim rejected — rejection email sent to claimant',
+      );
+
       return NextResponse.json({
         status: 'rejected',
-        message: 'Claim rejected. The listing remains unclaimed.',
+        message: 'Claim rejected. Rejection email sent to the claimant.',
       });
     }
   } catch (err) {
@@ -117,7 +173,14 @@ export async function POST(request: NextRequest) {
 /**
  * GET /api/marketplace/claim/admin
  * ---------------------------------
- * SuperAdmin-only: list all pending claim requests for the review queue.
+ * SuperAdmin-only: list all claim requests for the review queue.
+ *
+ * Query params:
+ *   ?status=pending|approved|rejected|auto_approved|completed|all
+ *   (default: 'pending')
+ *
+ * Returns the claim with tenant info and parsed verificationData so the
+ * admin UI can display the submitted Google URL, document URLs, and notes.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -139,14 +202,28 @@ export async function GET(request: NextRequest) {
       where: statusFilter === 'all' ? {} : { status: statusFilter },
       include: {
         tenant: {
-          select: { id: true, name: true, slug: true, city: true, state: true, phone: true, email: true },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            city: true,
+            state: true,
+            phone: true,
+            email: true,
+          },
         },
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
 
-    return NextResponse.json({ claims, total: claims.length });
+    // Parse verificationData JSON for the admin UI
+    const claimsWithParsedData = claims.map((c) => ({
+      ...c,
+      verificationData: JSON.parse(c.verificationData || '{}'),
+    }));
+
+    return NextResponse.json({ claims: claimsWithParsedData, total: claims.length });
   } catch (err) {
     logger.error({ component: 'claim-admin', err }, 'Failed to list claims');
     return NextResponse.json(

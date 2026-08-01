@@ -162,9 +162,6 @@ export function ListingProviderDashboard() {
           <TabsTrigger value="services" className="gap-1.5">
             <Wrench className="size-3.5" /> Services
           </TabsTrigger>
-          <TabsTrigger value="settings" className="gap-1.5">
-            <Settings className="size-3.5" /> Settings
-          </TabsTrigger>
         </TabsList>
 
         {/* Tab 1: Marketplace Page (reuses PublicHubTab) */}
@@ -203,23 +200,6 @@ export function ListingProviderDashboard() {
             </CardContent>
           </Card>
           <ServiceCatalogView />
-        </TabsContent>
-
-        {/* Tab 3: Settings (business name, phone, category, city, deactivate) */}
-        <TabsContent value="settings" className="mt-4">
-          {loadingSnap ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <Loader2 className="size-5 animate-spin mr-2" /> Loading…
-            </div>
-          ) : tenantSnap ? (
-            <SettingsTab tenant={tenantSnap} onSaved={loadSnapshot} />
-          ) : (
-            <Card>
-              <CardContent className="p-6 text-sm text-muted-foreground">
-                Could not load your business details. Please refresh the page.
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
       </Tabs>
     </div>

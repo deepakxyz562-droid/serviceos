@@ -33,7 +33,6 @@ import { Button } from '@/components/ui/button';
 interface ClaimBusinessBannerProps {
   tenantId: string;
   tenantName: string;
-  tenantPhone?: string | null;
   tenantEmail?: string | null;
   tenantCity?: string | null;
   tenantState?: string | null;
@@ -50,7 +49,6 @@ interface ClaimBusinessBannerProps {
 export function ClaimBusinessBanner({
   tenantId,
   tenantName,
-  tenantPhone,
   tenantEmail,
   tenantCity,
   tenantState,
@@ -118,14 +116,9 @@ export function ClaimBusinessBanner({
           onOpenChange={setClaimOpen}
           tenantId={tenantId}
           tenantName={tenantName}
-          tenantPhone={tenantPhone}
           tenantEmail={tenantEmail}
           tenantCity={tenantCity}
           tenantState={tenantState}
-          onSuccess={() => {
-            // Reload the page so the booking panel updates to show the owner's new state
-            if (typeof window !== 'undefined') window.location.reload();
-          }}
         />
       )}
 
@@ -176,8 +169,8 @@ function SignInGateDialog({
         </DialogHeader>
         <div className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
           <ShieldCheck className="mb-1 inline h-3.5 w-3.5 text-emerald-600" />{' '}
-          After signing in, you&rsquo;ll return to this page to complete the claim
-          verification (phone OTP, email code, Google Business Profile, or document upload).
+          After signing in, you&rsquo;ll return to this page to submit your claim
+          (business email + Google Business Profile or document upload).
         </div>
         <DialogFooter className="flex-col gap-2 sm:flex-col">
           <a href={registerHref} className="w-full">

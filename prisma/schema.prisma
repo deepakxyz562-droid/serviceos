@@ -5861,25 +5861,38 @@ model ClaimRequest {
   // The business being claimed (an existing Tenant row — usually an OSM seed
   // with claimed=false, listingTier='free').
   tenantId          String
-  // The user requesting the claim (must be authenticated).
-  claimantUserId    String
+  // The user requesting the claim. For the new email-link flow this may be
+  // empty until the claim is "completed" (user creates an account from the
+  // email link). Stored as a plain string (NOT a Prisma relation).
+  claimantUserId    String   @default("")
+  // ── New email-link flow fields ───────────────────────────────────────
+  // The business email the claimant submitted. We send the approval email
+  // here with a registration link. Required for all methods now.
+  claimantEmail     String?
+  // A secure random token used in the registration link
+  // (/?claim=complete&token=xxx). Generated when the claim is approved
+  // (or auto-approved by Google match). Single-use — cleared after completion.
+  completionToken   String?  @unique
+  // When the claimant finished the registration / confirmation step.
+  completedAt       DateTime?
+  // ─────────────────────────────────────────────────────────────────────
   // Verification method chosen by the claimant:
-  //   phone     → OTP sent to the tenant's seeded phone number (instant)
-  //   email     → code sent to an email at the business domain (instant)
-  //   google    → connected Google Business Profile with matching name+address (instant)
+  //   google    → Google Business Profile URL + name + address (auto-approve if ≥80% match)
   //   document  → uploaded business license / utility bill (admin review)
-  verificationMethod String  // phone | email | google | document
+  //   email     → business email only (admin review — legacy/simple path)
+  //   phone     → DEPRECATED (removed for anti-spam). Kept for backward compat.
+  verificationMethod String  // google | document | email | phone
   // Method-specific payload (JSON):
-  //   phone    → { phoneLast4: string, otpVerifiedAt: ISO }
-  //   email    → { email: string, codeVerifiedAt: ISO }
-  //   google   → { gbpUrl: string, gbpName: string, gbpAddress: string, matchScore: number }
+  //   google   → { gbpUrl, gbpName, gbpAddress, matchScore, nameScore, addressScore }
   //   document → { documentUrls: string[], note?: string }
+  //   email    → { note?: string }
   verificationData  String  @default("{}")
   // Review state:
-  //   pending       → awaiting admin review (document method)
-  //   auto_approved → verified instantly, no admin action needed
-  //   approved      → admin manually approved a pending request
-  //   rejected      → admin rejected (or auto-reject on failed verification)
+  //   pending              → awaiting admin review (document / email method)
+  //   auto_approved        → Google match ≥80%, instant approve, email sent
+  //   approved             → admin manually approved; email sent to claimant
+  //   rejected             → admin rejected; rejection email sent (no registration)
+  //   completed            → claimant created account / confirmed; business claimed
   status            String  @default("pending")
   // Optional reason for rejection (set by admin when status='rejected')
   reviewNote        String?
@@ -5893,4 +5906,5 @@ model ClaimRequest {
   @@index([tenantId])
   @@index([claimantUserId])
   @@index([status])
+  @@index([completionToken])
 }

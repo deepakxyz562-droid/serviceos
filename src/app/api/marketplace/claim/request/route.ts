@@ -1,39 +1,47 @@
 /**
  * POST /api/marketplace/claim/request
  * ------------------------------------
- * Start a business-claim flow. The authenticated user clicks "Claim this
- * business" on an unclaimed provider detail page and chooses a verification
- * method (phone / email / google / document).
+ * Start a business-claim flow with the new email-link architecture.
+ *
+ * The claimant submits a single form with:
+ *   - businessEmail (required) — where the approval/registration email goes
+ *   - Optional: Google Business Profile URL + name + address (auto-approve if ≥80% match)
+ *   - Optional: document uploads (admin review path)
+ *
+ * Flow:
+ *   1. If Google data provided AND matchScore ≥ 0.8 → status='auto_approved'
+ *      → generate completionToken, mark tenant claimed, send APPROVED email
+ *      with registration link `/?claim=complete&token=xxx`.
+ *   2. Otherwise → status='pending' (admin review)
+ *      → send UNDER_REVIEW email confirming receipt.
+ *      → Admin reviews; on approve → APPROVED email with token; on reject → REJECTED email.
+ *
+ * Auth: requires authenticated user (the claimant). The claim banner gates
+ * anonymous visitors behind a sign-in dialog before reaching this endpoint.
  *
  * Request body:
- *   { tenantId: string, verificationMethod: 'phone'|'email'|'google'|'document',
- *     verificationData: {...} }
+ *   {
+ *     tenantId: string,
+ *     claimantEmail: string,          // required — business email
+ *     google?: { gbpUrl, gbpName, gbpAddress },
+ *     documents?: { urls: string[], note?: string }
+ *   }
  *
- * Behaviour:
- *   - phone    → generates a 6-digit OTP, sends it via SMS to the tenant's
- *                seeded phone number, returns { requestId, otpSent: true }.
- *                The user then POSTs to /verify-otp with the code.
- *   - email    → generates a 6-digit code, sends it to the tenant's email,
- *                returns { requestId, codeSent: true }.
- *   - google   → expects verificationData.gbpUrl + gbpName + gbpAddress.
- *                Compares name/address similarity to the tenant. If
- *                matchScore >= 0.8 → auto-approve. Otherwise → pending review.
- *   - document → expects verificationData.documentUrls (array of uploaded
- *                file URLs). Always creates a pending request for admin review.
- *
- * Auth: requires authenticated user (the claimant).
+ * Returns: { requestId, status, message }
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, getAppUrl } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import {
+  generateClaimToken,
+  sendClaimApprovedEmail,
+  sendClaimUnderReviewEmail,
+  type ClaimEmailContext,
+} from '@/lib/claim-emails';
 
 export const dynamic = 'force-dynamic';
-
-function generateOtp(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
 
 /**
  * Naive name+address similarity score (0-1). Used for the Google GBP
@@ -49,6 +57,10 @@ function similarity(a: string, b: string): number {
   return union === 0 ? 0 : intersection / union;
 }
 
+function isEmailValid(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthUser();
@@ -60,20 +72,44 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { tenantId, verificationMethod, verificationData } = body as {
+    const {
+      tenantId,
+      claimantEmail,
+      google,
+      documents,
+    } = body as {
       tenantId: string;
-      verificationMethod: 'phone' | 'email' | 'google' | 'document';
-      verificationData: Record<string, unknown>;
+      claimantEmail: string;
+      google?: { gbpUrl: string; gbpName: string; gbpAddress: string };
+      documents?: { urls: string[]; note?: string };
     };
 
-    if (!tenantId || !verificationMethod) {
+    // ── Validate required fields ──────────────────────────────────────────
+    if (!tenantId) {
+      return NextResponse.json({ error: 'tenantId is required' }, { status: 400 });
+    }
+    if (!claimantEmail || !isEmailValid(claimantEmail)) {
       return NextResponse.json(
-        { error: 'tenantId and verificationMethod are required' },
+        { error: 'A valid business email is required' },
         { status: 400 },
       );
     }
 
-    // Load the target tenant (the business being claimed)
+    // Must provide at least one verification evidence (Google or documents)
+    // unless the tenant has no email on file (email-only path).
+    const hasGoogle = !!(google?.gbpUrl && google?.gbpName);
+    const hasDocuments = !!(documents?.urls && documents.urls.length > 0);
+    if (!hasGoogle && !hasDocuments) {
+      return NextResponse.json(
+        {
+          error:
+            'Please provide either a Google Business Profile URL or upload a verification document.',
+        },
+        { status: 400 },
+      );
+    }
+
+    // ── Load the target tenant ────────────────────────────────────────────
     const tenant = await db.tenant.findUnique({
       where: { id: tenantId },
       select: {
@@ -104,7 +140,7 @@ export async function POST(request: NextRequest) {
       where: {
         tenantId,
         claimantUserId: user.id,
-        status: { in: ['pending', 'auto_approved'] },
+        status: { in: ['pending', 'auto_approved', 'approved'] },
       },
     });
     if (existingPending) {
@@ -117,61 +153,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Route by verification method ───────────────────────────────────────
+    // ── Determine verification method + status ────────────────────────────
+    let verificationMethod: 'google' | 'document' | 'email';
+    let verificationData: Record<string, unknown> = {};
     let status: 'pending' | 'auto_approved' = 'pending';
-    let storedData: Record<string, unknown> = { ...verificationData };
 
-    if (verificationMethod === 'phone') {
-      if (!tenant.phone) {
-        return NextResponse.json(
-          { error: 'This business has no phone number on file for verification' },
-          { status: 400 },
-        );
-      }
-      const otp = generateOtp();
-      const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
-      storedData = {
-        ...storedData,
-        phoneLast4: tenant.phone.slice(-4),
-        otpHash: otp, // TODO: hash this in production (for dev, plain text is OK)
-        otpExpiresAt: otpExpiresAt.toISOString(),
-        otpVerified: false,
-      };
-      // TODO: send OTP via SMS (twilio). For now, log it for dev.
-      logger.info({ component: 'claim', otp: otp.slice(0, 2) + '****' }, 'OTP generated (dev: see DB)');
-    } else if (verificationMethod === 'email') {
-      if (!tenant.email) {
-        return NextResponse.json(
-          { error: 'This business has no email on file for verification' },
-          { status: 400 },
-        );
-      }
-      const code = generateOtp();
-      const codeExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-      storedData = {
-        ...storedData,
-        email: tenant.email,
-        codeHash: code, // TODO: hash in production
-        codeExpiresAt: codeExpiresAt.toISOString(),
-        codeVerified: false,
-      };
-      // TODO: send code via email. For now, log for dev.
-      logger.info({ component: 'claim', code: code.slice(0, 2) + '****' }, 'Email code generated');
-    } else if (verificationMethod === 'google') {
-      const gbpUrl = String(verificationData.gbpUrl ?? '');
-      const gbpName = String(verificationData.gbpName ?? '');
-      const gbpAddress = String(verificationData.gbpAddress ?? '');
-      if (!gbpUrl || !gbpName) {
-        return NextResponse.json(
-          { error: 'Google Business Profile URL and name are required' },
-          { status: 400 },
-        );
-      }
+    if (hasGoogle) {
+      verificationMethod = 'google';
+      const gbpUrl = String(google!.gbpUrl);
+      const gbpName = String(google!.gbpName);
+      const gbpAddress = String(google!.gbpAddress ?? '');
+
       const nameScore = similarity(gbpName, tenant.name);
-      const tenantAddress = [tenant.city, tenant.state, tenant.country].filter(Boolean).join(', ');
+      const tenantAddress = [tenant.city, tenant.state, tenant.country]
+        .filter(Boolean)
+        .join(', ');
       const addressScore = similarity(gbpAddress, tenantAddress);
-      const matchScore = (nameScore * 0.7 + addressScore * 0.3);
-      storedData = {
+      const matchScore = nameScore * 0.7 + addressScore * 0.3;
+
+      verificationData = {
         gbpUrl,
         gbpName,
         gbpAddress,
@@ -179,41 +179,45 @@ export async function POST(request: NextRequest) {
         nameScore: Math.round(nameScore * 100) / 100,
         addressScore: Math.round(addressScore * 100) / 100,
       };
+
       // Auto-approve if Google's listing closely matches our tenant record
       if (matchScore >= 0.8) {
         status = 'auto_approved';
       }
-    } else if (verificationMethod === 'document') {
-      const documentUrls = (verificationData.documentUrls as string[]) ?? [];
-      if (!Array.isArray(documentUrls) || documentUrls.length === 0) {
-        return NextResponse.json(
-          { error: 'At least one verification document is required' },
-          { status: 400 },
-        );
-      }
-      storedData = { documentUrls, note: verificationData.note ?? '' };
+    } else if (hasDocuments) {
+      verificationMethod = 'document';
+      verificationData = {
+        documentUrls: documents!.urls,
+        note: documents!.note ?? '',
+      };
       // Document claims always need admin review
       status = 'pending';
     } else {
-      return NextResponse.json(
-        { error: 'Invalid verification method' },
-        { status: 400 },
-      );
+      // Should not reach here due to validation above, but keep as safety net
+      verificationMethod = 'email';
+      status = 'pending';
     }
 
-    // ── Create the claim request ───────────────────────────────────────────
+    // ── Generate completion token (for auto-approved only) ────────────────
+    const completionToken = status === 'auto_approved' ? generateClaimToken() : null;
+
+    // ── Create the claim request ──────────────────────────────────────────
     const claimRequest = await db.claimRequest.create({
       data: {
         tenantId,
         claimantUserId: user.id,
+        claimantEmail,
+        completionToken,
         verificationMethod,
-        verificationData: JSON.stringify(storedData),
+        verificationData: JSON.stringify(verificationData),
         status,
       },
     });
 
-    // ── Auto-approve path: transfer ownership immediately ──────────────────
-    if (status === 'auto_approved') {
+    const appUrl = getAppUrl(request);
+
+    // ── Auto-approve path: claim the business + send approval email ───────
+    if (status === 'auto_approved' && completionToken) {
       await db.tenant.update({
         where: { id: tenantId },
         data: {
@@ -222,29 +226,48 @@ export async function POST(request: NextRequest) {
           claimedById: user.id,
           listingTier: 'claimed_free',
           googleBusinessProfileUrl:
-            verificationMethod === 'google'
-              ? String(verificationData.gbpUrl ?? '')
-              : undefined,
+            verificationMethod === 'google' ? String(google!.gbpUrl) : undefined,
           googleBusinessVerified: verificationMethod === 'google',
         },
       });
-      await db.claimRequest.update({
-        where: { id: claimRequest.id },
-        data: { status: 'auto_approved', reviewedAt: new Date() },
-      });
+
+      const emailCtx: ClaimEmailContext = {
+        businessName: tenant.name,
+        claimantEmail,
+        requestId: claimRequest.id,
+        completionToken,
+        appUrl,
+      };
+      await sendClaimApprovedEmail(emailCtx);
+    } else {
+      // ── Pending review path: send "under review" confirmation email ─────
+      const emailCtx: ClaimEmailContext = {
+        businessName: tenant.name,
+        claimantEmail,
+        requestId: claimRequest.id,
+        appUrl,
+      };
+      await sendClaimUnderReviewEmail(emailCtx);
     }
+
+    logger.info(
+      {
+        component: 'claim',
+        requestId: claimRequest.id,
+        tenantId,
+        method: verificationMethod,
+        status,
+      },
+      'Claim request created',
+    );
 
     return NextResponse.json({
       requestId: claimRequest.id,
       status,
       message:
         status === 'auto_approved'
-          ? 'Claim approved! You now manage this business.'
-          : verificationMethod === 'phone'
-            ? 'OTP sent to the phone number on file. Enter it to verify.'
-            : verificationMethod === 'email'
-              ? 'Verification code sent to the email on file. Enter it to verify.'
-              : 'Your claim request has been submitted for admin review (1-2 business days).',
+          ? 'Claim approved! Check your email for a link to create your account.'
+          : 'Your claim has been submitted for review. We sent a confirmation email — you\'ll hear back within 1-2 business days.',
     });
   } catch (err) {
     logger.error({ component: 'claim', err }, 'Claim request failed');

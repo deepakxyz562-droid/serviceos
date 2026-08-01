@@ -201,6 +201,52 @@ function SearchBox({
  */
 function HeaderAction() {
   const auth = useAppStore((s) => s.auth);
+  const setAuth = useAppStore((s) => s.setAuth);
+  const [hydrated, setHydrated] = React.useState(false);
+
+  // On mount, check if the user has a valid session cookie. The Zustand
+  // store has no `persist` middleware, so on a fresh page load (e.g. visiting
+  // /marketplace directly) the store is empty even if the user is logged in.
+  // This fetch hydrates the store so the header shows the profile dropdown
+  // instead of "List your business" for authenticated users.
+  React.useEffect(() => {
+    let cancelled = false;
+    async function hydrateAuth() {
+      try {
+        const res = await fetch('/api/auth/me?XTransformPort=3000', {
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // /api/auth/me returns { user: null } when not authenticated,
+          // and { user: {...}, tenant: {...} } when authenticated.
+          if (!cancelled && data.user) {
+            setAuth({
+              isAuthenticated: true,
+              user: data.user,
+              tenant: data.tenant,
+            });
+          }
+        }
+      } catch {
+        // Silently fail — treat as anonymous
+      } finally {
+        if (!cancelled) setHydrated(true);
+      }
+    }
+    hydrateAuth();
+    return () => {
+      cancelled = true;
+    };
+  }, [setAuth]);
+
+  // While hydrating, show a neutral placeholder (neither the CTA nor the
+  // dropdown) to avoid flicker from "List your business" → profile icon.
+  if (!hydrated && !auth?.isAuthenticated) {
+    return (
+      <div className="h-10 w-10 shrink-0 animate-pulse rounded-lg bg-muted/50" />
+    );
+  }
 
   // Anonymous visitor → show the CTA
   if (!auth?.isAuthenticated) {

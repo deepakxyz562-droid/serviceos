@@ -25,7 +25,7 @@ import { toast } from 'sonner';
 import {
   Store, Search, Trash2, Edit3, RefreshCw, CheckCircle2, AlertTriangle,
   Database, MapPin, Star, Globe, Filter, Loader2, Plus, Crown, Clock,
-  Calendar, X,
+  Calendar, X, ShieldCheck,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -50,6 +50,7 @@ import {
 } from '@/components/ui/table';
 import { SectionHeader } from '@/components/views/superadmin/_shared';
 import { INDUSTRY_CATALOG, getIndustry } from '@/lib/industry-catalog';
+import { ClaimReview } from '@/components/views/superadmin/sections/claim-review';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -1579,12 +1580,19 @@ export function DirectoryListingsSection() {
             <Filter className="size-3.5" />
             Manage Listings
           </TabsTrigger>
+          <TabsTrigger value="claims" className="gap-1.5">
+            <ShieldCheck className="size-3.5" />
+            Claims
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="seed" className="mt-4">
           <SeedTab />
         </TabsContent>
         <TabsContent value="manage" className="mt-4">
           <ManageTab />
+        </TabsContent>
+        <TabsContent value="claims" className="mt-4">
+          <ClaimReview />
         </TabsContent>
       </Tabs>
     </div>

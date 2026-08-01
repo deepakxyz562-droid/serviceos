@@ -563,7 +563,6 @@ export default async function PublicBusinessHubPage({
                   <ClaimBusinessBanner
                     tenantId={business.id}
                     tenantName={business.name}
-                    tenantPhone={business.phone}
                     tenantEmail={business.email}
                     tenantCity={business.city}
                     tenantState={business.state}

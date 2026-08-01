@@ -46,6 +46,10 @@ const IOSInstallBanner = dynamic(
   () => import('@/components/pwa/pwa-install-banner').then(m => ({ default: m.IOSInstallBanner })),
   { ssr: false, loading: () => null }
 );
+const ClaimCompletion = dynamic(
+  () => import('@/components/marketplace/claim-completion').then(m => ({ default: m.ClaimCompletion })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
 
 import { useAppStore } from '@/store/app-store';
 import { authFetch } from '@/lib/client-auth';
@@ -135,6 +139,10 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [unauthView, setUnauthView] = useState<UnauthView>('landing');
   const [error, setError] = useState<string | null>(null);
+  // Claim completion token — when set, the page renders the ClaimCompletion
+  // component instead of the normal landing/auth/app layout. Set when the
+  // user arrives via `/?claim=complete&token=xxx` (from the approval email).
+  const [claimToken, setClaimToken] = useState<string | null>(null);
 
   // Capture the `returnUrl` query param (set by the marketplace claim-this-
   // business sign-in gate) so we can redirect back to the provider detail
@@ -431,15 +439,32 @@ export default function HomePage() {
       try {
         handleOAuthCallback();
 
-        // Deep-link from marketplace "List your business" CTA, or from the
-        // claim-this-business sign-in gate → auto-open auth. The CTA links to
-        // /?auth=register (or /?auth=login); we read it here and switch to the
-        // auth view so the user lands directly on the form.
-        // The optional `returnUrl` param (set by the claim sign-in gate) is
-        // captured into a ref so onAuthSuccess can redirect back to the
-        // provider detail page after a successful login / registration.
         if (typeof window !== 'undefined') {
           const params = new URLSearchParams(window.location.search);
+
+          // ── Claim completion deep-link ──────────────────────────────────
+          // `/?claim=complete&token=xxx` — from the approval email. We set
+          // the token into state and short-circuit: the ClaimCompletion
+          // component renders its own full-screen UI (registration form or
+          // confirm button), independent of auth state. The token is left
+          // in the URL so a refresh re-validates it (the backend is idempotent
+          // — once completed, it returns an error which the component shows).
+          if (params.get('claim') === 'complete') {
+            const tk = params.get('token');
+            if (tk) {
+              setClaimToken(tk);
+              setIsLoading(false);
+              return; // Don't proceed to normal auth/layout rendering
+            }
+          }
+
+          // Deep-link from marketplace "List your business" CTA, or from the
+          // claim-this-business sign-in gate → auto-open auth. The CTA links to
+          // /?auth=register (or /?auth=login); we read it here and switch to the
+          // auth view so the user lands directly on the form.
+          // The optional `returnUrl` param (set by the claim sign-in gate) is
+          // captured into a ref so onAuthSuccess can redirect back to the
+          // provider detail page after a successful login / registration.
           if (params.get('auth') === 'register' || params.get('auth') === 'login') {
             const ru = params.get('returnUrl');
             if (ru) returnUrlRef.current = ru;
@@ -740,6 +765,16 @@ export default function HomePage() {
         </div>
       </div>
     );
+  }
+
+  // ── Claim completion screen ───────────────────────────────────────────────
+  // Rendered when the user arrives via `/?claim=complete&token=xxx` from the
+  // approval email. Shows a full-screen registration/confirm UI. This takes
+  // priority over everything else (landing, auth, app layout) because the
+  // user clicked a magic link in their email — they should never see the
+  // normal landing page in this state.
+  if (claimToken) {
+    return <ClaimCompletion token={claimToken} />;
   }
 
   // Onboarding screens (Step 0 mode selector / SaaS wizard / listing mini
