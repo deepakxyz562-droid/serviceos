@@ -561,8 +561,18 @@ export default async function MarketplaceBrowsePage({
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="border-t bg-background py-6">
+      {/* Footer
+          Fix C: `mt-auto` pins the footer to the bottom of the flex column
+          root (`min-h-screen flex flex-col`). The main content div above
+          already has `flex-1`, which SHOULD push the footer down — but
+          during rapid height transitions (filter changes, infinite-scroll
+          batch loads) the browser can briefly compute a shorter main
+          content height before the next paint, causing the footer to
+          float up for a frame. `mt-auto` is a defensive pin that tells
+          the flexbox layout "always push this element to the bottom
+          regardless of sibling heights", eliminating the 1-frame footer
+          float that users perceived as "footer pushing". */}
+      <footer className="mt-auto border-t bg-background py-6">
         <div className="w-full px-4 sm:px-6 lg:px-8 flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-between sm:text-left">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-emerald-500 to-teal-600 text-white">

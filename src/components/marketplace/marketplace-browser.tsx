@@ -41,6 +41,7 @@ import { useMarketplaceSearch, type MarketplaceSortKey } from './use-marketplace
 import type { ProviderListItem } from './types';
 import { getIndustry } from '@/lib/industry-catalog';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
+import { cn } from '@/lib/utils';
 
 interface MarketplaceBrowserProps {
   /** Full list of opted-in providers (server-fetched, up to 120). */
@@ -265,9 +266,19 @@ export function MarketplaceBrowser({
   // view (and there are more items, and we're not mid-filter-flash) we bump
   // visibleCount by PAGE_SIZE — so the next batch of 12 cards renders and
   // the grid grows. This continues until all filtered providers are shown.
-  // rootMargin: 400px starts the load slightly *before* the sentinel is
-  // visible so the next batch is usually ready by the time the user
-  // actually reaches the bottom — feels instant.
+  //
+  // Fix D: The old implementation had a 180ms artificial setTimeout delay
+  // and a 400px rootMargin. The delay created a window where the page
+  // height was in flux (spinner visible, no new cards yet) which made the
+  // sticky sidebar jerk and the footer shift as the grid height oscillated.
+  // The 400px rootMargin fired too aggressively, loading the next batch
+  // while the user was still 400px away — causing height jumps during
+  // normal scrolling. Now we render the next batch IMMEDIATELY when the
+  // sentinel intersects (no setTimeout) and use a tighter 200px rootMargin
+  // so the load fires closer to when the user actually needs the cards.
+  // The spinner still shows via the `loadingMore` state, but it's cleared
+  // synchronously in the same tick as setVisibleCount, so there's no
+  // height-flux gap.
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
   const [loadingMore, setLoadingMore] = React.useState(false);
 
@@ -279,17 +290,20 @@ export function MarketplaceBrowser({
       (entries) => {
         const entry = entries[0];
         if (entry.isIntersecting) {
+          // Render the next batch immediately — no artificial delay. This
+          // eliminates the height-flux window that caused the sidebar/footer
+          // to jerk during infinite-scroll loading.
           setLoadingMore(true);
-          // Small delay so the spinner is perceptible even when the next
-          // batch renders in a single frame; also lets React flush before
-          // we bump the count.
-          window.setTimeout(() => {
+          // Use requestAnimationFrame instead of setTimeout so the spinner
+          // paints for exactly one frame (perceptible but not janky), then
+          // the new cards render in the next frame.
+          requestAnimationFrame(() => {
             setVisibleCount((c) => c + PAGE_SIZE);
             setLoadingMore(false);
-          }, 180);
+          });
         }
       },
-      { rootMargin: '400px 0px' },
+      { rootMargin: '200px 0px' },
     );
     observer.observe(node);
     return () => observer.disconnect();
@@ -381,28 +395,19 @@ export function MarketplaceBrowser({
         </div>
       ) : null}
 
-      {/* ── Grid (with skeleton shimmer during filter changes) ──────────── */}
-      {filtering ? (
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
-          {Array.from({ length: Math.min(visibleCount, 6) }).map((_, i) => (
-            <div
-              key={i}
-              className="overflow-hidden rounded-xl border bg-card animate-pulse"
-            >
-              <div className="h-28 w-full bg-muted" />
-              <div className="space-y-3 p-4">
-                <div className="h-4 w-3/4 rounded bg-muted" />
-                <div className="h-3 w-1/2 rounded bg-muted" />
-                <div className="h-3 w-full rounded bg-muted" />
-                <div className="flex gap-1.5">
-                  <div className="h-5 w-16 rounded-full bg-muted" />
-                  <div className="h-5 w-16 rounded-full bg-muted" />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
+      {/* ── Grid ────────────────────────────────────────────────────────────
+          IMPORTANT (Fix A): We NO LONGER unmount the real card grid to show a
+          6-card skeleton during the 180ms `filtering` window. The old skeleton
+          flash collapsed the page height (6 short skeletons vs 12+ real cards),
+          which made the sticky sidebar jerk and the footer jump up-then-down
+          on every filter / sort / search keystroke. Instead we keep the real
+          grid mounted and apply a brief `opacity-50 + pointer-events-none` dim
+          so the user still sees a visual "applying filters" cue WITHOUT any
+          height change. A `min-h` safety net is added so the grid never
+          collapses below ~3 rows even when temporarily empty. Skeletons are
+          only shown when there are genuinely zero visible cards (initial load
+          or a filter set that yields nothing yet). */}
+      {filtered.length === 0 && !filtering ? (
         <div
           role="status"
           className="rounded-xl border border-border bg-card p-8 text-center"
@@ -428,8 +433,39 @@ export function MarketplaceBrowser({
             </button>
           ) : null}
         </div>
+      ) : visible.length === 0 ? (
+        /* Only show skeletons when there are genuinely zero visible cards
+           (e.g. the very first paint before providers hydrate). This reserves
+           a stable ~3-row height so the footer doesn't jump on initial load. */
+        <div
+          className="grid min-h-[420px] gap-5 sm:grid-cols-2 xl:grid-cols-3"
+          aria-hidden="true"
+        >
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="overflow-hidden rounded-xl border bg-card animate-pulse"
+            >
+              <div className="h-28 w-full bg-muted" />
+              <div className="space-y-3 p-4">
+                <div className="h-4 w-3/4 rounded bg-muted" />
+                <div className="h-3 w-1/2 rounded bg-muted" />
+                <div className="h-3 w-full rounded bg-muted" />
+                <div className="flex gap-1.5">
+                  <div className="h-5 w-16 rounded-full bg-muted" />
+                  <div className="h-5 w-16 rounded-full bg-muted" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+        <div
+          className={cn(
+            'grid min-h-[420px] gap-5 sm:grid-cols-2 xl:grid-cols-3 transition-opacity duration-150',
+            filtering && 'opacity-50 pointer-events-none',
+          )}
+        >
           {visible.map((p) => {
             const slug = p.slug || p.publicSlug;
             const canonicalHref = slug

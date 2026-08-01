@@ -70,11 +70,32 @@ export function MarketplaceSidebar({
       {/* Sticky container: fills the viewport height below the header and
           holds two regions — a scrollable middle (categories / trust filters /
           stats) and a pinned footer (trust badges) that is always visible.
-          max-h uses 9rem (not 6rem) to account for the marketplace header +
-          breadcrumb bar that sit above the grid on initial load — without
-          that headroom the footer would be pushed past the viewport bottom
-          and its last items would be clipped. */}
-      <div className="sticky top-20 flex max-h-[calc(100vh-9rem)] flex-col gap-3">
+
+          Fix B: Previously `top-20` (5rem = 80px) left a 16px gap below the
+          64px sticky header, and `max-h-[calc(100vh-9rem)]` (144px) over-
+          counted the NON-sticky breadcrumb bar (which scrolls away after
+          ~36px of scrolling). Once the breadcrumb scrolled out of view, the
+          sidebar was pinned 80px from the viewport top with only 64px of
+          header above it — leaving a visible 16px gap AND wasting 80px of
+          vertical space below the sidebar. This mismatch between the
+          expected offset (header + breadcrumb = 100px) and the actual
+          offset (header only = 64px) caused the sidebar's sticky position
+          to "recalculate" mid-scroll, producing a visible jerk. Now we use
+          `top-16` (64px = exact header height) so the sidebar sticks flush
+          below the header with zero gap, and `max-h-[calc(100vh-5rem)]`
+          (80px = header + small breathing room) so the sidebar fills the
+          full viewport height below the header.
+
+          Fix E: The `[transform:translateZ(0)]` hint promotes the sticky
+          container to its own GPU compositing layer. Without this, the
+          browser repaints the entire sidebar (categories list + stats card
+          + trust badges) on every scroll tick as the sticky position is
+          recalculated, which causes sub-pixel jitter on high-DPI displays
+          and visible "jerk" on lower-end devices. With the compositing
+          hint, the sidebar is rendered once to an offscreen texture and
+          only its composited position is updated during scroll — producing
+          perfectly smooth sticky tracking. */}
+      <div className="sticky top-16 flex max-h-[calc(100vh-5rem)] flex-col gap-3 [transform:translateZ(0)]">
         {/* ─── Scrollable content region ──────────────────────────────────── */}
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1 marketplace-sidebar-scroll">
           {/* ─── Categories ─────────────────────────────────────────────── */}
