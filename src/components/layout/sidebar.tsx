@@ -217,10 +217,15 @@ const employeeNavSections: NavSection[] = [
 
 // ─── Listing-only Navigation ────────────────────────────────────────────────
 // Minimal sidebar for tenants with signupMode='listing_only' (free marketplace
-// listing, no CRM). They only see their marketplace page, services, settings,
-// and a billing/upgrade CTA. All CRM features (pipeline, leads, jobs, dispatch,
-// invoices, omnichannel, AI, marketing) are hidden — they're blocked at the
-// API layer too (see src/lib/require-crm-tenant.ts).
+// listing, no CRM). They only see their marketplace page (which now also
+// contains the Business details card for editing name/phone/email/category),
+// services, and a billing/upgrade CTA. All CRM features (pipeline, leads,
+// jobs, dispatch, invoices, omnichannel, AI, marketing) are hidden — they're
+// blocked at the API layer too (see src/lib/require-crm-tenant.ts).
+// NOTE: the standalone Settings page is intentionally removed for listing-only
+// tenants — their editable business details now live inside the "My Listing"
+// page (see ListingProviderDashboard → BusinessDetailsCard). city and
+// marketplace-opt-in are edited in the My Listing page's PublicHubTab.
 const listingOnlyNavSections: NavSection[] = [
   {
     title: 'Marketplace',
@@ -233,7 +238,6 @@ const listingOnlyNavSections: NavSection[] = [
     title: 'Account',
     items: [
       { view: 'billing', label: 'Upgrade to CRM', icon: CreditCard, badge: 'UPGRADE' },
-      { view: 'settings', label: 'Settings', icon: Settings },
       { view: 'helpCenter', label: 'Help & Support', icon: LifeBuoy },
     ],
   },

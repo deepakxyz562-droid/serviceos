@@ -305,18 +305,28 @@ function HeaderAction() {
             {dashboardLabel}
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/?view=marketplaceDashboard" className="cursor-pointer">
-            <Store className="mr-2 h-4 w-4" />
-            Marketplace Listing
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/?view=settings" className="cursor-pointer">
-            <Settings className="mr-2 h-4 w-4" />
-            Settings
-          </Link>
-        </DropdownMenuItem>
+        {/* "Marketplace Listing" + "Settings" are only meaningful for CRM
+            tenants. Listing-only users already reach their listing via the
+            "My Listing" item above, and their standalone Settings page is
+            intentionally removed (business details are edited inside the
+            My Listing page). Hiding these avoids 3 of 4 menu items all
+            landing on the same marketplace dashboard. */}
+        {!isListingOnly && (
+          <>
+            <DropdownMenuItem asChild>
+              <Link href="/?view=marketplaceDashboard" className="cursor-pointer">
+                <Store className="mr-2 h-4 w-4" />
+                Marketplace Listing
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/?view=settings" className="cursor-pointer">
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link href="/?logout=1" className="cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600">

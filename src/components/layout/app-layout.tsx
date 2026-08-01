@@ -347,15 +347,19 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   // ─── Listing-only guard ──────────────────────────────────────────────────
   // Tenants with signupMode='listing_only' (or listingTier='claimed_free')
   // only have access to: marketplaceDashboard, serviceCatalog, billing,
-  // settings, helpCenter. If they somehow land on a CRM view (e.g. stale
-  // currentView from a previous CRM session before downgrade), redirect them
-  // to their marketplace dashboard. This is a UI guard; the API layer
-  // enforces the same restriction with 403 responses (see require-crm-tenant).
+  // helpCenter. The standalone Settings page is intentionally excluded —
+  // editable business details (name/phone/email/category) now live inside the
+  // "My Listing" page (ListingProviderDashboard → BusinessDetailsCard), and
+  // city + marketplace-opt-in are edited in the PublicHubTab. If they somehow
+  // land on a CRM view (e.g. stale currentView from a previous CRM session
+  // before downgrade) or the old 'settings' view, redirect them to their
+  // marketplace dashboard. This is a UI guard; the API layer enforces the
+  // same restriction with 403 responses (see require-crm-tenant).
   const isListingOnlyTenant =
     (auth?.tenant as any)?.signupMode === 'listing_only' ||
     (auth?.tenant as any)?.listingTier === 'claimed_free';
   const listingAllowedViews = new Set([
-    'marketplaceDashboard', 'serviceCatalog', 'billing', 'settings', 'helpCenter',
+    'marketplaceDashboard', 'serviceCatalog', 'billing', 'helpCenter',
   ]);
   useEffect(() => {
     if (isListingOnlyTenant && !listingAllowedViews.has(currentView)) {

@@ -7,11 +7,15 @@
  * (signupMode = 'listing_only', listingTier = 'claimed_free'). These
  * providers don't have the CRM / paid features, so they see:
  *
- *   Tab 1 — Marketplace Page: edit their public profile (cover image,
- *           tagline, description, hours, photos, FAQs, service areas).
- *           Reuses the existing <PublicHubTab> component.
- *   Tab 2 — Settings: business name, phone, email, category, city, and
- *           a "deactivate listing" toggle.
+ *   Tab 1 — Marketplace Page:
+ *            • BusinessDetailsCard — edit core identity (business name,
+ *              phone, email, category). These fields are NOT editable
+ *              anywhere else for listing-only users (the standalone
+ *              Settings page is hidden from them).
+ *            • PublicHubTab — edit the public profile (cover image,
+ *              tagline, description, city, hours, photos, FAQs, service
+ *              areas, marketplace opt-in toggle).
+ *   Tab 2 — Services: create/edit services shown on their marketplace page.
  *
  * Plus an upsell banner: "Want online bookings, quote inbox, and emergency
  * dispatch? Upgrade to the full CRM — 14-day free trial."
@@ -23,13 +27,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Store,
-  Settings,
   Zap,
   ArrowRight,
   Loader2,
   Check,
   Building2,
-  MapPin,
   Phone,
   Mail,
   Wrench,
@@ -48,14 +50,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import { useAppStore } from '@/store/app-store';
 import { PublicHubTab } from '@/components/settings/public-hub-tab';
 import { ServiceCatalogView } from '@/components/views/service-catalog-view';
 import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 import {
-  INDUSTRY_CATALOG,
   VERTICALS,
   getIndustriesByVertical,
   type Industry,
@@ -77,7 +77,9 @@ export function ListingProviderDashboard() {
   const auth = useAppStore((s) => s.auth);
   const setCurrentView = useAppStore((s) => s.setCurrentView);
 
-  // Fetch a fresh tenant snapshot so the Settings tab edits current data
+  // Fetch a fresh tenant snapshot so BusinessDetailsCard edits current data.
+  // (PublicHubTab manages its own city + marketplaceOptIn state internally;
+  //  this snapshot feeds the BusinessDetailsCard: name, phone, email, industry.)
   const [tenantSnap, setTenantSnap] = useState<TenantSnapshot | null>(null);
   const [loadingSnap, setLoadingSnap] = useState(true);
 
@@ -101,7 +103,7 @@ export function ListingProviderDashboard() {
         });
       }
     } catch {
-      // non-fatal — Settings tab will show stale data
+      // non-fatal — BusinessDetailsCard will show stale data
     } finally {
       setLoadingSnap(false);
     }
@@ -164,14 +166,23 @@ export function ListingProviderDashboard() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab 1: Marketplace Page (reuses PublicHubTab) */}
-        <TabsContent value="page" className="mt-4">
+        {/* Tab 1: Marketplace Page
+            • BusinessDetailsCard — core identity (name/phone/email/category)
+            • PublicHubTab — public profile content (city, opt-in, images, etc.) */}
+        <TabsContent value="page" className="mt-4 space-y-4">
           {tenantSnap ? (
-            <PublicHubTab
-              tenantId={tenantSnap.id}
-              industry={tenantSnap.industry || ''}
-              slug={tenantSnap.slug}
-            />
+            <>
+              <BusinessDetailsCard
+                key={tenantSnap.id + tenantSnap.name + tenantSnap.phone + tenantSnap.email + tenantSnap.industry}
+                tenant={tenantSnap}
+                onSaved={loadSnapshot}
+              />
+              <PublicHubTab
+                tenantId={tenantSnap.id}
+                industry={tenantSnap.industry || ''}
+                slug={tenantSnap.slug}
+              />
+            </>
           ) : (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <Loader2 className="size-5 animate-spin mr-2" /> Loading…
@@ -206,9 +217,16 @@ export function ListingProviderDashboard() {
   );
 }
 
-// ── Settings Tab ─────────────────────────────────────────────────────────────
+// ── Business Details Card ─────────────────────────────────────────────────────
+// Compact editor for the 4 core-identity fields that are NOT covered by
+// PublicHubTab: business name, phone, email, category/industry.
+//
+// (city + marketplace-opt-in are intentionally excluded here because they are
+//  already editable inside PublicHubTab's "Location & Service Areas" and
+//  "Public Business Hub" sections — duplicating them would cause two forms
+//  to fight over the same fields on save.)
 
-function SettingsTab({
+function BusinessDetailsCard({
   tenant,
   onSaved,
 }: {
@@ -219,19 +237,7 @@ function SettingsTab({
   const [name, setName] = useState(tenant.name);
   const [phone, setPhone] = useState(tenant.phone || '');
   const [email, setEmail] = useState(tenant.email || '');
-  const [city, setCity] = useState(tenant.city || '');
   const [industry, setIndustry] = useState(tenant.industry || '');
-  const [marketplaceOptIn, setMarketplaceOptIn] = useState(tenant.marketplaceOptIn);
-
-  // Re-sync if the tenant prop changes (after onSaved reload)
-  useEffect(() => {
-    setName(tenant.name);
-    setPhone(tenant.phone || '');
-    setEmail(tenant.email || '');
-    setCity(tenant.city || '');
-    setIndustry(tenant.industry || '');
-    setMarketplaceOptIn(tenant.marketplaceOptIn);
-  }, [tenant]);
 
   const industriesByVertical = (() => {
     const map: Record<string, Industry[]> = {};
@@ -243,8 +249,8 @@ function SettingsTab({
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !city.trim() || !phone.trim()) {
-      toast.error('Business name, city, and phone are required');
+    if (!name.trim() || !phone.trim()) {
+      toast.error('Business name and phone are required');
       return;
     }
     setSaving(true);
@@ -256,18 +262,16 @@ function SettingsTab({
           name: name.trim(),
           phone: phone.trim(),
           email: email.trim() || undefined,
-          city: city.trim(),
           industry,
-          marketplaceOptIn,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error || 'Failed to save settings');
+        toast.error(data.error || 'Failed to save business details');
         setSaving(false);
         return;
       }
-      toast.success('Settings saved');
+      toast.success('Business details saved');
       onSaved();
     } catch {
       toast.error('Network error. Please try again.');
@@ -281,7 +285,7 @@ function SettingsTab({
       <CardHeader>
         <CardTitle className="text-base">Business details</CardTitle>
         <CardDescription>
-          These details appear on your public marketplace page and power your “Call Now” button.
+          Your name, phone, email, and category. These power your &ldquo;Call now&rdquo; button and public URL.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -300,7 +304,7 @@ function SettingsTab({
             />
           </div>
 
-          {/* Industry */}
+          {/* Category / Industry */}
           <div className="space-y-1.5">
             <Label htmlFor="lpd-industry">Category</Label>
             <Select value={industry} onValueChange={setIndustry}>
@@ -326,22 +330,13 @@ function SettingsTab({
                 })}
               </SelectContent>
             </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Sets the first part of your public URL: <code className="text-[10px]">/{industry || 'industry'}/{tenant.city || 'city'}/{tenant.slug}</code>
+            </p>
           </div>
 
-          {/* City + Phone */}
+          {/* Phone + Email */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="lpd-city" className="flex items-center gap-1.5">
-                <MapPin className="size-3.5 text-muted-foreground" />
-                City <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="lpd-city"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                required
-              />
-            </div>
             <div className="space-y-1.5">
               <Label htmlFor="lpd-phone" className="flex items-center gap-1.5">
                 <Phone className="size-3.5 text-muted-foreground" />
@@ -353,44 +348,31 @@ function SettingsTab({
                 onChange={(e) => setPhone(e.target.value)}
                 required
               />
-            </div>
-          </div>
-
-          {/* Email */}
-          <div className="space-y-1.5">
-            <Label htmlFor="lpd-email" className="flex items-center gap-1.5">
-              <Mail className="size-3.5 text-muted-foreground" />
-              Email
-            </Label>
-            <Input
-              id="lpd-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-
-          {/* Listing active toggle */}
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div className="min-w-0">
-              <p className="text-sm font-medium">Show on marketplace</p>
-              <p className="text-xs text-muted-foreground">
-                When off, your listing is hidden from the public marketplace.
+              <p className="text-[11px] text-muted-foreground">
+                Shown as your &ldquo;Call now&rdquo; button on the marketplace.
               </p>
             </div>
-            <Switch
-              checked={marketplaceOptIn}
-              onCheckedChange={setMarketplaceOptIn}
-            />
+            <div className="space-y-1.5">
+              <Label htmlFor="lpd-email" className="flex items-center gap-1.5">
+                <Mail className="size-3.5 text-muted-foreground" />
+                Email
+              </Label>
+              <Input
+                id="lpd-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
           </div>
 
           {/* Save */}
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-2 pt-1">
             <Button type="submit" disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
               {saving ? (
                 <><Loader2 className="size-4 animate-spin mr-2" /> Saving…</>
               ) : (
-                <><Check className="size-4 mr-2" /> Save changes</>
+                <><Check className="size-4 mr-2" /> Save details</>
               )}
             </Button>
           </div>
