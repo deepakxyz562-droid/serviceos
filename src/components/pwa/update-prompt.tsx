@@ -86,8 +86,23 @@ export default function UpdatePrompt() {
         });
       })
       .catch((err) => {
-        // SW registration failures are non-fatal; just log.
-        console.warn('[ServiceOS] SW registration failed:', err);
+        // SW registration failures are non-fatal.
+        //
+        // Dev-only logging: in production, the inline <script> in
+        // layout.tsx already owns the authoritative registration and
+        // silently swallows its own errors. This duplicate register()
+        // call exists only to attach updatefound/controllerchange
+        // listeners. Some production monitoring/uptime/screenshot tools
+        // (and headless browsers) intercept navigator.serviceWorker and
+        // reject calls programmatically — logging that noise in prod
+        // would pollute the console with a false "SW failed" alarm even
+        // though the real (inline) registration succeeded.
+        //
+        // In dev we still want to see genuine failures (HTTPS scope,
+        // MIME type, syntax errors in sw.js) so they're fixed early.
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('[ServiceOS] SW registration failed:', err);
+        }
       });
 
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
