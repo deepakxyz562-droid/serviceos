@@ -357,7 +357,7 @@ export function AcceptInvitation({ token, onAuthSuccess, onBackToLanding }: Acce
               <Zap className="w-5 h-5 text-emerald-400" />
             </div>
             <span className="text-white text-xl font-bold tracking-tight">
-              ServiceOS
+              Fieseros
             </span>
           </motion.div>
         </div>
@@ -385,7 +385,7 @@ export function AcceptInvitation({ token, onAuthSuccess, onBackToLanding }: Acce
               </span>!
             </h1>
             <p className="text-slate-300 text-base xl:text-lg leading-relaxed">
-              You&apos;ve been invited to join {invitation?.companyName || 'the team'} on ServiceOS.
+              You&apos;ve been invited to join {invitation?.companyName || 'the team'} on Fieseros.
               Set up your account to get started with your new workspace.
             </p>
           </motion.div>
@@ -441,7 +441,7 @@ export function AcceptInvitation({ token, onAuthSuccess, onBackToLanding }: Acce
         >
           <div className="flex items-center gap-2 text-slate-400 text-xs">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Secure invitation • Powered by ServiceOS</span>
+            <span>Secure invitation • Powered by Fieseros</span>
           </div>
         </motion.div>
 
@@ -473,7 +473,7 @@ export function AcceptInvitation({ token, onAuthSuccess, onBackToLanding }: Acce
               <Zap className="w-4 h-4 text-emerald-600" />
             </div>
             <span className="text-lg font-bold text-slate-900 tracking-tight">
-              ServiceOS
+              Fieseros
             </span>
           </motion.div>
 
@@ -489,7 +489,7 @@ export function AcceptInvitation({ token, onAuthSuccess, onBackToLanding }: Acce
             </h2>
             <p className="text-slate-500 text-sm mt-1.5">
               {invitation?.companyName
-                ? `Join ${invitation.companyName} on ServiceOS`
+                ? `Join ${invitation.companyName} on Fieseros`
                 : 'Complete your profile to get started'}
             </p>
           </motion.div>
@@ -743,7 +743,7 @@ export function AcceptInvitation({ token, onAuthSuccess, onBackToLanding }: Acce
             transition={{ delay: 0.8, duration: 0.5 }}
             className="text-center text-xs text-slate-400 mt-8"
           >
-            By continuing, you agree to ServiceOS&apos;s{' '}
+            By continuing, you agree to Fieseros&apos;s{' '}
             <span className="underline cursor-pointer hover:text-slate-500">
               Terms of Service
             </span>{' '}

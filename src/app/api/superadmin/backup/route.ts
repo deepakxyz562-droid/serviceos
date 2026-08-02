@@ -89,13 +89,13 @@ export async function GET(request: NextRequest) {
 //
 // The response has:
 //   Content-Type: application/json
-//   Content-Disposition: attachment; filename="serviceos-backup-<ts>.json"
+//   Content-Disposition: attachment; filename="fieseros-backup-<ts>.json"
 //
 // JSON shape:
 // {
 //   "metadata": {
 //     "version": 1,
-//     "format": "serviceos-json-backup",
+//     "format": "fieseros-json-backup",
 //     "createdAt": "2025-07-28T15:04:22.000Z",
 //     "mode": "supabase" | "prisma",
 //     "totalTables": 158,
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
 
     const startedAt = new Date();
     const mode = dbMode();
-    const filename = `serviceos-backup-${timestampLabel(startedAt)}.json`;
+    const filename = `fieseros-backup-${timestampLabel(startedAt)}.json`;
 
     // Optional `?only=TableA,TableB` to back up just a subset (used by the
     // UI's per-table "Download this table" action).
@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
         enqueue('{\n');
         enqueue('  "metadata": {\n');
         enqueue(`    "version": 1,\n`);
-        enqueue(`    "format": "serviceos-json-backup",\n`);
+        enqueue(`    "format": "fieseros-json-backup",\n`);
         enqueue(`    "createdAt": ${JSON.stringify(startedAt.toISOString())},\n`);
         enqueue(`    "mode": ${JSON.stringify(mode)},\n`);
         enqueue(`    "totalTables": ${modelsToBackup.length},\n`);

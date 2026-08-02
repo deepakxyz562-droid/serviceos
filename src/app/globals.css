@@ -499,7 +499,7 @@ html {
 /* ── Blog article typography (.blog-prose) ─────────────────────────────────
    Custom prose styling for rendered MDX blog articles. Avoids the need for
    the @tailwindcss/typography plugin — we style each element explicitly to
-   match the ServiceOS design system (emerald accents, muted-foreground body
+   match the Fieseros design system (emerald accents, muted-foreground body
    text, consistent spacing rhythm). */
 .blog-prose {
   font-size: 1.0625rem;

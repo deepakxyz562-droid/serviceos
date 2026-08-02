@@ -61,7 +61,7 @@ import {
   getApplicationServerKey,
 } from '@/lib/push-client';
 
-const PUSH_BANNER_DISMISS_KEY = 'serviceos_tenant_push_banner_dismissed_v1';
+const PUSH_BANNER_DISMISS_KEY = 'fieseros_tenant_push_banner_dismissed_v1';
 
 // ---------------------------------------------------------------------------
 // usePushAutoSubscribe — silently (re)subscribe to Web Push on mount
@@ -669,7 +669,7 @@ export function PushDiagnosticsCard() {
                 {!state.isStandalone && (
                   <p className="text-amber-800 dark:text-amber-300">
                     Tap the Share button in Safari → <strong>Add to Home Screen</strong>,
-                    then open ServiceOS from the Home Screen icon. Push only works
+                    then open Fieseros from the Home Screen icon. Push only works
                     inside the installed PWA, not in a Safari tab.
                   </p>
                 )}

@@ -26,7 +26,7 @@ import {
 } from "@/lib/seo/schemas";
 
 export const metadata: Metadata = {
-  title: "10 Best Jobber Alternatives in 2026 — Free & Paid | ServiceOS",
+  title: "10 Best Jobber Alternatives in 2026 — Free & Paid | Fieseros",
   description:
     "Looking for a Jobber alternative? We compare the top 10 Jobber alternatives and competitors for field service businesses — pricing, features, Email & SMS messaging, and which is best for your market.",
   keywords: [
@@ -36,30 +36,30 @@ export const metadata: Metadata = {
     "jobber competitors",
     "jobber replacement",
   ],
-  alternates: { canonical: "https://serviceos.cc/jobber-alternatives" },
+  alternates: { canonical: "https://fieseros.com/jobber-alternatives" },
   openGraph: {
-    title: "10 Best Jobber Alternatives in 2026 | ServiceOS",
+    title: "10 Best Jobber Alternatives in 2026 | Fieseros",
     description:
       "Compare the top 10 Jobber alternatives — features, pricing, Email & SMS messaging, and which fits your field service business.",
-    url: "https://serviceos.cc/jobber-alternatives",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/jobber-alternatives",
+    siteName: "Fieseros",
     type: "article",
   },
   robots: { index: true, follow: true },
 };
 
-// ─── ServiceOS vs Jobber comparison rows ────────────────────────────────────
-const comparisonRows: { feature: string; serviceos: boolean; competitor: boolean }[] = [
-  { feature: "Email & SMS customer messaging included", serviceos: true, competitor: false },
-  { feature: "Transparent, public pricing", serviceos: true, competitor: false },
-  { feature: "Offline-capable technician app (PWA)", serviceos: true, competitor: true },
-  { feature: "Free invoice generator (no signup)", serviceos: true, competitor: false },
-  { feature: "Setup time under 30 minutes", serviceos: true, competitor: false },
-  { feature: "Built for India / LATAM / SEA markets", serviceos: true, competitor: false },
-  { feature: "Multi-currency & multi-language", serviceos: true, competitor: true },
-  { feature: "Mobile-first PWA (no app store install)", serviceos: true, competitor: false },
-  { feature: "Free plan for solo operators", serviceos: true, competitor: false },
-  { feature: "No-code automation builder (n8n)", serviceos: true, competitor: false },
+// ─── Fieseros vs Jobber comparison rows ────────────────────────────────────
+const comparisonRows: { feature: string; fieseros: boolean; competitor: boolean }[] = [
+  { feature: "Email & SMS customer messaging included", fieseros: true, competitor: false },
+  { feature: "Transparent, public pricing", fieseros: true, competitor: false },
+  { feature: "Offline-capable technician app (PWA)", fieseros: true, competitor: true },
+  { feature: "Free invoice generator (no signup)", fieseros: true, competitor: false },
+  { feature: "Setup time under 30 minutes", fieseros: true, competitor: false },
+  { feature: "Built for India / LATAM / SEA markets", fieseros: true, competitor: false },
+  { feature: "Multi-currency & multi-language", fieseros: true, competitor: true },
+  { feature: "Mobile-first PWA (no app store install)", fieseros: true, competitor: false },
+  { feature: "Free plan for solo operators", fieseros: true, competitor: false },
+  { feature: "No-code automation builder (n8n)", fieseros: true, competitor: false },
 ];
 
 // ─── Top 10 Jobber alternatives ─────────────────────────────────────────────
@@ -74,10 +74,10 @@ const alternatives: {
 }[] = [
   {
     position: 1,
-    name: "ServiceOS",
+    name: "Fieseros",
     bestFor: "Service businesses in India, LATAM & SEA",
     pricing: "Free trial → from $29/mo",
-    url: "https://serviceos.cc",
+    url: "https://fieseros.com",
     description:
       "A modern, multi-channel field service platform built for non-US markets. PWA technician app, free invoice generator, multi-currency, and transparent pricing without per-user surprises.",
     highlight: true,
@@ -171,13 +171,13 @@ const switchReasons = [
     icon: BadgeDollarSign,
     title: "Pricing transparency",
     description:
-      "Jobber's per-user pricing adds up quickly. ServiceOS publishes pricing openly and includes a free tier for solo operators — no surprises on renewal.",
+      "Jobber's per-user pricing adds up quickly. Fieseros publishes pricing openly and includes a free tier for solo operators — no surprises on renewal.",
   },
   {
     icon: MessageSquare,
     title: "Email & SMS included out-of-the-box",
     description:
-      "If your customers prefer SMS or email — most of the world does — ServiceOS ships with Email and SMS messaging included, no third-party integrations or approvals needed. Quotes, job updates, invoices, and payment links all flow through natively.",
+      "If your customers prefer SMS or email — most of the world does — Fieseros ships with Email and SMS messaging included, no third-party integrations or approvals needed. Quotes, job updates, invoices, and payment links all flow through natively.",
   },
   {
     icon: Globe,
@@ -189,49 +189,49 @@ const switchReasons = [
     icon: Smartphone,
     title: "Modern PWA, no app store",
     description:
-      "ServiceOS is a progressive web app. Technicians install it in one tap, work offline, and you never deal with iOS App Store updates again.",
+      "Fieseros is a progressive web app. Technicians install it in one tap, work offline, and you never deal with iOS App Store updates again.",
   },
 ];
 
 const faqs = [
   {
-    question: "Is ServiceOS cheaper than Jobber?",
+    question: "Is Fieseros cheaper than Jobber?",
     answer:
-      "For most small teams — yes. Jobber starts around $49/mo and scales per user, which means a 5-technician team can easily pay $150+/mo. ServiceOS has a free tier for solo operators and paid plans that scale with usage, not headcount. We also publish pricing openly so you know what you will pay next year, not just this month.",
+      "For most small teams — yes. Jobber starts around $49/mo and scales per user, which means a 5-technician team can easily pay $150+/mo. Fieseros has a free tier for solo operators and paid plans that scale with usage, not headcount. We also publish pricing openly so you know what you will pay next year, not just this month.",
   },
   {
-    question: "Does ServiceOS support Email and SMS messaging?",
+    question: "Does Fieseros support Email and SMS messaging?",
     answer:
-      "Yes — Email and SMS are first-class channels in ServiceOS, included out-of-the-box with no third-party integrations or approvals required. You can send quotes, job updates, invoices, and payment links directly through Email and SMS, and customer replies automatically thread into the right conversation inside ServiceOS. This is the single biggest reason field service businesses in India, Latin America, and Southeast Asia switch from Jobber to ServiceOS.",
+      "Yes — Email and SMS are first-class channels in Fieseros, included out-of-the-box with no third-party integrations or approvals required. You can send quotes, job updates, invoices, and payment links directly through Email and SMS, and customer replies automatically thread into the right conversation inside Fieseros. This is the single biggest reason field service businesses in India, Latin America, and Southeast Asia switch from Jobber to Fieseros.",
   },
   {
-    question: "Can I migrate from Jobber to ServiceOS?",
+    question: "Can I migrate from Jobber to Fieseros?",
     answer:
-      "Yes. You can export your customers, jobs, and invoices from Jobber as CSV files and import them into ServiceOS. Most small businesses complete the migration in under an hour. For larger teams, our support team will help you map fields and clean up data at no extra cost during onboarding.",
+      "Yes. You can export your customers, jobs, and invoices from Jobber as CSV files and import them into Fieseros. Most small businesses complete the migration in under an hour. For larger teams, our support team will help you map fields and clean up data at no extra cost during onboarding.",
   },
   {
     question: "Is there a free Jobber alternative?",
     answer:
-      "Yes — ServiceOS offers a free tier designed for solo operators and very small teams. You get scheduling, invoicing, customer CRM, and a limited number of SMS messages per month. There are no time limits and no credit card required to start. When you grow, you upgrade on your terms.",
+      "Yes — Fieseros offers a free tier designed for solo operators and very small teams. You get scheduling, invoicing, customer CRM, and a limited number of SMS messages per month. There are no time limits and no credit card required to start. When you grow, you upgrade on your terms.",
   },
   {
     question: "What's the best Jobber alternative for small businesses?",
     answer:
-      "For small service businesses (1–5 technicians), the two strongest Jobber alternatives are ServiceOS and Kickserv. ServiceOS is better if Email and SMS are primary customer channels or you operate outside North America. Kickserv is a good budget pick for US-based solo operators who want simple scheduling and invoicing. Housecall Pro is also popular for US home services, but pricing ramps quickly.",
+      "For small service businesses (1–5 technicians), the two strongest Jobber alternatives are Fieseros and Kickserv. Fieseros is better if Email and SMS are primary customer channels or you operate outside North America. Kickserv is a good budget pick for US-based solo operators who want simple scheduling and invoicing. Housecall Pro is also popular for US home services, but pricing ramps quickly.",
   },
   {
     question: "What's the best Jobber alternative for India?",
     answer:
-      "ServiceOS is purpose-built for the Indian market. It supports UPI and rupee invoicing, Email & SMS business messaging (which is how most Indian customers communicate), multi-language workflows, and Indian GST tax handling. Jobber does not natively support Indian payment rails or SMS workflows out of the box, which is why most Indian service businesses find ServiceOS a better operational fit.",
+      "Fieseros is purpose-built for the Indian market. It supports UPI and rupee invoicing, Email & SMS business messaging (which is how most Indian customers communicate), multi-language workflows, and Indian GST tax handling. Jobber does not natively support Indian payment rails or SMS workflows out of the box, which is why most Indian service businesses find Fieseros a better operational fit.",
   },
 ];
 
 export default function JobberAlternativesPage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Jobber Alternative",
+    name: "Fieseros — Jobber Alternative",
     description:
       "Email & SMS-native field service management software and Jobber alternative for India, LATAM, and SEA service businesses.",
-    url: "https://serviceos.cc/jobber-alternatives",
+    url: "https://fieseros.com/jobber-alternatives",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -240,7 +240,7 @@ export default function JobberAlternativesPage() {
     name: "10 Best Jobber Alternatives in 2026",
     description:
       "A ranked, compared list of the top 10 Jobber alternatives and competitors for field service businesses.",
-    url: "https://serviceos.cc/jobber-alternatives",
+    url: "https://fieseros.com/jobber-alternatives",
     items: alternatives.map((a) => ({
       position: a.position,
       name: a.name,
@@ -253,30 +253,30 @@ export default function JobberAlternativesPage() {
     <CornerstoneLayout
       activePath="/jobber-alternatives"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Compare", url: "https://serviceos.cc/jobber-alternatives" },
-        { name: "Jobber Alternatives", url: "https://serviceos.cc/jobber-alternatives" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Compare", url: "https://fieseros.com/jobber-alternatives" },
+        { name: "Jobber Alternatives", url: "https://fieseros.com/jobber-alternatives" },
       ]}
       additionalSchema={[appSchema, itemListSchema]}
     >
       <CornerstoneHero
         eyebrow="Jobber Alternatives"
         title="Looking for a Jobber Alternative? Here Are the 10 Best Options in 2026"
-        subtitle="Whether Jobber is too expensive, too complex, or missing multi-channel messaging, we compare the top 10 Jobber alternatives for field service businesses — including ServiceOS."
+        subtitle="Whether Jobber is too expensive, too complex, or missing multi-channel messaging, we compare the top 10 Jobber alternatives for field service businesses — including Fieseros."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
             href="/#signup"
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
-            Try ServiceOS Free
+            Try Fieseros Free
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
             href="/field-service-software"
             className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Explore ServiceOS
+            Explore Fieseros
           </Link>
         </div>
       </CornerstoneHero>
@@ -286,10 +286,10 @@ export default function JobberAlternativesPage() {
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <div className="text-center mb-10">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              ServiceOS vs Jobber — Feature Comparison
+              Fieseros vs Jobber — Feature Comparison
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              The features that matter most when choosing between ServiceOS and Jobber, side by side.
+              The features that matter most when choosing between Fieseros and Jobber, side by side.
             </p>
           </div>
           <div className="overflow-x-auto rounded-xl border">
@@ -297,7 +297,7 @@ export default function JobberAlternativesPage() {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left py-3 px-4 font-semibold text-foreground">Feature</th>
-                  <th className="text-center py-3 px-4 font-semibold text-emerald-700">ServiceOS</th>
+                  <th className="text-center py-3 px-4 font-semibold text-emerald-700">Fieseros</th>
                   <th className="text-center py-3 px-4 font-semibold text-muted-foreground">Jobber</th>
                 </tr>
               </thead>
@@ -306,7 +306,7 @@ export default function JobberAlternativesPage() {
                   <tr key={i} className="border-b last:border-0">
                     <td className="py-3 px-4 text-foreground">{row.feature}</td>
                     <td className="text-center py-3 px-4">
-                      {row.serviceos ? (
+                      {row.fieseros ? (
                         <CheckCircle2 className="h-5 w-5 text-emerald-600 mx-auto" />
                       ) : (
                         <X className="h-4 w-4 text-muted-foreground mx-auto" />
@@ -347,7 +347,7 @@ export default function JobberAlternativesPage() {
           SMS and email are how customers communicate with businesses. Jobber does not include
           native SMS and Email messaging out of the box — you need third-party integrations
           like Zapier, which are brittle and add cost. If 80% of your customers prefer SMS
-          or email over phone calls, that gap becomes a deal-breaker. ServiceOS was built
+          or email over phone calls, that gap becomes a deal-breaker. Fieseros was built
           Email & SMS-first, so quotes, job updates, invoices, and payment links all flow
           through Email and SMS natively.
         </p>
@@ -366,10 +366,10 @@ export default function JobberAlternativesPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <div className="text-center mb-10">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              Why teams switch to ServiceOS from Jobber
+              Why teams switch to Fieseros from Jobber
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Four concrete reasons ServiceOS has become the most-switched-to Jobber alternative
+              Four concrete reasons Fieseros has become the most-switched-to Jobber alternative
               outside North America.
             </p>
           </div>
@@ -484,7 +484,7 @@ export default function JobberAlternativesPage() {
         </div>
       </section>
 
-      {/* What ServiceOS gets right mini-section */}
+      {/* What Fieseros gets right mini-section */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -509,7 +509,7 @@ export default function JobberAlternativesPage() {
               <h3 className="font-semibold text-foreground mb-2">Multi-currency built in</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Invoice in rupees, pesos, reais, dollars, or dirhams. Set per-customer currency
-                and let ServiceOS handle conversions and tax labels.
+                and let Fieseros handle conversions and tax labels.
               </p>
             </div>
           </div>
@@ -530,7 +530,7 @@ export default function JobberAlternativesPage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/housecall-pro-alternatives" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
@@ -558,7 +558,7 @@ export default function JobberAlternativesPage() {
       </section>
 
       <CtaSection
-        title="Switch from Jobber to ServiceOS this week"
+        title="Switch from Jobber to Fieseros this week"
         subtitle="Migrate your customers and jobs in under an hour. Free trial, no credit card, cancel anytime."
         primaryCta={{ label: "Start Free Trial", href: "/#signup" }}
         secondaryCta={{ label: "Talk to Sales", href: "/contact-us" }}

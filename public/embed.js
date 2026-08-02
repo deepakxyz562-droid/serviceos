@@ -1,10 +1,10 @@
 /*!
- * ServiceOS Embed Script v1.1.0
+ * Fieseros Embed Script v1.1.0
  * Universal form lead capture for any website (HTML, React, Next.js, PHP, Vue, etc.)
  *
  * HOW IT WORKS:
  *   1. Paste this script tag into your site's <head> or before </body>:
- *      <script src="https://app.serviceos.io/embed.js" data-key="pk_live_xxx" async></script>
+ *      <script src="https://app.fieseros.io/embed.js" data-key="pk_live_xxx" async></script>
  *   2. The script auto-detects ALL <form> submissions on the page.
  *   3. On submit, it maps form fields and POSTs to /api/forms/leads.
  *   4. Your existing form handler (email, redirect, etc.) continues to run.
@@ -14,23 +14,23 @@
  *   data-endpoint="https://…"   Optional — custom API endpoint (defaults to current origin + /api/forms/leads)
  *   data-toast="true"           Optional — show a "✓ Message sent" toast on success
  *   data-form-selector="form"   Optional — CSS selector for forms to capture (default: all forms)
- *   data-serviceos-ajax="true"  Optional — also intercept fetch()/XHR POSTs (AJAX forms)
+ *   data-fieseros-ajax="true"  Optional — also intercept fetch()/XHR POSTs (AJAX forms)
  *
  * WORDPRESS / CONFIG OBJECT MODE:
- *   The WordPress plugin injects `window.SERVICEOS_CONFIG` BEFORE this script loads:
- *     window.SERVICEOS_CONFIG = {
+ *   The WordPress plugin injects `window.FIESEROS_CONFIG` BEFORE this script loads:
+ *     window.FIESEROS_CONFIG = {
  *       apiKey:   'pk_live_xxx',
- *       apiUrl:   'https://app.serviceos.io',
+ *       apiUrl:   'https://app.fieseros.io',
  *       interceptAjax: false   // set true to also intercept AJAX form POSTs
  *     };
  *   When present, these values take priority over the data-* attributes.
  *
  * OPT-OUT:
- *   Add data-serviceos="false" to any <form> to exclude it from capture.
+ *   Add data-fieseros="false" to any <form> to exclude it from capture.
  *
  * EVENTS:
  *   The script dispatches a custom event on window after each submission:
- *     window.addEventListener('serviceos:lead:created', (e) => {
+ *     window.addEventListener('fieseros:lead:created', (e) => {
  *       console.log('Lead created:', e.detail.leadId);
  *     });
  *
@@ -40,8 +40,8 @@
   'use strict';
 
   // ─── Prevent double-load ──────────────────────────────────────────────────
-  if (window.__serviceosEmbedLoaded) return;
-  window.__serviceosEmbedLoaded = true;
+  if (window.__fieserosEmbedLoaded) return;
+  window.__fieserosEmbedLoaded = true;
 
   var scriptTag = document.currentScript || (function () {
     var scripts = document.getElementsByTagName('script');
@@ -49,24 +49,24 @@
   })();
 
   // ─── Config resolution ────────────────────────────────────────────────────
-  // Priority: window.SERVICEOS_CONFIG (injected by WP plugin via wp_localize_script
+  // Priority: window.FIESEROS_CONFIG (injected by WP plugin via wp_localize_script
   // or inline <script>) → data-* attributes on the script tag.
-  var CONFIG = window.SERVICEOS_CONFIG || {};
+  var CONFIG = window.FIESEROS_CONFIG || {};
 
   var API_KEY = CONFIG.apiKey ||
                 scriptTag.getAttribute('data-key') ||
-                scriptTag.getAttribute('data-serviceos-api-key');
+                scriptTag.getAttribute('data-fieseros-api-key');
   var ENDPOINT = CONFIG.apiUrl ||
                  scriptTag.getAttribute('data-endpoint');
   var SHOW_TOAST = (CONFIG.showToast === true) ||
                    (scriptTag.getAttribute('data-toast') === 'true');
   var FORM_SELECTOR = scriptTag.getAttribute('data-form-selector') || 'form';
   var INTERCEPT_AJAX = (CONFIG.interceptAjax === true) ||
-                       (scriptTag.getAttribute('data-serviceos-ajax') === 'true');
+                       (scriptTag.getAttribute('data-fieseros-ajax') === 'true');
 
   if (!API_KEY) {
     if (console && console.warn) {
-      console.warn('[ServiceOS] Missing API key. Set window.SERVICEOS_CONFIG.apiKey or add data-key="pk_live_xxx" to the script tag.');
+      console.warn('[Fieseros] Missing API key. Set window.FIESEROS_CONFIG.apiKey or add data-key="pk_live_xxx" to the script tag.');
     }
     return;
   }
@@ -174,7 +174,7 @@
     var fields = form.querySelectorAll('input, textarea, select');
     for (var i = 0; i < fields.length; i++) {
       var field = fields[i];
-      // Skip submit buttons, hidden ServiceOS fields, and password fields
+      // Skip submit buttons, hidden Fieseros fields, and password fields
       if (['submit', 'button', 'reset', 'image', 'password', 'file', 'hidden'].indexOf(field.type) !== -1) {
         // Allow hidden fields that have a name (could be form_source etc.)
         if (field.type === 'hidden' && field.name && !field.name.match(/^_/)) {
@@ -338,7 +338,7 @@
           return response.json().catch(function () { return { error: 'HTTP ' + response.status }; })
             .then(function (err) {
               if (console && console.warn) {
-                console.warn('[ServiceOS] Lead capture failed:', err.error || err.message || response.status);
+                console.warn('[Fieseros] Lead capture failed:', err.error || err.message || response.status);
               }
               if (SHOW_TOAST) showToast('Could not send message. Please try again.', true);
             });
@@ -346,7 +346,7 @@
         return response.json().then(function (result) {
           // Dispatch custom event
           try {
-            window.dispatchEvent(new CustomEvent('serviceos:lead:created', {
+            window.dispatchEvent(new CustomEvent('fieseros:lead:created', {
               detail: { leadId: result.leadId, leadName: result.leadName, source: result.source },
             }));
           } catch (e) {
@@ -360,7 +360,7 @@
       })
       .catch(function (err) {
         if (console && console.warn) {
-          console.warn('[ServiceOS] Network error:', err);
+          console.warn('[Fieseros] Network error:', err);
         }
         if (SHOW_TOAST) showToast('Network error. Please try again.', true);
       });
@@ -373,12 +373,12 @@
     for (var i = 0; i < forms.length; i++) {
       var form = forms[i];
 
-      // Skip forms with data-serviceos="false"
-      if (form.getAttribute('data-serviceos') === 'false') continue;
+      // Skip forms with data-fieseros="false"
+      if (form.getAttribute('data-fieseros') === 'false') continue;
 
       // Skip already-attached forms
-      if (form.__serviceosAttached) continue;
-      form.__serviceosAttached = true;
+      if (form.__fieserosAttached) continue;
+      form.__fieserosAttached = true;
 
       form.addEventListener('submit', function (event) {
         // Don't prevent default — let the form's normal handler run
@@ -387,7 +387,7 @@
           handleSubmit(event.target);
         } catch (e) {
           if (console && console.warn) {
-            console.warn('[ServiceOS] Error capturing form:', e);
+            console.warn('[Fieseros] Error capturing form:', e);
           }
         }
       }, true); // Use capture phase to fire before any handlers that might redirect
@@ -395,8 +395,8 @@
   }
 
   // ─── Opt-in AJAX Interceptor ──────────────────────────────────────────────
-  // Activated only when data-serviceos-ajax="true" OR
-  // window.SERVICEOS_CONFIG.interceptAjax === true.
+  // Activated only when data-fieseros-ajax="true" OR
+  // window.FIESEROS_CONFIG.interceptAjax === true.
   //
   // Monkey-patches window.fetch and XMLHttpRequest to capture AJAX form POSTs
   // (Contact Form 7's REST endpoint, Gravity Forms admin-ajax, WPForms,
@@ -499,7 +499,7 @@
       mapped._form_plugin = 'ajax-interceptor';
 
       if (console && console.log) {
-        console.log('[ServiceOS] AJAX intercepted:', urlStr);
+        console.log('[Fieseros] AJAX intercepted:', urlStr);
       }
 
       // Fire and forget
@@ -513,20 +513,20 @@
         keepalive: true,
       }).catch(function (err) {
         if (console && console.warn) {
-          console.warn('[ServiceOS] AJAX capture network error:', err);
+          console.warn('[Fieseros] AJAX capture network error:', err);
         }
       });
     } catch (err) {
       if (console && console.warn) {
-        console.warn('[ServiceOS] AJAX capture failed (non-fatal):', err);
+        console.warn('[Fieseros] AJAX capture failed (non-fatal):', err);
       }
     }
   }
 
   function installAjaxInterceptor() {
     // ─── Patch fetch() ───────────────────────────────────────────────────
-    if (typeof window.fetch === 'function' && !window.__serviceosFetchPatched) {
-      window.__serviceosFetchPatched = true;
+    if (typeof window.fetch === 'function' && !window.__fieserosFetchPatched) {
+      window.__fieserosFetchPatched = true;
       var originalFetch = window.fetch;
       window.fetch = function (input, init) {
         try {
@@ -552,15 +552,15 @@
     }
 
     // ─── Patch XMLHttpRequest ────────────────────────────────────────────
-    if (typeof window.XMLHttpRequest === 'function' && !window.__serviceosXhrPatched) {
-      window.__serviceosXhrPatched = true;
+    if (typeof window.XMLHttpRequest === 'function' && !window.__fieserosXhrPatched) {
+      window.__fieserosXhrPatched = true;
       var originalOpen = XMLHttpRequest.prototype.open;
       var originalSend = XMLHttpRequest.prototype.send;
 
       XMLHttpRequest.prototype.open = function (method, url) {
         try {
-          this.__serviceosMethod = method;
-          this.__serviceosUrl = url;
+          this.__fieserosMethod = method;
+          this.__fieserosUrl = url;
         } catch (e) {
           // ignore
         }
@@ -569,7 +569,7 @@
 
       XMLHttpRequest.prototype.send = function (body) {
         try {
-          captureAjaxPayload(this.__serviceosUrl, this.__serviceosMethod, body);
+          captureAjaxPayload(this.__fieserosUrl, this.__fieserosMethod, body);
         } catch (e) {
           // Never break the original send
         }
@@ -590,8 +590,8 @@
         for (var i = 0; i < mutations.length; i++) {
           if (mutations[i].addedNodes && mutations[i].addedNodes.length > 0) {
             // Re-scan on any DOM change (debounced via rAF)
-            if (window.__serviceosRAF) cancelAnimationFrame(window.__serviceosRAF);
-            window.__serviceosRAF = requestAnimationFrame(attachListeners);
+            if (window.__fieserosRAF) cancelAnimationFrame(window.__fieserosRAF);
+            window.__fieserosRAF = requestAnimationFrame(attachListeners);
             break;
           }
         }
@@ -603,7 +603,7 @@
     if (INTERCEPT_AJAX) {
       installAjaxInterceptor();
       if (console && console.log) {
-        console.log('[ServiceOS] AJAX interceptor enabled (fetch + XHR).');
+        console.log('[Fieseros] AJAX interceptor enabled (fetch + XHR).');
       }
     }
   }

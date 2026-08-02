@@ -688,7 +688,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         {isExpandedMode && (
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-lg font-bold tracking-tight whitespace-nowrap text-sidebar-foreground">
-              {isSuperAdmin ? 'ServiceOS' : 'ServiceOS'}
+              {isSuperAdmin ? 'Fieseros' : 'Fieseros'}
             </span>
             <Badge variant="outline" className={cn('text-[9px] h-4 px-1.5 border shrink-0', isSuperAdmin ? 'bg-red-500/10 text-red-600 border-red-500/30' : 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30')}>
               {isSuperAdmin ? 'Admin' : planBadge.label}
@@ -853,9 +853,9 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
                 clipped with an ellipsis, hiding data the user needs to see. */}
             <p
               className="text-xs text-slate-500 dark:text-slate-500 break-all leading-tight"
-              title={auth.user?.email || 'demo@serviceos.cc'}
+              title={auth.user?.email || 'demo@fieseros.com'}
             >
-              {auth.user?.email || 'demo@serviceos.cc'}
+              {auth.user?.email || 'demo@fieseros.com'}
             </p>
           </div>
         )}

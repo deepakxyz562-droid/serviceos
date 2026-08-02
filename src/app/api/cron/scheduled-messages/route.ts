@@ -10,7 +10,7 @@ import { verifyCronAuth } from '@/lib/cron-auth';
  * (email / whatsapp / sms / in_app) and marks it as 'sent' or 'failed'.
  *
  * Protected by a shared secret passed in the `x-cron-secret` header (or
- * `?secret=` query param) — same pattern as the other ServiceOS cron routes.
+ * `?secret=` query param) — same pattern as the other Fieseros cron routes.
  *
  * Recommended schedule: every 15 minutes.
  *   Vercel cron:   "0,15,30,45 * * * *"  (or "*\/15 * * * *" — every 15 min)

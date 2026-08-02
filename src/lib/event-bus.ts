@@ -1,5 +1,5 @@
 /**
- * ServiceOS Event Bus
+ * Fieseros Event Bus
  *
  * A decoupled event system that allows different parts of the application
  * to communicate without direct dependencies.
@@ -206,7 +206,7 @@ function bridgeToRealtime(
   if (!shouldBridgeEvent(event)) return
 
   const internalSecret =
-    process.env.REALTIME_INTERNAL_SECRET || 'serviceos-internal'
+    process.env.REALTIME_INTERNAL_SECRET || 'fieseros-internal'
   const realtimeUrl =
     process.env.REALTIME_BROADCAST_URL ||
     'http://localhost:3003/broadcast'

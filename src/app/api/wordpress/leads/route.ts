@@ -508,7 +508,7 @@ export async function GET(request: NextRequest) {
   if (!providedKey) {
     return NextResponse.json({
       status: 'ok',
-      service: 'ServiceOS WordPress Lead Capture',
+      service: 'Fieseros WordPress Lead Capture',
       version: '2.0.0',
       message: 'API key required for lead submission. Use Authorization: Bearer <key>',
       features: ['lead_creation', 'auto_customer', 'whatsapp_owner_notification', 'whatsapp_user_notification', 'ai_generated_messages'],

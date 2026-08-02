@@ -20,7 +20,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Field Service Management Software — Schedule, Dispatch & Invoice | ServiceOS",
+  title: "Field Service Management Software — Schedule, Dispatch & Invoice | Fieseros",
   description:
     "All-in-one field service management software for modern service businesses. Scheduling, dispatch, invoicing, customer CRM, technician app, and Email & SMS operations. Start free today.",
   keywords: [
@@ -31,13 +31,13 @@ export const metadata: Metadata = {
     "field service CRM",
     "job management software",
   ],
-  alternates: { canonical: "https://serviceos.cc/field-service-software" },
+  alternates: { canonical: "https://fieseros.com/field-service-software" },
   openGraph: {
-    title: "Field Service Management Software | ServiceOS",
+    title: "Field Service Management Software | Fieseros",
     description:
       "All-in-one field service software: scheduling, dispatch, invoicing, CRM, technician app. Start free today.",
-    url: "https://serviceos.cc/field-service-software",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/field-service-software",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -86,30 +86,30 @@ const faqs = [
   {
     question: "What is field service management software?",
     answer:
-      "Field service management (FSM) software is a platform that helps service businesses manage their operations — scheduling jobs, dispatching technicians, tracking work orders, invoicing customers, and maintaining customer records. ServiceOS brings all of these into one unified system, eliminating the need for separate tools like text messages and scattered apps, Excel, and paper forms.",
+      "Field service management (FSM) software is a platform that helps service businesses manage their operations — scheduling jobs, dispatching technicians, tracking work orders, invoicing customers, and maintaining customer records. Fieseros brings all of these into one unified system, eliminating the need for separate tools like text messages and scattered apps, Excel, and paper forms.",
   },
   {
-    question: "How much does ServiceOS field service software cost?",
+    question: "How much does Fieseros field service software cost?",
     answer:
-      "ServiceOS offers a free trial with no credit card required. After the trial, pricing scales with your team size and usage. Visit our pricing page for current plans. There are no setup fees and you can cancel anytime.",
+      "Fieseros offers a free trial with no credit card required. After the trial, pricing scales with your team size and usage. Visit our pricing page for current plans. There are no setup fees and you can cancel anytime.",
   },
   {
-    question: "Can I use ServiceOS on my phone?",
+    question: "Can I use Fieseros on my phone?",
     answer:
-      "Yes. ServiceOS is a progressive web app (PWA) that works on any device — phone, tablet, or desktop. Technicians can install it on their phone and use it offline in the field. Office staff use it on desktop for scheduling and dispatch.",
+      "Yes. Fieseros is a progressive web app (PWA) that works on any device — phone, tablet, or desktop. Technicians can install it on their phone and use it offline in the field. Office staff use it on desktop for scheduling and dispatch.",
   },
   {
-    question: "Does ServiceOS support Email and SMS communication?",
+    question: "Does Fieseros support Email and SMS communication?",
     answer:
-      "Yes. Email and SMS are first-class communication channels in ServiceOS, included out-of-the-box with no approvals required. You can send quotes, job updates, and invoices through Email and SMS. Customer replies are automatically linked to the right conversation in your inbox. This is especially powerful in markets like India, Latin America, and Southeast Asia where SMS and email are the primary business communication tools.",
+      "Yes. Email and SMS are first-class communication channels in Fieseros, included out-of-the-box with no approvals required. You can send quotes, job updates, and invoices through Email and SMS. Customer replies are automatically linked to the right conversation in your inbox. This is especially powerful in markets like India, Latin America, and Southeast Asia where SMS and email are the primary business communication tools.",
   },
   {
-    question: "How long does it take to set up ServiceOS?",
+    question: "How long does it take to set up Fieseros?",
     answer:
       "Most service businesses are up and running within 30 minutes. The onboarding wizard guides you through adding your business details, importing customers, setting up services, and inviting technicians. No technical expertise required.",
   },
   {
-    question: "Is my data safe with ServiceOS?",
+    question: "Is my data safe with Fieseros?",
     answer:
       "Yes. Your data is stored securely with encryption in transit and at rest. We do not sell your data to third parties. You can export or delete your data at any time. See our Privacy Policy for full details.",
   },
@@ -117,10 +117,10 @@ const faqs = [
 
 export default function FieldServiceSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Field Service Management Software",
+    name: "Fieseros — Field Service Management Software",
     description:
       "All-in-one field service management platform with scheduling, dispatch, invoicing, CRM, and Email & SMS messaging.",
-    url: "https://serviceos.cc/field-service-software",
+    url: "https://fieseros.com/field-service-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
@@ -129,8 +129,8 @@ export default function FieldServiceSoftwarePage() {
     <CornerstoneLayout
       activePath="/field-service-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Software", url: "https://serviceos.cc/field-service-software" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Software", url: "https://fieseros.com/field-service-software" },
       ]}
       additionalSchema={[appSchema]}
     >
@@ -177,7 +177,7 @@ export default function FieldServiceSoftwarePage() {
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <Wrench className="h-5 w-5 text-destructive" />
-                Without ServiceOS
+                Without Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -198,7 +198,7 @@ export default function FieldServiceSoftwarePage() {
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With ServiceOS
+                With Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -232,18 +232,18 @@ export default function FieldServiceSoftwarePage() {
           <strong>technician mobile apps</strong>.
         </p>
         <p>
-          ServiceOS is a modern FSM platform that goes beyond the basics. Built
+          Fieseros is a modern FSM platform that goes beyond the basics. Built
           Email & SMS-first, it recognizes that in many markets — India, Southeast
           Asia, Latin America, Africa — service businesses run on SMS and email.
-          Instead of fighting that reality, ServiceOS embraces it: quotes, job
+          Instead of fighting that reality, Fieseros embraces it: quotes, job
           updates, invoices, and customer conversations all flow through Email and
-          SMS, but are automatically organized inside the ServiceOS dashboard. This
+          SMS, but are automatically organized inside the Fieseros dashboard. This
           means no more searching through chat history to find a customer&apos;s
           address or payment status.
         </p>
         <p>
           Unlike legacy FSM tools that were built for desktop computers and then
-          awkwardly adapted for mobile, ServiceOS is a{" "}
+          awkwardly adapted for mobile, Fieseros is a{" "}
           <strong>progressive web app (PWA)</strong> — it works on any device,
           installs like a native app, and even functions offline. Technicians in
           the field can complete work orders, capture photos, and collect
@@ -253,14 +253,14 @@ export default function FieldServiceSoftwarePage() {
         <p>
           Whether you&apos;re a solo contractor looking to professionalize your
           operations, or a growing service business with 50+ technicians,
-          ServiceOS scales with you. The free trial requires no credit card, and
+          Fieseros scales with you. The free trial requires no credit card, and
           most businesses are fully set up within 30 minutes.
         </p>
       </ContentSection>
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything you need to know about field service management software and ServiceOS."
+        subtitle="Everything you need to know about field service management software and Fieseros."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -271,7 +271,7 @@ export default function FieldServiceSoftwarePage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

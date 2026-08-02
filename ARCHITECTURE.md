@@ -116,7 +116,7 @@ src/app/
 - Existing magic-link activation via `/?activate=TOKEN` still works (handled in page.tsx).
 
 ### 4.3 Post-Login Routing
-After successful auth at any `/{slug}/*` route, the app sets the same `serviceos_session` cookie + `serviceos_auth` localStorage used today, then swaps to:
+After successful auth at any `/{slug}/*` route, the app sets the same `fieseros_session` cookie + `fieseros_auth` localStorage used today, then swaps to:
 - Admin/Owner → `AppLayout` (in-place render, no URL change)
 - Employee → `EmployeePortalLayout`
 - Customer → `CustomerPortalLayout`
@@ -271,7 +271,7 @@ src/app/
 
 ### 9.2 Auth state (existing) — unchanged shape
 - `auth.isAuthenticated`, `auth.user`, `auth.tenant` — same
-- Cookie `serviceos_session` + localStorage `serviceos_auth` — same (so existing AppLayout/portals work unchanged)
+- Cookie `fieseros_session` + localStorage `fieseros_auth` — same (so existing AppLayout/portals work unchanged)
 
 ### 9.3 New selectors
 - `useCompany()` — returns current company profile

@@ -6,7 +6,7 @@ import { checkMarketplaceEligibility } from '@/lib/marketplace-eligibility';
 import { notifyOwner } from '@/lib/owner-notifications';
 
 /**
- * Flow 3: Emergency Dispatch — provider accept (ServiceOS V1.5 — P10-flows)
+ * Flow 3: Emergency Dispatch — provider accept (Fieseros V1.5 — P10-flows)
  * ------------------------------------------------------------
  * POST /api/marketplace/emergency/[id]/accept
  *
@@ -393,7 +393,7 @@ export async function POST(
     actionUrl: '/bookings',
     smsMessage: `Emergency accepted! ${title}, ETA ${estimatedArrivalMins} min, customer: ${dispatch.customerName || 'N/A'} (${dispatch.customerPhone || 'N/A'}).`,
     emailSubject: `Emergency Accepted: ${title}`,
-    emailText: `Your tenant accepted an emergency dispatch.\n\nTitle: ${title}\nCustomer: ${dispatch.customerName || 'N/A'}\nPhone: ${dispatch.customerPhone || 'N/A'}\nAddress: ${dispatch.address || 'N/A'}\nETA: ${estimatedArrivalMins} minutes\nEstimated cost: ${grossAmount} ${currency}\n\nView this job in your ServiceOS dashboard.`,
+    emailText: `Your tenant accepted an emergency dispatch.\n\nTitle: ${title}\nCustomer: ${dispatch.customerName || 'N/A'}\nPhone: ${dispatch.customerPhone || 'N/A'}\nAddress: ${dispatch.address || 'N/A'}\nETA: ${estimatedArrivalMins} minutes\nEstimated cost: ${grossAmount} ${currency}\n\nView this job in your Fieseros dashboard.`,
     emailHtml: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px"><h2 style="color:#dc2626">Emergency Accepted</h2><p>Your tenant accepted an emergency dispatch.</p><table style="width:100%;border-collapse:collapse;font-size:14px"><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Title</td><td style="padding:8px">${title}</td></tr><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Customer</td><td style="padding:8px">${dispatch.customerName || 'N/A'}</td></tr><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Phone</td><td style="padding:8px">${dispatch.customerPhone || 'N/A'}</td></tr><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Address</td><td style="padding:8px">${dispatch.address || 'N/A'}</td></tr><tr><td style="padding:8px;background:#f9fafb;font-weight:600">ETA</td><td style="padding:8px">${estimatedArrivalMins} minutes</td></tr><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Est. Cost</td><td style="padding:8px">${grossAmount} ${currency}</td></tr></table></div>`,
     pushTitle: 'Emergency Accepted!',
     pushBody: `${dispatch.customerName || 'Customer'} — ETA ${estimatedArrivalMins} min`,

@@ -4,7 +4,7 @@ import { logger, withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
 
 /**
- * Flow 2: Quote Request — get / patch (ServiceOS V1.5 — P10-flows)
+ * Flow 2: Quote Request — get / patch (Fieseros V1.5 — P10-flows)
  * ------------------------------------------------------------
  * GET    /api/marketplace/quote-request/[id]    — get a job request; increments viewCount
  * PATCH  /api/marketplace/quote-request/[id]    — update (cancel, expire)

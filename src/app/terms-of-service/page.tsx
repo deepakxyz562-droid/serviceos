@@ -3,15 +3,15 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — ServiceOS CRM",
+  title: "Terms of Service — Fieseros CRM",
   description:
-    "Read the Terms of Service for ServiceOS CRM, the all-in-one operations platform for service businesses. Covers subscriptions, integrations, data handling, and more. Last updated March 5, 2026.",
+    "Read the Terms of Service for Fieseros CRM, the all-in-one operations platform for service businesses. Covers subscriptions, integrations, data handling, and more. Last updated March 5, 2026.",
   openGraph: {
-    title: "Terms of Service — ServiceOS CRM",
+    title: "Terms of Service — Fieseros CRM",
     description:
-      "Read the Terms of Service for ServiceOS CRM, the all-in-one operations platform for service businesses. Covers subscriptions, integrations, data handling, and more.",
-    url: "https://serviceos.cc/terms-of-service",
-    siteName: "ServiceOS",
+      "Read the Terms of Service for Fieseros CRM, the all-in-one operations platform for service businesses. Covers subscriptions, integrations, data handling, and more.",
+    url: "https://fieseros.com/terms-of-service",
+    siteName: "Fieseros",
     type: "website",
   },
 };
@@ -48,7 +48,7 @@ export default function TermsOfServicePage() {
               <Bolt className="h-5 w-5 text-white" />
             </span>
             <span className="text-xl font-bold tracking-tight text-foreground">
-              ServiceOS
+              Fieseros
             </span>
           </Link>
           <Link
@@ -109,10 +109,10 @@ export default function TermsOfServicePage() {
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   These Terms of Service (&quot;Terms&quot;) govern your access to
-                  and use of the ServiceOS platform and all related services,
+                  and use of the Fieseros platform and all related services,
                   features, applications, and websites (collectively, the
-                  &quot;Service&quot;) operated by ServiceOS, Inc.
-                  (&quot;ServiceOS,&quot; &quot;we,&quot; &quot;us,&quot; or
+                  &quot;Service&quot;) operated by Fieseros, Inc.
+                  (&quot;Fieseros,&quot; &quot;we,&quot; &quot;us,&quot; or
                   &quot;our&quot;).
                 </p>
                 <p className="text-muted-foreground leading-relaxed mb-4">
@@ -145,7 +145,7 @@ export default function TermsOfServicePage() {
                   2. Description of Service
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS is a customer relationship management (CRM) and
+                  Fieseros is a customer relationship management (CRM) and
                   business operations platform designed for service-based
                   businesses. The Service enables businesses to manage customer
                   relationships, schedule and dispatch jobs, communicate via
@@ -199,8 +199,8 @@ export default function TermsOfServicePage() {
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   You are responsible for safeguarding your account credentials
                   and for all activities that occur under your account. You must
-                  immediately notify ServiceOS of any unauthorized use of your
-                  account. ServiceOS will not be liable for any loss or damage
+                  immediately notify Fieseros of any unauthorized use of your
+                  account. Fieseros will not be liable for any loss or damage
                   arising from your failure to protect your account credentials.
                 </p>
 
@@ -211,7 +211,7 @@ export default function TermsOfServicePage() {
                   Certain features of the Service, including payment
                   processing and certain communication features, may require business
                   verification. You agree to provide accurate business
-                  information and documentation as requested. ServiceOS reserves
+                  information and documentation as requested. Fieseros reserves
                   the right to suspend accounts that fail verification or
                   provide misleading information.
                 </p>
@@ -238,7 +238,7 @@ export default function TermsOfServicePage() {
                   4.1 Plans and Pricing
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS offers multiple subscription plans with varying
+                  Fieseros offers multiple subscription plans with varying
                   features and usage limits. Current pricing and plan details are
                   available on our website. All prices are listed in US dollars
                   unless otherwise stated. We reserve the right to change pricing
@@ -249,7 +249,7 @@ export default function TermsOfServicePage() {
                   4.2 Payment Terms
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  By subscribing, you authorize ServiceOS to charge your payment
+                  By subscribing, you authorize Fieseros to charge your payment
                   method on a recurring basis. Payments are due at the beginning
                   of each billing cycle. If a payment fails, we may retry the
                   charge and suspend access to the Service until payment is
@@ -271,7 +271,7 @@ export default function TermsOfServicePage() {
                   4.4 Trial Periods
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS may offer free trial periods for new subscribers.
+                  Fieseros may offer free trial periods for new subscribers.
                   Trials are limited to one per business entity. At the end of
                   the trial period, your subscription will automatically convert
                   to a paid plan unless you cancel before the trial expires. You
@@ -328,7 +328,7 @@ export default function TermsOfServicePage() {
                   <li>Using the Service in any manner that could damage, disable, or impair the Service or interfere with any other party&apos;s use</li>
                 </ul>
                 <p className="text-muted-foreground leading-relaxed">
-                  ServiceOS reserves the right to investigate and take
+                  Fieseros reserves the right to investigate and take
                   appropriate action against anyone who, in our sole discretion,
                   violates this policy, including removing content, suspending or
                   terminating accounts, and reporting violations to law
@@ -343,14 +343,14 @@ export default function TermsOfServicePage() {
                 </h2>
 
                 <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
-                  6.1 ServiceOS Intellectual Property
+                  6.1 Fieseros Intellectual Property
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   The Service and all of its contents, features, and
                   functionality — including but not limited to software, text,
                   graphics, logos, icons, images, audio clips, data
                   compilations, and the design, selection, and arrangement
-                  thereof — are owned by ServiceOS, its licensors, or other
+                  thereof — are owned by Fieseros, its licensors, or other
                   providers of such material and are protected by international
                   copyright, trademark, patent, trade secret, and other
                   intellectual property or proprietary rights laws.
@@ -364,15 +364,15 @@ export default function TermsOfServicePage() {
                   submit to the Service (&quot;User Content&quot;), including
                   customer data, messages, templates, documents, and business
                   information. Nothing in these Terms transfers ownership of your
-                  User Content to ServiceOS.
+                  User Content to Fieseros.
                 </p>
 
                 <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
-                  6.3 License Grant to ServiceOS
+                  6.3 License Grant to Fieseros
                 </h3>
                 <p className="text-muted-foreground leading-relaxed">
                   By uploading or submitting User Content to the Service, you
-                  grant ServiceOS a worldwide, non-exclusive, royalty-free
+                  grant Fieseros a worldwide, non-exclusive, royalty-free
                   license to use, reproduce, process, adapt, modify, publish,
                   transmit, store, and distribute such User Content solely for
                   the purpose of providing the Service to you, including
@@ -393,7 +393,7 @@ export default function TermsOfServicePage() {
                   services, including payment processors, communication
                   providers, and analytics platforms. Your use of third-party
                   services is subject to their respective terms and policies.
-                  ServiceOS is not responsible for the availability, accuracy, or
+                  Fieseros is not responsible for the availability, accuracy, or
                   legality of third-party services, and you use them at your own
                   risk.
                 </p>
@@ -403,7 +403,7 @@ export default function TermsOfServicePage() {
                   or use in conjunction with the Service. This includes obtaining
                   all necessary consents from your contacts before sending
                   communications and honoring opt-out requests promptly.
-                  ServiceOS does not control and is not responsible for the
+                  Fieseros does not control and is not responsible for the
                   practices of these third-party services.
                 </p>
               </section>
@@ -429,7 +429,7 @@ export default function TermsOfServicePage() {
                   8.1 Data Processing
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS processes data on your behalf as a data processor
+                  Fieseros processes data on your behalf as a data processor
                   for the purpose of providing the Service. You are the data
                   controller for all User Content and customer data you upload to
                   the platform. You are responsible for ensuring that you have
@@ -442,7 +442,7 @@ export default function TermsOfServicePage() {
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   To the extent that the General Data Protection Regulation (GDPR)
-                  applies to your use of the Service, ServiceOS acts as a data
+                  applies to your use of the Service, Fieseros acts as a data
                   processor under Article 28 of the GDPR. We process personal
                   data only in accordance with your instructions and the terms of
                   our Data Processing Agreement (DPA), which is available upon
@@ -474,15 +474,15 @@ export default function TermsOfServicePage() {
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   You own your User Content and are solely responsible for it,
                   including ensuring that it does not violate any applicable laws
-                  or the rights of any third party. ServiceOS does not endorse,
+                  or the rights of any third party. Fieseros does not endorse,
                   verify, or take responsibility for any User Content.
                 </p>
 
                 <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
-                  9.2 License to ServiceOS
+                  9.2 License to Fieseros
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  As described in Section 6.3, you grant ServiceOS a limited
+                  As described in Section 6.3, you grant Fieseros a limited
                   license to process and handle your User Content for the purpose
                   of providing the Service. This includes the right to display
                   your content within your account, process messages through
@@ -494,7 +494,7 @@ export default function TermsOfServicePage() {
                   9.3 Right to Remove
                 </h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  ServiceOS reserves the right to remove or disable access to any
+                  Fieseros reserves the right to remove or disable access to any
                   User Content that, in our sole discretion, violates these
                   Terms, is objectionable, or could expose us or others to legal
                   liability. We will make reasonable efforts to notify you before
@@ -513,7 +513,7 @@ export default function TermsOfServicePage() {
                   10.1 Best Effort
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS strives to provide a reliable and available Service,
+                  Fieseros strives to provide a reliable and available Service,
                   but we do not guarantee uninterrupted access. The Service is
                   provided on a best-effort basis, and we make no commitments
                   regarding uptime, response times, or availability beyond what
@@ -562,21 +562,21 @@ export default function TermsOfServicePage() {
                 </p>
 
                 <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
-                  11.2 Termination by ServiceOS
+                  11.2 Termination by Fieseros
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS may suspend or terminate your account immediately,
+                  Fieseros may suspend or terminate your account immediately,
                   without prior notice, for cause, including but not limited to:
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground mb-4">
                   <li>Violation of these Terms or any applicable policies</li>
                   <li>Fraudulent, abusive, or unlawful activity</li>
-                  <li>Conduct that could cause harm to ServiceOS, its users, or third parties</li>
+                  <li>Conduct that could cause harm to Fieseros, its users, or third parties</li>
                   <li>Failure to pay applicable fees after reasonable notice</li>
                   <li>Violation of third-party service policies</li>
                 </ul>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  For terminations not involving immediate cause, ServiceOS will
+                  For terminations not involving immediate cause, Fieseros will
                   provide at least 30 days&apos; written notice.
                 </p>
 
@@ -595,7 +595,7 @@ export default function TermsOfServicePage() {
                   11.4 Data Deletion
                 </h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  After the 30-day post-termination data export period, ServiceOS
+                  After the 30-day post-termination data export period, Fieseros
                   will permanently delete your account data, including User
                   Content, customer records, messages, and all associated
                   information, in accordance with our data retention policy.
@@ -615,10 +615,10 @@ export default function TermsOfServicePage() {
                   12.1 Liability Cap
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  To the maximum extent permitted by applicable law, ServiceOS&apos;s
+                  To the maximum extent permitted by applicable law, Fieseros&apos;s
                   total aggregate liability arising out of or related to these
                   Terms or the Service shall not exceed the total amount paid by
-                  you to ServiceOS during the twelve (12) months immediately
+                  you to Fieseros during the twelve (12) months immediately
                   preceding the event giving rise to the claim.
                 </p>
 
@@ -627,12 +627,12 @@ export default function TermsOfServicePage() {
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   To the maximum extent permitted by applicable law, in no event
-                  shall ServiceOS be liable for any indirect, incidental,
+                  shall Fieseros be liable for any indirect, incidental,
                   special, consequential, or punitive damages, including but not
                   limited to loss of profits, data, use, goodwill, or other
                   intangible losses, regardless of whether such damages are based
                   on contract, tort, strict liability, or any other legal theory,
-                  and whether or not ServiceOS has been advised of the
+                  and whether or not Fieseros has been advised of the
                   possibility of such damages.
                 </p>
 
@@ -654,7 +654,7 @@ export default function TermsOfServicePage() {
                   13. Indemnification
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  You agree to indemnify, defend, and hold harmless ServiceOS,
+                  You agree to indemnify, defend, and hold harmless Fieseros,
                   its officers, directors, employees, agents, licensors, and
                   service providers from and against any and all claims,
                   damages, losses, costs, expenses (including reasonable
@@ -669,10 +669,10 @@ export default function TermsOfServicePage() {
                   <li>Any claims by your customers or end users related to your use of the Service</li>
                 </ul>
                 <p className="text-muted-foreground leading-relaxed">
-                  ServiceOS reserves the right, at its own expense, to assume
+                  Fieseros reserves the right, at its own expense, to assume
                   the exclusive defense and control of any matter subject to
                   indemnification by you, and in such case, you agree to
-                  cooperate with ServiceOS&apos;s defense of such claim.
+                  cooperate with Fieseros&apos;s defense of such claim.
                 </p>
               </section>
 
@@ -689,7 +689,7 @@ export default function TermsOfServicePage() {
                   NON-INFRINGEMENT, AND COURSE OF DEALING.
                 </p>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS does not warrant that: (a) the Service will be
+                  Fieseros does not warrant that: (a) the Service will be
                   uninterrupted, timely, secure, or error-free; (b) the results
                   obtained from the use of the Service will be accurate or
                   reliable; (c) the quality of any products, services,
@@ -701,7 +701,7 @@ export default function TermsOfServicePage() {
                   You assume all risk for any damage that may result from your
                   use of the Service, including damage to your business, data,
                   or systems. No advice or information, whether oral or written,
-                  obtained from ServiceOS or through the Service, shall create
+                  obtained from Fieseros or through the Service, shall create
                   any warranty not expressly stated in these Terms.
                 </p>
               </section>
@@ -759,7 +759,7 @@ export default function TermsOfServicePage() {
                   CONDUCTED ONLY ON AN INDIVIDUAL BASIS AND NOT IN A CLASS,
                   CONSOLIDATED, OR REPRESENTATIVE ACTION. You waive any right to
                   participate in a class action lawsuit or class-wide arbitration
-                  against ServiceOS.
+                  against Fieseros.
                 </p>
 
                 <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
@@ -781,7 +781,7 @@ export default function TermsOfServicePage() {
                   17. Changes to Terms
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS reserves the right to modify or replace these Terms
+                  Fieseros reserves the right to modify or replace these Terms
                   at any time. If a revision is material, we will provide at
                   least 30 days&apos; notice prior to any new terms taking
                   effect by posting the updated Terms on our website and sending
@@ -816,30 +816,30 @@ export default function TermsOfServicePage() {
                 <div className="rounded-lg border bg-card p-6 space-y-3">
                   <div className="flex items-start gap-3">
                     <span className="text-sm font-semibold text-foreground">Company:</span>
-                    <span className="text-sm text-muted-foreground">ServiceOS, Inc.</span>
+                    <span className="text-sm text-muted-foreground">Fieseros, Inc.</span>
                   </div>
                   <div className="flex items-start gap-3">
                     <span className="text-sm font-semibold text-foreground">Website:</span>
                     <a
-                      href="https://serviceos.cc"
+                      href="https://fieseros.com"
                       className="text-sm text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      serviceos.cc
+                      fieseros.com
                     </a>
                   </div>
                   <div className="flex items-start gap-3">
                     <span className="text-sm font-semibold text-foreground">Email:</span>
                     <a
-                      href="mailto:legal@serviceos.cc"
+                      href="mailto:legal@fieseros.com"
                       className="text-sm text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      legal@serviceos.cc
+                      legal@fieseros.com
                     </a>
                   </div>
                   <div className="flex items-start gap-3">
                     <span className="text-sm font-semibold text-foreground">Address:</span>
                     <span className="text-sm text-muted-foreground">
-                      ServiceOS, Inc.<br />
+                      Fieseros, Inc.<br />
                       1201 Orange Street, Suite 600<br />
                       Wilmington, DE 19801<br />
                       United States of America
@@ -867,7 +867,7 @@ export default function TermsOfServicePage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              &copy; 2026 ServiceOS, Inc. All rights reserved.
+              &copy; 2026 Fieseros, Inc. All rights reserved.
             </p>
             <nav className="flex items-center gap-6 text-sm text-muted-foreground">
               <a

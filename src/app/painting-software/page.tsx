@@ -22,7 +22,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Painting Software — Estimates, Crew Tracking & Progress Invoicing | ServiceOS",
+  title: "Painting Software — Estimates, Crew Tracking & Progress Invoicing | Fieseros",
   description:
     "Painting contractor software for estimate-to-quote workflows, paint quantity calculators, project phasing, photo documentation, and milestone invoicing. The painting CRM that helps painters get paid. Start free today.",
   keywords: [
@@ -32,13 +32,13 @@ export const metadata: Metadata = {
     "painting estimate software",
     "painting invoicing",
   ],
-  alternates: { canonical: "https://serviceos.cc/painting-software" },
+  alternates: { canonical: "https://fieseros.com/painting-software" },
   openGraph: {
-    title: "Painting Software & CRM | ServiceOS",
+    title: "Painting Software & CRM | Fieseros",
     description:
       "Build accurate estimates with paint quantity calculators, phase multi-room projects, document prep and coats with photos, track crew time against estimate, and bill by milestone. Painting software built for contractors.",
-    url: "https://serviceos.cc/painting-software",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/painting-software",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -49,7 +49,7 @@ const features: Feature[] = [
     icon: PaintRoller,
     title: "Estimate-to-Quote Workflow",
     description:
-      "Walk a job, measure the walls, plug in the paint system, and ServiceOS calculates quantities, labor hours, and price — turning a site visit into a professional quote in minutes, not hours.",
+      "Walk a job, measure the walls, plug in the paint system, and Fieseros calculates quantities, labor hours, and price — turning a site visit into a professional quote in minutes, not hours.",
   },
   {
     icon: Layers,
@@ -73,55 +73,55 @@ const features: Feature[] = [
     icon: Clock,
     title: "Crew Time Tracking Against Estimate",
     description:
-      "Crews clock in and out of each job and phase from their phone. ServiceOS compares actual hours against your estimated hours in real time, so you see margin drift the day it happens — not on the invoice after the job is done.",
+      "Crews clock in and out of each job and phase from their phone. Fieseros compares actual hours against your estimated hours in real time, so you see margin drift the day it happens — not on the invoice after the job is done.",
   },
   {
     icon: FileText,
     title: "Progress Invoicing & Milestone Billing",
     description:
-      "For multi-week commercial and repaint projects, bill by milestone — deposit on start, progress at phase completion, final on walk-through. ServiceOS tracks what's been billed vs. what's been earned, so you never over- or under-bill.",
+      "For multi-week commercial and repaint projects, bill by milestone — deposit on start, progress at phase completion, final on walk-through. Fieseros tracks what's been billed vs. what's been earned, so you never over- or under-bill.",
   },
 ];
 
 const faqs = [
   {
-    question: "How does ServiceOS help with painting estimates and quotes?",
+    question: "How does Fieseros help with painting estimates and quotes?",
     answer:
-      "ServiceOS turns a site visit into a professional quote fast. You measure the walls and ceilings, enter the paint system (primer, finish coats, product line), and ServiceOS calculates the gallon quantities, labor hours based on your production rates, materials, and your price. The quote goes to the customer via Email & SMS, where they approve with a tap in the customer portal. On approval, the quote converts into a scheduled job, material reservations, and a deposit invoice — no re-keying, no spreadsheets, no handwritten estimates that take an hour to write up. Most painting contractors cut their quoting time by 70% or more after switching.",
+      "Fieseros turns a site visit into a professional quote fast. You measure the walls and ceilings, enter the paint system (primer, finish coats, product line), and Fieseros calculates the gallon quantities, labor hours based on your production rates, materials, and your price. The quote goes to the customer via Email & SMS, where they approve with a tap in the customer portal. On approval, the quote converts into a scheduled job, material reservations, and a deposit invoice — no re-keying, no spreadsheets, no handwritten estimates that take an hour to write up. Most painting contractors cut their quoting time by 70% or more after switching.",
   },
   {
     question: "Can I manage multi-room and multi-phase painting projects?",
     answer:
-      "Yes. ServiceOS is built for the realities of whole-home repaints and commercial jobs that span weeks. You break the project into phases — prep, prime, living room, bedrooms, trim, final walk-through — each with its own crew, materials, and schedule. Crews see their phase on their phone, log time and materials against it, and mark it complete. You see phase-by-phase progress, billed-vs-earned, and any phase that's slipping behind — so a multi-week project stays on schedule instead of drifting into costly overtime and a margin-destroying final invoice.",
+      "Yes. Fieseros is built for the realities of whole-home repaints and commercial jobs that span weeks. You break the project into phases — prep, prime, living room, bedrooms, trim, final walk-through — each with its own crew, materials, and schedule. Crews see their phase on their phone, log time and materials against it, and mark it complete. You see phase-by-phase progress, billed-vs-earned, and any phase that's slipping behind — so a multi-week project stays on schedule instead of drifting into costly overtime and a margin-destroying final invoice.",
   },
   {
     question: "How does photo documentation work on painting jobs?",
     answer:
-      "Every painter knows the dispute: you didn't prep that wall, or you only did one coat. ServiceOS kills those disputes. Crews photograph every stage — bare drywall, patched, primed, first coat, second coat, final — and the photos attach permanently to the work order with timestamps. When a customer questions the prep work or the coat count, you have timestamped visual proof. The same photos build a portfolio you can use to win the next job, showing the quality and thoroughness of your prep and finish work to prospective customers.",
+      "Every painter knows the dispute: you didn't prep that wall, or you only did one coat. Fieseros kills those disputes. Crews photograph every stage — bare drywall, patched, primed, first coat, second coat, final — and the photos attach permanently to the work order with timestamps. When a customer questions the prep work or the coat count, you have timestamped visual proof. The same photos build a portfolio you can use to win the next job, showing the quality and thoroughness of your prep and finish work to prospective customers.",
   },
   {
     question: "Can I track paint colors and SKUs per customer for future touch-ups?",
     answer:
-      "Absolutely. ServiceOS stores every customer's color formulas, paint brand, product line, sheen, and SKU in their record — room by room if needed. When a customer calls two years later asking for touch-up paint on the dining room accent wall, you pull up the exact specification in seconds — no guessing, no I think it was SW 7029. Customers love that you remember their color, and it drives repeat business when they're ready to repaint the rest of the house or refer you to a neighbor.",
+      "Absolutely. Fieseros stores every customer's color formulas, paint brand, product line, sheen, and SKU in their record — room by room if needed. When a customer calls two years later asking for touch-up paint on the dining room accent wall, you pull up the exact specification in seconds — no guessing, no I think it was SW 7029. Customers love that you remember their color, and it drives repeat business when they're ready to repaint the rest of the house or refer you to a neighbor.",
   },
   {
     question: "How does progress invoicing work for larger painting projects?",
     answer:
-      "For commercial repaints and multi-week residential jobs, ServiceOS supports milestone billing: a deposit on project start, progress invoices at phase completions (prep done, walls complete, trim complete), and a final invoice on walk-through. ServiceOS tracks earned revenue versus billed revenue on a percentage-of-completion basis, so you always know whether you're over-billed or under-billed at any point in the project. Customers appreciate predictable billing milestones, and you maintain positive cash flow throughout a long project instead of carrying weeks of labor and material costs on your own balance sheet.",
+      "For commercial repaints and multi-week residential jobs, Fieseros supports milestone billing: a deposit on project start, progress invoices at phase completions (prep done, walls complete, trim complete), and a final invoice on walk-through. Fieseros tracks earned revenue versus billed revenue on a percentage-of-completion basis, so you always know whether you're over-billed or under-billed at any point in the project. Customers appreciate predictable billing milestones, and you maintain positive cash flow throughout a long project instead of carrying weeks of labor and material costs on your own balance sheet.",
   },
   {
     question: "How does crew time tracking work for painting contractors?",
     answer:
-      "Crew members clock in and out of each job and each phase from their phone, with optional GPS verification. ServiceOS compares actual hours against your estimated hours in real time — so if a crew is taking 30% longer than estimated on a bedroom repaint, you see it on day one and can adjust the estimate, the crew, or the scope before the margin is gone. At the end of each week, you get clean timesheet exports for payroll, plus reports on production rates per crew and per task type that feed straight back into more accurate estimates on the next job.",
+      "Crew members clock in and out of each job and each phase from their phone, with optional GPS verification. Fieseros compares actual hours against your estimated hours in real time — so if a crew is taking 30% longer than estimated on a bedroom repaint, you see it on day one and can adjust the estimate, the crew, or the scope before the margin is gone. At the end of each week, you get clean timesheet exports for payroll, plus reports on production rates per crew and per task type that feed straight back into more accurate estimates on the next job.",
   },
 ];
 
 export default function PaintingSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Painting Contractor Software",
+    name: "Fieseros — Painting Contractor Software",
     description:
       "Painting CRM and estimating software with paint quantity calculators, project phasing, prep and coat photo documentation, color and SKU tracking, crew time tracking, and milestone invoicing.",
-    url: "https://serviceos.cc/painting-software",
+    url: "https://fieseros.com/painting-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
@@ -130,15 +130,15 @@ export default function PaintingSoftwarePage() {
     <CornerstoneLayout
       activePath="/painting-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Painting Software", url: "https://serviceos.cc/painting-software" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Painting Software", url: "https://fieseros.com/painting-software" },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
         eyebrow="Painting Software"
         title="Painting Contractor Software That Protects Your Margin From Estimate to Final Coat"
-        subtitle="From a single-room repaint to a multi-week commercial project, ServiceOS helps painters quote accurately, document prep and coats, track crew time, and bill by milestone."
+        subtitle="From a single-room repaint to a multi-week commercial project, Fieseros helps painters quote accurately, document prep and coats, track crew time, and bill by milestone."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -174,14 +174,14 @@ export default function PaintingSoftwarePage() {
               Most painting contractors still build estimates on a notepad,
               track crew hours on paper timesheets, and send the final
               invoice weeks after the last brush stroke. Here&apos;s what
-              that costs you — and what changes when you switch to ServiceOS.
+              that costs you — and what changes when you switch to Fieseros.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <Wrench className="h-5 w-5 text-destructive" />
-                Without ServiceOS
+                Without Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -202,7 +202,7 @@ export default function PaintingSoftwarePage() {
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With ServiceOS
+                With Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -224,7 +224,7 @@ export default function PaintingSoftwarePage() {
         </div>
       </section>
 
-      <ContentSection title="Why painting contractors choose ServiceOS">
+      <ContentSection title="Why painting contractors choose Fieseros">
         <p>
           Painting contracting looks simple from the outside — primer, two
           coats, done. From the inside, it&apos;s a margin-sensitive business
@@ -243,7 +243,7 @@ export default function PaintingSoftwarePage() {
           square footage times an assumed coverage rate, plus labor at a
           rough guess. When the estimate is wrong, the crew runs out of
           paint mid-job, somebody drives to the supplier, and the overage
-          comes out of your pocket. ServiceOS calculates quantities from
+          comes out of your pocket. Fieseros calculates quantities from
           your actual production rates, builds a professional quote on the
           spot, and converts the approved quote into material reservations
           and a deposit invoice — so the job starts with the right
@@ -255,7 +255,7 @@ export default function PaintingSoftwarePage() {
           didn&apos;t sand that, you only did one coat. Without photo
           documentation, it&apos;s the contractor&apos;s word against the
           customer&apos;s, and contractors lose those disputes far more often
-          than they should. ServiceOS makes photo documentation part of the
+          than they should. Fieseros makes photo documentation part of the
           workflow: crews photograph every stage of every job, and the
           photos attach permanently to the work order. Disputes get closed
           in seconds. The same photos build a portfolio that closes future
@@ -265,7 +265,7 @@ export default function PaintingSoftwarePage() {
           Finally, there&apos;s cash flow. A multi-week commercial repaint
           or whole-home job can tie up tens of thousands of dollars in labor
           and materials before the customer pays a dime — if you let it.
-          ServiceOS supports milestone billing: deposit on start, progress
+          Fieseros supports milestone billing: deposit on start, progress
           invoices at phase completions, final on walk-through. You track
           earned revenue against billed revenue so you always know where you
           stand. Crew time tracking compares actual hours to estimated hours
@@ -276,7 +276,7 @@ export default function PaintingSoftwarePage() {
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything painting contractors ask before switching to ServiceOS."
+        subtitle="Everything painting contractors ask before switching to Fieseros."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -287,7 +287,7 @@ export default function PaintingSoftwarePage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/handyman-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

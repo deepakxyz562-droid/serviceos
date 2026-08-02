@@ -911,7 +911,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         onboardingStep: 4,
         onboardingCompleted: true,
       });
-      toast.success('Welcome to ServiceOS! 🎉');
+      toast.success('Welcome to Fieseros! 🎉');
       onComplete();
     } catch {
       toast.error('Something went wrong. Please try again.');
@@ -2175,8 +2175,8 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader className="sr-only">
-          <DialogTitle>ServiceOS Onboarding</DialogTitle>
-          <DialogDescription>Set up your ServiceOS workspace</DialogDescription>
+          <DialogTitle>Fieseros Onboarding</DialogTitle>
+          <DialogDescription>Set up your Fieseros workspace</DialogDescription>
         </DialogHeader>
 
         {/* Progress bar */}
@@ -2235,7 +2235,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         onSuccess={() => {
           setPayCheckoutPlan(null);
           setPaymentCompleted(true);
-          toast.success('Subscription activated! Welcome to ServiceOS 🎉');
+          toast.success('Subscription activated! Welcome to Fieseros 🎉');
           goNext();
         }}
       />

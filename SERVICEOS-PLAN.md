@@ -1,6 +1,6 @@
-# ServiceOS — Complete Implementation Plan
+# Fieseros — Complete Implementation Plan
 
-> **Mission**: Transform FlowForge into ServiceOS, a production-grade multi-tenant SaaS platform
+> **Mission**: Transform FlowForge into Fieseros, a production-grade multi-tenant SaaS platform
 > for service businesses (plumbing, cleaning, HVAC, movers, pest control, etc.) that rivals
 > Jobber / ServiceTitan / Housecall Pro.
 
@@ -14,7 +14,7 @@
 4. [API Route Design](#4-api-route-design)
 5. [Zustand Store Design](#5-zustand-store-design)
 6. [Implementation Priority Order](#6-implementation-priority-order)
-7. [Rebranding: FlowForge → ServiceOS](#7-rebranding-flowforge--serviceos)
+7. [Rebranding: FlowForge → Fieseros](#7-rebranding-flowforge--fieseros)
 
 ---
 
@@ -24,7 +24,7 @@
 
 | Module | Status | Component | Notes |
 |--------|--------|-----------|-------|
-| Landing Page | ✅ Good | `landing-page.tsx` | Rebrand to ServiceOS; add service industry illustrations |
+| Landing Page | ✅ Good | `landing-page.tsx` | Rebrand to Fieseros; add service industry illustrations |
 | Auth (Email + Google) | ✅ Good | `auth-page.tsx`, `google-onboarding.tsx` | Add demo accounts per industry |
 | Dashboard | ✅ Good | `saas-dashboard-view.tsx` | Enhance with today's schedule, conversion funnel |
 | Lead Management | ✅ Good | `leads-view.tsx` | Kanban + table, pipeline, convert to job |
@@ -544,7 +544,7 @@ src/
 ├── types/
 │   ├── index.ts                         # ✅ existing
 │   ├── workflow.ts                      # ✅ existing - add ViewType
-│   ├── service-os.ts                    # 🆕 NEW - all ServiceOS types
+│   ├── service-os.ts                    # 🆕 NEW - all Fieseros types
 │   └── api.ts                           # 🆕 NEW - API response types
 │
 ├── lib/
@@ -571,7 +571,7 @@ src/
 │
 └── scripts/
     ├── seed-all.ts                      # ✅ existing - extend
-    └── seed-service-os.ts              # 🆕 NEW - ServiceOS demo data
+    └── seed-service-os.ts              # 🆕 NEW - Fieseros demo data
 ```
 
 ---
@@ -902,7 +902,7 @@ interface AdminState {
 
 | # | Task | Est. | Files |
 |---|------|------|-------|
-| 1.1 | **Rebrand FlowForge → ServiceOS** | 2h | All references in sidebar, landing, loading states, localStorage keys |
+| 1.1 | **Rebrand FlowForge → Fieseros** | 2h | All references in sidebar, landing, loading states, localStorage keys |
 | 1.2 | **Update Prisma schema** — add all new models | 3h | `prisma/schema.prisma` |
 | 1.3 | **Run `prisma db push`** — apply schema | 0.5h | Terminal |
 | 1.4 | **Build Invoices module** | 16h | `invoices-view.tsx`, `invoice-*.tsx`, `/api/invoices/*`, `invoice-store.ts`, `invoice-utils.ts` |
@@ -947,7 +947,7 @@ interface AdminState {
 | # | Task | Est. | Files |
 |---|------|------|-------|
 | 4.1 | **Shared components** — DataTable, StatCard, StatusBadge | 8h | `shared/*.tsx` |
-| 4.2 | **Landing page redesign** — ServiceOS branding, industry-specific hero | 8h | `landing-page.tsx` |
+| 4.2 | **Landing page redesign** — Fieseros branding, industry-specific hero | 8h | `landing-page.tsx` |
 | 4.3 | **Industry onboarding** — industry-specific setup flows | 6h | `industry-onboarding.tsx` |
 | 4.4 | **Mobile responsive** — all views work on mobile | 12h | All view components |
 | 4.5 | **Performance optimization** — lazy loading, code splitting | 6h | Dynamic imports, React.lazy |
@@ -957,23 +957,23 @@ interface AdminState {
 
 ---
 
-## 7. Rebranding: FlowForge → ServiceOS
+## 7. Rebranding: FlowForge → Fieseros
 
 ### String Replacements
 
 | Old | New | Files |
 |-----|-----|-------|
-| `FlowForge` | `ServiceOS` | sidebar, landing page, loading states, auth pages |
-| `flowforge_user` | `serviceos_user` | localStorage keys in `page.tsx` |
-| `flowforge_tenant` | `serviceos_tenant` | localStorage keys in `page.tsx` |
-| `Loading FlowForge...` | `Loading ServiceOS...` | `page.tsx` |
-| `/logo.svg` | New ServiceOS logo | `public/logo.svg` |
+| `FlowForge` | `Fieseros` | sidebar, landing page, loading states, auth pages |
+| `flowforge_user` | `fieseros_user` | localStorage keys in `page.tsx` |
+| `flowforge_tenant` | `fieseros_tenant` | localStorage keys in `page.tsx` |
+| `Loading FlowForge...` | `Loading Fieseros...` | `page.tsx` |
+| `/logo.svg` | New Fieseros logo | `public/logo.svg` |
 
 ### Updated Sidebar Navigation
 
 ```
 ┌─────────────────────────────────────┐
-│  ⚡ ServiceOS           [Growth]    │
+│  ⚡ Fieseros           [Growth]    │
 │  ▼ Acme Plumbing                    │
 ├─────────────────────────────────────┤
 │  📊 Dashboard                       │
@@ -1000,7 +1000,7 @@ interface AdminState {
 - **Headline**: "Operations OS for Service Businesses"
 - **Subheadline**: "From leads to invoices — manage your entire field service business in one place"
 - **Industry icons**: Plumbing, Cleaning, HVAC, Moving, Pest Control, Electrical
-- **Social proof**: "500+ service businesses trust ServiceOS"
+- **Social proof**: "500+ service businesses trust Fieseros"
 
 ---
 

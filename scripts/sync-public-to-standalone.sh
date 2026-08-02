@@ -1,15 +1,15 @@
 #!/bin/bash
 # ============================================================
-# ServiceOS — Sync public/ → standalone/public/
+# Fieseros — Sync public/ → standalone/public/
 # ============================================================
 # The production deployment runs `node standalone/server.js`, which serves
 # static files from `standalone/public/`. Next.js's standalone build output
 # does NOT automatically copy `public/` into `standalone/public/`, so every
 # time a new icon / manifest / static asset is added to `public/`, it MUST
-# also land in `standalone/public/` or the deployed site (serviceos.cc)
+# also land in `standalone/public/` or the deployed site (fieseros.com)
 # will 404 on that asset — which is exactly what caused Lighthouse's
 # "Your PWA's web manifest refers to an image that doesn't exist:
-#  https://serviceos.cc/icon.svg" error.
+#  https://fieseros.com/icon.svg" error.
 #
 # This script mirrors every file from `public/` into `standalone/public/`
 # so the two directories never drift. Run it:

@@ -1,5 +1,5 @@
 /**
- * ServiceOS — Dynamic Forms Engine: Field Type Registry
+ * Fieseros — Dynamic Forms Engine: Field Type Registry
  * ----------------------------------------------------
  * Single source of truth for the 15 supported form field types plus the
  * conditional-display, calculation, and auto-scoring helpers that drive the

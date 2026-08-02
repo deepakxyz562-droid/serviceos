@@ -13,7 +13,7 @@
  *   SMTP pass: BInFKprST5upb+sYW5/U4dPAW7n3BZirdZL2FXFWNdPE
  *   SMTP host: email-smtp.ap-south-1.amazonaws.com
  *   Port: 587 (STARTTLS)
- *   Verified senders: sales@serviceos.cc, support@serviceos.cc
+ *   Verified senders: sales@fieseros.com, support@fieseros.com
  *
  * NOTE: If the SES SMTP credentials change, update the constants below
  * and re-run this script. It will upsert the provider record.
@@ -33,15 +33,15 @@ async function main() {
   const SES_REGION = 'ap-south-1';
 
   // From / reply-to: verified email addresses in SES
-  const FROM_EMAIL = 'sales@serviceos.cc';
-  const FROM_NAME  = 'ServiceOS';
+  const FROM_EMAIL = 'sales@fieseros.com';
+  const FROM_NAME  = 'Fieseros';
 
   // Find any tenant. The EmailProvider schema requires tenantId, so we
   // attach this SES provider to the first tenant we find.
   // Because isPlatform=true, the resolver will use it across all tenants
   // that don't have their own transactional provider configured.
   let tenant = await db.tenant.findFirst({
-    where: { slug: 'serviceos-demo' },
+    where: { slug: 'fieseros-demo' },
     select: { id: true, name: true },
   });
   if (!tenant) {
@@ -78,7 +78,7 @@ async function main() {
     provider = await db.emailProvider.update({
       where: { id: existing.id },
       data: {
-        name: 'AWS SES - ServiceOS',
+        name: 'AWS SES - Fieseros',
         configJson,
         fromName:  FROM_NAME,
         fromEmail: FROM_EMAIL,
@@ -95,7 +95,7 @@ async function main() {
   } else {
     provider = await db.emailProvider.create({
       data: {
-        name: 'AWS SES - ServiceOS',
+        name: 'AWS SES - Fieseros',
         providerType: 'ses',
         configJson,
         fromName:  FROM_NAME,

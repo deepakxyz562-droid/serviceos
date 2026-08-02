@@ -27,7 +27,7 @@ const COUNTRY_CURRENCY: Record<string, string> = {
 const ALLOWED_COUNTRIES = Object.keys(COUNTRY_CURRENCY);
 
 const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter';
-const OSM_USER_AGENT = 'ServiceOS-Seed/1.0';
+const OSM_USER_AGENT = 'Fieseros-Seed/1.0';
 // Reduced from 60s to 45s so a single slow category can't eat the whole
 // request budget. Combined with maxDuration=300, this gives enough headroom
 // for many categories in a single seed run.

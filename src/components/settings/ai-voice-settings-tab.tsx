@@ -112,7 +112,7 @@ export function AiVoiceSettingsTab() {
               </CardTitle>
               <CardDescription className="mt-1">
                 Connect your Vapi.ai account to power AI voice receptionists. You pay Vapi directly
-                for call minutes (~$0.05–0.15/min). ServiceOS pays $0 in API costs.
+                for call minutes (~$0.05–0.15/min). Fieseros pays $0 in API costs.
               </CardDescription>
             </div>
           </div>
@@ -250,7 +250,7 @@ export function AiVoiceSettingsTab() {
             Webhook Configuration
           </CardTitle>
           <CardDescription>
-            Point Vapi webhooks to your ServiceOS instance to receive call events and transcripts.
+            Point Vapi webhooks to your Fieseros instance to receive call events and transcripts.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
@@ -275,7 +275,7 @@ export function AiVoiceSettingsTab() {
             <div className="text-muted-foreground">
               <span className="font-medium text-blue-700 dark:text-blue-400">Setup tip:</span> In Vapi Dashboard →
               Webhooks, add the Webhook URL above. For function calling, the Server URL is auto-set on new assistants
-              created through ServiceOS.
+              created through Fieseros.
             </div>
           </div>
         </CardContent>

@@ -1539,7 +1539,7 @@ function PortalManagementView() {
                         <Building2 className="size-4 text-white" />
                       </div>
                       <div>
-                        <h2 className="text-sm font-bold text-gray-900">ServiceOS</h2>
+                        <h2 className="text-sm font-bold text-gray-900">Fieseros</h2>
                         <p className="text-[10px] text-gray-500">Customer Portal</p>
                       </div>
                     </div>
@@ -1550,7 +1550,7 @@ function PortalManagementView() {
 
                   {/* Mini footer */}
                   <div className="mt-4 pt-3 border-t border-emerald-100 flex items-center justify-between text-[10px] text-gray-400">
-                    <span>Powered by ServiceOS</span>
+                    <span>Powered by Fieseros</span>
                     {previewData.session?.expiresAt && (
                       <span>Session expires {formatDate(previewData.session.expiresAt)}</span>
                     )}

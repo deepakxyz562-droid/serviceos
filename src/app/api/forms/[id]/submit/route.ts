@@ -489,10 +489,10 @@ export async function POST(
                     `<tr><td style="padding:8px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb;width:40%">${k}</td><td style="padding:8px;border:1px solid #e5e7eb">${String(v)}</td></tr>`
                   ),
                   `</table>`,
-                  `<p style="font-size:12px;color:#9ca3af;margin-top:24px">— Sent from ServiceOS Forms</p>`,
+                  `<p style="font-size:12px;color:#9ca3af;margin-top:24px">— Sent from Fieseros Forms</p>`,
                   `</div>`,
                 ].join('\n');
-                const ownerText = `New Form Submission\nForm: ${form.name}\nSubmitter: ${customerName}${customerEmail ? ` (${customerEmail})` : ''}\n\nData:\n${Object.entries(formData).map(([k, v]) => `${k}: ${v}`).join('\n')}\n\n— ServiceOS Forms`;
+                const ownerText = `New Form Submission\nForm: ${form.name}\nSubmitter: ${customerName}${customerEmail ? ` (${customerEmail})` : ''}\n\nData:\n${Object.entries(formData).map(([k, v]) => `${k}: ${v}`).join('\n')}\n\n— Fieseros Forms`;
 
                 // notifyOwner handles owner email resolution + sendEmail + NotificationLog
                 const r = await notifyOwner(tenantId, {
@@ -518,10 +518,10 @@ export async function POST(
                   `<p>Hi ${customerName},</p>`,
                   `<p>Thank you for submitting the <strong>${form.name}</strong> form. We've received your details and will be in touch shortly.</p>`,
                   form.completionMessage ? `<p>${form.completionMessage}</p>` : '',
-                  `<p style="font-size:12px;color:#9ca3af;margin-top:24px">— Sent from ServiceOS</p>`,
+                  `<p style="font-size:12px;color:#9ca3af;margin-top:24px">— Sent from Fieseros</p>`,
                   `</div>`,
                 ].filter(Boolean).join('\n');
-                const userText = `Hi ${customerName},\n\nThank you for submitting the ${form.name} form. We've received your details and will be in touch shortly.\n${form.completionMessage ? `\n${form.completionMessage}\n` : ''}\n— Sent from ServiceOS`;
+                const userText = `Hi ${customerName},\n\nThank you for submitting the ${form.name} form. We've received your details and will be in touch shortly.\n${form.completionMessage ? `\n${form.completionMessage}\n` : ''}\n— Sent from Fieseros`;
 
                 const r = await sendEmail({
                   to: customerEmail,

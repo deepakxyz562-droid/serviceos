@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
  * Unified cron authentication helper.
  *
  * All cron routes under /api/cron/* MUST use `verifyCronAuth(request)` instead
- * of inline secret checks. This eliminates the historical `serviceos-cron-dev`
+ * of inline secret checks. This eliminates the historical `fieseros-cron-dev`
  * fallback (a public hardcoded constant that allowed anyone to trigger billing
  * mutations, mass email sends, and Stripe transfers when CRON_SECRET was unset).
  *

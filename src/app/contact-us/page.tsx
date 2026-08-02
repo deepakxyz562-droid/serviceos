@@ -10,15 +10,15 @@ import {
 import ContactForm from "./contact-form";
 
 export const metadata: Metadata = {
-  title: "Contact Us — ServiceOS CRM",
+  title: "Contact Us — Fieseros CRM",
   description:
-    "Get in touch with the ServiceOS CRM team. Reach out for sales inquiries, technical support, integration help, billing questions, or partnership opportunities. We're here to help.",
+    "Get in touch with the Fieseros CRM team. Reach out for sales inquiries, technical support, integration help, billing questions, or partnership opportunities. We're here to help.",
   openGraph: {
-    title: "Contact Us — ServiceOS CRM",
+    title: "Contact Us — Fieseros CRM",
     description:
-      "Get in touch with the ServiceOS CRM team. Reach out for sales inquiries, technical support, integration help, billing questions, or partnership opportunities.",
-    url: "https://serviceos.cc/contact-us",
-    siteName: "ServiceOS",
+      "Get in touch with the Fieseros CRM team. Reach out for sales inquiries, technical support, integration help, billing questions, or partnership opportunities.",
+    url: "https://fieseros.com/contact-us",
+    siteName: "Fieseros",
     type: "website",
   },
 };
@@ -31,9 +31,9 @@ const faqs = [
     link: { href: "/docs/notifications-setup", label: "View Notifications Setup Docs" },
   },
   {
-    question: "Can I try ServiceOS for free?",
+    question: "Can I try Fieseros for free?",
     answer:
-      "Yes! ServiceOS offers a 14-day free trial with full access to all features. No credit card required.",
+      "Yes! Fieseros offers a 14-day free trial with full access to all features. No credit card required.",
     link: null,
   },
   {
@@ -46,7 +46,7 @@ const faqs = [
     question: "Do you offer custom enterprise plans?",
     answer:
       "Absolutely! We offer tailored enterprise solutions with custom pricing, dedicated support, and SLA guarantees. Contact our sales team to discuss your needs.",
-    link: { href: "mailto:sales@serviceos.cc", label: "Email sales@serviceos.cc" },
+    link: { href: "mailto:sales@fieseros.com", label: "Email sales@fieseros.com" },
   },
 ];
 
@@ -61,7 +61,7 @@ export default function ContactUsPage() {
               <Bolt className="h-5 w-5 text-white" />
             </span>
             <span className="text-xl font-bold tracking-tight text-foreground">
-              ServiceOS
+              Fieseros
             </span>
           </Link>
           <Link
@@ -113,10 +113,10 @@ export default function ContactUsPage() {
                       General Inquiries
                     </p>
                     <a
-                      href="mailto:hello@serviceos.cc"
+                      href="mailto:hello@fieseros.com"
                       className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
                     >
-                      hello@serviceos.cc
+                      hello@fieseros.com
                     </a>
                   </div>
                   <div>
@@ -124,10 +124,10 @@ export default function ContactUsPage() {
                       Technical Support
                     </p>
                     <a
-                      href="mailto:support@serviceos.cc"
+                      href="mailto:support@fieseros.com"
                       className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
                     >
-                      support@serviceos.cc
+                      support@fieseros.com
                     </a>
                   </div>
                   <div>
@@ -135,10 +135,10 @@ export default function ContactUsPage() {
                       Privacy & Data Requests
                     </p>
                     <a
-                      href="mailto:privacy@serviceos.cc"
+                      href="mailto:privacy@fieseros.com"
                       className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
                     >
-                      privacy@serviceos.cc
+                      privacy@fieseros.com
                     </a>
                   </div>
                 </CardContent>
@@ -259,7 +259,7 @@ export default function ContactUsPage() {
                   </span>
                   <div>
                     <p className="font-semibold text-foreground text-lg">
-                      ServiceOS Headquarters
+                      Fieseros Headquarters
                     </p>
                     <address className="not-italic text-muted-foreground text-sm mt-1 leading-relaxed">
                       123 Innovation Drive, Suite 400
@@ -288,7 +288,7 @@ export default function ContactUsPage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              &copy; 2026 ServiceOS, Inc. All rights reserved.
+              &copy; 2026 Fieseros, Inc. All rights reserved.
             </p>
             <nav className="flex items-center gap-6 text-sm text-muted-foreground">
               <a

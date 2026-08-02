@@ -425,7 +425,7 @@ function OneClickWizard({
 function getEmbedCode(channelId: string): string {
   if (channelId === 'livechat') {
     return `<script src="${typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'}/widget/livechat.js" async></script>
-<div id="serviceos-livechat" data-position="bottom-right"></div>`
+<div id="fieseros-livechat" data-position="bottom-right"></div>`
   }
   if (channelId === 'webwidget') {
     return `<script src="${typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'}/widget/widget.js" async></script>`

@@ -11,7 +11,7 @@
  * forbidden header in fetch/XHR), which violates Nominatim's usage policy
  * (they require an identifying User-Agent) and causes aggressive
  * rate-limiting (429s) or empty results — the dropdown never populated.
- * The proxy sets `User-Agent: ServiceOS-Onboarding/1.0 (...)` server-side
+ * The proxy sets `User-Agent: Fieseros-Onboarding/1.0 (...)` server-side
  * and adds a 60-second in-memory cache to respect Nominatim's rate limit.
  *
  * Features:

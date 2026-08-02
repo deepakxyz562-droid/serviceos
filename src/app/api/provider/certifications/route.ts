@@ -4,7 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { withRequestId } from '@/lib/logger';
 
 /**
- * Provider Certifications — list + add (ServiceOS V1.5 — P10-flows)
+ * Provider Certifications — list + add (Fieseros V1.5 — P10-flows)
  * ------------------------------------------------------------
  * GET  /api/provider/certifications          — list own certifications
  * POST /api/provider/certifications          — add a new certification

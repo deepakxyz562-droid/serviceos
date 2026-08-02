@@ -15,7 +15,7 @@ import { sendSmsMessage } from '@/lib/sms-send'
  *      Body: { to: string, provider: string, config: Record<string, string> }
  *      → uses the provided provider + config directly (no DB lookup)
  *
- * The test message is always: "ServiceOS test: Your SMS provider is working. <timestamp>"
+ * The test message is always: "Fieseros test: Your SMS provider is working. <timestamp>"
  */
 export async function POST(request: NextRequest) {
   try {
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const testMessage = `ServiceOS test: Your SMS provider is working. ${new Date().toISOString()}`
+    const testMessage = `Fieseros test: Your SMS provider is working. ${new Date().toISOString()}`
 
     const result = await sendSmsMessage({
       to,

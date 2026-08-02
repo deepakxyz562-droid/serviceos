@@ -48,7 +48,7 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function ThemeBrandingSection() {
-  const [platformName, setPlatformName] = useState('ServiceOS');
+  const [platformName, setPlatformName] = useState('Fieseros');
   const [tagline, setTagline] = useState('Run your service business on one platform.');
   const [brandedHeader, setBrandedHeader] = useState(true);
   const [brandedFooter, setBrandedFooter] = useState(true);
@@ -138,7 +138,7 @@ export function ThemeBrandingSection() {
                 <span className="size-2.5 rounded-full bg-red-400/70" />
                 <span className="size-2.5 rounded-full bg-amber-400/70" />
                 <span className="size-2.5 rounded-full bg-emerald-400/70" />
-                <span className="ml-3 text-[10px] text-muted-foreground truncate">app.ServiceOS.io</span>
+                <span className="ml-3 text-[10px] text-muted-foreground truncate">app.Fieseros.io</span>
               </div>
               <div className="p-4 space-y-3">
                 {/* fake header */}

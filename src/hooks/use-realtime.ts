@@ -45,7 +45,7 @@ export function getCachedTenantPresence(tenantId: string): boolean | null {
  *
  * Forward-compatible: if you later deploy the mini-service to a separate
  * host (Railway / Render / Fly.io), set `NEXT_PUBLIC_REALTIME_URL` to its
- * public URL (e.g. `https://realtime.serviceos.cc`) and the hook will
+ * public URL (e.g. `https://realtime.fieseros.com`) and the hook will
  * connect there instead of skipping — no other code change needed.
  */
 function isRealtimeServerAvailable(): boolean {
@@ -563,9 +563,9 @@ export function usePresence(employeeIds: string[] = []): Record<string, 'online'
  * feature). Returns null on the server (no localStorage) or when the auth
  * data is missing/malformed.
  *
- * Reads `serviceos_auth` (preferred — set by the login flow with shape
+ * Reads `fieseros_auth` (preferred — set by the login flow with shape
  * `{ token, user: { id, tenantId, employeeId? } }`) and falls back to
- * decoding the JWT from `serviceos_token` if needed.
+ * decoding the JWT from `fieseros_token` if needed.
  */
 function getPresenceInfoFromStorage(): {
   userId: string;
@@ -574,7 +574,7 @@ function getPresenceInfoFromStorage(): {
 } | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem('serviceos_auth');
+    const raw = window.localStorage.getItem('fieseros_auth');
     if (!raw) return null;
     const parsed = JSON.parse(raw) as {
       token?: string;

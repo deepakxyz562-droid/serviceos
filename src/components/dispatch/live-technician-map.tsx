@@ -279,7 +279,7 @@ function buildTechDivIcon(tech: MapTechnician, color: string, isFollowed: boolea
     <div style="position:relative;width:28px;height:28px;">
       ${
         !isOfflineMarker
-          ? `<span style="position:absolute;inset:-4px;border-radius:9999px;background:${color};opacity:0.25;animation:serviceos-tech-pulse 2s ease-out infinite;"></span>`
+          ? `<span style="position:absolute;inset:-4px;border-radius:9999px;background:${color};opacity:0.25;animation:fieseros-tech-pulse 2s ease-out infinite;"></span>`
           : ''
       }
       <span style="
@@ -296,7 +296,7 @@ function buildTechDivIcon(tech: MapTechnician, color: string, isFollowed: boolea
   `;
   return L.divIcon({
     html,
-    className: 'serviceos-tech-marker',
+    className: 'fieseros-tech-marker',
     iconSize: [28, 28],
     iconAnchor: [14, 14],
     popupAnchor: [0, -16],
@@ -317,7 +317,7 @@ function buildJobDivIcon(job: MapJob, color: string): L.DivIcon {
   `;
   return L.divIcon({
     html,
-    className: 'serviceos-job-marker',
+    className: 'fieseros-job-marker',
     iconSize: [24, 30],
     iconAnchor: [12, 28],
     popupAnchor: [0, -26],
@@ -340,7 +340,7 @@ function buildClusterDivIcon(count: number): L.DivIcon {
   `;
   return L.divIcon({
     html,
-    className: 'serviceos-job-cluster',
+    className: 'fieseros-job-cluster',
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
     popupAnchor: [0, -size / 2],
@@ -673,18 +673,18 @@ export default function LiveTechnicianMap({
     mapRef.current = map;
 
     // Inject pulse keyframes + custom marker styles once.
-    if (typeof document !== 'undefined' && !document.getElementById('serviceos-tech-marker-style')) {
+    if (typeof document !== 'undefined' && !document.getElementById('fieseros-tech-marker-style')) {
       const styleEl = document.createElement('style');
-      styleEl.id = 'serviceos-tech-marker-style';
+      styleEl.id = 'fieseros-tech-marker-style';
       styleEl.textContent = `
-        @keyframes serviceos-tech-pulse {
+        @keyframes fieseros-tech-pulse {
           0%   { transform: scale(0.85); opacity: 0.45; }
           70%  { transform: scale(1.8);  opacity: 0;    }
           100% { transform: scale(1.8);  opacity: 0;    }
         }
-        .serviceos-tech-marker,
-        .serviceos-job-marker,
-        .serviceos-job-cluster { background: transparent !important; border: none !important; }
+        .fieseros-tech-marker,
+        .fieseros-job-marker,
+        .fieseros-job-cluster { background: transparent !important; border: none !important; }
         .leaflet-container { font-family: inherit; }
         .leaflet-popup-content-wrapper { border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
         .leaflet-popup-content { margin: 10px 12px; }

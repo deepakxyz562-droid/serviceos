@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       try {
         paypalCancelled = await cancelPayPalSubscription(
           subscription.paypalSubscriptionId,
-          'Cancelled by user via ServiceOS billing page',
+          'Cancelled by user via Fieseros billing page',
         );
       } catch (err) {
         paypalError = err instanceof Error ? err.message : String(err);

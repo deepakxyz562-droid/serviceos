@@ -6,7 +6,7 @@ import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit'
 import { checkMarketplaceEligibility } from '@/lib/marketplace-eligibility';
 
 /**
- * Flow 2: Quote Request — list + submit quotes (ServiceOS V1.5 — P10-flows)
+ * Flow 2: Quote Request — list + submit quotes (Fieseros V1.5 — P10-flows)
  * ------------------------------------------------------------
  * GET  /api/marketplace/quote-request/[id]/quotes   — list all quotes submitted
  * POST /api/marketplace/quote-request/[id]/quotes   — provider submits a quote

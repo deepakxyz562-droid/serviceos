@@ -65,7 +65,7 @@ export function BillingSettings() {
       icon={CreditCard}
       accent="emerald"
       configuredItems={[
-        { label: 'Subscription Plan', hint: 'View and change your ServiceOS plan tier' },
+        { label: 'Subscription Plan', hint: 'View and change your Fieseros plan tier' },
         { label: 'Usage Dashboard', hint: 'Track seats, jobs, AI credits, SMS, storage used' },
         { label: 'Invoice History', hint: 'Download past invoices and receipts' },
         { label: 'Marketplace Plan', hint: 'Commission rate, featured-listing quota' },

@@ -1,14 +1,14 @@
 <?php
 /**
- * Plugin Name: ServiceOS CRM - Lead Capture
- * Plugin URI: https://serviceos.cc
+ * Plugin Name: Fieseros CRM - Lead Capture
+ * Plugin URI: https://fieseros.com
  * Description: Injects a universal JavaScript form capture script on every page. Works with Contact Form 7, WPForms, Gravity Forms, Ninja Forms, Fluent Forms, Elementor Forms, Formidable, MetForm, Everest Forms, HTML forms, and custom forms — automatically.
  * Version: 2.0.0
- * Author: ServiceOS
- * Author URI: https://serviceos.cc
+ * Author: Fieseros
+ * Author URI: https://fieseros.com
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: serviceos-crm-lead-capture
+ * Text Domain: fieseros-crm-lead-capture
  * Domain Path: /languages
  * Requires at least: 5.0
  * Requires PHP: 7.4
@@ -21,18 +21,18 @@ if (!defined('ABSPATH')) {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-define('SERVICEOS_VERSION', '2.0.0');
-define('SERVICEOS_PLUGIN_DIR', plugin_dir_path(__FILE__));
-define('SERVICEOS_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('SERVICEOS_OPTION_KEY', 'serviceos_crm_settings');
-define('SERVICEOS_LOG_OPTION', 'serviceos_crm_logs');
+define('FIESEROS_VERSION', '2.0.0');
+define('FIESEROS_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('FIESEROS_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('FIESEROS_OPTION_KEY', 'fieseros_crm_settings');
+define('FIESEROS_LOG_OPTION', 'fieseros_crm_logs');
 
 // ─── Activation / Deactivation ────────────────────────────────────────────────
 
-register_activation_hook(__FILE__, 'serviceos_activate');
-register_deactivation_hook(__FILE__, 'serviceos_deactivate');
+register_activation_hook(__FILE__, 'fieseros_activate');
+register_deactivation_hook(__FILE__, 'fieseros_deactivate');
 
-function serviceos_activate() {
+function fieseros_activate() {
     $defaults = array(
         'api_url'         => '',
         'api_key'         => '',
@@ -41,107 +41,107 @@ function serviceos_activate() {
         'debug_mode'      => false,
         'intercept_ajax'  => false,
     );
-    if (false === get_option(SERVICEOS_OPTION_KEY)) {
-        add_option(SERVICEOS_OPTION_KEY, $defaults);
+    if (false === get_option(FIESEROS_OPTION_KEY)) {
+        add_option(FIESEROS_OPTION_KEY, $defaults);
     }
     // Initialize log storage
-    if (false === get_option(SERVICEOS_LOG_OPTION)) {
-        add_option(SERVICEOS_LOG_OPTION, array());
+    if (false === get_option(FIESEROS_LOG_OPTION)) {
+        add_option(FIESEROS_LOG_OPTION, array());
     }
 }
 
-function serviceos_deactivate() {
+function fieseros_deactivate() {
     // Clean up transients but preserve settings
-    delete_transient('serviceos_connection_test');
+    delete_transient('fieseros_connection_test');
 }
 
 // ─── Settings Page ────────────────────────────────────────────────────────────
 
-add_action('admin_menu', 'serviceos_add_admin_menu');
+add_action('admin_menu', 'fieseros_add_admin_menu');
 
-function serviceos_add_admin_menu() {
+function fieseros_add_admin_menu() {
     add_options_page(
-        'ServiceOS CRM Settings',
-        'ServiceOS CRM',
+        'Fieseros CRM Settings',
+        'Fieseros CRM',
         'manage_options',
-        'serviceos-crm',
-        'serviceos_settings_page'
+        'fieseros-crm',
+        'fieseros_settings_page'
     );
 }
 
-add_action('admin_init', 'serviceos_settings_init');
+add_action('admin_init', 'fieseros_settings_init');
 
-function serviceos_settings_init() {
-    register_setting('serviceos_crm', SERVICEOS_OPTION_KEY, 'serviceos_sanitize_settings');
+function fieseros_settings_init() {
+    register_setting('fieseros_crm', FIESEROS_OPTION_KEY, 'fieseros_sanitize_settings');
 
     // ─── Connection Section ───────────────────────────────────────────────
     add_settings_section(
-        'serviceos_connection_section',
+        'fieseros_connection_section',
         'API Connection',
-        'serviceos_connection_section_callback',
-        'serviceos_crm'
+        'fieseros_connection_section_callback',
+        'fieseros_crm'
     );
 
     add_settings_field(
         'api_url',
-        'ServiceOS URL',
-        'serviceos_api_url_render',
-        'serviceos_crm',
-        'serviceos_connection_section'
+        'Fieseros URL',
+        'fieseros_api_url_render',
+        'fieseros_crm',
+        'fieseros_connection_section'
     );
 
     add_settings_field(
         'api_key',
         'API Key',
-        'serviceos_api_key_render',
-        'serviceos_crm',
-        'serviceos_connection_section'
+        'fieseros_api_key_render',
+        'fieseros_crm',
+        'fieseros_connection_section'
     );
 
     add_settings_field(
         'tenant_id',
         'Tenant ID',
-        'serviceos_tenant_id_render',
-        'serviceos_crm',
-        'serviceos_connection_section'
+        'fieseros_tenant_id_render',
+        'fieseros_crm',
+        'fieseros_connection_section'
     );
 
     // ─── Features Section ─────────────────────────────────────────────────
     add_settings_section(
-        'serviceos_features_section',
+        'fieseros_features_section',
         'Capture Options',
-        'serviceos_features_section_callback',
-        'serviceos_crm'
+        'fieseros_features_section_callback',
+        'fieseros_crm'
     );
 
     add_settings_field(
         'enabled',
         'Enable Integration',
-        'serviceos_enabled_render',
-        'serviceos_crm',
-        'serviceos_features_section'
+        'fieseros_enabled_render',
+        'fieseros_crm',
+        'fieseros_features_section'
     );
 
     add_settings_field(
         'intercept_ajax',
         'AJAX Interception',
-        'serviceos_intercept_ajax_render',
-        'serviceos_crm',
-        'serviceos_features_section'
+        'fieseros_intercept_ajax_render',
+        'fieseros_crm',
+        'fieseros_features_section'
     );
 
     add_settings_field(
         'debug_mode',
         'Debug Mode',
-        'serviceos_debug_mode_render',
-        'serviceos_crm',
-        'serviceos_features_section'
+        'fieseros_debug_mode_render',
+        'fieseros_crm',
+        'fieseros_features_section'
     );
 }
 
 // ─── Settings Field Renderers ─────────────────────────────────────────────────
 
-function serviceos_get_settings() {
+function fieseros_get_settings() {
     $defaults = array(
         'api_url'         => '',
         'api_key'         => '',
@@ -150,66 +150,66 @@ function serviceos_get_settings() {
         'debug_mode'      => false,
         'intercept_ajax'  => false,
     );
-    $stored = get_option(SERVICEOS_OPTION_KEY, array());
+    $stored = get_option(FIESEROS_OPTION_KEY, array());
     if (!is_array($stored)) $stored = array();
     return array_merge($defaults, $stored);
 }
 
-function serviceos_api_url_render() {
-    $settings = serviceos_get_settings();
+function fieseros_api_url_render() {
+    $settings = fieseros_get_settings();
     $value = isset($settings['api_url']) ? esc_attr($settings['api_url']) : '';
-    echo '<input type="url" name="' . SERVICEOS_OPTION_KEY . '[api_url]" value="' . $value . '" '
+    echo '<input type="url" name="' . FIESEROS_OPTION_KEY . '[api_url]" value="' . $value . '" '
         . 'class="regular-text" placeholder="https://app.yourcrm.com" '
         . 'style="min-width:400px;" />';
-    echo '<p class="description">Your ServiceOS base URL (e.g., https://app.yourcrm.com). The plugin loads /embed.js from this domain.</p>';
+    echo '<p class="description">Your Fieseros base URL (e.g., https://app.yourcrm.com). The plugin loads /embed.js from this domain.</p>';
 }
 
-function serviceos_api_key_render() {
-    $settings = serviceos_get_settings();
+function fieseros_api_key_render() {
+    $settings = fieseros_get_settings();
     $value = isset($settings['api_key']) ? esc_attr($settings['api_key']) : '';
-    echo '<input type="password" name="' . SERVICEOS_OPTION_KEY . '[api_key]" value="' . $value . '" '
+    echo '<input type="password" name="' . FIESEROS_OPTION_KEY . '[api_key]" value="' . $value . '" '
         . 'class="regular-text" placeholder="ff_prod_xxxxxxxxxxxx" '
         . 'style="min-width:400px;" />';
-    echo '<p class="description">Publishable API key from Settings → Integrations → Website Form Integration in your ServiceOS dashboard.</p>';
+    echo '<p class="description">Publishable API key from Settings → Integrations → Website Form Integration in your Fieseros dashboard.</p>';
 }
 
-function serviceos_tenant_id_render() {
-    $settings = serviceos_get_settings();
+function fieseros_tenant_id_render() {
+    $settings = fieseros_get_settings();
     $value = isset($settings['tenant_id']) ? esc_attr($settings['tenant_id']) : '';
-    echo '<input type="text" name="' . SERVICEOS_OPTION_KEY . '[tenant_id]" value="' . $value . '" '
+    echo '<input type="text" name="' . FIESEROS_OPTION_KEY . '[tenant_id]" value="' . $value . '" '
         . 'class="regular-text" placeholder="cltxxxxxxxxxx" />';
     echo '<p class="description">Your Tenant ID (found in Settings → General). Optional if API key is tenant-scoped.</p>';
 }
 
-function serviceos_enabled_render() {
-    $settings = serviceos_get_settings();
+function fieseros_enabled_render() {
+    $settings = fieseros_get_settings();
     $checked = !empty($settings['enabled']) ? 'checked' : '';
-    echo '<label><input type="checkbox" name="' . SERVICEOS_OPTION_KEY . '[enabled]" value="1" ' . $checked . ' /> Inject the universal capture script on every frontend page</label>';
+    echo '<label><input type="checkbox" name="' . FIESEROS_OPTION_KEY . '[enabled]" value="1" ' . $checked . ' /> Inject the universal capture script on every frontend page</label>';
 }
 
-function serviceos_intercept_ajax_render() {
-    $settings = serviceos_get_settings();
+function fieseros_intercept_ajax_render() {
+    $settings = fieseros_get_settings();
     $checked = !empty($settings['intercept_ajax']) ? 'checked' : '';
-    echo '<label><input type="checkbox" name="' . SERVICEOS_OPTION_KEY . '[intercept_ajax]" value="1" ' . $checked . ' /> Also intercept AJAX form POSTs (fetch + XHR)</label>';
+    echo '<label><input type="checkbox" name="' . FIESEROS_OPTION_KEY . '[intercept_ajax]" value="1" ' . $checked . ' /> Also intercept AJAX form POSTs (fetch + XHR)</label>';
     echo '<p class="description">Optional. Enable for forms that submit via AJAX without a page reload (Contact Form 7 REST mode, Elementor, custom React forms). Disabled by default.</p>';
 }
 
-function serviceos_debug_mode_render() {
-    $settings = serviceos_get_settings();
+function fieseros_debug_mode_render() {
+    $settings = fieseros_get_settings();
     $checked = !empty($settings['debug_mode']) ? 'checked' : '';
-    echo '<label><input type="checkbox" name="' . SERVICEOS_OPTION_KEY . '[debug_mode]" value="1" ' . $checked . ' /> Log embed script load events</label>';
-    echo '<p class="description">Check the ServiceOS Logs tab below to see debug output.</p>';
+    echo '<label><input type="checkbox" name="' . FIESEROS_OPTION_KEY . '[debug_mode]" value="1" ' . $checked . ' /> Log embed script load events</label>';
+    echo '<p class="description">Check the Fieseros Logs tab below to see debug output.</p>';
 }
 
-function serviceos_connection_section_callback() {
-    echo '<p>Configure the connection to your ServiceOS CRM instance. Get these values from your ServiceOS dashboard under Settings → Integrations → Website Form Integration.</p>';
+function fieseros_connection_section_callback() {
+    echo '<p>Configure the connection to your Fieseros CRM instance. Get these values from your Fieseros dashboard under Settings → Integrations → Website Form Integration.</p>';
 }
 
-function serviceos_features_section_callback() {
+function fieseros_features_section_callback() {
     echo '<p>This plugin injects a single &lt;script&gt; tag into every frontend page. The script auto-detects all form submissions — no per-plugin configuration needed.</p>';
 }
 
-function serviceos_sanitize_settings($input) {
+function fieseros_sanitize_settings($input) {
     $sanitized = array();
 
     $sanitized['api_url'] = esc_url_raw(trim(isset($input['api_url']) ? $input['api_url'] : ''));
@@ -224,8 +224,8 @@ function serviceos_sanitize_settings($input) {
 
 // ─── Settings Page HTML ───────────────────────────────────────────────────────
 
-function serviceos_settings_page() {
-    $settings = serviceos_get_settings();
+function fieseros_settings_page() {
+    $settings = fieseros_get_settings();
     $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'settings';
     ?>
     <div class="wrap">
@@ -233,14 +233,14 @@ function serviceos_settings_page() {
             <span style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;background:#10b981;border-radius:8px;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             </span>
-            ServiceOS CRM — Universal Lead Capture
+            Fieseros CRM — Universal Lead Capture
         </h1>
 
         <nav class="nav-tab-wrapper" style="margin-top:16px;">
-            <a href="?page=serviceos-crm&tab=settings" class="nav-tab <?php echo $active_tab === 'settings' ? 'nav-tab-active' : ''; ?>">Settings</a>
-            <a href="?page=serviceos-crm&tab=supported-forms" class="nav-tab <?php echo $active_tab === 'supported-forms' ? 'nav-tab-active' : ''; ?>">Supported Forms</a>
-            <a href="?page=serviceos-crm&tab=logs" class="nav-tab <?php echo $active_tab === 'logs' ? 'nav-tab-active' : ''; ?>">Logs</a>
-            <a href="?page=serviceos-crm&tab=help" class="nav-tab <?php echo $active_tab === 'help' ? 'nav-tab-active' : ''; ?>">Help</a>
+            <a href="?page=fieseros-crm&tab=settings" class="nav-tab <?php echo $active_tab === 'settings' ? 'nav-tab-active' : ''; ?>">Settings</a>
+            <a href="?page=fieseros-crm&tab=supported-forms" class="nav-tab <?php echo $active_tab === 'supported-forms' ? 'nav-tab-active' : ''; ?>">Supported Forms</a>
+            <a href="?page=fieseros-crm&tab=logs" class="nav-tab <?php echo $active_tab === 'logs' ? 'nav-tab-active' : ''; ?>">Logs</a>
+            <a href="?page=fieseros-crm&tab=help" class="nav-tab <?php echo $active_tab === 'help' ? 'nav-tab-active' : ''; ?>">Help</a>
         </nav>
 
         <?php if ($active_tab === 'settings'): ?>
@@ -249,7 +249,7 @@ function serviceos_settings_page() {
                 <?php
                 $is_configured = !empty($settings['api_url']) && !empty($settings['api_key']);
                 if ($is_configured):
-                    $test_result = get_transient('serviceos_connection_test');
+                    $test_result = get_transient('fieseros_connection_test');
                     if ($test_result === 'ok'):
                 ?>
                     <div class="notice notice-success inline" style="padding:12px 16px;display:flex;align-items:center;gap:8px;">
@@ -259,25 +259,25 @@ function serviceos_settings_page() {
                 <?php elseif ($test_result === 'fail'): ?>
                     <div class="notice notice-error inline" style="padding:12px 16px;display:flex;align-items:center;gap:8px;">
                         <span style="color:#ef4444;font-size:18px;">✗</span>
-                        <span><strong>Connection Failed.</strong> Check your ServiceOS URL and API Key.</span>
+                        <span><strong>Connection Failed.</strong> Check your Fieseros URL and API Key.</span>
                     </div>
                 <?php endif; ?>
                 <?php else: ?>
                     <div class="notice notice-warning inline" style="padding:12px 16px;">
-                        <span>⚠ Configure your ServiceOS URL and API Key to start capturing leads.</span>
+                        <span>⚠ Configure your Fieseros URL and API Key to start capturing leads.</span>
                     </div>
                 <?php endif; ?>
             </div>
 
             <form action="options.php" method="post">
                 <?php
-                settings_fields('serviceos_crm');
-                do_settings_sections('serviceos_crm');
+                settings_fields('fieseros_crm');
+                do_settings_sections('fieseros_crm');
                 ?>
                 <p class="submit" style="display:flex;gap:12px;align-items:center;">
                     <?php submit_button('Save Settings', 'primary', 'submit', false); ?>
                     <?php if ($is_configured): ?>
-                        <button type="button" id="serviceos-test-btn" class="button button-secondary">Test Connection</button>
+                        <button type="button" id="fieseros-test-btn" class="button button-secondary">Test Connection</button>
                     <?php endif; ?>
                 </p>
             </form>
@@ -285,15 +285,15 @@ function serviceos_settings_page() {
             <?php if ($is_configured): ?>
             <script>
             jQuery(document).ready(function($) {
-                $('#serviceos-test-btn').on('click', function() {
+                $('#fieseros-test-btn').on('click', function() {
                     var btn = $(this);
                     btn.prop('disabled', true).text('Testing...');
                     $.ajax({
                         url: ajaxurl,
                         method: 'POST',
                         data: {
-                            action: 'serviceos_test_connection',
-                            nonce: '<?php echo wp_create_nonce("serviceos_test"); ?>'
+                            action: 'fieseros_test_connection',
+                            nonce: '<?php echo wp_create_nonce("fieseros_test"); ?>'
                         },
                         success: function(response) {
                             if (response.success) {
@@ -340,7 +340,7 @@ function serviceos_settings_page() {
                             array('Everest Forms', 'Native submit captured automatically.'),
                             array('HTML Forms', 'Captured automatically — plain <form> elements.'),
                             array('Custom React / Vue / PHP Forms', 'Captured automatically. Use AJAX interception for SPA-style form POSTs.'),
-                            array('JotForm (iframe)', 'Use ServiceOS Webhook integration in JotForm settings — iframe forms cannot be captured via JS due to cross-origin restrictions.'),
+                            array('JotForm (iframe)', 'Use Fieseros Webhook integration in JotForm settings — iframe forms cannot be captured via JS due to cross-origin restrictions.'),
                         );
                         foreach ($supported as $row):
                         ?>
@@ -359,17 +359,17 @@ WordPress page loads
         ↓
 Plugin enqueues /embed.js (via wp_enqueue_script)
         ↓
-window.SERVICEOS_CONFIG = { apiKey, apiUrl, interceptAjax }
+window.FIESEROS_CONFIG = { apiKey, apiUrl, interceptAjax }
         ↓
 embed.js auto-detects ALL &lt;form&gt; submit events
         ↓
 Fields mapped → POST /api/forms/leads (with X-API-Key header)
         ↓
-Lead appears in ServiceOS CRM dashboard
+Lead appears in Fieseros CRM dashboard
                 </div>
 
                 <h3 style="margin-top:24px;">Field Mapping Reference</h3>
-                <p>ServiceOS auto-maps these common form fields:</p>
+                <p>Fieseros auto-maps these common form fields:</p>
                 <table class="widefat striped" style="max-width:700px;">
                     <thead>
                         <tr>
@@ -394,10 +394,10 @@ Lead appears in ServiceOS CRM dashboard
             <div style="margin-top:20px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
                     <h2>Integration Logs</h2>
-                    <button type="button" class="button button-secondary" onclick="if(confirm('Clear all logs?')){jQuery.post(ajaxurl,{action:'serviceos_clear_logs',nonce:'<?php echo wp_create_nonce("serviceos_clear"); ?>'},function(){location.reload();})}">Clear Logs</button>
+                    <button type="button" class="button button-secondary" onclick="if(confirm('Clear all logs?')){jQuery.post(ajaxurl,{action:'fieseros_clear_logs',nonce:'<?php echo wp_create_nonce("fieseros_clear"); ?>'},function(){location.reload();})}">Clear Logs</button>
                 </div>
                 <?php
-                $logs = get_option(SERVICEOS_LOG_OPTION, array());
+                $logs = get_option(FIESEROS_LOG_OPTION, array());
                 if (empty($logs)):
                 ?>
                     <p style="color:#94a3b8;">No logs yet. Submit a form to see activity here. (Lead delivery is handled by the embed script client-side; this log only tracks plugin-side events like script injection and connection tests.)</p>
@@ -436,11 +436,11 @@ Lead appears in ServiceOS CRM dashboard
                 <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;margin-bottom:20px;">
                     <h3 style="margin-top:0;color:#166534;">Quick Setup (2 minutes)</h3>
                     <ol>
-                        <li><strong>Get your API credentials</strong> — In ServiceOS, go to Settings → Integrations → Website Form Integration → Generate.</li>
-                        <li><strong>Enter the credentials</strong> — On the Settings tab above, paste your ServiceOS URL (e.g. <code>https://app.yourcrm.com</code>) and API Key.</li>
+                        <li><strong>Get your API credentials</strong> — In Fieseros, go to Settings → Integrations → Website Form Integration → Generate.</li>
+                        <li><strong>Enter the credentials</strong> — On the Settings tab above, paste your Fieseros URL (e.g. <code>https://app.yourcrm.com</code>) and API Key.</li>
                         <li><strong>Save Settings</strong> — The plugin will start loading <code>/embed.js</code> on every frontend page automatically.</li>
                         <li><strong>Test the connection</strong> — Click "Test Connection" to verify the API key.</li>
-                        <li><strong>Submit a test form</strong> — Fill out any form on your site and verify the lead appears in ServiceOS.</li>
+                        <li><strong>Submit a test form</strong> — Fill out any form on your site and verify the lead appears in Fieseros.</li>
                     </ol>
                 </div>
 
@@ -450,7 +450,7 @@ WordPress page loads (frontend)
         ↓
 Plugin enqueues /embed.js via wp_enqueue_script
         ↓
-window.SERVICEOS_CONFIG = { apiKey: '...', apiUrl: '...' }
+window.FIESEROS_CONFIG = { apiKey: '...', apiUrl: '...' }
         ↓
 embed.js attaches submit listeners to ALL &lt;form&gt; elements
         ↓
@@ -458,7 +458,7 @@ User submits any form → fields auto-mapped
         ↓
 POST {apiUrl}/api/forms/leads  (header: X-API-Key)
         ↓
-ServiceOS creates Lead + sends WhatsApp (if configured)
+Fieseros creates Lead + sends WhatsApp (if configured)
         ↓
 Lead appears in CRM dashboard
                 </div>
@@ -477,13 +477,13 @@ Lead appears in CRM dashboard
                 <ol>
                     <li>In JotForm Form Builder → Settings → Integrations → Webhook → Add.</li>
                     <li>Use this webhook URL: <code><?php echo esc_html(trailingslashit($settings['api_url']) . 'api/forms/leads?key=' . $settings['api_key']); ?></code></li>
-                    <li>Submit a test form — JotForm will POST the submission to ServiceOS directly.</li>
+                    <li>Submit a test form — JotForm will POST the submission to Fieseros directly.</li>
                 </ol>
 
                 <h3 style="margin-top:24px;">Troubleshooting</h3>
                 <ul>
                     <li><strong>No leads appearing?</strong> — Open browser DevTools → Network tab. Look for a POST request to <code>/api/forms/leads</code> when you submit a form. Check the response.</li>
-                    <li><strong>401 Unauthorized?</strong> — Verify your API Key is correct (copy it again from ServiceOS → Integrations → Website Form Integration).</li>
+                    <li><strong>401 Unauthorized?</strong> — Verify your API Key is correct (copy it again from Fieseros → Integrations → Website Form Integration).</li>
                     <li><strong>400 Validation error?</strong> — Ensure your form has at least a <code>name</code> or <code>phone</code> field. See the Field Mapping Reference on the Supported Forms tab.</li>
                     <li><strong>AJAX forms not captured?</strong> — Enable "AJAX Interception" on the Settings tab.</li>
                     <li><strong>JotForm submissions not arriving?</strong> — Use the webhook URL above (JotForm iframe forms cannot be captured via JS).</li>
@@ -494,7 +494,7 @@ Lead appears in CRM dashboard
                     <li>WordPress 5.0 or higher</li>
                     <li>PHP 7.4 or higher</li>
                     <li>Any form plugin (or plain HTML forms) — the universal script works with all of them</li>
-                    <li>ServiceOS account with Website Form Integration enabled</li>
+                    <li>Fieseros account with Website Form Integration enabled</li>
                 </ul>
             </div>
         <?php endif; ?>
@@ -504,12 +504,12 @@ Lead appears in CRM dashboard
 
 // ─── AJAX: Test Connection ────────────────────────────────────────────────────
 
-add_action('wp_ajax_serviceos_test_connection', 'serviceos_ajax_test_connection');
+add_action('wp_ajax_fieseros_test_connection', 'fieseros_ajax_test_connection');
 
-function serviceos_ajax_test_connection() {
-    check_ajax_referer('serviceos_test', 'nonce');
+function fieseros_ajax_test_connection() {
+    check_ajax_referer('fieseros_test', 'nonce');
 
-    $settings = serviceos_get_settings();
+    $settings = fieseros_get_settings();
     // Test the universal /api/forms/leads endpoint with ?key= query param.
     $api_url = trailingslashit($settings['api_url']) . 'api/forms/leads?key=' . rawurlencode($settings['api_key']);
 
@@ -521,7 +521,7 @@ function serviceos_ajax_test_connection() {
     ));
 
     if (is_wp_error($response)) {
-        set_transient('serviceos_connection_test', 'fail', HOUR_IN_SECONDS);
+        set_transient('fieseros_connection_test', 'fail', HOUR_IN_SECONDS);
         wp_send_json_error($response->get_error_message());
     }
 
@@ -529,10 +529,10 @@ function serviceos_ajax_test_connection() {
     $body = json_decode(wp_remote_retrieve_body($response), true);
 
     if ($code === 200 && isset($body['status']) && $body['status'] === 'connected') {
-        set_transient('serviceos_connection_test', 'ok', HOUR_IN_SECONDS);
+        set_transient('fieseros_connection_test', 'ok', HOUR_IN_SECONDS);
         wp_send_json_success('Connection verified!');
     } else {
-        set_transient('serviceos_connection_test', 'fail', HOUR_IN_SECONDS);
+        set_transient('fieseros_connection_test', 'fail', HOUR_IN_SECONDS);
         $msg = isset($body['error']) ? $body['error'] : (isset($body['message']) ? $body['message'] : "HTTP $code");
         wp_send_json_error($msg);
     }
@@ -540,21 +540,21 @@ function serviceos_ajax_test_connection() {
 
 // ─── AJAX: Clear Logs ─────────────────────────────────────────────────────────
 
-add_action('wp_ajax_serviceos_clear_logs', 'serviceos_ajax_clear_logs');
+add_action('wp_ajax_fieseros_clear_logs', 'fieseros_ajax_clear_logs');
 
-function serviceos_ajax_clear_logs() {
-    check_ajax_referer('serviceos_clear', 'nonce');
-    update_option(SERVICEOS_LOG_OPTION, array());
+function fieseros_ajax_clear_logs() {
+    check_ajax_referer('fieseros_clear', 'nonce');
+    update_option(FIESEROS_LOG_OPTION, array());
     wp_send_json_success();
 }
 
 // ─── Logging ──────────────────────────────────────────────────────────────────
 
-function serviceos_log($status, $message) {
-    $settings = serviceos_get_settings();
+function fieseros_log($status, $message) {
+    $settings = fieseros_get_settings();
     if (empty($settings['debug_mode']) && $status === 'debug') return;
 
-    $logs = get_option(SERVICEOS_LOG_OPTION, array());
+    $logs = get_option(FIESEROS_LOG_OPTION, array());
     $logs[] = array(
         'time'    => current_time('mysql'),
         'status'  => $status,
@@ -566,7 +566,7 @@ function serviceos_log($status, $message) {
         $logs = array_slice($logs, -200);
     }
 
-    update_option(SERVICEOS_LOG_OPTION, $logs);
+    update_option(FIESEROS_LOG_OPTION, $logs);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -580,13 +580,13 @@ function serviceos_log($status, $message) {
 // /api/forms/leads. This works with every form plugin automatically.
 //
 // JotForm is a special case — it embeds forms in a cross-origin iframe, so the
-// JS cannot capture those submissions. JotForm users should use ServiceOS's
+// JS cannot capture those submissions. JotForm users should use Fieseros's
 // webhook URL (?key= query param auth) directly in JotForm's webhook settings.
 
-add_action('wp_enqueue_scripts', 'serviceos_enqueue_embed_script');
+add_action('wp_enqueue_scripts', 'fieseros_enqueue_embed_script');
 
-function serviceos_enqueue_embed_script() {
-    $settings = serviceos_get_settings();
+function fieseros_enqueue_embed_script() {
+    $settings = fieseros_get_settings();
 
     // Skip in wp-admin and on AJAX endpoints
     if (is_admin() || wp_doing_ajax()) return;
@@ -608,53 +608,53 @@ function serviceos_enqueue_embed_script() {
     $embed_url = $api_base . '/embed.js';
 
     // Register + enqueue the script
-    wp_register_script('serviceos-embed', $embed_url, array(), SERVICEOS_VERSION, true);
-    wp_enqueue_script('serviceos-embed');
+    wp_register_script('fieseros-embed', $embed_url, array(), FIESEROS_VERSION, true);
+    wp_enqueue_script('fieseros-embed');
 
     // Pass config to the script via wp_localize_script. embed.js reads
-    // window.SERVICEOS_CONFIG before init.
+    // window.FIESEROS_CONFIG before init.
     $config = array(
         'apiKey'        => $settings['api_key'],
         'apiUrl'        => $api_base,
         'interceptAjax' => !empty($settings['intercept_ajax']),
         'showToast'     => false,
     );
-    wp_localize_script('serviceos-embed', 'SERVICEOS_CONFIG', $config);
+    wp_localize_script('fieseros-embed', 'FIESEROS_CONFIG', $config);
 
     if (!empty($settings['debug_mode'])) {
-        serviceos_log('debug', 'Enqueued serviceos-embed script from: ' . $embed_url);
+        fieseros_log('debug', 'Enqueued fieseros-embed script from: ' . $embed_url);
     }
 }
 
 // ─── Admin Bar Indicator ──────────────────────────────────────────────────────
 
-add_action('admin_bar_menu', 'serviceos_admin_bar', 100);
+add_action('admin_bar_menu', 'fieseros_admin_bar', 100);
 
-function serviceos_admin_bar($wp_admin_bar) {
+function fieseros_admin_bar($wp_admin_bar) {
     if (is_admin()) return;
-    $settings = serviceos_get_settings();
+    $settings = fieseros_get_settings();
     if (empty($settings['enabled'])) return;
 
-    $is_connected = get_transient('serviceos_connection_test') === 'ok';
+    $is_connected = get_transient('fieseros_connection_test') === 'ok';
 
     $wp_admin_bar->add_node(array(
-        'id'     => 'serviceos-status',
+        'id'     => 'fieseros-status',
         'title'  => $is_connected
-            ? '<span style="color:#22c55e;">●</span> ServiceOS Capturing'
-            : '<span style="color:#ef4444;">●</span> ServiceOS Not Connected',
-        'href'   => admin_url('options-general.php?page=serviceos-crm'),
+            ? '<span style="color:#22c55e;">●</span> Fieseros Capturing'
+            : '<span style="color:#ef4444;">●</span> Fieseros Not Connected',
+        'href'   => admin_url('options-general.php?page=fieseros-crm'),
         'parent' => 'top-secondary',
     ));
 }
 
 // ─── Plugin Row Meta ──────────────────────────────────────────────────────────
 
-add_filter('plugin_row_meta', 'serviceos_plugin_row_meta', 10, 2);
+add_filter('plugin_row_meta', 'fieseros_plugin_row_meta', 10, 2);
 
-function serviceos_plugin_row_meta($links, $file) {
+function fieseros_plugin_row_meta($links, $file) {
     if (plugin_basename(__FILE__) === $file) {
-        $links[] = '<a href="https://serviceos.cc/docs/wordpress" target="_blank">Documentation</a>';
-        $links[] = '<a href="https://serviceos.cc/support" target="_blank">Support</a>';
+        $links[] = '<a href="https://fieseros.com/docs/wordpress" target="_blank">Documentation</a>';
+        $links[] = '<a href="https://fieseros.com/support" target="_blank">Support</a>';
     }
     return $links;
 }

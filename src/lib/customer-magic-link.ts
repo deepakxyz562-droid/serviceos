@@ -9,7 +9,7 @@
  *
  * - `mgl` (magic-link token) is consumed by the public exchange endpoint
  *   /api/auth/customer/exchange-magic-link, which mirrors the OTP verify flow:
- *   creates a CustomerPortalSession → generateToken() → sets `serviceos_session`
+ *   creates a CustomerPortalSession → generateToken() → sets `fieseros_session`
  *   cookie → returns user + tenant.
  * - The frontend (src/app/page.tsx) reads `?mgl=` from the URL on first load,
  *   POSTs it to the exchange endpoint, then navigates to `?redirect=` once

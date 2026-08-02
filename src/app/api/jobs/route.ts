@@ -37,7 +37,7 @@ async function geocodeAddress(address: string): Promise<{ latitude: number; long
       method: 'GET',
       headers: {
         Accept: 'application/json',
-        'User-Agent': process.env.NOMINATIM_USER_AGENT || 'ServiceOS-Dispatch/1.0 (dispatch@serviceos.app)',
+        'User-Agent': process.env.NOMINATIM_USER_AGENT || 'Fieseros-Dispatch/1.0 (dispatch@fieseros.app)',
       },
       // Short timeout — geocoding is best-effort, don't hang the server.
       signal: AbortSignal.timeout(8000),

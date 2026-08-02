@@ -19,8 +19,8 @@ import { InvoiceGeneratorClient } from "./invoice-generator-client";
 import { AiReceptionistSection } from "@/components/seo/ai-receptionist-section";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://serviceos.cc"),
-  title: "Free Invoice Generator — Create & Download PDF Invoices Online | ServiceOS",
+  metadataBase: new URL("https://fieseros.com"),
+  title: "Free Invoice Generator — Create & Download PDF Invoices Online | Fieseros",
   description:
     "100% free online invoice generator. Create professional invoices with your logo, add line items, tax, discounts, and download as PDF instantly. No sign-up, no watermark, no limits. Works on mobile and desktop.",
   keywords: [
@@ -36,14 +36,14 @@ export const metadata: Metadata = {
     "GST invoice generator",
   ],
   alternates: {
-    canonical: "https://serviceos.cc/invoice-generator",
+    canonical: "https://fieseros.com/invoice-generator",
   },
   openGraph: {
     title: "Free Invoice Generator — Create & Download PDF Invoices Online",
     description:
       "Create professional invoices with your logo, line items, tax, and discounts. Download as PDF instantly. No sign-up, no watermark, 100% free.",
-    url: "https://serviceos.cc/invoice-generator",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/invoice-generator",
+    siteName: "Fieseros",
     type: "website",
   },
   twitter: {
@@ -62,7 +62,7 @@ const jsonLd = {
   name: "Free Invoice Generator",
   description:
     "Free online invoice generator. Create professional invoices with your logo, line items, tax, discounts and download as PDF. No sign-up required.",
-  url: "https://serviceos.cc/invoice-generator",
+  url: "https://fieseros.com/invoice-generator",
   applicationCategory: "BusinessApplication",
   operatingSystem: "Web",
   browserRequirements: "Requires JavaScript. Requires HTML5.",
@@ -84,15 +84,15 @@ const jsonLd = {
   ],
   publisher: {
     "@type": "Organization",
-    name: "ServiceOS",
-    url: "https://serviceos.cc",
+    name: "Fieseros",
+    url: "https://fieseros.com",
   },
 };
 
 const faqs = [
   {
     q: "Is the invoice generator really free?",
-    a: "Yes — 100% free with no hidden costs. There is no sign-up, no subscription, no watermark, and no limit on the number of invoices you can create or download. It is a free tool offered by ServiceOS.",
+    a: "Yes — 100% free with no hidden costs. There is no sign-up, no subscription, no watermark, and no limit on the number of invoices you can create or download. It is a free tool offered by Fieseros.",
   },
   {
     q: "Do I need to create an account or sign in?",
@@ -191,7 +191,7 @@ export default function InvoiceGeneratorPage() {
               <Bolt className="h-5 w-5 text-white" />
             </span>
             <span className="text-xl font-bold tracking-tight text-foreground">
-              ServiceOS
+              Fieseros
             </span>
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">
@@ -387,7 +387,7 @@ export default function InvoiceGeneratorPage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/invoicing-and-payments" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
@@ -421,7 +421,7 @@ export default function InvoiceGeneratorPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              &copy; 2026 ServiceOS, Inc. All rights reserved.
+              &copy; 2026 Fieseros, Inc. All rights reserved.
             </p>
             <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
               <a href="/privacy-policy" className="hover:text-foreground transition-colors">

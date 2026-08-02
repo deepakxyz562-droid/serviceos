@@ -18,7 +18,7 @@ async function main() {
   } : 'NOT FOUND');
 
   if (user?.passwordHash) {
-    for (const pw of ['demo123', 'Owner@123', 'password', 'demo', 'Demo@123', 'ServiceOS@123']) {
+    for (const pw of ['demo123', 'Owner@123', 'password', 'demo', 'Demo@123', 'Fieseros@123']) {
       const ok = await verifyPassword(pw, user.passwordHash);
       console.log(`  verifyPassword("${pw}") = ${ok}`);
     }

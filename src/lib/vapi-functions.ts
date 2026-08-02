@@ -20,7 +20,7 @@ export function getFunctionCallServerUrl(): string {
   if (process.env.VAPI_SERVER_URL) return process.env.VAPI_SERVER_URL;
   // Fallback: relative path — Vapi will reject, but assistant still works
   // for non-function-call conversations.
-  return 'https://your-serviceos-instance.com/api/vapi/function-call';
+  return 'https://your-fieseros-instance.com/api/vapi/function-call';
 }
 
 // ─── Tool definitions exposed to Vapi assistants ────────────────────────────

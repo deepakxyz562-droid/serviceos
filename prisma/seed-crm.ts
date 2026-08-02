@@ -156,11 +156,11 @@ async function main() {
   // Marketplace Templates
   count = 0;
   for (const mt of [
-    { name: 'Lead Follow-up', description: 'Auto follow-up with leads', category: 'lead_follow_up', icon: 'target', color: '#10b981', author: 'ServiceOS Team', downloads: 342, rating: 4.8, reviewCount: 28, featured: true, workflowJson: '{}', tenantId },
-    { name: 'Appointment Reminder', description: 'Auto reminders', category: 'appointment_reminder', icon: 'calendar', color: '#3b82f6', author: 'ServiceOS Team', downloads: 256, rating: 4.6, reviewCount: 19, featured: true, workflowJson: '{}', tenantId },
-    { name: 'Payment Reminder', description: 'Auto payment reminders', category: 'payment_reminder', icon: 'credit-card', color: '#f59e0b', author: 'ServiceOS Team', downloads: 189, rating: 4.5, reviewCount: 15, workflowJson: '{}', tenantId },
-    { name: 'Review Collection', description: 'Collect reviews', category: 'review_collection', icon: 'star', color: '#8b5cf6', author: 'ServiceOS Team', downloads: 198, rating: 4.7, reviewCount: 22, featured: true, workflowJson: '{}', tenantId },
-    { name: 'Win-back Campaign', description: 'Re-engage customers', category: 'win_back', icon: 'heart', color: '#ef4444', author: 'ServiceOS Team', downloads: 145, rating: 4.4, reviewCount: 11, workflowJson: '{}', tenantId },
+    { name: 'Lead Follow-up', description: 'Auto follow-up with leads', category: 'lead_follow_up', icon: 'target', color: '#10b981', author: 'Fieseros Team', downloads: 342, rating: 4.8, reviewCount: 28, featured: true, workflowJson: '{}', tenantId },
+    { name: 'Appointment Reminder', description: 'Auto reminders', category: 'appointment_reminder', icon: 'calendar', color: '#3b82f6', author: 'Fieseros Team', downloads: 256, rating: 4.6, reviewCount: 19, featured: true, workflowJson: '{}', tenantId },
+    { name: 'Payment Reminder', description: 'Auto payment reminders', category: 'payment_reminder', icon: 'credit-card', color: '#f59e0b', author: 'Fieseros Team', downloads: 189, rating: 4.5, reviewCount: 15, workflowJson: '{}', tenantId },
+    { name: 'Review Collection', description: 'Collect reviews', category: 'review_collection', icon: 'star', color: '#8b5cf6', author: 'Fieseros Team', downloads: 198, rating: 4.7, reviewCount: 22, featured: true, workflowJson: '{}', tenantId },
+    { name: 'Win-back Campaign', description: 'Re-engage customers', category: 'win_back', icon: 'heart', color: '#ef4444', author: 'Fieseros Team', downloads: 145, rating: 4.4, reviewCount: 11, workflowJson: '{}', tenantId },
   ]) { try { await prisma.marketplaceTemplate.create({ data: mt }); count++; } catch {} }
   console.log(`Marketplace: ${count}`);
 

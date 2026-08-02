@@ -1,7 +1,7 @@
 #!/bin/bash
 cd /home/z/my-project
 while true; do
-  echo "[$(date)] Starting ServiceOS..."
+  echo "[$(date)] Starting Fieseros..."
   bun run dev 2>&1
   EXIT_CODE=$?
   echo "[$(date)] Server exited with code $EXIT_CODE. Restarting in 3s..."

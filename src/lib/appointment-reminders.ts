@@ -169,7 +169,7 @@ export async function scheduleAppointmentReminders(): Promise<ScheduleAppointmen
       '',
       'If you need to reschedule, please contact us as soon as possible.',
       '',
-      '— ServiceOS',
+      '— Fieseros',
     ]
       .filter((line) => line !== '')
       .join('\n')
@@ -189,7 +189,7 @@ export async function scheduleAppointmentReminders(): Promise<ScheduleAppointmen
           `</table>`,
           `<p>If you need to reschedule, please contact us as soon as possible.</p>`,
           `<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />`,
-          `<p style="font-size:12px;color:#9ca3af;">— ServiceOS</p>`,
+          `<p style="font-size:12px;color:#9ca3af;">— Fieseros</p>`,
           `</div>`,
         ]
         .filter(Boolean)

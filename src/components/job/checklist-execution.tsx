@@ -67,8 +67,8 @@ interface PendingOp {
   ts: number;
 }
 
-const STORAGE_KEY_PREFIX = 'serviceos:checklist:pending:';
-const DRAFT_KEY_PREFIX = 'serviceos:checklist:draft:';
+const STORAGE_KEY_PREFIX = 'fieseros:checklist:pending:';
+const DRAFT_KEY_PREFIX = 'fieseros:checklist:draft:';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

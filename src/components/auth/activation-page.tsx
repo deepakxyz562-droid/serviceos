@@ -117,7 +117,7 @@ export function ActivationPage({ token, onAuthSuccess, onBackToLanding }: Activa
         }
         // Store auth and call success
         localStorage.setItem(
-          'serviceos_auth',
+          'fieseros_auth',
           JSON.stringify({
             isAuthenticated: true,
             user: data.user,
@@ -242,7 +242,7 @@ export function ActivationPage({ token, onAuthSuccess, onBackToLanding }: Activa
             <Zap className="w-4 h-4 text-emerald-600" />
           </div>
           <span className="text-lg font-bold text-slate-900 tracking-tight">
-            ServiceOS
+            Fieseros
           </span>
         </div>
 
@@ -375,7 +375,7 @@ export function ActivationPage({ token, onAuthSuccess, onBackToLanding }: Activa
 
         {/* Footer */}
         <p className="text-center text-xs text-slate-400 mt-6">
-          By activating your account, you agree to ServiceOS&apos;s{' '}
+          By activating your account, you agree to Fieseros&apos;s{' '}
           <span className="underline cursor-pointer hover:text-slate-500">Terms of Service</span>
           {' '}and{' '}
           <span className="underline cursor-pointer hover:text-slate-500">Privacy Policy</span>

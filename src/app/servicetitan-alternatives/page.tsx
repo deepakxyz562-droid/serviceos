@@ -26,7 +26,7 @@ import {
 } from "@/lib/seo/schemas";
 
 export const metadata: Metadata = {
-  title: "Best ServiceTitan Alternatives for Small & Mid-Size Businesses | ServiceOS",
+  title: "Best ServiceTitan Alternatives for Small & Mid-Size Businesses | Fieseros",
   description:
     "ServiceTitan is powerful but expensive and built for large contractors. Compare the best ServiceTitan alternatives for small and mid-size field service businesses.",
   keywords: [
@@ -35,29 +35,29 @@ export const metadata: Metadata = {
     "apps like servicetitan",
     "servicetitan competitors",
   ],
-  alternates: { canonical: "https://serviceos.cc/servicetitan-alternatives" },
+  alternates: { canonical: "https://fieseros.com/servicetitan-alternatives" },
   openGraph: {
-    title: "Best ServiceTitan Alternatives in 2026 | ServiceOS",
+    title: "Best ServiceTitan Alternatives in 2026 | Fieseros",
     description:
       "ServiceTitan alternatives that won't break the bank — features, pricing, and which is right for small and mid-size service businesses.",
-    url: "https://serviceos.cc/servicetitan-alternatives",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/servicetitan-alternatives",
+    siteName: "Fieseros",
     type: "article",
   },
   robots: { index: true, follow: true },
 };
 
-const comparisonRows: { feature: string; serviceos: string; competitor: string }[] = [
-  { feature: "Starting price", serviceos: "Free trial, from $29/mo", competitor: "$300+/mo (custom)" },
-  { feature: "Setup time", serviceos: "Under 30 minutes", competitor: "Weeks to months" },
-  { feature: "Best for business size", serviceos: "Solo → 50 techs", competitor: "20+ techs, large ops" },
-  { feature: "Email & SMS messaging", serviceos: "Native, first-class", competitor: "Not native" },
-  { feature: "Mobile app", serviceos: "PWA (offline)", competitor: "Native iOS/Android" },
-  { feature: "Software complexity", serviceos: "Simple, guided", competitor: "Enterprise, complex" },
-  { feature: "Onboarding", serviceos: "Self-serve wizard", competitor: "Dedicated implementation" },
-  { feature: "Free trial", serviceos: "Yes, no credit card", competitor: "Limited demo only" },
-  { feature: "Multi-currency", serviceos: "Yes, built in", competitor: "USD-centric" },
-  { feature: "Best-fit market", serviceos: "Global, multi-channel", competitor: "US large contractors" },
+const comparisonRows: { feature: string; fieseros: string; competitor: string }[] = [
+  { feature: "Starting price", fieseros: "Free trial, from $29/mo", competitor: "$300+/mo (custom)" },
+  { feature: "Setup time", fieseros: "Under 30 minutes", competitor: "Weeks to months" },
+  { feature: "Best for business size", fieseros: "Solo → 50 techs", competitor: "20+ techs, large ops" },
+  { feature: "Email & SMS messaging", fieseros: "Native, first-class", competitor: "Not native" },
+  { feature: "Mobile app", fieseros: "PWA (offline)", competitor: "Native iOS/Android" },
+  { feature: "Software complexity", fieseros: "Simple, guided", competitor: "Enterprise, complex" },
+  { feature: "Onboarding", fieseros: "Self-serve wizard", competitor: "Dedicated implementation" },
+  { feature: "Free trial", fieseros: "Yes, no credit card", competitor: "Limited demo only" },
+  { feature: "Multi-currency", fieseros: "Yes, built in", competitor: "USD-centric" },
+  { feature: "Best-fit market", fieseros: "Global, multi-channel", competitor: "US large contractors" },
 ];
 
 const alternatives: {
@@ -71,10 +71,10 @@ const alternatives: {
 }[] = [
   {
     position: 1,
-    name: "ServiceOS",
+    name: "Fieseros",
     bestFor: "Small & mid-size service businesses, especially outside the US",
     pricing: "Free trial → from $29/mo",
-    url: "https://serviceos.cc",
+    url: "https://fieseros.com",
     description:
       "A modern, multi-channel FSM built for solo operators up to ~50-technician teams. Transparent pricing, fast setup, and a PWA technician app — without the enterprise complexity or implementation cost.",
     highlight: true,
@@ -149,25 +149,25 @@ const switchReasons = [
     icon: BadgeDollarSign,
     title: "Pricing that fits small budgets",
     description:
-      "ServiceTitan typically costs $300+ per month and often requires annual contracts and implementation fees. ServiceOS has a free tier and paid plans that scale with usage, not headcount.",
+      "ServiceTitan typically costs $300+ per month and often requires annual contracts and implementation fees. Fieseros has a free tier and paid plans that scale with usage, not headcount.",
   },
   {
     icon: Clock,
     title: "Setup in days, not months",
     description:
-      "ServiceTitan implementations frequently take weeks or months with dedicated project managers. ServiceOS is designed to be live in under 30 minutes — no consultants required.",
+      "ServiceTitan implementations frequently take weeks or months with dedicated project managers. Fieseros is designed to be live in under 30 minutes — no consultants required.",
   },
   {
     icon: Layers,
     title: "Right-sized feature set",
     description:
-      "ServiceTitan's depth is impressive but includes dispatch boards, inventory, payroll, and call tracking most small teams will never use. ServiceOS ships the 20% of features that drive 80% of value.",
+      "ServiceTitan's depth is impressive but includes dispatch boards, inventory, payroll, and call tracking most small teams will never use. Fieseros ships the 20% of features that drive 80% of value.",
   },
   {
     icon: MessageSquare,
     title: "Email & SMS-native, not US-only",
     description:
-      "ServiceTitan is built for large North American contractors. ServiceOS is built Email & SMS-first for India, LATAM, SEA, and other markets where SMS and email are how business gets done.",
+      "ServiceTitan is built for large North American contractors. Fieseros is built Email & SMS-first for India, LATAM, SEA, and other markets where SMS and email are how business gets done.",
   },
 ];
 
@@ -180,22 +180,22 @@ const faqs = [
   {
     question: "Is ServiceTitan too complex for a small business?",
     answer:
-      "For most small businesses — yes. ServiceTitan is built for large, multi-dispatcher operations with 20+ technicians, dedicated call centers, and complex inventory needs. A solo operator or 3-technician team will spend more time configuring the tool than running jobs. ServiceOS, Jobber, and Housecall Pro are all better fits for small teams that need core FSM without the enterprise overhead.",
+      "For most small businesses — yes. ServiceTitan is built for large, multi-dispatcher operations with 20+ technicians, dedicated call centers, and complex inventory needs. A solo operator or 3-technician team will spend more time configuring the tool than running jobs. Fieseros, Jobber, and Housecall Pro are all better fits for small teams that need core FSM without the enterprise overhead.",
   },
   {
     question: "What's the best ServiceTitan alternative for small businesses?",
     answer:
-      "For small service businesses, the strongest ServiceTitan alternatives are ServiceOS, Jobber, and Housecall Pro. ServiceOS is the best choice if Email and SMS are your primary customer channels or you operate outside the US. Jobber is the most popular all-rounder for North American teams. Housecall Pro is a strong pick for US home services. For very small or budget-conscious teams, Kickserv offers a simpler starting point.",
+      "For small service businesses, the strongest ServiceTitan alternatives are Fieseros, Jobber, and Housecall Pro. Fieseros is the best choice if Email and SMS are your primary customer channels or you operate outside the US. Jobber is the most popular all-rounder for North American teams. Housecall Pro is a strong pick for US home services. For very small or budget-conscious teams, Kickserv offers a simpler starting point.",
   },
   {
     question: "How long does ServiceTitan implementation take?",
     answer:
-      "ServiceTitan implementations typically take 4–12 weeks depending on team size and data complexity, and they often involve a dedicated implementation manager and training sessions. By contrast, ServiceOS is designed to be live in under 30 minutes with a self-serve onboarding wizard. If you need to be operational this week, ServiceTitan is the wrong fit.",
+      "ServiceTitan implementations typically take 4–12 weeks depending on team size and data complexity, and they often involve a dedicated implementation manager and training sessions. By contrast, Fieseros is designed to be live in under 30 minutes with a self-serve onboarding wizard. If you need to be operational this week, ServiceTitan is the wrong fit.",
   },
   {
     question: "Can I migrate from ServiceTitan to a smaller platform?",
     answer:
-      "Yes, but it requires planning. ServiceTitan allows CSV exports of customers, jobs, and invoices. The challenge is mapping ServiceTitan's deeply nested data structures (locations, equipment, recurring services) to a simpler platform. ServiceOS onboarding support will help you map fields and clean up data at no extra cost for paid plans. Most migrations take 1–3 days depending on data volume.",
+      "Yes, but it requires planning. ServiceTitan allows CSV exports of customers, jobs, and invoices. The challenge is mapping ServiceTitan's deeply nested data structures (locations, equipment, recurring services) to a simpler platform. Fieseros onboarding support will help you map fields and clean up data at no extra cost for paid plans. Most migrations take 1–3 days depending on data volume.",
   },
   {
     question: "When is ServiceTitan the right choice?",
@@ -206,10 +206,10 @@ const faqs = [
 
 export default function ServiceTitanAlternativesPage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — ServiceTitan Alternative",
+    name: "Fieseros — ServiceTitan Alternative",
     description:
       "Email & SMS-native field service management software and ServiceTitan alternative for small and mid-size service businesses.",
-    url: "https://serviceos.cc/servicetitan-alternatives",
+    url: "https://fieseros.com/servicetitan-alternatives",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -218,7 +218,7 @@ export default function ServiceTitanAlternativesPage() {
     name: "Best ServiceTitan Alternatives for Small & Mid-Size Businesses",
     description:
       "A ranked, compared list of the best ServiceTitan alternatives for field service businesses that find ServiceTitan too expensive or complex.",
-    url: "https://serviceos.cc/servicetitan-alternatives",
+    url: "https://fieseros.com/servicetitan-alternatives",
     items: alternatives.map((a) => ({
       position: a.position,
       name: a.name,
@@ -231,9 +231,9 @@ export default function ServiceTitanAlternativesPage() {
     <CornerstoneLayout
       activePath="/servicetitan-alternatives"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Compare", url: "https://serviceos.cc/jobber-alternatives" },
-        { name: "ServiceTitan Alternatives", url: "https://serviceos.cc/servicetitan-alternatives" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Compare", url: "https://fieseros.com/jobber-alternatives" },
+        { name: "ServiceTitan Alternatives", url: "https://fieseros.com/servicetitan-alternatives" },
       ]}
       additionalSchema={[appSchema, itemListSchema]}
     >
@@ -247,14 +247,14 @@ export default function ServiceTitanAlternativesPage() {
             href="/#signup"
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
-            Try ServiceOS Free
+            Try Fieseros Free
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
             href="/field-service-software"
             className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Explore ServiceOS
+            Explore Fieseros
           </Link>
         </div>
       </CornerstoneHero>
@@ -264,10 +264,10 @@ export default function ServiceTitanAlternativesPage() {
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <div className="text-center mb-10">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              ServiceOS vs ServiceTitan — Side-by-Side
+              Fieseros vs ServiceTitan — Side-by-Side
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              ServiceTitan is built for a very specific customer. Here is how ServiceOS compares
+              ServiceTitan is built for a very specific customer. Here is how Fieseros compares
               on the dimensions that matter most to small and mid-size businesses.
             </p>
           </div>
@@ -276,7 +276,7 @@ export default function ServiceTitanAlternativesPage() {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left py-3 px-4 font-semibold text-foreground">Dimension</th>
-                  <th className="text-center py-3 px-4 font-semibold text-emerald-700">ServiceOS</th>
+                  <th className="text-center py-3 px-4 font-semibold text-emerald-700">Fieseros</th>
                   <th className="text-center py-3 px-4 font-semibold text-muted-foreground">
                     ServiceTitan
                   </th>
@@ -286,7 +286,7 @@ export default function ServiceTitanAlternativesPage() {
                 {comparisonRows.map((row, i) => (
                   <tr key={i} className="border-b last:border-0">
                     <td className="py-3 px-4 text-foreground font-medium">{row.feature}</td>
-                    <td className="text-center py-3 px-4 text-foreground">{row.serviceos}</td>
+                    <td className="text-center py-3 px-4 text-foreground">{row.fieseros}</td>
                     <td className="text-center py-3 px-4 text-muted-foreground">{row.competitor}</td>
                   </tr>
                 ))}
@@ -335,10 +335,10 @@ export default function ServiceTitanAlternativesPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <div className="text-center mb-10">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              Why teams switch to ServiceOS from ServiceTitan
+              Why teams switch to Fieseros from ServiceTitan
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Four reasons ServiceOS is the most popular right-sized alternative for teams that
+              Four reasons Fieseros is the most popular right-sized alternative for teams that
               find ServiceTitan too much.
             </p>
           </div>
@@ -465,7 +465,7 @@ export default function ServiceTitanAlternativesPage() {
               <Rocket className="h-6 w-6 text-emerald-700 mb-3" />
               <h3 className="font-semibold text-foreground mb-2">Solo or 1–5 techs, fast setup</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Pick <strong>ServiceOS</strong> or <strong>Jobber</strong>. Both are live in under
+                Pick <strong>Fieseros</strong> or <strong>Jobber</strong>. Both are live in under
                 an hour and scale to ~10 techs comfortably.
               </p>
             </div>
@@ -481,7 +481,7 @@ export default function ServiceTitanAlternativesPage() {
               <Smartphone className="h-6 w-6 text-emerald-700 mb-3" />
               <h3 className="font-semibold text-foreground mb-2">Multi-channel, non-US market</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Pick <strong>ServiceOS</strong>. It is the only platform on this list built
+                Pick <strong>Fieseros</strong>. It is the only platform on this list built
                 Email & SMS-native for India, LATAM, and SEA from day one.
               </p>
             </div>
@@ -503,7 +503,7 @@ export default function ServiceTitanAlternativesPage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/jobber-alternatives" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { logActivity } from '@/lib/activity-log';
 
 /**
- * AI Quote Draft (ServiceOS V1.5)
+ * AI Quote Draft (Fieseros V1.5)
  * -------------------------------
  * POST /api/ai/quote-draft
  *

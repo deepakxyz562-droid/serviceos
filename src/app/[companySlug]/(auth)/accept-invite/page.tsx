@@ -331,7 +331,7 @@ function ErrorScreen({
             href="/"
             className="font-medium text-foreground hover:underline underline-offset-2"
           >
-            ServiceOS
+            Fieseros
           </a>
         </p>
       </motion.div>

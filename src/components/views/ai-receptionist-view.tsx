@@ -422,7 +422,7 @@ export function AiReceptionistView() {
               <div className="font-medium text-amber-700 dark:text-amber-400">Vapi API key not configured</div>
               <p className="text-sm text-muted-foreground mt-0.5">
                 Add your Vapi.ai API key in Settings → AI Voice to start using AI Receptionist.
-                It only takes a minute (BYOK — you pay Vapi directly, ServiceOS pays $0).
+                It only takes a minute (BYOK — you pay Vapi directly, Fieseros pays $0).
               </p>
               <p className="text-xs text-muted-foreground mt-1.5">
                 Phone numbers (for both SMS and AI voice) are managed in Inbox &amp; Automation → Phone Numbers.

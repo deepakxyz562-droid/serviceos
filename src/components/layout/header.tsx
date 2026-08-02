@@ -252,7 +252,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
 
   const handleInstallClick = useCallback(async () => {
     if (isStandaloneDisplay()) {
-      toast.info('ServiceOS is already installed');
+      toast.info('Fieseros is already installed');
       return;
     }
     if (isIOS()) {
@@ -264,11 +264,11 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
     // Delegate to the shared module — it holds the single deferred event.
     const outcome = await requestInstall();
     if (outcome === 'unavailable') {
-      toast.info('Install ServiceOS', {
+      toast.info('Install Fieseros', {
         description: 'Use your browser menu → "Install app" or "Add to Home Screen".',
       });
     } else if (outcome === 'accepted') {
-      toast.success('Installing ServiceOS…');
+      toast.success('Installing Fieseros…');
     }
   }, []);
 
@@ -489,7 +489,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
                   {auth.user?.name || 'Demo User'}
                 </span>
                 <span className="text-xs text-muted-foreground font-normal">
-                  {auth.user?.email || 'demo@serviceos.cc'}
+                  {auth.user?.email || 'demo@fieseros.com'}
                 </span>
               </div>
             </DropdownMenuLabel>

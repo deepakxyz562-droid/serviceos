@@ -53,10 +53,10 @@ export async function POST() {
     // makes "Failed to send test push" debuggable — the UI can show
     // exactly which device failed and the push service's error reason.
     const result = await sendWebPushToUserWithDiagnostics(user.id, user.tenantId, {
-      title: 'ServiceOS Test Notification',
+      title: 'Fieseros Test Notification',
       body: 'If you can see this, push notifications are working correctly!',
       url: '/',
-      tag: 'serviceos-test-push',
+      tag: 'fieseros-test-push',
       icon: '/icon-192.png',
       badge: '/icon-192.png',
     });

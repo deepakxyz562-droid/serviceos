@@ -522,7 +522,7 @@ export async function GET(request: NextRequest) {
   if (!providedKey) {
     return NextResponse.json({
       status: 'ok',
-      service: 'ServiceOS Universal Form Lead Capture',
+      service: 'Fieseros Universal Form Lead Capture',
       version: '1.0.0',
       message: 'API key required. Use Authorization: Bearer <key>, X-API-Key header, or ?key=<key> query param',
       features: [

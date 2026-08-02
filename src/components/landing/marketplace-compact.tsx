@@ -175,7 +175,7 @@ export function MarketplaceCompact({
         <div className="mb-8 text-center">
           <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 mb-3 font-medium">
             <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
-            ServiceOS Marketplace
+            Fieseros Marketplace
           </Badge>
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
             Find trusted <span className="text-amber-600">local pros</span>
@@ -334,7 +334,7 @@ export function MarketplaceCompact({
                 <Badge className="mb-3 bg-white/20 text-white hover:bg-white/20">
                   <ShieldCheck className="mr-1 h-3.5 w-3.5" /> For service businesses
                 </Badge>
-                <h3 className="text-2xl font-bold sm:text-3xl">Run your business on ServiceOS.</h3>
+                <h3 className="text-2xl font-bold sm:text-3xl">Run your business on Fieseros.</h3>
                 <p className="mt-2 text-sm text-amber-50">
                   Get discovered by thousands of customers in your area. Manage bookings, dispatch, invoicing, and AI automation — all in one platform.
                 </p>

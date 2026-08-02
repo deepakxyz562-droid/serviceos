@@ -10,7 +10,7 @@ import {
 import { notifyOwner } from '@/lib/owner-notifications';
 
 /**
- * Flow 1: Instant Booking (ServiceOS V1.5 — P10-flows)
+ * Flow 1: Instant Booking (Fieseros V1.5 — P10-flows)
  * ------------------------------------------------------------
  * POST /api/marketplace/book/instant
  *
@@ -401,7 +401,7 @@ export async function POST(request: NextRequest) {
     actionUrl: '/bookings',
     smsMessage: `New instant booking: ${title}, customer: ${customerName}, scheduled: ${scheduledAt ? scheduledAt.toISOString() : 'TBD'}.`,
     emailSubject: `New Instant Booking: ${title}`,
-    emailText: `New instant marketplace booking.\n\nTitle: ${title}\nCustomer: ${customerName}\nPhone: ${customerPhone}\n${customerEmail ? `Email: ${customerEmail}\n` : ''}${address ? `Address: ${address}\n` : ''}Scheduled: ${scheduledAt ? scheduledAt.toISOString() : 'TBD'}\n\n— Sent from ServiceOS`,
+    emailText: `New instant marketplace booking.\n\nTitle: ${title}\nCustomer: ${customerName}\nPhone: ${customerPhone}\n${customerEmail ? `Email: ${customerEmail}\n` : ''}${address ? `Address: ${address}\n` : ''}Scheduled: ${scheduledAt ? scheduledAt.toISOString() : 'TBD'}\n\n— Sent from Fieseros`,
     emailHtml: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px"><h2 style="color:#0f172a">New Instant Booking</h2><p>A marketplace customer just booked you instantly.</p><table style="width:100%;border-collapse:collapse;font-size:14px"><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Title</td><td style="padding:8px">${title}</td></tr><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Customer</td><td style="padding:8px">${customerName}</td></tr><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Phone</td><td style="padding:8px">${customerPhone}</td></tr>${customerEmail ? `<tr><td style="padding:8px;background:#f9fafb;font-weight:600">Email</td><td style="padding:8px">${customerEmail}</td></tr>` : ''}${address ? `<tr><td style="padding:8px;background:#f9fafb;font-weight:600">Address</td><td style="padding:8px">${address}</td></tr>` : ''}</table></div>`,
     pushTitle: 'New Instant Booking',
     pushBody: `${customerName} booked ${serviceName || 'a service'} — ${scheduledAt ? scheduledAt.toLocaleString() : 'TBD'}`,

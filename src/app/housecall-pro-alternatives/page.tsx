@@ -27,39 +27,39 @@ import {
 } from "@/lib/seo/schemas";
 
 export const metadata: Metadata = {
-  title: "Best Housecall Pro Alternatives in 2026 — Compared | ServiceOS",
+  title: "Best Housecall Pro Alternatives in 2026 — Compared | Fieseros",
   description:
-    "Comparing the 8 best Housecall Pro alternatives for field service businesses — pricing, Email & SMS messaging, mobile apps, and which is right for your team. Includes ServiceOS.",
+    "Comparing the 8 best Housecall Pro alternatives for field service businesses — pricing, Email & SMS messaging, mobile apps, and which is right for your team. Includes Fieseros.",
   keywords: [
     "housecall pro alternative",
     "housecall pro alternatives",
     "apps like housecall pro",
     "housecall pro competitors",
   ],
-  alternates: { canonical: "https://serviceos.cc/housecall-pro-alternatives" },
+  alternates: { canonical: "https://fieseros.com/housecall-pro-alternatives" },
   openGraph: {
-    title: "Best Housecall Pro Alternatives in 2026 | ServiceOS",
+    title: "Best Housecall Pro Alternatives in 2026 | Fieseros",
     description:
       "Compare the top 8 Housecall Pro alternatives — features, pricing, Email & SMS messaging, and which fits your field service business.",
-    url: "https://serviceos.cc/housecall-pro-alternatives",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/housecall-pro-alternatives",
+    siteName: "Fieseros",
     type: "article",
   },
   robots: { index: true, follow: true },
 };
 
-const comparisonRows: { feature: string; serviceos: boolean; competitor: boolean }[] = [
-  { feature: "Email & SMS customer messaging included", serviceos: true, competitor: false },
-  { feature: "Public, transparent pricing", serviceos: true, competitor: false },
-  { feature: "Free trial, no credit card required", serviceos: true, competitor: false },
-  { feature: "PWA technician app (no app store)", serviceos: true, competitor: false },
-  { feature: "Native iOS & Android apps", serviceos: true, competitor: true },
-  { feature: "Built for non-US markets (India, LATAM, SEA)", serviceos: true, competitor: false },
-  { feature: "Multi-currency invoicing", serviceos: true, competitor: true },
-  { feature: "Customizable workflows & forms", serviceos: true, competitor: true },
-  { feature: "Setup in under 30 minutes", serviceos: true, competitor: false },
-  { feature: "No-code automation builder (n8n)", serviceos: true, competitor: false },
-  { feature: "Pay-as-you-go messaging credits", serviceos: true, competitor: false },
+const comparisonRows: { feature: string; fieseros: boolean; competitor: boolean }[] = [
+  { feature: "Email & SMS customer messaging included", fieseros: true, competitor: false },
+  { feature: "Public, transparent pricing", fieseros: true, competitor: false },
+  { feature: "Free trial, no credit card required", fieseros: true, competitor: false },
+  { feature: "PWA technician app (no app store)", fieseros: true, competitor: false },
+  { feature: "Native iOS & Android apps", fieseros: true, competitor: true },
+  { feature: "Built for non-US markets (India, LATAM, SEA)", fieseros: true, competitor: false },
+  { feature: "Multi-currency invoicing", fieseros: true, competitor: true },
+  { feature: "Customizable workflows & forms", fieseros: true, competitor: true },
+  { feature: "Setup in under 30 minutes", fieseros: true, competitor: false },
+  { feature: "No-code automation builder (n8n)", fieseros: true, competitor: false },
+  { feature: "Pay-as-you-go messaging credits", fieseros: true, competitor: false },
 ];
 
 const alternatives: {
@@ -73,10 +73,10 @@ const alternatives: {
 }[] = [
   {
     position: 1,
-    name: "ServiceOS",
+    name: "Fieseros",
     bestFor: "Service businesses outside the US",
     pricing: "Free trial → from $29/mo",
-    url: "https://serviceos.cc",
+    url: "https://fieseros.com",
     description:
       "A modern, multi-channel FSM built for India, LATAM, and SEA. Transparent pricing, free tier, PWA technician app, and multi-currency support without the per-seat pricing surprises.",
     highlight: true,
@@ -151,51 +151,51 @@ const switchReasons = [
     icon: BadgeDollarSign,
     title: "Pricing that doesn't creep up",
     description:
-      "Housecall Pro's plan tiers and add-ons can quietly escalate as you grow. ServiceOS publishes pricing openly, with a real free tier and predictable per-usage SMS credits.",
+      "Housecall Pro's plan tiers and add-ons can quietly escalate as you grow. Fieseros publishes pricing openly, with a real free tier and predictable per-usage SMS credits.",
   },
   {
     icon: MessageSquare,
     title: "Email & SMS included out-of-the-box",
     description:
-      "If your customers prefer SMS or email over phone calls — which is most of the world — ServiceOS ships with Email and SMS messaging included, no third-party integrations or approvals needed. Housecall Pro does not include native SMS out of the box.",
+      "If your customers prefer SMS or email over phone calls — which is most of the world — Fieseros ships with Email and SMS messaging included, no third-party integrations or approvals needed. Housecall Pro does not include native SMS out of the box.",
   },
   {
     icon: Globe,
     title: "Built for non-US markets",
     description:
-      "Housecall Pro is purpose-built for American home services. ServiceOS is built for India, LATAM, SEA, and other multi-channel markets with multi-currency, multi-language, and local payment rails.",
+      "Housecall Pro is purpose-built for American home services. Fieseros is built for India, LATAM, SEA, and other multi-channel markets with multi-currency, multi-language, and local payment rails.",
   },
   {
     icon: SlidersHorizontal,
     title: "Customizable without consultants",
     description:
-      "Housecall Pro customization often requires support tickets or third-party consultants. ServiceOS workflows, forms, and templates are editable in-product by any admin.",
+      "Housecall Pro customization often requires support tickets or third-party consultants. Fieseros workflows, forms, and templates are editable in-product by any admin.",
   },
 ];
 
 const faqs = [
   {
-    question: "Is ServiceOS cheaper than Housecall Pro?",
+    question: "Is Fieseros cheaper than Housecall Pro?",
     answer:
-      "For most teams operating outside the US, yes. Housecall Pro starts at $49/mo and pricing increases with seats and add-ons. ServiceOS offers a free tier for solo operators and paid plans that scale with usage rather than headcount. We also publish pricing openly, so there are no surprise increases at renewal.",
+      "For most teams operating outside the US, yes. Housecall Pro starts at $49/mo and pricing increases with seats and add-ons. Fieseros offers a free tier for solo operators and paid plans that scale with usage rather than headcount. We also publish pricing openly, so there are no surprise increases at renewal.",
   },
   {
-    question: "Can I migrate my customers from Housecall Pro to ServiceOS?",
+    question: "Can I migrate my customers from Housecall Pro to Fieseros?",
     answer:
-      "Yes. Export your customer list, job history, and invoices from Housecall Pro as CSV files, then import them into ServiceOS. Most small businesses finish the migration in under an hour. Our onboarding team will help map custom fields and clean up data free of charge for paid plans.",
+      "Yes. Export your customer list, job history, and invoices from Housecall Pro as CSV files, then import them into Fieseros. Most small businesses finish the migration in under an hour. Our onboarding team will help map custom fields and clean up data free of charge for paid plans.",
   },
   {
     question: "Why is multi-channel messaging a big deal?",
     answer:
-      "In most of the world — India, Latin America, Southeast Asia, Africa, the Middle East — SMS and email are how customers communicate with businesses. If 80% of your customers prefer SMS or email over phone calls, a tool that doesn't include native messaging forces you to juggle two systems. ServiceOS ships with Email and SMS included for quotes, updates, invoices, and payment links.",
+      "In most of the world — India, Latin America, Southeast Asia, Africa, the Middle East — SMS and email are how customers communicate with businesses. If 80% of your customers prefer SMS or email over phone calls, a tool that doesn't include native messaging forces you to juggle two systems. Fieseros ships with Email and SMS included for quotes, updates, invoices, and payment links.",
   },
   {
     question: "What's the best Housecall Pro alternative for small US businesses?",
     answer:
-      "For US-based small service businesses, Jobber and Workiz are the strongest Housecall Pro alternatives. Jobber has the closest feature parity and a polished mobile app. Workiz is a great pick if you want a built-in VoIP phone system. Kickserv is the most affordable option for solo operators. ServiceOS is the better choice if Email and SMS are your primary customer channels or you operate outside the US.",
+      "For US-based small service businesses, Jobber and Workiz are the strongest Housecall Pro alternatives. Jobber has the closest feature parity and a polished mobile app. Workiz is a great pick if you want a built-in VoIP phone system. Kickserv is the most affordable option for solo operators. Fieseros is the better choice if Email and SMS are your primary customer channels or you operate outside the US.",
   },
   {
-    question: "Does ServiceOS have a mobile app like Housecall Pro?",
+    question: "Does Fieseros have a mobile app like Housecall Pro?",
     answer:
       "Yes, but it is a progressive web app (PWA) rather than a native iOS/Android app. Technicians install it in one tap from the browser, it works offline in the field, and updates ship instantly without app store review delays. Most field teams find PWA more convenient than managing native app updates across dozens of technician phones.",
   },
@@ -208,10 +208,10 @@ const faqs = [
 
 export default function HousecallProAlternativesPage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Housecall Pro Alternative",
+    name: "Fieseros — Housecall Pro Alternative",
     description:
       "Email & SMS-native field service management software and Housecall Pro alternative for India, LATAM, and SEA service businesses.",
-    url: "https://serviceos.cc/housecall-pro-alternatives",
+    url: "https://fieseros.com/housecall-pro-alternatives",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -220,7 +220,7 @@ export default function HousecallProAlternativesPage() {
     name: "8 Best Housecall Pro Alternatives in 2026",
     description:
       "A ranked, compared list of the top 8 Housecall Pro alternatives and competitors for field service businesses.",
-    url: "https://serviceos.cc/housecall-pro-alternatives",
+    url: "https://fieseros.com/housecall-pro-alternatives",
     items: alternatives.map((a) => ({
       position: a.position,
       name: a.name,
@@ -233,9 +233,9 @@ export default function HousecallProAlternativesPage() {
     <CornerstoneLayout
       activePath="/housecall-pro-alternatives"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Compare", url: "https://serviceos.cc/jobber-alternatives" },
-        { name: "Housecall Pro Alternatives", url: "https://serviceos.cc/housecall-pro-alternatives" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Compare", url: "https://fieseros.com/jobber-alternatives" },
+        { name: "Housecall Pro Alternatives", url: "https://fieseros.com/housecall-pro-alternatives" },
       ]}
       additionalSchema={[appSchema, itemListSchema]}
     >
@@ -249,14 +249,14 @@ export default function HousecallProAlternativesPage() {
             href="/#signup"
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
-            Try ServiceOS Free
+            Try Fieseros Free
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
             href="/field-service-software"
             className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Explore ServiceOS
+            Explore Fieseros
           </Link>
         </div>
       </CornerstoneHero>
@@ -266,10 +266,10 @@ export default function HousecallProAlternativesPage() {
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <div className="text-center mb-10">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              ServiceOS vs Housecall Pro — Feature Comparison
+              Fieseros vs Housecall Pro — Feature Comparison
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              The capabilities that matter most when weighing ServiceOS against Housecall Pro.
+              The capabilities that matter most when weighing Fieseros against Housecall Pro.
             </p>
           </div>
           <div className="overflow-x-auto rounded-xl border">
@@ -277,7 +277,7 @@ export default function HousecallProAlternativesPage() {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left py-3 px-4 font-semibold text-foreground">Feature</th>
-                  <th className="text-center py-3 px-4 font-semibold text-emerald-700">ServiceOS</th>
+                  <th className="text-center py-3 px-4 font-semibold text-emerald-700">Fieseros</th>
                   <th className="text-center py-3 px-4 font-semibold text-muted-foreground">
                     Housecall Pro
                   </th>
@@ -288,7 +288,7 @@ export default function HousecallProAlternativesPage() {
                   <tr key={i} className="border-b last:border-0">
                     <td className="py-3 px-4 text-foreground">{row.feature}</td>
                     <td className="text-center py-3 px-4">
-                      {row.serviceos ? (
+                      {row.fieseros ? (
                         <CheckCircle2 className="h-5 w-5 text-emerald-600 mx-auto" />
                       ) : (
                         <X className="h-4 w-4 text-muted-foreground mx-auto" />
@@ -321,7 +321,7 @@ export default function HousecallProAlternativesPage() {
           for a solo operator, but as you add technicians and unlock features like inventory,
           marketing, or advanced reporting, the monthly bill climbs quickly. Many customers report
           being moved to a higher tier after a feature they needed was gated behind a plan
-          upgrade. ServiceOS publishes pricing openly and scales with usage, not seats, so you
+          upgrade. Fieseros publishes pricing openly and scales with usage, not seats, so you
           always know what you will pay next year.
         </p>
         <p>
@@ -330,7 +330,7 @@ export default function HousecallProAlternativesPage() {
           Mexico, Indonesia, or any of the dozens of countries where SMS and email are the
           dominant messaging channels, you end up running Housecall Pro for operations and a
           separate text-message workflow for customer communication — which means data in two
-          places and constant copy-paste. ServiceOS ships with Email and SMS included.
+          places and constant copy-paste. Fieseros ships with Email and SMS included.
         </p>
         <p>
           The third is <strong>market fit and customization</strong>. Housecall Pro is
@@ -338,7 +338,7 @@ export default function HousecallProAlternativesPage() {
           terminology, and onboarding flows reflect that. Businesses operating in multi-currency
           or multi-language environments often find themselves working around the tool.
           Customizing workflows frequently requires support tickets or third-party consultants.
-          ServiceOS is built for international markets, with editable workflows, forms, and
+          Fieseros is built for international markets, with editable workflows, forms, and
           templates that any admin can change in-product.
         </p>
       </ContentSection>
@@ -348,10 +348,10 @@ export default function HousecallProAlternativesPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <div className="text-center mb-10">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              Why teams switch to ServiceOS from Housecall Pro
+              Why teams switch to Fieseros from Housecall Pro
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Four reasons ServiceOS is the fastest-growing Housecall Pro alternative for
+              Four reasons Fieseros is the fastest-growing Housecall Pro alternative for
               service businesses outside North America.
             </p>
           </div>
@@ -508,7 +508,7 @@ export default function HousecallProAlternativesPage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/jobber-alternatives" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
@@ -536,7 +536,7 @@ export default function HousecallProAlternativesPage() {
       </section>
 
       <CtaSection
-        title="Switch from Housecall Pro to ServiceOS"
+        title="Switch from Housecall Pro to Fieseros"
         subtitle="Free trial, no credit card. Bring your customers and jobs over in under an hour."
         primaryCta={{ label: "Start Free Trial", href: "/#signup" }}
         secondaryCta={{ label: "Talk to Sales", href: "/contact-us" }}

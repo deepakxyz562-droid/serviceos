@@ -32,7 +32,7 @@ export interface ClaimEmailContext {
   requestId: string;
   /** The secure token for the registration link (only for approved). */
   completionToken?: string;
-  /** The base app URL (https://serviceos.cc or local). */
+  /** The base app URL (https://fieseros.com or local). */
   appUrl: string;
   /** Optional admin note (for rejection reason). */
   reviewNote?: string | null;
@@ -75,7 +75,7 @@ export async function sendClaimApprovedEmail(ctx: ClaimEmailContext): Promise<vo
   </div>
 
   <p style="color: #334155; font-size: 14px; line-height: 1.6;">
-    Click the button below to create your ServiceOS account. Once registered, you'll be able to:
+    Click the button below to create your Fieseros account. Once registered, you'll be able to:
   </p>
 
   <ul style="color: #475569; font-size: 14px; line-height: 1.8; padding-left: 20px;">
@@ -102,7 +102,7 @@ export async function sendClaimApprovedEmail(ctx: ClaimEmailContext): Promise<vo
 
   const text = `Claim Approved — ${ctx.businessName}
 
-Your claim for "${ctx.businessName}" has been approved. You can now create your ServiceOS account and take ownership of this business listing.
+Your claim for "${ctx.businessName}" has been approved. You can now create your Fieseros account and take ownership of this business listing.
 
 Create your account: ${registrationLink}
 

@@ -4,7 +4,7 @@ import { withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
 
 /**
- * Flow 3: Emergency Dispatch — status (ServiceOS V1.5 — P10-flows)
+ * Flow 3: Emergency Dispatch — status (Fieseros V1.5 — P10-flows)
  * ------------------------------------------------------------
  * GET /api/marketplace/emergency/[id]
  *

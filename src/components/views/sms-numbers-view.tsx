@@ -312,7 +312,7 @@ export function SmsNumbersView() {
   // Lazy init via `typeof window` guard avoids a setState-in-effect AND keeps
   // SSR output deterministic (banner hidden server-side; revealed client-side
   // only if the user hasn't dismissed it).
-  const INFO_BANNER_KEY = 'serviceos:phone-numbers-info-dismissed';
+  const INFO_BANNER_KEY = 'fieseros:phone-numbers-info-dismissed';
   const [infoDismissed, setInfoDismissed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true; // SSR: hidden by default
     try {

@@ -2,15 +2,15 @@ import { Bolt } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — ServiceOS CRM",
+  title: "Privacy Policy — Fieseros CRM",
   description:
-    "Learn how ServiceOS CRM collects, uses, and protects your personal information, payment details, and business data. Last updated March 5, 2026.",
+    "Learn how Fieseros CRM collects, uses, and protects your personal information, payment details, and business data. Last updated March 5, 2026.",
   openGraph: {
-    title: "Privacy Policy — ServiceOS CRM",
+    title: "Privacy Policy — Fieseros CRM",
     description:
-      "Learn how ServiceOS CRM collects, uses, and protects your personal information, payment details, and business data.",
-    url: "https://serviceos.cc/privacy-policy",
-    siteName: "ServiceOS",
+      "Learn how Fieseros CRM collects, uses, and protects your personal information, payment details, and business data.",
+    url: "https://fieseros.com/privacy-policy",
+    siteName: "Fieseros",
     type: "website",
   },
 };
@@ -40,7 +40,7 @@ export default function PrivacyPolicyPage() {
               <Bolt className="h-5 w-5 text-white" />
             </span>
             <span className="text-xl font-bold tracking-tight text-foreground">
-              ServiceOS
+              Fieseros
             </span>
           </a>
           <a
@@ -101,14 +101,14 @@ export default function PrivacyPolicyPage() {
                   1. Introduction
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS, Inc. (&quot;ServiceOS,&quot; &quot;we,&quot;
-                  &quot;us,&quot; or &quot;our&quot;) operates the ServiceOS CRM
+                  Fieseros, Inc. (&quot;Fieseros,&quot; &quot;we,&quot;
+                  &quot;us,&quot; or &quot;our&quot;) operates the Fieseros CRM
                   platform available at{" "}
                   <a
-                    href="https://serviceos.cc"
+                    href="https://fieseros.com"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    serviceos.cc
+                    fieseros.com
                   </a>{" "}
                   and related mobile applications (collectively, the
                   &quot;Service&quot;). This Privacy Policy explains how we
@@ -172,7 +172,7 @@ export default function PrivacyPolicyPage() {
                   <li>Workflow automation configurations</li>
                 </ul>
                 <p className="text-muted-foreground leading-relaxed mb-6">
-                  You retain full ownership of your business data. ServiceOS acts
+                  You retain full ownership of your business data. Fieseros acts
                   as a data processor on your behalf and processes this data only
                   to deliver the Service as instructed by you.
                 </p>
@@ -218,7 +218,7 @@ export default function PrivacyPolicyPage() {
                   </li>
                 </ul>
                 <p className="text-muted-foreground leading-relaxed mb-6">
-                  ServiceOS does <strong>not</strong> collect, store, or have
+                  Fieseros does <strong>not</strong> collect, store, or have
                   access to your full credit card number, CVV, or bank account
                   details. These are handled entirely by our payment processors
                   who comply with PCI DSS Level 1 certification. We retain only
@@ -289,7 +289,7 @@ export default function PrivacyPolicyPage() {
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-6">
                   <li>
                     <strong>Service Delivery</strong> — to provide, maintain, and
-                    improve the ServiceOS CRM platform, including processing your
+                    improve the Fieseros CRM platform, including processing your
                     business data, managing customer relationships, and delivering
                     email, SMS, push, and in-app communications
                   </li>
@@ -577,10 +577,10 @@ export default function PrivacyPolicyPage() {
                 <p className="text-muted-foreground leading-relaxed">
                   To exercise any of these rights, please contact us at{" "}
                   <a
-                    href="mailto:privacy@serviceos.cc"
+                    href="mailto:privacy@fieseros.com"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@serviceos.cc
+                    privacy@fieseros.com
                   </a>
                   . We will respond to your request within 30 days (or within the
                   timeframe required by applicable law).
@@ -594,7 +594,7 @@ export default function PrivacyPolicyPage() {
                   8. International Data Transfers
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-3">
-                  ServiceOS is headquartered in the United States, and our primary
+                  Fieseros is headquartered in the United States, and our primary
                   data processing occurs in AWS data centers in the US and EU.
                   Your information may be transferred to, stored, and processed in
                   countries other than your country of residence.
@@ -629,7 +629,7 @@ export default function PrivacyPolicyPage() {
                   9. Children&apos;s Privacy
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-3">
-                  ServiceOS is a business-to-business (B2B) platform and is not
+                  Fieseros is a business-to-business (B2B) platform and is not
                   intended for use by individuals under the age of 16. We do not
                   knowingly collect personal information from children under 16
                   years of age.
@@ -641,10 +641,10 @@ export default function PrivacyPolicyPage() {
                   you believe that a child under 16 has provided us with personal
                   data, please contact us at{" "}
                   <a
-                    href="mailto:privacy@serviceos.cc"
+                    href="mailto:privacy@fieseros.com"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@serviceos.cc
+                    privacy@fieseros.com
                   </a>
                   .
                 </p>
@@ -693,28 +693,28 @@ export default function PrivacyPolicyPage() {
                   Privacy Policy or our data practices, please contact us:
                 </p>
                 <div className="rounded-lg border border-border bg-card p-6 space-y-3">
-                  <p className="text-foreground font-semibold">ServiceOS, Inc.</p>
+                  <p className="text-foreground font-semibold">Fieseros, Inc.</p>
                   <p className="text-muted-foreground leading-relaxed">
                     <span className="font-medium text-foreground">Email: </span>
                     <a
-                      href="mailto:privacy@serviceos.cc"
+                      href="mailto:privacy@fieseros.com"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      privacy@serviceos.cc
+                      privacy@fieseros.com
                     </a>
                   </p>
                   <p className="text-muted-foreground leading-relaxed">
                     <span className="font-medium text-foreground">Website: </span>
                     <a
-                      href="https://serviceos.cc"
+                      href="https://fieseros.com"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      serviceos.cc
+                      fieseros.com
                     </a>
                   </p>
                   <p className="text-muted-foreground leading-relaxed">
                     <span className="font-medium text-foreground">Mailing Address: </span>
-                    ServiceOS, Inc., 100 CRM Boulevard, Suite 400, San Francisco, CA 94105, United States
+                    Fieseros, Inc., 100 CRM Boulevard, Suite 400, San Francisco, CA 94105, United States
                   </p>
                 </div>
                 <p className="text-muted-foreground leading-relaxed mt-4">
@@ -734,7 +734,7 @@ export default function PrivacyPolicyPage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              &copy; {new Date().getFullYear()} ServiceOS, Inc. All rights
+              &copy; {new Date().getFullYear()} Fieseros, Inc. All rights
               reserved.
             </p>
             <nav className="flex items-center gap-6 text-sm text-muted-foreground">

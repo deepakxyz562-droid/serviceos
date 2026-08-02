@@ -19,7 +19,7 @@ interface PWAState {
   installPrompt: BeforeInstallPromptEvent | null;
 }
 
-const DISMISS_KEY = 'serviceos_install_dismissed';
+const DISMISS_KEY = 'fieseros_install_dismissed';
 const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 function isDismissedRecently(): boolean {
@@ -123,7 +123,7 @@ export function usePWA() {
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'activated') {
                 // New service worker activated — could show update prompt
-                console.log('ServiceOS updated to latest version');
+                console.log('Fieseros updated to latest version');
               }
             });
           }

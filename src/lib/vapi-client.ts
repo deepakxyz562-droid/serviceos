@@ -1,7 +1,7 @@
 /**
  * Vapi.ai BYOK Client (server-side only)
  * ---------------------------------------
- * Tenants bring their own Vapi.ai API key. ServiceOS proxies requests to
+ * Tenants bring their own Vapi.ai API key. Fieseros proxies requests to
  * the Vapi REST API (https://api.vapi.ai) and never stores the key in
  * localStorage or sends it to the browser.
  *

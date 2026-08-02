@@ -244,7 +244,7 @@ function invalidateCache(tenantId: string) {
  * must cancel via the Creem dashboard).
  *
  * Metadata (set at /api/sms/numbers/buy):
- *   { kind: 'phone_number', phoneNumberId, tenantId, source: 'serviceos-sms' }
+ *   { kind: 'phone_number', phoneNumberId, tenantId, source: 'fieseros-sms' }
  */
 async function handlePhoneNumberCheckout(event: NormalisedEvent) {
   const phoneNumberId = (event.metadata.phoneNumberId as string) || '';

@@ -597,7 +597,7 @@ export function EmailProvidersView() {
               <div className="space-y-2">
                 <Label>From Name <span className="text-rose-500">*</span></Label>
                 <Input
-                  placeholder="ServiceOS"
+                  placeholder="Fieseros"
                   value={form.fromName}
                   onChange={(e) => setForm((f) => ({ ...f, fromName: e.target.value }))}
                 />

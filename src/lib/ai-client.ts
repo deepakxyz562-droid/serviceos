@@ -315,8 +315,8 @@ const openRouterAdapter: AiProviderAdapter = {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
-          'X-Title': 'ServiceOS AI',
-          'HTTP-Referer': 'https://serviceos.app',
+          'X-Title': 'Fieseros AI',
+          'HTTP-Referer': 'https://fieseros.app',
         },
         body: JSON.stringify({
           model,

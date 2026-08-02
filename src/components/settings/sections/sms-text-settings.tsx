@@ -130,7 +130,7 @@ export function SmsTextSettings() {
   // Test form
   const [testPhone, setTestPhone] = useState('');
   const [testMessage, setTestMessage] = useState(
-    'ServiceOS test: your SMS provider is working.',
+    'Fieseros test: your SMS provider is working.',
   );
 
   // ── Load existing settings ──────────────────────────────────────────────
@@ -556,7 +556,7 @@ export function SmsTextSettings() {
               onFocus={(e) => e.currentTarget.select()}
             />
             <p className="text-xs text-muted-foreground">
-              Point your provider&apos;s inbound SMS webhook to this URL. ServiceOS
+              Point your provider&apos;s inbound SMS webhook to this URL. Fieseros
               handles the inbound message and matches it to a conversation.
             </p>
           </div>
@@ -583,7 +583,7 @@ export function SmsTextSettings() {
             <div className="space-y-0.5">
               <Label className="text-sm font-medium">Auto-respond to keywords</Label>
               <p className="text-xs text-muted-foreground">
-                When a customer texts a matching keyword, ServiceOS replies with the configured response.
+                When a customer texts a matching keyword, Fieseros replies with the configured response.
               </p>
             </div>
             <Switch
@@ -711,7 +711,7 @@ export function SmsTextSettings() {
             <div className="space-y-2">
               <Label className="text-sm font-medium">Test Message</Label>
               <Input
-                placeholder="ServiceOS test message"
+                placeholder="Fieseros test message"
                 value={testMessage}
                 onChange={(e) => setTestMessage(e.target.value)}
               />

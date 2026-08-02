@@ -10,7 +10,7 @@ import { useAppStore } from '@/store/app-store';
  * page size (20) so production behavior is unchanged.
  *
  * The hook checks both the Zustand auth state (primary) and the
- * `serviceos_auth` localStorage entry (fallback — set by `/api/demo-login`
+ * `fieseros_auth` localStorage entry (fallback — set by `/api/demo-login`
  * with `isDemo: true`) so it works even before the store has hydrated.
  */
 const DEMO_TENANT_SLUG = 'abc-plumbing-demo';
@@ -24,7 +24,7 @@ export function useDemoPageSize(defaultSize = DEFAULT_PAGE_SIZE): number {
   // Also check localStorage flag as a fallback (demo login sets isDemo: true)
   if (typeof window !== 'undefined') {
     try {
-      const raw = localStorage.getItem('serviceos_auth');
+      const raw = localStorage.getItem('fieseros_auth');
       if (raw) {
         const parsed = JSON.parse(raw) as { isDemo?: boolean };
         if (parsed.isDemo) return DEMO_PAGE_SIZE;

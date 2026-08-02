@@ -228,7 +228,7 @@ export async function POST(
       ...(email ? [`Email: ${email}`] : []),
       ...(message ? [``, `Message:`, message] : []),
       ``,
-      `View this lead in your ServiceOS dashboard.`,
+      `View this lead in your Fieseros dashboard.`,
     ]
     const emailText = emailLines.join('\n')
     const emailHtml = `
@@ -240,7 +240,7 @@ export async function POST(
         ${email ? `<tr><td style="padding:4px 12px 4px 0;font-weight:600;">Email:</td><td>${email}</td></tr>` : ''}
       </table>
       ${message ? `<p style="margin:16px 0 4px 0;font-weight:600;color:#0f172a;">Message:</p><p style="margin:0;color:#475569;white-space:pre-wrap;">${message.replace(/</g, '&lt;')}</p>` : ''}
-      <p style="margin-top:24px;color:#94a3b8;font-size:12px;">View this lead in your ServiceOS dashboard.</p>
+      <p style="margin-top:24px;color:#94a3b8;font-size:12px;">View this lead in your Fieseros dashboard.</p>
     `
 
     notifyOwner(tenant.id, {

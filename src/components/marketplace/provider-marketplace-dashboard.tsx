@@ -701,7 +701,7 @@ function FeaturedUpgradeCTA({ isFeatured }: { isFeatured: boolean }) {
         </div>
         <Button
           className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5"
-          onClick={() => toast.info('Coming soon — contact sales@serviceos.cc to get featured.')}
+          onClick={() => toast.info('Coming soon — contact sales@fieseros.com to get featured.')}
         >
           <Crown className="size-4" /> Upgrade
         </Button>
@@ -884,7 +884,7 @@ function OptInTab({ onNavigatedToOverview }: { onNavigatedToOverview: () => void
           marketplaceTermsAcceptedAt: true, // server sets to new Date()
         }),
       });
-      toast.success('You are now opted in to the ServiceOS Marketplace!');
+      toast.success('You are now opted in to the Fieseros Marketplace!');
       onNavigatedToOverview();
     } catch (e: any) {
       toast.error(e?.message || 'Failed to opt in');
@@ -903,10 +903,10 @@ function OptInTab({ onNavigatedToOverview }: { onNavigatedToOverview: () => void
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Store className="size-5 text-emerald-600" /> ServiceOS Marketplace
+            <Store className="size-5 text-emerald-600" /> Fieseros Marketplace
           </CardTitle>
           <CardDescription>
-            Reach new customers every day through the ServiceOS Marketplace.
+            Reach new customers every day through the Fieseros Marketplace.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -944,7 +944,7 @@ function OptInTab({ onNavigatedToOverview }: { onNavigatedToOverview: () => void
                     className="mt-0.5"
                   />
                   <span className="text-sm">
-                    I agree to the ServiceOS Marketplace{' '}
+                    I agree to the Fieseros Marketplace{' '}
                     <a
                       href="#"
                       onClick={(e) => {
@@ -1490,7 +1490,7 @@ function CertificationDialog({
         <DialogHeader>
           <DialogTitle>{cert ? 'Edit certification' : 'Add certification'}</DialogTitle>
           <DialogDescription>
-            Trade licenses, accreditations, and certifications. Verification is performed by the ServiceOS team after submission.
+            Trade licenses, accreditations, and certifications. Verification is performed by the Fieseros team after submission.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">

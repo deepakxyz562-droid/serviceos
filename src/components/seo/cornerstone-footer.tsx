@@ -138,7 +138,7 @@ export function CornerstoneFooter() {
 
         <div className="mt-10 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} ServiceOS, Inc. All rights reserved.
+            &copy; {new Date().getFullYear()} Fieseros, Inc. All rights reserved.
           </p>
           <p className="text-sm text-muted-foreground">
             The Operating System for Service Businesses.

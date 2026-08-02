@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { logActivity } from '@/lib/activity-log';
 
 /**
- * AI Invoice Draft (ServiceOS V1.5)
+ * AI Invoice Draft (Fieseros V1.5)
  * ---------------------------------
  * POST /api/ai/invoice-draft
  *

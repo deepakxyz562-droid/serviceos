@@ -6,7 +6,7 @@ import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit'
 import { getIndustry } from '@/lib/industry-catalog';
 
 /**
- * Flow 2: Quote Request — create (ServiceOS V1.5 — P10-flows)
+ * Flow 2: Quote Request — create (Fieseros V1.5 — P10-flows)
  * ------------------------------------------------------------
  * POST /api/marketplace/quote-request
  *

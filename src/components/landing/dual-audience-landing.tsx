@@ -192,7 +192,7 @@ const providerBenefits = [
   {
     icon: Search,
     title: 'Get found by local customers',
-    description: 'Your business appears in the ServiceOS Marketplace where customers search for verified local pros. AI-powered matching sends you jobs that fit your skills and service area.',
+    description: 'Your business appears in the Fieseros Marketplace where customers search for verified local pros. AI-powered matching sends you jobs that fit your skills and service area.',
   },
   {
     icon: Calendar,
@@ -329,7 +329,7 @@ const testimonials = [
     name: 'Rajesh Kumar',
     business: 'Kumar Plumbing Co.',
     industry: 'Plumbing · Chennai',
-    quote: 'Before ServiceOS, I was losing leads in scattered text messages every week. Now every inquiry lands in one inbox and I get paid the same day the job finishes.',
+    quote: 'Before Fieseros, I was losing leads in scattered text messages every week. Now every inquiry lands in one inbox and I get paid the same day the job finishes.',
     metric: '+42% revenue in 3 months',
     avatar: '/images/landing/testimonial-1.png',
   },
@@ -385,7 +385,7 @@ const faqs = [
   },
   {
     question: 'Do I need any third-party approvals to get started?',
-    answer: 'No. ServiceOS works out of the box with Email, SMS, Push, and In-App notifications — no approvals, no waiting. Capture leads, send quotes, dispatch jobs, invoice customers, and collect payments from day one.',
+    answer: 'No. Fieseros works out of the box with Email, SMS, Push, and In-App notifications — no approvals, no waiting. Capture leads, send quotes, dispatch jobs, invoice customers, and collect payments from day one.',
   },
   {
     question: 'How long does it take to get set up?',
@@ -404,7 +404,7 @@ const faqs = [
     answer: 'Yes. We use enterprise-grade AES-256 encryption for all data at rest and in transit. Daily automated backups, 99.9% uptime SLA. You can export or delete your data anytime.',
   },
   {
-    question: 'Can I try ServiceOS before committing?',
+    question: 'Can I try Fieseros before committing?',
     answer: 'Of course. We offer a 14-day free trial with full access to all Growth plan features. No credit card required. You can also explore our Live Demo — a real plumbing business with 2,000 customers, 300 bookings, and 500 invoices.',
   },
 ];
@@ -469,11 +469,11 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
   return (
     <header className="sticky top-0 z-50 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 pt-[env(safe-area-inset-top,0px)]">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
-        <a href="#top" className="flex items-center gap-2" aria-label="ServiceOS home" onClick={(e) => { e.preventDefault(); setMobileOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
+        <a href="#top" className="flex items-center gap-2" aria-label="Fieseros home" onClick={(e) => { e.preventDefault(); setMobileOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
             <Wrench className="h-4 w-4" />
           </span>
-          <span className="text-lg font-bold text-foreground">ServiceOS</span>
+          <span className="text-lg font-bold text-foreground">Fieseros</span>
         </a>
 
         <nav className="hidden md:flex items-center gap-6">
@@ -636,7 +636,7 @@ function HeroFork({
         </div>
 
         <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl md:text-6xl">
-          ServiceOS —{' '}
+          Fieseros —{' '}
           <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent dark:from-emerald-400 dark:via-teal-400 dark:to-cyan-400">
             The AI Operating System
           </span>{' '}
@@ -780,7 +780,7 @@ function HeroFork({
               <div className="aspect-[1344/768] relative">
                 <Image
                   src="/images/landing/hero-dashboard.png"
-                  alt="ServiceOS CRM dashboard showing unified inbox, jobs, and dispatch"
+                  alt="Fieseros CRM dashboard showing unified inbox, jobs, and dispatch"
                   fill
                   priority
                   sizes="(max-width: 1024px) 100vw, 80vw"
@@ -864,7 +864,7 @@ function CrmProblem() {
           })}
         </div>
         <p className="text-center text-sm text-muted-foreground mt-8">
-          <span className="font-semibold text-emerald-600">ServiceOS fixes all three — day one, no Meta approvals required.</span>
+          <span className="font-semibold text-emerald-600">Fieseros fixes all three — day one, no Meta approvals required.</span>
         </p>
       </div>
     </section>
@@ -919,7 +919,7 @@ function CrmRoiMetrics() {
             Real results, <span className="text-emerald-600">measurable impact</span>
           </h2>
           <p className="text-muted-foreground mt-3 max-w-2xl mx-auto text-sm">
-            Aggregated averages from ServiceOS customers in their first 90 days. Individual results vary by industry and adoption.
+            Aggregated averages from Fieseros customers in their first 90 days. Individual results vary by industry and adoption.
           </p>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
@@ -1436,7 +1436,7 @@ function CrmForProviders({ onGetStarted }: { onGetStarted?: () => void }) {
         <div className="mb-10 text-center">
           <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 mb-3 font-medium">For Providers</Badge>
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
-            Get more customers with the <span className="text-amber-600">ServiceOS Marketplace</span>
+            Get more customers with the <span className="text-amber-600">Fieseros Marketplace</span>
           </h2>
           <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
             List your business for free. Get matched with local customers searching for your services. Get paid faster with built-in escrow.
@@ -1469,7 +1469,7 @@ function CrmForProviders({ onGetStarted }: { onGetStarted?: () => void }) {
             Ready to transform your business?
           </h3>
           <p className="text-emerald-50 text-lg mb-6 max-w-2xl mx-auto">
-            Join 2,500+ service businesses already running on ServiceOS. Email &amp; SMS work from day one — no approvals, no waiting.
+            Join 2,500+ service businesses already running on Fieseros. Email &amp; SMS work from day one — no approvals, no waiting.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             {onGetStarted ? (
@@ -1511,8 +1511,8 @@ function StickyCta({
         <div className="flex-1 min-w-0">
           <p className="text-xs text-muted-foreground truncate">
             {audience === 'crm'
-              ? 'ServiceOS CRM — run your business from lead to invoice'
-              : 'ServiceOS Marketplace — find verified local pros'}
+              ? 'Fieseros CRM — run your business from lead to invoice'
+              : 'Fieseros Marketplace — find verified local pros'}
           </p>
         </div>
         {audience === 'crm' ? (

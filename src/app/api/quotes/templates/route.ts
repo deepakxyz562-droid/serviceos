@@ -14,7 +14,7 @@ import {
 } from '@/lib/quote-templates';
 
 /**
- * Quote Templates API (ServiceOS V1.5 — P6-quotes)
+ * Quote Templates API (Fieseros V1.5 — P6-quotes)
  * -------------------------------------------------
  * GET  /api/quotes/templates         — list templates (?industry= filter)
  * POST /api/quotes/templates         — apply a template, create a Quote row

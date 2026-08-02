@@ -8,6 +8,7 @@ import { CookieConsentBanner } from "@/components/legal/cookie-consent-banner";
 import { StructuredData } from "@/components/seo/structured-data";
 import { WebVitalsReporter } from "@/components/seo/web-vitals-reporter";
 import { getOrganizationSchema, getWebsiteSchema } from "@/lib/seo/schemas";
+import { BRAND } from "@/lib/brand";
 
 // P5 (Font CLS fix): Poppins with `display: "swap"` causes a FOUT (flash of
 // unstyled text) where the fallback (Arial) is shown first, then swapped for
@@ -50,17 +51,17 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   // P0-3 (SEO): metadataBase makes all relative metadata URLs (canonical,
   // openGraph.url, openGraph.images, alternates) resolve to absolute
-  // https://serviceos.cc/... URLs. Without this, social scrapers and Google
+  // https://fieseros.com/... URLs. Without this, social scrapers and Google
   // see relative paths like "/og/og-default.png" which they can't resolve —
   // resulting in broken OG cards and canonical warnings in Search Console.
-  metadataBase: new URL('https://serviceos.cc'),
-  title: 'ServiceOS - The Operating System for Service Businesses',
-  description: 'ServiceOS — The Operating System for service businesses. Replace scattered texts, emails, and spreadsheets. Leads, dispatch, invoicing, and automated Email, SMS & Push operations.',
-  applicationName: 'ServiceOS',
-  keywords: ["ServiceOS", "field service", "SaaS", "job management", "email notifications", "SMS notifications", "push notifications", "invoicing", "workflow automation", "service business"],
-  authors: [{ name: 'ServiceOS Team' }],
-  creator: 'ServiceOS',
-  publisher: 'ServiceOS',
+  metadataBase: new URL(BRAND.url),
+  title: `${BRAND.name} - ${BRAND.tagline}`,
+  description: BRAND.description,
+  applicationName: BRAND.name,
+  keywords: [BRAND.name, "field service", "SaaS", "job management", "email notifications", "SMS notifications", "push notifications", "invoicing", "workflow automation", "service business"],
+  authors: [{ name: `${BRAND.name} Team` }],
+  creator: BRAND.name,
+  publisher: BRAND.name,
   manifest: '/manifest.json',
   formatDetection: { telephone: false },
   alternates: {
@@ -83,13 +84,13 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "ServiceOS",
+    title: BRAND.name,
   },
   openGraph: {
-    title: 'ServiceOS - The Operating System for Service Businesses',
+    title: `${BRAND.name} - ${BRAND.tagline}`,
     description: 'Replace scattered texts, emails, and spreadsheets with one powerful platform',
     type: 'website',
-    siteName: 'ServiceOS',
+    siteName: BRAND.name,
     url: '/',
     locale: 'en_US',
     images: [
@@ -97,13 +98,13 @@ export const metadata: Metadata = {
         url: '/og/og-default.png',
         width: 1200,
         height: 630,
-        alt: 'ServiceOS — The Operating System for Service Businesses',
+        alt: `${BRAND.name} — ${BRAND.tagline}`,
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ServiceOS - The Operating System for Service Businesses',
+    title: `${BRAND.name} - ${BRAND.tagline}`,
     description: 'Replace scattered texts, emails, and spreadsheets with one powerful platform',
     images: ['/og/og-default.png'],
   },

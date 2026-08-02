@@ -37,7 +37,7 @@ interface RouteContext {
 export async function POST(request: NextRequest, ctx: RouteContext) {
   try {
     // ── Auth: session OR internal-secret ───────────────────────────────
-    const internalSecret = process.env.JWT_SECRET || 'serviceos-saas-dev-secret-key'
+    const internalSecret = process.env.JWT_SECRET || 'fieseros-saas-dev-secret-key'
     const providedSecret = request.headers.get('x-internal-secret')
     const isInternal = providedSecret && providedSecret === internalSecret
 

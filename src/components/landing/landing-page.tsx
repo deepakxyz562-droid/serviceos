@@ -357,7 +357,7 @@ const testimonials = [
     name: 'Rajesh Kumar',
     business: 'Kumar Plumbing Co.',
     industry: 'Plumbing · Chennai',
-    quote: 'Before ServiceOS, I was losing leads in scattered text messages and spreadsheets every week. Now every inquiry lands in one inbox, and I get paid the same day the job finishes. Email and SMS work right away — no approvals needed.',
+    quote: 'Before Fieseros, I was losing leads in scattered text messages and spreadsheets every week. Now every inquiry lands in one inbox, and I get paid the same day the job finishes. Email and SMS work right away — no approvals needed.',
     avatar: '/images/landing/testimonial-1.png',
     metric: '+42% revenue in 3 months',
   },
@@ -441,7 +441,7 @@ const faqs = [
   },
   {
     question: 'Do I need any third-party approvals to get started?',
-    answer: 'No. ServiceOS works out of the box with Email, SMS, Push, and In-App notifications — no approvals, no waiting. You can capture leads, send quotes, dispatch jobs, invoice customers, and collect payments from day one. Everything you need to run your service business is included on every plan.',
+    answer: 'No. Fieseros works out of the box with Email, SMS, Push, and In-App notifications — no approvals, no waiting. You can capture leads, send quotes, dispatch jobs, invoice customers, and collect payments from day one. Everything you need to run your service business is included on every plan.',
   },
   {
     question: 'How long does it take to get set up?',
@@ -453,7 +453,7 @@ const faqs = [
   },
   {
     question: 'What can I automate with the n8n builder?',
-    answer: 'Our built-in n8n automation builder connects ServiceOS to 400+ apps and services. Automate tasks like syncing invoices to your accounting software, sending SMS reminders before appointments, updating spreadsheets when jobs complete, and triggering follow-up campaigns after payments — all without writing code. Pro and Enterprise plans include full n8n access with custom workflow triggers.',
+    answer: 'Our built-in n8n automation builder connects Fieseros to 400+ apps and services. Automate tasks like syncing invoices to your accounting software, sending SMS reminders before appointments, updating spreadsheets when jobs complete, and triggering follow-up campaigns after payments — all without writing code. Pro and Enterprise plans include full n8n access with custom workflow triggers.',
   },
   {
     question: 'Do you charge per message or per call?',
@@ -464,7 +464,7 @@ const faqs = [
     answer: 'Yes. We use enterprise-grade AES-256 encryption for all data at rest and in transit. Daily automated backups, 99.9% uptime SLA, and SOC 2 Type II compliance. Your business data is safer with us than on spreadsheets or paper. You can export or delete your data anytime — see our Data Deletion policy.',
   },
   {
-    question: 'Can I try ServiceOS before committing?',
+    question: 'Can I try Fieseros before committing?',
     answer: 'Of course. We offer a 14-day free trial with full access to all Growth plan features. No credit card required. You can also explore our Live Demo — a real plumbing business with 2,000 customers, 300 bookings, and 500 invoices — no signup needed.',
   },
   {
@@ -569,7 +569,7 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
             <div className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-sm bg-emerald-600 shadow-emerald-500/20">
               <Wrench className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-foreground tracking-tight">ServiceOS</span>
+            <span className="text-xl font-bold text-foreground tracking-tight">Fieseros</span>
           </div>
 
           <div className="hidden md:flex items-center gap-7">
@@ -696,7 +696,7 @@ function HeroSection({ onGetStarted, onTryDemo }: { onGetStarted: () => void; on
             </motion.h1>
 
             <motion.p variants={staggerItem} className="text-lg text-muted-foreground max-w-xl mb-8 leading-relaxed">
-              ServiceOS replaces scattered texts, emails, and spreadsheets. Capture leads, dispatch jobs, invoice clients, and get paid — with Email, SMS, Push, and In-App notifications built in. Plus an <span className="text-foreground font-medium">AI receptionist that answers every call 24/7</span>, so you never lose a customer to voicemail again.
+              Fieseros replaces scattered texts, emails, and spreadsheets. Capture leads, dispatch jobs, invoice clients, and get paid — with Email, SMS, Push, and In-App notifications built in. Plus an <span className="text-foreground font-medium">AI receptionist that answers every call 24/7</span>, so you never lose a customer to voicemail again.
             </motion.p>
 
             <motion.div variants={staggerItem} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
@@ -753,7 +753,7 @@ function HeroSection({ onGetStarted, onTryDemo }: { onGetStarted: () => void; on
               <div className="aspect-[1344/768] relative">
                 <Image
                   src="/images/landing/hero-dashboard.png"
-                  alt="ServiceOS dashboard showing unified inbox with Email and SMS channels"
+                  alt="Fieseros dashboard showing unified inbox with Email and SMS channels"
                   fill
                   priority
                   sizes="(max-width: 1024px) 100vw, 50vw"
@@ -923,7 +923,7 @@ function ProblemSection() {
           <motion.div variants={staggerItem} className="mt-12 text-center">
             <div className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-50 border border-emerald-200">
               <Bolt className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium text-emerald-700">ServiceOS fixes all three — day one, no Meta approvals required.</span>
+              <span className="text-sm font-medium text-emerald-700">Fieseros fixes all three — day one, no Meta approvals required.</span>
             </div>
           </motion.div>
         </div>
@@ -1444,7 +1444,7 @@ function RoiSection() {
               Real results, <span className="text-primary">measurable impact</span>
             </h2>
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
-              Based on aggregated data from 2,500+ service businesses running on ServiceOS.
+              Based on aggregated data from 2,500+ service businesses running on Fieseros.
             </p>
           </motion.div>
 
@@ -1469,7 +1469,7 @@ function RoiSection() {
             })}
           </div>
           <motion.p variants={staggerItem} className="text-center text-xs text-muted-foreground mt-6">
-            * Aggregated averages from ServiceOS customers in their first 90 days. Individual results vary by industry and adoption.
+            * Aggregated averages from Fieseros customers in their first 90 days. Individual results vary by industry and adoption.
           </motion.p>
         </div>
       </AnimatedSection>
@@ -1757,7 +1757,7 @@ function FinalCTASection({ onGetStarted }: { onGetStarted: () => void }) {
             </h2>
           </motion.div>
           <motion.p variants={staggerItem} className="text-muted-foreground text-lg mb-8">
-            Join 2,500+ service businesses already running on ServiceOS. Email & SMS work from day one — no Meta approvals, no waiting.
+            Join 2,500+ service businesses already running on Fieseros. Email & SMS work from day one — no Meta approvals, no waiting.
           </motion.p>
           <motion.div variants={staggerItem} className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button size="lg" onClick={onGetStarted} className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-10 h-14 text-lg shadow-lg shadow-emerald-200">
@@ -1791,7 +1791,7 @@ function Footer() {
               <div className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-sm bg-emerald-600 shadow-emerald-500/20">
                 <Wrench className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-bold text-background tracking-tight">ServiceOS</span>
+              <span className="text-xl font-bold text-background tracking-tight">Fieseros</span>
             </div>
             <p className="text-background/70 text-sm max-w-xs leading-relaxed">
               The operating system for service businesses. From leads to invoices, manage everything in one place — with Email, SMS, Push, and In-App notifications.
@@ -1856,7 +1856,7 @@ function Footer() {
         <Separator className="bg-background/10 my-8" />
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-background/50 text-xs">&copy; {new Date().getFullYear()} ServiceOS. All rights reserved.</p>
+          <p className="text-background/50 text-xs">&copy; {new Date().getFullYear()} Fieseros. All rights reserved.</p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             {footerLinks.legal.map((link) => (
               <a key={link.href} href={link.href} className="text-background/50 text-xs hover:text-background transition-colors">{link.label}</a>

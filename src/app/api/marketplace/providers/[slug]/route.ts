@@ -4,7 +4,7 @@ import { withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
 
 /**
- * Provider Profile — public (ServiceOS V1.5 — P10-flows)
+ * Provider Profile — public (Fieseros V1.5 — P10-flows)
  * ------------------------------------------------------------
  * GET /api/marketplace/providers/[slug]
  *

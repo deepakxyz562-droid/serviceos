@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# ServiceOS — production reverse proxy config (Caddy v2)
+# Fieseros — production reverse proxy config (Caddy v2)
 # ─────────────────────────────────────────────────────────────────────────────
 #
 # What this file does:
@@ -19,16 +19,16 @@
 #   caddy reload --config Caddyfile         # zero-downtime reload
 #
 # Domain:
-#   The site is `serviceos.cc`. To deploy on a different domain, search-and-
-#   replace `serviceos.cc` below (or set `{$SERVICEOS_DOMAIN}` and use that
-#   env-var placeholder). Wildcard certs for *.serviceos.cc are issued
+#   The site is `fieseros.com`. To deploy on a different domain, search-and-
+#   replace `fieseros.com` below (or set `{$FIESEROS_DOMAIN}` and use that
+#   env-var placeholder). Wildcard certs for *.fieseros.com are issued
 #   automatically when tenant subdomains are routed through this same block.
 #
 # Auto-HTTPS:
 #   Caddy provisions and rotates Let's Encrypt certificates with no extra
 #   config. The :80 block issues the redirect; the :443 block issues the cert.
 #   Make sure ports 80 + 443 are open inbound and that DNS A/AAAA records for
-#   serviceos.cc (and *.serviceos.cc if used) point at this host.
+#   fieseros.com (and *.fieseros.com if used) point at this host.
 #
 # XTransformPort routing pattern:
 #   The realtime layer runs as a separate Node process (socket.io) on :3003.
@@ -55,9 +55,9 @@
 }
 
 # ── Primary HTTPS site ────────────────────────────────────────────────────────
-serviceos.cc {
+fieseros.com {
 	# (Optional) issue a wildcard cert for tenant subdomains. Uncomment if you
-	# serve *.serviceos.cc from this same Caddy instance.
+	# serve *.fieseros.com from this same Caddy instance.
 	# tls {
 	#   dns cloudflare {$CLOUDFLARE_API_TOKEN}
 	# }
@@ -109,13 +109,13 @@ serviceos.cc {
 	# Optional: terminate /api/health at Caddy for sub-10ms LB checks. Comment
 	# out if you want the DB-aware health check from Next.js to be authoritative.
 	# handle /api/health {
-	#   respond `{"status":"ok","service":"serviceos","runtime":"caddy"}` 200
+	#   respond `{"status":"ok","service":"fieseros","runtime":"caddy"}` 200
 	#   header Content-Type application/json
 	# }
 
 	# Access + error logs (rotate with logrotate or Caddy's built-in rolling).
 	log {
-		output file /var/log/caddy/serviceos.cc.access.log {
+		output file /var/log/caddy/fieseros.com.access.log {
 			roll_size 100mb
 			roll_keep 10
 			roll_keep_for 30d
@@ -125,10 +125,10 @@ serviceos.cc {
 }
 
 # ── Wildcard tenant subdomains (optional) ─────────────────────────────────────
-# Uncomment to serve `*.serviceos.cc` from the same Caddy instance. Requires a
+# Uncomment to serve `*.fieseros.com` from the same Caddy instance. Requires a
 # DNS-01 challenge provider (Cloudflare, Route53, etc.) for the wildcard cert.
 #
-# *.serviceos.cc {
+# *.fieseros.com {
 #   header {
 #     Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
 #     X-Frame-Options "SAMEORIGIN"

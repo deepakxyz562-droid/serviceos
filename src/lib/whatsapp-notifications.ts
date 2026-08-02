@@ -203,7 +203,7 @@ function deriveSmsBody(payload: NotificationPayload): string {
 }
 
 function derivePushTitle(payload: NotificationPayload): string {
-  return (payload.pushTitle || payload.subject || 'ServiceOS update').slice(0, 80)
+  return (payload.pushTitle || payload.subject || 'Fieseros update').slice(0, 80)
 }
 
 function derivePushBody(payload: NotificationPayload): string {
@@ -553,14 +553,14 @@ async function sendEmailChannel(
     return
   }
 
-  const subject = payload.subject || 'ServiceOS Notification'
+  const subject = payload.subject || 'Fieseros Notification'
   // Build an HTML body. Prefer the caller-provided emailHtml; otherwise wrap
   // the plain-text message in a simple <pre> block so line breaks render.
   const html = payload.emailHtml
     || `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px;">
   <h2 style="margin: 0 0 16px 0; color: #059669;">${escapeHtml(subject)}</h2>
   <pre style="white-space: pre-wrap; font-family: inherit; font-size: 14px; line-height: 1.5; color: #374151; margin: 0;">${escapeHtml(payload.message)}</pre>
-  ${payload.actionUrl || payload.jobId ? `<p style="margin-top: 24px;"><a href="${escapeHtml(payload.actionUrl || (payload.jobId ? `/?view=jobs&job=${payload.jobId}` : '/'))}" style="display: inline-block; padding: 10px 18px; background: #059669; color: #fff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 600;">Open in ServiceOS</a></p>` : ''}
+  ${payload.actionUrl || payload.jobId ? `<p style="margin-top: 24px;"><a href="${escapeHtml(payload.actionUrl || (payload.jobId ? `/?view=jobs&job=${payload.jobId}` : '/'))}" style="display: inline-block; padding: 10px 18px; background: #059669; color: #fff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 600;">Open in Fieseros</a></p>` : ''}
 </div>`
 
   try {
@@ -1016,7 +1016,7 @@ export async function notifyCustomerJobCompleted(
 
   // Try to find tenant name for the signature.
   // Job has `workspaceId` (not `tenantId`), so resolve via the Workspace row.
-  let tenantName = 'ServiceOS'
+  let tenantName = 'Fieseros'
   try {
     const wid = (job.tenantId as string) || (job.workspaceId as string)
     if (wid) {

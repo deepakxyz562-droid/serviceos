@@ -21,7 +21,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Electrical Contractor Software — Dispatch, Invoice & Track | ServiceOS",
+  title: "Electrical Contractor Software — Dispatch, Invoice & Track | Fieseros",
   description:
     "Electrical contractor software for licensed electricians. Compliance and certification tracking, permit management, Email & SMS quotes and invoicing, multi-electrician dispatch. Start free.",
   keywords: [
@@ -30,13 +30,13 @@ export const metadata: Metadata = {
     "electrical dispatch software",
     "electrician job management",
   ],
-  alternates: { canonical: "https://serviceos.cc/electrical-contractor-software" },
+  alternates: { canonical: "https://fieseros.com/electrical-contractor-software" },
   openGraph: {
-    title: "Electrical Contractor Software | ServiceOS",
+    title: "Electrical Contractor Software | Fieseros",
     description:
       "From residential service calls to commercial installations — dispatch electricians, track permits and certifications, document jobs with photos, and invoice by Email & SMS.",
-    url: "https://serviceos.cc/electrical-contractor-software",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/electrical-contractor-software",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -47,7 +47,7 @@ const features: Feature[] = [
     icon: ShieldCheck,
     title: "Compliance & Certification Tracking",
     description:
-      "Every electrician's license, certification, and CEU credits tracked with renewal alerts. Each job tagged with the credentials required — ServiceOS only dispatches electricians whose licenses are current and applicable.",
+      "Every electrician's license, certification, and CEU credits tracked with renewal alerts. Each job tagged with the credentials required — Fieseros only dispatches electricians whose licenses are current and applicable.",
   },
   {
     icon: Camera,
@@ -77,49 +77,49 @@ const features: Feature[] = [
     icon: FileCheck,
     title: "Permit & Inspection Tracking",
     description:
-      "Track permits pulled, inspection dates, inspector names, and pass/fail status for every job that requires it. ServiceOS alerts you when an inspection is coming due and stores the signed-off permit closure for your records.",
+      "Track permits pulled, inspection dates, inspector names, and pass/fail status for every job that requires it. Fieseros alerts you when an inspection is coming due and stores the signed-off permit closure for your records.",
   },
 ];
 
 const faqs = [
   {
-    question: "How does ServiceOS track electrician licenses and certifications?",
+    question: "How does Fieseros track electrician licenses and certifications?",
     answer:
-      "Every electrician in ServiceOS has a profile that stores their license number, license type (journeyman, master, residential, commercial), issuing authority, expiration date, and continuing education unit (CEU) credits. ServiceOS sends you alerts 90, 60, and 30 days before any license expires, so you have time to ensure the electrician completes their CEUs and renews. Each job type is tagged with the license requirements for your jurisdiction — for example, a service upgrade over 200 amps may require a master electrician's signature. ServiceOS only dispatches electricians whose current licenses match the job requirements. This protects your business from compliance violations and your customers from unsafe work performed by under-qualified electricians.",
+      "Every electrician in Fieseros has a profile that stores their license number, license type (journeyman, master, residential, commercial), issuing authority, expiration date, and continuing education unit (CEU) credits. Fieseros sends you alerts 90, 60, and 30 days before any license expires, so you have time to ensure the electrician completes their CEUs and renews. Each job type is tagged with the license requirements for your jurisdiction — for example, a service upgrade over 200 amps may require a master electrician's signature. Fieseros only dispatches electricians whose current licenses match the job requirements. This protects your business from compliance violations and your customers from unsafe work performed by under-qualified electricians.",
   },
   {
-    question: "Can ServiceOS help manage permits and inspections for electrical work?",
+    question: "Can Fieseros help manage permits and inspections for electrical work?",
     answer:
-      "Yes. Permit and inspection management is a core workflow for electrical contractors, and ServiceOS handles it end-to-end. When you create a job that requires a permit — a panel upgrade, a new circuit installation, a commercial rewiring project — ServiceOS tracks the permit application, permit number, issuing jurisdiction, expiration date, and required inspections (rough-in, final, etc.). You log inspection dates, inspector names, and pass/fail results against the job. ServiceOS alerts you when an inspection is coming due so you can schedule it, and stores the signed-off permit closure documentation in the job record permanently. This keeps you compliant with inspectors and gives you a clean audit trail if questions arise years later.",
+      "Yes. Permit and inspection management is a core workflow for electrical contractors, and Fieseros handles it end-to-end. When you create a job that requires a permit — a panel upgrade, a new circuit installation, a commercial rewiring project — Fieseros tracks the permit application, permit number, issuing jurisdiction, expiration date, and required inspections (rough-in, final, etc.). You log inspection dates, inspector names, and pass/fail results against the job. Fieseros alerts you when an inspection is coming due so you can schedule it, and stores the signed-off permit closure documentation in the job record permanently. This keeps you compliant with inspectors and gives you a clean audit trail if questions arise years later.",
   },
   {
     question: "How does materials billing work for electrical jobs?",
     answer:
-      "Electrical jobs use a lot of materials — wire by the foot, breakers, conduit, fittings, junction boxes, fixtures, plates — and every one of those materials needs to be billed to the customer at the right marked-up price. ServiceOS tracks all of it. Your van and warehouse inventory is loaded into the system with cost and retail price. When an electrician uses materials on a job, they tap them into the work order from their phone (or scan a barcode if you've labeled them). The materials automatically deduct from inventory and add to the customer's invoice at your marked-up price. When stock hits a reorder threshold, ServiceOS alerts you. Most electrical contractors recover 5–10% in lost materials revenue within the first month of using ServiceOS.",
+      "Electrical jobs use a lot of materials — wire by the foot, breakers, conduit, fittings, junction boxes, fixtures, plates — and every one of those materials needs to be billed to the customer at the right marked-up price. Fieseros tracks all of it. Your van and warehouse inventory is loaded into the system with cost and retail price. When an electrician uses materials on a job, they tap them into the work order from their phone (or scan a barcode if you've labeled them). The materials automatically deduct from inventory and add to the customer's invoice at your marked-up price. When stock hits a reorder threshold, Fieseros alerts you. Most electrical contractors recover 5–10% in lost materials revenue within the first month of using Fieseros.",
   },
   {
-    question: "Can I use ServiceOS to quote commercial electrical jobs?",
+    question: "Can I use Fieseros to quote commercial electrical jobs?",
     answer:
-      "Absolutely. Commercial electrical quoting is more complex than residential — it involves detailed material takeoffs, labor estimates by trade, multi-day or multi-week timelines, and often a formal bid process. ServiceOS lets you build detailed quotes line by line: materials (with your markup), labor hours by electrician classification (master, journeyman, apprentice), equipment rental, subcontractor costs, and overhead. You can save quote templates for common job types (office build-out, warehouse lighting retrofit, restaurant kitchen circuit install) and generate new quotes from them in minutes. Quotes are sent to the customer via Email or SMS, and customers can approve electronically. Once approved, the quote converts directly into a job with all materials and labor pre-populated.",
+      "Absolutely. Commercial electrical quoting is more complex than residential — it involves detailed material takeoffs, labor estimates by trade, multi-day or multi-week timelines, and often a formal bid process. Fieseros lets you build detailed quotes line by line: materials (with your markup), labor hours by electrician classification (master, journeyman, apprentice), equipment rental, subcontractor costs, and overhead. You can save quote templates for common job types (office build-out, warehouse lighting retrofit, restaurant kitchen circuit install) and generate new quotes from them in minutes. Quotes are sent to the customer via Email or SMS, and customers can approve electronically. Once approved, the quote converts directly into a job with all materials and labor pre-populated.",
   },
   {
-    question: "Does ServiceOS help with safety documentation for electrical work?",
+    question: "Does Fieseros help with safety documentation for electrical work?",
     answer:
-      "Yes. Electrical work carries serious safety risks — arc flash, shock, working at heights, energized circuits — and proper safety documentation protects both your electricians and your business. ServiceOS lets you attach safety documentation to every job: lockout/tagout procedures, arc flash hazard analysis, PPE requirements, safety data sheets for any chemicals used, and pre-job safety briefings. Electricians acknowledge the safety briefings on their phone before starting work. Job site photos taken before, during, and after the work serve as additional safety documentation. If an incident occurs, you have a complete record showing that proper safety procedures were followed — invaluable for insurance claims, OSHA inquiries, and liability defense.",
+      "Yes. Electrical work carries serious safety risks — arc flash, shock, working at heights, energized circuits — and proper safety documentation protects both your electricians and your business. Fieseros lets you attach safety documentation to every job: lockout/tagout procedures, arc flash hazard analysis, PPE requirements, safety data sheets for any chemicals used, and pre-job safety briefings. Electricians acknowledge the safety briefings on their phone before starting work. Job site photos taken before, during, and after the work serve as additional safety documentation. If an incident occurs, you have a complete record showing that proper safety procedures were followed — invaluable for insurance claims, OSHA inquiries, and liability defense.",
   },
   {
-    question: "How does ServiceOS handle multi-site commercial electrical projects?",
+    question: "How does Fieseros handle multi-site commercial electrical projects?",
     answer:
-      "Multi-site commercial projects — a retail chain rolling out LED retrofits across 20 locations, a property manager rewiring 5 buildings, a franchise upgrading panels at 12 sites — are where electrical contractor software really earns its keep. ServiceOS lets you create a parent project with child jobs for each site. You see progress across all sites in one dashboard: which are quoted, which are scheduled, which are in progress, which are awaiting inspection, which are invoiced, which are paid. You can dispatch different electrician crews to different sites on different days, track materials across all sites, and generate consolidated or per-site invoices. The project manager, the customer, and your electricians all see exactly what they need to see — nothing more, nothing less.",
+      "Multi-site commercial projects — a retail chain rolling out LED retrofits across 20 locations, a property manager rewiring 5 buildings, a franchise upgrading panels at 12 sites — are where electrical contractor software really earns its keep. Fieseros lets you create a parent project with child jobs for each site. You see progress across all sites in one dashboard: which are quoted, which are scheduled, which are in progress, which are awaiting inspection, which are invoiced, which are paid. You can dispatch different electrician crews to different sites on different days, track materials across all sites, and generate consolidated or per-site invoices. The project manager, the customer, and your electricians all see exactly what they need to see — nothing more, nothing less.",
   },
 ];
 
 export default function ElectricalContractorSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Electrical Contractor Software",
+    name: "Fieseros — Electrical Contractor Software",
     description:
       "Electrician CRM and dispatch software with compliance and certification tracking, permit and inspection management, materials billing, Email & SMS quotes and invoicing, and multi-electrician dispatch.",
-    url: "https://serviceos.cc/electrical-contractor-software",
+    url: "https://fieseros.com/electrical-contractor-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
@@ -128,15 +128,15 @@ export default function ElectricalContractorSoftwarePage() {
     <CornerstoneLayout
       activePath="/electrical-contractor-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Electrical Contractor Software", url: "https://serviceos.cc/electrical-contractor-software" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Electrical Contractor Software", url: "https://fieseros.com/electrical-contractor-software" },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
         eyebrow="Electrical Contractor Software"
         title="Electrical Contractor Software for Licensed Pros Who Move Fast"
-        subtitle="From residential service calls to commercial installations, ServiceOS helps electricians dispatch, track jobs, manage compliance documentation, and invoice — all from one platform with Email, SMS, and Push notifications."
+        subtitle="From residential service calls to commercial installations, Fieseros helps electricians dispatch, track jobs, manage compliance documentation, and invoice — all from one platform with Email, SMS, and Push notifications."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -171,14 +171,14 @@ export default function ElectricalContractorSoftwarePage() {
             <p className="text-muted-foreground max-w-2xl mx-auto">
               Electrical work moves fast — but the paperwork, permits, and
               compliance behind it can sink a business that isn&apos;t
-              organized. Here&apos;s what changes when you switch to ServiceOS.
+              organized. Here&apos;s what changes when you switch to Fieseros.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <Wrench className="h-5 w-5 text-destructive" />
-                Without ServiceOS
+                Without Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -199,7 +199,7 @@ export default function ElectricalContractorSoftwarePage() {
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With ServiceOS
+                With Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -230,7 +230,7 @@ export default function ElectricalContractorSoftwarePage() {
           you just as fast as a slow response can lose you a job. Electrician
           CRM software that handles only scheduling — without tackling
           licensing, permits, materials, and quoting — isn&apos;t really
-          electrical contractor software. ServiceOS is built for the full
+          electrical contractor software. Fieseros is built for the full
           reality of the trade.
         </p>
         <p>
@@ -241,7 +241,7 @@ export default function ElectricalContractorSoftwarePage() {
           proper electrician job management software, license renewals sneak up
           on you. An electrician works a job they&apos;re no longer licensed
           for, the work gets flagged in an inspection, and suddenly
-          you&apos;re facing fines, rework, and a damaged reputation. ServiceOS
+          you&apos;re facing fines, rework, and a damaged reputation. Fieseros
           tracks every electrician&apos;s license, sends you renewal alerts 90,
           60, and 30 days out, and only dispatches electricians whose current
           licenses match the job requirements. Compliance becomes automatic,
@@ -254,7 +254,7 @@ export default function ElectricalContractorSoftwarePage() {
           inspection dates slip, and a job that was completed months ago
           technically never closed out. That&apos;s a liability that can surface
           years later when the property is sold or the work is questioned.
-          ServiceOS tracks permits pulled, required inspections, inspector
+          Fieseros tracks permits pulled, required inspections, inspector
           names, pass/fail results, and final sign-offs — all stored against
           the job permanently. When a customer or inspector asks about a job
           from two years ago, you have the complete paper trail at your
@@ -280,7 +280,7 @@ export default function ElectricalContractorSoftwarePage() {
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything electrical contractors ask before switching to ServiceOS."
+        subtitle="Everything electrical contractors ask before switching to Fieseros."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -291,7 +291,7 @@ export default function ElectricalContractorSoftwarePage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/plumbing-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

@@ -10,7 +10,7 @@ import { HomeSeoContent } from '@/components/seo/home-seo-content';
  * needlessly bloat the page's server bundle. We only need the cookie NAME to
  * check presence (we never decode the token on the client shell).
  */
-const AUTH_COOKIE = 'serviceos_session';
+const AUTH_COOKIE = 'fieseros_session';
 
 /**
  * Homepage — server component shell (P0-1 SEO fix).
@@ -41,9 +41,9 @@ const AUTH_COOKIE = 'serviceos_session';
  * crawled anyway.
  */
 export const metadata: Metadata = {
-  title: 'ServiceOS — The Operating System for Service Businesses',
+  title: 'Fieseros — The Operating System for Service Businesses',
   description:
-    'ServiceOS is the all-in-one operating system for service businesses. Replace scattered texts, emails, and spreadsheets with one platform for leads, dispatch, invoicing, and automated Email, SMS & Push notifications. Start free today.',
+    'Fieseros is the all-in-one operating system for service businesses. Replace scattered texts, emails, and spreadsheets with one platform for leads, dispatch, invoicing, and automated Email, SMS & Push notifications. Start free today.',
   keywords: [
     'field service software',
     'service business software',
@@ -60,24 +60,24 @@ export const metadata: Metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'ServiceOS — The Operating System for Service Businesses',
+    title: 'Fieseros — The Operating System for Service Businesses',
     description:
       'Replace scattered texts, emails, and spreadsheets with one powerful platform for leads, dispatch, invoicing, and automated notifications.',
     url: '/',
-    siteName: 'ServiceOS',
+    siteName: 'Fieseros',
     type: 'website',
     images: [
       {
         url: '/og/og-default.png',
         width: 1200,
         height: 630,
-        alt: 'ServiceOS — The Operating System for Service Businesses',
+        alt: 'Fieseros — The Operating System for Service Businesses',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ServiceOS — The Operating System for Service Businesses',
+    title: 'Fieseros — The Operating System for Service Businesses',
     description:
       'Replace scattered texts, emails, and spreadsheets with one powerful platform for service businesses.',
     images: ['/og/og-default.png'],

@@ -5,7 +5,7 @@
  * ===================
  * The "Step 0" decision screen shown immediately after a fresh registration
  * (before the onboarding wizard). Asks the user how they want to use
- * ServiceOS:
+ * Fieseros:
  *
  *   1. "Grow with CRM" (crm_trial) — full CRM + 14-day free trial.
  *      Proceeds to the existing 4-step SaaSOnboarding wizard.
@@ -87,9 +87,9 @@ export function SignupModeSelector({
         });
         if (typeof window !== 'undefined') {
           try {
-            const stored = localStorage.getItem('serviceos_auth');
+            const stored = localStorage.getItem('fieseros_auth');
             const parsed = stored ? JSON.parse(stored) : {};
-            localStorage.setItem('serviceos_auth', JSON.stringify({
+            localStorage.setItem('fieseros_auth', JSON.stringify({
               ...parsed,
               tenant: updatedTenant,
             }));
@@ -147,7 +147,7 @@ export function SignupModeSelector({
                 <span className="text-sm font-normal text-muted-foreground"> · then from ₹999/mo</span>
               </p>
               <p className="text-sm text-muted-foreground mt-2">
-                Full ServiceOS CRM: dispatch, invoicing, AI Receptionist, online bookings, quote inbox, and emergency dispatch.
+                Full Fieseros CRM: dispatch, invoicing, AI Receptionist, online bookings, quote inbox, and emergency dispatch.
               </p>
               <ul className="mt-4 space-y-1.5 text-sm">
                 {[

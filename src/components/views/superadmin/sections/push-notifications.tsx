@@ -57,8 +57,8 @@ const PUSH_KPIS = [
 ];
 
 const PUSH_PROVIDERS: PushProviderRow[] = [
-  { id: 'fcm', name: 'Firebase Cloud Messaging', projectApp: 'serviceos-prod (fcm)', sent24h: 12184, deliveryRate: 93.1, subscribers: 18432, status: 'active' },
-  { id: 'onesignal', name: 'OneSignal', projectApp: 'serviceos-app', sent24h: 2663, deliveryRate: 89.4, subscribers: 5949, status: 'degraded' },
+  { id: 'fcm', name: 'Firebase Cloud Messaging', projectApp: 'fieseros-prod (fcm)', sent24h: 12184, deliveryRate: 93.1, subscribers: 18432, status: 'active' },
+  { id: 'onesignal', name: 'OneSignal', projectApp: 'fieseros-app', sent24h: 2663, deliveryRate: 89.4, subscribers: 5949, status: 'degraded' },
 ];
 
 const PUSH_PLATFORM_STATS: PushPlatformStat[] = [

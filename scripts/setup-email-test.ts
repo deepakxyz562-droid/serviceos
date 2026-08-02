@@ -14,13 +14,13 @@ const SMTP_CREDENTIAL = {
   smtpSecure: 'false', // STARTTLS
   smtpUser: 'AKIA2PPO3JNBZSEHPLQH',
   smtpPass: 'BOVpNDa2T6R/E8ziSzTd8KM/BB/vUwMt23mVm4XQJhDl',
-  fromName: 'ServiceOS Test',
+  fromName: 'Fieseros Test',
   fromEmail: 'deepakchandra076@gmail.com', // SES-verified sender (sandbox)
   replyTo: 'deepakchandra076@gmail.com',
 }
 
 const TEST_EMAILS = [
-  { name: 'Deepak Chandra', email: 'deepakchandra076@gmail.com', phone: '+919999999991', city: 'Mumbai', country: 'India', company: 'ServiceOS' },
+  { name: 'Deepak Chandra', email: 'deepakchandra076@gmail.com', phone: '+919999999991', city: 'Mumbai', country: 'India', company: 'Fieseros' },
   { name: 'Deepak YT', email: 'deepakchandrayt@gmail.com', phone: '+919999999992', city: 'Delhi', country: 'India', company: 'YT Studios' },
 ]
 

@@ -214,7 +214,7 @@ export async function createCreemCheckoutSession(
       tenantId: input.tenantId,
       planCode: input.planCode,
       billingCycle: cycle,
-      source: 'serviceos-billing',
+      source: 'fieseros-billing',
     },
   };
 
@@ -340,7 +340,7 @@ export type CreemBillingPeriod =
   | 'every-year';
 
 export interface CreateCreemProductInput {
-  /** Human-readable product name, e.g. "ServiceOS Professional — Monthly". */
+  /** Human-readable product name, e.g. "Fieseros Professional — Monthly". */
   name: string;
   /**
    * REQUIRED by the Creem API — long-form description shown in the Creem
@@ -400,7 +400,7 @@ export interface CreateCreemProductResult {
  *     `"every-six-months"` | `"every-year"`.
  *   - `tax_mode` enum: `"inclusive"` | `"exclusive"` (default `exclusive`).
  *   - `tax_category` enum: `"saas"` | `"digital-goods-service"` | `"ebooks"`.
- *     We send `"saas"` for all ServiceOS products (recommended for SaaS).
+ *     We send `"saas"` for all Fieseros products (recommended for SaaS).
  *
  * Auth: `x-api-key: <apiKey>` header. Idempotency: `Idempotency-Key: <string>`
  * header (recommended so retries don't duplicate products).
@@ -596,9 +596,9 @@ export async function createAllCreemProducts(): Promise<CreateAllProductsResult>
       const billingPeriod: CreemBillingPeriod =
         cycle === 'yearly' ? 'every-year' : 'every-month';
       const cycleLabel = cycle === 'yearly' ? 'Yearly' : 'Monthly';
-      const name = `ServiceOS ${plan.name} — ${cycleLabel}`;
+      const name = `Fieseros ${plan.name} — ${cycleLabel}`;
       const description =
-        plan.description || `ServiceOS ${plan.name} plan, ${cycle} subscription`;
+        plan.description || `Fieseros ${plan.name} plan, ${cycle} subscription`;
 
       try {
         const result = await createCreemProduct({
@@ -634,7 +634,7 @@ export async function createAllCreemProducts(): Promise<CreateAllProductsResult>
   // Mirrors the expectation in src/app/api/sms/numbers/buy/route.ts which
   // looks up cfg.products['sms_number'].monthly as the Creem product_id for
   // the dedicated-SMS-number checkout.
-  const smsName = 'ServiceOS Dedicated SMS Number — Monthly';
+  const smsName = 'Fieseros Dedicated SMS Number — Monthly';
   try {
     const result = await createCreemProduct({
       name: smsName,

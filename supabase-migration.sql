@@ -1,5 +1,5 @@
 -- ====================================================================
--- SERVICEOS — SUPABASE MIGRATION (AUTO-GENERATED)
+-- FIESEROS — SUPABASE MIGRATION (AUTO-GENERATED)
 -- Generated from prisma/schema.prisma
 --
 -- This migration is FULLY IDEMPOTENT and SELF-HEALING:

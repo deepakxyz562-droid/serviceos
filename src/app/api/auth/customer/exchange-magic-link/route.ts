@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic'
  *   2. If expired → 410 Gone.
  *   3. Update lastAccessedAt.
  *   4. Build AuthUser (role 'customer') + generateToken().
- *   5. Set the `serviceos_session` HTTP-only cookie (24h maxAge).
+ *   5. Set the `fieseros_session` HTTP-only cookie (24h maxAge).
  *   6. Update customer.lastLoginAt.
  *   7. Return { user, tenant, token }.
  *

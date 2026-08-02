@@ -12,7 +12,7 @@ const hoursAgo = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
 const daysFromNow = (d: number) => new Date(now.getTime() + d * 24 * 60 * 60 * 1000);
 
 async function main() {
-  console.log('🌱 Seeding ServiceOS database...\n');
+  console.log('🌱 Seeding Fieseros database...\n');
 
   // ════════════════════════════════════════════════
   // 0. CLEAN ALL EXISTING DATA (reverse dependency order)
@@ -76,7 +76,7 @@ async function main() {
   console.log('👑 Creating platform SuperAdmin...');
   const superAdmin = await db.user.create({
     data: {
-      email: 'admin@serviceos.cc',
+      email: 'admin@fieseros.com',
       name: 'Platform Admin',
       role: 'admin',
       passwordHash: adminPasswordHash,
@@ -84,7 +84,7 @@ async function main() {
       tenantId: null, // Platform admin, not tied to any tenant
     },
   });
-  console.log('  ✅ SuperAdmin: admin@serviceos.cc / Admin@123\n');
+  console.log('  ✅ SuperAdmin: admin@fieseros.com / Admin@123\n');
 
   // ══════════════════════════════════════════════════════════════
   // 3. TENANT 1: AquaFlow Plumbing (Starter Plan — Plumbing)
@@ -1163,7 +1163,7 @@ async function main() {
     where: {
       id: (
         await db.emailProvider.findFirst({
-          where: { name: 'AWS SES - ServiceOS (Platform)', isPlatform: true },
+          where: { name: 'AWS SES - Fieseros (Platform)', isPlatform: true },
           select: { id: true },
         })
       )?.id ?? '___not_found___',
@@ -1175,9 +1175,9 @@ async function main() {
       isDefaultTransactional: true,
       isDefaultMarketing: true,
       status: 'active',
-      fromName: 'ServiceOS',
-      fromEmail: 'sales@serviceos.cc',
-      replyTo: 'sales@serviceos.cc',
+      fromName: 'Fieseros',
+      fromEmail: 'sales@fieseros.com',
+      replyTo: 'sales@fieseros.com',
       configJson: JSON.stringify({
         smtpHost: 'email-smtp.ap-south-1.amazonaws.com',
         smtpPort: 587,
@@ -1189,16 +1189,16 @@ async function main() {
       tenantId: tenant1.id,
     },
     create: {
-      name: 'AWS SES - ServiceOS (Platform)',
+      name: 'AWS SES - Fieseros (Platform)',
       providerType: 'ses',
       isPlatform: true,
       usageType: 'both',
       isDefaultTransactional: true,
       isDefaultMarketing: true,
       status: 'active',
-      fromName: 'ServiceOS',
-      fromEmail: 'sales@serviceos.cc',
-      replyTo: 'sales@serviceos.cc',
+      fromName: 'Fieseros',
+      fromEmail: 'sales@fieseros.com',
+      replyTo: 'sales@fieseros.com',
       configJson: JSON.stringify({
         smtpHost: 'email-smtp.ap-south-1.amazonaws.com',
         smtpPort: 587,
@@ -1269,7 +1269,7 @@ async function main() {
   console.log('📋 DEMO ACCOUNTS:');
   console.log('─────────────────────────────────────────────────────');
   console.log('  👑 SuperAdmin:');
-  console.log('     admin@serviceos.cc  / Admin@123     (Platform Admin — sees all tenants)');
+  console.log('     admin@fieseros.com  / Admin@123     (Platform Admin — sees all tenants)');
   console.log('');
   console.log('  🔧 Tenant 1 — AquaFlow Plumbing (Starter):');
   console.log('     rajesh@aquaflow.com  / Owner@123     (Owner)');

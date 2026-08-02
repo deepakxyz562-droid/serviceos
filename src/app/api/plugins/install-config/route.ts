@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
           step1: 'Download the plugin from Settings → WordPress Integration',
           step2: 'Go to WordPress Admin → Plugins → Add New → Upload Plugin',
           step3: 'Upload the .php file and activate',
-          step4: 'Go to ServiceOS CRM in WordPress sidebar',
+          step4: 'Go to Fieseros CRM in WordPress sidebar',
           step5: 'Enter the API URL and API Key shown above',
         },
         oneClick: {

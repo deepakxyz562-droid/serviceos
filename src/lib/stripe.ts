@@ -119,7 +119,7 @@ export async function createConnectAccount(
       email,
       metadata: {
         tenantId,
-        platform: 'serviceos',
+        platform: 'fieseros',
       },
       capabilities: {
         // Express accounts default to card + bank transfers; request them
@@ -935,7 +935,7 @@ function defaultReturnUrl(): string {
   const base = (
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    'https://serviceos.cc'
+    'https://fieseros.com'
   ).replace(/\/$/, '');
   return `${base}/settings/billing?stripe_connect=return`;
 }
@@ -944,7 +944,7 @@ function defaultRefreshUrl(): string {
   const base = (
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    'https://serviceos.cc'
+    'https://fieseros.com'
   ).replace(/\/$/, '');
   return `${base}/settings/billing?stripe_connect=refresh`;
 }

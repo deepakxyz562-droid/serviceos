@@ -33,7 +33,7 @@ import {
  * Sticky top header for the marketplace (browse page + provider detail page).
  *
  * Layout (single row):
- *   • Logo (links to /marketplace) — "ServiceOS Marketplace" + tagline
+ *   • Logo (links to /marketplace) — "Fieseros Marketplace" + tagline
  *   • Centered search bar — LIVE filtering (writes to Zustand store, debounced
  *     250ms by MarketplaceBrowser). No submit button needed — typing filters
  *     the grid instantly. Includes a city input on the right side.
@@ -123,14 +123,14 @@ function Logo() {
     <Link
       href="/marketplace"
       className="flex shrink-0 items-center gap-2.5"
-      aria-label="ServiceOS Marketplace — home"
+      aria-label="Fieseros Marketplace — home"
     >
       <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
         <Wrench className="h-4 w-4" />
       </span>
       <span className="hidden min-w-0 flex-col leading-none sm:flex">
         <span className="truncate text-[15px] font-semibold tracking-tight text-foreground">
-          ServiceOS <span className="text-emerald-600">Marketplace</span>
+          Fieseros <span className="text-emerald-600">Marketplace</span>
         </span>
         <span className="mt-1 truncate text-[11px] font-medium text-muted-foreground">
           Verified provider network

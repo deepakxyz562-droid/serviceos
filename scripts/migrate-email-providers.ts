@@ -43,8 +43,8 @@ const BUILTIN_TEMPLATES = [
 </div>`,
     variablesJson: JSON.stringify([
       { key: 'name', label: 'Customer Name', required: true, example: 'John Smith' },
-      { key: 'company', label: 'Company Name', required: true, example: 'ServiceOS' },
-      { key: 'link', label: 'Activation Link', required: true, example: 'https://app.serviceos.cc/activate?token=...' },
+      { key: 'company', label: 'Company Name', required: true, example: 'Fieseros' },
+      { key: 'link', label: 'Activation Link', required: true, example: 'https://app.fieseros.com/activate?token=...' },
     ]),
   },
   {
@@ -52,11 +52,11 @@ const BUILTIN_TEMPLATES = [
     slug: 'employee-invitation',
     category: 'transactional',
     description: 'Sent to new employees when invited to join',
-    subject: 'You\'re invited to join {{company}} on ServiceOS',
+    subject: 'You\'re invited to join {{company}} on Fieseros',
     htmlBody: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
   <h2 style="color:#10b981">Hello {{name}},</h2>
   <p>You've been invited to join <strong>{{company}}</strong> as a <strong>{{role}}</strong>.</p>
-  <p>Click the button below to set up your account and start using ServiceOS:</p>
+  <p>Click the button below to set up your account and start using Fieseros:</p>
   <p style="margin:24px 0">
     <a href="{{link}}" style="background:#10b981;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none">Accept Invitation</a>
   </p>
@@ -64,9 +64,9 @@ const BUILTIN_TEMPLATES = [
 </div>`,
     variablesJson: JSON.stringify([
       { key: 'name', label: 'Employee Name', required: true, example: 'Ravi Technician' },
-      { key: 'company', label: 'Company Name', required: true, example: 'ServiceOS' },
+      { key: 'company', label: 'Company Name', required: true, example: 'Fieseros' },
       { key: 'role', label: 'Role', required: true, example: 'Technician' },
-      { key: 'link', label: 'Invitation Link', required: true, example: 'https://app.serviceos.cc/invite?token=...' },
+      { key: 'link', label: 'Invitation Link', required: true, example: 'https://app.fieseros.com/invite?token=...' },
     ]),
   },
   {
@@ -74,7 +74,7 @@ const BUILTIN_TEMPLATES = [
     slug: 'password-reset',
     category: 'transactional',
     description: 'Sent when a user requests a password reset',
-    subject: 'Reset your ServiceOS password',
+    subject: 'Reset your Fieseros password',
     htmlBody: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
   <h2 style="color:#10b981">Hello {{name}},</h2>
   <p>We received a request to reset your password. Click the button below to choose a new password:</p>
@@ -85,7 +85,7 @@ const BUILTIN_TEMPLATES = [
 </div>`,
     variablesJson: JSON.stringify([
       { key: 'name', label: 'User Name', required: true, example: 'John' },
-      { key: 'link', label: 'Reset Link', required: true, example: 'https://app.serviceos.cc/reset?token=...' },
+      { key: 'link', label: 'Reset Link', required: true, example: 'https://app.fieseros.com/reset?token=...' },
     ]),
   },
   {
@@ -133,11 +133,11 @@ const BUILTIN_TEMPLATES = [
 </div>`,
     variablesJson: JSON.stringify([
       { key: 'name', label: 'Customer Name', required: true, example: 'John Smith' },
-      { key: 'company', label: 'Company Name', required: true, example: 'ServiceOS' },
+      { key: 'company', label: 'Company Name', required: true, example: 'Fieseros' },
       { key: 'invoiceNumber', label: 'Invoice Number', required: true, example: 'INV-2026-001' },
       { key: 'amount', label: 'Amount', required: true, example: '$250.00' },
       { key: 'dueDate', label: 'Due Date', required: true, example: 'July 5, 2026' },
-      { key: 'link', label: 'Invoice Link', required: true, example: 'https://app.serviceos.cc/invoices/123' },
+      { key: 'link', label: 'Invoice Link', required: true, example: 'https://app.fieseros.com/invoices/123' },
     ]),
   },
   {
@@ -164,7 +164,7 @@ const BUILTIN_TEMPLATES = [
       { key: 'customer', label: 'Customer Name', required: true, example: 'John Smith' },
       { key: 'address', label: 'Address', required: true, example: '123 Main St' },
       { key: 'scheduledAt', label: 'Scheduled Time', required: true, example: 'June 25, 10 AM' },
-      { key: 'link', label: 'Job Link', required: true, example: 'https://app.serviceos.cc/jobs/123' },
+      { key: 'link', label: 'Job Link', required: true, example: 'https://app.fieseros.com/jobs/123' },
     ]),
   },
   {
@@ -186,8 +186,8 @@ const BUILTIN_TEMPLATES = [
       { key: 'name', label: 'Customer Name', required: true, example: 'John' },
       { key: 'technician', label: 'Technician Name', required: true, example: 'Ravi' },
       { key: 'jobTitle', label: 'Job Title', required: true, example: 'AC Repair' },
-      { key: 'company', label: 'Company Name', required: true, example: 'ServiceOS' },
-      { key: 'link', label: 'Review Link', required: true, example: 'https://app.serviceos.cc/review/123' },
+      { key: 'company', label: 'Company Name', required: true, example: 'Fieseros' },
+      { key: 'link', label: 'Review Link', required: true, example: 'https://app.fieseros.com/review/123' },
     ]),
   },
   {
@@ -231,8 +231,8 @@ const BUILTIN_TEMPLATES = [
 </div>`,
     variablesJson: JSON.stringify([
       { key: 'name', label: 'Lead Name', required: true, example: 'John' },
-      { key: 'company', label: 'Company Name', required: true, example: 'ServiceOS' },
-      { key: 'link', label: 'Website Link', required: false, example: 'https://serviceos.cc' },
+      { key: 'company', label: 'Company Name', required: true, example: 'Fieseros' },
+      { key: 'link', label: 'Website Link', required: false, example: 'https://fieseros.com' },
     ]),
   },
   {
@@ -266,7 +266,7 @@ async function main() {
       data: {
         providerType: 'ses',
         configJson: JSON.stringify(SES_SMTP_CONFIG),
-        fromName: 'ServiceOS',
+        fromName: 'Fieseros',
         fromEmail: 'deepakchandra076@gmail.com',
         replyTo: 'deepakchandra076@gmail.com',
         usageType: 'both',
@@ -282,7 +282,7 @@ async function main() {
         name: 'AWS SES Production',
         providerType: 'ses',
         configJson: JSON.stringify(SES_SMTP_CONFIG),
-        fromName: 'ServiceOS',
+        fromName: 'Fieseros',
         fromEmail: 'deepakchandra076@gmail.com',
         replyTo: 'deepakchandra076@gmail.com',
         usageType: 'both',

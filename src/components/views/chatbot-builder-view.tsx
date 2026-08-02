@@ -80,7 +80,7 @@ const FLOW_EXAMPLES = [
 const MOCK_CHATBOTS: Chatbot[] = [
   {
     id: 'bot1', name: 'Lead Capture Bot', status: 'active', triggerKeyword: 'hi,hello,help',
-    welcomeMessage: 'Hi! 👋 Welcome to ServiceOS. How can we help you today?',
+    welcomeMessage: 'Hi! 👋 Welcome to Fieseros. How can we help you today?',
     totalSessions: 1245, activeSessions: 23, resolutionRate: 78, avgResponseTime: 1.2,
     nodes: [
       { id: 'n1', type: 'message', label: 'Welcome', config: 'Hi! How can we help you today?', x: 50, y: 50, connections: ['n2'] },

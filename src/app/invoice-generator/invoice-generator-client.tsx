@@ -132,7 +132,7 @@ const ACCENT_COLORS = [
   { name: "Slate", value: "#334155" },
 ];
 
-const STORAGE_KEY = "serviceos-invoice-generator-v1";
+const STORAGE_KEY = "fieseros-invoice-generator-v1";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const addDaysISO = (iso: string, days: number) => {

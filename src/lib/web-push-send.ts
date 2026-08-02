@@ -1,5 +1,5 @@
 /**
- * ServiceOS — Web Push sending helper.
+ * Fieseros — Web Push sending helper.
  *
  * Wraps the `web-push` npm library so the rest of the app can send push
  * notifications without dealing with VAPID config / subscription storage.
@@ -32,7 +32,7 @@ function ensureConfigured(): void {
   const publicKey =
     process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT || 'mailto:admin@serviceos.local';
+  const subject = process.env.VAPID_SUBJECT || 'mailto:admin@fieseros.local';
 
   if (!publicKey) {
     configError = 'NEXT_PUBLIC_VAPID_PUBLIC_KEY is not set';
@@ -165,7 +165,7 @@ async function sendWebPushToUserInternal(
     title: payload.title,
     body: payload.body,
     url: payload.url || '/',
-    tag: payload.tag || 'serviceos-notification',
+    tag: payload.tag || 'fieseros-notification',
     icon: payload.icon || '/icon-192.png',
     badge: payload.badge || '/icon-192.png',
     requireInteraction: payload.requireInteraction ?? false,

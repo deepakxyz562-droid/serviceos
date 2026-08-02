@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { withRequestId } from '@/lib/logger';
 
 /**
- * AI Request Extraction — by-ID management (ServiceOS V1.5)
+ * AI Request Extraction — by-ID management (Fieseros V1.5)
  * -----------------------------------------------------------
  * GET   /api/ai/extract-request/[id]   → fetch a single extraction record
  * PATCH /api/ai/extract-request/[id]   → approve / reject (status change)

@@ -3,14 +3,14 @@ import bcrypt from 'bcryptjs';
 
 // Employee data matching current database records
 const employees = [
-  { name: 'Ramesh Kumar', phone: '+919876543210', email: 'ramesh@serviceos.cc', workspaceId: 'cmpzp0zrg0002q772ni26e8tr' },
-  { name: 'Vikram Reddy', phone: '+919876543214', email: 'vikram@serviceos.cc', workspaceId: 'cmpzp0zrn0009q7724vrhr82n' },
-  { name: 'Priya Singh', phone: '+919876543213', email: 'priya@serviceos.cc', workspaceId: 'cmpzp0zrn0009q7724vrhr82n' },
-  { name: 'Suresh Patel', phone: '+919876543211', email: 'suresh@serviceos.cc', workspaceId: 'cmpzp0zrg0002q772ni26e8tr' },
-  { name: 'Amit Sharma', phone: '+919876543212', email: 'amit@serviceos.cc', workspaceId: 'cmpzp0zrg0002q772ni26e8tr' },
-  { name: 'Carlos Mendez', phone: '+19175559801', email: 'carlos@serviceos.cc', workspaceId: null }, // will be assigned
-  { name: 'Maria Santos', phone: '+19175559802', email: 'maria@serviceos.cc', workspaceId: null }, // will be assigned
-  { name: 'John Baker', phone: '+19175559803', email: 'john@serviceos.cc', workspaceId: null },    // will be assigned
+  { name: 'Ramesh Kumar', phone: '+919876543210', email: 'ramesh@fieseros.com', workspaceId: 'cmpzp0zrg0002q772ni26e8tr' },
+  { name: 'Vikram Reddy', phone: '+919876543214', email: 'vikram@fieseros.com', workspaceId: 'cmpzp0zrn0009q7724vrhr82n' },
+  { name: 'Priya Singh', phone: '+919876543213', email: 'priya@fieseros.com', workspaceId: 'cmpzp0zrn0009q7724vrhr82n' },
+  { name: 'Suresh Patel', phone: '+919876543211', email: 'suresh@fieseros.com', workspaceId: 'cmpzp0zrg0002q772ni26e8tr' },
+  { name: 'Amit Sharma', phone: '+919876543212', email: 'amit@fieseros.com', workspaceId: 'cmpzp0zrg0002q772ni26e8tr' },
+  { name: 'Carlos Mendez', phone: '+19175559801', email: 'carlos@fieseros.com', workspaceId: null }, // will be assigned
+  { name: 'Maria Santos', phone: '+19175559802', email: 'maria@fieseros.com', workspaceId: null }, // will be assigned
+  { name: 'John Baker', phone: '+19175559803', email: 'john@fieseros.com', workspaceId: null },    // will be assigned
 ];
 
 // Fallback for employees without workspace

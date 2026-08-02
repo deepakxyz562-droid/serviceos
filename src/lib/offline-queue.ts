@@ -5,9 +5,9 @@
  * Concern #4 — PWA + offline mode.
  *
  * The service worker (`public/sw.js`) registers a Background Sync tag
- * `serviceos-sync` that fires when connectivity returns. When the SW
+ * `fieseros-sync` that fires when connectivity returns. When the SW
  * receives the `sync` event, it postMessages all clients with
- * `{ type: 'SERVICEOS_SYNC', tag: 'serviceos-sync' }`. This module
+ * `{ type: 'FIESEROS_SYNC', tag: 'fieseros-sync' }`. This module
  * listens for that message and replays all queued mutations from
  * IndexedDB in order.
  *
@@ -48,7 +48,7 @@ export interface ReplayResult {
 
 /**
  * Replay all queued mutations. Called when:
- *   - The SW's `serviceos-sync` Background Sync event fires (via postMessage).
+ *   - The SW's `fieseros-sync` Background Sync event fires (via postMessage).
  *   - The app regains connectivity (`online` window event).
  *   - The user manually clicks "Sync now" in the UI.
  *
@@ -117,7 +117,7 @@ export async function replayQueuedMutations(): Promise<ReplayResult> {
   // Emit a final summary event so toasts can be shown.
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
-      new CustomEvent('serviceos:replay-complete', {
+      new CustomEvent('fieseros:replay-complete', {
         detail: { succeeded, failed, skipped, total: mutations.length },
       }),
     );
@@ -135,7 +135,7 @@ function notifyQueueChanged(): void {
   if (typeof window === 'undefined') return;
   getQueuedMutationCount().then((count) => {
     window.dispatchEvent(
-      new CustomEvent('serviceos:queue-changed', { detail: { count } }),
+      new CustomEvent('fieseros:queue-changed', { detail: { count } }),
     );
   });
 }
@@ -144,7 +144,7 @@ function notifyQueueChanged(): void {
 
 /**
  * React hook that sets up listeners for:
- *   1. SW `SERVICEOS_SYNC` postMessage → triggers replay.
+ *   1. SW `FIESEROS_SYNC` postMessage → triggers replay.
  *   2. Window `online` event → triggers replay.
  *   3. Periodic check every 30s when online (safety net in case the
  *      Background Sync event was missed — e.g. the user closed the app
@@ -172,7 +172,7 @@ export function useOfflineSync(): void {
 
     // 1. SW Background Sync message listener.
     const onMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'SERVICEOS_SYNC') {
+      if (event.data?.type === 'FIESEROS_SYNC') {
         triggerReplay();
       }
     };

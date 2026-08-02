@@ -5,7 +5,7 @@
  * (e.g., n8n workflows) whenever a job lifecycle event occurs.
  *
  * Architecture:
- *   ServiceOS Job Event → Save to DB → Fire webhooks → n8n → WhatsApp
+ *   Fieseros Job Event → Save to DB → Fire webhooks → n8n → WhatsApp
  *
  * Supported events:
  *   - job.created      → When a new job is created

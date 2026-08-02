@@ -47,7 +47,7 @@ export function PwaProvider() {
     // safety net that also keeps `navigator.serviceWorker.ready` warmed
     // up for any consumer that awaits it (e.g. push subscription).
     navigator.serviceWorker.ready.catch((err) => {
-      console.warn('[ServiceOS] SW not ready:', err);
+      console.warn('[Fieseros] SW not ready:', err);
     });
   }, []);
 

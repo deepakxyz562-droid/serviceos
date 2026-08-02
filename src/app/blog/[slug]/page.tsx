@@ -31,7 +31,7 @@ export function generateMetadata({ params }: { params: Promise<{ slug: string }>
 
     const url = blogPostUrl(slug);
     return {
-      title: `${post.title} | ServiceOS Blog`,
+      title: `${post.title} | Fieseros Blog`,
       description: post.description,
       keywords: post.keywords,
       alternates: { canonical: url },
@@ -39,7 +39,7 @@ export function generateMetadata({ params }: { params: Promise<{ slug: string }>
         title: post.title,
         description: post.description,
         url,
-        siteName: "ServiceOS",
+        siteName: "Fieseros",
         type: "article",
         publishedTime: post.date,
         authors: [post.author],
@@ -74,15 +74,15 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     title: post.title,
     description: post.description,
     url,
-    ...(post.coverImage ? { image: `https://serviceos.cc${post.coverImage}` } : {}),
+    ...(post.coverImage ? { image: `https://fieseros.com${post.coverImage}` } : {}),
     datePublished: post.date,
     authorName: post.author,
     keywords: post.keywords,
   });
 
   const breadcrumbSchema = getBreadcrumbSchema([
-    { name: "Home", url: "https://serviceos.cc" },
-    { name: "Blog", url: "https://serviceos.cc/blog" },
+    { name: "Home", url: "https://fieseros.com" },
+    { name: "Blog", url: "https://fieseros.com/blog" },
     { name: post.title, url },
   ]);
 
@@ -163,7 +163,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         {/* Inline CTA after the article */}
         <div className="mt-12 rounded-2xl border bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 p-6 sm:p-8">
           <h2 className="text-xl font-bold tracking-tight text-foreground mb-2">
-            Run your service business on ServiceOS
+            Run your service business on Fieseros
           </h2>
           <p className="text-sm text-muted-foreground mb-4">
             Scheduling, dispatch, invoicing, CRM, and automated Email &amp; SMS

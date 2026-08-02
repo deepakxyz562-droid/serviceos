@@ -1,5 +1,5 @@
 /**
- * Centralized API client for ServiceOS.
+ * Centralized API client for Fieseros.
  *
  * In sandbox/preview environments, API requests must include the
  * `XTransformPort` query parameter so the Caddy gateway routes
@@ -21,12 +21,12 @@ function addTransformPort(url: string): string {
 
 /**
  * Get the auth token from localStorage (client-side only).
- * The JWT token is stored during login as part of serviceos_auth.
+ * The JWT token is stored during login as part of fieseros_auth.
  */
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    const stored = localStorage.getItem('serviceos_auth');
+    const stored = localStorage.getItem('fieseros_auth');
     if (stored) {
       const parsed = JSON.parse(stored);
       if (parsed?.token) return parsed.token;

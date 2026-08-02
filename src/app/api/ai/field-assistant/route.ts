@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { logActivity } from '@/lib/activity-log';
 
 /**
- * AI Field Assistant (ServiceOS V1.5)
+ * AI Field Assistant (Fieseros V1.5)
  * -----------------------------------
  * A single POST endpoint that powers 6 different LLM-backed actions for the
  * job-detail AI panel. Each action fetches the relevant context from the DB,

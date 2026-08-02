@@ -42,8 +42,8 @@ export async function POST(request: NextRequest) {
 
     const systemPrompt = type === 'owner' ? OWNER_SYSTEM_PROMPT : CUSTOMER_SYSTEM_PROMPT;
     const userMessage = type === 'owner'
-      ? `Generate a WhatsApp notification template for a business owner in the "${industry || 'service'}" industry named "${companyName || 'ServiceOS'}". The template should notify them of a new lead from their website contact form. ${currentTemplate ? `Current template for reference: "${currentTemplate}"` : ''} Return ONLY the template text, nothing else.`
-      : `Generate a WhatsApp auto-reply template for customers of "${companyName || 'ServiceOS'}" in the "${industry || 'service'}" industry. The customer just submitted a contact form on the website. ${currentTemplate ? `Current template for reference: "${currentTemplate}"` : ''} Return ONLY the template text, nothing else.`;
+      ? `Generate a WhatsApp notification template for a business owner in the "${industry || 'service'}" industry named "${companyName || 'Fieseros'}". The template should notify them of a new lead from their website contact form. ${currentTemplate ? `Current template for reference: "${currentTemplate}"` : ''} Return ONLY the template text, nothing else.`
+      : `Generate a WhatsApp auto-reply template for customers of "${companyName || 'Fieseros'}" in the "${industry || 'service'}" industry. The customer just submitted a contact form on the website. ${currentTemplate ? `Current template for reference: "${currentTemplate}"` : ''} Return ONLY the template text, nothing else.`;
 
     const completion = await zai.chat.completions.create({
       messages: [

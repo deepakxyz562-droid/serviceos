@@ -1,5 +1,5 @@
 /**
- * ServiceOS Realtime Service
+ * Fieseros Realtime Service
  * --------------------------
  * A standalone Bun + socket.io server that pushes live events to authenticated
  * browser clients. Runs on port 3003 in dev (and is reverse-proxied by the
@@ -45,8 +45,8 @@ import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 
 const PORT = Number(process.env.REALTIME_PORT || 3003);
-const JWT_SECRET = process.env.JWT_SECRET || 'serviceos-saas-dev-secret-key';
-const INTERNAL_SECRET = process.env.REALTIME_INTERNAL_SECRET || 'serviceos-internal';
+const JWT_SECRET = process.env.JWT_SECRET || 'fieseros-saas-dev-secret-key';
+const INTERNAL_SECRET = process.env.REALTIME_INTERNAL_SECRET || 'fieseros-internal';
 
 // Presence threshold — must mirror PRESENCE_THRESHOLD_MS in
 // src/lib/presence.ts. A user is "online" if they sent a heartbeat (or made
@@ -135,7 +135,7 @@ const httpServer = createServer((req, res) => {
   // Health-check endpoint (used by curl / readiness probes).
   if (req.method === 'GET' && (req.url === '/' || req.url === '/health')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, service: 'serviceos-realtime', port: PORT }));
+    res.end(JSON.stringify({ ok: true, service: 'fieseros-realtime', port: PORT }));
     return;
   }
 
@@ -393,7 +393,7 @@ const cleanupInterval = setInterval(() => {
 cleanupInterval.unref?.();
 
 httpServer.listen(PORT, () => {
-  console.log(`[realtime] ServiceOS realtime service listening on port ${PORT}`);
+  console.log(`[realtime] Fieseros realtime service listening on port ${PORT}`);
   console.log(`[realtime] JWT_SECRET length=${JWT_SECRET.length}`);
   console.log(`[realtime] INTERNAL_SECRET length=${INTERNAL_SECRET.length}`);
   console.log(`[realtime] Presence cleanup interval: 60s, threshold: ${PRESENCE_THRESHOLD_MS}ms`);

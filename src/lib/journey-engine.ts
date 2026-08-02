@@ -1,5 +1,5 @@
 /**
- * ServiceOS Customer Journey Engine
+ * Fieseros Customer Journey Engine
  *
  * Automates the customer lifecycle:
  *

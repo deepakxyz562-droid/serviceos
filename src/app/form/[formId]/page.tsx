@@ -352,7 +352,7 @@ export default function FormPage() {
           {/* Footer branding */}
           <div className="text-center pt-4 pb-8">
             <p className="text-xs text-muted-foreground">
-              Powered by <span className="font-semibold text-emerald-600">ServiceOS</span>
+              Powered by <span className="font-semibold text-emerald-600">Fieseros</span>
             </p>
           </div>
         </form>

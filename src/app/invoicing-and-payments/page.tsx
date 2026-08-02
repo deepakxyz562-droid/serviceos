@@ -20,7 +20,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Invoicing & Payment Software for Service Businesses | ServiceOS",
+  title: "Invoicing & Payment Software for Service Businesses | Fieseros",
   description:
     "Generate professional invoices from completed jobs in one click. Accept online payments, send invoices by Email & SMS, automate payment reminders, and get paid faster. Free trial.",
   keywords: [
@@ -30,13 +30,13 @@ export const metadata: Metadata = {
     "invoice automation",
     "field service invoicing",
   ],
-  alternates: { canonical: "https://serviceos.cc/invoicing-and-payments" },
+  alternates: { canonical: "https://fieseros.com/invoicing-and-payments" },
   openGraph: {
-    title: "Invoicing & Payment Software for Service Businesses | ServiceOS",
+    title: "Invoicing & Payment Software for Service Businesses | Fieseros",
     description:
       "One-click invoices from completed jobs, online payments, Email & SMS delivery, automatic reminders, recurring billing, and multi-currency. Get paid faster.",
-    url: "https://serviceos.cc/invoicing-and-payments",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/invoicing-and-payments",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -47,7 +47,7 @@ const features: Feature[] = [
     icon: Receipt,
     title: "One-click invoice from completed job",
     description:
-      "When a technician marks a job complete — parts used, labor hours, photos, signature — ServiceOS builds a professional invoice automatically. You review it and hit send. No more re-typing line items into Word or your accounting tool.",
+      "When a technician marks a job complete — parts used, labor hours, photos, signature — Fieseros builds a professional invoice automatically. You review it and hit send. No more re-typing line items into Word or your accounting tool.",
   },
   {
     icon: CreditCard,
@@ -59,25 +59,25 @@ const features: Feature[] = [
     icon: MessageSquare,
     title: "Email & SMS invoice delivery",
     description:
-      "Invoices land in the customer's inbox or text messages — the channels they actually check. They get a clean PDF plus a payment link. No more 'I never got the email' excuses. Delivery and read receipts are tracked inside ServiceOS.",
+      "Invoices land in the customer's inbox or text messages — the channels they actually check. They get a clean PDF plus a payment link. No more 'I never got the email' excuses. Delivery and read receipts are tracked inside Fieseros.",
   },
   {
     icon: BellRing,
     title: "Automatic payment reminders",
     description:
-      "Set up a reminder schedule — day 3, day 7, day 14 after the invoice is sent. ServiceOS sends polite Email & SMS follow-ups automatically, with the payment link attached. Stop chasing payments manually; let the system do it.",
+      "Set up a reminder schedule — day 3, day 7, day 14 after the invoice is sent. Fieseros sends polite Email & SMS follow-ups automatically, with the payment link attached. Stop chasing payments manually; let the system do it.",
   },
   {
     icon: RefreshCw,
     title: "Recurring invoicing for contracts",
     description:
-      "For monthly maintenance contracts, retainers, and subscription-style services, ServiceOS generates and sends invoices on a schedule. Set the contract once and the invoices keep going out — until you tell them to stop.",
+      "For monthly maintenance contracts, retainers, and subscription-style services, Fieseros generates and sends invoices on a schedule. Set the contract once and the invoices keep going out — until you tell them to stop.",
   },
   {
     icon: Globe,
     title: "Multi-currency support",
     description:
-      "Bill customers in USD, INR, AED, BRL, SGD — whatever your market uses. ServiceOS handles currency formatting, tax rules, and exchange-rate display. Perfect for businesses serving customers across borders.",
+      "Bill customers in USD, INR, AED, BRL, SGD — whatever your market uses. Fieseros handles currency formatting, tax rules, and exchange-rate display. Perfect for businesses serving customers across borders.",
   },
 ];
 
@@ -85,41 +85,41 @@ const faqs = [
   {
     question: "Can I accept online payments?",
     answer:
-      "Yes. Every invoice generated in ServiceOS includes a secure online payment link. Customers can pay by credit card, debit card, UPI (for India), or bank transfer — directly from their phone, no app required. We integrate with leading payment processors including Stripe, Razorpay, and PayPal, so you can choose the provider that works in your market. You see payment status in real time inside ServiceOS, and the funds settle to your bank account on the standard processor timeline (usually 1–3 business days). Most service businesses using ServiceOS get paid 2–3x faster than with paper invoices or PDFs sent over email.",
+      "Yes. Every invoice generated in Fieseros includes a secure online payment link. Customers can pay by credit card, debit card, UPI (for India), or bank transfer — directly from their phone, no app required. We integrate with leading payment processors including Stripe, Razorpay, and PayPal, so you can choose the provider that works in your market. You see payment status in real time inside Fieseros, and the funds settle to your bank account on the standard processor timeline (usually 1–3 business days). Most service businesses using Fieseros get paid 2–3x faster than with paper invoices or PDFs sent over email.",
   },
   {
     question: "Does it support multiple currencies?",
     answer:
-      "Yes — ServiceOS supports multi-currency invoicing out of the box. You can bill customers in USD, INR, AED, BRL, SGD, EUR, GBP, and dozens of other currencies. Each customer can have a default currency, and ServiceOS handles currency formatting, decimal places, and tax rules appropriate to the region. This is especially useful for service businesses that operate across borders or serve expats in a foreign country. The invoice generator automatically applies the right currency symbol, thousands separator, and tax label based on the customer's location — so your invoices always look professional and locally correct.",
+      "Yes — Fieseros supports multi-currency invoicing out of the box. You can bill customers in USD, INR, AED, BRL, SGD, EUR, GBP, and dozens of other currencies. Each customer can have a default currency, and Fieseros handles currency formatting, decimal places, and tax rules appropriate to the region. This is especially useful for service businesses that operate across borders or serve expats in a foreign country. The invoice generator automatically applies the right currency symbol, thousands separator, and tax label based on the customer's location — so your invoices always look professional and locally correct.",
   },
   {
     question: "Can I send invoices by Email and SMS?",
     answer:
-      "Yes — and this is one of the biggest reasons service businesses switch to ServiceOS. Every invoice is delivered to the customer by Email and SMS as a clean PDF attachment, along with a one-tap payment link. Customers get the invoice instantly on the device they already use all day, and they can pay without leaving their inbox or messages. Delivery and read receipts are tracked inside ServiceOS, so you know exactly when the customer received the invoice — no more 'I never got it' excuses. In markets where SMS and email are the primary communication channels (India, Latin America, Southeast Asia, Africa, the Middle East), Email & SMS invoicing cuts average time-to-payment by 50% or more compared to manual follow-up.",
+      "Yes — and this is one of the biggest reasons service businesses switch to Fieseros. Every invoice is delivered to the customer by Email and SMS as a clean PDF attachment, along with a one-tap payment link. Customers get the invoice instantly on the device they already use all day, and they can pay without leaving their inbox or messages. Delivery and read receipts are tracked inside Fieseros, so you know exactly when the customer received the invoice — no more 'I never got it' excuses. In markets where SMS and email are the primary communication channels (India, Latin America, Southeast Asia, Africa, the Middle East), Email & SMS invoicing cuts average time-to-payment by 50% or more compared to manual follow-up.",
   },
   {
     question: "Are there automatic payment reminders?",
     answer:
-      "Yes. You can configure a reminder schedule per invoice or as a business-wide default — for example, send a gentle reminder 3 days after the invoice is sent, a firmer follow-up at 7 days, and a final notice at 14 days. ServiceOS sends each reminder automatically via Email and SMS, with the invoice and payment link attached. You can customize the message templates to match your brand voice — friendly for the first reminder, more direct for the last one. You can also pause reminders for a specific customer (for example, a long-term client who always pays on net-30 terms). Most businesses recover 15–25% more overdue invoices within the first month of enabling automatic reminders.",
+      "Yes. You can configure a reminder schedule per invoice or as a business-wide default — for example, send a gentle reminder 3 days after the invoice is sent, a firmer follow-up at 7 days, and a final notice at 14 days. Fieseros sends each reminder automatically via Email and SMS, with the invoice and payment link attached. You can customize the message templates to match your brand voice — friendly for the first reminder, more direct for the last one. You can also pause reminders for a specific customer (for example, a long-term client who always pays on net-30 terms). Most businesses recover 15–25% more overdue invoices within the first month of enabling automatic reminders.",
   },
   {
     question: "Can I do recurring invoices?",
     answer:
-      "Yes. Recurring invoicing is built for service businesses that run on monthly maintenance contracts, retainers, or subscription-style offerings. You define the contract once — customer, service, price, billing frequency (monthly, quarterly, annually), start and end dates — and ServiceOS automatically generates and sends each invoice on schedule. The invoice goes out via Email and SMS with a payment link, and the customer's outstanding balance updates automatically. If the contract is linked to a recurring job, the invoice is generated after each visit is marked complete. You can pause, edit, or cancel any recurring invoice series at any time, and ServiceOS keeps a full audit trail of every invoice generated.",
+      "Yes. Recurring invoicing is built for service businesses that run on monthly maintenance contracts, retainers, or subscription-style offerings. You define the contract once — customer, service, price, billing frequency (monthly, quarterly, annually), start and end dates — and Fieseros automatically generates and sends each invoice on schedule. The invoice goes out via Email and SMS with a payment link, and the customer's outstanding balance updates automatically. If the contract is linked to a recurring job, the invoice is generated after each visit is marked complete. You can pause, edit, or cancel any recurring invoice series at any time, and Fieseros keeps a full audit trail of every invoice generated.",
   },
   {
     question: "Is there a free invoice tool?",
     answer:
-      "Yes — we offer a free invoice generator at /invoice-generator that lets anyone create a professional PDF invoice in under two minutes, no signup required. You enter your business details, the customer's details, line items, and tax — and download a clean PDF. It's perfect for one-off invoices, freelancers just starting out, or service businesses that want to test what a professional invoice looks like before committing to invoicing software. When you're ready to upgrade, ServiceOS gives you the same professional invoices plus automation, payment processing, Email & SMS delivery, recurring billing, customer tracking, and full integration with the rest of your service business operations — quotes, jobs, dispatch, and CRM.",
+      "Yes — we offer a free invoice generator at /invoice-generator that lets anyone create a professional PDF invoice in under two minutes, no signup required. You enter your business details, the customer's details, line items, and tax — and download a clean PDF. It's perfect for one-off invoices, freelancers just starting out, or service businesses that want to test what a professional invoice looks like before committing to invoicing software. When you're ready to upgrade, Fieseros gives you the same professional invoices plus automation, payment processing, Email & SMS delivery, recurring billing, customer tracking, and full integration with the rest of your service business operations — quotes, jobs, dispatch, and CRM.",
   },
 ];
 
 export default function InvoicingAndPaymentsPage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Invoicing & Payment Software",
+    name: "Fieseros — Invoicing & Payment Software",
     description:
       "One-click invoicing from completed jobs, online payment acceptance, Email & SMS invoice delivery, automatic payment reminders, recurring billing, and multi-currency support for service businesses.",
-    url: "https://serviceos.cc/invoicing-and-payments",
+    url: "https://fieseros.com/invoicing-and-payments",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -128,8 +128,8 @@ export default function InvoicingAndPaymentsPage() {
     <CornerstoneLayout
       activePath="/scheduling-and-dispatch"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Invoicing & Payments", url: "https://serviceos.cc/invoicing-and-payments" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Invoicing & Payments", url: "https://fieseros.com/invoicing-and-payments" },
       ]}
       additionalSchema={[appSchema]}
     >
@@ -201,14 +201,14 @@ export default function InvoicingAndPaymentsPage() {
           weeks later, when the customer still hasn&apos;t paid, someone
           starts the chase — phone calls, text messages, follow-up
           emails. By the time payment lands, 30 or 45 days have passed and
-          someone has spent hours on a single invoice. ServiceOS collapses
+          someone has spent hours on a single invoice. Fieseros collapses
           all of that into one workflow.
         </p>
         <p>
           Here&apos;s how it works in practice. When a technician marks a
           job complete in the mobile app — selecting the parts used, logging
           their labor hours, attaching before-and-after photos, capturing
-          the customer&apos;s signature — ServiceOS compiles all of that
+          the customer&apos;s signature — Fieseros compiles all of that
           into a professional invoice automatically. Line items are pulled
           from the work order. Labor is calculated based on the
           technician&apos;s time entries. Parts are billed at your marked-up
@@ -229,22 +229,22 @@ export default function InvoicingAndPaymentsPage() {
           includes the invoice and payment link, so the customer can pay
           with one tap. You can also see a live outstanding-balance report
           showing exactly how much money is owed to you, by whom, and for
-          how long. Most service businesses using ServiceOS cut their
+          how long. Most service businesses using Fieseros cut their
           average days-to-payment from 30+ days down to under 10.
         </p>
         <p>
           For service businesses that run on contracts — monthly
           maintenance, quarterly inspections, annual service agreements —
-          ServiceOS handles recurring billing natively. You define the
-          contract once and ServiceOS generates and sends each invoice on
+          Fieseros handles recurring billing natively. You define the
+          contract once and Fieseros generates and sends each invoice on
           schedule, with the same Email & SMS delivery and online payment
-          flow. If you bill in multiple currencies, ServiceOS handles that
+          flow. If you bill in multiple currencies, Fieseros handles that
           too — USD, INR, AED, BRL, SGD and dozens more, with proper
           formatting and tax rules per region. And if you ever need a
           one-off invoice without signing up — for a friend, a side gig, or
           a quick test — our <Link href="/invoice-generator" className="text-emerald-700 underline underline-offset-2 hover:text-emerald-800">free invoice generator tool</Link>{" "}
           builds a clean PDF in under two minutes, no account required. When
-          you&apos;re ready for the full system, ServiceOS picks up where
+          you&apos;re ready for the full system, Fieseros picks up where
           the free tool leaves off and automates the entire invoicing
           workflow end to end.
         </p>
@@ -252,7 +252,7 @@ export default function InvoicingAndPaymentsPage() {
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything service businesses ask about invoicing and payments with ServiceOS."
+        subtitle="Everything service businesses ask about invoicing and payments with Fieseros."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -263,7 +263,7 @@ export default function InvoicingAndPaymentsPage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/scheduling-and-dispatch" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

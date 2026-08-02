@@ -24,7 +24,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Workflow Automations for Service Businesses | ServiceOS",
+  title: "Workflow Automations for Service Businesses | Fieseros",
   description:
     "Automatic Email & SMS reminders, invoice follow-ups, recurring job scheduling, technician notifications, and review requests. Set it once, let it run forever. Free trial.",
   keywords: [
@@ -34,13 +34,13 @@ export const metadata: Metadata = {
     "job automation",
     "sms automation",
   ],
-  alternates: { canonical: "https://serviceos.cc/automations" },
+  alternates: { canonical: "https://fieseros.com/automations" },
   openGraph: {
-    title: "Workflow Automations for Service Businesses | ServiceOS",
+    title: "Workflow Automations for Service Businesses | Fieseros",
     description:
       "Automate Email & SMS reminders, invoice follow-ups, recurring job scheduling, technician notifications, and review requests. Set it once, let it run forever.",
-    url: "https://serviceos.cc/automations",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/automations",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -57,25 +57,25 @@ const features: Feature[] = [
     icon: BellRing,
     title: "Automatic invoice follow-ups",
     description:
-      "When an invoice goes unpaid, ServiceOS sends polite Email & SMS reminders on the schedule you define — day 3, day 7, day 14 — each with the invoice and a one-tap payment link. Stop chasing manually.",
+      "When an invoice goes unpaid, Fieseros sends polite Email & SMS reminders on the schedule you define — day 3, day 7, day 14 — each with the invoice and a one-tap payment link. Stop chasing manually.",
   },
   {
     icon: RefreshCw,
     title: "Recurring job automation",
     description:
-      "Define a maintenance contract once — frequency, customer, asset, price — and ServiceOS auto-schedules every visit, sends the reminder, dispatches the technician, and queues the invoice. Forever.",
+      "Define a maintenance contract once — frequency, customer, asset, price — and Fieseros auto-schedules every visit, sends the reminder, dispatches the technician, and queues the invoice. Forever.",
   },
   {
     icon: UserCog,
     title: "Technician assignment rules",
     description:
-      "Auto-assign new jobs to the right technician based on skills, location, capacity, and customer history. New emergency call at 9pm? ServiceOS already knows who to dispatch before you do.",
+      "Auto-assign new jobs to the right technician based on skills, location, capacity, and customer history. New emergency call at 9pm? Fieseros already knows who to dispatch before you do.",
   },
   {
     icon: Star,
     title: "Review request automation",
     description:
-      "One hour after a job is marked complete, ServiceOS sends the customer an Email or SMS message thanking them and asking for a Google review with a direct link. Turn completed jobs into five-star reviews on autopilot.",
+      "One hour after a job is marked complete, Fieseros sends the customer an Email or SMS message thanking them and asking for a Google review with a direct link. Turn completed jobs into five-star reviews on autopilot.",
   },
   {
     icon: Send,
@@ -134,41 +134,41 @@ const faqs = [
   {
     question: "What can I automate?",
     answer:
-      "ServiceOS can automate virtually any repetitive workflow in a service business. The most common automations include: sending Email & SMS appointment reminders 24 hours before each job, sending Email & SMS confirmations when a job is booked, sending invoices automatically when a job is marked complete, sending payment reminders for unpaid invoices on a configurable schedule, requesting Google reviews after job completion, auto-scheduling recurring maintenance contract visits, auto-assigning new jobs to the right technician based on skills and location, notifying the office when technicians clock in or complete jobs, creating leads from inbound Email & SMS messages, sending status updates to customers at key moments (technician dispatched, technician 15 minutes away, job complete), and many more. If a workflow involves 'when X happens, do Y', ServiceOS can probably automate it.",
+      "Fieseros can automate virtually any repetitive workflow in a service business. The most common automations include: sending Email & SMS appointment reminders 24 hours before each job, sending Email & SMS confirmations when a job is booked, sending invoices automatically when a job is marked complete, sending payment reminders for unpaid invoices on a configurable schedule, requesting Google reviews after job completion, auto-scheduling recurring maintenance contract visits, auto-assigning new jobs to the right technician based on skills and location, notifying the office when technicians clock in or complete jobs, creating leads from inbound Email & SMS messages, sending status updates to customers at key moments (technician dispatched, technician 15 minutes away, job complete), and many more. If a workflow involves 'when X happens, do Y', Fieseros can probably automate it.",
   },
   {
     question: "Do I need technical skills to set up automations?",
     answer:
-      "No. ServiceOS ships with a library of pre-built automation recipes for the most common service business workflows — Email & SMS reminders, invoice follow-ups, recurring jobs, review requests, status updates. Each recipe can be enabled with a single click and customized through simple forms (choose the reminder schedule, edit the Email & SMS template, pick the recipient). You don't write code, build flowcharts, or configure API webhooks. For businesses that want more advanced or custom automations, our visual automation builder lets you chain triggers and actions together — still no code, just dropdowns and toggles. Most service businesses have their core automations running within the first hour of setup, configured by an office manager with zero technical background.",
+      "No. Fieseros ships with a library of pre-built automation recipes for the most common service business workflows — Email & SMS reminders, invoice follow-ups, recurring jobs, review requests, status updates. Each recipe can be enabled with a single click and customized through simple forms (choose the reminder schedule, edit the Email & SMS template, pick the recipient). You don't write code, build flowcharts, or configure API webhooks. For businesses that want more advanced or custom automations, our visual automation builder lets you chain triggers and actions together — still no code, just dropdowns and toggles. Most service businesses have their core automations running within the first hour of setup, configured by an office manager with zero technical background.",
   },
   {
     question: "Can I send Email and SMS messages automatically?",
     answer:
-      "Yes — Email & SMS automation is one of the most powerful features in ServiceOS, especially for service businesses in markets where SMS and email are the primary communication channels (India, Latin America, Southeast Asia, Africa, the Middle East). You can send automated Email and SMS messages for: appointment confirmations when a job is booked, reminders 24 hours before each appointment, status updates ('technician dispatched', 'arriving in 15 minutes'), invoices when a job is complete, payment reminders for overdue invoices, review requests after job completion, and contract renewal reminders. All messages use your brand name and go out automatically based on triggers you define. You can also customize the message templates to match your brand voice — friendly, formal, or anything in between.",
+      "Yes — Email & SMS automation is one of the most powerful features in Fieseros, especially for service businesses in markets where SMS and email are the primary communication channels (India, Latin America, Southeast Asia, Africa, the Middle East). You can send automated Email and SMS messages for: appointment confirmations when a job is booked, reminders 24 hours before each appointment, status updates ('technician dispatched', 'arriving in 15 minutes'), invoices when a job is complete, payment reminders for overdue invoices, review requests after job completion, and contract renewal reminders. All messages use your brand name and go out automatically based on triggers you define. You can also customize the message templates to match your brand voice — friendly, formal, or anything in between.",
   },
   {
     question: "Can I automate recurring invoices?",
     answer:
-      "Yes. Recurring invoicing automation is built for service businesses that run on monthly maintenance contracts, quarterly service agreements, retainers, or subscription-style offerings. You define the contract once — customer, service, price, billing frequency, start and end dates — and ServiceOS automatically generates and sends each invoice on schedule via Email & SMS with a one-tap payment link. If the contract is linked to a recurring job, the invoice is generated after each visit is marked complete by the technician. You can configure the invoice to go out a fixed number of days before or after the service visit, set up automatic payment reminders for any unpaid recurring invoice, and pause or cancel the recurring series at any time. Most service businesses that switch to ServiceOS for recurring invoicing recover 10–20% in previously-missed contract revenue within the first quarter.",
+      "Yes. Recurring invoicing automation is built for service businesses that run on monthly maintenance contracts, quarterly service agreements, retainers, or subscription-style offerings. You define the contract once — customer, service, price, billing frequency, start and end dates — and Fieseros automatically generates and sends each invoice on schedule via Email & SMS with a one-tap payment link. If the contract is linked to a recurring job, the invoice is generated after each visit is marked complete by the technician. You can configure the invoice to go out a fixed number of days before or after the service visit, set up automatic payment reminders for any unpaid recurring invoice, and pause or cancel the recurring series at any time. Most service businesses that switch to Fieseros for recurring invoicing recover 10–20% in previously-missed contract revenue within the first quarter.",
   },
   {
     question: "Are there pre-built automation templates?",
     answer:
-      "Yes — ServiceOS ships with a library of pre-built automation templates covering the most common service business workflows. These include: appointment reminder sequence (24-hour reminder + 1-hour reminder), invoice follow-up sequence (day 3, day 7, day 14 reminders), recurring maintenance contract scheduler, post-job review request, technician dispatch notification, customer status update sequence, lead capture from inbound Email & SMS, contract renewal reminder, and many more. Each template is one-click enabled and then customizable through simple forms. We also publish industry-specific template packs — for plumbing (emergency dispatch, water heater maintenance), HVAC (seasonal AC service contracts), cleaning (recurring weekly visits), and electrical (permit renewal reminders). New templates are added regularly based on customer requests and emerging best practices in the service business community.",
+      "Yes — Fieseros ships with a library of pre-built automation templates covering the most common service business workflows. These include: appointment reminder sequence (24-hour reminder + 1-hour reminder), invoice follow-up sequence (day 3, day 7, day 14 reminders), recurring maintenance contract scheduler, post-job review request, technician dispatch notification, customer status update sequence, lead capture from inbound Email & SMS, contract renewal reminder, and many more. Each template is one-click enabled and then customizable through simple forms. We also publish industry-specific template packs — for plumbing (emergency dispatch, water heater maintenance), HVAC (seasonal AC service contracts), cleaning (recurring weekly visits), and electrical (permit renewal reminders). New templates are added regularly based on customer requests and emerging best practices in the service business community.",
   },
   {
     question: "Can I create custom automation rules?",
     answer:
-      "Yes. For workflows that go beyond the pre-built templates, ServiceOS includes a visual automation builder that lets you chain triggers and actions together — no code required. You pick a trigger (job created, job completed, invoice unpaid for X days, customer reply received, technician clocked in, etc.), then add one or more actions (send Email & SMS message, send email, create a task, assign a technician, generate an invoice, schedule a follow-up job, add a tag, notify a team member). You can add conditions (only run if the customer is tagged 'VIP', only run on weekdays, only run if the invoice is over $500) and delays (wait 1 hour, wait 24 hours, wait until 9am local time). The builder is designed for office managers and operations staff, not developers. If you can describe the workflow in plain English, you can build it in ServiceOS.",
+      "Yes. For workflows that go beyond the pre-built templates, Fieseros includes a visual automation builder that lets you chain triggers and actions together — no code required. You pick a trigger (job created, job completed, invoice unpaid for X days, customer reply received, technician clocked in, etc.), then add one or more actions (send Email & SMS message, send email, create a task, assign a technician, generate an invoice, schedule a follow-up job, add a tag, notify a team member). You can add conditions (only run if the customer is tagged 'VIP', only run on weekdays, only run if the invoice is over $500) and delays (wait 1 hour, wait 24 hours, wait until 9am local time). The builder is designed for office managers and operations staff, not developers. If you can describe the workflow in plain English, you can build it in Fieseros.",
   },
 ];
 
 export default function AutomationsPage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Workflow Automations",
+    name: "Fieseros — Workflow Automations",
     description:
       "Automate Email & SMS reminders, invoice follow-ups, recurring job scheduling, technician assignment rules, review requests, and status update notifications for service businesses. Pre-built recipes plus a no-code visual builder.",
-    url: "https://serviceos.cc/automations",
+    url: "https://fieseros.com/automations",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -177,8 +177,8 @@ export default function AutomationsPage() {
     <CornerstoneLayout
       activePath="/scheduling-and-dispatch"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Automations", url: "https://serviceos.cc/automations" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Automations", url: "https://fieseros.com/automations" },
       ]}
       additionalSchema={[appSchema]}
     >
@@ -205,8 +205,8 @@ export default function AutomationsPage() {
       </CornerstoneHero>
 
       <FeatureGrid
-        title="The automations that pay for ServiceOS"
-        subtitle="Every minute your team spends on reminders, follow-ups, and manual status updates is a minute they're not serving customers. ServiceOS handles the busywork — your team handles the work."
+        title="The automations that pay for Fieseros"
+        subtitle="Every minute your team spends on reminders, follow-ups, and manual status updates is a minute they're not serving customers. Fieseros handles the busywork — your team handles the work."
         features={features}
       />
 
@@ -261,7 +261,7 @@ export default function AutomationsPage() {
           Google review after every job. Each task is small — a minute here,
           two minutes there — but across a week, a month, a year, it adds up
           to hundreds of hours of skilled team members doing low-value
-          busywork. ServiceOS eliminates that busywork with workflow
+          busywork. Fieseros eliminates that busywork with workflow
           automation that runs in the background, every day, without
           complaint.
         </p>
@@ -274,7 +274,7 @@ export default function AutomationsPage() {
           technician clocks in, notify the office and share their ETA with
           the customer. When a new lead messages by Email or SMS, create a lead
           record and assign it. Each trigger-action pair is called an
-          automation recipe, and ServiceOS ships with dozens of pre-built
+          automation recipe, and Fieseros ships with dozens of pre-built
           recipes for the most common service business workflows. You enable
           them with a click, customize the message templates to match your
           brand voice, and let them run forever.
@@ -286,11 +286,11 @@ export default function AutomationsPage() {
           manual invoice creations, 200 manual review requests, dozens of
           manual payment reminders, and dozens of manual contract
           renewals — easily 30–40 hours of admin work per month, the
-          equivalent of a part-time employee. With ServiceOS automations,
+          equivalent of a part-time employee. With Fieseros automations,
           all of that runs in the background. The office team shifts from
           busywork to high-value work: handling escalations, quoting new
           business, training technicians, growing the customer base. One
-          owner we worked with put it this way: &quot;ServiceOS didn&apos;t
+          owner we worked with put it this way: &quot;Fieseros didn&apos;t
           replace a person — it gave me back the person I already had.&quot;
         </p>
         <p>
@@ -303,7 +303,7 @@ export default function AutomationsPage() {
           every time, on every job, for every customer, without exception.
           That consistency is what turns a chaotic service business into a
           reliable, scalable operation. And because every automation in
-          ServiceOS is logged — you can see exactly what was sent, when, and
+          Fieseros is logged — you can see exactly what was sent, when, and
           to whom — you have full visibility into what&apos;s running and
           can intervene any time. Set it once, let it run forever, and
           watch the busywork disappear.
@@ -312,7 +312,7 @@ export default function AutomationsPage() {
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything service businesses ask about workflow automation with ServiceOS."
+        subtitle="Everything service businesses ask about workflow automation with Fieseros."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -323,7 +323,7 @@ export default function AutomationsPage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/scheduling-and-dispatch" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

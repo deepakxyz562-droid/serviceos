@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     }
 
     // Create or update super admin
-    const adminEmail = 'admin@serviceos.ai';
+    const adminEmail = 'admin@fieseros.ai';
     const adminPassword = 'Admin@123';
 
     const existingUser = await db.user.findUnique({

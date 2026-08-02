@@ -179,7 +179,7 @@ export interface PublicReviewData {
   responseJson: string
 }
 
-const SITE_URL = 'https://serviceos.cc'
+const SITE_URL = 'https://fieseros.com'
 
 /**
  * Resolve a tenant by the three URL segments (industry, city, slug).

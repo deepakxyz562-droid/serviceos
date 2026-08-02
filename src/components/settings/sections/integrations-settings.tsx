@@ -369,7 +369,7 @@ export function IntegrationsSettings() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success('Connection successful! ServiceOS is ready to receive leads.');
+        toast.success('Connection successful! Fieseros is ready to receive leads.');
       } else {
         toast.error(data.error || 'Connection failed');
       }
@@ -592,7 +592,7 @@ export function IntegrationsSettings() {
             <div className="flex items-center gap-1 flex-wrap">
               <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">WordPress Form</span>
               <ArrowRight className="size-3" />
-              <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">ServiceOS API</span>
+              <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">Fieseros API</span>
               <ArrowRight className="size-3" />
               <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-medium">Lead Created</span>
               <ArrowRight className="size-3" />
@@ -683,8 +683,8 @@ export function IntegrationsSettings() {
                   Test Connection
                 </Button>
                 <a
-                  href="/downloads/serviceos-crm-lead-capture.php"
-                  download="serviceos-crm-lead-capture.php"
+                  href="/downloads/fieseros-crm-lead-capture.php"
+                  download="fieseros-crm-lead-capture.php"
                   className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-md border bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
                 >
                   <Download className="size-3" /> Download Plugin
@@ -701,8 +701,8 @@ export function IntegrationsSettings() {
                 <p className="text-sm font-medium">WordPress Plugin</p>
               </div>
               <a
-                href="/downloads/serviceos-crm-lead-capture.php"
-                download="serviceos-crm-lead-capture.php"
+                href="/downloads/fieseros-crm-lead-capture.php"
+                download="fieseros-crm-lead-capture.php"
                 className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-md border bg-background hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
               >
                 <Download className="size-3" /> Download
@@ -885,7 +885,7 @@ export function IntegrationsSettings() {
                     </div>
                     <p className="text-[11px] text-muted-foreground">
                       The script auto-detects all <code className="text-[10px]">&lt;form&gt;</code> submissions. Add
-                      <code className="text-[10px] bg-muted px-1 rounded">data-serviceos=&quot;false&quot;</code> to any form to opt out.
+                      <code className="text-[10px] bg-muted px-1 rounded">data-fieseros=&quot;false&quot;</code> to any form to opt out.
                     </p>
                   </div>
 
@@ -1025,7 +1025,7 @@ curl_close($ch);`}
               <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside ml-1">
                 <li>Click <span className="font-medium text-foreground">Generate</span> to create a publishable API key.</li>
                 <li>Copy the <span className="font-medium text-foreground">embed snippet</span> and paste it into your website&apos;s <code className="text-[10px] bg-background px-1 rounded">&lt;head&gt;</code>.</li>
-                <li>The script auto-detects all form submissions and sends leads to ServiceOS.</li>
+                <li>The script auto-detects all form submissions and sends leads to Fieseros.</li>
                 <li>Leads appear instantly in your CRM with WhatsApp notifications.</li>
               </ol>
             </div>
@@ -1048,7 +1048,7 @@ curl_close($ch);`}
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                   JotForm embeds forms in a cross-origin iframe, so our universal JavaScript cannot capture
                   submissions automatically. Instead, use JotForm&apos;s native Webhook integration to send
-                  submissions directly to ServiceOS.
+                  submissions directly to Fieseros.
                 </p>
               </div>
             </div>
@@ -1532,7 +1532,7 @@ curl_close($ch);`}
                 onChange={(e) => setWebhookForm({ ...webhookForm, url: e.target.value })}
               />
               <p className="text-[10px] text-muted-foreground">
-                The URL from your n8n workflow webhook trigger. ServiceOS will POST job data here when the event fires.
+                The URL from your n8n workflow webhook trigger. Fieseros will POST job data here when the event fires.
               </p>
             </div>
             <div className="flex items-center justify-between">

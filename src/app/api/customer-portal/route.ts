@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     // any link we hand out would 404 on click. The home page
     // (`src/app/page.tsx`) already detects `?mgl=` on first load, POSTs the
     // token to `/api/auth/customer/exchange-magic-link`, auto-authenticates
-    // the customer, sets the `serviceos_session` cookie, and (when `redirect`
+    // the customer, sets the `fieseros_session` cookie, and (when `redirect`
     // is present) stashes the deep-link target in `sessionStorage.mgl_redirect`
     // for the customer portal to consume on mount. This mirrors the
     // `issueCustomerMagicLink` helper in `src/lib/customer-magic-link.ts`.

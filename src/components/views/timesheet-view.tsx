@@ -788,8 +788,8 @@ function OwnerTimesheet() {
         // "Failed to load team timesheet" on every refresh.
         if (res.status === 401) {
           try {
-            localStorage.removeItem('serviceos_auth');
-            localStorage.removeItem('serviceos_token');
+            localStorage.removeItem('fieseros_auth');
+            localStorage.removeItem('fieseros_token');
           } catch { /* ignore */ }
           clearAuth();
           toast.error('Session expired', { description: 'Please log in again to view timesheets.' });

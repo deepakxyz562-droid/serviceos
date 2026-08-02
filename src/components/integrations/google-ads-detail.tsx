@@ -230,7 +230,7 @@ export function GoogleAdsDetail({ onBack, connectionStatus, onConnectionChange }
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2"><Zap className="size-4 text-amber-600" /> How Lead Capture Works</CardTitle>
-              <CardDescription>Google Ads does not push webhooks for lead forms — ServiceOS polls the Google Ads API on demand or via cron.</CardDescription>
+              <CardDescription>Google Ads does not push webhooks for lead forms — Fieseros polls the Google Ads API on demand or via cron.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-center gap-2 flex-wrap py-2">

@@ -1,5 +1,5 @@
 /**
- * ServiceOS WhatsApp State Machine
+ * Fieseros WhatsApp State Machine
  *
  * Manages WhatsApp conversations as stateful interactions.
  * Each conversation tracks its current state and responds
@@ -600,7 +600,7 @@ export async function generateReply(
     case 'greeting': {
       if (intentType === 'greeting') {
         return {
-          message: '👋 Welcome! I\'m your ServiceOS assistant. How can I help you today?\n\nYou can:\n• Book a service\n• Check your appointment status\n• Get a price quote\n• Speak with an agent',
+          message: '👋 Welcome! I\'m your Fieseros assistant. How can I help you today?\n\nYou can:\n• Book a service\n• Check your appointment status\n• Get a price quote\n• Speak with an agent',
           interactive: {
             type: 'button',
             body: { text: '👋 Welcome! How can I help you today?' },

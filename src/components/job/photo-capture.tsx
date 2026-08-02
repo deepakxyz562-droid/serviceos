@@ -84,7 +84,7 @@ const PHOTO_TYPE_TABS: { value: PhotoType; label: string; color: string }[] = [
 
 const MAX_DIMENSION = 1280;
 const JPEG_QUALITY = 0.8;
-const PENDING_STORAGE_KEY = 'serviceos_pending_photos';
+const PENDING_STORAGE_KEY = 'fieseros_pending_photos';
 // Reject files larger than 10MB before compression (protects against
 // memory blow-ups in the canvas resize step + avoids huge base64 payloads
 // that would exceed the server's 15MB body-size limit after base64 encoding).

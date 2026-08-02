@@ -10,9 +10,9 @@ import { getBreadcrumbSchema } from '@/lib/seo/schemas';
 //   • Includes BreadcrumbList schema for rich results eligibility
 //   • Uses semantic HTML (main, nav, h1) for accessibility
 export const metadata: Metadata = {
-  title: 'Page Not Found — ServiceOS',
+  title: 'Page Not Found — Fieseros',
   description:
-    'The page you were looking for could not be found. Explore ServiceOS — the operating system for service businesses. Browse the marketplace, compare software, or contact us.',
+    'The page you were looking for could not be found. Explore Fieseros — the operating system for service businesses. Browse the marketplace, compare software, or contact us.',
   robots: { index: false, follow: true },
 };
 

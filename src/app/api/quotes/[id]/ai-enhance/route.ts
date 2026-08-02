@@ -5,7 +5,7 @@ import { logActivity } from '@/lib/activity-log';
 import { withRequestId } from '@/lib/logger';
 
 /**
- * AI Quote Enhance (ServiceOS V1.5 — P6-quotes)
+ * AI Quote Enhance (Fieseros V1.5 — P6-quotes)
  * ----------------------------------------------
  * POST /api/quotes/[id]/ai-enhance
  *

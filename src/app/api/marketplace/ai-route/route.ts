@@ -9,7 +9,7 @@ import {
 } from '@/lib/industry-catalog';
 
 /**
- * Describe-Problem Router (ServiceOS V1.5 — P8-ai-layer)
+ * Describe-Problem Router (Fieseros V1.5 — P8-ai-layer)
  * ------------------------------------------------------------
  * POST /api/marketplace/ai-route
  *

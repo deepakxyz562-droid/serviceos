@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { logActivity } from '@/lib/activity-log';
 
 /**
- * AI Job Prefill (ServiceOS V1.5)
+ * AI Job Prefill (Fieseros V1.5)
  * --------------------------------
  * POST /api/ai/job-prefill
  *

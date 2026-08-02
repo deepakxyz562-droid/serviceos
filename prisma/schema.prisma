@@ -1669,9 +1669,9 @@ model WhatsAppMessageAction {
 // ==========================================
 // EVENT WEBHOOKS (n8n integration)
 // ==========================================
-// Stores external webhook URLs (e.g., n8n workflows) that ServiceOS
+// Stores external webhook URLs (e.g., n8n workflows) that Fieseros
 // calls when job events occur. This bridges the gap between
-// ServiceOS job lifecycle and n8n automation workflows.
+// Fieseros job lifecycle and n8n automation workflows.
 
 model EventWebhook {
   id            String   @id @default(cuid())
@@ -3830,7 +3830,7 @@ model Announcement {
 }
 
 // ==========================================
-// SERVICEOS V1.5 — FIELD SERVICE UPGRADE
+// FIESEROS V1.5 — FIELD SERVICE UPGRADE
 // ==========================================
 // NOTE on naming: An older `Notification` model already exists above (lines ~464-480)
 // and is actively referenced by `Tenant.notifications` / `User.notifications` plus 7 source
@@ -4423,7 +4423,7 @@ model PublicChatMessage {
 // ==========================================
 // AI RECEPTIONIST (Vapi.ai BYOK)
 // ==========================================
-// Tenant brings their own Vapi.ai API key (BYOK). ServiceOS proxies
+// Tenant brings their own Vapi.ai API key (BYOK). Fieseros proxies
 // assistant/number/call management and ingests webhooks + function-call bridges.
 
 model AiAgent {
@@ -5023,7 +5023,7 @@ model PricingRule {
 // JOB LIFECYCLE ENGINE (Phase 4)
 // ==========================================
 // Assessment, Visit Types, Job State Machine, Quality Inspection —
-// the pipeline that makes ServiceOS better than Jobber:
+// the pipeline that makes Fieseros better than Jobber:
 // Lead → Assessment → Quote → Approved → Scheduled → Assigned →
 // Travelling → OnSite → Paused → Completed → QC → Invoice → Paid →
 // Warranty → Closed

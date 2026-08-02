@@ -26,7 +26,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Customer CRM for Service Businesses — 360° Customer View | ServiceOS",
+  title: "Customer CRM for Service Businesses — 360° Customer View | Fieseros",
   description:
     "A customer CRM built for service businesses, not sales teams. Contact info, job history, assets, service records, Email & SMS conversations, and payment status — all in one customer profile.",
   keywords: [
@@ -36,13 +36,13 @@ export const metadata: Metadata = {
     "field service crm",
     "customer 360",
   ],
-  alternates: { canonical: "https://serviceos.cc/customer-crm" },
+  alternates: { canonical: "https://fieseros.com/customer-crm" },
   openGraph: {
-    title: "Customer CRM for Service Businesses — 360° Customer View | ServiceOS",
+    title: "Customer CRM for Service Businesses — 360° Customer View | Fieseros",
     description:
       "Every customer's contact info, job history, assets, service records, Email & SMS conversations, and outstanding balances in one place. Built for service businesses, not sales pipelines.",
-    url: "https://serviceos.cc/customer-crm",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/customer-crm",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -142,22 +142,22 @@ const faqs = [
   {
     question: "How is this different from Salesforce or HubSpot?",
     answer:
-      "Salesforce, HubSpot, and most generic CRMs are built for B2B sales pipelines — leads, opportunities, deal stages, sales rep activity. Service businesses have an entirely different operational model: you don't have 'opportunities', you have recurring jobs; you don't have 'deal stages', you have service history per asset; you don't track 'sales rep activity', you track technician performance and customer satisfaction. ServiceOS is built specifically for service businesses. Where a generic CRM forces you to bend your operations to fit its sales-pipeline model, ServiceOS gives you a customer 360 view that reflects how service businesses actually work — assets, service history, recurring jobs, Email & SMS conversations, outstanding balances, and field technician context. You can be up and running in 30 minutes instead of spending months customizing a generic CRM to almost fit your needs.",
+      "Salesforce, HubSpot, and most generic CRMs are built for B2B sales pipelines — leads, opportunities, deal stages, sales rep activity. Service businesses have an entirely different operational model: you don't have 'opportunities', you have recurring jobs; you don't have 'deal stages', you have service history per asset; you don't track 'sales rep activity', you track technician performance and customer satisfaction. Fieseros is built specifically for service businesses. Where a generic CRM forces you to bend your operations to fit its sales-pipeline model, Fieseros gives you a customer 360 view that reflects how service businesses actually work — assets, service history, recurring jobs, Email & SMS conversations, outstanding balances, and field technician context. You can be up and running in 30 minutes instead of spending months customizing a generic CRM to almost fit your needs.",
   },
   {
     question: "Can I track customer equipment and assets?",
     answer:
-      "Yes — asset and equipment tracking is a core part of the ServiceOS customer CRM. Every customer profile can have multiple assets: AC units, water heaters, boilers, electrical panels, security systems, appliances, elevators — anything you install, service, or maintain. Each asset has its own record with make, model, serial number, install date, warranty expiry, location on the property, and a complete service history. When a customer calls about a 'leaky water heater', you can instantly see exactly which water heater they mean, when it was installed, what repairs have been done on it, and whether it's still under warranty. This single feature eliminates hours of 'do you remember when we serviced that?' phone tag and helps you upsell maintenance contracts on aging equipment.",
+      "Yes — asset and equipment tracking is a core part of the Fieseros customer CRM. Every customer profile can have multiple assets: AC units, water heaters, boilers, electrical panels, security systems, appliances, elevators — anything you install, service, or maintain. Each asset has its own record with make, model, serial number, install date, warranty expiry, location on the property, and a complete service history. When a customer calls about a 'leaky water heater', you can instantly see exactly which water heater they mean, when it was installed, what repairs have been done on it, and whether it's still under warranty. This single feature eliminates hours of 'do you remember when we serviced that?' phone tag and helps you upsell maintenance contracts on aging equipment.",
   },
   {
     question: "Can I see Email and SMS history per customer?",
     answer:
-      "Yes. Every Email and SMS message exchanged with a customer — quotes you sent, appointment reminders, follow-ups, their replies, casual conversations — is automatically linked to that customer's profile. You don't have to forward messages or copy-paste them into the CRM; ServiceOS does it for you based on the customer's phone number and email. Your whole team sees the same conversation history, so anyone answering the phone can pick up where the last conversation left off. You can search within a customer's message history (for example, 'show me everything about their AC unit'), filter by date range, and jump directly to a specific message in context. This is especially powerful in markets where SMS and email are the primary business communication channels.",
+      "Yes. Every Email and SMS message exchanged with a customer — quotes you sent, appointment reminders, follow-ups, their replies, casual conversations — is automatically linked to that customer's profile. You don't have to forward messages or copy-paste them into the CRM; Fieseros does it for you based on the customer's phone number and email. Your whole team sees the same conversation history, so anyone answering the phone can pick up where the last conversation left off. You can search within a customer's message history (for example, 'show me everything about their AC unit'), filter by date range, and jump directly to a specific message in context. This is especially powerful in markets where SMS and email are the primary business communication channels.",
   },
   {
     question: "Can I import my existing customer list?",
     answer:
-      "Yes — and the import process is designed to be painless. You can upload a CSV or Excel file of your existing customers, and ServiceOS will map your columns (name, phone, email, address, notes) to the right fields automatically. If you have data scattered across multiple sources — a phone contact list, an Excel sheet, an old CRM export — you can merge them into one clean customer database during import. ServiceOS will deduplicate based on phone number and email so you don't end up with two profiles for the same customer. If you have a large or messy customer list, our team can help with the migration as part of onboarding. Most service businesses with a few hundred to a few thousand customers complete the import in under an hour.",
+      "Yes — and the import process is designed to be painless. You can upload a CSV or Excel file of your existing customers, and Fieseros will map your columns (name, phone, email, address, notes) to the right fields automatically. If you have data scattered across multiple sources — a phone contact list, an Excel sheet, an old CRM export — you can merge them into one clean customer database during import. Fieseros will deduplicate based on phone number and email so you don't end up with two profiles for the same customer. If you have a large or messy customer list, our team can help with the migration as part of onboarding. Most service businesses with a few hundred to a few thousand customers complete the import in under an hour.",
   },
   {
     question: "Can I tag and segment customers?",
@@ -167,16 +167,16 @@ const faqs = [
   {
     question: "Is there a customer portal?",
     answer:
-      "Yes. ServiceOS includes an optional customer portal that gives your customers a self-service view of their relationship with your business. Through the portal, a customer can see their upcoming appointments, view past service history, download invoices and payment receipts, approve quotes, pay outstanding balances, and request new appointments — all without calling your office. The portal is accessed via a secure magic link sent over email or SMS, so customers don't have to remember another password. The customer portal is especially valuable for commercial accounts with multiple stakeholders (a property manager who needs to share service records with ownership) and for service businesses that want to project a polished, professional image. You can enable or disable the portal per customer based on what makes sense for your business.",
+      "Yes. Fieseros includes an optional customer portal that gives your customers a self-service view of their relationship with your business. Through the portal, a customer can see their upcoming appointments, view past service history, download invoices and payment receipts, approve quotes, pay outstanding balances, and request new appointments — all without calling your office. The portal is accessed via a secure magic link sent over email or SMS, so customers don't have to remember another password. The customer portal is especially valuable for commercial accounts with multiple stakeholders (a property manager who needs to share service records with ownership) and for service businesses that want to project a polished, professional image. You can enable or disable the portal per customer based on what makes sense for your business.",
   },
 ];
 
 export default function CustomerCrmPage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Customer CRM for Service Businesses",
+    name: "Fieseros — Customer CRM for Service Businesses",
     description:
       "A customer CRM purpose-built for field service businesses — 360-degree customer view, asset and equipment tracking, service history timeline, Email & SMS conversation history, outstanding balance tracking, and customer notes and tags.",
-    url: "https://serviceos.cc/customer-crm",
+    url: "https://fieseros.com/customer-crm",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -185,8 +185,8 @@ export default function CustomerCrmPage() {
     <CornerstoneLayout
       activePath="/scheduling-and-dispatch"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Customer CRM", url: "https://serviceos.cc/customer-crm" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Customer CRM", url: "https://fieseros.com/customer-crm" },
       ]}
       additionalSchema={[appSchema]}
     >
@@ -214,7 +214,7 @@ export default function CustomerCrmPage() {
 
       <FeatureGrid
         title="A CRM that reflects how service businesses actually work"
-        subtitle="Service businesses track assets, service history, and recurring jobs — not deal stages. ServiceOS is built around that reality."
+        subtitle="Service businesses track assets, service history, and recurring jobs — not deal stages. Fieseros is built around that reality."
         features={features}
       />
 
@@ -226,7 +226,7 @@ export default function CustomerCrmPage() {
               What you can see in a customer profile
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Open any customer in ServiceOS and you get the complete picture —
+              Open any customer in Fieseros and you get the complete picture —
               everything your team needs to deliver great service, in one
               scrollable view.
             </p>
@@ -269,11 +269,11 @@ export default function CustomerCrmPage() {
           sales-pipeline model that doesn&apos;t reflect reality.
         </p>
         <p>
-          A field service CRM like ServiceOS is built around the actual
+          A field service CRM like Fieseros is built around the actual
           objects of a service business: customers, assets, jobs, and
           recurring contracts. The customer is the center, but unlike in a
           sales CRM, the customer isn&apos;t just a contact record with a
-          pipeline attached. A ServiceOS customer profile holds every asset
+          pipeline attached. A Fieseros customer profile holds every asset
           that customer owns — every AC unit, water heater, electrical panel,
           boiler, alarm system — each with its own service history, warranty
           status, and maintenance schedule. When a customer calls about a
@@ -290,7 +290,7 @@ export default function CustomerCrmPage() {
           like India, Latin America, Southeast Asia, and the Middle East, the
           dominant channels are SMS and email. Customers send photos of the broken
           AC, ask for quotes, confirm appointments, and even pay — all over
-          SMS and email. ServiceOS treats Email and SMS as first-class channels.
+          SMS and email. Fieseros treats Email and SMS as first-class channels.
           Every Email and SMS message exchanged with a customer is automatically
           linked to their profile, visible to your whole team, and searchable.
           When a returning customer messages &quot;the AC isn&apos;t cooling
@@ -303,7 +303,7 @@ export default function CustomerCrmPage() {
           Finally, a service business CRM needs to connect to the operational
           reality of the business: outstanding balances, recurring
           maintenance contracts, technician assignments, and service history.
-          ServiceOS ties all of this together. When you open a customer, you
+          Fieseros ties all of this together. When you open a customer, you
           see not just their contact info but their lifetime revenue,
           outstanding balance, upcoming appointments, active contracts, and
           every invoice and payment — alongside the assets, Email & SMS history,
@@ -311,13 +311,13 @@ export default function CustomerCrmPage() {
           businesses actually need: not a sales pipeline, but an operational
           command center for every relationship you have. No generic CRM can
           deliver that without expensive customization and third-party
-          integrations. ServiceOS ships with it on day one.
+          integrations. Fieseros ships with it on day one.
         </p>
       </ContentSection>
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything service businesses ask about the ServiceOS customer CRM."
+        subtitle="Everything service businesses ask about the Fieseros customer CRM."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -328,7 +328,7 @@ export default function CustomerCrmPage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/scheduling-and-dispatch" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

@@ -6,7 +6,7 @@ import { db } from '../src/lib/db'
 
 async function main() {
   const user = await db.user.findUnique({
-    where: { email: 'whatsapp-test@serviceos.local' },
+    where: { email: 'whatsapp-test@fieseros.local' },
     include: { tenant: true, workspace: true },
   })
   if (!user) {
@@ -95,12 +95,12 @@ async function main() {
   console.log('═══════════════════════════════════════════════════════\n')
   console.log('  Option A — Dev login (no password needed):')
   console.log('    POST http://localhost:3000/api/auth/dev-login')
-  console.log('    Body: { "email": "whatsapp-test@serviceos.local" }')
-  console.log('    → returns a JWT + sets the serviceos_session cookie')
+  console.log('    Body: { "email": "whatsapp-test@fieseros.local" }')
+  console.log('    → returns a JWT + sets the fieseros_session cookie')
   console.log('')
   console.log('  Option B — From the browser UI:')
   console.log('    Go to the dev login page and enter:')
-  console.log('      email: whatsapp-test@serviceos.local')
+  console.log('      email: whatsapp-test@fieseros.local')
   console.log('      (password is not checked by /api/auth/dev-login)')
   console.log('')
 }

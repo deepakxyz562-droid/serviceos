@@ -491,7 +491,7 @@ export function PushPermissionCard() {
         </CardTitle>
         <CardDescription>
           Get notified about new leads, job updates, and messages even when
-          ServiceOS is in the background.
+          Fieseros is in the background.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

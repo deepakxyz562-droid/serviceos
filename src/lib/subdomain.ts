@@ -1,14 +1,16 @@
 /**
- * ServiceOS Subdomain Detection Library
+ * Fieseros Subdomain Detection Library
  *
  * Handles subdomain extraction, validation, and URL construction
  * for the multi-tenant SaaS architecture.
  *
  * Subdomain convention:
- *   - Root domain: serviceos.cc → landing page / generic login
- *   - Super admin: admin.serviceos.cc → admin dashboard
- *   - Tenant: {slug}.serviceos.cc → company workspace
+ *   - Root domain: fieseros.com → landing page / generic login
+ *   - Super admin: admin.fieseros.com → admin dashboard
+ *   - Tenant: {slug}.fieseros.com → company workspace
  */
+
+import { getAppUrl, getCookieDomain as getCookieDomainFromBrand } from '@/lib/brand';
 
 // ─── Subdomain Extraction ──────────────────────────────────────────────────────
 
@@ -16,9 +18,9 @@
  * Extract subdomain from a hostname.
  *
  * Examples:
- *   "abc-plumbing.serviceos.cc" → "abc-plumbing"
- *   "admin.serviceos.cc"         → "admin"
- *   "serviceos.cc"               → null (root domain)
+ *   "abc-plumbing.fieseros.com" → "abc-plumbing"
+ *   "admin.fieseros.com"         → "admin"
+ *   "fieseros.com"               → null (root domain)
  *   "localhost:3000"                          → null (dev)
  *   "192.168.1.1:3000"                        → null (IP)
  *
@@ -38,7 +40,7 @@ export function extractSubdomain(hostname: string): string | null {
 
   // Determine the "root" hostname from NEXT_PUBLIC_APP_URL so we can
   // figure out what constitutes a subdomain relative to our deployment.
-  // For "https://serviceos.cc" the root host is "serviceos.cc"
+  // For "https://fieseros.com" the root host is "fieseros.com"
   // and any extra prefix label is a tenant/admin subdomain.
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
   let rootHost = '';
@@ -54,7 +56,7 @@ export function extractSubdomain(hostname: string): string | null {
   }
 
   // If the hostname ends with ".{rootHost}", the subdomain is the prefix.
-  // e.g., "abc.serviceos.cc" endsWith ".serviceos.cc"
+  // e.g., "abc.fieseros.com" endsWith ".fieseros.com"
   if (rootHost && host.endsWith(`.${rootHost}`)) {
     const subdomain = host.slice(0, host.length - rootHost.length - 1);
     // "www" is treated as no subdomain (canonical root)
@@ -64,7 +66,7 @@ export function extractSubdomain(hostname: string): string | null {
 
   // Fallback for custom domains or when NEXT_PUBLIC_APP_URL is not set:
   // For *.netlify.app: subdomain is the first part when we have 4+ parts
-  // e.g., abc.serviceos.cc → parts = ['abc', 'serviceos', 'cc']
+  // e.g., abc.fieseros.com → parts = ['abc', 'fieseros', 'cc']
   if (parts.length >= 4) {
     const subdomain = parts[0];
     if (subdomain === 'www') return null;
@@ -100,10 +102,10 @@ export function isSuperAdminSubdomain(subdomain: string | null): boolean {
  * Build the full subdomain URL for a tenant.
  *
  * @param tenantSlug - The tenant's slug (used as subdomain)
- * @returns Full URL like "https://abc-plumbing.serviceos.cc"
+ * @returns Full URL like "https://abc-plumbing.fieseros.com"
  */
 export function buildTenantUrl(tenantSlug: string): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.cc';
+  const appUrl = getAppUrl();
   const url = new URL(appUrl);
   return `${url.protocol}//${tenantSlug}.${url.host}`;
 }
@@ -111,10 +113,10 @@ export function buildTenantUrl(tenantSlug: string): string {
 /**
  * Build the super admin URL.
  *
- * @returns Full URL like "https://admin.serviceos.cc"
+ * @returns Full URL like "https://admin.fieseros.com"
  */
 export function buildSuperAdminUrl(): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.cc';
+  const appUrl = getAppUrl();
   const url = new URL(appUrl);
   return `${url.protocol}//admin.${url.host}`;
 }
@@ -122,11 +124,10 @@ export function buildSuperAdminUrl(): string {
 /**
  * Get the root domain URL (no subdomain).
  *
- * @returns Full URL like "https://serviceos.cc"
+ * @returns Full URL like "https://fieseros.com"
  */
 export function getRootDomainUrl(): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.cc';
-  return appUrl.replace(/\/+$/, '');
+  return getAppUrl().replace(/\/+$/, '');
 }
 
 // ─── Cookie Domain ─────────────────────────────────────────────────────────────
@@ -134,7 +135,7 @@ export function getRootDomainUrl(): string {
 /**
  * Get cookie domain that works across subdomains.
  *
- * For "serviceos.cc" → ".serviceos.cc"
+ * For "fieseros.com" → ".fieseros.com"
  * For localhost → undefined (browser default)
  *
  * The leading dot allows cookies to be shared across all subdomains,
@@ -144,23 +145,10 @@ export function getRootDomainUrl(): string {
  * @returns The cookie domain string, or undefined for localhost
  */
 export function getCookieDomain(): string | undefined {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
-  if (!appUrl) return undefined;
-
-  try {
-    const url = new URL(appUrl);
-    const host = url.hostname;
-
-    // localhost / IP → no domain attribute needed
-    if (host === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(host)) {
-      return undefined;
-    }
-
-    // Add leading dot for subdomain sharing: ".serviceos.cc"
-    return `.${host}`;
-  } catch {
-    return undefined;
-  }
+  // Delegate to the centralized brand config so there is a single source
+  // of truth for cookie-domain logic. Kept here as a re-export for
+  // backward compatibility with existing imports.
+  return getCookieDomainFromBrand();
 }
 
 // ─── Subdomain Validation ──────────────────────────────────────────────────────

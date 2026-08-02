@@ -45,7 +45,7 @@ export default function UpdatePrompt() {
       if (!reg.waiting) return;
       if (toastId.current) return; // already showing
       toastId.current = toast('A new version is available', {
-        description: 'Refresh to get the latest ServiceOS update.',
+        description: 'Refresh to get the latest Fieseros update.',
         duration: Infinity,
         action: {
           label: (
@@ -101,7 +101,7 @@ export default function UpdatePrompt() {
         // In dev we still want to see genuine failures (HTTPS scope,
         // MIME type, syntax errors in sw.js) so they're fixed early.
         if (process.env.NODE_ENV !== 'production') {
-          console.warn('[ServiceOS] SW registration failed:', err);
+          console.warn('[Fieseros] SW registration failed:', err);
         }
       });
 

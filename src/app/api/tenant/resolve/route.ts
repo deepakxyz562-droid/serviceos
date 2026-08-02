@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         type: 'unknown',
         subdomain,
-        message: `No company found at "${subdomain}.serviceos.cc"`,
+        message: `No company found at "${subdomain}.fieseros.com"`,
       });
     }
 

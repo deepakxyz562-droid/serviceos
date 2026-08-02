@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Send OTP via WhatsApp
-    const otpMessage = `🔐 *Your ServiceOS verification code is: ${otpCode}*
+    const otpMessage = `🔐 *Your Fieseros verification code is: ${otpCode}*
 
 This code expires in 5 minutes.
 

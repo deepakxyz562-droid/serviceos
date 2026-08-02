@@ -22,7 +22,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Pool Service Software — Routes, Chemical Logs & Recurring Billing | ServiceOS",
+  title: "Pool Service Software — Routes, Chemical Logs & Recurring Billing | Fieseros",
   description:
     "Pool service software for weekly smart auto-dispatch, chemical-level logging, equipment inspections, recurring contract billing, and a customer portal. Start free today.",
   keywords: [
@@ -32,13 +32,13 @@ export const metadata: Metadata = {
     "pool maintenance software",
     "pool route software",
   ],
-  alternates: { canonical: "https://serviceos.cc/pool-service-software" },
+  alternates: { canonical: "https://fieseros.com/pool-service-software" },
   openGraph: {
-    title: "Pool Service Software | ServiceOS",
+    title: "Pool Service Software | Fieseros",
     description:
       "Optimize weekly pool routes, log pH and chlorine on every visit, track equipment inspections, and bill recurring service contracts automatically. Built for pool service companies.",
-    url: "https://serviceos.cc/pool-service-software",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/pool-service-software",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -49,7 +49,7 @@ const features: Feature[] = [
     icon: Waves,
     title: "Weekly Smart Auto-Dispatch",
     description:
-      "ServiceOS orders your pool techs' stops by drive time and zip code density, not by memory. A 22-pool Tuesday route that used to take 9 hours gets done in 7, and the tech sees turn-by-turn navigation to every stop on their phone.",
+      "Fieseros orders your pool techs' stops by drive time and zip code density, not by memory. A 22-pool Tuesday route that used to take 9 hours gets done in 7, and the tech sees turn-by-turn navigation to every stop on their phone.",
   },
   {
     icon: FlaskConical,
@@ -67,13 +67,13 @@ const features: Feature[] = [
     icon: Repeat,
     title: "Recurring Service Contract Billing",
     description:
-      "Set up weekly, bi-weekly, or monthly service contracts once, and ServiceOS sends automatic payment reminders after each completed visit. No more end-of-month invoice runs, no more chasing customers who are six weeks behind.",
+      "Set up weekly, bi-weekly, or monthly service contracts once, and Fieseros sends automatic payment reminders after each completed visit. No more end-of-month invoice runs, no more chasing customers who are six weeks behind.",
   },
   {
     icon: Package,
     title: "Parts Ordering for Filters & Pumps",
     description:
-      "When a tech diagnoses a bad multiport valve or a worn impeller, they generate a parts order from the field tied to the customer's account. ServiceOS tracks the order through delivery and rolls the cost onto the next invoice automatically.",
+      "When a tech diagnoses a bad multiport valve or a worn impeller, they generate a parts order from the field tied to the customer's account. Fieseros tracks the order through delivery and rolls the cost onto the next invoice automatically.",
   },
   {
     icon: Smartphone,
@@ -85,29 +85,29 @@ const features: Feature[] = [
 
 const faqs = [
   {
-    question: "How does ServiceOS optimize weekly pool service routes?",
+    question: "How does Fieseros optimize weekly pool service routes?",
     answer:
-      "When a pool tech has 18 to 25 stops in a day, the order in which they visit those pools is the single biggest driver of how early they get home. ServiceOS sorts each tech's daily route by drive time and zip code density, factoring in customer time windows and pool type. The tech sees turn-by-turn navigation to every stop on their phone, and the dispatch board shows real-time progress against the planned route. Most pool service companies cut 90 to 120 minutes off a typical route day in the first month, which means each tech can take on 3 to 5 more weekly pools without working longer hours.",
+      "When a pool tech has 18 to 25 stops in a day, the order in which they visit those pools is the single biggest driver of how early they get home. Fieseros sorts each tech's daily route by drive time and zip code density, factoring in customer time windows and pool type. The tech sees turn-by-turn navigation to every stop on their phone, and the dispatch board shows real-time progress against the planned route. Most pool service companies cut 90 to 120 minutes off a typical route day in the first month, which means each tech can take on 3 to 5 more weekly pools without working longer hours.",
   },
   {
     question: "Can techs log chemical readings from the field?",
     answer:
-      "Yes. After testing the water at a pool, the tech taps the pH, free chlorine, total alkalinity, calcium hardness, and cyanuric acid readings into ServiceOS on their phone. The reading is timestamped, geotagged, and attached to the customer's service history permanently. If the reading is outside safe range, ServiceOS flags it and prompts the tech to log the chemical adjustment they made. When a customer calls three weeks later complaining about a green pool, you pull the chemical timeline and show them exactly what was recorded on every visit — which usually ends the dispute in your favor.",
+      "Yes. After testing the water at a pool, the tech taps the pH, free chlorine, total alkalinity, calcium hardness, and cyanuric acid readings into Fieseros on their phone. The reading is timestamped, geotagged, and attached to the customer's service history permanently. If the reading is outside safe range, Fieseros flags it and prompts the tech to log the chemical adjustment they made. When a customer calls three weeks later complaining about a green pool, you pull the chemical timeline and show them exactly what was recorded on every visit — which usually ends the dispute in your favor.",
   },
   {
     question: "How does recurring service contract billing work?",
     answer:
-      "Most pool service companies run on weekly or bi-weekly contracts billed monthly, and that recurring billing is the lifeblood of the business. In ServiceOS, you define each contract once — customer, frequency, monthly price, payment method — and the system generates a branded invoice after each visit, or on the first of the month depending on your preference, and sends it via Email & SMS with a secure payment link. ServiceOS follows up with automatic payment reminders for unpaid balances, so customers who fall behind get nudged without you having to chase them. You see a dashboard of all active contracts, upcoming invoices, and overdue balances, and you can pause service on a non-paying customer before they rack up eight weeks of unpaid cleanings. You stop spending the last week of every month chasing customers who are six weeks behind.",
+      "Most pool service companies run on weekly or bi-weekly contracts billed monthly, and that recurring billing is the lifeblood of the business. In Fieseros, you define each contract once — customer, frequency, monthly price, payment method — and the system generates a branded invoice after each visit, or on the first of the month depending on your preference, and sends it via Email & SMS with a secure payment link. Fieseros follows up with automatic payment reminders for unpaid balances, so customers who fall behind get nudged without you having to chase them. You see a dashboard of all active contracts, upcoming invoices, and overdue balances, and you can pause service on a non-paying customer before they rack up eight weeks of unpaid cleanings. You stop spending the last week of every month chasing customers who are six weeks behind.",
   },
   {
-    question: "Can ServiceOS handle pool equipment repairs and parts ordering?",
+    question: "Can Fieseros handle pool equipment repairs and parts ordering?",
     answer:
-      "Yes. During a routine visit, the tech runs through an equipment inspection checklist — skimmer basket, pump strainer, filter pressure, heater firing, salt cell condition. When something is worn or broken, they tap a button to generate a repair quote tied to the customer's account, with photos of the failing part. Once the customer approves the quote via Email & SMS, the parts order is created in ServiceOS, tracked through delivery, and rolled onto the next invoice automatically. The repair workflow is just as tracked as the weekly service — no more repairs disappearing into the tech's memory.",
+      "Yes. During a routine visit, the tech runs through an equipment inspection checklist — skimmer basket, pump strainer, filter pressure, heater firing, salt cell condition. When something is worn or broken, they tap a button to generate a repair quote tied to the customer's account, with photos of the failing part. Once the customer approves the quote via Email & SMS, the parts order is created in Fieseros, tracked through delivery, and rolled onto the next invoice automatically. The repair workflow is just as tracked as the weekly service — no more repairs disappearing into the tech's memory.",
   },
   {
-    question: "Does ServiceOS support seasonal pool openings and closings?",
+    question: "Does Fieseros support seasonal pool openings and closings?",
     answer:
-      "Yes, and these are some of the most profitable jobs a pool service company runs. ServiceOS treats openings and closings as seasonal service packages with their own checklists — cover removal, equipment startup, chemical balancing for openings; blow-out lines, winterize equipment, cover installation for closings. You can pre-schedule the entire opening or closing season in March, dispatch techs in the right order, and bill each job on completion. Customers get Email & SMS reminders a week before their scheduled opening or closing, so you stop getting the Friday-night call asking why the pool isn't open yet.",
+      "Yes, and these are some of the most profitable jobs a pool service company runs. Fieseros treats openings and closings as seasonal service packages with their own checklists — cover removal, equipment startup, chemical balancing for openings; blow-out lines, winterize equipment, cover installation for closings. You can pre-schedule the entire opening or closing season in March, dispatch techs in the right order, and bill each job on completion. Customers get Email & SMS reminders a week before their scheduled opening or closing, so you stop getting the Friday-night call asking why the pool isn't open yet.",
   },
   {
     question: "How does the customer portal work for pool service?",
@@ -118,10 +118,10 @@ const faqs = [
 
 export default function PoolServiceSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Pool Service Business Software",
+    name: "Fieseros — Pool Service Business Software",
     description:
       "Pool service CRM and route software with weekly smart auto-dispatch, chemical-level logging, equipment inspections, recurring contract billing, parts ordering, and a customer portal.",
-    url: "https://serviceos.cc/pool-service-software",
+    url: "https://fieseros.com/pool-service-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
@@ -130,15 +130,15 @@ export default function PoolServiceSoftwarePage() {
     <CornerstoneLayout
       activePath="/pool-service-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Pool Service Software", url: "https://serviceos.cc/pool-service-software" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Pool Service Software", url: "https://fieseros.com/pool-service-software" },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
         eyebrow="Pool Service Software"
         title="Pool Service Software That Logs Every Chemical, Optimizes Every Route, and Bills Every Contract"
-        subtitle="From weekly smart auto-dispatch to chemical logging, equipment inspections, and recurring billing, ServiceOS is the pool service CRM built for cleaning and maintenance companies."
+        subtitle="From weekly smart auto-dispatch to chemical logging, equipment inspections, and recurring billing, Fieseros is the pool service CRM built for cleaning and maintenance companies."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -170,14 +170,14 @@ export default function PoolServiceSoftwarePage() {
               The chaos of running a pool service business without software
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most pool service companies still juggle paper route sheets, chemical logs in a notebook, and invoices sent at the end of the month. Here&apos;s what that costs you — and what changes when you switch to ServiceOS.
+              Most pool service companies still juggle paper route sheets, chemical logs in a notebook, and invoices sent at the end of the month. Here&apos;s what that costs you — and what changes when you switch to Fieseros.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <Wrench className="h-5 w-5 text-destructive" />
-                Without ServiceOS
+                Without Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -198,7 +198,7 @@ export default function PoolServiceSoftwarePage() {
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With ServiceOS
+                With Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -220,24 +220,24 @@ export default function PoolServiceSoftwarePage() {
         </div>
       </section>
 
-      <ContentSection title="Why pool service companies choose ServiceOS">
+      <ContentSection title="Why pool service companies choose Fieseros">
         <p>
-          Pool service is a recurring-revenue business with a daily operational grind. A typical tech visits 18 to 25 pools a day, logs chemical readings at every stop, inspects equipment, makes small adjustments, and tries to finish before dark. Multiply that across a team of three or four techs and you have hundreds of customer interactions every week, each one generating data — chemical levels, equipment condition, repair recommendations, time on site — that almost never gets captured without dedicated pool service software. ServiceOS is built to capture all of it, in seconds, from the technician's phone, and turn it into better routes, faster billing, and fewer customer disputes.
+          Pool service is a recurring-revenue business with a daily operational grind. A typical tech visits 18 to 25 pools a day, logs chemical readings at every stop, inspects equipment, makes small adjustments, and tries to finish before dark. Multiply that across a team of three or four techs and you have hundreds of customer interactions every week, each one generating data — chemical levels, equipment condition, repair recommendations, time on site — that almost never gets captured without dedicated pool service software. Fieseros is built to capture all of it, in seconds, from the technician's phone, and turn it into better routes, faster billing, and fewer customer disputes.
         </p>
         <p>
-          The recurring billing side of pool service is where most shops lose money quietly. Pool companies typically bill weekly or monthly in arrears, which means a customer who stops paying in May can still be on the route in July before anyone notices. ServiceOS fixes this by generating a branded invoice after every completed visit (or on a fixed monthly cycle), sending it via Email & SMS with a secure payment link, and immediately flagging overdue balances on the dispatch board so you can follow up before the situation escalates. You see exactly who owes what, and you can pause service on a non-paying customer before they rack up eight weeks of unpaid cleanings. Most pool service companies recover 5 to 8 percent of revenue they were previously writing off within the first quarter of switching to ServiceOS.
+          The recurring billing side of pool service is where most shops lose money quietly. Pool companies typically bill weekly or monthly in arrears, which means a customer who stops paying in May can still be on the route in July before anyone notices. Fieseros fixes this by generating a branded invoice after every completed visit (or on a fixed monthly cycle), sending it via Email & SMS with a secure payment link, and immediately flagging overdue balances on the dispatch board so you can follow up before the situation escalates. You see exactly who owes what, and you can pause service on a non-paying customer before they rack up eight weeks of unpaid cleanings. Most pool service companies recover 5 to 8 percent of revenue they were previously writing off within the first quarter of switching to Fieseros.
         </p>
         <p>
-          Then there is the chemical-logging problem, which becomes critical the moment a customer calls to complain about a green pool. Without a record of what was tested and adjusted on each visit, the customer's word stands against yours, and you end up crediting service calls you shouldn't have to. ServiceOS solves this by capturing pH, free chlorine, total alkalinity, and calcium hardness on every visit, timestamped and attached to the customer's account. When the complaint call comes in, you pull the chemical timeline, walk the customer through every reading, and the dispute usually ends in your favor. The same data also helps you spot pools that need more frequent service before they turn green in the first place.
+          Then there is the chemical-logging problem, which becomes critical the moment a customer calls to complain about a green pool. Without a record of what was tested and adjusted on each visit, the customer's word stands against yours, and you end up crediting service calls you shouldn't have to. Fieseros solves this by capturing pH, free chlorine, total alkalinity, and calcium hardness on every visit, timestamped and attached to the customer's account. When the complaint call comes in, you pull the chemical timeline, walk the customer through every reading, and the dispute usually ends in your favor. The same data also helps you spot pools that need more frequent service before they turn green in the first place.
         </p>
         <p>
-          Finally, there is the equipment repair revenue that pool service companies routinely leave on the table. A tech notices a pump making noise or a filter pressure reading 30 psi during a routine visit, mentions it to the customer in passing, and nothing ever happens — until the pump fails two months later and the customer blames you for not telling them. ServiceOS turns every equipment observation into a tracked item. The tech logs the finding with a photo, generates a repair quote on the spot, and sends it to the customer via Email & SMS. Whether they approve it now or in three months, the recommendation is on record, and the eventual repair revenue goes to you instead of the first company they call when the pump finally dies.
+          Finally, there is the equipment repair revenue that pool service companies routinely leave on the table. A tech notices a pump making noise or a filter pressure reading 30 psi during a routine visit, mentions it to the customer in passing, and nothing ever happens — until the pump fails two months later and the customer blames you for not telling them. Fieseros turns every equipment observation into a tracked item. The tech logs the finding with a photo, generates a repair quote on the spot, and sends it to the customer via Email & SMS. Whether they approve it now or in three months, the recommendation is on record, and the eventual repair revenue goes to you instead of the first company they call when the pump finally dies.
         </p>
       </ContentSection>
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything pool service owners ask before switching to ServiceOS."
+        subtitle="Everything pool service owners ask before switching to Fieseros."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -248,7 +248,7 @@ export default function PoolServiceSoftwarePage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/cleaning-business-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

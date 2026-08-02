@@ -1,5 +1,5 @@
 /**
- * ServiceOS Multi-Tenant Isolation Middleware
+ * Fieseros Multi-Tenant Isolation Middleware
  *
  * Ensures strict tenant isolation:
  * - Every database query must enforce tenantId filtering

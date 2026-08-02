@@ -1,17 +1,17 @@
 <?php
 /**
- * Plugin Name: ServiceOS CRM Lead Capture
- * Plugin URI: https://serviceos.cc/wordpress
+ * Plugin Name: Fieseros CRM Lead Capture
+ * Plugin URI: https://fieseros.com/wordpress
  * Description: Injects a universal JavaScript form capture script on every page. Works with Contact Form 7, WPForms, Gravity Forms, Ninja Forms, Fluent Forms, Elementor Forms, Formidable, MetForm, Everest Forms, HTML forms, and custom forms — automatically.
  * Version: 2.1.0
- * Author: ServiceOS
- * Author URI: https://serviceos.cc
+ * Author: Fieseros
+ * Author URI: https://fieseros.com
  * License: GPL v2 or later
- * Text Domain: serviceos-crm
+ * Text Domain: fieseros-crm
  * Domain Path: /languages
  *
- * ServiceOS CRM Lead Capture – Connect WordPress Forms to Your CRM
- * Copyright (C) 2025 ServiceOS
+ * Fieseros CRM Lead Capture – Connect WordPress Forms to Your CRM
+ * Copyright (C) 2025 Fieseros
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,8 +23,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 define( 'SOS_CRM_VERSION', '2.1.0' );
-define( 'SOS_CRM_OPTION_KEY', 'serviceos_crm_settings' );
-define( 'SOS_CRM_LOG_OPTION', 'serviceos_crm_logs' );
+define( 'SOS_CRM_OPTION_KEY', 'fieseros_crm_settings' );
+define( 'SOS_CRM_LOG_OPTION', 'fieseros_crm_logs' );
 
 // ─── Activation / Deactivation ──────────────────────────────────────────────
 register_activation_hook( __FILE__, 'sos_crm_activate' );
@@ -56,10 +56,10 @@ add_action( 'admin_menu', 'sos_crm_admin_menu' );
 
 function sos_crm_admin_menu() {
     add_options_page(
-        'ServiceOS CRM',
-        'ServiceOS CRM',
+        'Fieseros CRM',
+        'Fieseros CRM',
         'manage_options',
-        'serviceos-crm',
+        'fieseros-crm',
         'sos_crm_settings_page'
     );
 }
@@ -110,12 +110,12 @@ function sos_crm_settings_page() {
     $is_configured = ! empty( $settings['api_url'] ) && ! empty( $settings['api_key'] );
     ?>
     <div class="wrap">
-        <h1>🚀 ServiceOS CRM — Universal Lead Capture</h1>
+        <h1>🚀 Fieseros CRM — Universal Lead Capture</h1>
         <p style="color:#64748b;font-size:13px;max-width:800px;">Injects a universal JavaScript form capture script on every page. Works with Contact Form 7, WPForms, Gravity Forms, Ninja Forms, Fluent Forms, Elementor Forms, Formidable, MetForm, Everest Forms, HTML forms, and custom forms — automatically.</p>
 
         <?php if ( ! $is_configured ) : ?>
         <div class="notice notice-info">
-            <p><strong>Get started:</strong> Copy your <strong>ServiceOS URL</strong> and <strong>API Key</strong> from your ServiceOS Settings → Integrations → Website Form Integration page, then paste them below.</p>
+            <p><strong>Get started:</strong> Copy your <strong>Fieseros URL</strong> and <strong>API Key</strong> from your Fieseros Settings → Integrations → Website Form Integration page, then paste them below.</p>
         </div>
         <?php endif; ?>
 
@@ -124,24 +124,24 @@ function sos_crm_settings_page() {
 
             <table class="form-table">
                 <tr>
-                    <th scope="row"><label for="api_url">ServiceOS URL</label></th>
+                    <th scope="row"><label for="api_url">Fieseros URL</label></th>
                     <td>
                         <input type="url" name="api_url" id="api_url" value="<?php echo esc_attr( $settings['api_url'] ); ?>" class="regular-text" placeholder="https://app.yourcrm.com" />
-                        <p class="description">Your ServiceOS base URL. The plugin loads /embed.js from this domain.</p>
+                        <p class="description">Your Fieseros base URL. The plugin loads /embed.js from this domain.</p>
                     </td>
                 </tr>
                 <tr>
                     <th scope="row"><label for="api_key">API Key</label></th>
                     <td>
                         <input type="password" name="api_key" id="api_key" value="<?php echo esc_attr( $settings['api_key'] ); ?>" class="regular-text" placeholder="ff_prod_xxxxxxxxxxxx" />
-                        <p class="description">API key from ServiceOS Settings → Integrations → Website Form Integration</p>
+                        <p class="description">API key from Fieseros Settings → Integrations → Website Form Integration</p>
                     </td>
                 </tr>
                 <tr>
                     <th scope="row"><label for="tenant_id">Tenant ID <small>(optional)</small></label></th>
                     <td>
                         <input type="text" name="tenant_id" id="tenant_id" value="<?php echo esc_attr( $settings['tenant_id'] ); ?>" class="regular-text" placeholder="e.g., cm3x..." />
-                        <p class="description">Your ServiceOS tenant ID (for multi-tenant setups). Auto-detected if your API key is tenant-scoped.</p>
+                        <p class="description">Your Fieseros tenant ID (for multi-tenant setups). Auto-detected if your API key is tenant-scoped.</p>
                     </td>
                 </tr>
                 <tr>
@@ -193,7 +193,7 @@ function sos_crm_settings_page() {
                 <tr><td><strong>Everest Forms</strong></td><td><span style="color:#22c55e;">✓ Yes</span></td><td>Native submit captured automatically.</td></tr>
                 <tr><td><strong>HTML Forms</strong></td><td><span style="color:#22c55e;">✓ Yes</span></td><td>Captured automatically — plain &lt;form&gt; elements.</td></tr>
                 <tr><td><strong>Custom React / Vue / PHP Forms</strong></td><td><span style="color:#22c55e;">✓ Yes</span></td><td>Captured automatically. Use AJAX interception for SPA-style form POSTs.</td></tr>
-                <tr><td><strong>JotForm (iframe)</strong></td><td><span style="color:#f59e0b;">⚠ Webhook only</span></td><td>JotForm iframe forms cannot be captured via JS. Use ServiceOS Webhook URL in JotForm's webhook settings.</td></tr>
+                <tr><td><strong>JotForm (iframe)</strong></td><td><span style="color:#f59e0b;">⚠ Webhook only</span></td><td>JotForm iframe forms cannot be captured via JS. Use Fieseros Webhook URL in JotForm's webhook settings.</td></tr>
             </tbody>
         </table>
 
@@ -221,7 +221,7 @@ function sos_crm_settings_page() {
 
         <hr style="margin-top:30px;" />
         <h3>Field Mapping Reference</h3>
-        <p>ServiceOS auto-maps these common form fields:</p>
+        <p>Fieseros auto-maps these common form fields:</p>
         <table class="widefat" style="max-width:500px;">
             <thead><tr><th>Lead Field</th><th>Recognized Form Field Names</th></tr></thead>
             <tbody>
@@ -265,7 +265,7 @@ function sos_crm_log( $success, $detail ) {
 
 function sos_crm_test_connection( $api_url, $api_key ) {
     if ( empty( $api_url ) || empty( $api_key ) ) {
-        return array( 'success' => false, 'message' => 'ServiceOS URL and Key are required.' );
+        return array( 'success' => false, 'message' => 'Fieseros URL and Key are required.' );
     }
 
     // Normalize base URL
@@ -290,7 +290,7 @@ function sos_crm_test_connection( $api_url, $api_key ) {
     if ( $code === 200 && ! empty( $body['status'] ) && $body['status'] === 'connected' ) {
         return array(
             'success' => true,
-            'message' => 'Connected! ServiceOS is ready to receive leads. ' . ( $body['message'] ?? '' ),
+            'message' => 'Connected! Fieseros is ready to receive leads. ' . ( $body['message'] ?? '' ),
         );
     } else {
         return array(
@@ -312,7 +312,7 @@ function sos_crm_test_connection( $api_url, $api_key ) {
 // This works with every form plugin automatically.
 //
 // JotForm is a special case — it embeds forms in a cross-origin iframe, so
-// the JS cannot capture those. JotForm users should use the ServiceOS webhook
+// the JS cannot capture those. JotForm users should use the Fieseros webhook
 // URL (?key= query param auth) directly in JotForm's webhook settings.
 
 add_action( 'wp_enqueue_scripts', 'sos_crm_enqueue_embed_script' );
@@ -339,21 +339,21 @@ function sos_crm_enqueue_embed_script() {
     $embed_url = $api_base . '/embed.js';
 
     // Register + enqueue the universal embed script
-    wp_register_script( 'serviceos-embed', $embed_url, array(), SOS_CRM_VERSION, true );
-    wp_enqueue_script( 'serviceos-embed' );
+    wp_register_script( 'fieseros-embed', $embed_url, array(), SOS_CRM_VERSION, true );
+    wp_enqueue_script( 'fieseros-embed' );
 
     // Pass config to the script via wp_localize_script. embed.js reads
-    // window.SERVICEOS_CONFIG before init.
+    // window.FIESEROS_CONFIG before init.
     $config = array(
         'apiKey'        => $settings['api_key'],
         'apiUrl'        => $api_base,
         'interceptAjax' => ! empty( $settings['intercept_ajax'] ),
         'showToast'     => false,
     );
-    wp_localize_script( 'serviceos-embed', 'SERVICEOS_CONFIG', $config );
+    wp_localize_script( 'fieseros-embed', 'FIESEROS_CONFIG', $config );
 
     if ( ! empty( $settings['debug_mode'] ) ) {
-        sos_crm_log( true, 'Enqueued serviceos-embed script from: ' . $embed_url );
+        sos_crm_log( true, 'Enqueued fieseros-embed script from: ' . $embed_url );
     }
 }
 
@@ -361,7 +361,7 @@ function sos_crm_enqueue_embed_script() {
 add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'sos_crm_action_links' );
 
 function sos_crm_action_links( $links ) {
-    $url = admin_url( 'options-general.php?page=serviceos-crm' );
+    $url = admin_url( 'options-general.php?page=fieseros-crm' );
     array_unshift( $links, '<a href="' . esc_url( $url ) . '">Settings</a>' );
     return $links;
 }

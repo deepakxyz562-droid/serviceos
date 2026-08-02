@@ -72,7 +72,7 @@ interface ResolvedOwner {
 
 /**
  * Resolve a tenant ID from a value that might be either a Tenant ID or a
- * Workspace ID. ServiceOS stores `workspaceId` on Job/Employee/Customer rows,
+ * Workspace ID. Fieseros stores `workspaceId` on Job/Employee/Customer rows,
  * but notifications need the Tenant ID (for owner lookup + NotificationLog FK).
  */
 export async function resolveTenantId(maybeWorkspaceOrTenantId: string | null | undefined): Promise<string | null> {

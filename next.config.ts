@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-// ServiceOS demo - trigger dev server restart
+// Fieseros demo - trigger dev server restart
 const nextConfig: NextConfig = {
   compress: false,
   typescript: {
@@ -41,8 +41,8 @@ const nextConfig: NextConfig = {
     "21.0.10.43",
     "space-z.ai",
     ".space-z.ai",
-    "serviceos.cc",
-    ".serviceos.cc",
+    "fieseros.com",
+    ".fieseros.com",
     "0.0.0.0",
     "127.0.0.1",
     "localhost",
@@ -63,7 +63,7 @@ const nextConfig: NextConfig = {
   // Lighthouse's PWA audit requires manifest icons to be fetchable AND served
   // with an image/* content-type. Next.js sets these correctly by default,
   // but an explicit header here survives any reverse-proxy/CDN in front of
-  // the deployment (e.g. serviceos.cc) that might strip or re-label
+  // the deployment (e.g. fieseros.com) that might strip or re-label
   // Content-Type — which is the second half of the Lighthouse error.
   async headers() {
     return [

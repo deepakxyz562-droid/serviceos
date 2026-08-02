@@ -133,7 +133,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
         toast.error(data.error || 'Login failed');
         return;
       }
-      localStorage.setItem('serviceos_auth', JSON.stringify({
+      localStorage.setItem('fieseros_auth', JSON.stringify({
         isAuthenticated: true,
         user: data.user,
         tenant: data.tenant || null,
@@ -178,7 +178,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
         toast.error(data.error || 'Registration failed');
         return;
       }
-      localStorage.setItem('serviceos_auth', JSON.stringify({
+      localStorage.setItem('fieseros_auth', JSON.stringify({
         isAuthenticated: true,
         user: data.user,
         tenant: data.tenant || null,
@@ -481,7 +481,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
               <Zap className="w-5 h-5 text-emerald-400" />
             </div>
             <span className="text-white text-xl font-bold tracking-tight">
-              ServiceOS
+              Fieseros
             </span>
           </motion.div>
         </div>
@@ -588,7 +588,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
               <Zap className="w-4 h-4 text-emerald-600" />
             </div>
             <span className="text-lg font-bold text-slate-900 tracking-tight">
-              ServiceOS
+              Fieseros
             </span>
           </motion.div>
 
@@ -608,7 +608,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
             transition={{ delay: 0.8, duration: 0.5 }}
             className="text-center text-xs text-slate-400 mt-8"
           >
-            By continuing, you agree to ServiceOS&apos;s{' '}
+            By continuing, you agree to Fieseros&apos;s{' '}
             <span className="underline cursor-pointer hover:text-slate-500">Terms of Service</span>
             {' '}and{' '}
             <span className="underline cursor-pointer hover:text-slate-500">Privacy Policy</span>

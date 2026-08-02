@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 /**
- * Dynamic robots.txt for ServiceOS.
+ * Dynamic robots.txt for Fieseros.
  * - Allows all good bots to crawl public pages.
  * - Blocks authenticated app routes, API routes, and portal routes that
  *   shouldn't appear in search results.
@@ -26,7 +26,7 @@ export default function robots(): MetadataRoute.Robots {
         ],
       },
     ],
-    sitemap: "https://serviceos.cc/sitemap.xml",
-    host: "https://serviceos.cc",
+    sitemap: "https://fieseros.com/sitemap.xml",
+    host: "https://fieseros.com",
   };
 }

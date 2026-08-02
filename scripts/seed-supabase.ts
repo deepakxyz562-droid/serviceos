@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * ServiceOS Supabase Seed Script
+ * Fieseros Supabase Seed Script
  *
  * Seeds the missing tables (CommunicationProvider, Contact, Form, FormResponse,
  * WorkflowAutomation, TriggerExecution) in Supabase via the REST API, and
@@ -163,7 +163,7 @@ async function seedCommunicationProviders(tenantId: string, workspaceId: string 
       type: 'email',
       provider: 'amazon_ses',
       status: 'active',
-      configJson: JSON.stringify({ region: 'us-east-1', accessKey: 'AKIAIOSFODNN7EXAMPLE', secretKey: 'demo_secret_key', fromEmail: 'noreply@serviceos.demo', fromName: 'ServiceOS Notifications' }),
+      configJson: JSON.stringify({ region: 'us-east-1', accessKey: 'AKIAIOSFODNN7EXAMPLE', secretKey: 'demo_secret_key', fromEmail: 'noreply@fieseros.demo', fromName: 'Fieseros Notifications' }),
       isDefault: false,
       sendingEnabled: true,
       dailyLimit: 5000,
@@ -183,7 +183,7 @@ async function seedCommunicationProviders(tenantId: string, workspaceId: string 
       type: 'email',
       provider: 'sendgrid',
       status: 'inactive',
-      configJson: JSON.stringify({ apiKey: 'SG.demo_api_key_xxxxxxxxx', fromEmail: 'noreply@serviceos.demo', fromName: 'ServiceOS' }),
+      configJson: JSON.stringify({ apiKey: 'SG.demo_api_key_xxxxxxxxx', fromEmail: 'noreply@fieseros.demo', fromName: 'Fieseros' }),
       isDefault: false,
       sendingEnabled: false,
       dailyLimit: 1000,
@@ -836,7 +836,7 @@ async function createUserAccounts(tenantId: string, workspaceId: string | null):
 
   for (const role of roles) {
     for (const num of [1, 2] as const) {
-      const email = `${role}${num}@serviceos-demo.com`;
+      const email = `${role}${num}@fieseros-demo.com`;
       const plainPassword = USER_PASSWORD;
       const passwordHash = await bcrypt.hash(plainPassword, 10);
       const name = `${role.charAt(0).toUpperCase() + role.slice(1)} User ${num}`;
@@ -908,7 +908,7 @@ async function createUserAccounts(tenantId: string, workspaceId: string | null):
 
 function printSQLMigration() {
   const sql = `-- ============================================
--- ServiceOS: Missing Tables Migration for Supabase
+-- Fieseros: Missing Tables Migration for Supabase
 -- ============================================
 
 -- 1. CommunicationProvider
@@ -1122,7 +1122,7 @@ async function main() {
   const args = process.argv.slice(2);
   const mode = args[0] || 'all';
 
-  console.log('\n🚀 ServiceOS Supabase Seed Script');
+  console.log('\n🚀 Fieseros Supabase Seed Script');
   console.log(`   Mode: ${mode}`);
   console.log(`   Target: ${SUPABASE_URL}`);
 

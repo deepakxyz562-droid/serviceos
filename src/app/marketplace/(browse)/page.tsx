@@ -230,19 +230,19 @@ export async function generateMetadata({
   let title: string;
   let description: string;
   if (facetName && cityFilter) {
-    title = `${facetName} in ${cityFilter} — ServiceOS Marketplace`;
+    title = `${facetName} in ${cityFilter} — Fieseros Marketplace`;
     description = `Browse verified ${facetName.toLowerCase()} providers in ${cityFilter}. Read real reviews, compare quotes, and book instantly. Verified identity, business, insurance, and payments.`;
   } else if (facetName) {
-    title = `${facetName} — ServiceOS Marketplace`;
-    description = `Browse verified ${facetName.toLowerCase()} providers on the ServiceOS Marketplace. Read real reviews, compare quotes, and book instantly.`;
+    title = `${facetName} — Fieseros Marketplace`;
+    description = `Browse verified ${facetName.toLowerCase()} providers on the Fieseros Marketplace. Read real reviews, compare quotes, and book instantly.`;
   } else if (cityFilter) {
-    title = `Local Service Providers in ${cityFilter} — ServiceOS Marketplace`;
+    title = `Local Service Providers in ${cityFilter} — Fieseros Marketplace`;
     description = `Find verified local service professionals in ${cityFilter}. HVAC, plumbing, electrical, cleaning, landscaping, and more. Read reviews and book instantly.`;
   } else if (searchFilter) {
-    title = `Search: "${searchFilter}" — ServiceOS Marketplace`;
-    description = `Search results for "${searchFilter}" on the ServiceOS Marketplace. Browse verified local service professionals.`;
+    title = `Search: "${searchFilter}" — Fieseros Marketplace`;
+    description = `Search results for "${searchFilter}" on the Fieseros Marketplace. Browse verified local service professionals.`;
   } else {
-    title = 'ServiceOS Marketplace — Find Trusted Local Service Professionals';
+    title = 'Fieseros Marketplace — Find Trusted Local Service Professionals';
     description =
       'Browse 2,500+ verified local service professionals across 25 industries — HVAC, plumbing, electrical, cleaning, landscaping, pest control, roofing, painting, locksmiths, appliance repair, pool & spa, and automotive. Read real reviews, compare quotes, and book instantly or request emergency dispatch.';
   }
@@ -328,7 +328,7 @@ export default async function MarketplaceBrowsePage({
   const itemListLd = {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
-    name: 'ServiceOS Marketplace Providers',
+    name: 'Fieseros Marketplace Providers',
     numberOfItems: providers.length,
     itemListElement: providers.slice(0, 30).map((p, i) => {
       const slug = p.slug || p.publicSlug;
@@ -370,7 +370,7 @@ export default async function MarketplaceBrowsePage({
   // breadcrumb links (rendered as <a href> below) relative so they work on
   // any host, and the JSON-LD payload uses the same relative URLs for
   // consistency. If Google warnings appear later, swap these for
-  // `https://serviceos.cc/marketplace` (the canonical production origin).
+  // `https://fieseros.com/marketplace` (the canonical production origin).
   const breadcrumbItems: Array<{ name: string; url: string }> = [
     { name: 'Home', url: '/marketplace' },
     { name: 'Marketplace', url: '/marketplace' },
@@ -432,7 +432,7 @@ export default async function MarketplaceBrowsePage({
         />
 
         <h1 className="sr-only">
-          ServiceOS Marketplace — Find Trusted Local Service Professionals
+          Fieseros Marketplace — Find Trusted Local Service Professionals
         </h1>
       </div>
 
@@ -563,13 +563,13 @@ export default async function MarketplaceBrowsePage({
             {/* SEO footer copy */}
             <div className="mt-12 rounded-xl border border-border bg-muted/20 p-5 text-sm text-muted-foreground leading-relaxed mr-3 ml-3 sm:mr-3 sm:ml-3 lg:mr-3 lg:ml-3">
               <h2 className="text-base font-semibold text-foreground mb-2">
-                About the ServiceOS Marketplace
+                About the Fieseros Marketplace
               </h2>
               <p>
-                The ServiceOS Marketplace connects homeowners and businesses with local service
+                The Fieseros Marketplace connects homeowners and businesses with local service
                 professionals across {VERTICALS.length} verticals — from HVAC and plumbing to
                 cleaning, landscaping, pest control, roofing, painting, locksmiths, appliance
-                repair, pool services, and automotive. Every provider on ServiceOS who has opted
+                repair, pool services, and automotive. Every provider on Fieseros who has opted
                 into the marketplace appears here with their verification badges (identity,
                 business, insurance, and payments) so you can see at a glance how vetted they are.
                 Browse by vertical or city, read real customer reviews, and book instantly — or
@@ -585,16 +585,16 @@ export default async function MarketplaceBrowsePage({
                     <Wrench className="h-3.5 w-3.5" />
                   </span>
                   <div>
-                    <p className="text-sm font-semibold text-foreground">ServiceOS Marketplace</p>
+                    <p className="text-sm font-semibold text-foreground">Fieseros Marketplace</p>
                     <p className="text-xs text-muted-foreground">AI Marketplace & Operating System for Local Service Businesses</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <a href="/" className="hover:text-foreground">← ServiceOS Home</a>
+                  <a href="/" className="hover:text-foreground">← Fieseros Home</a>
                   <a href="/#pricing" className="hover:text-foreground">For businesses</a>
                   <a href="/#ai-receptionist" className="hover:text-foreground">AI Receptionist</a>
                   <a href="/contact-us" className="hover:text-foreground">Contact</a>
-                  <span>© {new Date().getFullYear()} ServiceOS</span>
+                  <span>© {new Date().getFullYear()} Fieseros</span>
                 </div>
               </div>
             </footer>

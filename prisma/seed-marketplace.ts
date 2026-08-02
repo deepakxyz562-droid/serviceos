@@ -7,7 +7,7 @@
  *   - Each provider is a fully-eligible Tenant (all 8 gates passed)
  *   - Each has 4-7 services, 8-25 reviews, a gallery, business hours,
  *     service areas, FAQs, certifications, portfolio, and a FeaturedListing
- *   - Each has an owner User (login: owner+slug@demo.serviceos.cc / Owner@123)
+ *   - Each has an owner User (login: owner+slug@demo.fieseros.com / Owner@123)
  *   - 2 providers are marked Featured (priority 10), 2 Sponsored (priority 5)
  *   - Industries covered: plumbing, hvac, electrical, cleaning, landscaping,
  *     pest-control, roofing, painting, locksmith, appliance-repair, pool-spa,
@@ -1090,8 +1090,8 @@ async function seedProvider(p: ProviderSeed, index: number) {
     },
   });
 
-  // 2. Upsert owner user (login: owner+slug@demo.serviceos.cc / Owner@123)
-  const email = `owner+${p.slug}@demo.serviceos.cc`;
+  // 2. Upsert owner user (login: owner+slug@demo.fieseros.com / Owner@123)
+  const email = `owner+${p.slug}@demo.fieseros.com`;
   const passwordHash = await bcrypt.hash('Owner@123', 12);
   await db.user.upsert({
     where: { email },
@@ -1198,7 +1198,7 @@ async function seedProvider(p: ProviderSeed, index: number) {
 }
 
 async function main() {
-  console.log('=== ServiceOS Marketplace Seed ===');
+  console.log('=== Fieseros Marketplace Seed ===');
   console.log(`Seeding ${PROVIDERS.length} demo providers...\n`);
 
   for (let i = 0; i < PROVIDERS.length; i++) {
@@ -1221,11 +1221,11 @@ async function main() {
   console.log(`Provider certifications:       ${certs}`);
   console.log(`Active featured listings:      ${featured}`);
   console.log('\n=== Demo Login Credentials ===');
-  console.log('Email: owner+<provider-slug>@demo.serviceos.cc');
+  console.log('Email: owner+<provider-slug>@demo.fieseros.com');
   console.log('Password: Owner@123');
   console.log('\nExample slugs:');
   PROVIDERS.slice(0, 4).forEach((p) => {
-    console.log(`  - owner+${p.slug}@demo.serviceos.cc  (${p.name})`);
+    console.log(`  - owner+${p.slug}@demo.fieseros.com  (${p.name})`);
   });
 
   await db.$disconnect();

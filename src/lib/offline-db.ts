@@ -19,7 +19,7 @@
  *
  * The mutation queue (`offline-queue.ts`) handles offline WRITES — when
  * the user submits a form while offline, the mutation is queued here and
- * replayed when the SW's Background Sync `serviceos-sync` event fires.
+ * replayed when the SW's Background Sync `fieseros-sync` event fires.
  *
  * DB versioning: Dexie uses semantic versioning. Bump `DB_VERSION` when
  * the schema changes and add an `.upgrade()` handler in the `.version()`
@@ -105,13 +105,13 @@ export interface QueuedMutation {
 
 // ─── Dexie Database ─────────────────────────────────────────────────────────
 
-class ServiceOSOfflineDB extends Dexie {
+class FieserosOfflineDB extends Dexie {
   providers!: Table<CachedProvider, string>;
   reference!: Table<CachedReferenceData, string>;
   mutations!: Table<QueuedMutation, number>;
 
   constructor() {
-    super('serviceos-offline');
+    super('fieseros-offline');
 
     this.version(DB_VERSION).stores({
       // `id` is the primary key. Index the fields we query/sort by.
@@ -134,13 +134,13 @@ class ServiceOSOfflineDB extends Dexie {
  * guard below ensures SSR safety — if `window` is undefined, we return
  * null and callers must check.
  */
-let _db: ServiceOSOfflineDB | null = null;
+let _db: FieserosOfflineDB | null = null;
 
-export function getOfflineDB(): ServiceOSOfflineDB | null {
+export function getOfflineDB(): FieserosOfflineDB | null {
   if (typeof window === 'undefined') return null;
   if (!_db) {
     try {
-      _db = new ServiceOSOfflineDB();
+      _db = new FieserosOfflineDB();
     } catch (err) {
       // IndexedDB may be unavailable (private browsing in some browsers,
       // or the user disabled storage). Fail gracefully — callers fall

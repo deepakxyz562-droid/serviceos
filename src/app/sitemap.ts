@@ -3,7 +3,7 @@ import { listIndexableBusinessUrls } from "@/lib/public-business";
 import { getAllPosts } from "@/lib/blog";
 
 /**
- * Dynamic sitemap for ServiceOS public pages.
+ * Dynamic sitemap for Fieseros public pages.
  *
  * Lists every indexable public route so search engines can discover them all.
  * This includes:
@@ -30,7 +30,7 @@ import { getAllPosts } from "@/lib/blog";
  * they should not be indexed.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = "https://serviceos.cc";
+  const base = "https://fieseros.com";
   const now = new Date().toISOString();
 
   // Static marketing + legal routes.

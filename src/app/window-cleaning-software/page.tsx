@@ -20,7 +20,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Window Cleaning Software — Routes, Photo Proof & Storefront Billing | ServiceOS",
+  title: "Window Cleaning Software — Routes, Photo Proof & Storefront Billing | Fieseros",
   description:
     "Window cleaning software for recurring smart auto-dispatch, height-access safety checklists, before-and-after photo proof, and storefront contract billing. Start free today.",
   keywords: [
@@ -30,13 +30,13 @@ export const metadata: Metadata = {
     "window cleaner scheduling",
     "storefront cleaning software",
   ],
-  alternates: { canonical: "https://serviceos.cc/window-cleaning-software" },
+  alternates: { canonical: "https://fieseros.com/window-cleaning-software" },
   openGraph: {
-    title: "Window Cleaning Software | ServiceOS",
+    title: "Window Cleaning Software | Fieseros",
     description:
       "Optimize recurring routes, log height-access safety checks, capture before-and-after photo proof, and bill storefront contracts automatically. Built for window cleaning companies.",
-    url: "https://serviceos.cc/window-cleaning-software",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/window-cleaning-software",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -47,13 +47,13 @@ const features: Feature[] = [
     icon: Route,
     title: "Route Density Optimization",
     description:
-      "ServiceOS clusters recurring residential customers by neighborhood and orders stops to minimize drive time between them. A Tuesday route that used to zigzag across town now stays inside two zip codes, and the tech gets home an hour earlier.",
+      "Fieseros clusters recurring residential customers by neighborhood and orders stops to minimize drive time between them. A Tuesday route that used to zigzag across town now stays inside two zip codes, and the tech gets home an hour earlier.",
   },
   {
     icon: HardHat,
     title: "Height & Access Safety Checklists",
     description:
-      "Before a tech sets up a 32-foot extension ladder or ropes a high-rise facade, they complete a height-access safety checklist in ServiceOS — anchor points, ladder angle, fall arrest inspection. The completed checklist is timestamped and stored on the work order.",
+      "Before a tech sets up a 32-foot extension ladder or ropes a high-rise facade, they complete a height-access safety checklist in Fieseros — anchor points, ladder angle, fall arrest inspection. The completed checklist is timestamped and stored on the work order.",
   },
   {
     icon: Camera,
@@ -65,13 +65,13 @@ const features: Feature[] = [
     icon: SprayCan,
     title: "Water-Fed-Pole vs Squeegee Job Tracking",
     description:
-      "ServiceOS tracks which method each job requires — water-fed pole for high exterior panes, traditional squeegee for interiors and detailing — and assigns the right tech with the right equipment. You stop sending a squeegee-only crew to a job that needs a 40-foot pole.",
+      "Fieseros tracks which method each job requires — water-fed pole for high exterior panes, traditional squeegee for interiors and detailing — and assigns the right tech with the right equipment. You stop sending a squeegee-only crew to a job that needs a 40-foot pole.",
   },
   {
     icon: Building2,
     title: "Storefront Contract Billing",
     description:
-      "Set up weekly, bi-weekly, or monthly storefront contracts once, and ServiceOS sends the property manager a branded invoice with a payment link after each completed visit, plus automatic reminders for unpaid balances. Recurring commercial revenue stops slipping through the cracks without a monthly invoice run or a follow-up phone call.",
+      "Set up weekly, bi-weekly, or monthly storefront contracts once, and Fieseros sends the property manager a branded invoice with a payment link after each completed visit, plus automatic reminders for unpaid balances. Recurring commercial revenue stops slipping through the cracks without a monthly invoice run or a follow-up phone call.",
   },
   {
     icon: Sparkles,
@@ -83,43 +83,43 @@ const features: Feature[] = [
 
 const faqs = [
   {
-    question: "How does ServiceOS optimize recurring window cleaning routes?",
+    question: "How does Fieseros optimize recurring window cleaning routes?",
     answer:
-      "Recurring residential window cleaning lives or dies on route density. A tech who drives 20 minutes between stops will struggle to do more than 10 jobs a day, while a tech with tightly clustered stops can do 16 or more. ServiceOS looks at every recurring customer on your books, groups them by neighborhood and visit frequency, and produces an optimized weekly schedule that keeps each tech inside a tight geographic area. When a new customer books, ServiceOS tells you which tech's route they fit into and which day of the week they should be scheduled for. Most window cleaning companies cut their average drive time per stop by 40 percent within the first month.",
+      "Recurring residential window cleaning lives or dies on route density. A tech who drives 20 minutes between stops will struggle to do more than 10 jobs a day, while a tech with tightly clustered stops can do 16 or more. Fieseros looks at every recurring customer on your books, groups them by neighborhood and visit frequency, and produces an optimized weekly schedule that keeps each tech inside a tight geographic area. When a new customer books, Fieseros tells you which tech's route they fit into and which day of the week they should be scheduled for. Most window cleaning companies cut their average drive time per stop by 40 percent within the first month.",
   },
   {
     question: "How do before-and-after photos protect my window cleaning business?",
     answer:
-      "Disputes over whether a window was actually cleaned are one of the most common — and frustrating — issues in the window cleaning industry. A storefront manager claims the second-floor panes weren't done, a homeowner says the skylight still looks streaky, and without proof, you end up sending a tech back out for free. ServiceOS puts a stop to this. Every tech snaps before and after photos of every pane, all timestamped and attached to the work order. When the dispute call comes in, you pull the photo set, email it to the customer, and the conversation is over. The same photos also make exceptional marketing material for your social channels.",
+      "Disputes over whether a window was actually cleaned are one of the most common — and frustrating — issues in the window cleaning industry. A storefront manager claims the second-floor panes weren't done, a homeowner says the skylight still looks streaky, and without proof, you end up sending a tech back out for free. Fieseros puts a stop to this. Every tech snaps before and after photos of every pane, all timestamped and attached to the work order. When the dispute call comes in, you pull the photo set, email it to the customer, and the conversation is over. The same photos also make exceptional marketing material for your social channels.",
   },
   {
-    question: "Can ServiceOS handle both residential and storefront commercial contracts?",
+    question: "Can Fieseros handle both residential and storefront commercial contracts?",
     answer:
-      "Yes, and that mix is the hallmark of a healthy window cleaning business. Residential jobs are typically one-off or seasonal, billed per visit, and scheduled by route density. Storefront contracts are weekly, bi-weekly, or monthly, billed on a recurring cycle, and managed through the property manager rather than the building owner. ServiceOS handles both workflows on the same dispatch board. Storefront contracts auto-generate invoices with payment links after every visit, residential jobs generate a one-time invoice on completion, and you see both revenue streams on a single dashboard. Many window cleaning companies use ServiceOS to deliberately grow their storefront book because the recurring revenue smooths out the seasonality of residential work.",
+      "Yes, and that mix is the hallmark of a healthy window cleaning business. Residential jobs are typically one-off or seasonal, billed per visit, and scheduled by route density. Storefront contracts are weekly, bi-weekly, or monthly, billed on a recurring cycle, and managed through the property manager rather than the building owner. Fieseros handles both workflows on the same dispatch board. Storefront contracts auto-generate invoices with payment links after every visit, residential jobs generate a one-time invoice on completion, and you see both revenue streams on a single dashboard. Many window cleaning companies use Fieseros to deliberately grow their storefront book because the recurring revenue smooths out the seasonality of residential work.",
   },
   {
-    question: "How does ServiceOS track water-fed-pole versus squeegee jobs?",
+    question: "How does Fieseros track water-fed-pole versus squeegee jobs?",
     answer:
-      "Not every window cleaning tech can or should do every job. High exterior panes on a three-story home require a water-fed pole and DI water system, while a ground-floor storefront with interior glass is a traditional squeegee and detail job. ServiceOS tags every job with the method it requires, and the dispatch board shows you at a glance which tech has which equipment in their van. When you assign a job, ServiceOS warns you if the tech doesn't have the right method on their profile. You stop sending a squeegee-only tech to a job that needs a 40-foot pole, which is the kind of mistake that costs you a customer and a half-day of wasted driving.",
+      "Not every window cleaning tech can or should do every job. High exterior panes on a three-story home require a water-fed pole and DI water system, while a ground-floor storefront with interior glass is a traditional squeegee and detail job. Fieseros tags every job with the method it requires, and the dispatch board shows you at a glance which tech has which equipment in their van. When you assign a job, Fieseros warns you if the tech doesn't have the right method on their profile. You stop sending a squeegee-only tech to a job that needs a 40-foot pole, which is the kind of mistake that costs you a customer and a half-day of wasted driving.",
   },
   {
     question: "How does recurring storefront billing work?",
     answer:
-      "Storefront contracts are typically billed on a fixed weekly or monthly price — for example, 85 dollars per visit, twice a month, for a chain of retail locations. In ServiceOS, you define each contract once with the customer, frequency, per-visit price, and payment method on file. After every completed visit, the system generates a branded invoice with a secure payment link and sends it to the property manager via Email & SMS. ServiceOS follows up with automatic reminders for unpaid balances, and overdue invoices surface on the dispatch board so you can pause service before the customer owes three months of unpaid cleanings. You eliminate the monthly invoice run that used to eat two days of office time, and your recurring commercial revenue becomes far more predictable.",
+      "Storefront contracts are typically billed on a fixed weekly or monthly price — for example, 85 dollars per visit, twice a month, for a chain of retail locations. In Fieseros, you define each contract once with the customer, frequency, per-visit price, and payment method on file. After every completed visit, the system generates a branded invoice with a secure payment link and sends it to the property manager via Email & SMS. Fieseros follows up with automatic reminders for unpaid balances, and overdue invoices surface on the dispatch board so you can pause service before the customer owes three months of unpaid cleanings. You eliminate the monthly invoice run that used to eat two days of office time, and your recurring commercial revenue becomes far more predictable.",
   },
   {
-    question: "Can ServiceOS help me upsell hard-water stain removal and frame restoration?",
+    question: "Can Fieseros help me upsell hard-water stain removal and frame restoration?",
     answer:
-      "Yes, and these upsells are some of the highest-margin work a window cleaning company does. When a tech spots hard-water stains on a pane or oxidized vinyl frames during a routine clean, they tap a button in ServiceOS to generate a surcharge quote with photos of the affected area. The quote goes to the customer via Email & SMS, where they can approve it with one tap in the customer portal. If they approve, the surcharge gets added to that day's invoice. If they decline, the recommendation is on record — which matters when they call six months later complaining that the stains are worse. You capture revenue you used to leave on the table, and you build a documented record of every recommendation you made.",
+      "Yes, and these upsells are some of the highest-margin work a window cleaning company does. When a tech spots hard-water stains on a pane or oxidized vinyl frames during a routine clean, they tap a button in Fieseros to generate a surcharge quote with photos of the affected area. The quote goes to the customer via Email & SMS, where they can approve it with one tap in the customer portal. If they approve, the surcharge gets added to that day's invoice. If they decline, the recommendation is on record — which matters when they call six months later complaining that the stains are worse. You capture revenue you used to leave on the table, and you build a documented record of every recommendation you made.",
   },
 ];
 
 export default function WindowCleaningSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Window Cleaning Business Software",
+    name: "Fieseros — Window Cleaning Business Software",
     description:
       "Window cleaning CRM and route software with recurring smart auto-dispatch, height-access safety checklists, before-and-after photo proof, storefront contract billing, and surcharge quoting.",
-    url: "https://serviceos.cc/window-cleaning-software",
+    url: "https://fieseros.com/window-cleaning-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
@@ -128,15 +128,15 @@ export default function WindowCleaningSoftwarePage() {
     <CornerstoneLayout
       activePath="/window-cleaning-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Window Cleaning Software", url: "https://serviceos.cc/window-cleaning-software" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Window Cleaning Software", url: "https://fieseros.com/window-cleaning-software" },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
         eyebrow="Window Cleaning Software"
         title="Window Cleaning Software That Tightens Routes, Protects Against Disputes, and Bills Storefronts on Autopilot"
-        subtitle="From recurring residential smart auto-dispatch to height-access safety checklists, photo proof, and storefront contract billing, ServiceOS is the window cleaning CRM built for crews on the move."
+        subtitle="From recurring residential smart auto-dispatch to height-access safety checklists, photo proof, and storefront contract billing, Fieseros is the window cleaning CRM built for crews on the move."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -168,14 +168,14 @@ export default function WindowCleaningSoftwarePage() {
               The chaos of running a window cleaning business without software
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most window cleaning companies still juggle paper route sheets, ladder safety in their head, and invoices emailed at the end of the month. Here&apos;s what that costs you — and what changes when you switch to ServiceOS.
+              Most window cleaning companies still juggle paper route sheets, ladder safety in their head, and invoices emailed at the end of the month. Here&apos;s what that costs you — and what changes when you switch to Fieseros.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <Wrench className="h-5 w-5 text-destructive" />
-                Without ServiceOS
+                Without Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -196,7 +196,7 @@ export default function WindowCleaningSoftwarePage() {
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With ServiceOS
+                With Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -218,24 +218,24 @@ export default function WindowCleaningSoftwarePage() {
         </div>
       </section>
 
-      <ContentSection title="Why window cleaning companies choose ServiceOS">
+      <ContentSection title="Why window cleaning companies choose Fieseros">
         <p>
-          Window cleaning is a route business where time is everything. A tech who finishes their route at 3 p.m. can take on more customers; a tech who finishes at 7 p.m. is burning out and looking for another job. The difference is almost never how fast they squeegee a pane — it is how efficiently they drive between stops, how much time they lose on jobs that needed different equipment, and how much of their day gets eaten by disputes, follow-ups, and end-of-month invoice chasing. Window cleaning software from ServiceOS is built to attack each of those time sinks directly, so your crews do more jobs per day without working longer hours.
+          Window cleaning is a route business where time is everything. A tech who finishes their route at 3 p.m. can take on more customers; a tech who finishes at 7 p.m. is burning out and looking for another job. The difference is almost never how fast they squeegee a pane — it is how efficiently they drive between stops, how much time they lose on jobs that needed different equipment, and how much of their day gets eaten by disputes, follow-ups, and end-of-month invoice chasing. Window cleaning software from Fieseros is built to attack each of those time sinks directly, so your crews do more jobs per day without working longer hours.
         </p>
         <p>
-          The route-density problem is where most residential window cleaning companies leave the most money on the table. A typical customer wants their windows cleaned twice a year — once in spring, once in fall. That means a 200-customer book generates 400 jobs a year, and the order in which those jobs get done is the single biggest driver of how many trucks you need and how many hours your techs drive. ServiceOS clusters recurring customers by neighborhood and visit frequency, produces an optimized weekly schedule, and tells you which new bookings fit which tech's route. Most window cleaning companies cut drive time per stop by 30 to 40 percent in the first month, which means each tech can take on 4 to 6 more customers without working longer hours.
+          The route-density problem is where most residential window cleaning companies leave the most money on the table. A typical customer wants their windows cleaned twice a year — once in spring, once in fall. That means a 200-customer book generates 400 jobs a year, and the order in which those jobs get done is the single biggest driver of how many trucks you need and how many hours your techs drive. Fieseros clusters recurring customers by neighborhood and visit frequency, produces an optimized weekly schedule, and tells you which new bookings fit which tech's route. Most window cleaning companies cut drive time per stop by 30 to 40 percent in the first month, which means each tech can take on 4 to 6 more customers without working longer hours.
         </p>
         <p>
-          The dispute problem is the second silent margin killer. A storefront manager calls and says the second-floor panes weren't done, or a homeowner claims the skylight still has streaks. Without photo proof, you end up sending a tech back out — unpaid — and the customer walks away thinking your work was sloppy. ServiceOS makes before-and-after photos on every pane a non-negotiable part of the workflow. Every photo is timestamped and attached to the work order, and when the dispute call comes in, you have the proof in front of you in 10 seconds. The disputes that used to cost you a free return trip now get resolved in your favor in a single phone call.
+          The dispute problem is the second silent margin killer. A storefront manager calls and says the second-floor panes weren't done, or a homeowner claims the skylight still has streaks. Without photo proof, you end up sending a tech back out — unpaid — and the customer walks away thinking your work was sloppy. Fieseros makes before-and-after photos on every pane a non-negotiable part of the workflow. Every photo is timestamped and attached to the work order, and when the dispute call comes in, you have the proof in front of you in 10 seconds. The disputes that used to cost you a free return trip now get resolved in your favor in a single phone call.
         </p>
         <p>
-          Finally, there is the recurring storefront revenue that smooths out the seasonality of residential work. Storefront contracts — weekly or bi-weekly cleanings of retail fronts, restaurants, and office buildings — are billed on a fixed cycle and managed through the property manager, not the building owner. ServiceOS automatically generates a branded invoice with a payment link after every completed visit and sends it via Email & SMS, then follows up with payment reminders for any unpaid balance. No end-of-month invoice run, no chasing property managers who pay net-60, no service pauses because someone forgot to follow up on an overdue invoice. The storefront book becomes the predictable base that lets you take on more lucrative residential work in the busy season without worrying about cash flow in the slow months.
+          Finally, there is the recurring storefront revenue that smooths out the seasonality of residential work. Storefront contracts — weekly or bi-weekly cleanings of retail fronts, restaurants, and office buildings — are billed on a fixed cycle and managed through the property manager, not the building owner. Fieseros automatically generates a branded invoice with a payment link after every completed visit and sends it via Email & SMS, then follows up with payment reminders for any unpaid balance. No end-of-month invoice run, no chasing property managers who pay net-60, no service pauses because someone forgot to follow up on an overdue invoice. The storefront book becomes the predictable base that lets you take on more lucrative residential work in the busy season without worrying about cash flow in the slow months.
         </p>
       </ContentSection>
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything window cleaning business owners ask before switching to ServiceOS."
+        subtitle="Everything window cleaning business owners ask before switching to Fieseros."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -246,7 +246,7 @@ export default function WindowCleaningSoftwarePage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/cleaning-business-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

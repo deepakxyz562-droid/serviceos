@@ -5,7 +5,7 @@ import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit'
 import { notifyOwner } from '@/lib/owner-notifications';
 
 /**
- * Flow 2: Quote Request — accept (ServiceOS V1.5 — P10-flows)
+ * Flow 2: Quote Request — accept (Fieseros V1.5 — P10-flows)
  * ------------------------------------------------------------
  * POST /api/marketplace/quote-request/[id]/accept
  *
@@ -326,7 +326,7 @@ export async function POST(
     actionUrl: '/bookings',
     smsMessage: `Your quote was accepted! ${title}, customer: ${jobRequest.customerName || 'N/A'}, total: ${grossAmount} ${currency}.`,
     emailSubject: `Quote Accepted: ${title}`,
-    emailText: `Your marketplace quote was accepted by the customer.\n\nTitle: ${title}\nCustomer: ${jobRequest.customerName || 'N/A'}\nPhone: ${jobRequest.customerPhone || 'N/A'}\nTotal: ${grossAmount} ${currency}\n\nView this job in your ServiceOS dashboard.`,
+    emailText: `Your marketplace quote was accepted by the customer.\n\nTitle: ${title}\nCustomer: ${jobRequest.customerName || 'N/A'}\nPhone: ${jobRequest.customerPhone || 'N/A'}\nTotal: ${grossAmount} ${currency}\n\nView this job in your Fieseros dashboard.`,
     emailHtml: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px"><h2 style="color:#0f172a">Quote Accepted</h2><p>The customer accepted your marketplace quote.</p><table style="width:100%;border-collapse:collapse;font-size:14px"><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Title</td><td style="padding:8px">${title}</td></tr><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Customer</td><td style="padding:8px">${jobRequest.customerName || 'N/A'}</td></tr><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Phone</td><td style="padding:8px">${jobRequest.customerPhone || 'N/A'}</td></tr><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Total</td><td style="padding:8px">${grossAmount} ${currency}</td></tr></table></div>`,
     pushTitle: 'Quote Accepted!',
     pushBody: `${jobRequest.customerName || 'A customer'} accepted your quote — ${grossAmount} ${currency}`,

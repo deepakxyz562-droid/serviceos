@@ -46,7 +46,7 @@ export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsApp
           return {
             accessToken: resolved.accessToken,
             phoneNumberId: resolved.phoneNumberId,
-            verifyToken: resolved.verifyToken || process.env.WHATSAPP_VERIFY_TOKEN || 'serviceos_verify_token',
+            verifyToken: resolved.verifyToken || process.env.WHATSAPP_VERIFY_TOKEN || 'fieseros_verify_token',
             wabaId: resolved.wabaId,
             source: 'tenant-own',
           }
@@ -87,7 +87,7 @@ export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsApp
         return {
           accessToken: resolved.accessToken,
           phoneNumberId: resolved.phoneNumberId,
-          verifyToken: resolved.verifyToken || process.env.WHATSAPP_VERIFY_TOKEN || 'serviceos_verify_token',
+          verifyToken: resolved.verifyToken || process.env.WHATSAPP_VERIFY_TOKEN || 'fieseros_verify_token',
           wabaId: resolved.wabaId,
           source: 'platform',
         }
@@ -110,7 +110,7 @@ export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsApp
         return {
           accessToken: resolved.accessToken,
           phoneNumberId: resolved.phoneNumberId,
-          verifyToken: resolved.verifyToken || process.env.WHATSAPP_VERIFY_TOKEN || 'serviceos_verify_token',
+          verifyToken: resolved.verifyToken || process.env.WHATSAPP_VERIFY_TOKEN || 'fieseros_verify_token',
           wabaId: resolved.wabaId,
           source: anyProvider.isPlatform ? 'platform' : 'tenant-own',
         }
@@ -161,7 +161,7 @@ export function getWhatsAppConfigFromEnv(): WhatsAppConfig {
   return {
     accessToken: process.env.WHATSAPP_ACCESS_TOKEN || '',
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
-    verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || 'serviceos_verify_token',
+    verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || 'fieseros_verify_token',
   };
 }
 

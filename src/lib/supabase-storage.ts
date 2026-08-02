@@ -52,7 +52,7 @@ export function isS3Configured(): boolean {
 }
 
 function getS3Bucket(): string {
-  return process.env.AWS_S3_BUCKET || 'serviceos-uploads'
+  return process.env.AWS_S3_BUCKET || 'fieseros-uploads'
 }
 
 function getS3Region(): string {

@@ -1,5 +1,5 @@
 /*
- * ServiceOS Service Worker (v3)
+ * Fieseros Service Worker (v3)
  * ------------------------------
  * Capabilities:
  *   1. App-shell pre-caching on install (/, /manifest.json, /logo.svg, /icon.svg, /offline.html)
@@ -11,7 +11,7 @@
  *        - Stale-while-revalidate for /_next/static/ assets
  *        - Cache-first for images and fonts
  *        - Network-first with cache fallback for HTML navigation, falling back to /offline.html
- *   4. Background Sync: 'serviceos-sync' event notifies all clients to replay queued mutations
+ *   4. Background Sync: 'fieseros-sync' event notifies all clients to replay queued mutations
  *   5. Push Notifications: parses payload, shows notification with View/Dismiss actions
  *      — ALWAYS active (including dev) so real Web Push works in `next dev`.
  *   6. Notification click: focuses existing client (and postMessages data) or opens new client
@@ -26,7 +26,7 @@
  *   stale dev pages. The push + notificationclick handlers stay active.
  */
 
-const CACHE_NAME = 'serviceos-v3';
+const CACHE_NAME = 'fieseros-v3';
 const OFFLINE_URL = '/offline.html';
 
 // Detect dev mode from the SW's own URL. PwaProvider registers this script
@@ -67,7 +67,7 @@ self.addEventListener('install', (event) => {
       .catch((err) => {
         // addAll rejects if ANY asset fails; we log but still install so the
         // SW can be activated and used for runtime caching.
-        console.warn('[ServiceOS SW] App-shell precache failed:', err);
+        console.warn('[Fieseros SW] App-shell precache failed:', err);
       })
   );
   self.skipWaiting();
@@ -215,10 +215,10 @@ async function staleWhileRevalidate(request) {
 }
 
 // ---------------------------------------------------------------------------
-// Background Sync — 'serviceos-sync' notifies clients to replay queued mutations
+// Background Sync — 'fieseros-sync' notifies clients to replay queued mutations
 // ---------------------------------------------------------------------------
 self.addEventListener('sync', (event) => {
-  if (event.tag === 'serviceos-sync') {
+  if (event.tag === 'fieseros-sync') {
     event.waitUntil(notifyClientsToReplay());
   }
 });
@@ -230,8 +230,8 @@ async function notifyClientsToReplay() {
   });
   clients.forEach((client) => {
     client.postMessage({
-      type: 'SERVICEOS_SYNC',
-      tag: 'serviceos-sync',
+      type: 'FIESEROS_SYNC',
+      tag: 'fieseros-sync',
       timestamp: Date.now(),
     });
   });
@@ -249,17 +249,17 @@ self.addEventListener('push', (event) => {
   } catch (err) {
     // Payload wasn't JSON — try to use it as plain text
     try {
-      payload = { title: 'ServiceOS', body: event.data ? event.data.text() : '' };
+      payload = { title: 'Fieseros', body: event.data ? event.data.text() : '' };
     } catch (e2) {
-      payload = { title: 'ServiceOS', body: 'You have a new update' };
+      payload = { title: 'Fieseros', body: 'You have a new update' };
     }
   }
 
-  const title = payload.title || 'ServiceOS';
+  const title = payload.title || 'Fieseros';
   const body = payload.body || '';
   const icon = payload.icon || '/icon-192.png';
   const badge = payload.badge || '/icon-192.png';
-  const tag = payload.tag || 'serviceos-notification';
+  const tag = payload.tag || 'fieseros-notification';
   const data = payload.data || {};
   const actions =
     'actions' in Notification.prototype
@@ -357,7 +357,7 @@ self.addEventListener('message', (event) => {
 
   if (event.data.type === 'CLEAR_CACHE') {
     caches.delete(CACHE_NAME).then(() => {
-      console.log('[ServiceOS SW] Cache cleared');
+      console.log('[Fieseros SW] Cache cleared');
     });
   }
 });

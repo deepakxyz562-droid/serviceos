@@ -96,7 +96,7 @@ export async function POST(
     }
 
     messageLines.push('');
-    messageLines.push('_Powered by ServiceOS_');
+    messageLines.push('_Powered by Fieseros_');
 
     const message = messageLines.join('\n');
 
@@ -131,7 +131,7 @@ export async function POST(
           `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:24px">`,
           `<h2 style="color:#0f172a;">📋 Your Quote: ${quote.title}</h2>`,
           `<p>Hi ${customerName},</p>`,
-          `<p>Please review your quote from <strong>${quote.tenant?.name || 'ServiceOS'}</strong>.</p>`,
+          `<p>Please review your quote from <strong>${quote.tenant?.name || 'Fieseros'}</strong>.</p>`,
           viewQuoteButton,
           `<table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;">`,
           `<tr><td style="padding:8px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb;">Total</td><td style="padding:8px;border:1px solid #e5e7eb;font-weight:700;color:#059669;">$${Number(quote.total).toFixed(2)}</td></tr>`,
@@ -139,14 +139,14 @@ export async function POST(
           `</table>`,
           quote.notes ? `<p style="margin-top:16px;"><strong>Notes:</strong> ${quote.notes}</p>` : '',
           `<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />`,
-          `<p style="font-size:12px;color:#9ca3af;">— Sent from ${quote.tenant?.name || 'ServiceOS'}</p>`,
+          `<p style="font-size:12px;color:#9ca3af;">— Sent from ${quote.tenant?.name || 'Fieseros'}</p>`,
           `</div>`,
         ].filter(Boolean).join('\n')
         const r = await sendEmail({
           to: quote.customer.email,
-          subject: `Your quote from ${quote.tenant?.name || 'ServiceOS'}: ${quote.title}`,
+          subject: `Your quote from ${quote.tenant?.name || 'Fieseros'}: ${quote.title}`,
           html: emailHtml,
-          text: `Your quote "${quote.title}" for $${Number(quote.total).toFixed(2)} is ready.\n\nView your quote: ${magicUrl}\n\n— ${quote.tenant?.name || 'ServiceOS'}`,
+          text: `Your quote "${quote.title}" for $${Number(quote.total).toFixed(2)} is ready.\n\nView your quote: ${magicUrl}\n\n— ${quote.tenant?.name || 'Fieseros'}`,
           usageType: 'transactional',
           tenantId: quote.tenantId || undefined,
         })

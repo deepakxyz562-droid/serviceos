@@ -28,7 +28,7 @@ import { logBillingEvent } from '@/lib/billing-events'
  *   1. Create a `PhoneNumber` row with status='pending', tenantId,
  *      paymentProvider, monthlyCost=5.00.
  *   2. PayPal: create (or reuse cached) PayPal Product + Plan for
- *      "ServiceOS Dedicated SMS Number — $5/month" then create a
+ *      "Fieseros Dedicated SMS Number — $5/month" then create a
  *      Subscription, return the approval URL.
  *   3. Creem: create a checkout session for the mapped `sms_number_monthly`
  *      product (admin must pre-map it). Return the checkout URL.
@@ -225,7 +225,7 @@ export async function POST(request: NextRequest) {
 // ─── PayPal helper ─────────────────────────────────────────────────────────
 
 /**
- * Create (or reuse a cached) PayPal Product + Plan for "ServiceOS Dedicated
+ * Create (or reuse a cached) PayPal Product + Plan for "Fieseros Dedicated
  * SMS Number — $5/month" and then create a Subscription. Returns the approval
  * URL the user must visit to authorise the recurring charge.
  *
@@ -266,7 +266,7 @@ async function createPayPalSubscriptionForNumber(opts: {
         'PayPal-Request-Id': 'product-sms-number',
       },
       body: JSON.stringify({
-        name: 'ServiceOS Dedicated SMS Number',
+        name: 'Fieseros Dedicated SMS Number',
         description: 'Dedicated phone number for SMS + voice — $5/month',
         type: 'SERVICE',
         category: 'SOFTWARE',
@@ -283,7 +283,7 @@ async function createPayPalSubscriptionForNumber(opts: {
       })
       const listData = await listRes.json()
       const existing = (listData.products as Array<{ name: string; id: string }> | undefined)?.find(
-        (p) => p.name === 'ServiceOS Dedicated SMS Number',
+        (p) => p.name === 'Fieseros Dedicated SMS Number',
       )
       if (!existing) {
         const errData = await productRes.json().catch(() => ({}))
@@ -304,7 +304,7 @@ async function createPayPalSubscriptionForNumber(opts: {
       },
       body: JSON.stringify({
         product_id: paypalProductId,
-        name: 'ServiceOS SMS Number — Monthly',
+        name: 'Fieseros SMS Number — Monthly',
         description: 'Dedicated phone number, billed monthly',
         billing_cycles: [
           {
@@ -363,7 +363,7 @@ async function createPayPalSubscriptionForNumber(opts: {
       quantity: '1',
       custom_id: `phn_${opts.phoneNumberId}`,
       application_context: {
-        brand_name: 'ServiceOS',
+        brand_name: 'Fieseros',
         locale: 'en-US',
         shipping_preference: 'NO_SHIPPING',
         user_action: 'SUBSCRIBE_NOW',
@@ -448,7 +448,7 @@ async function createCreemCheckoutForNumber(opts: {
       kind: 'phone_number',
       phoneNumberId: opts.phoneNumberId,
       tenantId: opts.tenantId,
-      source: 'serviceos-sms',
+      source: 'fieseros-sms',
     },
     customer: { email: opts.userEmail },
   }

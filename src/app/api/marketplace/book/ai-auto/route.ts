@@ -7,7 +7,7 @@ import { estimatePrice } from '@/lib/smart-pricing';
 import { notifyOwner } from '@/lib/owner-notifications';
 
 /**
- * Mode 4: AI Auto-assign (ServiceOS V1.5 — P10-flows)
+ * Mode 4: AI Auto-assign (Fieseros V1.5 — P10-flows)
  * ------------------------------------------------------------
  * POST /api/marketplace/book/ai-auto
  *
@@ -786,7 +786,7 @@ export async function POST(request: NextRequest) {
     actionUrl: '/bookings',
     smsMessage: `AI auto-assigned booking: ${title}, customer: ${customerName}, scheduled: ${scheduledAt.toISOString()}.`,
     emailSubject: `AI Auto-Assigned Booking: ${title}`,
-    emailText: `A marketplace booking was auto-assigned to you by the AI dispatcher.\n\nTitle: ${title}\nCustomer: ${customerName}\nPhone: ${customerPhone}\n${customerEmail ? `Email: ${customerEmail}\n` : ''}Address: ${address}\nScheduled: ${scheduledAt.toISOString()}\nAI score: ${best.score.toFixed(3)}\n\nView this job in your ServiceOS dashboard.`,
+    emailText: `A marketplace booking was auto-assigned to you by the AI dispatcher.\n\nTitle: ${title}\nCustomer: ${customerName}\nPhone: ${customerPhone}\n${customerEmail ? `Email: ${customerEmail}\n` : ''}Address: ${address}\nScheduled: ${scheduledAt.toISOString()}\nAI score: ${best.score.toFixed(3)}\n\nView this job in your Fieseros dashboard.`,
     emailHtml: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px"><h2 style="color:#0f172a">AI Auto-Assigned Booking</h2><p>The AI dispatcher picked you as the best provider for this marketplace request.</p><table style="width:100%;border-collapse:collapse;font-size:14px"><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Title</td><td style="padding:8px">${title}</td></tr><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Customer</td><td style="padding:8px">${customerName}</td></tr><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Phone</td><td style="padding:8px">${customerPhone}</td></tr><tr><td style="padding:8px;background:#f9fafb;font-weight:600">Address</td><td style="padding:8px">${address}</td></tr><tr><td style="padding:8px;background:#f9fafb;font-weight:600">AI Score</td><td style="padding:8px">${best.score.toFixed(3)}</td></tr></table></div>`,
     pushTitle: 'AI Auto-Assigned Booking',
     pushBody: `${customerName} — AI matched you (${best.score.toFixed(2)})`,

@@ -1,7 +1,7 @@
 import { getAllPostSummaries, blogPostUrl, formatBlogDate } from "@/lib/blog";
 
 /**
- * RSS 2.0 feed for the ServiceOS blog.
+ * RSS 2.0 feed for the Fieseros blog.
  *
  * Route: /blog/rss.xml
  *
@@ -10,7 +10,7 @@ import { getAllPostSummaries, blogPostUrl, formatBlogDate } from "@/lib/blog";
  * feed is generated on-demand from the same MDX source files as the blog.
  */
 
-const SITE_URL = "https://serviceos.cc";
+const SITE_URL = "https://fieseros.com";
 
 function escapeXml(unsafe: string): string {
   return unsafe
@@ -41,7 +41,7 @@ export async function GET() {
   const rss = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>ServiceOS Blog — Field Service Management Insights</title>
+    <title>Fieseros Blog — Field Service Management Insights</title>
     <link>${SITE_URL}/blog</link>
     <description>Practical guides, industry benchmarks, and how-to articles for service businesses. Learn how to automate scheduling, speed up invoicing, and grow your field service business.</description>
     <language>en-us</language>

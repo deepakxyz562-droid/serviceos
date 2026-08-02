@@ -434,7 +434,7 @@ export async function POST(request: NextRequest) {
     // Auto-reply to the lead's phone
     if (leadConfig.autoReplyWhatsApp && lead.phone && lead.phone !== 'N/A') {
       const autoReplyMsg = leadConfig.autoReplyTemplate ||
-        `Thank you for reaching out, ${lead.name}! We've received your inquiry and our team will contact you shortly. - ServiceOS`
+        `Thank you for reaching out, ${lead.name}! We've received your inquiry and our team will contact you shortly. - Fieseros`
 
       sendWhatsAppMessage({
         to: lead.phone,
@@ -533,7 +533,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       status: 'connected',
-      service: 'ServiceOS Universal Webhook',
+      service: 'Fieseros Universal Webhook',
       version: '2.0.0',
       endpoint: '/api/webhooks/ingest',
       methods: ['POST'],

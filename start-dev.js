@@ -1,5 +1,5 @@
 // This script ensures the correct DATABASE_URL before starting Next.js
-process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/serviceos';
+process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/fieseros';
 
 const { spawn } = require('child_process');
 const path = require('path');

@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import { appendFileSync, writeFileSync } from 'fs';
 
-const CWD = '/home/z/my-project/serviceos';
+const CWD = '/home/z/my-project/fieseros';
 const LOG = `${CWD}/prod.log`;
 
 const log = (msg) => {

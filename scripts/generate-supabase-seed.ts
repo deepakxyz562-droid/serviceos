@@ -118,7 +118,7 @@ async function main() {
 
   // 2. Build the SQL
   const header = `-- ====================================================================
--- SERVICEOS — SUPABASE SEED DATA: MARKETPLACE PROVIDERS
+-- FIESEROS — SUPABASE SEED DATA: MARKETPLACE PROVIDERS
 -- Auto-generated from local SQLite database
 -- Generated: ${new Date().toISOString()}
 --

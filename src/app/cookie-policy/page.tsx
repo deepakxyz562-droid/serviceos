@@ -11,15 +11,15 @@ import {
 } from "@/components/ui/table";
 
 export const metadata: Metadata = {
-  title: "Cookie Policy — ServiceOS CRM",
+  title: "Cookie Policy — Fieseros CRM",
   description:
-    "Learn how ServiceOS CRM uses cookies and similar technologies to operate our service, remember your preferences, and measure performance. Last updated March 5, 2026.",
+    "Learn how Fieseros CRM uses cookies and similar technologies to operate our service, remember your preferences, and measure performance. Last updated March 5, 2026.",
   openGraph: {
-    title: "Cookie Policy — ServiceOS CRM",
+    title: "Cookie Policy — Fieseros CRM",
     description:
-      "Learn how ServiceOS CRM uses cookies and similar technologies to operate our service, remember your preferences, and measure performance.",
-    url: "https://serviceos.cc/cookie-policy",
-    siteName: "ServiceOS",
+      "Learn how Fieseros CRM uses cookies and similar technologies to operate our service, remember your preferences, and measure performance.",
+    url: "https://fieseros.com/cookie-policy",
+    siteName: "Fieseros",
     type: "website",
   },
 };
@@ -75,20 +75,20 @@ const cookieTypes = [
 
 const specificCookies = [
   {
-    name: "serviceos_auth",
+    name: "fieseros_auth",
     purpose: "Authenticates signed-in users and maintains the active session.",
     duration: "Session (cleared on logout, max 30 days)",
     type: "Strictly Necessary",
   },
   {
-    name: "serviceos_consent",
+    name: "fieseros_consent",
     purpose:
       "Stores your cookie consent preferences (necessary, performance, functionality, analytics, advertising).",
     duration: "365 days",
     type: "Strictly Necessary",
   },
   {
-    name: "serviceos_theme",
+    name: "fieseros_theme",
     purpose: "Remembers your selected light/dark theme preference.",
     duration: "365 days",
     type: "Functionality",
@@ -120,7 +120,7 @@ export default function CookiePolicyPage() {
               <Bolt className="h-5 w-5 text-white" />
             </span>
             <span className="text-xl font-bold tracking-tight text-foreground">
-              ServiceOS
+              Fieseros
             </span>
           </Link>
           <Link
@@ -181,17 +181,17 @@ export default function CookiePolicyPage() {
                   1. Introduction
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS, Inc. (&quot;ServiceOS,&quot; &quot;we,&quot;
+                  Fieseros, Inc. (&quot;Fieseros,&quot; &quot;we,&quot;
                   &quot;us,&quot; or &quot;our&quot;) uses cookies and similar
                   tracking technologies (collectively, &quot;cookies&quot;) on
                   our website at{" "}
                   <a
-                    href="https://serviceos.cc"
+                    href="https://fieseros.com"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    serviceos.cc
+                    fieseros.com
                   </a>{" "}
-                  and across the ServiceOS CRM platform (the
+                  and across the Fieseros CRM platform (the
                   &quot;Service&quot;). Cookies are small text files placed on
                   your device that allow us to recognize you, remember your
                   preferences, and measure how the Service is used.
@@ -294,7 +294,7 @@ export default function CookiePolicyPage() {
                   new features or modify existing ones; this list will be
                   updated accordingly. Cookie names prefixed with{" "}
                   <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono text-foreground">
-                    serviceos_
+                    fieseros_
                   </code>{" "}
                   are first-party cookies set directly by us. Cookies prefixed
                   with an underscore (e.g.,{" "}
@@ -410,10 +410,10 @@ export default function CookiePolicyPage() {
                   </li>
                 </ul>
                 <p className="text-muted-foreground leading-relaxed">
-                  To reset your ServiceOS consent preference specifically,
+                  To reset your Fieseros consent preference specifically,
                   clear{" "}
                   <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono text-foreground">
-                    serviceos_consent
+                    fieseros_consent
                   </code>{" "}
                   from your browser&apos;s local storage, or use the
                   &quot;Reset consent&quot; option in your account settings. The
@@ -506,10 +506,10 @@ export default function CookiePolicyPage() {
                   <p className="text-muted-foreground leading-relaxed mb-1">
                     <span className="font-medium text-foreground">Email: </span>
                     <a
-                      href="mailto:privacy@serviceos.cc"
+                      href="mailto:privacy@fieseros.com"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      privacy@serviceos.cc
+                      privacy@fieseros.com
                     </a>
                   </p>
                   <p className="text-muted-foreground leading-relaxed mb-1">
@@ -527,7 +527,7 @@ export default function CookiePolicyPage() {
                     <span className="font-medium text-foreground">
                       Mailing Address:{" "}
                     </span>
-                    ServiceOS, Inc., 100 CRM Boulevard, Suite 400, San
+                    Fieseros, Inc., 100 CRM Boulevard, Suite 400, San
                     Francisco, CA 94105, United States
                   </p>
                 </div>
@@ -546,7 +546,7 @@ export default function CookiePolicyPage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              &copy; {new Date().getFullYear()} ServiceOS, Inc. All rights
+              &copy; {new Date().getFullYear()} Fieseros, Inc. All rights
               reserved.
             </p>
             <nav className="flex items-center gap-6 text-sm text-muted-foreground">

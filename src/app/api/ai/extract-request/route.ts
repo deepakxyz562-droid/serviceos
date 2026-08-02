@@ -5,7 +5,7 @@ import { withRequestId } from '@/lib/logger';
 import { INDUSTRY_CATALOG, type Industry } from '@/lib/industry-catalog';
 
 /**
- * AI Request Extraction (ServiceOS V1.5 — Marketplace Intake)
+ * AI Request Extraction (Fieseros V1.5 — Marketplace Intake)
  * ------------------------------------------------------------
  * POST /api/ai/extract-request
  *
@@ -484,7 +484,7 @@ async function getZai(): Promise<any | null> {
 
 /**
  * Call the LLM with a JSON-mode system prompt that enumerates the 25
- * ServiceOS industries and their sub-services. Returns the raw text
+ * Fieseros industries and their sub-services. Returns the raw text
  * content (the model is told to emit valid JSON only) or null on
  * failure.
  */

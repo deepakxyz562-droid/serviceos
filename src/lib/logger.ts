@@ -18,7 +18,7 @@ const isDev = process.env.NODE_ENV !== 'production';
 const baseLogger = pino({
   level: process.env.LOG_LEVEL || (isDev ? 'debug' : 'info'),
   base: {
-    service: 'serviceos',
+    service: 'fieseros',
     env: process.env.NODE_ENV || 'development',
   },
   timestamp: pino.stdTimeFunctions.isoTime,

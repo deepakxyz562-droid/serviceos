@@ -9,7 +9,7 @@ import {
 } from '@/lib/marketplace-featured';
 
 /**
- * Provider Profile — list (ServiceOS V1.5 — P10-flows)
+ * Provider Profile — list (Fieseros V1.5 — P10-flows)
  * ------------------------------------------------------------
  * GET /api/marketplace/providers
  *

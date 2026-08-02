@@ -8,7 +8,7 @@ export function ServiceWorkerRegistration() {
       navigator.serviceWorker
         .register('/sw.js')
         .then((registration) => {
-          console.log('ServiceOS Service Worker registered with scope:', registration.scope);
+          console.log('Fieseros Service Worker registered with scope:', registration.scope);
 
           // Check for updates periodically
           registration.addEventListener('updatefound', () => {
@@ -16,14 +16,14 @@ export function ServiceWorkerRegistration() {
             if (newWorker) {
               newWorker.addEventListener('statechange', () => {
                 if (newWorker.state === 'activated') {
-                  console.log('ServiceOS Service Worker updated and activated');
+                  console.log('Fieseros Service Worker updated and activated');
                 }
               });
             }
           });
         })
         .catch((error) => {
-          console.error('ServiceOS Service Worker registration failed:', error);
+          console.error('Fieseros Service Worker registration failed:', error);
         });
     }
   }, []);

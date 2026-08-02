@@ -311,7 +311,7 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
             </div>
             <div>
               <CardTitle className="text-base">Public Business Hub</CardTitle>
-              <CardDescription>Control your public-facing page at serviceos.cc</CardDescription>
+              <CardDescription>Control your public-facing page at fieseros.com</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -337,7 +337,7 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
               the provider shows up in the /marketplace browse grid. */}
           <div className="flex items-start justify-between gap-4 p-4 rounded-lg border bg-muted/30">
             <div className="space-y-1">
-              <Label htmlFor="marketplace-optin" className="text-sm font-medium">List on ServiceOS Marketplace</Label>
+              <Label htmlFor="marketplace-optin" className="text-sm font-medium">List on Fieseros Marketplace</Label>
               <p className="text-xs text-muted-foreground">
                 When ON, your business appears in the marketplace browse grid at{' '}
                 <a href="/marketplace" target="_blank" rel="noreferrer" className="font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-800 dark:text-emerald-400">
@@ -357,7 +357,7 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
           <div className="space-y-2">
             <Label className="text-sm font-medium">Your public URL</Label>
             <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/30 font-mono text-sm break-all">
-              <span className="text-muted-foreground">serviceos.cc/</span>
+              <span className="text-muted-foreground">fieseros.com/</span>
               <span className="text-emerald-700 dark:text-emerald-400">{urlPreview}</span>
             </div>
             <p className="text-xs text-muted-foreground">

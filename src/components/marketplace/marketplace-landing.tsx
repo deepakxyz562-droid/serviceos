@@ -291,7 +291,7 @@ export function MarketplaceLanding({
           </div>
 
           <h1 className="text-center text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl md:text-6xl">
-            ServiceOS —{' '}
+            Fieseros —{' '}
             <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent dark:from-emerald-400 dark:via-teal-400 dark:to-cyan-400">
               The AI Operating System
             </span>{' '}
@@ -787,7 +787,7 @@ export function MarketplaceLanding({
                   <ShieldCheck className="mr-1 h-3.5 w-3.5" /> For service businesses
                 </Badge>
                 <h2 className="text-2xl font-bold sm:text-3xl">
-                  Run your business on ServiceOS.
+                  Run your business on Fieseros.
                 </h2>
                 <p className="mt-2 text-sm text-emerald-50">
                   Get discovered by thousands of customers in your area. Manage bookings, dispatch, invoicing, and AI automation — all in one platform.
@@ -859,12 +859,12 @@ function MarketplaceHeader({
           type="button"
           onClick={onLogoClick}
           className="flex items-center gap-2"
-          aria-label="ServiceOS home"
+          aria-label="Fieseros home"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
             <Sparkles className="h-4 w-4" />
           </span>
-          <span className="text-lg font-bold text-foreground">ServiceOS</span>
+          <span className="text-lg font-bold text-foreground">Fieseros</span>
         </button>
 
         <nav className="flex items-center gap-2">
@@ -901,14 +901,14 @@ function MarketplaceFooter() {
               <Sparkles className="h-3.5 w-3.5" />
             </span>
             <div>
-              <p className="text-sm font-semibold text-foreground">ServiceOS</p>
+              <p className="text-sm font-semibold text-foreground">Fieseros</p>
               <p className="text-xs text-muted-foreground">
                 AI Marketplace & Operating System for Local Service Businesses
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span>© {new Date().getFullYear()} ServiceOS</span>
+            <span>© {new Date().getFullYear()} Fieseros</span>
             <span className="hidden sm:inline">·</span>
             <span>25 industries · 9 verticals · 150+ services</span>
             <span className="hidden sm:inline">·</span>

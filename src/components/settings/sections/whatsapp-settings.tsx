@@ -157,7 +157,7 @@ export function WhatsAppSettings() {
   // Test message form.
   const [testPhone, setTestPhone] = useState('');
   const [testMessage, setTestMessage] = useState(
-    'Hello from ServiceOS! This is a test message.',
+    'Hello from Fieseros! This is a test message.',
   );
   const [sendingTest, setSendingTest] = useState(false);
 

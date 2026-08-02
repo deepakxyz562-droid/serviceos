@@ -107,19 +107,19 @@ export async function POST(
           `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:24px">`,
           `<h2 style="color:#0f172a;">You're invited to the customer portal</h2>`,
           `<p>Hi ${customer.name || 'there'},</p>`,
-          `<p>${tenantName || 'ServiceOS'} has enabled customer portal access for you. Use the button below to activate your account and start tracking your jobs, invoices, and quotes online.</p>`,
+          `<p>${tenantName || 'Fieseros'} has enabled customer portal access for you. Use the button below to activate your account and start tracking your jobs, invoices, and quotes online.</p>`,
           activateButton,
           `<p style="font-size:13px;color:#6b7280;">Or copy this link into your browser:<br/><a href="${activationUrl}" style="color:#059669;word-break:break-all;">${activationUrl}</a></p>`,
           `<p style="font-size:12px;color:#9ca3af;">This invitation link expires in 7 days. If you didn't expect this email, you can safely ignore it.</p>`,
           `<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />`,
-          `<p style="font-size:12px;color:#9ca3af;">— Sent from ${tenantName || 'ServiceOS'}</p>`,
+          `<p style="font-size:12px;color:#9ca3af;">— Sent from ${tenantName || 'Fieseros'}</p>`,
           `</div>`,
         ].join('\n')
         const r = await sendEmail({
           to: customer.email,
-          subject: `Your portal invitation from ${tenantName || 'ServiceOS'}`,
+          subject: `Your portal invitation from ${tenantName || 'Fieseros'}`,
           html,
-          text: `You're invited to the ${tenantName || 'ServiceOS'} customer portal.\n\nActivate your account: ${activationUrl}\n\nThis invitation link expires in 7 days.\n\n— ${tenantName || 'ServiceOS'}`,
+          text: `You're invited to the ${tenantName || 'Fieseros'} customer portal.\n\nActivate your account: ${activationUrl}\n\nThis invitation link expires in 7 days.\n\n— ${tenantName || 'Fieseros'}`,
           usageType: 'transactional',
           tenantId: tenantId || undefined,
         })

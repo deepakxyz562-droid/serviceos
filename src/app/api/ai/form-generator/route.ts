@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     // Build the list of valid field types for the system prompt
     const validTypes = FIELD_TYPES.map((t) => t.value).join(', ');
 
-    const systemPrompt = `You are a form builder assistant for ServiceOS, a field-service management platform.
+    const systemPrompt = `You are a form builder assistant for Fieseros, a field-service management platform.
 Given a natural-language description, generate an array of form fields that would be useful for the described form.
 
 Valid field types (use ONLY these): ${validTypes}

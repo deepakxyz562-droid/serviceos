@@ -3,7 +3,7 @@ import { verifyPassword } from '../src/lib/auth';
 
 async function main() {
   const user = await db.user.findUnique({
-    where: { email: 'whatsapp-test@serviceos.local' },
+    where: { email: 'whatsapp-test@fieseros.local' },
     select: { id: true, email: true, role: true, tenantId: true, isActive: true, passwordHash: true, authProvider: true },
   });
   console.log('User:', user ? {

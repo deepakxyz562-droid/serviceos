@@ -26,7 +26,7 @@ import readingTime from "reading-time";
  */
 
 const BLOG_DIR = path.join(process.cwd(), "content", "blog");
-const SITE_URL = "https://serviceos.cc";
+const SITE_URL = "https://fieseros.com";
 
 export interface BlogPostMeta {
   slug: string;
@@ -82,7 +82,7 @@ function readPost(slug: string): BlogPostMeta | null {
     description,
     date: new Date(date).toISOString(),
     category: String(data.category ?? "General").trim(),
-    author: String(data.author ?? "ServiceOS Team").trim(),
+    author: String(data.author ?? "Fieseros Team").trim(),
     coverImage: data.coverImage ? String(data.coverImage) : undefined,
     keywords: Array.isArray(data.keywords) ? data.keywords.map(String) : undefined,
     readingMinutes: Math.max(1, Math.round(stats.minutes)),

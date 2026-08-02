@@ -4,7 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { logger, withRequestId } from '@/lib/logger';
 
 /**
- * Provider Portfolio — get + upsert (ServiceOS V1.5 — P10-flows)
+ * Provider Portfolio — get + upsert (Fieseros V1.5 — P10-flows)
  * ------------------------------------------------------------
  * GET  /api/provider/portfolio          — get own portfolio
  * POST /api/provider/portfolio          — create or update portfolio items

@@ -341,7 +341,7 @@ export async function POST(request: NextRequest) {
               `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">`,
               `<h2 style="color: #10b981; margin-bottom: 16px;">🎯 New Lead Received</h2>`,
               `<p style="font-size: 16px; color: #374151;">Hi ${notifyName},</p>`,
-              `<p style="font-size: 16px; color: #374151;">A new lead has been created in your ServiceOS workspace. Here are the details:</p>`,
+              `<p style="font-size: 16px; color: #374151;">A new lead has been created in your Fieseros workspace. Here are the details:</p>`,
               `<table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">`,
               `<tr><td style="padding: 10px; background: #f9fafb; font-weight: 600; width: 35%; border: 1px solid #e5e7eb;">Name</td><td style="padding: 10px; border: 1px solid #e5e7eb;">${lead.name}</td></tr>`,
               `<tr><td style="padding: 10px; background: #f9fafb; font-weight: 600; border: 1px solid #e5e7eb;">Phone</td><td style="padding: 10px; border: 1px solid #e5e7eb;">${lead.phone}</td></tr>`,
@@ -354,11 +354,11 @@ export async function POST(request: NextRequest) {
               `</table>`,
               `<p style="font-size: 14px; color: #6b7280; margin-top: 24px;">Follow up promptly to maximize conversion!</p>`,
               `<hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />`,
-              `<p style="font-size: 12px; color: #9ca3af;">— Sent from ServiceOS</p>`,
+              `<p style="font-size: 12px; color: #9ca3af;">— Sent from Fieseros</p>`,
               `</div>`,
             ].join('\n');
 
-            const text = `New Lead Received\n\nName: ${lead.name}\nPhone: ${lead.phone}\n${lead.email ? `Email: ${lead.email}\n` : ''}Source: ${lead.source}\nService: ${lead.serviceType || 'N/A'}\nPriority: ${lead.priority}\nEstimated Value: ${leadValue}\n${lead.description ? `\nDescription: ${lead.description}\n` : ''}\nFollow up promptly!\n\n— Sent from ServiceOS`;
+            const text = `New Lead Received\n\nName: ${lead.name}\nPhone: ${lead.phone}\n${lead.email ? `Email: ${lead.email}\n` : ''}Source: ${lead.source}\nService: ${lead.serviceType || 'N/A'}\nPriority: ${lead.priority}\nEstimated Value: ${leadValue}\n${lead.description ? `\nDescription: ${lead.description}\n` : ''}\nFollow up promptly!\n\n— Sent from Fieseros`;
 
             const result = await sendEmail({
               to: notifyEmail,

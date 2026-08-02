@@ -55,7 +55,7 @@ type WizardStep = 'banner' | 'connect' | 'number' | 'import' | 'customize' | 'su
 const STEPS: { key: WizardStep; label: string; icon: React.ElementType }[] = [
   { key: 'connect', label: 'Connect Meta Business', icon: Globe },
   { key: 'number', label: 'Connect WhatsApp Number', icon: Phone },
-  { key: 'import', label: 'Import ServiceOS Templates', icon: Upload },
+  { key: 'import', label: 'Import Fieseros Templates', icon: Upload },
   { key: 'customize', label: 'Customize Company Name', icon: Settings2 },
   { key: 'submit', label: 'Submit to Meta', icon: Send },
 ];
@@ -624,7 +624,7 @@ export function WhatsAppSetupWizard() {
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
-              <Upload className="size-5 text-emerald-400" /> Import ServiceOS Templates
+              <Upload className="size-5 text-emerald-400" /> Import Fieseros Templates
             </CardTitle>
             <CardDescription className="text-slate-400">
               Choose which pre-built WhatsApp templates to import. These templates follow Meta&apos;s guidelines

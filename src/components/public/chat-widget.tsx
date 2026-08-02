@@ -60,7 +60,7 @@ interface PresenceResponse {
 
 type Phase = 'closed' | 'prechat' | 'chatting'
 
-const STORAGE_KEY_PREFIX = 'serviceos_chat_'
+const STORAGE_KEY_PREFIX = 'fieseros_chat_'
 
 // ─── Component ────────────────────────────────────────────────────────────
 

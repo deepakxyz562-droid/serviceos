@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     if (addonKey === 'sms_number') {
       // Hardcoded add-on spec — mirrors src/app/api/sms/numbers/buy/route.ts.
-      name = 'ServiceOS Dedicated SMS Number — Monthly';
+      name = 'Fieseros Dedicated SMS Number — Monthly';
       description =
         'Dedicated phone number for SMS + voice. Billed monthly per number.';
       price = 5;
@@ -84,9 +84,9 @@ export async function POST(request: NextRequest) {
         );
       }
       const cycleLabel = cycle === 'yearly' ? 'Yearly' : 'Monthly';
-      name = `ServiceOS ${plan.name} — ${cycleLabel}`;
+      name = `Fieseros ${plan.name} — ${cycleLabel}`;
       description =
-        plan.description || `ServiceOS ${plan.name} plan, ${cycle} subscription`;
+        plan.description || `Fieseros ${plan.name} plan, ${cycle} subscription`;
       price = cycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
       currency = plan.currency || 'USD';
       if (!price || price <= 0) {

@@ -1,11 +1,11 @@
-# ServiceOS Subdomain Multi-Tenant Architecture Plan
+# Fieseros Subdomain Multi-Tenant Architecture Plan
 
 ## Executive Summary
 
 This document details the implementation plan for subdomain-based multi-tenancy
-in ServiceOS, deployed on Netlify at `serviceosapp.netlify.app`. Each company
-gets `company-slug.serviceosapp.netlify.app`, a super admin portal at
-`admin.serviceosapp.netlify.app`, and an employee invitation system with
+in Fieseros, deployed on Netlify at `fieserosapp.netlify.app`. Each company
+gets `company-slug.fieserosapp.netlify.app`, a super admin portal at
+`admin.fieserosapp.netlify.app`, and an employee invitation system with
 token-based set-password links.
 
 **Key constraint**: The app is a single-page client with only the `/` page
@@ -46,12 +46,12 @@ are unrestricted. There is **no existing middleware.ts**.
 **How it works:**
 
 ```
-User visits: acme-plumbing.serviceosapp.netlify.app
+User visits: acme-plumbing.fieserosapp.netlify.app
   │
   ├─ Browser loads / (same HTML for all subdomains — Netlify wildcard)
   │
   ├─ Client JS reads window.location.hostname
-  │   → "acme-plumbing.serviceosapp.netlify.app"
+  │   → "acme-plumbing.fieserosapp.netlify.app"
   │
   ├─ Client extracts subdomain: "acme-plumbing"
   │
@@ -66,18 +66,18 @@ User visits: acme-plumbing.serviceosapp.netlify.app
 
 ```typescript
 /**
- * ServiceOS Subdomain Detection & Resolution
+ * Fieseros Subdomain Detection & Resolution
  *
  * Subdomain patterns on Netlify:
- *   - serviceosapp.netlify.app         → Landing / main site (no subdomain)
- *   - admin.serviceosapp.netlify.app   → Super admin portal
- *   - *.serviceosapp.netlify.app       → Company portal (slug = subdomain)
+ *   - fieserosapp.netlify.app         → Landing / main site (no subdomain)
+ *   - admin.fieserosapp.netlify.app   → Super admin portal
+ *   - *.fieserosapp.netlify.app       → Company portal (slug = subdomain)
  *
  * Custom domains (future):
  *   - crm.companydomain.com            → Resolved via CustomDomain table
  */
 
-const ROOT_DOMAIN = 'serviceosapp.netlify.app';
+const ROOT_DOMAIN = 'fieserosapp.netlify.app';
 const ADMIN_SUBDOMAIN = 'admin';
 
 export interface SubdomainContext {
@@ -303,7 +303,7 @@ if (subdomainCtx.isCompanySubdomain && subdomainCtx.subdomain) {
 ### Current Flow (No Subdomain Awareness)
 
 ```
-1. User visits serviceosapp.netlify.app → sees landing/auth page
+1. User visits fieserosapp.netlify.app → sees landing/auth page
 2. Login → JWT cookie set → client shows app layout
 3. All users see the same UI, tenant context comes from JWT
 ```
@@ -311,13 +311,13 @@ if (subdomainCtx.isCompanySubdomain && subdomainCtx.subdomain) {
 ### New Flow (Subdomain-Aware)
 
 ```
-SCENARIO A: User on root domain (serviceosapp.netlify.app)
+SCENARIO A: User on root domain (fieserosapp.netlify.app)
   1. Visit root → Landing page → "Sign In" or "Create Account"
   2. Login → API returns user + tenant
-  3. Client REDIRECTS to {tenant.slug}.serviceosapp.netlify.app
+  3. Client REDIRECTS to {tenant.slug}.fieserosapp.netlify.app
      (or stays on root if super admin)
 
-SCENARIO B: User on company subdomain (acme.serviceosapp.netlify.app)
+SCENARIO B: User on company subdomain (acme.fieserosapp.netlify.app)
   1. Tenant resolved → company-branded login page
   2. Login → API validates user belongs to THIS tenant (or is super admin)
   3. If user belongs to different tenant → error "Wrong workspace"
@@ -325,7 +325,7 @@ SCENARIO B: User on company subdomain (acme.serviceosapp.netlify.app)
   4. If valid → app loads within subdomain context
 
 SCENARIO C: Employee with invitation token
-  1. Clicks link in email → lands on {company}.serviceosapp.netlify.app/invite?token=xxx
+  1. Clicks link in email → lands on {company}.fieserosapp.netlify.app/invite?token=xxx
   2. Since / only → client reads ?invite_token=xxx from URL
   3. Shows "Set Your Password" form
   4. On submit → POST /api/invitations/accept
@@ -333,7 +333,7 @@ SCENARIO C: Employee with invitation token
   6. Auto-login → show employee portal
 
 SCENARIO D: Super admin
-  1. Visit admin.serviceosapp.netlify.app
+  1. Visit admin.fieserosapp.netlify.app
   2. Login (must have isSuperAdmin=true)
   3. See platform admin dashboard
 ```
@@ -391,11 +391,11 @@ if (subdomainCtx.isRootDomain && user.tenantId && !user.isSuperAdmin) {
 
 ### Cookie Domain Strategy
 
-**CRITICAL**: Cookies set on `serviceosapp.netlify.app` are NOT sent to
-`acme.serviceosapp.netlify.app` because browsers treat different subdomains
+**CRITICAL**: Cookies set on `fieserosapp.netlify.app` are NOT sent to
+`acme.fieserosapp.netlify.app` because browsers treat different subdomains
 as different origins for same-site cookies.
 
-**Solution**: Set the cookie domain to `.serviceosapp.netlify.app` (leading
+**Solution**: Set the cookie domain to `.fieserosapp.netlify.app` (leading
 dot = all subdomains). This means a cookie set on ANY subdomain is accessible
 on ALL subdomains.
 
@@ -409,7 +409,7 @@ export function getCookieOptions(request?: NextRequest) {
   let domain: string | undefined;
   if (secure) {
     // In production, share cookies across all subdomains
-    domain = '.serviceosapp.netlify.app';
+    domain = '.fieserosapp.netlify.app';
   }
   // In development (localhost), don't set domain — cookies are already
   // shared on localhost
@@ -487,8 +487,8 @@ function getRedirectUri(request: NextRequest, clientOrigin?: string): string {
 **Google Cloud Console Configuration:**
 
 You need to add ALL possible redirect URIs:
-- `https://serviceosapp.netlify.app/api/auth/google/callback`
-- `https://*.serviceosapp.netlify.app/api/auth/google/callback`
+- `https://fieserosapp.netlify.app/api/auth/google/callback`
+- `https://*.fieserosapp.netlify.app/api/auth/google/callback`
 
 Unfortunately, Google does NOT support wildcard redirect URIs. Options:
 1. **Recommended**: Use a single redirect URI on the root domain, then
@@ -523,7 +523,7 @@ if (existingUser?.tenantId) {
 Owner invites employee →
   POST /api/invitations/create
   → Creates Invitation record with token
-  → Sends email with link: {company}.serviceosapp.netlify.app/?invite_token=xxx
+  → Sends email with link: {company}.fieserosapp.netlify.app/?invite_token=xxx
   → Employee clicks link
   → Client shows "Set Your Password" form
   → POST /api/invitations/accept
@@ -645,7 +645,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Build invitation URL
-    const inviteUrl = `https://${tenant?.slug}.serviceosapp.netlify.app/?invite_token=${token}`;
+    const inviteUrl = `https://${tenant?.slug}.fieserosapp.netlify.app/?invite_token=${token}`;
 
     // Send email (via notification orchestrator or direct email service)
     // await sendInvitationEmail({ to: email, name, tenantName: tenant?.name, inviteUrl, inviterName: user.name });
@@ -675,7 +675,7 @@ export async function POST(request: NextRequest) {
 
 The email contains a link like:
 ```
-https://acme-plumbing.serviceosapp.netlify.app/?invite_token=abc123...
+https://acme-plumbing.fieserosapp.netlify.app/?invite_token=abc123...
 ```
 
 Since there's only one page route (`/`), the client reads the `invite_token`
@@ -1132,7 +1132,7 @@ src/app/api/
 
 ### Access Point
 
-`admin.serviceosapp.netlify.app` — dedicated subdomain for platform admins.
+`admin.fieserosapp.netlify.app` — dedicated subdomain for platform admins.
 
 ### How It Works
 
@@ -1249,12 +1249,12 @@ Company wants: crm.companydomain.com
   │     POST /api/custom-domains
   │     → Creates CustomDomain record (status: pending)
   │     → Returns DNS instructions:
-  │        CNAME: crm.companydomain.com → serviceosapp.netlify.app
-  │        TXT:  _serviceos.crm.companydomain.com → verification_token
+  │        CNAME: crm.companydomain.com → fieserosapp.netlify.app
+  │        TXT:  _fieseros.crm.companydomain.com → verification_token
   │
   ├─ 2. Company configures DNS
   │
-  ├─ 3. ServiceOS verifies DNS
+  ├─ 3. Fieseros verifies DNS
   │     GET /api/custom-domains/[id]/verify
   │     → Checks CNAME points to our app
   │     → Checks TXT record matches verification token
@@ -1266,7 +1266,7 @@ Company wants: crm.companydomain.com
   │     - All *.netlify.app routes + custom domains serve the same Next.js app
   │
   └─ 5. Subdomain resolution falls back to CustomDomain table
-        In /api/tenant/resolve, if hostname is NOT *.serviceosapp.netlify.app,
+        In /api/tenant/resolve, if hostname is NOT *.fieserosapp.netlify.app,
         look up CustomDomain table:
         const customDomain = await db.customDomain.findUnique({
           where: { domain: hostname, active: true },
@@ -1331,7 +1331,7 @@ if (!ctx.isRootDomain && !ctx.isAdminSubdomain && !ctx.isCompanySubdomain) {
 2. **Create `src/app/api/tenant/resolve/route.ts`** — Tenant resolution API
 3. **Update `src/store/app-store.ts`** — Add tenant context state
 4. **Update `src/app/page.tsx`** — Add subdomain detection on mount
-5. **Update `src/lib/auth.ts`** — Set cookie domain to `.serviceosapp.netlify.app`
+5. **Update `src/lib/auth.ts`** — Set cookie domain to `.fieserosapp.netlify.app`
 6. **Test**: Verify subdomain detection works locally with `?subdomain=xxx`
 
 ### Phase 2: Subdomain-Aware Auth (Week 2)
@@ -1374,7 +1374,7 @@ if (!ctx.isRootDomain && !ctx.isAdminSubdomain && !ctx.isCompanySubdomain) {
 
 31. **Enable wildcard subdomain** on Netlify (already supported on `*.netlify.app`)
 32. **Update Google Cloud Console** — Add redirect URIs
-33. **Update environment variables** — Add `NEXT_PUBLIC_ROOT_DOMAIN=serviceosapp.netlify.app`
+33. **Update environment variables** — Add `NEXT_PUBLIC_ROOT_DOMAIN=fieserosapp.netlify.app`
 34. **Deploy and test** on staging
 
 ---
@@ -1383,7 +1383,7 @@ if (!ctx.isRootDomain && !ctx.isAdminSubdomain && !ctx.isCompanySubdomain) {
 
 Netlify automatically supports `*.netlify.app` wildcard subdomains. No
 additional DNS configuration is needed. Every subdomain of
-`serviceosapp.netlify.app` will serve the same site.
+`fieserosapp.netlify.app` will serve the same site.
 
 To confirm:
 1. Go to Netlify Dashboard → Site settings → Domain management
@@ -1394,14 +1394,14 @@ To confirm:
 
 | Setting | Value | Reason |
 |---------|-------|--------|
-| `domain` | `.serviceosapp.netlify.app` | Share cookie across subdomains |
+| `domain` | `.fieserosapp.netlify.app` | Share cookie across subdomains |
 | `httpOnly` | `true` | Prevent XSS access |
 | `secure` | `true` (production) | HTTPS only |
 | `sameSite` | `lax` | Allow cross-subdomain navigation |
 | `path` | `/` | Available on all paths |
 
-**Risk**: A cookie set on `acme.serviceosapp.netlify.app` is also sent to
-`other-company.serviceosapp.netlify.app`. This is intentional — we need the
+**Risk**: A cookie set on `acme.fieserosapp.netlify.app` is also sent to
+`other-company.fieserosapp.netlify.app`. This is intentional — we need the
 cookie to persist when redirecting between subdomains.
 
 **Mitigation**: The JWT contains `tenantId`. Every API route validates that
@@ -1421,8 +1421,8 @@ To prevent abuse:
 Add to `.env` and Netlify Dashboard:
 
 ```
-NEXT_PUBLIC_ROOT_DOMAIN=serviceosapp.netlify.app
-NEXT_PUBLIC_APP_URL=https://serviceosapp.netlify.app
+NEXT_PUBLIC_ROOT_DOMAIN=fieserosapp.netlify.app
+NEXT_PUBLIC_APP_URL=https://fieserosapp.netlify.app
 ```
 
 These are used by `src/lib/subdomain.ts` for subdomain detection.

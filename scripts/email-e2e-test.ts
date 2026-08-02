@@ -12,7 +12,7 @@
 import { db } from '../src/lib/db'
 
 const API_BASE = 'http://localhost:3000'
-const TEST_USER_EMAIL = 'whatsapp-test@serviceos.local'
+const TEST_USER_EMAIL = 'whatsapp-test@fieseros.local'
 const TENANT_ID = 'cmqjeqtze0000lwkj1qh5qt47'
 
 async function devLogin(): Promise<string> {
@@ -43,7 +43,7 @@ async function main() {
     headers: { 'Content-Type': 'application/json', cookie },
     body: JSON.stringify({
       to: 'deepakchandra076@gmail.com',
-      subject: 'ServiceOS Email Test — Single Send',
+      subject: 'Fieseros Email Test — Single Send',
       html: `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e5e7eb;border-radius:8px">
           <h1 style="color:#10b981;margin:0 0 16px">Email Test Successful ✉️</h1>
@@ -51,7 +51,7 @@ async function main() {
             Hi Deepak,
           </p>
           <p style="color:#374151;font-size:15px;line-height:1.6">
-            This is a test email sent from <strong>ServiceOS</strong> via AWS SES SMTP.
+            This is a test email sent from <strong>Fieseros</strong> via AWS SES SMTP.
             If you're reading this, the SMTP integration is working correctly.
           </p>
           <hr style="border:0;border-top:1px solid #e5e7eb;margin:24px 0">
@@ -90,12 +90,12 @@ async function main() {
     headers: { 'Content-Type': 'application/json', cookie },
     body: JSON.stringify({
       name: 'Welcome Campaign — June 2026',
-      subject: 'Welcome to ServiceOS, {{name}}! 🎉',
+      subject: 'Welcome to Fieseros, {{name}}! 🎉',
       html: `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e5e7eb;border-radius:8px">
           <h1 style="color:#10b981;margin:0 0 16px">Hello {{name}} 👋</h1>
           <p style="color:#374151;font-size:15px;line-height:1.6">
-            Welcome to <strong>ServiceOS</strong>! We're excited to have you on board.
+            Welcome to <strong>Fieseros</strong>! We're excited to have you on board.
           </p>
           <p style="color:#374151;font-size:15px;line-height:1.6">
             Here are your details on file:

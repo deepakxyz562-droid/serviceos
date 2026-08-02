@@ -1,7 +1,7 @@
 /**
  * industry-catalog.ts — AUTHORITATIVE Industry & Sub-Service Catalog
  * -------------------------------------------------------------------
- * The single source of truth for the 29 industries ServiceOS supports,
+ * The single source of truth for the 29 industries Fieseros supports,
  * each with its sub-services (170+ total), icons, descriptions, and
  * default seed data (job types, employee roles, sample services).
  *

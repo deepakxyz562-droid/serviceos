@@ -1,5 +1,5 @@
 /**
- * Communication Engine (ServiceOS V1.5)
+ * Communication Engine (Fieseros V1.5)
  * -------------------------------------
  * Unified multi-channel messaging layer that supports Email, SMS, WhatsApp,
  * Push, and In-App notifications. Automatically selects the best channel(s)
@@ -471,7 +471,7 @@ async function resolveContext(
   });
 
   // ── Resolve sender name. ──
-  let senderName = params.senderName ?? 'ServiceOS';
+  let senderName = params.senderName ?? 'Fieseros';
   if (!params.senderName && tenantName) senderName = tenantName;
 
   // ── Resolve the subject/body using the DB-built variable map. ──

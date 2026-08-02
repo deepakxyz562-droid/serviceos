@@ -6,7 +6,7 @@ import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit'
 import { getIndustry } from '@/lib/industry-catalog';
 
 /**
- * Flow 3: Emergency Dispatch — create (ServiceOS V1.5 — P10-flows)
+ * Flow 3: Emergency Dispatch — create (Fieseros V1.5 — P10-flows)
  * ------------------------------------------------------------
  * GET  /api/marketplace/emergency       — list broadcasting emergencies (provider-auth'd)
  * POST /api/marketplace/emergency       — customer creates a new emergency dispatch

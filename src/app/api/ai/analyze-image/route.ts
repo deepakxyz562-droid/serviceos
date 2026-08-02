@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { logActivity } from '@/lib/activity-log';
 
 /**
- * AI Image Analysis endpoint (ServiceOS — Dynamic Forms Engine)
+ * AI Image Analysis endpoint (Fieseros — Dynamic Forms Engine)
  * -------------------------------------------------------------
  * POST /api/ai/analyze-image
  *

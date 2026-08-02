@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * ServiceOS — Dynamic Forms Field Renderer
+ * Fieseros — Dynamic Forms Field Renderer
  * -----------------------------------------
  * A client component that renders a single form field input based on its
  * `type`. Handles all 15 field types defined in src/lib/form-field-types.ts:

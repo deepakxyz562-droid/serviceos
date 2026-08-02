@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# ServiceOS — Quick Start Script
+# Fieseros — Quick Start Script
 # ============================================================
 # Usage:
 #   bash start.sh         # Start dev server in background
@@ -19,7 +19,7 @@ case "${1:-start}" in
       echo "  URL: http://localhost:3000"
       exit 0
     fi
-    echo "Starting ServiceOS dev server..."
+    echo "Starting Fieseros dev server..."
     setsid bash -c 'exec node spawn-dev.mjs' < /dev/null > /dev/null 2>&1 &
     disown
     sleep 3

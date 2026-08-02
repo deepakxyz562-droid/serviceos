@@ -21,7 +21,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "HVAC Software — Dispatch, Service & Invoice | ServiceOS",
+  title: "HVAC Software — Dispatch, Service & Invoice | Fieseros",
   description:
     "HVAC service software for seasonal demand, preventive maintenance contracts, equipment history, certified technician dispatch, and Email & SMS customer communication. Start free today.",
   keywords: [
@@ -31,13 +31,13 @@ export const metadata: Metadata = {
     "hvac service management",
     "air conditioning software",
   ],
-  alternates: { canonical: "https://serviceos.cc/hvac-software" },
+  alternates: { canonical: "https://fieseros.com/hvac-software" },
   openGraph: {
-    title: "HVAC Software — Dispatch, Service & Invoice | ServiceOS",
+    title: "HVAC Software — Dispatch, Service & Invoice | Fieseros",
     description:
       "Handle summer and winter demand spikes, track equipment service history, schedule preventive maintenance, and dispatch certified technicians — all in one HVAC CRM with Email, SMS, and Push notifications.",
-    url: "https://serviceos.cc/hvac-software",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/hvac-software",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -48,7 +48,7 @@ const features: Feature[] = [
     icon: ThermometerSun,
     title: "Seasonal Demand Scheduling",
     description:
-      "When the first heatwave hits, your phone rings off the hook. ServiceOS handles the surge — prioritized emergency queue, automated triage, and dynamic dispatch so no AC breakdown slips through the cracks.",
+      "When the first heatwave hits, your phone rings off the hook. Fieseros handles the surge — prioritized emergency queue, automated triage, and dynamic dispatch so no AC breakdown slips through the cracks.",
   },
   {
     icon: Fan,
@@ -60,7 +60,7 @@ const features: Feature[] = [
     icon: ShieldCheck,
     title: "Preventive Maintenance Contracts",
     description:
-      "Sell more maintenance agreements by making them effortless to deliver. ServiceOS auto-schedules seasonal tune-ups, sends SMS reminders, dispatches the right tech, and renews the contract — automatically, every year.",
+      "Sell more maintenance agreements by making them effortless to deliver. Fieseros auto-schedules seasonal tune-ups, sends SMS reminders, dispatches the right tech, and renews the contract — automatically, every year.",
   },
   {
     icon: MessageSquare,
@@ -78,49 +78,49 @@ const features: Feature[] = [
     icon: BadgeCheck,
     title: "Technician Skill-Based Dispatch",
     description:
-      "Tag each technician with certifications — EPA 608, NATE, manufacturer-specific. ServiceOS only dispatches qualified techs to jobs that require those credentials, keeping you compliant and customers safe.",
+      "Tag each technician with certifications — EPA 608, NATE, manufacturer-specific. Fieseros only dispatches qualified techs to jobs that require those credentials, keeping you compliant and customers safe.",
   },
 ];
 
 const faqs = [
   {
-    question: "How does ServiceOS handle the summer and winter HVAC rush?",
+    question: "How does Fieseros handle the summer and winter HVAC rush?",
     answer:
-      "Seasonal demand is the defining challenge of an HVAC business. When the first heatwave or cold snap hits, call volume can jump 5x overnight. ServiceOS handles the surge in three ways: first, an emergency triage queue that prioritizes calls by urgency (no AC in 100°F with elderly residents gets priority). Second, dynamic dispatch that shows every available technician, their certifications, and live location so you can route the right tech to the right job fast. Third, automated Email, SMS, and Push notifications that keep customers informed — ETA, technician name, status updates — so they stop calling you for updates. Most HVAC businesses using ServiceOS report handling 40% more rush-period calls without adding staff.",
+      "Seasonal demand is the defining challenge of an HVAC business. When the first heatwave or cold snap hits, call volume can jump 5x overnight. Fieseros handles the surge in three ways: first, an emergency triage queue that prioritizes calls by urgency (no AC in 100°F with elderly residents gets priority). Second, dynamic dispatch that shows every available technician, their certifications, and live location so you can route the right tech to the right job fast. Third, automated Email, SMS, and Push notifications that keep customers informed — ETA, technician name, status updates — so they stop calling you for updates. Most HVAC businesses using Fieseros report handling 40% more rush-period calls without adding staff.",
   },
   {
-    question: "Can I track preventive maintenance contracts in ServiceOS?",
+    question: "Can I track preventive maintenance contracts in Fieseros?",
     answer:
-      "Yes — preventive maintenance contracts are a core workflow in ServiceOS. You define each contract once: customer, equipment, service frequency (spring tune-up, fall furnace check, bi-annual, quarterly), price, and renewal date. ServiceOS then automatically schedules each visit, sends the customer an SMS reminder before the appointment, dispatches the technician, generates the invoice, and tracks the contract renewal date. When renewal time approaches, ServiceOS alerts you to reach out and lock in another year. HVAC businesses that switch to ServiceOS typically grow their maintenance contract revenue by 30–50% in the first year.",
+      "Yes — preventive maintenance contracts are a core workflow in Fieseros. You define each contract once: customer, equipment, service frequency (spring tune-up, fall furnace check, bi-annual, quarterly), price, and renewal date. Fieseros then automatically schedules each visit, sends the customer an SMS reminder before the appointment, dispatches the technician, generates the invoice, and tracks the contract renewal date. When renewal time approaches, Fieseros alerts you to reach out and lock in another year. HVAC businesses that switch to Fieseros typically grow their maintenance contract revenue by 30–50% in the first year.",
   },
   {
     question: "How does equipment service history work in HVAC software?",
     answer:
-      "Every piece of HVAC equipment — central AC unit, furnace, heat pump, mini-split, commercial rooftop unit — gets an asset record in ServiceOS. That record stores the model number, serial number, install date, refrigerant type, filter size, warranty info, and complete service history: every repair, every tune-up, every part replaced, every photo taken. When a customer calls about \"the AC in the upstairs bedroom,\" you can pull up that exact unit and see what was repaired last summer, what the tech noted, and whether it's still under warranty — before you even dispatch.",
+      "Every piece of HVAC equipment — central AC unit, furnace, heat pump, mini-split, commercial rooftop unit — gets an asset record in Fieseros. That record stores the model number, serial number, install date, refrigerant type, filter size, warranty info, and complete service history: every repair, every tune-up, every part replaced, every photo taken. When a customer calls about \"the AC in the upstairs bedroom,\" you can pull up that exact unit and see what was repaired last summer, what the tech noted, and whether it's still under warranty — before you even dispatch.",
   },
   {
-    question: "How does ServiceOS dispatch only certified technicians to certain jobs?",
+    question: "How does Fieseros dispatch only certified technicians to certain jobs?",
     answer:
-      "Each technician in ServiceOS has a profile listing their certifications — EPA 608 Universal, NATE-certified, manufacturer-specific training (Carrier, Trane, Daikin), gas furnace certification, refrigerant handling credentials, and more. Each job type is tagged with the certifications required to perform it legally and safely. When you dispatch, ServiceOS only shows you technicians whose certifications match the job requirements. This protects your business from compliance violations, your customers from unsafe work, and your technicians from being asked to do work they're not certified for.",
+      "Each technician in Fieseros has a profile listing their certifications — EPA 608 Universal, NATE-certified, manufacturer-specific training (Carrier, Trane, Daikin), gas furnace certification, refrigerant handling credentials, and more. Each job type is tagged with the certifications required to perform it legally and safely. When you dispatch, Fieseros only shows you technicians whose certifications match the job requirements. This protects your business from compliance violations, your customers from unsafe work, and your technicians from being asked to do work they're not certified for.",
   },
   {
-    question: "Does ServiceOS support seasonal pricing for HVAC services?",
+    question: "Does Fieseros support seasonal pricing for HVAC services?",
     answer:
-      "Yes. HVAC pricing legitimately varies by season — emergency AC repair in July is priced differently than a routine tune-up in March. ServiceOS lets you set up seasonal pricing rules: higher rates during peak cooling season (June–August) and heating season (December–February), standard rates in shoulder months, and discounted pricing for maintenance contract customers. When a technician completes a job, the correct price is automatically applied based on the date, service type, and customer's contract status. No manual price lookups, no undercharging during peak season.",
+      "Yes. HVAC pricing legitimately varies by season — emergency AC repair in July is priced differently than a routine tune-up in March. Fieseros lets you set up seasonal pricing rules: higher rates during peak cooling season (June–August) and heating season (December–February), standard rates in shoulder months, and discounted pricing for maintenance contract customers. When a technician completes a job, the correct price is automatically applied based on the date, service type, and customer's contract status. No manual price lookups, no undercharging during peak season.",
   },
   {
     question: "Can I automate filter change and tune-up reminders to customers?",
     answer:
-      "Absolutely. Filter changes are the highest-leverage reminder an HVAC business can send — they keep equipment running efficiently, prevent expensive breakdowns, and generate goodwill (and often a tune-up visit). ServiceOS sends automated SMS reminders at the interval you define for each piece of equipment — monthly for 1-inch filters, quarterly for 4-inch, annually for media filters. Customers tap to confirm they changed it themselves, or tap to schedule a service visit. This simple automation typically drives a 20–30% increase in tune-up visits and a meaningful drop in emergency breakdown calls.",
+      "Absolutely. Filter changes are the highest-leverage reminder an HVAC business can send — they keep equipment running efficiently, prevent expensive breakdowns, and generate goodwill (and often a tune-up visit). Fieseros sends automated SMS reminders at the interval you define for each piece of equipment — monthly for 1-inch filters, quarterly for 4-inch, annually for media filters. Customers tap to confirm they changed it themselves, or tap to schedule a service visit. This simple automation typically drives a 20–30% increase in tune-up visits and a meaningful drop in emergency breakdown calls.",
   },
 ];
 
 export default function HvacSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — HVAC Service Software",
+    name: "Fieseros — HVAC Service Software",
     description:
       "HVAC CRM and dispatch software with seasonal demand scheduling, equipment asset tracking, preventive maintenance contracts, certified technician dispatch, and Email & SMS invoicing.",
-    url: "https://serviceos.cc/hvac-software",
+    url: "https://fieseros.com/hvac-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
@@ -129,8 +129,8 @@ export default function HvacSoftwarePage() {
     <CornerstoneLayout
       activePath="/hvac-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "HVAC Software", url: "https://serviceos.cc/hvac-software" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "HVAC Software", url: "https://fieseros.com/hvac-software" },
       ]}
       additionalSchema={[appSchema]}
     >
@@ -179,7 +179,7 @@ export default function HvacSoftwarePage() {
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <Wrench className="h-5 w-5 text-destructive" />
-                Without ServiceOS
+                Without Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -200,7 +200,7 @@ export default function HvacSoftwarePage() {
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With ServiceOS
+                With Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -222,7 +222,7 @@ export default function HvacSoftwarePage() {
         </div>
       </section>
 
-      <ContentSection title="How ServiceOS transforms HVAC operations">
+      <ContentSection title="How Fieseros transforms HVAC operations">
         <p>
           HVAC is a business defined by seasons. For six months of the year,
           work is steady — preventive maintenance visits, the occasional
@@ -230,7 +230,7 @@ export default function HvacSoftwarePage() {
           suddenly you have 50 emergency calls before lunch. HVAC service
           management software that can&apos;t handle both modes — the steady
           recurring revenue engine and the seasonal surge — isn&apos;t really
-          HVAC software. ServiceOS is built for both.
+          HVAC software. Fieseros is built for both.
         </p>
         <p>
           The recurring revenue side of HVAC is where strong businesses are
@@ -240,7 +240,7 @@ export default function HvacSoftwarePage() {
           year-round and keep customers loyal. But managing those contracts in
           spreadsheets or paper files is a losing battle. Contracts get
           forgotten, customers don&apos;t get called, and a competitor swoops in
-          with a friendly reminder. ServiceOS automates the entire maintenance
+          with a friendly reminder. Fieseros automates the entire maintenance
           contract lifecycle: scheduling, SMS reminders, dispatch,
           invoicing, and renewal. You set it once, and the recurring revenue
           keeps flowing.
@@ -250,7 +250,7 @@ export default function HvacSoftwarePage() {
           When a customer calls about \"the AC in the upstairs bedroom that
           keeps tripping,\" you need to know exactly which unit that is — model,
           serial, install date, refrigerant type, what was repaired last summer,
-          whether it&apos;s still under warranty. ServiceOS keeps a complete
+          whether it&apos;s still under warranty. Fieseros keeps a complete
           asset record for every piece of equipment at every customer site.
           This isn&apos;t just operational efficiency — it&apos;s how you build
           trust. When a technician walks up to a unit already knowing its
@@ -263,7 +263,7 @@ export default function HvacSoftwarePage() {
           certification. Gas furnace work requires specific qualifications.
           Commercial equipment often requires manufacturer-specific training.
           Dispatching the wrong technician isn&apos;t just inefficient —
-          it&apos;s a legal liability. ServiceOS tracks every technician&apos;s
+          it&apos;s a legal liability. Fieseros tracks every technician&apos;s
           certifications and only dispatches them to jobs they&apos;re qualified
           for. Refrigerant usage is logged per job, with a complete audit trail
           for EPA compliance. And every permit, inspection, and safety
@@ -275,7 +275,7 @@ export default function HvacSoftwarePage() {
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything HVAC business owners ask before switching to ServiceOS."
+        subtitle="Everything HVAC business owners ask before switching to Fieseros."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -286,7 +286,7 @@ export default function HvacSoftwarePage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/roofing-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

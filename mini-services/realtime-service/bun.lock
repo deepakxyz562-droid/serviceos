@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "serviceos-realtime-service",
+      "name": "fieseros-realtime-service",
       "dependencies": {
         "jsonwebtoken": "^9.0.3",
         "socket.io": "^4.8.3",

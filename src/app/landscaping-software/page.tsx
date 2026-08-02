@@ -20,7 +20,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Landscaping Software — Crew Routing, Design-Build Quotes & Invoicing | ServiceOS",
+  title: "Landscaping Software — Crew Routing, Design-Build Quotes & Invoicing | Fieseros",
   description:
     "Landscaping business software for multi-stop crew routing, recurring maintenance contracts, design-build proposals, and material inventory. The all-in-one landscaping CRM that helps landscapers grow. Start free today.",
   keywords: [
@@ -30,13 +30,13 @@ export const metadata: Metadata = {
     "landscape design software",
     "landscaping invoicing",
   ],
-  alternates: { canonical: "https://serviceos.cc/landscaping-software" },
+  alternates: { canonical: "https://fieseros.com/landscaping-software" },
   openGraph: {
-    title: "Landscaping Software & CRM | ServiceOS",
+    title: "Landscaping Software & CRM | Fieseros",
     description:
       "Optimize multi-stop crew routes, manage recurring maintenance contracts, quote design-build projects, and track plant and material inventory. Landscaping software built for the way crews actually work.",
-    url: "https://serviceos.cc/landscaping-software",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/landscaping-software",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -53,7 +53,7 @@ const features: Feature[] = [
     icon: Truck,
     title: "Multi-Stop Crew Route Planning",
     description:
-      "Optimize daily routes for crews hitting 8–12 lawns across town. ServiceOS clusters jobs by neighborhood, calculates drive time, and pushes the ordered route to each crew's phone so nobody's zig-zagging across the city.",
+      "Optimize daily routes for crews hitting 8–12 lawns across town. Fieseros clusters jobs by neighborhood, calculates drive time, and pushes the ordered route to each crew's phone so nobody's zig-zagging across the city.",
   },
   {
     icon: Leaf,
@@ -65,7 +65,7 @@ const features: Feature[] = [
     icon: Sprout,
     title: "Seasonal Scheduling Packages",
     description:
-      "Spring cleanups, summer mows, fall aeration, winter prep — set up seasonal service packages once and ServiceOS auto-schedules the right crew, sends customer reminders, and queues invoices for each turn of the season.",
+      "Spring cleanups, summer mows, fall aeration, winter prep — set up seasonal service packages once and Fieseros auto-schedules the right crew, sends customer reminders, and queues invoices for each turn of the season.",
   },
   {
     icon: Sun,
@@ -83,43 +83,43 @@ const features: Feature[] = [
 
 const faqs = [
   {
-    question: "How does ServiceOS handle recurring weekly mowing routes?",
+    question: "How does Fieseros handle recurring weekly mowing routes?",
     answer:
-      "ServiceOS treats weekly and biweekly mow contracts as recurring schedules. You define the customer, the service (mow, trim, blow), the frequency, and the price — and ServiceOS auto-generates each visit on the right day, assigns it to the crew that owns that neighborhood, and queues the invoice after the crew marks the job done. Customers get an Email & SMS reminder the day before, and you get route-density reports that show which neighborhoods are profitable and which crews are running behind. Most landscape businesses cut drive time by 20–30% within the first month of using ServiceOS routing.",
+      "Fieseros treats weekly and biweekly mow contracts as recurring schedules. You define the customer, the service (mow, trim, blow), the frequency, and the price — and Fieseros auto-generates each visit on the right day, assigns it to the crew that owns that neighborhood, and queues the invoice after the crew marks the job done. Customers get an Email & SMS reminder the day before, and you get route-density reports that show which neighborhoods are profitable and which crews are running behind. Most landscape businesses cut drive time by 20–30% within the first month of using Fieseros routing.",
   },
   {
-    question: "Can I quote and sell design-build landscaping projects through ServiceOS?",
+    question: "Can I quote and sell design-build landscaping projects through Fieseros?",
     answer:
-      "Yes. After a site visit, you build a proposal in ServiceOS with before photos, a line-item scope (plants, pavers, labor, equipment), and your price. The proposal goes to the customer via Email & SMS, where they approve with a single tap in the customer portal. On approval, ServiceOS creates the job, reserves the materials in inventory, schedules the crew, and generates a deposit invoice — so the design-build sale flows straight into operations without you re-entering a single line. Customers love the visual proposals, and you close more work without the back-and-forth of email threads.",
+      "Yes. After a site visit, you build a proposal in Fieseros with before photos, a line-item scope (plants, pavers, labor, equipment), and your price. The proposal goes to the customer via Email & SMS, where they approve with a single tap in the customer portal. On approval, Fieseros creates the job, reserves the materials in inventory, schedules the crew, and generates a deposit invoice — so the design-build sale flows straight into operations without you re-entering a single line. Customers love the visual proposals, and you close more work without the back-and-forth of email threads.",
   },
   {
     question: "How does material and plant inventory work for landscapers?",
     answer:
-      "Landscapers carry a lot of material — mulch by the yard, stone by the ton, nursery stock, pavers, edging, irrigation parts. ServiceOS tracks all of it across your yard and each truck. When a crew loads material for a job, they log it on their phone; it deducts from inventory and adds to the customer invoice at your markup. Reorder alerts fire when stock runs low, so you're never turning away a job because you're out of edging or under-ordering mulch. Most landscape businesses recover 5–10% in lost material revenue within the first month of switching.",
+      "Landscapers carry a lot of material — mulch by the yard, stone by the ton, nursery stock, pavers, edging, irrigation parts. Fieseros tracks all of it across your yard and each truck. When a crew loads material for a job, they log it on their phone; it deducts from inventory and adds to the customer invoice at your markup. Reorder alerts fire when stock runs low, so you're never turning away a job because you're out of edging or under-ordering mulch. Most landscape businesses recover 5–10% in lost material revenue within the first month of switching.",
   },
   {
-    question: "Can crews use ServiceOS on their phones in the field?",
+    question: "Can crews use Fieseros on their phones in the field?",
     answer:
-      "Yes. ServiceOS is fully mobile. Each crew member sees their daily route, job details, customer notes, site photos, and the scope of work on their phone. They mark jobs complete, capture before and after photos, log materials used, and collect payment on-site — all without coming back to the office. Drive time between jobs is calculated automatically, and route changes pushed from the office show up on the crew's phone instantly. For crews working across multiple neighborhoods in a day, the mobile experience is the difference between 8 jobs and 12.",
+      "Yes. Fieseros is fully mobile. Each crew member sees their daily route, job details, customer notes, site photos, and the scope of work on their phone. They mark jobs complete, capture before and after photos, log materials used, and collect payment on-site — all without coming back to the office. Drive time between jobs is calculated automatically, and route changes pushed from the office show up on the crew's phone instantly. For crews working across multiple neighborhoods in a day, the mobile experience is the difference between 8 jobs and 12.",
   },
   {
     question: "How does invoicing work for landscaping businesses?",
     answer:
-      "As soon as a crew marks a job complete, ServiceOS generates a professional invoice with labor, materials, and photos attached, then sends it to the customer via Email & SMS with a secure payment link. For design-build projects, you can set up milestone invoicing — deposit on approval, progress billing at phase completions, final on walk-through. Customers pay by card or bank transfer from their phone, and you see payment status in real time with automated reminders for unpaid balances. Most landscape businesses using ServiceOS get paid 2x faster than with paper invoices.",
+      "As soon as a crew marks a job complete, Fieseros generates a professional invoice with labor, materials, and photos attached, then sends it to the customer via Email & SMS with a secure payment link. For design-build projects, you can set up milestone invoicing — deposit on approval, progress billing at phase completions, final on walk-through. Customers pay by card or bank transfer from their phone, and you see payment status in real time with automated reminders for unpaid balances. Most landscape businesses using Fieseros get paid 2x faster than with paper invoices.",
   },
   {
     question: "Can I manage both residential and commercial landscaping contracts?",
     answer:
-      "Absolutely. ServiceOS handles residential recurring maintenance (weekly mows, seasonal cleanups) and commercial contracts (HOAs, office parks, retail centers) in the same platform. For commercial accounts, you can set up monthly retainers, track multiple properties per customer, attach contract documents, and schedule site visits across the portfolio. Reports break out revenue and cost by customer type so you can see whether residential or commercial is more profitable for your business — and which properties to renegotiate or drop before next season.",
+      "Absolutely. Fieseros handles residential recurring maintenance (weekly mows, seasonal cleanups) and commercial contracts (HOAs, office parks, retail centers) in the same platform. For commercial accounts, you can set up monthly retainers, track multiple properties per customer, attach contract documents, and schedule site visits across the portfolio. Reports break out revenue and cost by customer type so you can see whether residential or commercial is more profitable for your business — and which properties to renegotiate or drop before next season.",
   },
 ];
 
 export default function LandscapingSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Landscaping Business Software",
+    name: "Fieseros — Landscaping Business Software",
     description:
       "Landscaping CRM and crew dispatch software with multi-stop route planning, recurring maintenance contracts, design-build proposals, material inventory, and seasonal scheduling.",
-    url: "https://serviceos.cc/landscaping-software",
+    url: "https://fieseros.com/landscaping-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
@@ -128,15 +128,15 @@ export default function LandscapingSoftwarePage() {
     <CornerstoneLayout
       activePath="/landscaping-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Landscaping Software", url: "https://serviceos.cc/landscaping-software" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Landscaping Software", url: "https://fieseros.com/landscaping-software" },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
         eyebrow="Landscaping Software"
         title="Landscaping Business Software That Keeps Your Crews — and Your Margins — Growing"
-        subtitle="From weekly mow routes to multi-week design-build projects, ServiceOS helps landscaping businesses optimize crews, quote faster, track materials, and get paid via Email & SMS."
+        subtitle="From weekly mow routes to multi-week design-build projects, Fieseros helps landscaping businesses optimize crews, quote faster, track materials, and get paid via Email & SMS."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -172,14 +172,14 @@ export default function LandscapingSoftwarePage() {
               Most landscaping businesses still juggle text messages and
               scattered apps, paper work orders, and a mental inventory of
               mulch. Here&apos;s what
-              that costs you — and what changes when you switch to ServiceOS.
+              that costs you — and what changes when you switch to Fieseros.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <Wrench className="h-5 w-5 text-destructive" />
-                Without ServiceOS
+                Without Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -200,7 +200,7 @@ export default function LandscapingSoftwarePage() {
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With ServiceOS
+                With Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -222,14 +222,14 @@ export default function LandscapingSoftwarePage() {
         </div>
       </section>
 
-      <ContentSection title="Why landscaping businesses choose ServiceOS">
+      <ContentSection title="Why landscaping businesses choose Fieseros">
         <p>
           Landscaping is a seasonal, weather-dependent business with two
           distinct revenue engines: recurring maintenance (the weekly mows,
           the seasonal cleanups, the predictable contract income) and
           design-build projects (the patios, the plantings, the hardscapes
           that bring bigger one-time revenue). Most landscaping software only
-          handles one of these well. ServiceOS is built to run both — from the
+          handles one of these well. Fieseros is built to run both — from the
           recurring weekly route to the multi-week design-build — in a single
           workflow your crews and office team can actually use.
         </p>
@@ -241,7 +241,7 @@ export default function LandscapingSoftwarePage() {
           special instructions (&ldquo;don&apos;t trim the hydrangeas&rdquo;).
           Without a proper landscaping CRM, routes get rebuilt every Monday
           by hand, customers get missed, and the office fields calls all day
-          long. ServiceOS automates the entire recurring schedule — set the
+          long. Fieseros automates the entire recurring schedule — set the
           contract once, and the right jobs show up on the right crew&apos;s
           phone every week, with reminders, invoicing, and renewal tracking
           handled for you.
@@ -251,7 +251,7 @@ export default function LandscapingSoftwarePage() {
           lost on accurate quoting and clean execution. A landscape design
           proposal that lives in an email thread can sit unanswered for weeks.
           A material list that lives in your head can blow a budget by 20%.
-          ServiceOS turns site visits into visual proposals with before
+          Fieseros turns site visits into visual proposals with before
           photos, line-item scopes, and your price — sent to the customer
           via Email & SMS, approved with a tap, and converted straight into a
           scheduled job with materials reserved and a deposit invoice
@@ -260,12 +260,12 @@ export default function LandscapingSoftwarePage() {
         </p>
         <p>
           Finally, there&apos;s the operational backbone — crews, trucks, and
-          materials moving across dozens of job sites every day. ServiceOS
+          materials moving across dozens of job sites every day. Fieseros
           shows you live GPS on every crew, optimized routes that minimize
           drive time, real-time material usage that auto-flows to invoices,
           and before/after photos that protect you in disputes and build a
           portfolio for future sales. Whether you&apos;re running two crews
-          or twenty, landscaping dispatch software from ServiceOS gives you
+          or twenty, landscaping dispatch software from Fieseros gives you
           the visibility to grow without the chaos that usually comes with
           it.
         </p>
@@ -273,7 +273,7 @@ export default function LandscapingSoftwarePage() {
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything landscapers ask before switching to ServiceOS."
+        subtitle="Everything landscapers ask before switching to Fieseros."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -284,7 +284,7 @@ export default function LandscapingSoftwarePage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/lawn-care-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

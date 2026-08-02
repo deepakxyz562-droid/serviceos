@@ -21,7 +21,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Handyman Software — Scheduling, Quoting & On-Site Payment | ServiceOS",
+  title: "Handyman Software — Scheduling, Quoting & On-Site Payment | Fieseros",
   description:
     "Handyman business software for same-day scheduling, flat-rate and time-and-materials quoting, on-site card payment, and recurring maintenance subscriptions. The handyman CRM that helps you get paid before you leave. Start free today.",
   keywords: [
@@ -31,13 +31,13 @@ export const metadata: Metadata = {
     "handyman invoicing",
     "handyman business software",
   ],
-  alternates: { canonical: "https://serviceos.cc/handyman-software" },
+  alternates: { canonical: "https://fieseros.com/handyman-software" },
   openGraph: {
-    title: "Handyman Software & CRM | ServiceOS",
+    title: "Handyman Software & CRM | Fieseros",
     description:
       "Schedule same-day jobs, quote flat-rate and time-and-materials, lock in scope with photo checklists, collect payment on-site, and run recurring home checkup subscriptions. Handyman software built for solo and small teams.",
-    url: "https://serviceos.cc/handyman-software",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/handyman-software",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -48,13 +48,13 @@ const features: Feature[] = [
     icon: Clock,
     title: "Same-Day Job Scheduling",
     description:
-      "A customer calls at 9 a.m. with a leaky faucet; you slot them in at 2 p.m. the same day. ServiceOS shows your live availability, sends the customer an Email & SMS confirmation with ETA, and pushes job details to your phone.",
+      "A customer calls at 9 a.m. with a leaky faucet; you slot them in at 2 p.m. the same day. Fieseros shows your live availability, sends the customer an Email & SMS confirmation with ETA, and pushes job details to your phone.",
   },
   {
     icon: Hammer,
     title: "Flat-Rate vs Time-and-Materials Quoting",
     description:
-      "Quote a fixed price for a hang-a-ceiling-fan job, or bill T&M for a figure-out-why-the-door-sticks diagnostic. ServiceOS supports both — flat-rate quotes approved via Email & SMS, or timer-based T&M invoicing that starts when you arrive.",
+      "Quote a fixed price for a hang-a-ceiling-fan job, or bill T&M for a figure-out-why-the-door-sticks diagnostic. Fieseros supports both — flat-rate quotes approved via Email & SMS, or timer-based T&M invoicing that starts when you arrive.",
   },
   {
     icon: ClipboardCheck,
@@ -66,13 +66,13 @@ const features: Feature[] = [
     icon: CreditCard,
     title: "On-Site Card Payment",
     description:
-      "The moment you mark the job done, ServiceOS sends a payment link to the customer's phone. They tap, pay by card or bank transfer, and you walk out with payment confirmed — no invoicing, no chasing, no waiting 30 days.",
+      "The moment you mark the job done, Fieseros sends a payment link to the customer's phone. They tap, pay by card or bank transfer, and you walk out with payment confirmed — no invoicing, no chasing, no waiting 30 days.",
   },
   {
     icon: RefreshCw,
     title: "Recurring Maintenance Subscriptions",
     description:
-      "Offer quarterly home checkup subscriptions: HVAC filter changes, gutter cleans, smoke-alarm tests, small fixes caught early. ServiceOS auto-schedules each visit, charges the customer's card, and sends the Email & SMS reminder.",
+      "Offer quarterly home checkup subscriptions: HVAC filter changes, gutter cleans, smoke-alarm tests, small fixes caught early. Fieseros auto-schedules each visit, charges the customer's card, and sends the Email & SMS reminder.",
   },
   {
     icon: History,
@@ -84,43 +84,43 @@ const features: Feature[] = [
 
 const faqs = [
   {
-    question: "How does ServiceOS help a solo handyman run their business?",
+    question: "How does Fieseros help a solo handyman run their business?",
     answer:
-      "ServiceOS is built for solo and small-team handyman businesses — the kind of operation where you're the owner, the estimator, the technician, and the biller all at once. Customers call or message with a job, you slot them into your calendar from your phone, ServiceOS sends them an Email & SMS confirmation with ETA, and when the job is done you tap to send a payment link and get paid before you leave. No spreadsheets, no paper invoices, no chasing payment. Most solo handymen using ServiceOS recover 3–5 hours of admin time every week and get paid on the spot on over 90% of jobs.",
+      "Fieseros is built for solo and small-team handyman businesses — the kind of operation where you're the owner, the estimator, the technician, and the biller all at once. Customers call or message with a job, you slot them into your calendar from your phone, Fieseros sends them an Email & SMS confirmation with ETA, and when the job is done you tap to send a payment link and get paid before you leave. No spreadsheets, no paper invoices, no chasing payment. Most solo handymen using Fieseros recover 3–5 hours of admin time every week and get paid on the spot on over 90% of jobs.",
   },
   {
     question: "Can I quote both flat-rate and time-and-materials jobs?",
     answer:
-      "Yes. ServiceOS handles both quoting styles that handymen actually use. For a defined scope (hang a ceiling fan I already bought), send a flat-rate quote the customer approves via Email & SMS before you arrive. For a diagnostic (figure out why the door keeps sticking), start a T&M timer when you arrive, log materials as you use them, and stop the timer when you're done — ServiceOS builds the invoice from the actual time and materials. You can even mix the two on the same job: a flat diagnostic fee plus T&M for whatever you fix once you've diagnosed the problem.",
+      "Yes. Fieseros handles both quoting styles that handymen actually use. For a defined scope (hang a ceiling fan I already bought), send a flat-rate quote the customer approves via Email & SMS before you arrive. For a diagnostic (figure out why the door keeps sticking), start a T&M timer when you arrive, log materials as you use them, and stop the timer when you're done — Fieseros builds the invoice from the actual time and materials. You can even mix the two on the same job: a flat diagnostic fee plus T&M for whatever you fix once you've diagnosed the problem.",
   },
   {
     question: "How does on-site payment work for handymen?",
     answer:
-      "When you mark a job complete, ServiceOS generates the invoice and sends it to the customer's phone via Email & SMS with a secure payment link — while you're still standing in their kitchen. The customer taps the link, pays by card or bank transfer, and you see payment confirmation in real time before you walk out the door. No more I'll mail you a check, no more 30-day chases, no more writing off small unpaid invoices. Most handymen using ServiceOS collect payment on over 90% of jobs before they leave the site, which dramatically improves cash flow and eliminates the awkward follow-up call.",
+      "When you mark a job complete, Fieseros generates the invoice and sends it to the customer's phone via Email & SMS with a secure payment link — while you're still standing in their kitchen. The customer taps the link, pays by card or bank transfer, and you see payment confirmation in real time before you walk out the door. No more I'll mail you a check, no more 30-day chases, no more writing off small unpaid invoices. Most handymen using Fieseros collect payment on over 90% of jobs before they leave the site, which dramatically improves cash flow and eliminates the awkward follow-up call.",
   },
   {
     question: "Can I offer recurring maintenance subscriptions to my handyman customers?",
     answer:
-      "Absolutely. Many handymen are now offering quarterly home checkup subscriptions — HVAC filter changes, gutter cleans, smoke-alarm battery tests, small fixes caught early — as a way to smooth out income and build long-term customer relationships. You set up the subscription once in ServiceOS, and it auto-schedules each visit, charges the customer's stored card, sends them an Email & SMS reminder, and queues the work order. Recurring subscriptions turn one-off handyman customers into predictable monthly revenue, and they give you a reason to be in the house when bigger repair opportunities come up.",
+      "Absolutely. Many handymen are now offering quarterly home checkup subscriptions — HVAC filter changes, gutter cleans, smoke-alarm battery tests, small fixes caught early — as a way to smooth out income and build long-term customer relationships. You set up the subscription once in Fieseros, and it auto-schedules each visit, charges the customer's stored card, sends them an Email & SMS reminder, and queues the work order. Recurring subscriptions turn one-off handyman customers into predictable monthly revenue, and they give you a reason to be in the house when bigger repair opportunities come up.",
   },
   {
-    question: "How does ServiceOS handle scope creep on fixed-price handyman jobs?",
+    question: "How does Fieseros handle scope creep on fixed-price handyman jobs?",
     answer:
-      "Scope creep is the silent margin killer for handymen. A customer agrees to hang a TV and then asks you to also patch the drywall, run the cables, and mount the soundbar. ServiceOS handles this with photo checklists: before you start, you photograph the agreed scope and attach it to the work order. When the customer asks for more, you can show the original scope and quote the additional work as a separate line item — sent and approved via Email & SMS before you do it. No more free work, no more awkward conversations at the door, and the customer understands exactly what they're paying for at each step.",
+      "Scope creep is the silent margin killer for handymen. A customer agrees to hang a TV and then asks you to also patch the drywall, run the cables, and mount the soundbar. Fieseros handles this with photo checklists: before you start, you photograph the agreed scope and attach it to the work order. When the customer asks for more, you can show the original scope and quote the additional work as a separate line item — sent and approved via Email & SMS before you do it. No more free work, no more awkward conversations at the door, and the customer understands exactly what they're paying for at each step.",
   },
   {
     question: "How does customer history work for repeat handyman customers?",
     answer:
-      "Every job you do — every hinge you replaced, every faucet you fixed, every fan you hung — is stored permanently against the customer's record in ServiceOS. When a customer calls back six months or two years later, you pull up their history in seconds: what you did, what you charged, what parts you used, any photos from the job, and notes about quirks of their house. That history makes you look professional, helps you diagnose recurring problems faster, and turns one-time customers into long-term clients who call you first for anything that breaks around the house.",
+      "Every job you do — every hinge you replaced, every faucet you fixed, every fan you hung — is stored permanently against the customer's record in Fieseros. When a customer calls back six months or two years later, you pull up their history in seconds: what you did, what you charged, what parts you used, any photos from the job, and notes about quirks of their house. That history makes you look professional, helps you diagnose recurring problems faster, and turns one-time customers into long-term clients who call you first for anything that breaks around the house.",
   },
 ];
 
 export default function HandymanSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Handyman Business Software",
+    name: "Fieseros — Handyman Business Software",
     description:
       "Handyman CRM and scheduling software with same-day job booking, flat-rate and T&M quoting, photo scope checklists, on-site card payment, recurring maintenance subscriptions, and full customer job history.",
-    url: "https://serviceos.cc/handyman-software",
+    url: "https://fieseros.com/handyman-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
@@ -129,15 +129,15 @@ export default function HandymanSoftwarePage() {
     <CornerstoneLayout
       activePath="/handyman-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Handyman Software", url: "https://serviceos.cc/handyman-software" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Handyman Software", url: "https://fieseros.com/handyman-software" },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
         eyebrow="Handyman Software"
         title="Handyman Software That Gets You Paid Before You Walk Out the Door"
-        subtitle="From same-day scheduling to on-site card payment, ServiceOS helps solo and small-team handymen quote, document scope, collect payment, and turn one-off fixes into long-term customers."
+        subtitle="From same-day scheduling to on-site card payment, Fieseros helps solo and small-team handymen quote, document scope, collect payment, and turn one-off fixes into long-term customers."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -173,14 +173,14 @@ export default function HandymanSoftwarePage() {
               Most handymen still run their business on a paper calendar, a
               pocket full of receipts, and a stack of unpaid invoices.
               Here&apos;s what that costs you — and what changes when you
-              switch to ServiceOS.
+              switch to Fieseros.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <Wrench className="h-5 w-5 text-destructive" />
-                Without ServiceOS
+                Without Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -201,7 +201,7 @@ export default function HandymanSoftwarePage() {
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With ServiceOS
+                With Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -223,7 +223,7 @@ export default function HandymanSoftwarePage() {
         </div>
       </section>
 
-      <ContentSection title="Why handyman businesses choose ServiceOS">
+      <ContentSection title="Why handyman businesses choose Fieseros">
         <p>
           Handyman work is the most entrepreneurial corner of the home
           services industry. A solo operator might be the owner, the
@@ -241,7 +241,7 @@ export default function HandymanSoftwarePage() {
           customer agrees to hang a ceiling fan, and by the time you leave,
           you&apos;ve also patched drywall, run a new electrical line,
           replaced a light switch, and hauled away their old fixture — all
-          for the original quote. ServiceOS fixes this with photo
+          for the original quote. Fieseros fixes this with photo
           checklists: before you start, you photograph the agreed scope and
           attach it to the work order. When the customer asks for more, you
           can quote it as an additional line item — sent and approved via
@@ -251,13 +251,13 @@ export default function HandymanSoftwarePage() {
         <p>
           Then there&apos;s payment. Handymen are notorious for leaving a
           job without collecting payment — trusting that the customer will
-          send a check that may or may not ever arrive. ServiceOS makes
+          send a check that may or may not ever arrive. Fieseros makes
           on-site payment the default: the moment you mark the job complete,
           the invoice goes to the customer&apos;s phone via Email & SMS
           with a secure payment link. They pay by card or bank transfer while
           you&apos;re still packing up your tools. No chasing, no 30-day
           waits, no writing off small unpaid invoices. Most handymen using
-          ServiceOS collect payment on over 90% of jobs before they leave
+          Fieseros collect payment on over 90% of jobs before they leave
           the site.
         </p>
         <p>
@@ -266,7 +266,7 @@ export default function HandymanSoftwarePage() {
           likely to call you again — for the dryer vent next spring, the
           deck boards next summer, the smoke alarms next fall. Without a
           proper handyman CRM, you forget what you did last time and start
-          every repeat visit cold. ServiceOS stores every job against the
+          every repeat visit cold. Fieseros stores every job against the
           customer forever — what you fixed, what you charged, what parts
           you used, photos, and notes. Repeat customers feel known, you
           diagnose faster, and a one-time job becomes a multi-year
@@ -276,7 +276,7 @@ export default function HandymanSoftwarePage() {
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything handymen ask before switching to ServiceOS."
+        subtitle="Everything handymen ask before switching to Fieseros."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -287,7 +287,7 @@ export default function HandymanSoftwarePage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/painting-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

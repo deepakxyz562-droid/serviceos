@@ -1388,7 +1388,7 @@ export function FormBuilderView() {
   const siteOrigin = typeof window !== 'undefined' ? window.location.origin : '';
 
   // The hosted form route is /f/[slug] (see src/app/f/[slug]/page.tsx).
-  // Previously this pointed to a non-existent https://app.serviceos.cc/form/{slug} — wrong domain + wrong path.
+  // Previously this pointed to a non-existent https://app.fieseros.com/form/{slug} — wrong domain + wrong path.
   const getFormLink = (form: FormItem) => {
     const slug = form.slug || form.id;
     return `${siteOrigin}/f/${slug}`;
@@ -1729,7 +1729,7 @@ export function FormBuilderView() {
                     <h4 className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">Submission Actions</h4>
                   </div>
                   <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                    This is what makes ServiceOS Forms different from Google Forms. When someone submits your form, automatically create leads, send WhatsApp messages, and trigger business processes.
+                    This is what makes Fieseros Forms different from Google Forms. When someone submits your form, automatically create leads, send WhatsApp messages, and trigger business processes.
                   </p>
                 </div>
 

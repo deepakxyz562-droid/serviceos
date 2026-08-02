@@ -26,7 +26,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Technician Mobile App — Offline-Capable Field Service App | ServiceOS",
+  title: "Technician Mobile App — Offline-Capable Field Service App | Fieseros",
   description:
     "A mobile app for field technicians with job details, navigation, digital checklists, photo and signature capture, and time tracking. Works offline. Syncs when reconnected. No app store required.",
   keywords: [
@@ -36,13 +36,13 @@ export const metadata: Metadata = {
     "field worker app",
     "service technician app",
   ],
-  alternates: { canonical: "https://serviceos.cc/technician-app" },
+  alternates: { canonical: "https://fieseros.com/technician-app" },
   openGraph: {
-    title: "Technician Mobile App — Offline-Capable Field Service App | ServiceOS",
+    title: "Technician Mobile App — Offline-Capable Field Service App | Fieseros",
     description:
       "Give technicians a mobile app with job details, navigation, checklists, photo and signature capture, and time tracking. Works offline in basements and remote areas — syncs when reconnected.",
-    url: "https://serviceos.cc/technician-app",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/technician-app",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -53,7 +53,7 @@ const features: Feature[] = [
     icon: Smartphone,
     title: "Offline-capable PWA",
     description:
-      "ServiceOS is a progressive web app — installs on any phone, no app store required. Works offline in basements, elevators, and remote areas. Photos, signatures, checklists, and job updates are saved locally and sync the moment a connection returns.",
+      "Fieseros is a progressive web app — installs on any phone, no app store required. Works offline in basements, elevators, and remote areas. Photos, signatures, checklists, and job updates are saved locally and sync the moment a connection returns.",
   },
   {
     icon: Navigation,
@@ -129,41 +129,41 @@ const faqs = [
   {
     question: "Do technicians need to download an app?",
     answer:
-      "No app store visit required. ServiceOS is a progressive web app (PWA) — technicians open a link in their phone's browser (Chrome, Safari, Samsung Internet), tap 'Add to Home Screen', and it installs like a native app with its own icon, splash screen, and full-screen experience. This means zero friction on day one: no App Store account, no Google Play login, no waiting for downloads. It also means updates are instant — when we ship a new feature, every technician gets it the next time they open the app, no update prompts required. Most service businesses get their entire field team set up in under 10 minutes by sending a single SMS or email link.",
+      "No app store visit required. Fieseros is a progressive web app (PWA) — technicians open a link in their phone's browser (Chrome, Safari, Samsung Internet), tap 'Add to Home Screen', and it installs like a native app with its own icon, splash screen, and full-screen experience. This means zero friction on day one: no App Store account, no Google Play login, no waiting for downloads. It also means updates are instant — when we ship a new feature, every technician gets it the next time they open the app, no update prompts required. Most service businesses get their entire field team set up in under 10 minutes by sending a single SMS or email link.",
   },
   {
     question: "Does it work on iPhone and Android?",
     answer:
-      "Yes — ServiceOS works on any modern smartphone, including iPhone (iOS 12.4+), Android (8.0+), and tablets of any size. Because it's a progressive web app, the experience is consistent across platforms — your Android technicians and iPhone technicians see the same interface, the same features, and the same updates. There's no 'Android got the new feature, iOS is still waiting' problem that plagues native apps. The app also adapts to phone size — technicians on small phones see a streamlined mobile interface, while those on tablets or large phones get a more spacious layout. Whatever phone your technicians already own, ServiceOS runs on it.",
+      "Yes — Fieseros works on any modern smartphone, including iPhone (iOS 12.4+), Android (8.0+), and tablets of any size. Because it's a progressive web app, the experience is consistent across platforms — your Android technicians and iPhone technicians see the same interface, the same features, and the same updates. There's no 'Android got the new feature, iOS is still waiting' problem that plagues native apps. The app also adapts to phone size — technicians on small phones see a streamlined mobile interface, while those on tablets or large phones get a more spacious layout. Whatever phone your technicians already own, Fieseros runs on it.",
   },
   {
     question: "What happens offline?",
     answer:
-      "ServiceOS is engineered for the real world — basements, elevator shafts, rural areas, customer homes with poor reception, buildings with thick concrete walls. When a technician loses connection, the app keeps working: they can still see their job list, view customer details and history, complete checklists, capture photos and signatures, log time, and mark jobs complete. Everything is saved locally on the phone in an encrypted cache. The moment a connection returns — even briefly — the app syncs all the queued data to the cloud in the background. The technician doesn't have to remember to sync; it just happens. The office dashboard updates with the new data within seconds. Most service businesses see zero productivity loss from connectivity issues after switching to ServiceOS.",
+      "Fieseros is engineered for the real world — basements, elevator shafts, rural areas, customer homes with poor reception, buildings with thick concrete walls. When a technician loses connection, the app keeps working: they can still see their job list, view customer details and history, complete checklists, capture photos and signatures, log time, and mark jobs complete. Everything is saved locally on the phone in an encrypted cache. The moment a connection returns — even briefly — the app syncs all the queued data to the cloud in the background. The technician doesn't have to remember to sync; it just happens. The office dashboard updates with the new data within seconds. Most service businesses see zero productivity loss from connectivity issues after switching to Fieseros.",
   },
   {
     question: "Can technicians see customer history?",
     answer:
-      "Yes — and this is one of the biggest reasons service businesses switch to ServiceOS. When a technician opens a job, they see not just the current scope but the customer's full history: every previous job, every asset (with serial numbers, install dates, warranty status), prior service notes from other technicians, photos from past visits, and any customer-specific instructions ('prefers morning appointments', 'has aggressive dog in backyard', 'gate code 4321'). This means even a brand-new technician arrives prepared, as if they'd been servicing that customer for years. It also means a returning customer never has to re-explain their situation — the technician already knows the AC unit's history, the last repair, and what was discussed last time. That kind of continuity is what makes service businesses feel professional.",
+      "Yes — and this is one of the biggest reasons service businesses switch to Fieseros. When a technician opens a job, they see not just the current scope but the customer's full history: every previous job, every asset (with serial numbers, install dates, warranty status), prior service notes from other technicians, photos from past visits, and any customer-specific instructions ('prefers morning appointments', 'has aggressive dog in backyard', 'gate code 4321'). This means even a brand-new technician arrives prepared, as if they'd been servicing that customer for years. It also means a returning customer never has to re-explain their situation — the technician already knows the AC unit's history, the last repair, and what was discussed last time. That kind of continuity is what makes service businesses feel professional.",
   },
   {
     question: "Does it track GPS location?",
     answer:
-      "Yes — but only while the technician is clocked in, and the technician is explicitly notified. When a technician clocks in for a job, ServiceOS starts capturing their GPS location at intervals, which is visible to the dispatcher on a live team map. This isn't about surveillance — it's about operational efficiency. When a customer calls asking 'where is my technician?', you have an instant answer. When an emergency call comes in, you can see who's closest. When a job runs long, you can proactively adjust the rest of the day. Tracking stops the moment the technician clocks out, and personal time is respected. We're transparent about this with technicians during onboarding, and most technicians actually appreciate it because it protects them — proof of arrival, proof of time on site, automatic drive-time logging for expense reports.",
+      "Yes — but only while the technician is clocked in, and the technician is explicitly notified. When a technician clocks in for a job, Fieseros starts capturing their GPS location at intervals, which is visible to the dispatcher on a live team map. This isn't about surveillance — it's about operational efficiency. When a customer calls asking 'where is my technician?', you have an instant answer. When an emergency call comes in, you can see who's closest. When a job runs long, you can proactively adjust the rest of the day. Tracking stops the moment the technician clocks out, and personal time is respected. We're transparent about this with technicians during onboarding, and most technicians actually appreciate it because it protects them — proof of arrival, proof of time on site, automatic drive-time logging for expense reports.",
   },
   {
     question: "Can technicians create invoices?",
     answer:
-      "Technicians don't create invoices from scratch — but they trigger them. When a technician marks a job complete, they capture the parts used, log their labor hours, attach before-and-after photos, and collect the customer's signature. ServiceOS then compiles all of that into a draft invoice automatically, with line items pulled from the work order, labor calculated from time entries, and tax applied based on the customer's location. The office reviews the draft and hits send — usually within 60 seconds of job completion. For technicians who are trusted to bill directly (solo operators, owner-technicians, senior field techs), you can grant them permission to send invoices straight from the field without office review. Either way, the customer receives a professional PDF invoice plus a payment link by Email & SMS instantly. No more end-of-week invoice catch-up marathons.",
+      "Technicians don't create invoices from scratch — but they trigger them. When a technician marks a job complete, they capture the parts used, log their labor hours, attach before-and-after photos, and collect the customer's signature. Fieseros then compiles all of that into a draft invoice automatically, with line items pulled from the work order, labor calculated from time entries, and tax applied based on the customer's location. The office reviews the draft and hits send — usually within 60 seconds of job completion. For technicians who are trusted to bill directly (solo operators, owner-technicians, senior field techs), you can grant them permission to send invoices straight from the field without office review. Either way, the customer receives a professional PDF invoice plus a payment link by Email & SMS instantly. No more end-of-week invoice catch-up marathons.",
   },
 ];
 
 export default function TechnicianAppPage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Technician Mobile App",
+    name: "Fieseros — Technician Mobile App",
     description:
       "An offline-capable progressive web app for field service technicians — job details, navigation, digital checklists, photo and signature capture, and time tracking. Works on iPhone and Android without an app store visit.",
-    url: "https://serviceos.cc/technician-app",
+    url: "https://fieseros.com/technician-app",
     applicationCategory: "BusinessApplication",
     operatingSystem: "iOS, Android, Web",
     offers: { price: "0", priceCurrency: "USD" },
@@ -173,8 +173,8 @@ export default function TechnicianAppPage() {
     <CornerstoneLayout
       activePath="/scheduling-and-dispatch"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Technician App", url: "https://serviceos.cc/technician-app" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Technician App", url: "https://fieseros.com/technician-app" },
       ]}
       additionalSchema={[appSchema]}
     >
@@ -215,7 +215,7 @@ export default function TechnicianAppPage() {
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
               From the morning coffee to the last job of the day — here&apos;s
-              what a technician&apos;s day looks like on ServiceOS. No phone
+              what a technician&apos;s day looks like on Fieseros. No phone
               calls to the office, no paper, no end-of-day data entry.
             </p>
           </div>
@@ -253,7 +253,7 @@ export default function TechnicianAppPage() {
           signal, in customer homes with thick concrete walls that block
           reception entirely. The moment a cloud-only app loses connection,
           it stops being useful — and the technician goes back to pen and
-          paper. ServiceOS is engineered for the real world from the ground
+          paper. Fieseros is engineered for the real world from the ground
           up. It&apos;s a progressive web app (PWA) that works fully offline,
           syncing data the moment a connection returns. Your field team keeps
           working in basements; the office dashboard catches up when they
@@ -304,9 +304,9 @@ export default function TechnicianAppPage() {
           minutes of the technician leaving their driveway. No end-of-day
           phone calls to report job status. No end-of-week catch-up entering
           data from paper work orders. No lost photos. No forgotten billable
-          parts. The technician focuses on the work; ServiceOS handles the
+          parts. The technician focuses on the work; Fieseros handles the
           paperwork. That&apos;s the whole point of a service technician
-          app — and it&apos;s what makes ServiceOS different from generic
+          app — and it&apos;s what makes Fieseros different from generic
           field service software that treats the mobile app as an
           afterthought.
         </p>
@@ -314,7 +314,7 @@ export default function TechnicianAppPage() {
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything service businesses ask about the ServiceOS technician mobile app."
+        subtitle="Everything service businesses ask about the Fieseros technician mobile app."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -325,7 +325,7 @@ export default function TechnicianAppPage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/scheduling-and-dispatch" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

@@ -185,7 +185,7 @@ export function LandingFooter() {
               <div className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-sm bg-emerald-600 shadow-emerald-500/20">
                 <Wrench className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-bold text-background tracking-tight">ServiceOS</span>
+              <span className="text-xl font-bold text-background tracking-tight">Fieseros</span>
             </div>
             <p className="text-background/70 text-sm max-w-xs leading-relaxed">
               The AI Operating System for Local Services. Run your business with the CRM. Find trusted pros on the marketplace. Automate everything.
@@ -309,7 +309,7 @@ export function LandingFooter() {
         <Separator className="bg-background/10 my-8" />
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-background/50 text-xs">© {new Date().getFullYear()} ServiceOS. All rights reserved.</p>
+          <p className="text-background/50 text-xs">© {new Date().getFullYear()} Fieseros. All rights reserved.</p>
           <p className="text-background/50 text-xs">AI Operating System for Local Service Businesses</p>
         </div>
       </div>

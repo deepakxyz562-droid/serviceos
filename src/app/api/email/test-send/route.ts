@@ -25,8 +25,8 @@ export async function POST(request: NextRequest) {
 
     const result = await sendEmail({
       to,
-      subject: subject || 'Test Email from ServiceOS',
-      text: text || 'This is a test email sent from ServiceOS.',
+      subject: subject || 'Test Email from Fieseros',
+      text: text || 'This is a test email sent from Fieseros.',
       html: html || undefined,
       providerId: providerId || undefined,
       usageType: usageType || undefined,

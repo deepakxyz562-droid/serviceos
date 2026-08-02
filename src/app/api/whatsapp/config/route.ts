@@ -26,9 +26,9 @@ export async function GET(request: NextRequest) {
       mode: configured ? 'live' : 'demo',
       phoneNumberId: maskString(config.phoneNumberId),
       source: config.source || 'none',
-      webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.cc'}/api/whatsapp/callback`,
+      webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com'}/api/whatsapp/callback`,
       apiVersion: WHATSAPP_API_VERSION,
-      verifyTokenSet: !!config.verifyToken && config.verifyToken !== 'serviceos_verify_token',
+      verifyTokenSet: !!config.verifyToken && config.verifyToken !== 'fieseros_verify_token',
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to read WhatsApp config';

@@ -25,7 +25,7 @@
 import { db } from '../src/lib/db'
 
 const API = 'http://localhost:3000'
-const TEST_USER_EMAIL = 'whatsapp-test@serviceos.local'
+const TEST_USER_EMAIL = 'whatsapp-test@fieseros.local'
 const TEST_CUSTOMER_PHONE = '+918505945123'
 const TEST_CUSTOMER_NAME = 'Test Customer'
 
@@ -60,7 +60,7 @@ async function login() {
   if (r.status !== 200) throw new Error(`Login failed: ${r.status} ${JSON.stringify(r.body)}`)
   // Extract Set-Cookie
   const cookie = r.headers.get('set-cookie') || ''
-  const token = cookie.match(/serviceos_session=([^;]+)/)?.[1]
+  const token = cookie.match(/fieseros_session=([^;]+)/)?.[1]
   return { token, authHeader: `Bearer ${token}` }
 }
 
@@ -102,7 +102,7 @@ async function main() {
     category: 'promotional',
     content: 'Hi {{name}}! 🎉 This Diwali, get 25% off on all AC service plans. Reply YES to book.',
     ctaText: 'Book Now',
-    ctaUrl: 'https://serviceos.local/book',
+    ctaUrl: 'https://fieseros.local/book',
     variablesJson: JSON.stringify(['name']),
     isApproved: true,
     tenantId,

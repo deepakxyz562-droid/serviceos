@@ -27,7 +27,7 @@ import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit
  * For employee login, if the User record has no passwordHash, we also try
  * authenticating via the Employee record's linked User account.
  *
- * On success: sets the serviceos_session http-only cookie + returns { user, tenant }.
+ * On success: sets the fieseros_session http-only cookie + returns { user, tenant }.
  */
 export async function POST(request: NextRequest) {
   const rateLimited = applyRateLimit(authLimiter, request);

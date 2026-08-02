@@ -24,7 +24,7 @@
 import { db } from '../src/lib/db'
 
 const API = 'http://localhost:3000'
-const TEST_USER_EMAIL = 'whatsapp-test@serviceos.local'
+const TEST_USER_EMAIL = 'whatsapp-test@fieseros.local'
 const TEST_PHONE = '+918505945123'
 
 const NEW_ACCESS_TOKEN =
@@ -60,7 +60,7 @@ async function login() {
   })
   if (r.status !== 200) throw new Error(`Login failed: ${r.status} ${JSON.stringify(r.body)}`)
   const cookie = r.headers.get('set-cookie') || ''
-  const token = cookie.match(/serviceos_session=([^;]+)/)?.[1]
+  const token = cookie.match(/fieseros_session=([^;]+)/)?.[1]
   return { token, authHeader: `Bearer ${token}` }
 }
 

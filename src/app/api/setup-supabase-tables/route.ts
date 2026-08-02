@@ -15,7 +15,7 @@ function getAdminClient() {
 // ── SQL Migration Script ───────────────────────────────────────────────────
 
 const SQL_MIGRATION = `-- ============================================
--- ServiceOS: Missing Tables Migration for Supabase
+-- Fieseros: Missing Tables Migration for Supabase
 -- Generated: ${new Date().toISOString()}
 -- ============================================
 
@@ -343,7 +343,7 @@ async function seedCommunicationProviders(tenantId: string, workspaceId: string 
       type: 'email',
       provider: 'amazon_ses',
       status: 'active',
-      configJson: JSON.stringify({ region: 'us-east-1', accessKey: 'demo_key', secretKey: 'demo_secret', fromEmail: 'noreply@serviceos.demo' }),
+      configJson: JSON.stringify({ region: 'us-east-1', accessKey: 'demo_key', secretKey: 'demo_secret', fromEmail: 'noreply@fieseros.demo' }),
       isDefault: false,
       sendingEnabled: true,
       dailyLimit: 5000,
@@ -357,7 +357,7 @@ async function seedCommunicationProviders(tenantId: string, workspaceId: string 
       type: 'email',
       provider: 'sendgrid',
       status: 'inactive',
-      configJson: JSON.stringify({ apiKey: 'demo_key', fromEmail: 'noreply@serviceos.demo', fromName: 'ServiceOS' }),
+      configJson: JSON.stringify({ apiKey: 'demo_key', fromEmail: 'noreply@fieseros.demo', fromName: 'Fieseros' }),
       isDefault: false,
       sendingEnabled: false,
       dailyLimit: 1000,
@@ -920,7 +920,7 @@ async function createUserAccounts(tenantId: string, workspaceId: string | null):
 
   for (const role of roles) {
     for (const num of [1, 2]) {
-      const email = `${role}${num}@serviceos-demo.com`;
+      const email = `${role}${num}@fieseros-demo.com`;
       const plainPassword = `${role.charAt(0).toUpperCase() + role.slice(1)}${num}@123`;
       const passwordHash = await bcrypt.hash(plainPassword, 10);
       const name = `${role.charAt(0).toUpperCase() + role.slice(1)} User ${num}`;
@@ -1060,7 +1060,7 @@ export async function POST(request: NextRequest) {
 
       const roles = ['owner', 'admin', 'manager', 'technician', 'dispatcher', 'viewer'];
       const credentials = roles.flatMap(role => [1, 2].map(num => ({
-        email: `${role}${num}@serviceos-demo.com`,
+        email: `${role}${num}@fieseros-demo.com`,
         password: `${role.charAt(0).toUpperCase() + role.slice(1)}${num}@123`,
         role,
       })));

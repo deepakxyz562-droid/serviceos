@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/card";
  * CookieConsentBanner
  *
  * Shows a slide-up cookie consent banner to first-time visitors. Stores the
- * user's decision in localStorage under the key `serviceos_consent`. Once a
+ * user's decision in localStorage under the key `fieseros_consent`. Once a
  * decision is recorded, the banner stays hidden until that key is cleared.
  *
  * Hidden on `/cookie-policy` itself (the user is already reading it).
@@ -24,12 +24,12 @@ import { Card } from "@/components/ui/card";
  * before the next render reads the freshly written localStorage value.
  */
 
-const CONSENT_KEY = "serviceos_consent";
+const CONSENT_KEY = "fieseros_consent";
 // Session flag — once the user scrolls past the banner, we hide it for the
 // rest of the session so it doesn't keep popping back over content. Unlike
 // CONSENT_KEY (which is a permanent decision), this is just a "defer" so the
 // banner can reappear on a future visit and actually get a decision.
-const DEFERRED_KEY = "serviceos_consent_deferred";
+const DEFERRED_KEY = "fieseros_consent_deferred";
 
 type ConsentPreferences = {
   necessary: boolean;
@@ -230,7 +230,7 @@ export function CookieConsentBanner() {
                   We value your privacy
                 </h2>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                  ServiceOS uses cookies to operate our service, improve
+                  Fieseros uses cookies to operate our service, improve
                   performance, and provide analytics. By clicking{" "}
                   <span className="font-medium text-foreground">
                     &quot;Accept all&quot;

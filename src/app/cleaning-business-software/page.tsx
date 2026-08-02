@@ -22,7 +22,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Cleaning Business Software — Schedule, Track & Invoice | ServiceOS",
+  title: "Cleaning Business Software — Schedule, Track & Invoice | Fieseros",
   description:
     "Cleaning business software for recurring schedules, cleaner dispatch, GPS tracking, secure access management, and Email & SMS reminders. The cleaning CRM that grows recurring revenue.",
   keywords: [
@@ -32,13 +32,13 @@ export const metadata: Metadata = {
     "maid service software",
     "janitorial software",
   ],
-  alternates: { canonical: "https://serviceos.cc/cleaning-business-software" },
+  alternates: { canonical: "https://fieseros.com/cleaning-business-software" },
   openGraph: {
-    title: "Cleaning Business Software | ServiceOS",
+    title: "Cleaning Business Software | Fieseros",
     description:
       "Schedule one-time deep cleans and recurring weekly services. Track which cleaner is where, send Email & SMS reminders, manage access codes securely, and never lose a payment.",
-    url: "https://serviceos.cc/cleaning-business-software",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/cleaning-business-software",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -49,7 +49,7 @@ const features: Feature[] = [
     icon: CalendarClock,
     title: "Recurring Schedule Automation",
     description:
-      "Set up a customer once — \"every Tuesday at 10 a.m.\" — and ServiceOS auto-generates every future visit, assigns the right cleaner, sends reminders, and queues the recurring invoice. Change one visit without breaking the series.",
+      "Set up a customer once — \"every Tuesday at 10 a.m.\" — and Fieseros auto-generates every future visit, assigns the right cleaner, sends reminders, and queues the recurring invoice. Change one visit without breaking the series.",
   },
   {
     icon: MapPin,
@@ -79,49 +79,49 @@ const features: Feature[] = [
     icon: Receipt,
     title: "Recurring Invoicing",
     description:
-      "Set up recurring billing once and ServiceOS generates and sends invoices automatically — weekly, bi-weekly, monthly. Customers pay by card or bank transfer through a secure online payment link. You track paid, pending, and overdue at a glance.",
+      "Set up recurring billing once and Fieseros generates and sends invoices automatically — weekly, bi-weekly, monthly. Customers pay by card or bank transfer through a secure online payment link. You track paid, pending, and overdue at a glance.",
   },
 ];
 
 const faqs = [
   {
-    question: "How does ServiceOS handle recurring cleaning schedules?",
+    question: "How does Fieseros handle recurring cleaning schedules?",
     answer:
-      "Recurring schedules are the heart of any cleaning business, and ServiceOS is built around them. You set up a customer once with their preferred frequency — weekly, bi-weekly, monthly, or any custom cadence — preferred day and time, assigned cleaner, and price. ServiceOS then auto-generates every future visit on an infinite schedule. You can view the entire recurring schedule in a single calendar, drag-and-drop to reschedule individual visits without breaking the series, and handle one-time add-ons (a deep clean before a holiday, a post-construction clean) alongside the recurring visits. If a customer wants to skip a week or pause for vacation, one click handles it — and the recurring invoice adjusts automatically.",
+      "Recurring schedules are the heart of any cleaning business, and Fieseros is built around them. You set up a customer once with their preferred frequency — weekly, bi-weekly, monthly, or any custom cadence — preferred day and time, assigned cleaner, and price. Fieseros then auto-generates every future visit on an infinite schedule. You can view the entire recurring schedule in a single calendar, drag-and-drop to reschedule individual visits without breaking the series, and handle one-time add-ons (a deep clean before a holiday, a post-construction clean) alongside the recurring visits. If a customer wants to skip a week or pause for vacation, one click handles it — and the recurring invoice adjusts automatically.",
   },
   {
     question: "Can I track which cleaner is where and whether they showed up?",
     answer:
-      "Yes. Every cleaner installs the ServiceOS mobile app, which tracks their location during work hours and logs check-in and check-out at each job site. You see a live map showing every cleaner, their current job, and their next appointment. If a cleaner hasn't checked in at a scheduled job by the start time, ServiceOS alerts you so you can call them or dispatch a backup — before the customer calls you asking where the cleaner is. At the end of each day, you get a report showing jobs completed, jobs skipped, total hours worked per cleaner, and any checklist items flagged for follow-up.",
+      "Yes. Every cleaner installs the Fieseros mobile app, which tracks their location during work hours and logs check-in and check-out at each job site. You see a live map showing every cleaner, their current job, and their next appointment. If a cleaner hasn't checked in at a scheduled job by the start time, Fieseros alerts you so you can call them or dispatch a backup — before the customer calls you asking where the cleaner is. At the end of each day, you get a report showing jobs completed, jobs skipped, total hours worked per cleaner, and any checklist items flagged for follow-up.",
   },
   {
-    question: "How does ServiceOS securely handle keys, alarm codes, and access information?",
+    question: "How does Fieseros securely handle keys, alarm codes, and access information?",
     answer:
-      "Access management is one of the most sensitive parts of running a cleaning business. ServiceOS stores access details per property — key location (e.g., \"under the flowerpot\" or \"lockbox #1234\"), alarm codes, gate codes, garage codes, pet information, and parking instructions — in encrypted fields that only the assigned cleaner can see, and only for the duration of their job. Office staff with the right permissions can view full access details; cleaners see only what they need for their current job. Every access to this information is logged, so you have a complete audit trail. When a cleaner leaves your team, their access is revoked instantly — no more scrambling to change lockbox codes.",
+      "Access management is one of the most sensitive parts of running a cleaning business. Fieseros stores access details per property — key location (e.g., \"under the flowerpot\" or \"lockbox #1234\"), alarm codes, gate codes, garage codes, pet information, and parking instructions — in encrypted fields that only the assigned cleaner can see, and only for the duration of their job. Office staff with the right permissions can view full access details; cleaners see only what they need for their current job. Every access to this information is logged, so you have a complete audit trail. When a cleaner leaves your team, their access is revoked instantly — no more scrambling to change lockbox codes.",
   },
   {
     question: "How do quality checklists work for cleaning jobs?",
     answer:
-      "You build custom checklists in ServiceOS for each service type — a weekly recurring clean has a different checklist than a deep clean or a move-out clean. Checklists include every task: \"vacuum living room,\" \"clean kitchen counters,\" \"scrub bathroom tile,\" \"empty all trash,\" and so on. Cleaners work through the checklist on their phone, ticking off items as they go. For any item flagged as a problem — \"carpet stain that won't come out,\" \"broken tile in kitchen\" — the cleaner can attach a photo and a note. You see completion rates across all jobs and all cleaners, so you can spot quality issues before customers complain. Many cleaning businesses use this feature to guarantee consistent quality even when different cleaners service the same customer.",
+      "You build custom checklists in Fieseros for each service type — a weekly recurring clean has a different checklist than a deep clean or a move-out clean. Checklists include every task: \"vacuum living room,\" \"clean kitchen counters,\" \"scrub bathroom tile,\" \"empty all trash,\" and so on. Cleaners work through the checklist on their phone, ticking off items as they go. For any item flagged as a problem — \"carpet stain that won't come out,\" \"broken tile in kitchen\" — the cleaner can attach a photo and a note. You see completion rates across all jobs and all cleaners, so you can spot quality issues before customers complain. Many cleaning businesses use this feature to guarantee consistent quality even when different cleaners service the same customer.",
   },
   {
-    question: "Does ServiceOS handle recurring billing for cleaning contracts?",
+    question: "Does Fieseros handle recurring billing for cleaning contracts?",
     answer:
-      "Yes — recurring billing is fully automated in ServiceOS. When you set up a recurring schedule for a customer, you also set up the recurring billing: price, frequency (matches the cleaning cadence or a custom billing cycle), and payment method. ServiceOS then generates and sends invoices automatically on the schedule you define. Customers receive invoices via Email and SMS with a secure payment link — they pay by card or bank transfer through the online customer portal. You see a dashboard showing paid, pending, and overdue invoices at a glance, with automatic payment reminders sent to customers who haven't paid. Most cleaning businesses using ServiceOS eliminate overdue invoices almost entirely.",
+      "Yes — recurring billing is fully automated in Fieseros. When you set up a recurring schedule for a customer, you also set up the recurring billing: price, frequency (matches the cleaning cadence or a custom billing cycle), and payment method. Fieseros then generates and sends invoices automatically on the schedule you define. Customers receive invoices via Email and SMS with a secure payment link — they pay by card or bank transfer through the online customer portal. You see a dashboard showing paid, pending, and overdue invoices at a glance, with automatic payment reminders sent to customers who haven't paid. Most cleaning businesses using Fieseros eliminate overdue invoices almost entirely.",
   },
   {
     question: "Can customers provide feedback after each cleaning visit?",
     answer:
-      "Yes. After every job, ServiceOS sends the customer an automated Email and SMS message thanking them for their business and asking for a quick rating (1–5 stars) and optional feedback. Positive feedback is automatically routed to your reviews page or Google Business profile (with the customer's permission). Negative feedback routes immediately to you so you can reach out and fix the issue before it becomes a bad review publicly. This continuous feedback loop helps you identify your best cleaners, catch quality issues early, and build a strong online reputation that drives new customer acquisition.",
+      "Yes. After every job, Fieseros sends the customer an automated Email and SMS message thanking them for their business and asking for a quick rating (1–5 stars) and optional feedback. Positive feedback is automatically routed to your reviews page or Google Business profile (with the customer's permission). Negative feedback routes immediately to you so you can reach out and fix the issue before it becomes a bad review publicly. This continuous feedback loop helps you identify your best cleaners, catch quality issues early, and build a strong online reputation that drives new customer acquisition.",
   },
 ];
 
 export default function CleaningBusinessSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Cleaning Business Software",
+    name: "Fieseros — Cleaning Business Software",
     description:
       "Cleaning CRM and scheduling software with recurring schedule automation, cleaner GPS tracking, secure access management, quality checklists, and recurring invoicing.",
-    url: "https://serviceos.cc/cleaning-business-software",
+    url: "https://fieseros.com/cleaning-business-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
@@ -130,8 +130,8 @@ export default function CleaningBusinessSoftwarePage() {
     <CornerstoneLayout
       activePath="/cleaning-business-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Cleaning Business Software", url: "https://serviceos.cc/cleaning-business-software" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Cleaning Business Software", url: "https://fieseros.com/cleaning-business-software" },
       ]}
       additionalSchema={[appSchema]}
     >
@@ -181,7 +181,7 @@ export default function CleaningBusinessSoftwarePage() {
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <Wrench className="h-5 w-5 text-destructive" />
-                Without ServiceOS
+                Without Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -202,7 +202,7 @@ export default function CleaningBusinessSoftwarePage() {
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With ServiceOS
+                With Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -224,7 +224,7 @@ export default function CleaningBusinessSoftwarePage() {
         </div>
       </section>
 
-      <ContentSection title="Why cleaning businesses love ServiceOS">
+      <ContentSection title="Why cleaning businesses love Fieseros">
         <p>
           Cleaning is a recurring revenue business. The customer who hires you
           for a weekly clean this Tuesday is ideally a customer for years —
@@ -235,7 +235,7 @@ export default function CleaningBusinessSoftwarePage() {
           payment that slips through the cracks, a quality issue that turns a
           loyal customer into a churned one. Cleaning business software that
           can&apos;t prevent those small failures isn&apos;t worth the
-          subscription. ServiceOS is built to prevent every one of them.
+          subscription. Fieseros is built to prevent every one of them.
         </p>
         <p>
           The biggest pain point in any cleaning business is staff reliability.
@@ -244,7 +244,7 @@ export default function CleaningBusinessSoftwarePage() {
           cleaner dispatch software, you find out about a no-show when the
           angry customer calls asking where the cleaner is. By then it&apos;s
           too late — the customer&apos;s trust is shaken, and one more incident
-          like that will lose them for good. ServiceOS flips this. Every
+          like that will lose them for good. Fieseros flips this. Every
           cleaner checks in at each job site through the mobile app. If a
           check-in doesn&apos;t happen by the scheduled start time, you get an
           alert — and you can call the cleaner, dispatch a backup, or message
@@ -258,7 +258,7 @@ export default function CleaningBusinessSoftwarePage() {
           Keeping all of this in a notebook, a spreadsheet, or a cleaner&apos;s
           memory is a disaster waiting to happen. Keys get lost. Codes get
           shared with the wrong people. When a cleaner leaves your team, you
-          have to scramble to change every lockbox code they knew. ServiceOS
+          have to scramble to change every lockbox code they knew. Fieseros
           solves this with an encrypted access vault. Access details are stored
           per property, visible only to the assigned cleaner during their job
           window, and revoked instantly when a cleaner leaves your team. Every
@@ -269,7 +269,7 @@ export default function CleaningBusinessSoftwarePage() {
           recurring billing — the two things that determine whether your
           cleaning business grows or shrinks. Quality control means every
           clean, every time, meets the same standard — regardless of which
-          cleaner did the work. ServiceOS makes this possible with custom
+          cleaner did the work. Fieseros makes this possible with custom
           checklists per service type and photo proof for problem areas, so
           you can spot quality issues before customers do. Recurring billing
           means every invoice goes out on time, every payment is tracked, and
@@ -285,7 +285,7 @@ export default function CleaningBusinessSoftwarePage() {
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything cleaning business owners ask before switching to ServiceOS."
+        subtitle="Everything cleaning business owners ask before switching to Fieseros."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -296,7 +296,7 @@ export default function CleaningBusinessSoftwarePage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/window-cleaning-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

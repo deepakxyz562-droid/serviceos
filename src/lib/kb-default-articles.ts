@@ -1,5 +1,5 @@
 /**
- * Default Knowledge Base Articles for ServiceOS
+ * Default Knowledge Base Articles for Fieseros
  *
  * These articles are auto-seeded on first fetch when the KB table is empty.
  * Categories: getting_started, guides, troubleshooting, faq, policies, general
@@ -19,10 +19,10 @@ export const DEFAULT_KB_ARTICLES: KBSeedArticle[] = [
   // GETTING STARTED (6 articles)
   // ═══════════════════════════════════════════════════════════
   {
-    title: 'Welcome to ServiceOS — Your Complete Guide',
-    content: `# Welcome to ServiceOS
+    title: 'Welcome to Fieseros — Your Complete Guide',
+    content: `# Welcome to Fieseros
 
-ServiceOS is the all-in-one operating system for service businesses. Whether you run a plumbing company, electrical service, HVAC business, cleaning service, or any field service operation — ServiceOS gives you everything you need to manage your entire business from one platform.
+Fieseros is the all-in-one operating system for service businesses. Whether you run a plumbing company, electrical service, HVAC business, cleaning service, or any field service operation — Fieseros gives you everything you need to manage your entire business from one platform.
 
 ## What You Can Do
 
@@ -53,7 +53,7 @@ Ready to get started? Check out the other Getting Started articles for detailed 
     title: 'Setting Up Your Business Profile',
     content: `# Setting Up Your Business Profile
 
-Your business profile is the foundation of ServiceOS. It determines how your business appears to customers, on invoices, and in communications.
+Your business profile is the foundation of Fieseros. It determines how your business appears to customers, on invoices, and in communications.
 
 ## Step-by-Step Setup
 
@@ -98,7 +98,7 @@ If you use WhatsApp Business:
     title: 'Adding Your First Team Members',
     content: `# Adding Your First Team Members
 
-Your team is the backbone of your service business. Here's how to add employees and set their roles in ServiceOS.
+Your team is the backbone of your service business. Here's how to add employees and set their roles in Fieseros.
 
 ## Adding Employees
 
@@ -122,7 +122,7 @@ Your team is the backbone of your service business. Here's how to add employees 
 | **Admin** | Full access including settings, billing, and team management |
 
 ### Inviting Employees via Email
-1. When you add an email, ServiceOS sends an invitation
+1. When you add an email, Fieseros sends an invitation
 2. The employee receives a link to set their password
 3. They can log in and access the employee portal
 
@@ -193,7 +193,7 @@ Group your services into categories to keep things organized:
     title: 'Your First Job — Step by Step',
     content: `# Your First Job — Step by Step
 
-Ready to create your first job in ServiceOS? Here's a complete walkthrough.
+Ready to create your first job in Fieseros? Here's a complete walkthrough.
 
 ## Creating a Job
 
@@ -249,7 +249,7 @@ Once a job is completed, you can:
     title: 'Understanding the Dashboard',
     content: `# Understanding the Dashboard
 
-Your ServiceOS Dashboard gives you a real-time snapshot of your business at a glance.
+Your Fieseros Dashboard gives you a real-time snapshot of your business at a glance.
 
 ## Dashboard Sections
 
@@ -310,7 +310,7 @@ From the dashboard, you can quickly:
     title: 'Managing Customers & CRM',
     content: `# Managing Customers & CRM
 
-ServiceOS gives you a powerful CRM to manage all your customer relationships in one place.
+Fieseros gives you a powerful CRM to manage all your customer relationships in one place.
 
 ## Customer List
 The Customers page shows all your customers with key information:
@@ -369,7 +369,7 @@ To invite: Click **Invite** next to the customer → They receive an email/SMS w
     title: 'Lead Management & Pipeline',
     content: `# Lead Management & Pipeline
 
-Turn every inquiry into revenue with ServiceOS's lead management system.
+Turn every inquiry into revenue with Fieseros's lead management system.
 
 ## Capturing Leads
 Leads come from multiple sources:
@@ -434,7 +434,7 @@ Leads are automatically scored based on:
     title: 'Booking & Scheduling Guide',
     content: `# Booking & Scheduling Guide
 
-Manage your appointments efficiently with ServiceOS's booking system.
+Manage your appointments efficiently with Fieseros's booking system.
 
 ## Creating Bookings
 
@@ -474,7 +474,7 @@ The Calendar shows all your bookings and jobs in a visual timeline:
 - Drag and drop to reschedule
 
 ## Smart Scheduling
-ServiceOS helps you schedule efficiently:
+Fieseros helps you schedule efficiently:
 - **Availability Check** — See when employees are free
 - **Conflict Detection** — Prevent double-booking
 - **Travel Time** — Account for travel between jobs
@@ -571,7 +571,7 @@ After a job is completed:
     title: 'Invoicing & Getting Paid Faster',
     content: `# Invoicing & Getting Paid Faster
 
-ServiceOS makes it easy to create professional invoices and collect payments quickly.
+Fieseros makes it easy to create professional invoices and collect payments quickly.
 
 ## Creating Invoices
 
@@ -617,7 +617,7 @@ When a customer accepts a quote, convert it to an invoice with one click.
 2. **Clear Due Dates** — Set expectations upfront
 3. **Online Payment** — Enable online payment on the customer portal
 4. **Early Payment Discounts** — Offer 2% discount for payment within 10 days
-5. **Automated Reminders** — ServiceOS sends reminders before and after due dates
+5. **Automated Reminders** — Fieseros sends reminders before and after due dates
 6. **Mobile Invoicing** — Create invoices on-site right after completing a job
 
 ## Payment Methods
@@ -643,7 +643,7 @@ Track payments from any source:
     title: 'WhatsApp Campaigns & Marketing',
     content: `# WhatsApp Campaigns & Marketing
 
-Reach your customers where they are — on WhatsApp. ServiceOS provides powerful campaign tools designed for WhatsApp-first businesses.
+Reach your customers where they are — on WhatsApp. Fieseros provides powerful campaign tools designed for WhatsApp-first businesses.
 
 ## Campaign Types
 
@@ -724,7 +724,7 @@ Send one-time messages to your entire list:
     title: 'Setting Up the AI Assistant',
     content: `# Setting Up the AI Assistant
 
-ServiceOS includes an AI-powered assistant that helps you run your business more efficiently.
+Fieseros includes an AI-powered assistant that helps you run your business more efficiently.
 
 ## What the AI Assistant Can Do
 
@@ -791,7 +791,7 @@ Check your usage in **Settings → Subscription**.`,
     title: 'Workflow Automation Guide',
     content: `# Workflow Automation Guide
 
-Automate repetitive tasks and save hours every week with ServiceOS Workflows.
+Automate repetitive tasks and save hours every week with Fieseros Workflows.
 
 ## What Are Workflows?
 Workflows are automated sequences that trigger based on events in your business. They run in the background, handling tasks so you don't have to.
@@ -973,7 +973,7 @@ Use these segments for targeted campaigns and personalized service.`,
     title: 'Reports & Analytics Guide',
     content: `# Reports & Analytics Guide
 
-Make data-driven decisions with ServiceOS's reporting and analytics tools.
+Make data-driven decisions with Fieseros's reporting and analytics tools.
 
 ## Available Reports
 
@@ -1094,7 +1094,7 @@ If you're having trouble with WhatsApp integration, here are the most common iss
 
 1. Verify the webhook URL in your WhatsApp Business settings
 2. Check that your server is receiving POST requests
-3. Look for errors in the ServiceOS notification logs
+3. Look for errors in the Fieseros notification logs
 4. Ensure your SSL certificate is valid
 
 ## Issue: Auto-Reply Not Working
@@ -1106,7 +1106,7 @@ If you're having trouble with WhatsApp integration, here are the most common iss
 
 ## Still Having Issues?
 If none of these solutions work:
-1. Check the ServiceOS status page for any known outages
+1. Check the Fieseros status page for any known outages
 2. Contact support via the Help Center
 3. Include your WhatsApp phone number and the specific error message`,
     category: 'troubleshooting',
@@ -1126,7 +1126,7 @@ Common booking and scheduling issues and how to resolve them.
 When two bookings are scheduled for the same employee at the same time.
 
 ### Solution
-- ServiceOS automatically detects time conflicts
+- Fieseros automatically detects time conflicts
 - If you see a conflict warning, choose a different time or employee
 - Use the Calendar view to spot overlaps visually
 - Enable "Prevent Double Booking" in Settings → Scheduling
@@ -1210,7 +1210,7 @@ Common invoice and payment issues and how to resolve them.
 You or someone on your team created an invoice with a duplicate number.
 
 ### Solution
-- ServiceOS auto-generates unique invoice numbers (INV-2024-XXXX)
+- Fieseros auto-generates unique invoice numbers (INV-2024-XXXX)
 - If entering manually, check existing invoices first
 - You can change the number before sending
 - If stuck, contact support to reset the counter
@@ -1244,7 +1244,7 @@ You or someone on your team created an invoice with a duplicate number.
 ## Issue: Payment Not Reflecting
 
 ### Cause
-- Payment was recorded outside ServiceOS
+- Payment was recorded outside Fieseros
 - Partial payment not properly recorded
 - Wrong invoice was marked as paid
 
@@ -1395,7 +1395,7 @@ Fix problems with notifications not being received or showing incorrectly.
 ### Solutions
 1. Check your spam/junk folder
 2. Verify your email address in Profile Settings
-3. Add notifications@serviceos.cc to your contacts
+3. Add notifications@fieseros.com to your contacts
 4. Check that email notifications are enabled in Settings → Notifications
 
 ## Issue: Too Many Notifications
@@ -1415,7 +1415,7 @@ Fix problems with notifications not being received or showing incorrectly.
 
 ### Solutions
 1. Enable push notifications in your phone's settings
-2. Allow notifications for ServiceOS in your browser
+2. Allow notifications for Fieseros in your browser
 3. If using the PWA, ensure it's installed properly
 4. Try clearing the app cache and reinstalling
 
@@ -1435,7 +1435,7 @@ Fix problems with notifications not being received or showing incorrectly.
     title: 'Common Integration Issues',
     content: `# Common Integration Issues
 
-Troubleshoot problems with third-party integrations in ServiceOS.
+Troubleshoot problems with third-party integrations in Fieseros.
 
 ## Issue: Google Calendar Sync Not Working
 
@@ -1488,11 +1488,11 @@ Troubleshoot problems with third-party integrations in ServiceOS.
 2. **Check API Keys** — Ensure they haven't expired or been regenerated
 3. **Review Permissions** — Make sure all required permissions were granted
 4. **Check Rate Limits** — Some integrations have daily/hourly limits
-5. **Update Credentials** — If you changed your password, update it in ServiceOS too
+5. **Update Credentials** — If you changed your password, update it in Fieseros too
 
 ## Getting Help
 If you're still having issues:
-1. Check the ServiceOS status page
+1. Check the Fieseros status page
 2. Search the Knowledge Base for your specific integration
 3. Submit a support ticket with:
    - Integration name
@@ -1515,7 +1515,7 @@ If you're still having issues:
 If you've forgotten your password, you can reset it easily.
 
 ## Option 1: From the Login Page
-1. Go to the ServiceOS login page
+1. Go to the Fieseros login page
 2. Click **"Forgot Password?"** below the login form
 3. Enter your email address
 4. Check your email for a reset link
@@ -1555,7 +1555,7 @@ If neither option works:
     title: 'Can I Customize My Branding?',
     content: `# Can I Customize My Branding?
 
-Yes! ServiceOS supports extensive branding customization, especially on Pro and Enterprise plans.
+Yes! Fieseros supports extensive branding customization, especially on Pro and Enterprise plans.
 
 ## What You Can Customize
 
@@ -1570,7 +1570,7 @@ On Pro and Enterprise plans:
 - **Custom Domain** — Use your own URL (e.g., portal.yourbusiness.com)
 - **Branded Login Page** — Your logo, colors, and messaging
 - **Custom Email Templates** — Your branding on all emails
-- **White Label** — Remove ServiceOS branding entirely
+- **White Label** — Remove Fieseros branding entirely
 
 ### Invoice Branding
 - **Logo** — Your company logo on every invoice
@@ -1609,7 +1609,7 @@ On Pro and Enterprise plans:
     title: 'What Are the Plan Limits?',
     content: `# What Are the Plan Limits?
 
-ServiceOS offers four plans designed for businesses of different sizes.
+Fieseros offers four plans designed for businesses of different sizes.
 
 ## Plan Comparison
 
@@ -1683,7 +1683,7 @@ ServiceOS offers four plans designed for businesses of different sizes.
     title: 'How Does the Free Trial Work?',
     content: `# How Does the Free Trial Work?
 
-ServiceOS offers a 14-day free trial so you can experience everything before committing.
+Fieseros offers a 14-day free trial so you can experience everything before committing.
 
 ## Trial Features
 During your trial, you get full access to the **Pro plan** features:
@@ -1747,7 +1747,7 @@ During your trial, you get full access to the **Pro plan** features:
     title: 'How Do I Export My Data?',
     content: `# How Do I Export My Data
 
-You own your data. Here's how to export it from ServiceOS.
+You own your data. Here's how to export it from Fieseros.
 
 ## Exporting from the UI
 
@@ -1780,7 +1780,7 @@ For a complete export of all your data:
 
 1. Go to **Settings → Data Management**
 2. Click **Export All Data**
-3. ServiceOS prepares a complete archive including:
+3. Fieseros prepares a complete archive including:
    - Customers
    - Jobs
    - Invoices and payments
@@ -1800,7 +1800,7 @@ For a complete export of all your data:
 - **PDF** — Available for individual invoices and reports
 
 ## Importing Data
-You can also import data into ServiceOS:
+You can also import data into Fieseros:
 - **Customers** — Import from CSV (name, phone, email, address columns)
 - **Services** — Import from CSV
 - **Invoices** — Import from CSV
@@ -1819,7 +1819,7 @@ You can also import data into ServiceOS:
     title: 'Is My Data Secure?',
     content: `# Is My Data Secure?
 
-Yes. ServiceOS takes data security very seriously. Here's how we protect your business data.
+Yes. Fieseros takes data security very seriously. Here's how we protect your business data.
 
 ## Data Encryption
 - **In Transit** — All data is encrypted using TLS 1.3 when transmitted
@@ -1870,7 +1870,7 @@ Yes. ServiceOS takes data security very seriously. Here's how we protect your bu
 
 ## Reporting Security Issues
 If you discover a security vulnerability:
-- Email: security@serviceos.cc
+- Email: security@fieseros.com
 - We acknowledge reports within 24 hours
 - Critical issues are addressed within 48 hours
 - We offer bug bounties for confirmed vulnerabilities`,
@@ -1890,7 +1890,7 @@ If you discover a security vulnerability:
 Last updated: January 2025
 
 ## 1. Overview
-ServiceOS ("we", "our", "us") is committed to protecting the privacy and security of your data. This policy describes how we collect, use, store, and protect your information.
+Fieseros ("we", "our", "us") is committed to protecting the privacy and security of your data. This policy describes how we collect, use, store, and protect your information.
 
 ## 2. Data We Collect
 - **Account Data** — Business name, email, phone, address provided during signup
@@ -1942,8 +1942,8 @@ Data is processed in the region you select during signup. Cross-region transfers
 We use essential cookies for authentication and session management. Analytics cookies are optional and can be disabled.
 
 ## 10. Contact
-For privacy inquiries: privacy@serviceos.cc
-Data Protection Officer: dpo@serviceos.cc
+For privacy inquiries: privacy@fieseros.com
+Data Protection Officer: dpo@fieseros.com
 
 ## 11. Changes to This Policy
 We may update this policy periodically. Material changes will be notified via email and in-app notification.`,
@@ -1959,7 +1959,7 @@ We may update this policy periodically. Material changes will be notified via em
 Last updated: January 2025
 
 ## 1. Service Availability
-ServiceOS targets **99.9% uptime** measured monthly, excluding:
+Fieseros targets **99.9% uptime** measured monthly, excluding:
 - Scheduled maintenance windows (announced 72 hours in advance)
 - Force majeure events
 - Issues caused by third-party services
@@ -2017,9 +2017,9 @@ This SLA does not cover:
 - Force majeure events
 
 ## 9. Contact
-- Support: help@serviceos.cc
-- Emergency: +1-800-SERVICEOS
-- Status Page: status.serviceos.cc`,
+- Support: help@fieseros.com
+- Emergency: +1-800-FIESEROS
+- Status Page: status.fieseros.com`,
     category: 'policies',
     tagsJson: '["SLA","uptime","support","maintenance","policy"]',
     isPublic: true,
@@ -2032,10 +2032,10 @@ This SLA does not cover:
 Last updated: January 2025
 
 ## 1. Purpose
-This policy defines acceptable use of the ServiceOS platform to ensure a safe, reliable, and legal experience for all users.
+This policy defines acceptable use of the Fieseros platform to ensure a safe, reliable, and legal experience for all users.
 
 ## 2. Acceptable Use
-You may use ServiceOS to:
+You may use Fieseros to:
 - Manage your service business operations
 - Communicate with your customers via approved channels
 - Process business transactions (invoices, payments)
@@ -2044,7 +2044,7 @@ You may use ServiceOS to:
 - Automate business workflows
 
 ## 3. Prohibited Uses
-You may NOT use ServiceOS to:
+You may NOT use Fieseros to:
 - Send spam or unsolicited messages
 - Violate any laws or regulations
 - Infringe on intellectual property rights
@@ -2089,7 +2089,7 @@ Violations may result in:
 - Legal action if warranted
 
 ## 8. Reporting Violations
-Report suspected violations to: abuse@serviceos.cc
+Report suspected violations to: abuse@fieseros.com
 
 ## 9. Changes
 We may update this policy. Continued use after changes constitutes acceptance.`,
@@ -2106,7 +2106,7 @@ We may update this policy. Continued use after changes constitutes acceptance.`,
     title: 'Keyboard Shortcuts & Productivity Tips',
     content: `# Keyboard Shortcuts & Productivity Tips
 
-Work faster in ServiceOS with these shortcuts and tips.
+Work faster in Fieseros with these shortcuts and tips.
 
 ## Global Shortcuts
 
@@ -2119,7 +2119,7 @@ Work faster in ServiceOS with these shortcuts and tips.
 
 ## Navigation
 - Use the sidebar to quickly switch between views
-- Click the ServiceOS logo to return to the dashboard
+- Click the Fieseros logo to return to the dashboard
 - Use **breadcrumb navigation** to go back in context
 
 ## Productivity Tips
@@ -2168,7 +2168,7 @@ Work faster in ServiceOS with these shortcuts and tips.
     title: 'Getting Help & Support',
     content: `# Getting Help & Support
 
-We're here to help you succeed with ServiceOS. Here's how to get assistance when you need it.
+We're here to help you succeed with Fieseros. Here's how to get assistance when you need it.
 
 ## Self-Service Resources
 

@@ -126,7 +126,7 @@ function ViewLoader() {
       <div className="flex items-center gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
         <span className="text-xl font-semibold text-foreground">
-          Loading ServiceOS...
+          Loading Fieseros...
         </span>
       </div>
     </div>
@@ -240,7 +240,7 @@ export default function HomePageClient() {
                 window.history.replaceState({}, '', window.location.pathname);
                 // Persist auth to localStorage (mirror the existing shape)
                 localStorage.setItem(
-                  'serviceos_auth',
+                  'fieseros_auth',
                   JSON.stringify({
                     isAuthenticated: true,
                     user: data.user,
@@ -330,10 +330,10 @@ export default function HomePageClient() {
           }
           if (typeof window !== 'undefined') {
             // Preserve existing token if available, or update with new one
-            const existingAuth = localStorage.getItem('serviceos_auth');
+            const existingAuth = localStorage.getItem('fieseros_auth');
             const existingData = existingAuth ? JSON.parse(existingAuth) : {};
             localStorage.setItem(
-              'serviceos_auth',
+              'fieseros_auth',
               JSON.stringify({
                 isAuthenticated: true,
                 user: data.user,
@@ -354,8 +354,8 @@ export default function HomePageClient() {
         // Clear any stale auth + token and let the landing page render.
         if (typeof window !== 'undefined') {
           try {
-            localStorage.removeItem('serviceos_auth');
-            localStorage.removeItem('serviceos_token');
+            localStorage.removeItem('fieseros_auth');
+            localStorage.removeItem('fieseros_token');
           } catch {
             // localStorage unavailable — nothing to clear
           }
@@ -366,8 +366,8 @@ export default function HomePageClient() {
       // Non-200 (e.g. 401) — same treatment: don't trust stale localStorage.
       if (typeof window !== 'undefined') {
         try {
-          localStorage.removeItem('serviceos_auth');
-          localStorage.removeItem('serviceos_token');
+          localStorage.removeItem('fieseros_auth');
+          localStorage.removeItem('fieseros_token');
         } catch {
           // ignore
         }
@@ -384,7 +384,7 @@ export default function HomePageClient() {
     // Network-failure fallback ONLY (not the "server said no" path).
     try {
       if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('serviceos_auth');
+        const stored = localStorage.getItem('fieseros_auth');
         if (stored) {
           const parsed = JSON.parse(stored);
           // Defensive: verify the JWT is not expired before trusting it.
@@ -426,8 +426,8 @@ export default function HomePageClient() {
             }
             // Token is expired — clear the stale auth so the user sees login.
             try {
-              localStorage.removeItem('serviceos_auth');
-              localStorage.removeItem('serviceos_token');
+              localStorage.removeItem('fieseros_auth');
+              localStorage.removeItem('fieseros_token');
             } catch {
               // ignore
             }
@@ -597,7 +597,7 @@ export default function HomePageClient() {
     }
 
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('serviceos_auth');
+      localStorage.removeItem('fieseros_auth');
     }
 
     clearAuth();
@@ -647,7 +647,7 @@ export default function HomePageClient() {
 
       // Store in localStorage
       if (typeof window !== 'undefined') {
-        localStorage.setItem('serviceos_auth', JSON.stringify({
+        localStorage.setItem('fieseros_auth', JSON.stringify({
           ...authData,
           token: data.token,
           isDemo: true,
@@ -676,9 +676,9 @@ export default function HomePageClient() {
 
       if (typeof window !== 'undefined') {
         // Preserve the token that was already stored by the login/register handler
-        const existingAuth = localStorage.getItem('serviceos_auth');
+        const existingAuth = localStorage.getItem('fieseros_auth');
         const existingData = existingAuth ? JSON.parse(existingAuth) : {};
-        localStorage.setItem('serviceos_auth', JSON.stringify({
+        localStorage.setItem('fieseros_auth', JSON.stringify({
           ...authData,
           token: existingData.token,
           portalToken: existingData.portalToken,
@@ -720,11 +720,11 @@ export default function HomePageClient() {
           setOnboardingView('mode_selector');
         }
         setShowOnboarding(false); // we use onboardingView, not showOnboarding
-        toast.success('Welcome to ServiceOS! Let\'s set up your workspace.');
+        toast.success('Welcome to Fieseros! Let\'s set up your workspace.');
       } else {
         setShowOnboarding(false);
         setOnboardingView(null);
-        toast.success('Welcome to ServiceOS!');
+        toast.success('Welcome to Fieseros!');
       }
 
       // If the user arrived via the claim-this-business sign-in gate, they

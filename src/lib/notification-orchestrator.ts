@@ -1,5 +1,5 @@
 /**
- * ServiceOS Notification Orchestrator
+ * Fieseros Notification Orchestrator
  *
  * Central notification engine that manages multi-channel delivery:
  * - WhatsApp (primary)
@@ -220,7 +220,7 @@ const TEMPLATES: Record<NotificationTemplate, TemplateDefinition> = {
       `Service: ${d.serviceTitle || d.jobTitle || 'N/A'}`,
       `Technician: ${d.employeeName || 'N/A'}`,
       '',
-      `Thank you for choosing ${d.tenantName || 'ServiceOS'}!`,
+      `Thank you for choosing ${d.tenantName || 'Fieseros'}!`,
       '',
       'Please rate your experience:',
       '⭐⭐⭐⭐⭐',
@@ -232,11 +232,11 @@ const TEMPLATES: Record<NotificationTemplate, TemplateDefinition> = {
       `<li><strong>Service:</strong> ${d.serviceTitle || d.jobTitle || 'N/A'}</li>`,
       `<li><strong>Technician:</strong> ${d.employeeName || 'N/A'}</li>`,
       `</ul>`,
-      `<p>Thank you for choosing ${d.tenantName || 'ServiceOS'}!</p>`,
+      `<p>Thank you for choosing ${d.tenantName || 'Fieseros'}!</p>`,
       `<p>Please rate your experience.</p>`,
     ].join('\n'),
     getSmsMessage: (d) =>
-      `Service completed: ${d.serviceTitle || d.jobTitle || 'Service'} by ${d.employeeName || 'technician'}. Thank you from ${d.tenantName || 'ServiceOS'}!`,
+      `Service completed: ${d.serviceTitle || d.jobTitle || 'Service'} by ${d.employeeName || 'technician'}. Thank you from ${d.tenantName || 'Fieseros'}!`,
     getInAppPayload: (d) => ({
       title: 'Service Completed',
       message: `${d.serviceTitle || d.jobTitle || 'Service'} completed by ${d.employeeName || 'technician'}`,
@@ -246,7 +246,7 @@ const TEMPLATES: Record<NotificationTemplate, TemplateDefinition> = {
   },
 
   review_request: {
-    getSubject: (d) => `Rate Your Experience - ${d.tenantName || 'ServiceOS'}`,
+    getSubject: (d) => `Rate Your Experience - ${d.tenantName || 'Fieseros'}`,
     getWhatsAppMessage: (d) => [
       '⭐ How Was Your Experience?',
       '',
@@ -260,17 +260,17 @@ const TEMPLATES: Record<NotificationTemplate, TemplateDefinition> = {
       '2️⃣ Below Average',
       '1️⃣ Poor',
       '',
-      `Thank you! - ${d.tenantName || 'ServiceOS'}`,
+      `Thank you! - ${d.tenantName || 'Fieseros'}`,
     ].join('\n'),
     getEmailBody: (d) => [
       `<h2>⭐ How Was Your Experience?</h2>`,
       `<p>We hope you enjoyed your ${d.serviceTitle || d.jobTitle || 'service'}.</p>`,
       `<p>Technician: <strong>${d.employeeName || 'N/A'}</strong></p>`,
       `<p>Please take a moment to rate your experience.</p>`,
-      `<p>Thank you! - ${d.tenantName || 'ServiceOS'}</p>`,
+      `<p>Thank you! - ${d.tenantName || 'Fieseros'}</p>`,
     ].join('\n'),
     getSmsMessage: (d) =>
-      `Rate your experience with ${d.tenantName || 'ServiceOS'}: ${d.serviceTitle || d.jobTitle || 'service'}. Thank you!`,
+      `Rate your experience with ${d.tenantName || 'Fieseros'}: ${d.serviceTitle || d.jobTitle || 'service'}. Thank you!`,
     getInAppPayload: (d) => ({
       title: 'Rate Your Experience',
       message: `How was your ${d.serviceTitle || d.jobTitle || 'service'}?`,
@@ -1101,7 +1101,7 @@ export async function notifyJobCompleted(
   const isCustomer = options?.recipientRole === 'customer'
 
   // Try to resolve tenant name
-  let tenantName = 'ServiceOS'
+  let tenantName = 'Fieseros'
   if (options?.tenantId || job.tenantId) {
     try {
       const tenant = await db.tenant.findUnique({
@@ -1156,7 +1156,7 @@ export async function notifyReviewRequest(
   const jobData = buildJobTemplateData(job)
   const empData = buildEmployeeTemplateData(employee)
 
-  let tenantName = 'ServiceOS'
+  let tenantName = 'Fieseros'
   if (options?.tenantId || job.tenantId) {
     try {
       const tenant = await db.tenant.findUnique({

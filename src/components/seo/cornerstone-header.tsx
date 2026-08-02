@@ -3,7 +3,7 @@ import { Wrench, ArrowRight, ChevronDown } from "lucide-react";
 
 /**
  * Shared header for all SEO cornerstone pages.
- * Matches the ServiceOS brand identity (emerald accent, Wrench logo mark).
+ * Matches the Fieseros brand identity (emerald accent, Wrench logo mark).
  * Server component — uses CSS-only hover dropdowns (group-hover) so no client JS.
  */
 export function CornerstoneHeader({ activePath }: { activePath?: string }) {
@@ -46,7 +46,7 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
             <Wrench className="h-5 w-5 text-white" />
           </span>
           <span className="text-xl font-bold tracking-tight text-foreground">
-            ServiceOS
+            Fieseros
           </span>
         </Link>
 

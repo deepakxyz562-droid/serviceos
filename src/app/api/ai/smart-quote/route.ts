@@ -13,7 +13,7 @@ import {
 } from '@/lib/quote-templates';
 
 /**
- * AI Smart Quote Builder (ServiceOS V1.5 — P6-quotes)
+ * AI Smart Quote Builder (Fieseros V1.5 — P6-quotes)
  * ----------------------------------------------------
  * POST /api/ai/smart-quote
  *
@@ -536,7 +536,7 @@ export async function POST(request: NextRequest) {
     const zaiResult = await getZai();
     if (zaiResult && zaiResult.zai) {
       const systemPrompt =
-        'You are an expert service business estimator for ServiceOS, a platform for local service businesses.\n' +
+        'You are an expert service business estimator for Fieseros, a platform for local service businesses.\n' +
         'Given a customer\'s problem description, generate a detailed quote.\n\n' +
         'Return a JSON object:\n' +
         '{\n' +

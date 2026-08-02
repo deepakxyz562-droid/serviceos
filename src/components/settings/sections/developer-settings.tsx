@@ -63,7 +63,7 @@ export function DeveloperSettings() {
         { label: 'API Keys', hint: 'Generate, rotate, and revoke API keys with scoped permissions' },
         { label: 'Webhooks', hint: 'Register endpoints to receive event payloads' },
         { label: 'OAuth Apps', hint: 'Register OAuth client apps for third-party access' },
-        { label: 'Marketplace Apps', hint: 'Publish custom apps to the ServiceOS marketplace' },
+        { label: 'Marketplace Apps', hint: 'Publish custom apps to the Fieseros marketplace' },
         { label: 'Custom Integrations', hint: 'Build private integrations with the SDK' },
         { label: 'Developer Docs', hint: 'OpenAPI spec, SDK downloads, sample apps' },
         { label: 'Rate Limits', hint: 'View per-key rate limits and current usage' },

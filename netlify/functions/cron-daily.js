@@ -44,7 +44,7 @@
 // ── Schedule: 09:00 UTC every day ──────────────────────────────────────────
 export const schedule = '0 9 * * *';
 
-// ── The 5 ServiceOS daily cron endpoints ───────────────────────────────────
+// ── The 5 Fieseros daily cron endpoints ───────────────────────────────────
 const CRON_ENDPOINTS = [
   {
     name: 'trial-reminders',

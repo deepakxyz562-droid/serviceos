@@ -73,7 +73,7 @@ const features: Feature[] = [
     icon: ShieldCheck,
     title: 'Verified Provider Marketplace',
     description:
-      'List your business on the ServiceOS marketplace. Identity, business, and insurance verification badges.',
+      'List your business on the Fieseros marketplace. Identity, business, and insurance verification badges.',
   },
   {
     icon: Headphones,
@@ -85,34 +85,34 @@ const features: Feature[] = [
 
 const faqs = [
   {
-    question: 'What is ServiceOS and who is it for?',
+    question: 'What is Fieseros and who is it for?',
     answer:
-      'ServiceOS is the all-in-one operating system for service businesses — plumbers, HVAC technicians, electricians, cleaners, landscapers, and more. It replaces scattered texts, emails, and spreadsheets with one platform for leads, dispatch, invoicing, and automated Email, SMS & Push notifications.',
+      'Fieseros is the all-in-one operating system for service businesses — plumbers, HVAC technicians, electricians, cleaners, landscapers, and more. It replaces scattered texts, emails, and spreadsheets with one platform for leads, dispatch, invoicing, and automated Email, SMS & Push notifications.',
   },
   {
-    question: 'How much does ServiceOS cost?',
+    question: 'How much does Fieseros cost?',
     answer:
-      'ServiceOS offers a free plan for small teams, with paid plans starting at affordable monthly rates. You can start a free trial with no credit card required. Visit the pricing page or sign up to see current plans.',
+      'Fieseros offers a free plan for small teams, with paid plans starting at affordable monthly rates. You can start a free trial with no credit card required. Visit the pricing page or sign up to see current plans.',
   },
   {
-    question: 'Does ServiceOS work on mobile?',
+    question: 'Does Fieseros work on mobile?',
     answer:
-      'Yes. ServiceOS is a Progressive Web App (PWA) that works on any device — desktop, tablet, and mobile. Technicians can use the dedicated employee portal on their phone to see their daily route, update job status, capture photos, and collect signatures.',
+      'Yes. Fieseros is a Progressive Web App (PWA) that works on any device — desktop, tablet, and mobile. Technicians can use the dedicated employee portal on their phone to see their daily route, update job status, capture photos, and collect signatures.',
   },
   {
-    question: 'Can I use ServiceOS for my specific service industry?',
+    question: 'Can I use Fieseros for my specific service industry?',
     answer:
-      'ServiceOS supports 25+ service industries including plumbing, HVAC, electrical, cleaning, landscaping, pest control, roofing, painting, handyman, tree care, snow removal, pool service, solar, pet services, and more. Each industry gets tailored features and workflows.',
+      'Fieseros supports 25+ service industries including plumbing, HVAC, electrical, cleaning, landscaping, pest control, roofing, painting, handyman, tree care, snow removal, pool service, solar, pet services, and more. Each industry gets tailored features and workflows.',
   },
   {
-    question: 'Does ServiceOS integrate with my existing tools?',
+    question: 'Does Fieseros integrate with my existing tools?',
     answer:
-      'ServiceOS includes a built-in CRM, invoicing, and communication tools. It supports Email, SMS, and Push notifications natively. You can export invoices and reports as CSV for accounting tools like QuickBooks and Xero. A WordPress plugin is available for lead capture forms.',
+      'Fieseros includes a built-in CRM, invoicing, and communication tools. It supports Email, SMS, and Push notifications natively. You can export invoices and reports as CSV for accounting tools like QuickBooks and Xero. A WordPress plugin is available for lead capture forms.',
   },
   {
-    question: 'How does the ServiceOS marketplace work?',
+    question: 'How does the Fieseros marketplace work?',
     answer:
-      'The ServiceOS marketplace lists verified service providers across 25 industries. Businesses opt in, get verified (identity, business, insurance), and receive public Business Hub pages with reviews, services, and booking. Customers can browse, compare, and book instantly.',
+      'The Fieseros marketplace lists verified service providers across 25 industries. Businesses opt in, get verified (identity, business, insurance), and receive public Business Hub pages with reviews, services, and booking. Customers can browse, compare, and book instantly.',
   },
 ];
 
@@ -121,7 +121,7 @@ export function HomeSeoContent() {
 
   return (
     <section
-      aria-label="ServiceOS platform overview"
+      aria-label="Fieseros platform overview"
       className="sr-only"
     >
       {/*
@@ -144,7 +144,7 @@ export function HomeSeoContent() {
 
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-12">
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground mb-4">
-          ServiceOS — The Operating System for Service Businesses
+          Fieseros — The Operating System for Service Businesses
         </h1>
         <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
           Replace scattered texts, emails, and spreadsheets with one powerful

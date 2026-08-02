@@ -22,9 +22,9 @@ function getJwtSecret(): string {
     );
   }
   // Dev-only fallback so local development works without manual setup.
-  return 'serviceos-saas-dev-secret-key';
+  return 'fieseros-saas-dev-secret-key';
 }
-const TOKEN_NAME = 'serviceos_session';
+const TOKEN_NAME = 'fieseros_session';
 const TOKEN_EXPIRY = '7d';
 
 export interface AuthUser {
@@ -194,7 +194,7 @@ export function getAppUrl(request?: { headers: { get(name: string): string | nul
     }
   }
 
-  return 'https://serviceos.cc';
+  return 'https://fieseros.com';
 }
 
 // In HTTPS-through-proxy setups, Node sees HTTP internally,

@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 
 /**
- * AI Dashboard Suggestions (ServiceOS — Signature Feature)
+ * AI Dashboard Suggestions (Fieseros — Signature Feature)
  * --------------------------------------------------------
  * GET /api/ai/dashboard-suggestions
  *

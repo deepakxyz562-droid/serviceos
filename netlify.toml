@@ -1,4 +1,4 @@
-# Netlify Configuration for ServiceOS CRM
+# Netlify Configuration for Fieseros CRM
 # This ensures proper build and runtime behavior on Netlify
 
 [build]
@@ -17,7 +17,7 @@
   # Include node_modules needed at runtime (none needed here — uses native fetch)
 
 # ── Daily Cron Schedule ───────────────────────────────────────────────────
-# The cron-daily function triggers all 5 ServiceOS cron endpoints at 09:00 UTC.
+# The cron-daily function triggers all 5 Fieseros cron endpoints at 09:00 UTC.
 # To change the time, edit `export const schedule` in netlify/functions/cron-daily.js.
 # To disable: delete the file or remove the `schedule` export.
 

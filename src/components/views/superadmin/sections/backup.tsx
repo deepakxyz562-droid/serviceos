@@ -178,7 +178,7 @@ export function BackupSection() {
       const ts = res.headers.get('X-Backup-Timestamp') || new Date().toISOString();
       const cd = res.headers.get('Content-Disposition') || '';
       const m = cd.match(/filename="?([^"]+)"?/);
-      const name = m?.[1] || `serviceos-backup-${ts.replace(/[:.]/g, '-')}.json`;
+      const name = m?.[1] || `fieseros-backup-${ts.replace(/[:.]/g, '-')}.json`;
 
       // Trigger browser download
       const url = URL.createObjectURL(blob);
@@ -226,7 +226,7 @@ export function BackupSection() {
       const ts = res.headers.get('X-Backup-Timestamp') || new Date().toISOString();
       const cd = res.headers.get('Content-Disposition') || '';
       const m = cd.match(/filename="?([^"]+)"?/);
-      const name = m?.[1] || `serviceos-backup-partial-${ts.replace(/[:.]/g, '-')}.json`;
+      const name = m?.[1] || `fieseros-backup-partial-${ts.replace(/[:.]/g, '-')}.json`;
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

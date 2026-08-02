@@ -24,7 +24,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Scheduling & Dispatch Software for Field Service | ServiceOS",
+  title: "Scheduling & Dispatch Software for Field Service | Fieseros",
   description:
     "Drag-and-drop scheduling, smart dispatch based on skills and location, recurring jobs, real-time GPS tracking, and smart auto-dispatch. The scheduling & dispatch software service businesses actually use.",
   keywords: [
@@ -34,13 +34,13 @@ export const metadata: Metadata = {
     "technician dispatch",
     "job scheduling software",
   ],
-  alternates: { canonical: "https://serviceos.cc/scheduling-and-dispatch" },
+  alternates: { canonical: "https://fieseros.com/scheduling-and-dispatch" },
   openGraph: {
-    title: "Scheduling & Dispatch Software for Field Service | ServiceOS",
+    title: "Scheduling & Dispatch Software for Field Service | Fieseros",
     description:
       "Drag-and-drop scheduling, smart dispatch, real-time GPS tracking, and smart auto-dispatch in one platform. Stop juggling text messages and Excel — start dispatching.",
-    url: "https://serviceos.cc/scheduling-and-dispatch",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/scheduling-and-dispatch",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -57,13 +57,13 @@ const features: Feature[] = [
     icon: Sparkles,
     title: "Smart dispatch (skill + location matching)",
     description:
-      "When a new job comes in, ServiceOS recommends the best technician based on the skills required, current location, drive time, and remaining capacity. One click to assign. No more checking three group text threads to see who's free.",
+      "When a new job comes in, Fieseros recommends the best technician based on the skills required, current location, drive time, and remaining capacity. One click to assign. No more checking three group text threads to see who's free.",
   },
   {
     icon: RefreshCw,
     title: "Recurring job scheduling",
     description:
-      "Set up recurring jobs once — weekly, monthly, quarterly, annual maintenance contracts — and ServiceOS auto-schedules every visit, sends the customer an SMS reminder, and queues the invoice. Set it and forget it.",
+      "Set up recurring jobs once — weekly, monthly, quarterly, annual maintenance contracts — and Fieseros auto-schedules every visit, sends the customer an SMS reminder, and queues the invoice. Set it and forget it.",
   },
   {
     icon: MapPin,
@@ -75,13 +75,13 @@ const features: Feature[] = [
     icon: Route,
     title: "Smart Auto-Dispatch",
     description:
-      "ServiceOS reorders each technician's daily jobs to minimize drive time. Less windshield time means more jobs per day, less fuel, and earlier finishes — without you having to manually optimize routes.",
+      "Fieseros reorders each technician's daily jobs to minimize drive time. Less windshield time means more jobs per day, less fuel, and earlier finishes — without you having to manually optimize routes.",
   },
   {
     icon: AlertTriangle,
     title: "Conflict detection",
     description:
-      "Double-booked a technician? Assigned a job outside their working hours? Overlapping visits at the same customer? ServiceOS flags every conflict before you save the schedule — so the customer never finds out the hard way.",
+      "Double-booked a technician? Assigned a job outside their working hours? Overlapping visits at the same customer? Fieseros flags every conflict before you save the schedule — so the customer never finds out the hard way.",
   },
 ];
 
@@ -116,12 +116,12 @@ const faqs = [
   {
     question: "Can I schedule recurring jobs?",
     answer:
-      "Yes — recurring jobs are a first-class feature in ServiceOS. You define a job once (a weekly cleaning, a monthly pest-control visit, an annual AC service contract) and ServiceOS automatically creates every future occurrence, assigns the right technician based on your rules, sends the customer an SMS reminder before each visit, and queues the invoice for after the job is marked complete. You can pause, skip, or reschedule any single occurrence without affecting the rest of the schedule. Most service businesses that run maintenance contracts cut their scheduling admin time by 80%+ after switching to ServiceOS.",
+      "Yes — recurring jobs are a first-class feature in Fieseros. You define a job once (a weekly cleaning, a monthly pest-control visit, an annual AC service contract) and Fieseros automatically creates every future occurrence, assigns the right technician based on your rules, sends the customer an SMS reminder before each visit, and queues the invoice for after the job is marked complete. You can pause, skip, or reschedule any single occurrence without affecting the rest of the schedule. Most service businesses that run maintenance contracts cut their scheduling admin time by 80%+ after switching to Fieseros.",
   },
   {
     question: "How does smart dispatch work?",
     answer:
-      "When a new job is created — whether it's an emergency call or a routine appointment — ServiceOS looks at every technician and scores them against the job. The score combines four factors: (1) skill match — does the technician have the certifications and trade skills the job requires; (2) geographic proximity — how far is the technician from the customer's location, factoring in current traffic; (3) capacity — how many jobs are already on their plate today and how much time they have left; (4) existing context — have they worked with this customer or asset before. The top three recommended technicians are surfaced to the dispatcher, who assigns with a single click. Smart dispatch reduces travel time by an average of 25% and virtually eliminates 'wrong tech dispatched' callbacks.",
+      "When a new job is created — whether it's an emergency call or a routine appointment — Fieseros looks at every technician and scores them against the job. The score combines four factors: (1) skill match — does the technician have the certifications and trade skills the job requires; (2) geographic proximity — how far is the technician from the customer's location, factoring in current traffic; (3) capacity — how many jobs are already on their plate today and how much time they have left; (4) existing context — have they worked with this customer or asset before. The top three recommended technicians are surfaced to the dispatcher, who assigns with a single click. Smart dispatch reduces travel time by an average of 25% and virtually eliminates 'wrong tech dispatched' callbacks.",
   },
   {
     question: "Can technicians see their schedule on mobile?",
@@ -131,26 +131,26 @@ const faqs = [
   {
     question: "Does it handle emergency or urgent jobs?",
     answer:
-      "Absolutely — emergency dispatch is where ServiceOS shines. When a burst-pipe or no-heat call comes in, you open the live map, see every technician's current location and job status, and dispatch the closest qualified tech in seconds. The customer automatically receives an SMS message with the technician's name, photo, and ETA. The technician receives full job details on their phone — including the customer's history, any prior repairs, and notes about the property. ServiceOS can also reroute the technician's remaining jobs automatically or surface them for manual reassignment. Most emergency-driven service businesses cut their average response time by 30–50% after switching to ServiceOS.",
+      "Absolutely — emergency dispatch is where Fieseros shines. When a burst-pipe or no-heat call comes in, you open the live map, see every technician's current location and job status, and dispatch the closest qualified tech in seconds. The customer automatically receives an SMS message with the technician's name, photo, and ETA. The technician receives full job details on their phone — including the customer's history, any prior repairs, and notes about the property. Fieseros can also reroute the technician's remaining jobs automatically or surface them for manual reassignment. Most emergency-driven service businesses cut their average response time by 30–50% after switching to Fieseros.",
   },
   {
     question: "Can I track technicians in real-time?",
     answer:
-      "Yes. ServiceOS includes live GPS tracking for every technician who is on the clock. You see a single map with all technicians, their current location, and the status of the job they're on. This isn't about surveillance — it's about operational efficiency. When a customer calls asking 'where is my technician?', you have an instant answer. When an emergency comes in, you can see who's closest. When a job runs long, you can proactively reschedule the next appointment. Technicians are explicitly notified that location is tracked while clocked in, and tracking stops when they clock out — privacy is respected outside of working hours.",
+      "Yes. Fieseros includes live GPS tracking for every technician who is on the clock. You see a single map with all technicians, their current location, and the status of the job they're on. This isn't about surveillance — it's about operational efficiency. When a customer calls asking 'where is my technician?', you have an instant answer. When an emergency comes in, you can see who's closest. When a job runs long, you can proactively reschedule the next appointment. Technicians are explicitly notified that location is tracked while clocked in, and tracking stops when they clock out — privacy is respected outside of working hours.",
   },
   {
     question: "Does it work offline?",
     answer:
-      "Yes — both the technician app and parts of the dispatcher interface work offline. Technicians in basements, remote rural areas, or buildings with poor reception can still see their job details, complete checklists, capture photos, collect signatures, and mark jobs complete. Everything is stored locally on the phone and syncs automatically the moment a connection is restored. The dispatcher calendar also continues to function offline, with changes syncing when you reconnect. This is one of the biggest advantages of ServiceOS being a progressive web app rather than a traditional cloud-only tool — your business doesn't grind to a halt every time the internet drops.",
+      "Yes — both the technician app and parts of the dispatcher interface work offline. Technicians in basements, remote rural areas, or buildings with poor reception can still see their job details, complete checklists, capture photos, collect signatures, and mark jobs complete. Everything is stored locally on the phone and syncs automatically the moment a connection is restored. The dispatcher calendar also continues to function offline, with changes syncing when you reconnect. This is one of the biggest advantages of Fieseros being a progressive web app rather than a traditional cloud-only tool — your business doesn't grind to a halt every time the internet drops.",
   },
 ];
 
 export default function SchedulingAndDispatchPage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Scheduling & Dispatch Software",
+    name: "Fieseros — Scheduling & Dispatch Software",
     description:
       "Drag-and-drop scheduling, smart technician dispatch based on skills and location, recurring job automation, real-time GPS tracking, and smart auto-dispatch for field service businesses.",
-    url: "https://serviceos.cc/scheduling-and-dispatch",
+    url: "https://fieseros.com/scheduling-and-dispatch",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -159,8 +159,8 @@ export default function SchedulingAndDispatchPage() {
     <CornerstoneLayout
       activePath="/scheduling-and-dispatch"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Scheduling & Dispatch", url: "https://serviceos.cc/scheduling-and-dispatch" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Scheduling & Dispatch", url: "https://fieseros.com/scheduling-and-dispatch" },
       ]}
       additionalSchema={[appSchema]}
     >
@@ -200,7 +200,7 @@ export default function SchedulingAndDispatchPage() {
               Who is this for
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              ServiceOS scheduling &amp; dispatch software works for any service
+              Fieseros scheduling &amp; dispatch software works for any service
               business that sends technicians to customer locations. These are
               the four most common.
             </p>
@@ -224,9 +224,9 @@ export default function SchedulingAndDispatchPage() {
         </div>
       </section>
 
-      <ContentSection title="How ServiceOS scheduling & dispatch works">
+      <ContentSection title="How Fieseros scheduling & dispatch works">
         <p>
-          The heart of ServiceOS is a real <strong>drag-and-drop scheduling
+          The heart of Fieseros is a real <strong>drag-and-drop scheduling
           calendar</strong> — not a spreadsheet pretending to be one. You see
           your team in rows and the day or week in columns. To assign a job,
           drag it from the unassigned queue onto a technician&apos;s timeline.
@@ -241,10 +241,10 @@ export default function SchedulingAndDispatchPage() {
           software should feel like.
         </p>
         <p>
-          Where ServiceOS pulls ahead of basic calendar tools is in the
+          Where Fieseros pulls ahead of basic calendar tools is in the
           <strong> smart dispatch algorithm</strong>. When a new job comes in
           — an emergency call, a routine booking, a recurring visit —
-          ServiceOS analyzes every technician and recommends the best fit
+          Fieseros analyzes every technician and recommends the best fit
           based on four signals: required skills and certifications, current
           location and drive time, remaining capacity that day, and prior
           history with that customer or asset. The dispatcher sees the top
@@ -259,7 +259,7 @@ export default function SchedulingAndDispatchPage() {
           AC servicing, bi-monthly pest control, quarterly elevator
           inspections — the <strong>recurring job engine</strong> is a quiet
           revenue hero. You define a contract once: customer, asset, service
-          type, frequency, price, preferred technician. ServiceOS then
+          type, frequency, price, preferred technician. Fieseros then
           auto-schedules every future visit, sends the customer an SMS
           reminder 24 hours before, dispatches the technician, and queues the
           invoice for after the job is marked complete. You can pause a
@@ -283,13 +283,13 @@ export default function SchedulingAndDispatchPage() {
           trigger a frantic round of phone calls — you have an instant,
           accurate answer. That&apos;s what modern field service scheduling
           and technician dispatch looks like, and it&apos;s included in every
-          ServiceOS plan from day one.
+          Fieseros plan from day one.
         </p>
       </ContentSection>
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything service businesses ask about scheduling and dispatch with ServiceOS."
+        subtitle="Everything service businesses ask about scheduling and dispatch with Fieseros."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -300,7 +300,7 @@ export default function SchedulingAndDispatchPage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/technician-app" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

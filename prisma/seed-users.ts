@@ -19,7 +19,7 @@ const hoursAgo = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
 const daysFromNow = (d: number) => new Date(now.getTime() + d * 24 * 60 * 60 * 1000);
 
 async function main() {
-  console.log('🌱 Seeding ServiceOS — 5 Users (1 SuperAdmin) + Full Dummy Data...\n');
+  console.log('🌱 Seeding Fieseros — 5 Users (1 SuperAdmin) + Full Dummy Data...\n');
 
   // ════════════════════════════════════════════════
   // 0. CLEAN ALL EXISTING DATA (reverse dependency order)
@@ -91,7 +91,7 @@ async function main() {
   console.log('👑 Creating SuperAdmin...');
   const superAdmin = await db.user.create({
     data: {
-      email: 'admin@serviceos.cc',
+      email: 'admin@fieseros.com',
       name: 'Vikram Mehta',
       role: 'admin',
       passwordHash: superAdminHash,
@@ -103,18 +103,18 @@ async function main() {
       workspaceId: null,
     },
   });
-  console.log('  ✅ SuperAdmin: admin@serviceos.cc / SuperAdmin@123\n');
+  console.log('  ✅ SuperAdmin: admin@fieseros.com / SuperAdmin@123\n');
 
   // ══════════════════════════════════════════════════════════════
-  // 3. TENANT: ServiceOS Demo Corp (Growth Plan — Multi-Service)
+  // 3. TENANT: Fieseros Demo Corp (Growth Plan — Multi-Service)
   // ══════════════════════════════════════════════════════════════
-  console.log('🏢 Creating Tenant: ServiceOS Demo Corp...');
+  console.log('🏢 Creating Tenant: Fieseros Demo Corp...');
   const tenant = await db.tenant.create({
     data: {
-      name: 'ServiceOS Demo Corp',
-      slug: 'serviceos-demo',
+      name: 'Fieseros Demo Corp',
+      slug: 'fieseros-demo',
       industry: 'home-services',
-      email: 'rajesh@serviceos-demo.com',
+      email: 'rajesh@fieseros-demo.com',
       phone: '+1-555-0100',
       address: '100 Business Park, Suite 400, Houston, TX 77001',
       country: 'US',
@@ -140,7 +140,7 @@ async function main() {
   // USER 2: Owner
   const owner = await db.user.create({
     data: {
-      email: 'rajesh@serviceos-demo.com',
+      email: 'rajesh@fieseros-demo.com',
       name: 'Rajesh Kumar',
       role: 'owner',
       passwordHash: ownerHash,
@@ -154,7 +154,7 @@ async function main() {
   // USER 3: Manager
   const manager = await db.user.create({
     data: {
-      email: 'priya@serviceos-demo.com',
+      email: 'priya@fieseros-demo.com',
       name: 'Priya Patel',
       role: 'manager',
       passwordHash: managerHash,
@@ -168,7 +168,7 @@ async function main() {
   // USER 4: Technician
   const technician = await db.user.create({
     data: {
-      email: 'amit@serviceos-demo.com',
+      email: 'amit@fieseros-demo.com',
       name: 'Amit Singh',
       role: 'technician',
       passwordHash: techHash,
@@ -182,7 +182,7 @@ async function main() {
   // USER 5: Dispatcher
   const dispatcher = await db.user.create({
     data: {
-      email: 'suresh@serviceos-demo.com',
+      email: 'suresh@fieseros-demo.com',
       name: 'Suresh Naik',
       role: 'admin',
       passwordHash: dispatchHash,
@@ -193,10 +193,10 @@ async function main() {
     },
   });
 
-  console.log('  ✅ User 2 (Owner): rajesh@serviceos-demo.com / Owner@123');
-  console.log('  ✅ User 3 (Manager): priya@serviceos-demo.com / Manager@123');
-  console.log('  ✅ User 4 (Technician): amit@serviceos-demo.com / Technician@123');
-  console.log('  ✅ User 5 (Dispatcher): suresh@serviceos-demo.com / Dispatch@123\n');
+  console.log('  ✅ User 2 (Owner): rajesh@fieseros-demo.com / Owner@123');
+  console.log('  ✅ User 3 (Manager): priya@fieseros-demo.com / Manager@123');
+  console.log('  ✅ User 4 (Technician): amit@fieseros-demo.com / Technician@123');
+  console.log('  ✅ User 5 (Dispatcher): suresh@fieseros-demo.com / Dispatch@123\n');
 
   // ════════════════════════════════════════════════
   // 5. WORKSPACE
@@ -204,8 +204,8 @@ async function main() {
   console.log('📂 Creating workspace...');
   const workspace = await db.workspace.create({
     data: {
-      name: 'ServiceOS Demo Corp',
-      slug: 'serviceos-demo',
+      name: 'Fieseros Demo Corp',
+      slug: 'fieseros-demo',
       industry: 'home-services',
       plan: 'growth',
       ownerId: owner.id,
@@ -281,7 +281,7 @@ async function main() {
 
   const emp_owner = await db.employee.create({
     data: {
-      name: 'Rajesh Kumar', phone: '+1-555-0101', email: 'rajesh@serviceos-demo.com',
+      name: 'Rajesh Kumar', phone: '+1-555-0101', email: 'rajesh@fieseros-demo.com',
       role: 'owner', status: 'available',
       skills: '["plumbing","estimation","project_management","sales"]',
       rating: 4.9, completedJobs: 120, location: 'Houston, TX',
@@ -292,7 +292,7 @@ async function main() {
 
   const emp_manager = await db.employee.create({
     data: {
-      name: 'Priya Patel', phone: '+1-555-0102', email: 'priya@serviceos-demo.com',
+      name: 'Priya Patel', phone: '+1-555-0102', email: 'priya@fieseros-demo.com',
       role: 'manager', status: 'available',
       skills: '["scheduling","customer_service","quality_assurance","team_management"]',
       rating: 4.8, completedJobs: 45, location: 'Houston, TX',
@@ -303,7 +303,7 @@ async function main() {
 
   const emp_tech1 = await db.employee.create({
     data: {
-      name: 'Amit Singh', phone: '+1-555-0103', email: 'amit@serviceos-demo.com',
+      name: 'Amit Singh', phone: '+1-555-0103', email: 'amit@fieseros-demo.com',
       role: 'technician', status: 'available',
       skills: '["plumbing","pipe_fitting","water_heater","drain_cleaning"]',
       rating: 4.6, completedJobs: 87, location: 'Sugar Land, TX',
@@ -347,7 +347,7 @@ async function main() {
 
   const emp_dispatcher = await db.employee.create({
     data: {
-      name: 'Suresh Naik', phone: '+1-555-0104', email: 'suresh@serviceos-demo.com',
+      name: 'Suresh Naik', phone: '+1-555-0104', email: 'suresh@fieseros-demo.com',
       role: 'dispatcher', status: 'available',
       skills: '["dispatch","routing","customer_coordination","scheduling"]',
       rating: 4.6, completedJobs: 30, location: 'Houston, TX',
@@ -723,7 +723,7 @@ async function main() {
       lastDirection: 'inbound',
       messagesJson: JSON.stringify([
         { sender: 'customer', content: 'Hi, I need help with a plumbing issue', time: hoursAgo(2) },
-        { sender: 'agent', content: 'Hello! Welcome to ServiceOS Demo. How can I help you today?', time: hoursAgo(1.9) },
+        { sender: 'agent', content: 'Hello! Welcome to Fieseros Demo. How can I help you today?', time: hoursAgo(1.9) },
         { sender: 'customer', content: 'I need a plumber urgently for a kitchen faucet leak', time: hoursAgo(1) },
       ]),
       customerId: customers[0].id, tenantId: tenant.id, workspaceId: workspace.id,
@@ -880,7 +880,7 @@ async function main() {
     { userId: owner.id, action: 'job.assigned', resourceType: 'job', metadataJson: JSON.stringify({ jobTitle: 'Clogged Bathroom Drain', assignee: 'Amit Singh' }) },
     { userId: technician.id, action: 'job.started', resourceType: 'job', metadataJson: JSON.stringify({ jobTitle: 'Water Heater Installation' }) },
     { userId: owner.id, action: 'invoice.created', resourceType: 'invoice', metadataJson: JSON.stringify({ invoiceNumber: 'INV-SOS-001' }) },
-    { userId: superAdmin.id, action: 'tenant.settings_updated', resourceType: 'tenant', metadataJson: JSON.stringify({ tenant: 'ServiceOS Demo Corp' }) },
+    { userId: superAdmin.id, action: 'tenant.settings_updated', resourceType: 'tenant', metadataJson: JSON.stringify({ tenant: 'Fieseros Demo Corp' }) },
   ];
   for (const a of auditData) {
     await db.auditLog.create({ data: { ...a, createdAt: daysAgo(Math.floor(Math.random() * 7)) } });
@@ -929,18 +929,18 @@ async function main() {
   // SUMMARY
   // ════════════════════════════════════════════════
   console.log('='.repeat(70));
-  console.log('🎉 SEED COMPLETE — ServiceOS CRM Database');
+  console.log('🎉 SEED COMPLETE — Fieseros CRM Database');
   console.log('='.repeat(70));
   console.log('');
   console.log('👤 USERS (5):');
-  console.log('  1. SuperAdmin: admin@serviceos.cc / SuperAdmin@123 (Platform Admin)');
-  console.log('  2. Owner:      rajesh@serviceos-demo.com / Owner@123');
-  console.log('  3. Manager:    priya@serviceos-demo.com / Manager@123');
-  console.log('  4. Technician: amit@serviceos-demo.com / Technician@123');
-  console.log('  5. Dispatcher: suresh@serviceos-demo.com / Dispatch@123');
+  console.log('  1. SuperAdmin: admin@fieseros.com / SuperAdmin@123 (Platform Admin)');
+  console.log('  2. Owner:      rajesh@fieseros-demo.com / Owner@123');
+  console.log('  3. Manager:    priya@fieseros-demo.com / Manager@123');
+  console.log('  4. Technician: amit@fieseros-demo.com / Technician@123');
+  console.log('  5. Dispatcher: suresh@fieseros-demo.com / Dispatch@123');
   console.log('');
   console.log('📊 DATA SUMMARY:');
-  console.log(`  Tenants:        1 (ServiceOS Demo Corp)`);
+  console.log(`  Tenants:        1 (Fieseros Demo Corp)`);
   console.log(`  Workspaces:     1`);
   console.log(`  Subscriptions:  1 (Growth Plan)`);
   console.log(`  Services:       ${services.length}`);

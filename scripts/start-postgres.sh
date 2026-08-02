@@ -47,7 +47,7 @@ for i in {1..10}; do
 done
 
 # Create database if it doesn't exist
-echo "Ensuring 'serviceos' database exists..."
+echo "Ensuring 'fieseros' database exists..."
 node -e "
 const { Client } = require('pg');
 const client = new Client({
@@ -57,12 +57,12 @@ const client = new Client({
   database: 'postgres'
 });
 client.connect().then(() => {
-  return client.query('SELECT 1 FROM pg_database WHERE datname = \$1', ['serviceos']);
+  return client.query('SELECT 1 FROM pg_database WHERE datname = \$1', ['fieseros']);
 }).then(res => {
   if (res.rows.length === 0) {
-    return client.query('CREATE DATABASE serviceos');
+    return client.query('CREATE DATABASE fieseros');
   }
-  console.log('Database serviceos already exists');
+  console.log('Database fieseros already exists');
   client.end();
   return null;
 }).then(() => {
@@ -74,4 +74,4 @@ client.connect().then(() => {
 " 2>&1
 
 echo "PostgreSQL is ready on port $PG_PORT"
-echo "Connection: postgresql://postgres:postgres@localhost:5432/serviceos"
+echo "Connection: postgresql://postgres:postgres@localhost:5432/fieseros"

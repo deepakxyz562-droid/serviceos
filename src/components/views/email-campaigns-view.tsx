@@ -89,9 +89,9 @@ export function EmailCampaignsView() {
   const [htmlBody, setHtmlBody] = useState(
     `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
   <h1 style="color:#10b981">Hello {{name}} 👋</h1>
-  <p>Thank you for being part of <strong>ServiceOS</strong>.</p>
+  <p>Thank you for being part of <strong>Fieseros</strong>.</p>
   <p>Company: {{company}}<br>Location: {{city}}, {{country}}</p>
-  <p>— The ServiceOS Team</p>
+  <p>— The Fieseros Team</p>
 </div>`
   );
   const [groupId, setGroupId] = useState('');
@@ -314,7 +314,7 @@ export function EmailCampaignsView() {
                 <div className="space-y-2">
                   <Label>Subject (supports {'{{name}}'})</Label>
                   <Input
-                    placeholder="Welcome to ServiceOS, {{name}}!"
+                    placeholder="Welcome to Fieseros, {{name}}!"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                   />

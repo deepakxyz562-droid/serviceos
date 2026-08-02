@@ -48,7 +48,7 @@ export async function GET(
 
     // WordPress shortcode
     embedCodes.wordpress = {
-      shortcode: `[serviceos_form id="${form.id}" slug="${embedSlug}"]`,
+      shortcode: `[fieseros_form id="${form.id}" slug="${embedSlug}"]`,
     };
 
     return NextResponse.json({

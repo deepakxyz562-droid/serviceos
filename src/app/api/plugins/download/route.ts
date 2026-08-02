@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
       // Return the PHP file with ZIP content-type header
       // In production, you'd generate a proper ZIP here
       // For now, return the PHP file with proper headers
-      const phpPath = join(process.cwd(), 'public', 'downloads', 'serviceos-wp-plugin', 'serviceos-crm-connector.php')
+      const phpPath = join(process.cwd(), 'public', 'downloads', 'fieseros-wp-plugin', 'fieseros-crm-connector.php')
 
       if (!existsSync(phpPath)) {
         return NextResponse.json(
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       return new NextResponse(fileContent, {
         headers: {
           'Content-Type': 'application/octet-stream',
-          'Content-Disposition': 'attachment; filename="serviceos-crm-connector.php"',
+          'Content-Disposition': 'attachment; filename="fieseros-crm-connector.php"',
           'X-Plugin-Version': '2.0.0',
         },
       })
@@ -35,9 +35,9 @@ export async function GET(request: NextRequest) {
 
     // Return plugin info as JSON
     return NextResponse.json({
-      name: 'ServiceOS CRM Connector',
+      name: 'Fieseros CRM Connector',
       version: '2.0.0',
-      description: 'Connect WordPress forms to ServiceOS CRM. Supports Contact Form 7, WPForms, Gravity Forms, Fluent Forms, and Elementor Forms.',
+      description: 'Connect WordPress forms to Fieseros CRM. Supports Contact Form 7, WPForms, Gravity Forms, Fluent Forms, and Elementor Forms.',
       downloadUrl: '/api/plugins/download?format=zip',
       installUrl: '/api/plugins/install-config',
       supportedForms: [

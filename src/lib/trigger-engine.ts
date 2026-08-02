@@ -1,5 +1,5 @@
 /**
- * ServiceOS Trigger Engine
+ * Fieseros Trigger Engine
  * 
  * Bridges the EventBus to WorkflowAutomation records.
  * When a ServiceEvent is emitted, the trigger engine:

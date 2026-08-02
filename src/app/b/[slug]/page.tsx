@@ -48,14 +48,14 @@ export default async function ShortBusinessUrlPage({
           <div className="text-center max-w-md">
             <h1 className="text-2xl font-bold mb-2">Business not found</h1>
             <p className="text-muted-foreground mb-6">
-              We couldn&apos;t find a ServiceOS business profile at <code className="px-1.5 py-0.5 rounded bg-muted text-foreground">/b/{slug}</code>.
+              We couldn&apos;t find a Fieseros business profile at <code className="px-1.5 py-0.5 rounded bg-muted text-foreground">/b/{slug}</code>.
               The link may be incorrect or the business may no longer be active.
             </p>
             <a
               href="/"
               className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 transition-colors"
             >
-              Go to ServiceOS
+              Go to Fieseros
             </a>
           </div>
         </main>

@@ -15,7 +15,7 @@
  * `persistQueryClientSubscribe` from `@tanstack/react-query-persist-client`.
  *
  * Storage: idb-keyval stores the entire serialized query cache as a single
- * JSON blob under the key `serviceos-query-cache`. This is simpler than
+ * JSON blob under the key `fieseros-query-cache`. This is simpler than
  * per-query storage and works well for our cache size (<1MB typical).
  *
  * SSR-safe: no-ops on the server (IndexedDB is browser-only).
@@ -28,7 +28,7 @@ import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const QUERY_CACHE_KEY = 'serviceos-query-cache';
+const QUERY_CACHE_KEY = 'fieseros-query-cache';
 
 /** Max age for persisted cache entries (24 hours). */
 const PERSIST_MAX_AGE_MS = 24 * 60 * 60 * 1000;

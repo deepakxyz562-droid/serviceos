@@ -1,5 +1,5 @@
 /**
- * JSON-LD structured data generators for ServiceOS SEO.
+ * JSON-LD structured data generators for Fieseros SEO.
  *
  * These functions return plain objects that are serialized into
  * <script type="application/ld+json"> tags. Google uses this data to
@@ -8,7 +8,7 @@
  * Reference: https://schema.org / https://developers.google.com/search/docs/appearance/structured-data
  */
 
-const SITE_URL = "https://serviceos.cc";
+const SITE_URL = "https://fieseros.com";
 const LOGO_URL = `${SITE_URL}/icon-512.png`;
 
 // ─── Organization schema (site-wide, injected in root layout) ────────────────
@@ -17,20 +17,20 @@ export function getOrganizationSchema() {
   return {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "ServiceOS",
+    name: "Fieseros",
     url: SITE_URL,
     logo: LOGO_URL,
     description:
-      "ServiceOS is the operating system for service businesses — scheduling, dispatch, invoicing, Email, SMS & Push notifications, and field service management.",
+      "Fieseros is the operating system for service businesses — scheduling, dispatch, invoicing, Email, SMS & Push notifications, and field service management.",
     foundingDate: "2024",
     // P2-2 (SEO): sameAs links Google's Knowledge Graph to our social profiles.
     // This consolidates entity identity and enables knowledge panel features.
     sameAs: [
-      "https://twitter.com/serviceos",
-      "https://www.linkedin.com/company/serviceos",
+      "https://twitter.com/fieseros",
+      "https://www.linkedin.com/company/fieseros",
       "https://github.com/deepakxyz562-droid",
-      "https://www.youtube.com/@serviceos",
-      "https://www.facebook.com/serviceos",
+      "https://www.youtube.com/@fieseros",
+      "https://www.facebook.com/fieseros",
     ],
     contactPoint: {
       "@type": "ContactPoint",
@@ -47,7 +47,7 @@ export function getWebsiteSchema() {
   return {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    name: "ServiceOS",
+    name: "Fieseros",
     url: SITE_URL,
     // P2-3 (SEO): SearchAction enables the Google sitelinks search box rich
     // result. The target MUST point to a real, working search results page.
@@ -74,11 +74,11 @@ export interface BreadcrumbItem {
 }
 
 /**
- * Convert a relative URL to an absolute one using the canonical ServiceOS
+ * Convert a relative URL to an absolute one using the canonical Fieseros
  * origin. Google's BreadcrumbList structured data REQUIRES absolute URLs
  * (relative URLs produce "Missing field 'item'" warnings in Search Console),
  * but the visible breadcrumb links should stay relative so they work on any
- * host (localhost in dev, serviceos.cc in prod, custom domains).
+ * host (localhost in dev, fieseros.com in prod, custom domains).
  *
  * Pass relative URLs to <Breadcrumbs>; this function absolutizes them only
  * for the JSON-LD payload. Already-absolute URLs (http://, https://) are
@@ -87,7 +87,7 @@ export interface BreadcrumbItem {
 function absolutizeUrl(url: string): string {
   if (/^https?:\/\//i.test(url)) return url;
   // Ensure the path starts with "/" so we don't accidentally produce
-  // "https://serviceos.ccmarketplace" when a caller passes "marketplace".
+  // "https://fieseros.commarketplace" when a caller passes "marketplace".
   const path = url.startsWith("/") ? url : `/${url}`;
   return `${SITE_URL}${path}`;
 }
@@ -163,7 +163,7 @@ export function getSoftwareApplicationSchema(opts: {
       : {}),
     publisher: {
       "@type": "Organization",
-      name: "ServiceOS",
+      name: "Fieseros",
       url: SITE_URL,
     },
   };
@@ -185,7 +185,7 @@ export function getProductSchema(opts: {
     description: opts.description,
     brand: {
       "@type": "Brand",
-      name: opts.brand ?? "ServiceOS",
+      name: opts.brand ?? "Fieseros",
     },
     url: opts.url,
     image: LOGO_URL,
@@ -331,10 +331,10 @@ export function getLocalBusinessSchema(opts: {
     }));
   }
 
-  // Parent organization (ServiceOS) — makes this a node in the platform graph
+  // Parent organization (Fieseros) — makes this a node in the platform graph
   schema.parentOrganization = {
     "@type": "Organization",
-    name: "ServiceOS",
+    name: "Fieseros",
     url: SITE_URL,
   };
 
@@ -471,12 +471,12 @@ export function getBlogPostingSchema(opts: {
     dateModified: opts.dateModified ?? opts.datePublished,
     author: {
       "@type": "Organization",
-      name: opts.authorName ?? "ServiceOS",
+      name: opts.authorName ?? "Fieseros",
       url: SITE_URL,
     },
     publisher: {
       "@type": "Organization",
-      name: "ServiceOS",
+      name: "Fieseros",
       logo: { "@type": "ImageObject", url: LOGO_URL },
     },
     mainEntityOfPage: {

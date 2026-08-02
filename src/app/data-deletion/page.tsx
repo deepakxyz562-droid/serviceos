@@ -3,15 +3,15 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Data Deletion Policy — ServiceOS CRM",
+  title: "Data Deletion Policy — Fieseros CRM",
   description:
-    "Learn how to request deletion of your personal data from ServiceOS CRM. Covers account holders, end customers, and Meta platform users. Compliant with GDPR, CCPA, and Meta Platform Terms. Last updated March 5, 2026.",
+    "Learn how to request deletion of your personal data from Fieseros CRM. Covers account holders, end customers, and Meta platform users. Compliant with GDPR, CCPA, and Meta Platform Terms. Last updated March 5, 2026.",
   openGraph: {
-    title: "Data Deletion Policy — ServiceOS CRM",
+    title: "Data Deletion Policy — Fieseros CRM",
     description:
-      "Learn how to request deletion of your personal data from ServiceOS CRM. Covers account holders, end customers, and Meta platform users. Compliant with GDPR, CCPA, and Meta Platform Terms.",
-    url: "https://serviceos.cc/data-deletion",
-    siteName: "ServiceOS",
+      "Learn how to request deletion of your personal data from Fieseros CRM. Covers account holders, end customers, and Meta platform users. Compliant with GDPR, CCPA, and Meta Platform Terms.",
+    url: "https://fieseros.com/data-deletion",
+    siteName: "Fieseros",
     type: "website",
   },
 };
@@ -43,7 +43,7 @@ export default function DataDeletionPage() {
               <Bolt className="h-5 w-5 text-white" />
             </span>
             <span className="text-xl font-bold tracking-tight text-foreground">
-              ServiceOS
+              Fieseros
             </span>
           </Link>
           <Link
@@ -113,10 +113,10 @@ export default function DataDeletionPage() {
                       <li>
                         Send an email to{" "}
                         <a
-                          href="mailto:privacy@serviceos.cc"
+                          href="mailto:privacy@fieseros.com"
                           className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700 font-medium"
                         >
-                          privacy@serviceos.cc
+                          privacy@fieseros.com
                         </a>{" "}
                         with the subject line &quot;Data Deletion Request.&quot;
                       </li>
@@ -136,7 +136,7 @@ export default function DataDeletionPage() {
                   </div>
                   <div className="shrink-0">
                     <a
-                      href="mailto:privacy@serviceos.cc?subject=Data%20Deletion%20Request"
+                      href="mailto:privacy@fieseros.com?subject=Data%20Deletion%20Request"
                       className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-3 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg hover:from-emerald-600 hover:to-teal-700"
                     >
                       Email Us Now
@@ -152,37 +152,37 @@ export default function DataDeletionPage() {
                   1. Overview
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS, Inc. (&quot;ServiceOS,&quot; &quot;we,&quot;
+                  Fieseros, Inc. (&quot;Fieseros,&quot; &quot;we,&quot;
                   &quot;us,&quot; or &quot;our&quot;) is committed to protecting
                   your privacy and respecting your right to control your personal
                   data. This Data Deletion Policy explains how you can request
-                  the deletion of your personal data held by ServiceOS and
+                  the deletion of your personal data held by Fieseros and
                   outlines our obligations in processing such requests.
                 </p>
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   This policy applies to all individuals whose personal data is
-                  processed by ServiceOS, including:
+                  processed by Fieseros, including:
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-4">
                   <li>
                     <strong className="text-foreground">
-                      ServiceOS Account Holders
+                      Fieseros Account Holders
                     </strong>{" "}
-                    &mdash; businesses and professionals who use the ServiceOS
+                    &mdash; businesses and professionals who use the Fieseros
                     CRM platform to manage their operations.
                   </li>
                   <li>
                     <strong className="text-foreground">
-                      End Customers of ServiceOS Users
+                      End Customers of Fieseros Users
                     </strong>{" "}
-                    &mdash; individuals whose data is entered into ServiceOS by
+                    &mdash; individuals whose data is entered into Fieseros by
                     our account holders (e.g., customers, leads, contacts).
                   </li>
                   <li>
                     <strong className="text-foreground">
                       Meta Platform Users
                     </strong>{" "}
-                    &mdash; individuals who interact with ServiceOS through
+                    &mdash; individuals who interact with Fieseros through
                     Facebook integrations.
                   </li>
                 </ul>
@@ -247,7 +247,7 @@ export default function DataDeletionPage() {
                   2.3 Meta Platform Terms
                 </h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  If you interact with ServiceOS through Meta integrations
+                  If you interact with Fieseros through Meta integrations
                   (Facebook Login), you have the right to
                   request deletion of the data we receive from Meta. We provide a
                   data deletion callback URL and honor all deletion requests
@@ -264,14 +264,14 @@ export default function DataDeletionPage() {
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-6">
                   We provide multiple channels for submitting data deletion
-                  requests, depending on your relationship with ServiceOS.
+                  requests, depending on your relationship with Fieseros.
                 </p>
 
                 <h3 className="text-lg font-semibold text-foreground mt-8 mb-3">
-                  3.1 For ServiceOS Account Holders
+                  3.1 For Fieseros Account Holders
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-3">
-                  If you have an active ServiceOS account, you can request data
+                  If you have an active Fieseros account, you can request data
                   deletion through:
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-6">
@@ -286,10 +286,10 @@ export default function DataDeletionPage() {
                     <strong className="text-foreground">Email Request:</strong>{" "}
                     Send an email to{" "}
                     <a
-                      href="mailto:privacy@serviceos.cc"
+                      href="mailto:privacy@fieseros.com"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      privacy@serviceos.cc
+                      privacy@fieseros.com
                     </a>{" "}
                     with the subject line &quot;Account Deletion Request.&quot;
                     Include your registered email address and a clear statement
@@ -299,10 +299,10 @@ export default function DataDeletionPage() {
                 </ul>
 
                 <h3 className="text-lg font-semibold text-foreground mt-8 mb-3">
-                  3.2 For End Customers of ServiceOS Users
+                  3.2 For End Customers of Fieseros Users
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-3">
-                  If your data has been entered into ServiceOS by one of our
+                  If your data has been entered into Fieseros by one of our
                   account holders (e.g., as a customer, lead, or contact), you
                   can request deletion through:
                 </p>
@@ -316,7 +316,7 @@ export default function DataDeletionPage() {
                       href="/contact-us"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      serviceos.cc/contact-us
+                      fieseros.com/contact-us
                     </Link>{" "}
                     and select &quot;Data Deletion Request.&quot; You will need
                     to provide your name, email address, and the name of the
@@ -326,10 +326,10 @@ export default function DataDeletionPage() {
                     <strong className="text-foreground">Email Request:</strong>{" "}
                     Send an email to{" "}
                     <a
-                      href="mailto:privacy@serviceos.cc"
+                      href="mailto:privacy@fieseros.com"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      privacy@serviceos.cc
+                      privacy@fieseros.com
                     </a>{" "}
                     with the subject line &quot;Customer Data Deletion
                     Request.&quot; Include your full name and any identifying
@@ -338,7 +338,7 @@ export default function DataDeletionPage() {
                 </ul>
                 <p className="text-muted-foreground leading-relaxed mb-6">
                   Please note: If you are an end customer, we may need to
-                  coordinate with the ServiceOS account holder who entered your
+                  coordinate with the Fieseros account holder who entered your
                   data. We will make every reasonable effort to process your
                   request directly and will notify the account holder as required
                   by law.
@@ -348,7 +348,7 @@ export default function DataDeletionPage() {
                   3.3 For Meta Platform Users
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-3">
-                  If you interact with ServiceOS through
+                  If you interact with Fieseros through
                   Facebook integrations, you can request deletion through:
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-4">
@@ -357,7 +357,7 @@ export default function DataDeletionPage() {
                       Data Deletion Callback:
                     </strong>{" "}
                     Use the data deletion functionality provided within the
-                    Facebook app settings. When you remove the ServiceOS app from
+                    Facebook app settings. When you remove the Fieseros app from
                     your Facebook account, a deletion request is automatically
                     sent to our callback URL.
                   </li>
@@ -365,10 +365,10 @@ export default function DataDeletionPage() {
                     <strong className="text-foreground">Email Request:</strong>{" "}
                     Send an email to{" "}
                     <a
-                      href="mailto:privacy@serviceos.cc"
+                      href="mailto:privacy@fieseros.com"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      privacy@serviceos.cc
+                      privacy@fieseros.com
                     </a>{" "}
                     with the subject line &quot;Meta Data Deletion Request.&quot;
                     Include your Facebook User ID so we
@@ -380,7 +380,7 @@ export default function DataDeletionPage() {
                     <strong className="text-foreground">
                       Important for Meta Users:
                     </strong>{" "}
-                    When you delete the ServiceOS app from your Facebook account
+                    When you delete the Fieseros app from your Facebook account
                     or request data deletion through Facebook, we receive a
                     signed request containing your Facebook User ID. We use this
                     ID to locate and delete all associated data within our
@@ -452,7 +452,7 @@ export default function DataDeletionPage() {
                   <strong className="text-foreground">
                     Note on Card Numbers:
                   </strong>{" "}
-                  ServiceOS does not store full credit/debit card numbers. Card
+                  Fieseros does not store full credit/debit card numbers. Card
                   data is processed and stored by our payment processors (Stripe
                   and PayPal) in compliance with PCI-DSS standards. When you
                   request data deletion, we will remove all tokenized references
@@ -636,7 +636,7 @@ export default function DataDeletionPage() {
                   7. Data Deletion for Meta Platform
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS integrates with Meta platforms (Facebook Login) to provide authentication and business management
+                  Fieseros integrates with Meta platforms (Facebook Login) to provide authentication and business management
                   features. This section describes how we handle data deletion
                   requests originating from Meta in compliance with the Meta
                   Platform Terms.
@@ -650,7 +650,7 @@ export default function DataDeletionPage() {
                     <strong className="text-foreground">
                       Facebook App ID:
                     </strong>{" "}
-                    Our ServiceOS Facebook App is registered with Meta and has a
+                    Our Fieseros Facebook App is registered with Meta and has a
                     designated App ID.
                   </li>
                   <li>
@@ -658,7 +658,7 @@ export default function DataDeletionPage() {
                       Data Deletion Callback URL:
                     </strong>{" "}
                     We provide a data deletion callback URL that Meta uses to
-                    send deletion requests when a user removes the ServiceOS app
+                    send deletion requests when a user removes the Fieseros app
                     from their Facebook account.
                   </li>
                   <li>
@@ -675,7 +675,7 @@ export default function DataDeletionPage() {
                   7.2 What Data We Receive from Meta
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-3">
-                  When you use ServiceOS through Meta integrations, we may
+                  When you use Fieseros through Meta integrations, we may
                   receive and store the following data:
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-6">
@@ -724,10 +724,10 @@ export default function DataDeletionPage() {
                   also be provided to you upon request. If you need your
                   confirmation code, please contact us at{" "}
                   <a
-                    href="mailto:privacy@serviceos.cc"
+                    href="mailto:privacy@fieseros.com"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@serviceos.cc
+                    privacy@fieseros.com
                   </a>
                   .
                 </p>
@@ -740,7 +740,7 @@ export default function DataDeletionPage() {
                   8. Third-Party Data
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-6">
-                  ServiceOS integrates with several third-party services. When
+                  Fieseros integrates with several third-party services. When
                   you request data deletion, we take the following actions with
                   respect to data held by our partners:
                 </p>
@@ -772,7 +772,7 @@ export default function DataDeletionPage() {
                 <p className="text-muted-foreground leading-relaxed mb-3">
                   Payment data processed through Stripe and PayPal is subject to
                   their respective data retention policies. Full credit/debit
-                  card numbers are never stored on ServiceOS servers. When you
+                  card numbers are never stored on Fieseros servers. When you
                   request data deletion:
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-6">
@@ -800,7 +800,7 @@ export default function DataDeletionPage() {
                   8.3 AWS (Amazon Web Services)
                 </h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  ServiceOS uses AWS for infrastructure and data storage. When
+                  Fieseros uses AWS for infrastructure and data storage. When
                   your account is deleted, all data stored on AWS infrastructure
                   is deleted along with your account. This includes database
                   records, file uploads, and application logs. AWS
@@ -830,7 +830,7 @@ export default function DataDeletionPage() {
                     associated with the account
                   </li>
                   <li>
-                    Requiring login to the ServiceOS account for in-app deletion
+                    Requiring login to the Fieseros account for in-app deletion
                     requests
                   </li>
                   <li>
@@ -872,10 +872,10 @@ export default function DataDeletionPage() {
                   categories of data deleted, and our authorized signature. To
                   request a Deletion Certificate, please contact{" "}
                   <a
-                    href="mailto:privacy@serviceos.cc"
+                    href="mailto:privacy@fieseros.com"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@serviceos.cc
+                    privacy@fieseros.com
                   </a>{" "}
                   after receiving your deletion confirmation.
                 </p>
@@ -936,10 +936,10 @@ export default function DataDeletionPage() {
                   To withdraw consent more broadly or for processing activities
                   not listed above, please contact us at{" "}
                   <a
-                    href="mailto:privacy@serviceos.cc"
+                    href="mailto:privacy@fieseros.com"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@serviceos.cc
+                    privacy@fieseros.com
                   </a>
                   .
                 </p>
@@ -958,7 +958,7 @@ export default function DataDeletionPage() {
                   Article 20 and is also available to CCPA-covered individuals.
                 </p>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS provides the following data export options:
+                  Fieseros provides the following data export options:
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-6">
                   <li>
@@ -978,7 +978,7 @@ export default function DataDeletionPage() {
                   To export your data:
                 </p>
                 <ol className="list-decimal pl-6 space-y-1 text-muted-foreground leading-relaxed mb-6">
-                  <li>Log in to your ServiceOS account.</li>
+                  <li>Log in to your Fieseros account.</li>
                   <li>
                     Navigate to Settings &rarr; Data Management &rarr; Export
                     Data.
@@ -996,10 +996,10 @@ export default function DataDeletionPage() {
                   If you do not have access to your account or are an end
                   customer, please contact{" "}
                   <a
-                    href="mailto:privacy@serviceos.cc"
+                    href="mailto:privacy@fieseros.com"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@serviceos.cc
+                    privacy@fieseros.com
                   </a>{" "}
                   to request a data export. We will verify your identity and
                   provide your data in your preferred format within 30 days.
@@ -1013,7 +1013,7 @@ export default function DataDeletionPage() {
                   12. Children&apos;s Data
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS is not intended for use by individuals under the age
+                  Fieseros is not intended for use by individuals under the age
                   of 16. We do not knowingly collect or process personal data
                   from children under 16 years of age.
                 </p>
@@ -1022,12 +1022,12 @@ export default function DataDeletionPage() {
                   data from a child under the age of 16, we will take immediate
                   steps to delete that information from our servers. If you
                   become aware that a child under 16 has provided personal data
-                  to ServiceOS, please contact us immediately at{" "}
+                  to Fieseros, please contact us immediately at{" "}
                   <a
-                    href="mailto:privacy@serviceos.cc"
+                    href="mailto:privacy@fieseros.com"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@serviceos.cc
+                    privacy@fieseros.com
                   </a>{" "}
                   so that we can take appropriate action.
                 </p>
@@ -1077,10 +1077,10 @@ export default function DataDeletionPage() {
                     <div>
                       <p className="font-semibold text-foreground">Email</p>
                       <a
-                        href="mailto:privacy@serviceos.cc"
+                        href="mailto:privacy@fieseros.com"
                         className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                       >
-                        privacy@serviceos.cc
+                        privacy@fieseros.com
                       </a>
                     </div>
                   </div>
@@ -1109,7 +1109,7 @@ export default function DataDeletionPage() {
                         href="/contact-us"
                         className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                       >
-                        serviceos.cc/contact-us
+                        fieseros.com/contact-us
                       </Link>
                     </div>
                   </div>
@@ -1133,10 +1133,10 @@ export default function DataDeletionPage() {
                     <div>
                       <p className="font-semibold text-foreground">Website</p>
                       <a
-                        href="https://serviceos.cc"
+                        href="https://fieseros.com"
                         className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                       >
-                        serviceos.cc
+                        fieseros.com
                       </a>
                     </div>
                   </div>
@@ -1159,7 +1159,7 @@ export default function DataDeletionPage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              &copy; 2026 ServiceOS, Inc. All rights reserved.
+              &copy; 2026 Fieseros, Inc. All rights reserved.
             </p>
             <nav className="flex items-center gap-6 text-sm text-muted-foreground">
               <a

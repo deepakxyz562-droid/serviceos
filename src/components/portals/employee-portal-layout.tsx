@@ -874,7 +874,7 @@ function usePushAutoSubscribe() {
  * The Enable button requests permission + subscribes + persists. On success
  * the banner disappears (permission is now `granted`).
  */
-const PUSH_BANNER_DISMISS_KEY = 'serviceos_push_banner_dismissed_v1';
+const PUSH_BANNER_DISMISS_KEY = 'fieseros_push_banner_dismissed_v1';
 
 function PushEnableBanner() {
   const [dismissed, setDismissed] = useState(false);
@@ -3495,7 +3495,7 @@ function EmployeeSidebar({
           <div className="size-9 rounded-lg bg-emerald-600 flex items-center justify-center">
             <Zap className="size-5 text-white" />
           </div>
-          <span className="text-lg font-bold text-foreground">ServiceOS</span>
+          <span className="text-lg font-bold text-foreground">Fieseros</span>
         </div>
         <div className="mt-3 flex items-center gap-3">
           <Avatar className="size-9">

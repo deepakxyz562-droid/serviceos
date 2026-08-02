@@ -173,13 +173,13 @@ export function AcceptInviteForm({
         return;
       }
 
-      // Persist auth: the API also sets the serviceos_session cookie, so the
+      // Persist auth: the API also sets the fieseros_session cookie, so the
       // user could go straight to `/` and the layout would pick it up. We
       // also mirror the auth object to localStorage for parity with the
       // existing auth flow.
       if (typeof window !== 'undefined') {
         localStorage.setItem(
-          'serviceos_auth',
+          'fieseros_auth',
           JSON.stringify({
             isAuthenticated: true,
             user: data.user,

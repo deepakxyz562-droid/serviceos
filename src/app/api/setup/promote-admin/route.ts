@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
 /**
- * Promote the admin@serviceos.ai user to super admin.
+ * Promote the admin@fieseros.ai user to super admin.
  * In production, requires a SETUP_TOKEN header matching process.env.SETUP_TOKEN.
  */
 export async function POST(request: Request) {
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     }
 
     const admin = await db.user.update({
-      where: { email: 'admin@serviceos.ai' },
+      where: { email: 'admin@fieseros.ai' },
       data: {
         isSuperAdmin: true,
         role: 'super_admin',

@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 
   const body = {
     status: 'ok',
-    service: 'serviceos',
+    service: 'fieseros',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     uptime: Math.round(process.uptime()), // seconds, integer for compactness

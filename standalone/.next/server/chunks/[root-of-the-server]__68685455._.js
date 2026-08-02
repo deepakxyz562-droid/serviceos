@@ -21,7 +21,7 @@ Service: ${e.title||"N/A"}`;await n({to:r,message:o,recipientName:e.customerName
 ${t.name||"Your technician"} is on the way!
 Service: ${e.title||"N/A"}
 Address: ${e.address||"N/A"}
-ETA: ${a}`;await n({to:r,message:o,recipientName:e.customerName||void 0,recipientRole:"customer",subject:"Technician On The Way",jobId:e.id,employeeId:t.id||void 0,customerId:e.customerId||void 0,tenantId:e.tenantId||void 0})}async function u(e,r){let a=e.customerPhone||"";if(!a)return;let i="ServiceOS";if(e.tenantId)try{let r=await t.db.tenant.findUnique({where:{id:e.tenantId}});r?.name&&(i=r.name)}catch{}let s=o(e),d=`✅ Service Completed
+ETA: ${a}`;await n({to:r,message:o,recipientName:e.customerName||void 0,recipientRole:"customer",subject:"Technician On The Way",jobId:e.id,employeeId:t.id||void 0,customerId:e.customerId||void 0,tenantId:e.tenantId||void 0})}async function u(e,r){let a=e.customerPhone||"";if(!a)return;let i="Fieseros";if(e.tenantId)try{let r=await t.db.tenant.findUnique({where:{id:e.tenantId}});r?.name&&(i=r.name)}catch{}let s=o(e),d=`✅ Service Completed
 
 Your service has been completed.
 Service: ${e.title||"N/A"}

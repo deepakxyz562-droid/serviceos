@@ -6,7 +6,7 @@ import { estimatePrice } from '@/lib/smart-pricing';
 import { getIndustry } from '@/lib/industry-catalog';
 
 /**
- * AI Dispatcher (ServiceOS V1.5 — P8-ai-layer)
+ * AI Dispatcher (Fieseros V1.5 — P8-ai-layer)
  * ------------------------------------------------------------
  * POST /api/ai/dispatcher
  *

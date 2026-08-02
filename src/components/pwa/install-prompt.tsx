@@ -10,11 +10,11 @@ import {
   type BeforeInstallPromptEvent,
 } from '@/lib/pwa-install';
 
-const DISMISS_KEY = 'serviceos_install_dismissed';
+const DISMISS_KEY = 'fieseros_install_dismissed';
 const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 // Separate dismissal for the iOS instructions banner so Android users (who
 // never see it) and iOS users don't share the same dismissal state.
-const IOS_DISMISS_KEY = 'serviceos_ios_install_dismissed';
+const IOS_DISMISS_KEY = 'fieseros_ios_install_dismissed';
 
 function isDismissedRecently(key: string): boolean {
   try {
@@ -124,7 +124,7 @@ export default function InstallPrompt() {
       setIosVisible(false);
       setLocalDeferredPrompt(null);
       publishDeferredPrompt(null);
-      toast.success('ServiceOS installed', {
+      toast.success('Fieseros installed', {
         description: 'You can now launch it from your home screen.',
       });
     };
@@ -152,7 +152,7 @@ export default function InstallPrompt() {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
       if (choice.outcome === 'accepted') {
-        toast.success('Installing ServiceOS…');
+        toast.success('Installing Fieseros…');
       } else {
         // User dismissed the native prompt — honor it as a 7-day dismissal.
         markDismissed(DISMISS_KEY);
@@ -187,14 +187,14 @@ export default function InstallPrompt() {
       <div
         className="fixed left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 bottom-[calc(4rem+1rem+env(safe-area-inset-bottom,0px))] lg:bottom-4"
         role="dialog"
-        aria-label="Install ServiceOS"
+        aria-label="Install Fieseros"
         aria-live="polite"
       >
         <div className="relative flex items-start gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xl shadow-slate-900/10">
           <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-emerald-50 ring-1 ring-emerald-100">
             <Image
               src="/icon-192.png"
-              alt="ServiceOS"
+              alt="Fieseros"
               width={28}
               height={28}
               priority
@@ -204,7 +204,7 @@ export default function InstallPrompt() {
 
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold text-slate-900">
-              Install ServiceOS
+              Install Fieseros
             </h3>
             <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
               Add to your device for quick access and offline work.
@@ -251,14 +251,14 @@ export default function InstallPrompt() {
       <div
         className="fixed left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 bottom-[calc(4rem+1rem+env(safe-area-inset-bottom,0px))] lg:bottom-4"
         role="dialog"
-        aria-label="Add ServiceOS to Home Screen"
+        aria-label="Add Fieseros to Home Screen"
         aria-live="polite"
       >
         <div className="relative flex items-start gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xl shadow-slate-900/10">
           <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-emerald-50 ring-1 ring-emerald-100">
             <Image
               src="/icon-192.png"
-              alt="ServiceOS"
+              alt="Fieseros"
               width={28}
               height={28}
               priority
@@ -268,7 +268,7 @@ export default function InstallPrompt() {
 
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold text-slate-900">
-              Add ServiceOS to Home Screen
+              Add Fieseros to Home Screen
             </h3>
             <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
               For the full app experience on iPhone/iPad:

@@ -342,7 +342,7 @@ export function ClaimCompletion({ token }: ClaimCompletionProps) {
         {/* Trust footer */}
         <div className="flex items-center justify-center gap-1.5 border-t border-border pt-4 text-[11px] text-muted-foreground">
           <ShieldCheck className="h-3 w-3 text-emerald-600" />
-          <span>Secured by ServiceOS — your information is encrypted</span>
+          <span>Secured by Fieseros — your information is encrypted</span>
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 /**
- * Create SuperAdmin user for ServiceOS
+ * Create SuperAdmin user for Fieseros
  */
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
@@ -7,7 +7,7 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = 'admin@serviceos.cc';
+  const email = 'admin@fieseros.com';
   const password = 'Admin@2024';
   const name = 'Super Admin';
 

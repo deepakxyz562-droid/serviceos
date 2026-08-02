@@ -2741,7 +2741,7 @@ export function SuperAdminView() {
             </div>
             <div className="min-w-0 hidden sm:block">
               <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-foreground truncate">ServiceOS Platform</h1>
+                <h1 className="text-base font-bold text-foreground truncate">Fieseros Platform</h1>
                 <Badge className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 text-[9px] font-semibold px-1.5 py-0">SA</Badge>
               </div>
               <p className="text-[11px] text-muted-foreground truncate">
@@ -2795,7 +2795,7 @@ export function SuperAdminView() {
                 <div className="flex items-center justify-center size-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
                   <ShieldCheck className="size-4 text-white" />
                 </div>
-                <span className="text-sm font-bold text-foreground">ServiceOS Platform</span>
+                <span className="text-sm font-bold text-foreground">Fieseros Platform</span>
               </div>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation">
                 <X className="size-4" />

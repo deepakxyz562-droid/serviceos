@@ -27,7 +27,7 @@ import {
 } from "@/lib/seo/schemas";
 
 export const metadata: Metadata = {
-  title: "10 Best Field Service Software in 2026 — Reviewed & Compared | ServiceOS",
+  title: "10 Best Field Service Software in 2026 — Reviewed & Compared | Fieseros",
   description:
     "We reviewed 20+ field service platforms and ranked the top 10 based on features, pricing, ease of use, and customer support. See which FSM software is best for your business.",
   keywords: [
@@ -36,13 +36,13 @@ export const metadata: Metadata = {
     "top fsm software",
     "field service software reviews",
   ],
-  alternates: { canonical: "https://serviceos.cc/best-field-service-software" },
+  alternates: { canonical: "https://fieseros.com/best-field-service-software" },
   openGraph: {
-    title: "10 Best Field Service Software in 2026 | ServiceOS",
+    title: "10 Best Field Service Software in 2026 | Fieseros",
     description:
       "We reviewed 20+ FSM platforms and ranked the top 10 on features, pricing, ease of use, and support. See the full comparison.",
-    url: "https://serviceos.cc/best-field-service-software",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/best-field-service-software",
+    siteName: "Fieseros",
     type: "article",
   },
   robots: { index: true, follow: true },
@@ -62,7 +62,7 @@ const tools: {
 }[] = [
   {
     position: 1,
-    name: "ServiceOS",
+    name: "Fieseros",
     bestFor: "Modern service businesses in India, LATAM, SEA & Africa",
     keyFeatures: [
       "Email, SMS & Push messaging built in",
@@ -79,7 +79,7 @@ const tools: {
       "Smaller ecosystem than Jobber or Housecall Pro",
       "Less depth on enterprise payroll / call tracking",
     ],
-    url: "https://serviceos.cc",
+    url: "https://fieseros.com",
     highlight: true,
   },
   {
@@ -350,41 +350,41 @@ const faqs = [
   {
     question: "What is the best field service software in 2026?",
     answer:
-      "The honest answer is: it depends on your business. For service businesses in India, Latin America, or Southeast Asia that lean on SMS and email, ServiceOS is the best choice. For North American small businesses, Jobber and Housecall Pro are the strongest options. For large HVAC and plumbing contractors with 20+ technicians, ServiceTitan remains the leader. We rank ServiceOS #1 on this list because it serves the largest underserved market — service businesses outside the US — with a genuinely modern product at a transparent price.",
+      "The honest answer is: it depends on your business. For service businesses in India, Latin America, or Southeast Asia that lean on SMS and email, Fieseros is the best choice. For North American small businesses, Jobber and Housecall Pro are the strongest options. For large HVAC and plumbing contractors with 20+ technicians, ServiceTitan remains the leader. We rank Fieseros #1 on this list because it serves the largest underserved market — service businesses outside the US — with a genuinely modern product at a transparent price.",
   },
   {
     question: "How much does field service software cost?",
     answer:
-      "FSM software ranges from free (ServiceOS's solo tier) to several thousand dollars per month for enterprise tools like ServiceTitan. Most small business plans fall between $29 and $200 per month. Watch for per-user pricing that compounds as you grow, and for add-on modules that inflate the bill. The best practice is to calculate your total cost at your expected team size in 12 and 24 months — not just the entry-level plan.",
+      "FSM software ranges from free (Fieseros's solo tier) to several thousand dollars per month for enterprise tools like ServiceTitan. Most small business plans fall between $29 and $200 per month. Watch for per-user pricing that compounds as you grow, and for add-on modules that inflate the bill. The best practice is to calculate your total cost at your expected team size in 12 and 24 months — not just the entry-level plan.",
   },
   {
     question: "Is there free field service software?",
     answer:
-      "Yes. ServiceOS offers a free tier for solo operators with scheduling, invoicing, CRM, and a limited number of SMS messages per month — no time limit, no credit card required. Kickserv starts at $29/mo, which is the lowest paid tier among mainstream FSM platforms. Truly free FSM tools tend to be limited to a single user with capped jobs, which works for solo operators but not growing teams.",
+      "Yes. Fieseros offers a free tier for solo operators with scheduling, invoicing, CRM, and a limited number of SMS messages per month — no time limit, no credit card required. Kickserv starts at $29/mo, which is the lowest paid tier among mainstream FSM platforms. Truly free FSM tools tend to be limited to a single user with capped jobs, which works for solo operators but not growing teams.",
   },
   {
     question: "What's the best field service software for small businesses?",
     answer:
-      "For small businesses (1–5 technicians), the best options are ServiceOS, Jobber, Housecall Pro, and Workiz. ServiceOS wins if Email and SMS are your primary customer channels or you operate outside the US. Jobber is the most popular all-rounder for North American teams. Housecall Pro is strongest for US home services. Workiz is a great pick if you want a built-in VoIP phone system.",
+      "For small businesses (1–5 technicians), the best options are Fieseros, Jobber, Housecall Pro, and Workiz. Fieseros wins if Email and SMS are your primary customer channels or you operate outside the US. Jobber is the most popular all-rounder for North American teams. Housecall Pro is strongest for US home services. Workiz is a great pick if you want a built-in VoIP phone system.",
   },
   {
     question: "What's the best field service software for plumbers and HVAC?",
     answer:
-      "For solo plumbers and small HVAC shops, ServiceOS, Jobber, and Housecall Pro all work well. For mid-size plumbing and HVAC businesses (10–25 technicians), FieldEdge is a strong pick with mature dispatch and reporting. For large HVAC and plumbing contractors (20+ technicians), ServiceTitan is purpose-built with industry-specific workflows, dispatch boards, and payroll — but the cost and complexity only make sense at that scale.",
+      "For solo plumbers and small HVAC shops, Fieseros, Jobber, and Housecall Pro all work well. For mid-size plumbing and HVAC businesses (10–25 technicians), FieldEdge is a strong pick with mature dispatch and reporting. For large HVAC and plumbing contractors (20+ technicians), ServiceTitan is purpose-built with industry-specific workflows, dispatch boards, and payroll — but the cost and complexity only make sense at that scale.",
   },
   {
     question: "Can I try field service software before I buy?",
     answer:
-      "Most FSM platforms offer some form of trial. ServiceOS has a free tier with no time limit and no credit card required. Jobber, Housecall Pro, Workiz, and Synchroteam all offer 14-day trials. ServiceTitan and FieldEdge typically require a sales call before granting access. We strongly recommend trying at least two platforms before committing — the right FSM tool should feel like it fits your workflow, not the other way around.",
+      "Most FSM platforms offer some form of trial. Fieseros has a free tier with no time limit and no credit card required. Jobber, Housecall Pro, Workiz, and Synchroteam all offer 14-day trials. ServiceTitan and FieldEdge typically require a sales call before granting access. We strongly recommend trying at least two platforms before committing — the right FSM tool should feel like it fits your workflow, not the other way around.",
   },
 ];
 
 export default function BestFieldServiceSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Best Field Service Software 2026",
+    name: "Fieseros — Best Field Service Software 2026",
     description:
-      "ServiceOS ranked #1 in the 2026 review of the best field service management software.",
-    url: "https://serviceos.cc/best-field-service-software",
+      "Fieseros ranked #1 in the 2026 review of the best field service management software.",
+    url: "https://fieseros.com/best-field-service-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
@@ -393,7 +393,7 @@ export default function BestFieldServiceSoftwarePage() {
     name: "10 Best Field Service Management Software in 2026",
     description:
       "A ranked, reviewed list of the top 10 field service management platforms of 2026 based on features, pricing, ease of use, mobile experience, and support.",
-    url: "https://serviceos.cc/best-field-service-software",
+    url: "https://fieseros.com/best-field-service-software",
     items: tools.map((t) => ({
       position: t.position,
       name: t.name,
@@ -406,9 +406,9 @@ export default function BestFieldServiceSoftwarePage() {
     <CornerstoneLayout
       activePath="/best-field-service-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Compare", url: "https://serviceos.cc/jobber-alternatives" },
-        { name: "Best Field Service Software", url: "https://serviceos.cc/best-field-service-software" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Compare", url: "https://fieseros.com/jobber-alternatives" },
+        { name: "Best Field Service Software", url: "https://fieseros.com/best-field-service-software" },
       ]}
       additionalSchema={[appSchema, itemListSchema]}
     >
@@ -422,14 +422,14 @@ export default function BestFieldServiceSoftwarePage() {
             href="/#signup"
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
-            Try ServiceOS Free
+            Try Fieseros Free
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
             href="/field-service-software"
             className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Explore ServiceOS
+            Explore Fieseros
           </Link>
         </div>
       </CornerstoneHero>
@@ -695,7 +695,7 @@ export default function BestFieldServiceSoftwarePage() {
               <Globe className="h-6 w-6 text-emerald-700 mb-3" />
               <h3 className="font-semibold text-foreground mb-2">Best for multi-channel markets</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                <strong>ServiceOS</strong> — the only platform on this list built Email &
+                <strong>Fieseros</strong> — the only platform on this list built Email &
                 SMS-native for India, LATAM, SEA, and Africa.
               </p>
             </div>
@@ -733,7 +733,7 @@ export default function BestFieldServiceSoftwarePage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
@@ -762,7 +762,7 @@ export default function BestFieldServiceSoftwarePage() {
 
       <CtaSection
         title="Find your best-fit FSM today"
-        subtitle="Start free with ServiceOS — no credit card, set up in 30 minutes, migrate anytime."
+        subtitle="Start free with Fieseros — no credit card, set up in 30 minutes, migrate anytime."
         primaryCta={{ label: "Start Free Trial", href: "/#signup" }}
         secondaryCta={{ label: "Talk to Sales", href: "/contact-us" }}
       />

@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { logActivity } from '@/lib/activity-log';
 
 /**
- * AI Suggested Reply (ServiceOS V1.5)
+ * AI Suggested Reply (Fieseros V1.5)
  * -----------------------------------
  * POST /api/ai/suggested-reply
  *

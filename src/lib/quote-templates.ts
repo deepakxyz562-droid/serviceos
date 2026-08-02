@@ -1,7 +1,7 @@
 /**
  * quote-templates.ts — Industry Quote Templates
  * ---------------------------------------------
- * Pre-baked quote templates for the 7 core ServiceOS industries.
+ * Pre-baked quote templates for the 7 core Fieseros industries.
  *
  * Each template ships with:
  *   - default line items (labour, materials, equipment, waste removal, permits)

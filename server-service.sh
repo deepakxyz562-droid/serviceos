@@ -1,5 +1,5 @@
 #!/bin/bash
-# ServiceOS Production Server Service
+# Fieseros Production Server Service
 # Runs with proper signal handling and auto-restart
 
 cd /home/z/my-project

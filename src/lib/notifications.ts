@@ -1,7 +1,7 @@
 import { db } from '@/lib/db';
 
 /**
- * ServiceOS V1.5 — Notification helper library.
+ * Fieseros V1.5 — Notification helper library.
  *
  * Backs the AppNotification / NotificationPreference / PushSubscription
  * Prisma models added in V15-1b-SCHEMA. Exposes:

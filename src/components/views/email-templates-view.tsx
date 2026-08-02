@@ -624,7 +624,7 @@ export function EmailTemplatesView() {
             <div className="space-y-2">
               <Label>Subject <span className="text-rose-500">*</span> <span className="text-xs text-muted-foreground font-normal">(supports {'{{variables}}'})</span></Label>
               <Input
-                placeholder="Welcome to ServiceOS, {{name}}!"
+                placeholder="Welcome to Fieseros, {{name}}!"
                 value={form.subject}
                 onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
               />

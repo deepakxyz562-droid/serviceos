@@ -5,7 +5,7 @@ import { logger, withRequestId } from '@/lib/logger';
 import { getIndustry } from '@/lib/industry-catalog';
 
 /**
- * Knowledge Base Q&A (ServiceOS V1.5 — P8-ai-layer)
+ * Knowledge Base Q&A (Fieseros V1.5 — P8-ai-layer)
  * ------------------------------------------------------------
  * POST /api/ai/kb-qa
  *
@@ -283,7 +283,7 @@ function makeSnippet(content: string, hitIdx: number): string {
 }
 
 /**
- * Build the LLM system prompt. Enumerates the 25 ServiceOS industries so the
+ * Build the LLM system prompt. Enumerates the 25 Fieseros industries so the
  * model can pick the right domain context. If the caller supplied an industry
  * explicitly, we narrow the prompt to that industry + its sub-services.
  */

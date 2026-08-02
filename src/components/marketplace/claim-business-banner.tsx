@@ -190,7 +190,7 @@ function SignInGateDialog({
             Sign in to claim
           </DialogTitle>
           <DialogDescription>
-            You need a ServiceOS account to claim &ldquo;{tenantName}&rdquo; and verify
+            You need a Fieseros account to claim &ldquo;{tenantName}&rdquo; and verify
             your ownership. It&rsquo;s free and takes less than a minute.
           </DialogDescription>
         </DialogHeader>

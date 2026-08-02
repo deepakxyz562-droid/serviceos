@@ -1,5 +1,5 @@
 /**
- * ServiceOS Pre-Built WhatsApp Template Catalog
+ * Fieseros Pre-Built WhatsApp Template Catalog
  * ──────────────────────────────────────────────
  * These templates follow Meta's WhatsApp Business API template format.
  * Categories must be one of: AUTHENTICATION, MARKETING, UTILITY
@@ -9,7 +9,7 @@
  *   e.g., utility_booking_confirmation, marketing_seasonal_offer
  *
  * Variables use {{1}}, {{2}}, etc. (Meta's positional variable format).
- * ServiceOS auto-maps {{customer.name}} → {{1}} during submission.
+ * Fieseros auto-maps {{customer.name}} → {{1}} during submission.
  *
  * Meta compliance rules enforced here:
  * - No variables at the start or end of body text
@@ -26,7 +26,7 @@ export interface WhatsAppPreBuiltTemplate {
   name: string;
   /** Meta-compatible category: AUTHENTICATION | MARKETING | UTILITY */
   metaCategory: 'AUTHENTICATION' | 'MARKETING' | 'UTILITY';
-  /** Internal category for ServiceOS grouping */
+  /** Internal category for Fieseros grouping */
   businessCategory: string;
   /** Template description shown in the wizard */
   description: string;
@@ -82,14 +82,14 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     templateType: 'TEXT',
     headerText: 'New Job Assigned',
     bodyText: 'You have been assigned a new job.\n\nJob: {{1}}\nCustomer: {{2}}\nService: {{3}}\nScheduled: {{4}}\n\nPlease confirm your availability.',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
       { type: 'QUICK_REPLY', text: 'Accept Job' },
       { type: 'QUICK_REPLY', text: 'Reject Job' },
     ],
     essential: true,
     industries: ['field_service', 'home_services', 'maintenance'],
-    exampleValues: ['10234', 'John Customer', 'Pipe Repair', 'Jan 15, 2025', 'ServiceOS'],
+    exampleValues: ['10234', 'John Customer', 'Pipe Repair', 'Jan 15, 2025', 'Fieseros'],
   },
   {
     key: 'notification_service_completed',
@@ -101,7 +101,7 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     templateType: 'TEXT',
     headerText: 'Service Completed',
     bodyText: 'Your service has been completed.\n\nService: {{1}}\nTechnician: {{2}}\n\nThank you for choosing {{3}}! Please rate your experience.',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
       { type: 'QUICK_REPLY', text: 'Excellent' },
       { type: 'QUICK_REPLY', text: 'Good' },
@@ -109,7 +109,7 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     ],
     essential: true,
     industries: ['field_service', 'home_services', 'maintenance'],
-    exampleValues: ['Pipe Repair', 'Raj Kumar', 'ServiceOS'],
+    exampleValues: ['Pipe Repair', 'Raj Kumar', 'Fieseros'],
   },
 
   // ═══════════════════════════════════════════
@@ -125,14 +125,14 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Hi {{1}}, your booking with {{2}} is confirmed.\n\nDate: {{3}}\nTime: {{4}}\nService: {{5}}\n\nWe look forward to serving you!',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
       { type: 'QUICK_REPLY', text: 'Confirm' },
       { type: 'QUICK_REPLY', text: 'Reschedule' },
     ],
     essential: true,
     industries: ['all'],
-    exampleValues: ['John', 'ServiceOS Plumbing', 'Jan 15, 2025', '10:00 AM', 'Pipe Repair'],
+    exampleValues: ['John', 'Fieseros Plumbing', 'Jan 15, 2025', '10:00 AM', 'Pipe Repair'],
   },
   {
     key: 'utility_booking_reminder',
@@ -143,14 +143,14 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Reminder: You have an appointment with {{1}} tomorrow at {{2}}.\n\nService: {{3}}\n\nPlease reply to confirm or reschedule.',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
       { type: 'QUICK_REPLY', text: "I'll be there" },
       { type: 'QUICK_REPLY', text: 'Reschedule' },
     ],
     essential: true,
     industries: ['all'],
-    exampleValues: ['ServiceOS Plumbing', '10:00 AM', 'Pipe Repair'],
+    exampleValues: ['Fieseros Plumbing', '10:00 AM', 'Pipe Repair'],
   },
   {
     key: 'utility_technician_assigned',
@@ -161,10 +161,10 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Hi {{1}}, {{2}} has been assigned to your job #{{3}}.\n\nThey will reach out to you shortly.',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     essential: true,
     industries: ['field_service', 'home_services', 'maintenance'],
-    exampleValues: ['John', 'Raj Kumar', '10234', 'ServiceOS'],
+    exampleValues: ['John', 'Raj Kumar', '10234', 'Fieseros'],
   },
   {
     key: 'utility_technician_en_route',
@@ -175,13 +175,13 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Great news, {{1}}! Your technician {{2}} is on the way and will arrive shortly.\n\nYou can reach them at: {{3}}',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
       { type: 'CALL', text: 'Call Technician', phoneNumber: '{{3}}' },
     ],
     essential: true,
     industries: ['field_service', 'home_services', 'delivery', 'maintenance'],
-    exampleValues: ['John', 'Raj Kumar', '+91 98765 43210', 'ServiceOS'],
+    exampleValues: ['John', 'Raj Kumar', '+91 98765 43210', 'Fieseros'],
   },
   {
     key: 'utility_job_completed',
@@ -192,13 +192,13 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Hi {{1}}, your job #{{2}} has been completed!\n\nWe hope you are satisfied with the service. Your feedback means a lot to us!',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
       { type: 'QUICK_REPLY', text: 'Rate Service' },
     ],
     essential: true,
     industries: ['field_service', 'home_services', 'maintenance'],
-    exampleValues: ['John', '10234', 'ServiceOS'],
+    exampleValues: ['John', '10234', 'Fieseros'],
   },
   {
     key: 'utility_payment_reminder',
@@ -209,13 +209,13 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Hi {{1}}, this is a friendly reminder that your invoice #{{2}} for {{3}} is due on {{4}}.\n\nPay now to avoid late fees:',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
-      { type: 'URL', text: 'Pay Now', url: '{{5}}', example: ['https://pay.serviceos.cc/inv/10234'] },
+      { type: 'URL', text: 'Pay Now', url: '{{5}}', example: ['https://pay.fieseros.com/inv/10234'] },
     ],
     essential: true,
     industries: ['all'],
-    exampleValues: ['John', 'INV-10234', '$2,500', 'Jan 20, 2025', 'https://pay.serviceos.cc/inv/10234'],
+    exampleValues: ['John', 'INV-10234', '$2,500', 'Jan 20, 2025', 'https://pay.fieseros.com/inv/10234'],
   },
   {
     key: 'utility_payment_confirmation',
@@ -226,10 +226,10 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Thank you, {{1}}! We have received your payment of {{2}} for invoice #{{3}}.\n\nPayment confirmed!',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     essential: false,
     industries: ['all'],
-    exampleValues: ['John', '$2,500', 'INV-10234', 'ServiceOS'],
+    exampleValues: ['John', '$2,500', 'INV-10234', 'Fieseros'],
   },
   {
     key: 'utility_quote_ready',
@@ -240,14 +240,14 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Hi {{1}}, your quote from {{2}} is ready.\n\nQuote #: {{3}}\nAmount: {{4}}\nValid until: {{5}}',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
-      { type: 'URL', text: 'View Quote', url: '{{6}}', example: ['https://app.serviceos.cc/quote/10234'] },
+      { type: 'URL', text: 'View Quote', url: '{{6}}', example: ['https://app.fieseros.com/quote/10234'] },
       { type: 'QUICK_REPLY', text: 'Accept' },
     ],
     essential: false,
     industries: ['all'],
-    exampleValues: ['John', 'ServiceOS', 'QT-10234', '$5,000', 'Jan 30, 2025', 'https://app.serviceos.cc/quote/10234'],
+    exampleValues: ['John', 'Fieseros', 'QT-10234', '$5,000', 'Jan 30, 2025', 'https://app.fieseros.com/quote/10234'],
   },
   {
     key: 'utility_appointment_rescheduled',
@@ -258,14 +258,14 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Hi {{1}}, your appointment with {{2}} has been rescheduled.\n\nNew Date: {{3}}\nNew Time: {{4}}\n\nIf this does not work for you, please let us know.',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
       { type: 'QUICK_REPLY', text: 'Confirmed' },
       { type: 'QUICK_REPLY', text: 'Reschedule again' },
     ],
     essential: false,
     industries: ['all'],
-    exampleValues: ['John', 'ServiceOS', 'Jan 20, 2025', '2:00 PM'],
+    exampleValues: ['John', 'Fieseros', 'Jan 20, 2025', '2:00 PM'],
   },
   {
     key: 'utility_order_update',
@@ -276,13 +276,13 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Hi {{1}}, your order #{{2}} status has been updated.\n\nStatus: {{3}}\n{{4}}',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
-      { type: 'URL', text: 'Track Order', url: '{{5}}', example: ['https://track.serviceos.cc/ORD-10234'] },
+      { type: 'URL', text: 'Track Order', url: '{{5}}', example: ['https://track.fieseros.com/ORD-10234'] },
     ],
     essential: false,
     industries: ['ecommerce', 'retail', 'delivery'],
-    exampleValues: ['John', 'ORD-10234', 'Shipped', 'In transit - arriving tomorrow', 'https://track.serviceos.cc/ORD-10234'],
+    exampleValues: ['John', 'ORD-10234', 'Shipped', 'In transit - arriving tomorrow', 'https://track.fieseros.com/ORD-10234'],
   },
 
   // ═══════════════════════════════════════════
@@ -298,14 +298,14 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Welcome to {{1}}, {{2}}!\n\nThank you for your interest! We are excited to help you with {{3}}.\n\nOur team will reach out shortly. In the meantime, feel free to explore our services!',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
-      { type: 'URL', text: 'Visit Website', url: '{{4}}', example: ['https://serviceos.cc'] },
+      { type: 'URL', text: 'Visit Website', url: '{{4}}', example: ['https://fieseros.com'] },
       { type: 'QUICK_REPLY', text: 'Call me' },
     ],
     essential: true,
     industries: ['all'],
-    exampleValues: ['ServiceOS', 'John', 'home cleaning', 'https://serviceos.cc'],
+    exampleValues: ['Fieseros', 'John', 'home cleaning', 'https://fieseros.com'],
   },
   {
     key: 'marketing_lead_followup',
@@ -316,14 +316,14 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Hi {{1}}! This is {{2}} following up on your inquiry about {{3}}.\n\nAre you still interested? We would love to help!',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
       { type: 'QUICK_REPLY', text: 'Yes, I am' },
       { type: 'QUICK_REPLY', text: 'Not anymore' },
     ],
     essential: true,
     industries: ['all'],
-    exampleValues: ['John', 'ServiceOS', 'plumbing services'],
+    exampleValues: ['John', 'Fieseros', 'plumbing services'],
   },
   {
     key: 'marketing_seasonal_offer',
@@ -334,13 +334,13 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Special Offer from {{1}}!\n\n{{2}} - {{3}} off on {{4}}!\n\nOffer valid until {{5}}. Do not miss out!',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
-      { type: 'URL', text: 'Claim Offer', url: '{{6}}', example: ['https://serviceos.cc/offer'] },
+      { type: 'URL', text: 'Claim Offer', url: '{{6}}', example: ['https://fieseros.com/offer'] },
     ],
     essential: false,
     industries: ['all'],
-    exampleValues: ['ServiceOS', 'Summer Sale', '20%', 'all services', 'March 31', 'https://serviceos.cc/offer'],
+    exampleValues: ['Fieseros', 'Summer Sale', '20%', 'all services', 'March 31', 'https://fieseros.com/offer'],
   },
   {
     key: 'marketing_lost_lead_nurture',
@@ -357,7 +357,7 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     ],
     essential: false,
     industries: ['all'],
-    exampleValues: ['John', '10%', 'ServiceOS'],
+    exampleValues: ['John', '10%', 'Fieseros'],
   },
   {
     key: 'marketing_review_request',
@@ -368,13 +368,13 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Hi {{1}}! We hope you loved your recent service with {{2}}.\n\nYour feedback helps us improve! Would you mind leaving a quick review?',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
-      { type: 'URL', text: 'Leave Review', url: '{{3}}', example: ['https://g.page/review/serviceos'] },
+      { type: 'URL', text: 'Leave Review', url: '{{3}}', example: ['https://g.page/review/fieseros'] },
     ],
     essential: true,
     industries: ['all'],
-    exampleValues: ['John', 'ServiceOS', 'https://g.page/review/serviceos'],
+    exampleValues: ['John', 'Fieseros', 'https://g.page/review/fieseros'],
   },
   {
     key: 'marketing_referral_invite',
@@ -385,13 +385,13 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Hi {{1}}! Love our service? Share the joy!\n\nRefer a friend to {{2}} and you BOTH get {{3}} off your next service!\n\nShare your unique link:',
-    footerText: 'ServiceOS',
+    footerText: 'Fieseros',
     buttons: [
-      { type: 'URL', text: 'Share Referral Link', url: '{{4}}', example: ['https://serviceos.cc/ref/ABC123'] },
+      { type: 'URL', text: 'Share Referral Link', url: '{{4}}', example: ['https://fieseros.com/ref/ABC123'] },
     ],
     essential: false,
     industries: ['all'],
-    exampleValues: ['John', 'ServiceOS', '$500', 'https://serviceos.cc/ref/ABC123'],
+    exampleValues: ['John', 'Fieseros', '$500', 'https://fieseros.com/ref/ABC123'],
   },
 
   // ═══════════════════════════════════════════
@@ -417,7 +417,7 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     ],
     essential: true,
     industries: ['all'],
-    exampleValues: ['483921', 'ServiceOS', '10'],
+    exampleValues: ['483921', 'Fieseros', '10'],
   },
   {
     key: 'authentication_account_verify',
@@ -434,7 +434,7 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     ],
     essential: false,
     industries: ['all'],
-    exampleValues: ['ServiceOS', '738291', '15'],
+    exampleValues: ['Fieseros', '738291', '15'],
   },
 ];
 

@@ -1,5 +1,5 @@
 /**
- * ServiceOS — Lifecycle Push Dispatcher
+ * Fieseros — Lifecycle Push Dispatcher
  *
  * A central EventBus listener that fires an in-app notification + a real Web
  * Push notification to the relevant dashboard users on EVERY lifecycle event.

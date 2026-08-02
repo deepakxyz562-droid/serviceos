@@ -27,10 +27,10 @@ const WHATSAPP = {
   phoneNumberId: '1117830511419208',
   wabaId: '2076211023292638',
   // Display phone number for the WhatsApp Business test sender
-  businessName: 'ServiceOS Test WABA',
+  businessName: 'Fieseros Test WABA',
 }
 
-const TEST_USER_EMAIL = 'whatsapp-test@serviceos.local'
+const TEST_USER_EMAIL = 'whatsapp-test@fieseros.local'
 const TENANT_SLUG = 'whatsapp-test-tenant'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ function log(label: string, value?: unknown) {
 // ─── Main ────────────────────────────────────────────────────────────────────
 async function main() {
   console.log('\n═══════════════════════════════════════════════════════')
-  console.log('  WhatsApp E2E Test — ServiceOS')
+  console.log('  WhatsApp E2E Test — Fieseros')
   console.log('═══════════════════════════════════════════════════════\n')
 
   // 1. Ensure Tenant
@@ -128,7 +128,7 @@ async function main() {
       data: {
         name: EMPLOYEE_NAME,
         phone: EMPLOYEE_PHONE,
-        email: 'ravi@serviceos.local',
+        email: 'ravi@fieseros.local',
         role: 'technician',
         status: 'available',
         workspaceId: (workspace as any).id,

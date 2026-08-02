@@ -51,7 +51,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
 
     const recipient = to.trim();
-    const subject = `[ServiceOS Test] Provider test — ${provider.name}`;
+    const subject = `[Fieseros Test] Provider test — ${provider.name}`;
     const html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px;">
         <h2 style="color: #059669; margin-bottom: 8px;">Email Provider Test</h2>

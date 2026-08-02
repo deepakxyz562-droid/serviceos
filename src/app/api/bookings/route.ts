@@ -248,10 +248,10 @@ export async function POST(request: NextRequest) {
         `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Source</td><td style="padding:10px;border:1px solid #e5e7eb">${finalSource}</td></tr>`,
         `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Status</td><td style="padding:10px;border:1px solid #e5e7eb">${booking.status}</td></tr>`,
         `</table>`,
-        `<p style="font-size:12px;color:#9ca3af">— Sent from ServiceOS</p>`,
+        `<p style="font-size:12px;color:#9ca3af">— Sent from Fieseros</p>`,
         `</div>`,
       ].filter(Boolean).join('\n')
-      const emailText = `New Booking Created\n\nTitle: ${booking.title}\nCustomer: ${finalCustomerName || 'N/A'}\n${finalCustomerPhone ? `Phone: ${finalCustomerPhone}\n` : ''}${finalCustomerEmail ? `Email: ${finalCustomerEmail}\n` : ''}${booking.address ? `Address: ${booking.address}\n` : ''}Scheduled: ${scheduledStr}\nSource: ${finalSource}\nStatus: ${booking.status}\n\n— Sent from ServiceOS`
+      const emailText = `New Booking Created\n\nTitle: ${booking.title}\nCustomer: ${finalCustomerName || 'N/A'}\n${finalCustomerPhone ? `Phone: ${finalCustomerPhone}\n` : ''}${finalCustomerEmail ? `Email: ${finalCustomerEmail}\n` : ''}${booking.address ? `Address: ${booking.address}\n` : ''}Scheduled: ${scheduledStr}\nSource: ${finalSource}\nStatus: ${booking.status}\n\n— Sent from Fieseros`
 
       await notifyOwner(user.tenantId, {
         eventType: 'booking.created',

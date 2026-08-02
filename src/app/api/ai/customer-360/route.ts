@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { logger, withRequestId } from '@/lib/logger';
 
 /**
- * Customer 360 AI Summary (ServiceOS V1.5 — P8-ai-layer)
+ * Customer 360 AI Summary (Fieseros V1.5 — P8-ai-layer)
  * ------------------------------------------------------------
  * POST /api/ai/customer-360
  *

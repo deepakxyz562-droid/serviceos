@@ -105,11 +105,11 @@ export function CompanyLoginForm({
 
       // Persist auth to localStorage (same shape as existing auth-page.tsx)
       if (typeof window !== 'undefined') {
-        const existingAuth = localStorage.getItem('serviceos_auth');
+        const existingAuth = localStorage.getItem('fieseros_auth');
         const existingData = existingAuth ? safeParse(existingAuth) : {};
         const token = data.token ?? existingData.token ?? undefined;
         localStorage.setItem(
-          'serviceos_auth',
+          'fieseros_auth',
           JSON.stringify({
             isAuthenticated: true,
             user: data.user,

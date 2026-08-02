@@ -224,7 +224,7 @@ export const useAppStore = create<AppState>()(
   setPipelineViewMode: (m) => set({ pipelineViewMode: m }),
     }),
     {
-      name: 'serviceos-app-store',
+      name: 'fieseros-app-store',
       // SSR-safe: localStorage is undefined on the server. createJSONStorage
       // accepts a function that returns the storage or `undefined` — when
       // undefined, persist skips hydration silently (no crash, no persistence).

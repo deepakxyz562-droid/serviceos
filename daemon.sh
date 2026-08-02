@@ -1,5 +1,5 @@
 #!/bin/bash
-# ServiceOS Production Server Daemon
+# Fieseros Production Server Daemon
 cd /home/z/my-project
 LOG="/home/z/my-project/dev.log"
 

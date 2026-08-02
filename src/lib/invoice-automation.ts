@@ -1,7 +1,7 @@
 /**
  * Invoice Automation
  * ───────────────────
- * Enterprise invoice workflow engine for ServiceOS.
+ * Enterprise invoice workflow engine for Fieseros.
  *
  * Supports the four invoice creation methods requested:
  *   1. Manual           — manager creates from the Invoices page
@@ -52,7 +52,7 @@ export interface InvoiceAutomationSettings {
 }
 
 export const DEFAULT_INVOICE_SETTINGS: InvoiceAutomationSettings = {
-  // Auto-create an invoice the moment a job is marked complete — core ServiceOS
+  // Auto-create an invoice the moment a job is marked complete — core Fieseros
   // value proposition. Tenants can turn this off from the invoice settings dialog.
   autoCreateOnJobComplete: true,
   // Auto-email the invoice to the customer immediately after creation. Email
@@ -183,7 +183,7 @@ export interface AutoInvoiceResult {
  *
  * Both paths call this lock before checking/creating. On a multi-server
  * deployment a distributed lock (Redis SETNX etc.) would be needed, but
- * ServiceOS runs as a single Next.js process so this is sufficient.
+ * Fieseros runs as a single Next.js process so this is sufficient.
  */
 const _invoiceLockForJob = new Map<string, Promise<AutoInvoiceResult>>()
 
@@ -711,7 +711,7 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
       ? `<div style="margin: 24px 0;"><a href="${magicUrl}" style="display:inline-block;padding:12px 28px;background:#059669;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">View Invoice</a></div>`
       : ''
 
-    const subject = `Invoice ${invoice.number} from ${invoice.tenant?.name || 'ServiceOS'}`
+    const subject = `Invoice ${invoice.number} from ${invoice.tenant?.name || 'Fieseros'}`
     const html = [
       `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">`,
       `<h2 style="color: #0f172a;">Invoice ${invoice.number}</h2>`,
@@ -727,10 +727,10 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
       `<pre style="background: #f9fafb; padding: 12px; border-radius: 8px; white-space: pre-wrap;">${itemsText || 'No items'}</pre>`,
       invoice.notes ? `<p style="margin-top: 16px;"><strong>Notes:</strong> ${invoice.notes}</p>` : '',
       `<hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />`,
-      `<p style="font-size: 12px; color: #9ca3af;">— Sent from ${invoice.tenant?.name || 'ServiceOS'}</p>`,
+      `<p style="font-size: 12px; color: #9ca3af;">— Sent from ${invoice.tenant?.name || 'Fieseros'}</p>`,
       `</div>`,
     ].filter(Boolean).join('\n')
-    const text = `Invoice ${invoice.number}\nTotal: ${invoiceTotal}\nDue: ${invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A'}\n${magicUrl ? `\nView your invoice: ${magicUrl}\n` : ''}\nItems:\n${itemsText}\n\n— ${invoice.tenant?.name || 'ServiceOS'}`
+    const text = `Invoice ${invoice.number}\nTotal: ${invoiceTotal}\nDue: ${invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A'}\n${magicUrl ? `\nView your invoice: ${magicUrl}\n` : ''}\nItems:\n${itemsText}\n\n— ${invoice.tenant?.name || 'Fieseros'}`
     try {
       const r = await sendEmail({ to: recipientEmail, subject, html, text, usageType: 'transactional', tenantId: invoice.tenantId || undefined })
       result.email = { success: !!r.success, error: r.error, simulated: r.simulated }
@@ -767,7 +767,7 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
     const waMessage = [
       `🧾 *Invoice ${invoice.number}*`,
       '',
-      `Hi ${customerName}, your invoice from ${invoice.tenant?.name || 'ServiceOS'}:`,
+      `Hi ${customerName}, your invoice from ${invoice.tenant?.name || 'Fieseros'}:`,
       '',
       `*Total:* ${invoiceTotal}`,
       invoice.dueDate ? `*Due:* ${new Date(invoice.dueDate).toLocaleDateString()}` : '',
@@ -809,7 +809,7 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
       }
     }
     const dueStr = invoice.dueDate ? ` due ${new Date(invoice.dueDate).toLocaleDateString()}` : ''
-    const smsBody = `Invoice ${invoice.number} from ${invoice.tenant?.name || 'ServiceOS'}: ${invoiceTotal}${dueStr}.${smsMagicUrl ? ` View: ${smsMagicUrl}` : ''}`.slice(0, 160)
+    const smsBody = `Invoice ${invoice.number} from ${invoice.tenant?.name || 'Fieseros'}: ${invoiceTotal}${dueStr}.${smsMagicUrl ? ` View: ${smsMagicUrl}` : ''}`.slice(0, 160)
     try {
       const r = await sendSmsMessage({ to: recipientPhone, message: smsBody, tenantId: invoice.tenantId || undefined })
       result.sms = { success: r.success, error: r.error, simulated: r.simulated }
@@ -978,8 +978,8 @@ export async function sendInvoiceReminder(invoiceId: string): Promise<{ success:
       await sendEmail({
         to: invoice.customer.email,
         subject: `Reminder: Invoice ${invoice.number} is due`,
-        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px"><h2>Payment Reminder</h2><p>Hi ${customerName},</p><p>This is a friendly reminder that invoice <strong>${invoice.number}</strong> for <strong>${invoiceTotal}</strong> ${invoice.dueDate ? `is due on ${new Date(invoice.dueDate).toLocaleDateString()}` : 'is now due'}.</p>${viewInvoiceButton}<p>Please complete payment at your earliest convenience.</p><p>— ${invoice.tenant?.name || 'ServiceOS'}</p></div>`,
-        text: `Reminder: Invoice ${invoice.number} for ${invoiceTotal} is due. Please complete payment.${reminderMagicUrl ? `\n\nView your invoice: ${reminderMagicUrl}` : ''}\n\n— ${invoice.tenant?.name || 'ServiceOS'}`,
+        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px"><h2>Payment Reminder</h2><p>Hi ${customerName},</p><p>This is a friendly reminder that invoice <strong>${invoice.number}</strong> for <strong>${invoiceTotal}</strong> ${invoice.dueDate ? `is due on ${new Date(invoice.dueDate).toLocaleDateString()}` : 'is now due'}.</p>${viewInvoiceButton}<p>Please complete payment at your earliest convenience.</p><p>— ${invoice.tenant?.name || 'Fieseros'}</p></div>`,
+        text: `Reminder: Invoice ${invoice.number} for ${invoiceTotal} is due. Please complete payment.${reminderMagicUrl ? `\n\nView your invoice: ${reminderMagicUrl}` : ''}\n\n— ${invoice.tenant?.name || 'Fieseros'}`,
         usageType: 'transactional',
         tenantId: invoice.tenantId || undefined,
       })
@@ -993,7 +993,7 @@ export async function sendInvoiceReminder(invoiceId: string): Promise<{ success:
     try {
       await sendWhatsAppMessage({
         to: invoice.customer.phone,
-        message: `Friendly reminder: Your invoice ${invoice.number} for ${invoiceTotal} ${invoice.dueDate ? `(due ${new Date(invoice.dueDate).toLocaleDateString()})` : 'is now due'}. Please complete payment.${reminderMagicUrl ? `\nView your invoice: ${reminderMagicUrl}` : ''} Thank you! — ${invoice.tenant?.name || 'ServiceOS'}`,
+        message: `Friendly reminder: Your invoice ${invoice.number} for ${invoiceTotal} ${invoice.dueDate ? `(due ${new Date(invoice.dueDate).toLocaleDateString()})` : 'is now due'}. Please complete payment.${reminderMagicUrl ? `\nView your invoice: ${reminderMagicUrl}` : ''} Thank you! — ${invoice.tenant?.name || 'Fieseros'}`,
         tenantId: invoice.tenantId || undefined,
       })
       whatsappSent = true
@@ -1007,7 +1007,7 @@ export async function sendInvoiceReminder(invoiceId: string): Promise<{ success:
   // in a single SMS segment (<=160 chars).
   if (invoice.customer?.phone) {
     const dueStr = invoice.dueDate ? ` due ${new Date(invoice.dueDate).toLocaleDateString()}` : ''
-    const smsBody = `Reminder: Invoice ${invoice.number} for ${invoiceTotal}${dueStr}.${reminderMagicUrl ? ` View: ${reminderMagicUrl}` : ''} — ${invoice.tenant?.name || 'ServiceOS'}`.slice(0, 160)
+    const smsBody = `Reminder: Invoice ${invoice.number} for ${invoiceTotal}${dueStr}.${reminderMagicUrl ? ` View: ${reminderMagicUrl}` : ''} — ${invoice.tenant?.name || 'Fieseros'}`.slice(0, 160)
     try {
       const r = await sendSmsMessage({
         to: invoice.customer.phone,
@@ -1438,7 +1438,7 @@ export async function detectAndEmitOverdueInvoices(): Promise<{ processed: numbe
         : 'sms' // will be skipped at dispatch time if phone is null
 
     const subject = `Invoice ${invoice.number} is overdue`
-    const bodyText = `Hi ${customerName},\n\nYour invoice ${invoice.number} for ${invoiceTotal} was due on ${dueStr}. Please complete payment at your earliest convenience.\n\n— ${invoice.tenant?.name || 'ServiceOS'}`
+    const bodyText = `Hi ${customerName},\n\nYour invoice ${invoice.number} for ${invoiceTotal} was due on ${dueStr}. Please complete payment at your earliest convenience.\n\n— ${invoice.tenant?.name || 'Fieseros'}`
 
     const bodyHtml = customerEmail
       ? [
@@ -1448,7 +1448,7 @@ export async function detectAndEmitOverdueInvoices(): Promise<{ processed: numbe
           `<p>Your invoice <strong>${invoice.number}</strong> for <strong>${invoiceTotal}</strong> was due on <strong>${dueStr}</strong> and is now overdue.</p>`,
           `<p>Please complete payment at your earliest convenience. If you've already paid, please disregard this message.</p>`,
           `<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />`,
-          `<p style="font-size:12px;color:#9ca3af;">— ${invoice.tenant?.name || 'ServiceOS'}</p>`,
+          `<p style="font-size:12px;color:#9ca3af;">— ${invoice.tenant?.name || 'Fieseros'}</p>`,
           `</div>`,
         ].join('\n')
       : null

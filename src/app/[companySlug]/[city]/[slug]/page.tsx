@@ -79,7 +79,7 @@ export async function generateMetadata({
 
   const title =
     business.seoTitle ||
-    `${business.name} — ${business.industry || 'Service'} in ${business.city || 'Your Area'} | ServiceOS`
+    `${business.name} — ${business.industry || 'Service'} in ${business.city || 'Your Area'} | Fieseros`
   const description =
     business.seoDescription ||
     business.tagline ||
@@ -97,7 +97,7 @@ export async function generateMetadata({
       title,
       description,
       url: canonical,
-      siteName: 'ServiceOS',
+      siteName: 'Fieseros',
       type: 'website',
       ...(ogImage ? { images: [ogImage] } : {}),
     },
@@ -126,7 +126,7 @@ export default async function PublicBusinessHubPage({
 
   // 301 redirect to canonical URL when segments don't match the DB.
   // Use a RELATIVE path (strip the origin) so the redirect works on any
-  // domain — localhost in dev, serviceos.cc in prod, or a custom domain.
+  // domain — localhost in dev, fieseros.com in prod, or a custom domain.
   // NOTE: permanentRedirect() throws a NEXT_REDIRECT error internally, so we
   // must NOT wrap it in try/catch (the catch would intercept the redirect).
   if (needsRedirect && canonicalUrl) {
@@ -278,9 +278,9 @@ export default async function PublicBusinessHubPage({
 
   // Note: breadcrumb schema is injected by the <Breadcrumbs> component itself.
   // The visible <Link> items use RELATIVE URLs so they work on any host
-  // (localhost / serviceos.cc / custom domains). The JSON-LD schema is
+  // (localhost / fieseros.com / custom domains). The JSON-LD schema is
   // absolutized by `getBreadcrumbSchema` in @/lib/seo/schemas.ts using the
-  // canonical `https://serviceos.cc` origin — Google requires absolute URLs
+  // canonical `https://fieseros.com` origin — Google requires absolute URLs
   // for rich results, but visible links should stay relative.
   //
   // Home → /marketplace (NOT /): this page is part of the marketplace
@@ -715,7 +715,7 @@ export default async function PublicBusinessHubPage({
                 <div className="text-center text-xs text-muted-foreground">
                   Powered by{' '}
                   <Link href="/" className="font-semibold text-emerald-700 hover:underline">
-                    ServiceOS
+                    Fieseros
                   </Link>
                 </div>
               </div>

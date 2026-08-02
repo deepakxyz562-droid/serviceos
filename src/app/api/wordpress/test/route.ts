@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Connection successful! ServiceOS is ready to receive leads from WordPress.',
+      message: 'Connection successful! Fieseros is ready to receive leads from WordPress.',
       endpoint: {
         name: endpoint.name,
         active: endpoint.active,

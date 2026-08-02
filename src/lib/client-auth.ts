@@ -5,7 +5,7 @@
  * for making authenticated API requests with the Bearer token.
  */
 
-const TOKEN_KEY = 'serviceos_token';
+const TOKEN_KEY = 'fieseros_token';
 
 /**
  * Store the JWT token in localStorage.
@@ -26,7 +26,7 @@ export function getToken(): string | null {
     if (directToken) return directToken;
     // Fallback: extract token from the auth data object
     try {
-      const authData = localStorage.getItem('serviceos_auth');
+      const authData = localStorage.getItem('fieseros_auth');
       if (authData) {
         const parsed = JSON.parse(authData);
         if (parsed?.token) return parsed.token;

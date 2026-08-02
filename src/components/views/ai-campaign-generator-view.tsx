@@ -411,7 +411,7 @@ export function AiCampaignGeneratorView() {
                     <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-700">
                       <div className="size-8 rounded-full bg-emerald-600 flex items-center justify-center text-white text-xs font-bold">SF</div>
                       <div>
-                        <p className="text-xs font-medium">ServiceOS</p>
+                        <p className="text-xs font-medium">Fieseros</p>
                         <p className="text-[10px] text-muted-foreground">Business Account</p>
                       </div>
                     </div>

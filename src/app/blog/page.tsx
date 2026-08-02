@@ -8,9 +8,9 @@ import { getItemListSchema } from "@/lib/seo/schemas";
 import { Rss } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Blog — Field Service Management Insights & Guides | ServiceOS",
+  title: "Blog — Field Service Management Insights & Guides | Fieseros",
   description:
-    "Practical guides, industry benchmarks, and how-to articles for service businesses. Learn how to automate scheduling, speed up invoicing, and grow your field service business with ServiceOS.",
+    "Practical guides, industry benchmarks, and how-to articles for service businesses. Learn how to automate scheduling, speed up invoicing, and grow your field service business with Fieseros.",
   keywords: [
     "field service management blog",
     "service business tips",
@@ -20,14 +20,14 @@ export const metadata: Metadata = {
     "field service CRM",
   ],
   alternates: {
-    canonical: "https://serviceos.cc/blog",
+    canonical: "https://fieseros.com/blog",
   },
   openGraph: {
-    title: "Blog — Field Service Management Insights & Guides | ServiceOS",
+    title: "Blog — Field Service Management Insights & Guides | Fieseros",
     description:
       "Practical guides, industry benchmarks, and how-to articles for service businesses.",
-    url: "https://serviceos.cc/blog",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/blog",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -38,14 +38,14 @@ export default function BlogIndexPage() {
   const categories = getAllCategories();
 
   const itemListSchema = getItemListSchema({
-    name: "ServiceOS Blog Articles",
+    name: "Fieseros Blog Articles",
     description:
       "Practical guides, industry benchmarks, and how-to articles for field service businesses.",
-    url: "https://serviceos.cc/blog",
+    url: "https://fieseros.com/blog",
     items: posts.map((post, index) => ({
       position: index + 1,
       name: post.title,
-      url: `https://serviceos.cc/blog/${post.slug}`,
+      url: `https://fieseros.com/blog/${post.slug}`,
     })),
   });
 
@@ -62,7 +62,7 @@ export default function BlogIndexPage() {
       <section className="border-b bg-gradient-to-b from-emerald-50/50 to-background dark:from-emerald-950/20">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 mb-4">
-            ServiceOS Blog
+            Fieseros Blog
           </span>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground mb-4">
             Field Service Management Insights &amp; Guides
@@ -133,7 +133,7 @@ export default function BlogIndexPage() {
             Ready to put these insights to work?
           </h2>
           <p className="text-muted-foreground mb-6">
-            ServiceOS brings scheduling, dispatch, invoicing, and customer CRM into
+            Fieseros brings scheduling, dispatch, invoicing, and customer CRM into
             one platform built for service businesses.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">

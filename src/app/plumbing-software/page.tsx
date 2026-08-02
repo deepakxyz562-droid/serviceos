@@ -22,7 +22,7 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Plumbing Software & CRM — Schedule, Dispatch & Invoice | ServiceOS",
+  title: "Plumbing Software & CRM — Schedule, Dispatch & Invoice | Fieseros",
   description:
     "Plumbing business software for emergency dispatch, job tracking, parts inventory, and Email & SMS invoicing. The all-in-one plumbing CRM that helps plumbers get paid faster. Start free today.",
   keywords: [
@@ -32,13 +32,13 @@ export const metadata: Metadata = {
     "plumber job management",
     "plumbing invoicing",
   ],
-  alternates: { canonical: "https://serviceos.cc/plumbing-software" },
+  alternates: { canonical: "https://fieseros.com/plumbing-software" },
   openGraph: {
-    title: "Plumbing Software & CRM | ServiceOS",
+    title: "Plumbing Software & CRM | Fieseros",
     description:
       "Dispatch technicians, track job history per asset, send Email & SMS quotes and invoices, and manage parts inventory. Plumbing software built for the way plumbers actually work.",
-    url: "https://serviceos.cc/plumbing-software",
-    siteName: "ServiceOS",
+    url: "https://fieseros.com/plumbing-software",
+    siteName: "Fieseros",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -61,7 +61,7 @@ const features: Feature[] = [
     icon: MessageSquare,
     title: "Email & SMS Quotes",
     description:
-      "Build a quote in ServiceOS and send it straight to the customer's inbox or phone via SMS. They approve with a single tap. No more chasing approvals over phone calls or waiting days for a reply.",
+      "Build a quote in Fieseros and send it straight to the customer's inbox or phone via SMS. They approve with a single tap. No more chasing approvals over phone calls or waiting days for a reply.",
   },
   {
     icon: Camera,
@@ -73,7 +73,7 @@ const features: Feature[] = [
     icon: CalendarClock,
     title: "Recurring Maintenance Scheduling",
     description:
-      "Annual water heater flushes, bi-annual boiler service, backflow testing — set it once and ServiceOS auto-schedules every visit, sends the customer an SMS reminder, and queues the invoice.",
+      "Annual water heater flushes, bi-annual boiler service, backflow testing — set it once and Fieseros auto-schedules every visit, sends the customer an SMS reminder, and queues the invoice.",
   },
   {
     icon: Package,
@@ -85,43 +85,43 @@ const features: Feature[] = [
 
 const faqs = [
   {
-    question: "How does ServiceOS handle emergency plumbing dispatch?",
+    question: "How does Fieseros handle emergency plumbing dispatch?",
     answer:
-      "When an emergency call comes in, ServiceOS shows you a live map of every technician's current location and job status. You can see who is closest, who is finishing up a job, and who has the right skills for the repair. With one click, the job is dispatched, the customer gets an ETA via SMS, and the technician receives full job details — address, customer history, asset information, and any prior repairs — on their phone. Most plumbing businesses cut their average emergency response time by 30–50% after switching to ServiceOS.",
+      "When an emergency call comes in, Fieseros shows you a live map of every technician's current location and job status. You can see who is closest, who is finishing up a job, and who has the right skills for the repair. With one click, the job is dispatched, the customer gets an ETA via SMS, and the technician receives full job details — address, customer history, asset information, and any prior repairs — on their phone. Most plumbing businesses cut their average emergency response time by 30–50% after switching to Fieseros.",
   },
   {
     question: "Can I manage recurring service contracts for plumbing maintenance?",
     answer:
-      "Yes. ServiceOS is built for plumbing businesses that run annual water heater service contracts, bi-annual boiler inspections, and recurring backflow testing programs. You define the contract once — frequency, customer, asset, price — and ServiceOS automatically schedules each visit, sends the customer an SMS reminder before the appointment, dispatches the technician, and generates the invoice after the job is marked complete. You can also track contract renewal dates so you never lose a maintenance customer to a competitor.",
+      "Yes. Fieseros is built for plumbing businesses that run annual water heater service contracts, bi-annual boiler inspections, and recurring backflow testing programs. You define the contract once — frequency, customer, asset, price — and Fieseros automatically schedules each visit, sends the customer an SMS reminder before the appointment, dispatches the technician, and generates the invoice after the job is marked complete. You can also track contract renewal dates so you never lose a maintenance customer to a competitor.",
   },
   {
     question: "How does parts and materials tracking work on plumbing jobs?",
     answer:
-      "Every plumber's van is stocked with parts — copper fittings, PEX, valves, fixtures, water heaters. ServiceOS tracks all of it. When a technician uses parts on a job, they tap them into the work order from their phone. The parts automatically deduct from van inventory and add to the customer's invoice at your marked-up price. When stock hits a reorder threshold, ServiceOS alerts you. No more losing money on parts the plumber forgot to bill for.",
+      "Every plumber's van is stocked with parts — copper fittings, PEX, valves, fixtures, water heaters. Fieseros tracks all of it. When a technician uses parts on a job, they tap them into the work order from their phone. The parts automatically deduct from van inventory and add to the customer's invoice at your marked-up price. When stock hits a reorder threshold, Fieseros alerts you. No more losing money on parts the plumber forgot to bill for.",
   },
   {
     question: "Can customers pay on-site after a plumbing job is done?",
     answer:
-      "Yes. As soon as a technician marks the job complete, ServiceOS generates a professional invoice and sends it to the customer via Email & SMS with a secure payment link. Customers can pay by card, UPI, or bank transfer right from their phone — while the plumber is still on-site if needed. You see payment status in real time and can set up automatic reminders for unpaid invoices. Most plumbing businesses using ServiceOS get paid 2x faster than with paper invoices.",
+      "Yes. As soon as a technician marks the job complete, Fieseros generates a professional invoice and sends it to the customer via Email & SMS with a secure payment link. Customers can pay by card, UPI, or bank transfer right from their phone — while the plumber is still on-site if needed. You see payment status in real time and can set up automatic reminders for unpaid invoices. Most plumbing businesses using Fieseros get paid 2x faster than with paper invoices.",
   },
   {
-    question: "How does ServiceOS help with managing multiple plumbers?",
+    question: "How does Fieseros help with managing multiple plumbers?",
     answer:
-      "ServiceOS gives you a single dispatch calendar showing every plumber, their current job, their next appointment, and live GPS location. You can assign jobs based on skills — gas-certified plumbers get gas jobs, drain specialists get drain jobs. Technicians see their daily route on their phone, with optimized travel between jobs. At the end of the day, you get reports on jobs completed, revenue per plumber, average job time, and customer satisfaction scores.",
+      "Fieseros gives you a single dispatch calendar showing every plumber, their current job, their next appointment, and live GPS location. You can assign jobs based on skills — gas-certified plumbers get gas jobs, drain specialists get drain jobs. Technicians see their daily route on their phone, with optimized travel between jobs. At the end of the day, you get reports on jobs completed, revenue per plumber, average job time, and customer satisfaction scores.",
   },
   {
-    question: "Does ServiceOS integrate with my accounting software?",
+    question: "Does Fieseros integrate with my accounting software?",
     answer:
-      "ServiceOS lets you export invoices and financial reports as CSV files that you can import into any accounting tool — QuickBooks, Xero, Zoho Books, or your existing platform. Many plumbing businesses use ServiceOS as their plumbing invoicing software and use the CSV exports to keep their accounting system in sync, eliminating duplicate data entry and reconciliation headaches.",
+      "Fieseros lets you export invoices and financial reports as CSV files that you can import into any accounting tool — QuickBooks, Xero, Zoho Books, or your existing platform. Many plumbing businesses use Fieseros as their plumbing invoicing software and use the CSV exports to keep their accounting system in sync, eliminating duplicate data entry and reconciliation headaches.",
   },
 ];
 
 export default function PlumbingSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
-    name: "ServiceOS — Plumbing Business Software",
+    name: "Fieseros — Plumbing Business Software",
     description:
       "Plumbing CRM and dispatch software with emergency routing, asset history, parts inventory, Email & SMS invoicing, and recurring maintenance contracts.",
-    url: "https://serviceos.cc/plumbing-software",
+    url: "https://fieseros.com/plumbing-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
@@ -130,15 +130,15 @@ export default function PlumbingSoftwarePage() {
     <CornerstoneLayout
       activePath="/plumbing-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.cc" },
-        { name: "Plumbing Software", url: "https://serviceos.cc/plumbing-software" },
+        { name: "Home", url: "https://fieseros.com" },
+        { name: "Plumbing Software", url: "https://fieseros.com/plumbing-software" },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
         eyebrow="Plumbing Software"
         title="Plumbing Business Software That Keeps Your Pipes — and Schedule — Flowing"
-        subtitle="From emergency calls to scheduled maintenance, ServiceOS helps plumbing businesses dispatch technicians, track jobs, send invoices by Email & SMS, and get paid faster."
+        subtitle="From emergency calls to scheduled maintenance, Fieseros helps plumbing businesses dispatch technicians, track jobs, send invoices by Email & SMS, and get paid faster."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -173,14 +173,14 @@ export default function PlumbingSoftwarePage() {
             <p className="text-muted-foreground max-w-2xl mx-auto">
               Most plumbing businesses still juggle text messages and scattered
               apps, paper work orders, and mental inventory. Here&apos;s what that costs you —
-              and what changes when you switch to ServiceOS.
+              and what changes when you switch to Fieseros.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <Wrench className="h-5 w-5 text-destructive" />
-                Without ServiceOS
+                Without Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -201,7 +201,7 @@ export default function PlumbingSoftwarePage() {
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With ServiceOS
+                With Fieseros
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
@@ -223,7 +223,7 @@ export default function PlumbingSoftwarePage() {
         </div>
       </section>
 
-      <ContentSection title="Why plumbing businesses choose ServiceOS">
+      <ContentSection title="Why plumbing businesses choose Fieseros">
         <p>
           Plumbing is a business of extremes. On one end, you have scheduled
           maintenance — annual water heater flushes, bi-annual boiler services,
@@ -231,7 +231,7 @@ export default function PlumbingSoftwarePage() {
           On the other end, you have emergency callouts — burst pipes at midnight,
           gas leaks on a Sunday, flooded basements — where minutes matter and the
           customer is already stressed. A plumber scheduling software that
-          handles only one of these isn&apos;t enough. ServiceOS is built for
+          handles only one of these isn&apos;t enough. Fieseros is built for
           both, in a single workflow your team can actually use.
         </p>
         <p>
@@ -240,7 +240,7 @@ export default function PlumbingSoftwarePage() {
           maintenance contracts that need to be tracked, scheduled, and renewed
           every year. Without a proper plumbing CRM, these slip through the
           cracks. A customer forgets to schedule their annual service, a
-          competitor swoops in, and you lose a long-term relationship. ServiceOS
+          competitor swoops in, and you lose a long-term relationship. Fieseros
           automates the entire maintenance contract lifecycle: scheduling,
           customer reminders via SMS, technician dispatch, invoicing, and
           renewal alerts. You set it once, and the recurring revenue keeps
@@ -252,12 +252,12 @@ export default function PlumbingSoftwarePage() {
           valves, cartridges, fixtures, and more. When a plumber uses parts on a
           job, those parts need to be billed to the customer. But in the rush of
           a busy day, parts get forgotten, written down on a paper work order
-          that gets lost, or simply not marked up correctly. ServiceOS solves
+          that gets lost, or simply not marked up correctly. Fieseros solves
           this by tracking every part in real time. When the technician taps a
           part into the work order, it deducts from van inventory and adds to
           the customer&apos;s invoice at your marked-up price — automatically.
           Most plumbing businesses recover 5–10% in lost parts revenue within
-          the first month of using ServiceOS.
+          the first month of using Fieseros.
         </p>
         <p>
           Finally, there&apos;s dispatch and communication — the operational
@@ -266,7 +266,7 @@ export default function PlumbingSoftwarePage() {
           who is available, and who has the right skills. Then the customer
           needs to be kept in the loop — when will the plumber arrive? What&apos;s
           the status? How much will it cost? With plumbing dispatch software
-          from ServiceOS, all of this happens in one place. Live GPS shows every
+          from Fieseros, all of this happens in one place. Live GPS shows every
           technician. Dispatch takes seconds. ETAs go to the customer
           automatically. Quotes and plumbing invoicing flow through Email & SMS,
           the channels customers actually check. The result: happier customers,
@@ -276,7 +276,7 @@ export default function PlumbingSoftwarePage() {
 
       <FaqSection
         faqs={faqs}
-        subtitle="Everything plumbers ask before switching to ServiceOS."
+        subtitle="Everything plumbers ask before switching to Fieseros."
       />
 
       {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
@@ -287,7 +287,7 @@ export default function PlumbingSoftwarePage() {
             Related Field Service Software
           </h2>
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
-            Explore ServiceOS features built for other service industries.
+            Explore Fieseros features built for other service industries.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/hvac-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">

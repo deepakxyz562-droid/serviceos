@@ -12,7 +12,7 @@
 import { db } from '../src/lib/db'
 
 const API_BASE = 'http://localhost:3000'
-const TEST_USER_EMAIL = 'whatsapp-test@serviceos.local'
+const TEST_USER_EMAIL = 'whatsapp-test@fieseros.local'
 
 async function devLogin(): Promise<string> {
   const res = await fetch(`${API_BASE}/api/auth/dev-login?XTransformPort=3000`, {

@@ -4,7 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { withRequestId } from '@/lib/logger';
 
 /**
- * Provider Certifications — edit + delete (ServiceOS V1.5 — P13-provider-ui)
+ * Provider Certifications — edit + delete (Fieseros V1.5 — P13-provider-ui)
  * ------------------------------------------------------------
  * PATCH   /api/provider/certifications/[id]   — update fields on an existing cert
  * DELETE  /api/provider/certifications/[id]   — delete a cert

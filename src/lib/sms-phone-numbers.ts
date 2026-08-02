@@ -518,18 +518,18 @@ export interface SetNumberVoiceModeOpts {
    */
   twilioAccountSid?: string;
   twilioAuthToken?: string;
-  /** The ServiceOS app URL (for re-setting VoiceUrl when reverting from ai_vapi). */
+  /** The Fieseros app URL (for re-setting VoiceUrl when reverting from ai_vapi). */
   appUrl: string;
 }
 
 /**
  * Switch a phone number's voice-handling mode between forward, voicemail, and
  * AI Receptionist (Vapi). This is the unified phone-number architecture:
- * ServiceOS owns the Twilio number; Vapi handles voice when voiceMode='ai_vapi'.
+ * Fieseros owns the Twilio number; Vapi handles voice when voiceMode='ai_vapi'.
  *
  * Flow:
  *   forward / voicemail:
- *     - Repoint Twilio VoiceUrl → `${appUrl}/api/sms/voice` (ServiceOS TwiML).
+ *     - Repoint Twilio VoiceUrl → `${appUrl}/api/sms/voice` (Fieseros TwiML).
  *     - If the number was previously in 'ai_vapi' mode (vapiNumberId is set),
  *       call Vapi's DELETE /phone-number/{vapiNumberId} to release Vapi's claim.
  *     - Clear vapiNumberId + vapiAssistantId on the PhoneNumber row.
@@ -604,7 +604,7 @@ export async function setNumberVoiceMode(
     return { success: true, vapiNumberId };
   }
 
-  // ─── forward / voicemail: route voice back to ServiceOS ────────────────
+  // ─── forward / voicemail: route voice back to Fieseros ────────────────
   // If the number was previously in ai_vapi mode, release Vapi's claim first.
   if (phoneRow.vapiNumberId) {
     try {
@@ -619,7 +619,7 @@ export async function setNumberVoiceMode(
     }
   }
 
-  // Repoint Twilio VoiceUrl → ServiceOS /api/sms/voice.
+  // Repoint Twilio VoiceUrl → Fieseros /api/sms/voice.
   const voiceWebhookUrl = `${opts.appUrl.replace(/\/$/, '')}/api/sms/voice`;
   const res = await updateNumberWebhooks({
     sid: phoneRow.providerSid,

@@ -88,8 +88,8 @@ const TIMEZONES = ['UTC', 'America/New_York', 'America/Los_Angeles', 'Europe/Lon
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function PlatformSettingsSection() {
-  const [platformName, setPlatformName] = useState('ServiceOS');
-  const [supportEmail, setSupportEmail] = useState('support@ServiceOS.io');
+  const [platformName, setPlatformName] = useState('Fieseros');
+  const [supportEmail, setSupportEmail] = useState('support@Fieseros.io');
   const [currency, setCurrency] = useState<string>('USD');
   const [timezone, setTimezone] = useState<string>('UTC');
   const [quotas, setQuotas] = useState(QUOTAS);

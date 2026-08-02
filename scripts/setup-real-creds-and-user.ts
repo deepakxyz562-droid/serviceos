@@ -19,7 +19,7 @@ async function main() {
     const updated = await directPrisma.credential.update({
       where: { id: waCred.id },
       data: {
-        name: 'ServiceOS WhatsApp (Meta Cloud API)',
+        name: 'Fieseros WhatsApp (Meta Cloud API)',
         type: 'whatsapp',
         encryptedData: JSON.stringify({
           accessToken: process.env.WHATSAPP_ACCESS_TOKEN,
@@ -52,7 +52,7 @@ async function main() {
         name: 'Platform Email (AWS SES)',
         providerType: 'smtp',
         fromEmail: 'deepakchandra076@gmail.com',
-        fromName: 'ServiceOS',
+        fromName: 'Fieseros',
         configJson: NEW_CONFIG,
         status: 'active',
       },
@@ -79,7 +79,7 @@ async function main() {
           smtpUser: 'AKIA2PPO3JNBZSEHPLQH',
           smtpPass: 'BOVpNDa2T6R/E8ziSzTd8KM/BB/vUwMt23mVm4XQJhDl',
           fromEmail: 'deepakchandra076@gmail.com',
-          fromName: 'ServiceOS',
+          fromName: 'Fieseros',
         }),
       },
     });

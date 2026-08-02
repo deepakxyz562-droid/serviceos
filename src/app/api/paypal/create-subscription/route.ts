@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
         start_time: new Date(Date.now() + 60_000).toISOString(), // start in 1 min
         quantity: '1',
         application_context: {
-          brand_name: 'ServiceOS',
+          brand_name: 'Fieseros',
           locale: 'en-US',
           shipping_preference: 'NO_SHIPPING',
           user_action: 'SUBSCRIBE_NOW',
@@ -215,8 +215,8 @@ export async function POST(request: NextRequest) {
             payer_selected: 'PAYPAL',
             payee_preferred: 'IMMEDIATE_PAYMENT_REQUIRED',
           },
-          return_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.cc'}/?paypal_sub=success`,
-          cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.cc'}/?paypal_sub=cancel`,
+          return_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com'}/?paypal_sub=success`,
+          cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com'}/?paypal_sub=cancel`,
         },
       }),
     });

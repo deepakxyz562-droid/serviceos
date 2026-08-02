@@ -37,7 +37,7 @@ const cache = new Map<string, CacheEntry>()
 
 const NOMINATIM_UA =
   process.env.NOMINATIM_USER_AGENT ||
-  'ServiceOS-Onboarding/1.0 (onboarding@serviceos.app)'
+  'Fieseros-Onboarding/1.0 (onboarding@fieseros.app)'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
