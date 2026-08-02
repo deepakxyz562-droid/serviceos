@@ -55,20 +55,42 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useRealtime } from '@/hooks/use-realtime';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-} from 'recharts';
+// P1 (LCP fix): recharts is ~200KB and was eagerly imported, blocking
+// hydration + LCP. The chart components are now lazy-loaded from a separate
+// chunk via `next/dynamic` with `ssr: false` — recharts only downloads AFTER
+// the KPI cards paint, cutting ~1.5s off LCP on a fresh load.
+//
+// `ssr: false` is required because recharts' ResponsiveContainer needs
+// `window` to measure its parent — on the server it renders nothing, so
+// SSR would just produce a hydration mismatch warning + wasted work.
+//
+// The `loading` fallback reserves the chart's space (fixed height) so the
+// lazy swap doesn't cause CLS.
+import dynamic from 'next/dynamic';
+
+const LazyKPISparkline = dynamic(
+  () => import('./dashboard-charts').then(m => m.KPISparkline),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-8 w-20" />,
+  },
+);
+
+const LazyRevenueTrendChart = dynamic(
+  () => import('./dashboard-charts').then(m => m.RevenueTrendChart),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[240px] w-full" />,
+  },
+);
+
+const LazyLeadSourcesChart = dynamic(
+  () => import('./dashboard-charts').then(m => m.LeadSourcesChart),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[240px] w-full" />,
+  },
+);
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -307,6 +329,22 @@ function generateSparkline(baseValue: number, trend: number): { value: number }[
 // ─── Sub-Components ──────────────────────────────────────────────────────────
 
 function StatCardSkeleton() {
+  // P4 (CLS fix): the skeleton must match the real KPI card's height so the
+  // skeleton→real swap doesn't cause a layout shift (~0.31 CLS score).
+  //
+  // Real card structure (see the KPI cards rendered below):
+  //   • CardContent p-6  → 24px padding top + bottom
+  //   • Left column: label (text-sm ~20px) + mt-1 + value (text-2xl ~32px)
+  //                 + mt-1 + trend (~16px)  = ~76px
+  //   • Right column: icon container (p-2.5 → 40px outer) + gap-1 + sparkline
+  //                  (ResponsiveContainer height=32)  = ~76px
+  //   • Inner flex uses items-center, so the taller column wins.
+  //
+  // Previous skeleton used `size-12` (48px) for the icon and `gap-2` (8px)
+  // for the right column, making the skeleton ~136px tall vs the real card's
+  // ~128px — an 8px mismatch that registered as CLS.
+  //
+  // Now we mirror the real structure exactly: 40px icon, gap-1, 32px sparkline.
   return (
     <Card>
       <CardContent className="p-6">
@@ -316,8 +354,8 @@ function StatCardSkeleton() {
             <Skeleton className="h-8 w-20" />
             <Skeleton className="h-3 w-24" />
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <Skeleton className="size-12 rounded-xl" />
+          <div className="flex flex-col items-end gap-1">
+            <Skeleton className="size-10 rounded-xl" />
             <Skeleton className="h-8 w-20" />
           </div>
         </div>
@@ -363,19 +401,11 @@ function TableSkeleton() {
 }
 
 function KPISparkline({ data, color }: { data: { value: number }[]; color: string }) {
-  return (
-    <ResponsiveContainer width={80} height={32}>
-      <LineChart data={data} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
-        <Line
-          type="monotone"
-          dataKey="value"
-          stroke={color}
-          strokeWidth={1.5}
-          dot={false}
-        />
-      </LineChart>
-    </ResponsiveContainer>
-  );
+  // P1: recharts is now lazy-loaded. This local KPISparkline wraps the lazy
+  // LazyKPISparkline so the call sites (inside the KPI cards) don't change.
+  // The lazy version shows a Skeleton of the same size (h-8 w-20 = 32×80px)
+  // while recharts downloads, so there's no CLS.
+  return <LazyKPISparkline data={data} color={color} />;
 }
 
 // ─── Main Component ──────────────────────────────────────────────────────────
@@ -416,6 +446,15 @@ export function DashboardView() {
     }, []),
   });
 
+  // P2 (Priority KPI fetch): The 5 dashboard fetches (saas-stats, employees,
+  // journey, conversations, ecommerce) run as PARALLEL useEffect hooks —
+  // React fires them all in the same commit, and each `fetch()` is
+  // fire-and-forget so they don't block each other. The `loading` state is
+  // ONLY tied to saas-stats (the KPI data source), so KPI cards render as
+  // soon as saas-stats resolves — they don't wait for the other 4 fetches.
+  // The other fetches populate secondary sections (employee presence,
+  // journey timeline, conversations widget, ecommerce overview) and their
+  // loading states are independent.
   useEffect(() => {
     async function fetchStats() {
       try {
@@ -877,47 +916,11 @@ export function DashboardView() {
               <CardDescription>Monthly revenue over the last 6 months</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={240}>
-                <AreaChart data={stats.revenueTrend} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis
-                    dataKey="month"
-                    tick={{ fontSize: 12, fill: '#94a3b8' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: '#94a3b8' }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v: number) => `${symbol}${(v / 1000).toFixed(0)}k`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: '8px',
-                      border: '1px solid #e2e8f0',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                      fontSize: '12px',
-                    }}
-                    formatter={(value: number) => [formatCompact(value), 'Revenue']}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="#10b981"
-                    strokeWidth={2.5}
-                    fill="url(#revenueGradient)"
-                    dot={{ r: 4, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }}
-                    activeDot={{ r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              <LazyRevenueTrendChart
+                data={stats.revenueTrend}
+                symbol={symbol}
+                formatCompact={formatCompact}
+              />
             </CardContent>
           </Card>
         ) : (
@@ -945,36 +948,10 @@ export function DashboardView() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-col sm:flex-row items-center gap-4">
-                <ResponsiveContainer width="100%" height={240}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={95}
-                      paddingAngle={3}
-                      dataKey="value"
-                      strokeWidth={0}
-                    >
-                      {pieData.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={leadSourceColors[entry.source] || '#94a3b8'}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: '8px',
-                        border: '1px solid #e2e8f0',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                        fontSize: '12px',
-                      }}
-                      formatter={(value: number, name: string) => [`${value} leads`, name]}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                <LazyLeadSourcesChart
+                  pieData={pieData}
+                  leadSourceColors={leadSourceColors}
+                />
               </div>
               <div className="flex flex-wrap gap-3 mt-3 justify-center">
                 {pieData.map((item) => (

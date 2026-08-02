@@ -21,6 +21,19 @@ class MemoryCache {
   private store = new Map<string, CacheEntry<unknown>>();
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private readonly DEFAULT_TTL = 30_000; // 30 seconds
+  /**
+   * A4 (LRU eviction): hard cap on the number of entries. Without this the
+   * cache grows unboundedly for the lifetime of the Node process — every
+   * per-tenant, per-filter, per-page combination adds a new key and they
+   * never get GC'd until their TTL expires (which on a busy server never
+   * catches up). 500 entries × ~5KB average ≈ 2.5MB ceiling.
+   *
+   * We use the Map insertion-order property to implement LRU: on every
+   * `get()` we delete + re-set the key so it becomes the most-recently
+   * inserted (i.e. moved to the end). On `set()`, if we're over the cap,
+   * we evict from the front (oldest). This is O(1) per op.
+   */
+  private readonly MAX_ENTRIES = 500;
 
   constructor() {
     // Run cleanup every 60 seconds to prevent memory leaks
@@ -44,6 +57,12 @@ class MemoryCache {
       return undefined;
     }
 
+    // LRU: re-insert so this key moves to the end (most-recently-used).
+    // Map preserves insertion order, so the oldest entry is always
+    // `this.store.keys().next().value`.
+    this.store.delete(key);
+    this.store.set(key, entry);
+
     return entry.value as T;
   }
 
@@ -54,10 +73,30 @@ class MemoryCache {
    * @param ttlMs - Time-to-live in milliseconds (default: 30 seconds)
    */
   set<T>(key: string, value: T, ttlMs: number = this.DEFAULT_TTL): void {
+    // If the key already exists, delete first so re-setting it moves it to
+    // the end of insertion order (most-recently-used). This matches the
+    // LRU semantics of get().
+    if (this.store.has(key)) {
+      this.store.delete(key);
+    }
     this.store.set(key, {
       value,
       expiresAt: Date.now() + ttlMs,
     });
+
+    // LRU eviction: if we've exceeded the cap, drop the oldest entries
+    // (front of the Map) until we're back under the limit. We evict in a
+    // loop rather than slicing because the cap is small (500) and the
+    // overflow is typically 1–2 entries per write.
+    if (this.store.size > this.MAX_ENTRIES) {
+      const overflow = this.store.size - this.MAX_ENTRIES;
+      const iter = this.store.keys();
+      for (let i = 0; i < overflow; i++) {
+        const oldest = iter.next().value;
+        if (oldest === undefined) break;
+        this.store.delete(oldest);
+      }
+    }
   }
 
   /**

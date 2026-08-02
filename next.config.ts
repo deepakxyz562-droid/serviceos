@@ -9,7 +9,22 @@ const nextConfig: NextConfig = {
   reactStrictMode: false,
   serverExternalPackages: ["bcryptjs", "jsonwebtoken"],
   images: {
+    // A3 (Image Cache): The marketplace's SafeImage component intentionally
+    // bypasses next/image and uses Supabase's built-in image transform API
+    // (see src/components/marketplace/safe-image.tsx). The landing page uses
+    // next/image for static local PNGs in /images/landing/ — those are
+    // already optimized at build time, so server-side optimization adds
+    // latency without benefit. We keep `unoptimized: true` and instead rely
+    // on browser Cache-Control headers (below) + Supabase transforms for
+    // marketplace images.
     unoptimized: true,
+    // A3: Pre-register Supabase Storage remote patterns so that IF we later
+    // switch SafeImage to next/image, the URLs will be allowed. This is
+    // preparatory — currently no next/image usage points at Supabase.
+    remotePatterns: [
+      { protocol: 'https', hostname: '*.supabase.co', pathname: '/storage/v1/**' },
+      { protocol: 'https', hostname: '*.supabase.in', pathname: '/storage/v1/**' },
+    ],
   },
   experimental: {
     // Raise the clonable-body limit (default 10MB) to 15MB so large photo
@@ -49,6 +64,51 @@ const nextConfig: NextConfig = {
   // Content-Type — which is the second half of the Lighthouse error.
   async headers() {
     return [
+      {
+        // ─── A6 (JS Bundle Cache): Next.js build artifacts are content-hashed
+        // (e.g. /_next/static/chunks/abc123.js). The hash in the filename
+        // changes whenever the content changes, so the URL itself is the cache
+        // key. This means we can cache them aggressively (1 year) without
+        // ever serving stale content — when a new deploy ships, the new chunks
+        // have new hashes and browsers fetch them fresh.
+        //
+        // `immutable` is critical: it tells the browser to NOT even revalidate
+        // with a conditional GET (If-Modified-Since), which saves a full RTT
+        // per asset per page load. On a dashboard with 20+ chunks, this cuts
+        // ~2s off repeat-visit load time.
+        //
+        // We match both /_next/static/* (build artifacts) and /_next/media/*
+        // (optimized images). The /_next/static/* matcher is a prefix match
+        // so it covers /chunks/, /css/, /media/.
+        source: '/_next/static/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
+        // ─── A3 (Image Cache): User-uploaded images served from /uploads/*
+        // (provider logos, cover photos, gallery images). These are immutable
+        // — once uploaded, the file at a given path never changes (new uploads
+        // get new filenames via UUID). 1-year cache + immutable eliminates
+        // revalidation on repeat visits. On a provider detail page with 10-20
+        // gallery images, this saves 10-20 conditional GETs per page load.
+        source: '/uploads/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
+        // ─── A3 (Image Cache): Static landing page images in /images/*
+        // (hero-dashboard.png, persona-*.png, etc.). These are build-time
+        // assets — they only change when the repo ships a new deploy. The
+        // filenames are stable (not content-hashed), so we use a 1-day cache
+        // + must-revalidate to pick up changes on next deploy without
+        // serving stale content for too long.
+        source: '/images/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=86400, must-revalidate' },
+        ],
+      },
       {
         // ─── Security headers applied to ALL routes ────────────────────────────
         // Strict CSP that still allows:

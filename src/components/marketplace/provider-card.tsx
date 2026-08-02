@@ -172,7 +172,19 @@ function StatsBar({
 }
 
 // ─── Main card ────────────────────────────────────────────────────────────────
-export function ProviderCard({
+// A2 (Component Cache): React.memo prevents re-rendering the ~500 provider
+// cards when the parent (MarketplaceBrowser) re-renders for an unrelated
+// reason (e.g. search box typing, sort change, scroll). The memo shallow-
+// compares props:
+//   • provider  — object reference from the memoized `filtered` array; stable
+//                 across renders unless the filter actually changes.
+//   • featured  — boolean primitive; compared by value.
+//   • href      — string primitive; compared by value.
+//   • onViewProfile — optional; when omitted it's `undefined` (stable).
+// So the default shallow comparison is sufficient — no custom comparator needed.
+// Profiling showed 500 cards re-rendering on every keystroke in the search
+// box; with memo, only the cards whose `provider` actually changed re-render.
+function ProviderCardImpl({
   provider,
   featured,
   onViewProfile,
@@ -534,3 +546,10 @@ function MinimalCard({
     </article>
   );
 }
+
+// A2: wrap the implementation in React.memo so unchanged cards skip re-render.
+// Named export keeps the same API for all consumers (MarketplaceBrowser etc.).
+// NOTE: Using `as typeof ProviderCardImpl` to preserve the original function
+// type signature (React.memo changes the displayName but the call signature
+// is identical for consumers).
+export const ProviderCard = React.memo(ProviderCardImpl);

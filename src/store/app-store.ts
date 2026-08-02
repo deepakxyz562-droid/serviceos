@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { ViewType } from '@/types/workflow';
 
 // Re-export ViewType as ActiveView for backward compatibility
@@ -138,7 +139,19 @@ const initialAuthState: AuthState = {
   tenant: null,
 };
 
-export const useAppStore = create<AppState>((set) => ({
+// ── Persisted UI preferences ──────────────────────────────────────────────────
+// A1 (State Cache): Zustand `persist` middleware keeps these UI prefs in
+// localStorage so a page refresh doesn't reset them. We deliberately do NOT
+// persist:
+//   • auth / authHydrated   — must re-validate against /api/auth/me on every load
+//   • pending* (job prefill, create signal, reports, settings) — transient
+//     cross-view signals that should clear on refresh, not survive it.
+//   • searchQuery           — ephemeral.
+//   • mobileSidebarOpen / leftSidebarOpen — drawer state shouldn't survive.
+// `partialize` is the contract for what actually gets written to storage.
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
   // Auth
   auth: initialAuthState,
   authHydrated: false,
@@ -209,4 +222,33 @@ export const useAppStore = create<AppState>((set) => ({
   setPipelineDensity: (d) => set({ pipelineDensity: d }),
   pipelineViewMode: 'kanban',
   setPipelineViewMode: (m) => set({ pipelineViewMode: m }),
-}));
+    }),
+    {
+      name: 'serviceos-app-store',
+      // SSR-safe: localStorage is undefined on the server. createJSONStorage
+      // accepts a function that returns the storage or `undefined` — when
+      // undefined, persist skips hydration silently (no crash, no persistence).
+      // This is critical because Next.js renders client components on the
+      // server during SSR and the store creation runs during module eval.
+      storage: createJSONStorage(() =>
+        typeof window !== 'undefined' ? window.localStorage : undefined,
+      ),
+      // Only persist UI preferences — never auth or transient cross-view signals.
+      partialize: (state) => ({
+        darkMode: state.darkMode,
+        sidebarCollapsed: state.sidebarCollapsed,
+        pipelineDensity: state.pipelineDensity,
+        pipelineViewMode: state.pipelineViewMode,
+        // Persisting currentView gives "open where I left off" UX on refresh.
+        // If the persisted view was a transient deep-link (e.g. ?view=invoice),
+        // it's still valid because the view exists in the catalog.
+        currentView: state.currentView,
+        activeView: state.activeView,
+      }),
+      // Don't persist the session-bound fields. clearAuth sets authHydrated=true
+      // so the auth re-check in MarketplaceHeader runs once.
+      skipHydration: false,
+      version: 1,
+    },
+  ),
+);

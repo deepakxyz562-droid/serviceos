@@ -8,6 +8,10 @@ import { AppHeader } from '@/components/layout/header';
 import { MobileBottomNav } from '@/components/layout/mobile-bottom-nav';
 import { TrialBanner } from '@/components/layout/trial-banner';
 import { UpgradeModal } from '@/components/layout/upgrade-modal';
+// A7: Reusable ViewCache component extracted from this file. The view-history
+// logic + display:none toggling now lives in view-cache.tsx and can be shared
+// with the employee + customer portal layouts.
+import { ViewCache } from '@/components/layout/view-cache';
 import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -380,39 +384,17 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   }, [darkMode]);
 
   // ─── Keep-alive view cache (Tier 2 performance fix) ─────────────────────
-  // Instead of unmounting the previous view on every menu switch, we keep
-  // the last N visited views mounted in hidden divs. Switching back to a
-  // previously-visited view is INSTANT — no re-mount, no re-fetch, no
-  // spinner. Only the active view is visible; inactive cached views are
-  // `display: none`.
+  // A7: The view-history logic (which views to keep mounted + display:none
+  // toggling) now lives in the reusable <ViewCache> component
+  // (src/components/layout/view-cache.tsx). This keeps app-layout focused on
+  // the shell layout (sidebar + header + main + bottom nav) while ViewCache
+  // handles the keep-alive semantics. The same ViewCache can now be applied
+  // to the employee portal + customer portal layouts without duplicating
+  // the ~50 lines of view-history state + synchronous adjustment logic.
   //
-  // This solves the "one menu to another menu click is too slow" issue.
-  // Combined with the prefetch-on-hover in the sidebar (Tier 1), view
-  // switching is now near-instantaneous for all subsequent visits.
-  //
-  // Implementation: we use the "adjusting state when a prop changes" pattern
-  // from the React docs. When currentView changes, we update the viewHistory
-  // state SYNCHRONOUSLY during render (not in useEffect). React re-renders
-  // immediately with the new state, without a commit phase. This is the
-  // recommended pattern and avoids both set-state-in-effect and ref-during-
-  // render lint errors.
-  // See: https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
-  const MAX_CACHED_VIEWS = 5;
-  const [viewHistory, setViewHistory] = useState<string[]>([currentView]);
-
-  // If currentView has changed (or is not at the end of the history),
-  // synchronously update the history during render. React will immediately
-  // re-render with the new state — no extra commit, no cascading renders.
-  if (viewHistory[viewHistory.length - 1] !== currentView) {
-    const filtered = viewHistory.filter(v => v !== currentView);
-    const next = [...filtered, currentView];
-    setViewHistory(
-      next.length > MAX_CACHED_VIEWS
-        ? next.slice(next.length - MAX_CACHED_VIEWS)
-        : next,
-    );
-  }
-  const effectiveHistory = viewHistory;
+  // The `renderView` callback wraps each view in the app-layout's own
+  // ViewErrorBoundary + Suspense (with the rich ViewLoader that has chunk-
+  // error detection + reload button). ViewCache itself is boundary-agnostic.
 
   // Helper: render a view by ID. Handles the special marketplaceDashboard
   // case (uses a router component, not a lazy component).
@@ -485,38 +467,28 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
                 : 'p-4 lg:p-6 bg-background',
           )}
         >
-          {/* ── Keep-alive view cache ──────────────────────────────────────
+          {/* ── Keep-alive view cache (A7: now uses the reusable <ViewCache>) ──
               Render ALL visited views, but only show the active one. Hidden
               views stay mounted (preserving their state + scroll position +
               data) so switching back is instant. Each view gets its own
               ErrorBoundary + Suspense so a crash in one view doesn't take
               down the others, and a slow chunk load only shows a spinner
-              for the ACTIVE view (hidden views load silently). */}
-          {effectiveHistory.map(viewId => {
-            const isActive = viewId === currentView;
-            const viewIsFullHeight = isViewFullHeight(viewId);
-            return (
-              <div
-                key={viewId}
-                className={cn(
-                  // Active: visible. For full-height views, use flex-1 to
-                  // fill the main area. For normal views, no extra class
-                  // (block layout, sizes to content, main scrolls).
-                  // Inactive: hidden (display: none, but stays mounted).
-                  isActive
-                    ? viewIsFullHeight ? 'flex-1 min-h-0 flex flex-col' : ''
-                    : 'hidden',
-                )}
-                aria-hidden={!isActive}
-              >
-                <ViewErrorBoundary>
-                  <Suspense fallback={isActive ? <ViewLoader /> : null}>
-                    {renderView(viewId)}
-                  </Suspense>
-                </ViewErrorBoundary>
-              </div>
-            );
-          })}
+              for the ACTIVE view (hidden views load silently).
+              
+              The `renderView` callback receives `isActive` so it can decide
+              whether to show the Suspense loader (active) or null (hidden,
+              silent load). */}
+          <ViewCache
+            currentView={currentView}
+            isViewFullHeight={isViewFullHeight}
+            renderView={(viewId, isActive) => (
+              <ViewErrorBoundary>
+                <Suspense fallback={isActive ? <ViewLoader /> : null}>
+                  {renderView(viewId)}
+                </Suspense>
+              </ViewErrorBoundary>
+            )}
+          />
         </main>
 
         {/* Mobile bottom nav — `position: fixed; bottom: 0` so it touches the

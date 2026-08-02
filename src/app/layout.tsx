@@ -8,11 +8,27 @@ import { CookieConsentBanner } from "@/components/legal/cookie-consent-banner";
 import { StructuredData } from "@/components/seo/structured-data";
 import { getOrganizationSchema, getWebsiteSchema } from "@/lib/seo/schemas";
 
+// P5 (Font CLS fix): Poppins with `display: "swap"` causes a FOUT (flash of
+// unstyled text) where the fallback (Arial) is shown first, then swapped for
+// Poppins when it loads — the metrics differ, causing a ~0.31 CLS score.
+//
+// Fix: `adjustFontFallback: true` tells Next.js to emit a `size-adjust` +
+// metric override on the Arial fallback @font-face so it has the SAME advance
+// width as Poppins. The swap becomes metric-invisible. This is the
+// recommended Next.js pattern for CLS reduction with Google Fonts.
+//
+// All 6 weights are kept because the codebase uses font-light (300) through
+// font-extrabold (800); removing any would cause faux-rendering (browser
+// synthetically stretches the nearest available weight, which looks worse
+// than the original CLS). With size-adjust the swap is CLS-free so keeping
+// all weights has no CLS cost.
 const poppins = Poppins({
   variable: "--font-poppins",
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700", "800"],
   display: "swap",
+  preload: true,
+  adjustFontFallback: true,
 });
 
 const geistMono = Geist_Mono({

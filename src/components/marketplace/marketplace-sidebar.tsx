@@ -97,16 +97,40 @@ export function MarketplaceSidebar({
     : 0;
   const medianResponseLabel = medianResponse < 60 ? `${medianResponse}m` : `${Math.floor(medianResponse / 60)}h`;
 
-  // Helper: count providers in a vertical
-  const countForVertical = (verticalId: string) =>
-    providers.filter((p) => {
+  // A2 (Component Cache): Memoize the per-vertical and per-industry counts
+  // so they're not recomputed on every render. The `providers` array is the
+  // only dependency; when it changes (new server fetch), the counts recompute.
+  // Previously these were inline arrow functions that allocated a new closure
+  // + ran a full .filter() pass on every render — called inside .map() for
+  // each of the 9 verticals + their industries, this was ~50-100 filter
+  // passes per render. Now it's a single pass per vertical, memoized.
+  const verticalCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of providers) {
       const meta = p.industry ? getIndustry(p.industry) : undefined;
-      return meta?.vertical === verticalId;
-    }).length;
+      if (meta?.vertical) {
+        counts.set(meta.vertical, (counts.get(meta.vertical) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [providers]);
 
-  // Helper: count providers in an industry
-  const countForIndustry = (industryId: string) =>
-    providers.filter((p) => (p.industry ?? '').toLowerCase().trim() === industryId).length;
+  const industryCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of providers) {
+      const key = (p.industry ?? '').toLowerCase().trim();
+      if (key) {
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [providers]);
+
+  // Helper: count providers in a vertical (O(1) lookup into the memoized map)
+  const countForVertical = (verticalId: string) => verticalCounts.get(verticalId) ?? 0;
+
+  // Helper: count providers in an industry (O(1) lookup into the memoized map)
+  const countForIndustry = (industryId: string) => industryCounts.get(industryId) ?? 0;
 
   return (
     <aside className="hidden lg:flex w-[280px] shrink-0 h-full flex-col gap-3 overflow-hidden select-none pl-3 sm:pl-3 lg:pl-3 py-4 pr-3 border-r border-border/40">

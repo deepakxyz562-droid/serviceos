@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { toISOString } from '@/lib/utils';
 import { cache } from '@/lib/cache';
+import { cachedJson } from '@/lib/cache-headers';
 
 const CACHE_TTL = 60_000; // 60 seconds — dashboard data doesn't need sub-minute freshness
 
@@ -27,7 +28,10 @@ export async function GET() {
     const cacheKey = `saas-stats:${tenantId || 'superadmin'}`;
     const cached = cache.get<Record<string, unknown>>(cacheKey);
     if (cached) {
-      return NextResponse.json(cached);
+      // P3: attach browser Cache-Control so the dashboard's second load
+      // within 30s is instant (no network round-trip). `private` because
+      // the response is auth-scoped — never cache on a shared CDN.
+      return cachedJson(cached);
     }
 
     // Build tenant filter: super admins see all data, others only their tenant
@@ -210,10 +214,12 @@ export async function GET() {
       recentJobs: formattedRecentJobs,
     };
 
-    // Cache the result
+    // Cache the result (server-side, 60s)
     cache.set(cacheKey, result, CACHE_TTL);
 
-    return NextResponse.json(result);
+    // P3: also attach the browser Cache-Control header on the fresh fetch
+    // so subsequent navigations to the dashboard reuse the response.
+    return cachedJson(result);
   } catch (error) {
     console.error('SaaS stats error:', error);
     return NextResponse.json(getZeroStats());

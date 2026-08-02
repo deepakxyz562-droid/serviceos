@@ -628,7 +628,13 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         onMouseEnter={() => prefetchView(item.view)}
         onFocus={() => prefetchView(item.view)}
         className={cn(
-          'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150',
+          // P6: was `transition-all duration-150` — that transitions width,
+          // padding, gap, AND colors. When the sidebar collapses/expands,
+          // every nav button animates its layout, which the browser paints
+          // as a visible shift (the CLS source). Switching to
+          // `transition-colors` keeps the hover/active color animation but
+          // makes layout changes instant — no layout-paint shift.
+          'flex items-center w-full rounded-lg text-sm font-medium transition-colors duration-150',
           isMobile || leftSidebarOpen ? 'h-9 px-3 gap-3' : 'h-9 justify-center',
           isActive
             ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 shadow-sm'
