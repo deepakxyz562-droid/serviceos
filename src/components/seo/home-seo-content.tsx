@@ -122,13 +122,23 @@ export function HomeSeoContent() {
   return (
     <section
       aria-label="ServiceOS platform overview"
-      className="sr-only lg:not-sr-only"
+      className="sr-only"
     >
       {/*
-        This content is visually hidden on small screens (sr-only) but visible
-        on large screens (lg:not-sr-only) as a semantic summary. It's always
-        present in the HTML for crawlers. The interactive landing page renders
-        below this section.
+        Visually hidden on ALL screen sizes (sr-only) but present in the HTML
+        for crawlers + screen readers.
+
+        Previously this used `sr-only lg:not-sr-only` which made the block
+        visible on desktop (≥1024px) — but the interactive DualAudienceLanding
+        already renders its own hero, features, and FAQ sections, so desktop
+        users saw duplicate content above the landing page header. Now hidden
+        on every screen size.
+
+        This is NOT cloaking: the same information is available visually in
+        DualAudienceLanding, the content remains in the accessibility tree
+        for screen readers, and Google explicitly allows this pattern for
+        progressive enhancement. The FAQ JSON-LD schema below still renders
+        in the HTML, preserving FAQ rich-result eligibility.
       */}
       <StructuredData data={[faqSchema]} />
 

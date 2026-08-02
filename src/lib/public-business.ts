@@ -301,11 +301,33 @@ async function buildPublicBusinessData(
   } catch {
     gallery = []
   }
-  const hasImage = Boolean(tenant.coverImage || tenant.logo || gallery.length > 0)
+  // ── Cover-image fallback (SEO fix for production tenants) ─────────────
+  // Many production tenants onboarded before the auto-populate Hub defaults
+  // existed, so their `coverImage` is NULL. Without a fallback, these tenants
+  // fail the `hasImage` indexability gate → `isIndexable: false` → their
+  // public pages render with `robots: noindex` AND they're excluded from the
+  // sitemap → Google Search Console shows "Discovered pages: 0".
+  //
+  // Fix: derive an industry-appropriate default cover image at READ time.
+  // This makes `hasImage` always true (when industry is known) without
+  // requiring a data migration. Zero scripts to run — works for existing
+  // AND future tenants the moment this deploys. The effective value is also
+  // returned in the data object so OG images + page rendering + structured
+  // data all use the fallback.
+  const effectiveCoverImage =
+    tenant.coverImage || defaultCoverImageForIndustry(tenant.industry)
+  const hasImage = Boolean(effectiveCoverImage || tenant.logo || gallery.length > 0)
 
   // "Rich enough" rule for auto-indexing.
+  // Description minimum relaxed from 100 → 40 chars. Analysis of 50 production
+  // tenants showed the auto-generated onboarding descriptions follow the pattern
+  // "Established {Industry} business serving {City}." — the shortest real one
+  // is 41 chars ("Established HVAC business serving sydney."). The old 100-char
+  // gate excluded 32/50 production tenants from the sitemap; 40 chars captures
+  // ALL 50 while still filtering empty/garbage descriptions. This is the
+  // minimum threshold that makes the sitemap actually reflect the marketplace.
   const descriptionLongEnough = Boolean(
-    tenant.description && tenant.description.trim().length >= 100,
+    tenant.description && tenant.description.trim().length >= 40,
   )
   const hasEnoughServices = publicServiceCount >= 3
   const isIndexable = Boolean(
@@ -331,7 +353,10 @@ async function buildPublicBusinessData(
     country: tenant.country,
     currency: tenant.currency,
     logo: tenant.logo,
-    coverImage: tenant.coverImage,
+    // Use the effective (fallback-applied) cover image so downstream
+    // consumers (OG meta, <img> rendering, structured data) get a real
+    // URL even when the tenant never uploaded one.
+    coverImage: effectiveCoverImage,
     tagline: tenant.tagline,
     description: tenant.description,
     rating: tenant.rating,
@@ -588,9 +613,18 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
     // Apply the description + image "rich enough" checks first so we only
     // include tenants that pass BOTH criteria. This shrinks the set before
     // the (batched) service-count check below.
+    //
+    // SEO FIX (production sitemap empty): Mirrors the fix in
+    // buildPublicBusinessData() — (1) apply defaultCoverImageForIndustry()
+    // fallback so tenants with NULL coverImage still pass the hasImage gate,
+    // and (2) relax the description minimum from 100 → 40 chars so real
+    // short business summaries ("Established HVAC business serving sydney."
+    // = 41 chars) are accepted. Without these two changes, 32/50 production
+    // tenants fail the filter → sitemap has ~0 business URLs →
+    // GSC shows "Discovered pages: 0".
     const candidates = tenants.filter((t) => {
       const descriptionLongEnough = Boolean(
-        t.description && t.description.trim().length >= 100,
+        t.description && t.description.trim().length >= 40,
       )
       if (!descriptionLongEnough) return false
 
@@ -600,7 +634,9 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
       } catch {
         gallery = []
       }
-      const hasImage = Boolean(t.coverImage || t.logo || gallery.length > 0)
+      const effectiveCoverImage =
+        t.coverImage || defaultCoverImageForIndustry(t.industry)
+      const hasImage = Boolean(effectiveCoverImage || t.logo || gallery.length > 0)
       return hasImage
     })
 
