@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { Prisma } from '@prisma/client'
 import { cache } from '@/lib/cache'
+import { cachedJson } from '@/lib/cache-headers'
 
 // 90s cache — the dashboard only loads 5 recent orders on mount; no need
 // to re-query the DB for unchanged data.
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
     if (isCacheable) {
       const cached = cache.get<{ orders: unknown[]; total: number; limit: number; offset: number; hasMore: boolean }>(cacheKey)
       if (cached) {
-        return NextResponse.json(cached)
+        return cachedJson(cached)
       }
     }
 
@@ -157,7 +158,7 @@ export async function GET(request: NextRequest) {
       cache.set(cacheKey, responsePayload, ECOMMERCE_ORDERS_CACHE_TTL)
     }
 
-    return NextResponse.json(responsePayload)
+    return cachedJson(responsePayload)
   } catch (error) {
     console.error('Error listing ecommerce orders:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
