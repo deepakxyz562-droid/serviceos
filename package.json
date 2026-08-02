@@ -131,11 +131,11 @@
   "browserslist": [
     "defaults and fully supports es6-module",
     "last 2 versions and fully supports es6-module",
-    "Chrome >= 90",
-    "Firefox >= 90",
-    "Safari >= 14",
-    "Edge >= 90",
-    "iOS >= 14",
+    "Chrome >= 93",
+    "Firefox >= 92",
+    "Safari >= 15.4",
+    "Edge >= 93",
+    "iOS >= 15.4",
     "not dead"
   ]
 }

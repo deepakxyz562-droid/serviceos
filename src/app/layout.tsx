@@ -127,12 +127,14 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="msapplication-TileColor" content="#10b981" />
-        {/* P3-2 (SEO): preconnect to third-party origins used on the page to
-            cut DNS/TLS/TCP setup time. dns-prefetch is a lighter hint for
-            less-critical origins. */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+        {/*
+          PERF-2: Removed unused Google Fonts preconnect/dns-prefetch hints.
+          next/font/google SELF-HOSTS Poppins + Geist Mono — the font files
+          are served from /_next/static/media/*, never from fonts.googleapis.com
+          or fonts.gstatic.com. Lighthouse flagged all 4 hints as "unused
+          preconnect" because the browser set up DNS+TLS connections to Google
+          that were never used, wasting ~100ms of connection setup.
+        */}
         <link rel="icon" href="/favicon.png" type="image/png" sizes="32x32" />
         <link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16" />
         <link rel="apple-touch-icon" href="/icon-180.png" />
