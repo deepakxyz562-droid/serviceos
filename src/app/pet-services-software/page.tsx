@@ -122,7 +122,7 @@ export default function PetServicesSoftwarePage() {
       "Pet services CRM and dispatch software with recurring per-pet scheduling, customer pet profiles, geo-tracked dog walks, sitter GPS check-in, customer app for live updates, and subscription billing.",
     url: "https://serviceos.cc/pet-services-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

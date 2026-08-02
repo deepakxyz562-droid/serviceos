@@ -123,7 +123,7 @@ export default function LawnCareSoftwarePage() {
       "Lawn care CRM and routing software with recurring route optimization, chemical application tracking, customer self-serve portal, weather rescheduling, and auto-invoicing.",
     url: "https://serviceos.cc/lawn-care-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

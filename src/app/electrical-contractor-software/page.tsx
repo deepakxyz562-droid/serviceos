@@ -121,7 +121,7 @@ export default function ElectricalContractorSoftwarePage() {
       "Electrician CRM and dispatch software with compliance and certification tracking, permit and inspection management, materials billing, Email & SMS quotes and invoicing, and multi-electrician dispatch.",
     url: "https://serviceos.cc/electrical-contractor-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

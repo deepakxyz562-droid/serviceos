@@ -123,7 +123,7 @@ export default function ConcreteSoftwarePage() {
       "Concrete CRM and project management software with site-prep photo documentation, multi-day pour scheduling, yardage calculator, form inventory, crew time-tracking, and milestone invoicing.",
     url: "https://serviceos.cc/concrete-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

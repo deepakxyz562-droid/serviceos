@@ -122,7 +122,7 @@ export default function RoofingSoftwarePage() {
       "Roofing CRM and project management software with aerial measurement import, multi-day project phasing, shingle takeoff, milestone invoicing, and insurance claim documentation.",
     url: "https://serviceos.cc/roofing-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

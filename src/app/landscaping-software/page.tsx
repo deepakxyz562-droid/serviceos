@@ -121,7 +121,7 @@ export default function LandscapingSoftwarePage() {
       "Landscaping CRM and crew dispatch software with multi-stop route planning, recurring maintenance contracts, design-build proposals, material inventory, and seasonal scheduling.",
     url: "https://serviceos.cc/landscaping-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

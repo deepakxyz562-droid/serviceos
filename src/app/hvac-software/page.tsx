@@ -122,7 +122,7 @@ export default function HvacSoftwarePage() {
       "HVAC CRM and dispatch software with seasonal demand scheduling, equipment asset tracking, preventive maintenance contracts, certified technician dispatch, and Email & SMS invoicing.",
     url: "https://serviceos.cc/hvac-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

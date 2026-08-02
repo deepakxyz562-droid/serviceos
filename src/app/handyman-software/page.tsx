@@ -122,7 +122,7 @@ export default function HandymanSoftwarePage() {
       "Handyman CRM and scheduling software with same-day job booking, flat-rate and T&M quoting, photo scope checklists, on-site card payment, recurring maintenance subscriptions, and full customer job history.",
     url: "https://serviceos.cc/handyman-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

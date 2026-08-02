@@ -48,7 +48,7 @@ export const metadata: Metadata = {
 };
 
 const comparisonRows: { feature: string; serviceos: string; competitor: string }[] = [
-  { feature: "Starting price", serviceos: "Free tier available", competitor: "$300+/mo (custom)" },
+  { feature: "Starting price", serviceos: "Free trial, from $29/mo", competitor: "$300+/mo (custom)" },
   { feature: "Setup time", serviceos: "Under 30 minutes", competitor: "Weeks to months" },
   { feature: "Best for business size", serviceos: "Solo → 50 techs", competitor: "20+ techs, large ops" },
   { feature: "Email & SMS messaging", serviceos: "Native, first-class", competitor: "Not native" },
@@ -73,7 +73,7 @@ const alternatives: {
     position: 1,
     name: "ServiceOS",
     bestFor: "Small & mid-size service businesses, especially outside the US",
-    pricing: "Free tier → paid plans",
+    pricing: "Free trial → from $29/mo",
     url: "https://serviceos.cc",
     description:
       "A modern, multi-channel FSM built for solo operators up to ~50-technician teams. Transparent pricing, fast setup, and a PWA technician app — without the enterprise complexity or implementation cost.",

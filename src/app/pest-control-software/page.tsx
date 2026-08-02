@@ -123,7 +123,7 @@ export default function PestControlSoftwarePage() {
       "Pest control CRM and scheduling software with recurring quarterly treatments and auto-renew, state-compliant chemical application records, treatment-zone property maps, termite bond tracking, trap QR tracking, and pre-treatment prep reminders.",
     url: "https://serviceos.cc/pest-control-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

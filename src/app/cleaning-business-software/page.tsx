@@ -123,7 +123,7 @@ export default function CleaningBusinessSoftwarePage() {
       "Cleaning CRM and scheduling software with recurring schedule automation, cleaner GPS tracking, secure access management, quality checklists, and recurring invoicing.",
     url: "https://serviceos.cc/cleaning-business-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

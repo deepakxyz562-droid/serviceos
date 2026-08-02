@@ -69,7 +69,7 @@ const tools: {
       "PWA technician app (offline)",
       "Free invoice generator",
     ],
-    pricing: "Free tier → paid plans",
+    pricing: "Free trial → from $29/mo",
     pros: [
       "Transparent pricing with a real free tier",
       "Email & SMS included out-of-the-box, no approvals needed",
@@ -386,7 +386,7 @@ export default function BestFieldServiceSoftwarePage() {
       "ServiceOS ranked #1 in the 2026 review of the best field service management software.",
     url: "https://serviceos.cc/best-field-service-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   const itemListSchema = getItemListSchema({

@@ -122,7 +122,7 @@ export default function TreeCareSoftwarePage() {
       "Tree care and arborist CRM software with dangerous-tree photo logs, crew and equipment dispatch, ISA certification tracking, stump-grinding follow-ups, insurance-ready job documentation, and recurring tree-health inspection contracts.",
     url: "https://serviceos.cc/tree-care-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

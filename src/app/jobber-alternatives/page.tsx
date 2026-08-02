@@ -76,7 +76,7 @@ const alternatives: {
     position: 1,
     name: "ServiceOS",
     bestFor: "Service businesses in India, LATAM & SEA",
-    pricing: "Free tier → paid plans",
+    pricing: "Free trial → from $29/mo",
     url: "https://serviceos.cc",
     description:
       "A modern, multi-channel field service platform built for non-US markets. PWA technician app, free invoice generator, multi-currency, and transparent pricing without per-user surprises.",

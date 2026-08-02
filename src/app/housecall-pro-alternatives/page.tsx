@@ -51,7 +51,7 @@ export const metadata: Metadata = {
 const comparisonRows: { feature: string; serviceos: boolean; competitor: boolean }[] = [
   { feature: "Email & SMS customer messaging included", serviceos: true, competitor: false },
   { feature: "Public, transparent pricing", serviceos: true, competitor: false },
-  { feature: "Free tier for solo operators", serviceos: true, competitor: false },
+  { feature: "Free trial, no credit card required", serviceos: true, competitor: false },
   { feature: "PWA technician app (no app store)", serviceos: true, competitor: false },
   { feature: "Native iOS & Android apps", serviceos: true, competitor: true },
   { feature: "Built for non-US markets (India, LATAM, SEA)", serviceos: true, competitor: false },
@@ -75,7 +75,7 @@ const alternatives: {
     position: 1,
     name: "ServiceOS",
     bestFor: "Service businesses outside the US",
-    pricing: "Free tier → paid plans",
+    pricing: "Free trial → from $29/mo",
     url: "https://serviceos.cc",
     description:
       "A modern, multi-channel FSM built for India, LATAM, and SEA. Transparent pricing, free tier, PWA technician app, and multi-currency support without the per-seat pricing surprises.",

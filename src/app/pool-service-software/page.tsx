@@ -123,7 +123,7 @@ export default function PoolServiceSoftwarePage() {
       "Pool service CRM and route software with weekly smart auto-dispatch, chemical-level logging, equipment inspections, recurring contract billing, parts ordering, and a customer portal.",
     url: "https://serviceos.cc/pool-service-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

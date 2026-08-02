@@ -122,7 +122,7 @@ export default function FieldServiceSoftwarePage() {
       "All-in-one field service management platform with scheduling, dispatch, invoicing, CRM, and Email & SMS messaging.",
     url: "https://serviceos.cc/field-service-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

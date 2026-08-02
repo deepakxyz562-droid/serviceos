@@ -123,7 +123,7 @@ export default function SnowRemovalSoftwarePage() {
       "Snow and ice management CRM software with weather-triggered auto-dispatch, per-inch and seasonal contract billing, salt inventory tracking, plow smart auto-dispatch, crew GPS tracking, and 24-hour proof-of-service logs.",
     url: "https://serviceos.cc/snow-removal-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

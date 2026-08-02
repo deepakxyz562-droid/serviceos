@@ -123,7 +123,7 @@ export default function GarageDoorSoftwarePage() {
       "Garage door CRM and dispatch software with same-day repair routing, torsion-spring SKU catalog, photo proof of worn parts, safety inspections, recurring tune-up contracts, and install financing.",
     url: "https://serviceos.cc/garage-door-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

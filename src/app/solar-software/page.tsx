@@ -122,7 +122,7 @@ export default function SolarSoftwarePage() {
       "Solar CRM and project management software with site-survey documentation, system design proposals, permitting paperwork tracking, multi-week install management, PTO workflow, monitoring integration, and recurring O&M contracts.",
     url: "https://serviceos.cc/solar-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

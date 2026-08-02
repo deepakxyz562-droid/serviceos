@@ -123,7 +123,7 @@ export default function PaintingSoftwarePage() {
       "Painting CRM and estimating software with paint quantity calculators, project phasing, prep and coat photo documentation, color and SKU tracking, crew time tracking, and milestone invoicing.",
     url: "https://serviceos.cc/painting-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

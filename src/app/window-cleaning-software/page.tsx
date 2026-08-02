@@ -121,7 +121,7 @@ export default function WindowCleaningSoftwarePage() {
       "Window cleaning CRM and route software with recurring smart auto-dispatch, height-access safety checklists, before-and-after photo proof, storefront contract billing, and surcharge quoting.",
     url: "https://serviceos.cc/window-cleaning-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (

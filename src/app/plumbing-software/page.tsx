@@ -123,7 +123,7 @@ export default function PlumbingSoftwarePage() {
       "Plumbing CRM and dispatch software with emergency routing, asset history, parts inventory, Email & SMS invoicing, and recurring maintenance contracts.",
     url: "https://serviceos.cc/plumbing-software",
     applicationCategory: "BusinessApplication",
-    offers: { price: "0", priceCurrency: "USD" },
+    offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (
