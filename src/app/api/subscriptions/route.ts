@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { seedPlans, getActivePlans, getPlanByCode } from '@/lib/billing-seed';
 import { cache } from '@/lib/cache';
+import { cachedJson } from '@/lib/cache-headers';
 
 // 30s cache — this endpoint is polled every 60s. Caching cuts DB load in half
 // and eliminates redundant seedPlans() writes.
@@ -56,7 +57,7 @@ export async function GET() {
     const cacheKey = `subscription:${tenantId}`;
     const cached = cache.get<Record<string, unknown>>(cacheKey);
     if (cached) {
-      return NextResponse.json(cached);
+      return cachedJson(cached);
     }
 
     const subscription = await db.subscription.findFirst({
@@ -315,7 +316,7 @@ export async function GET() {
 
     cache.set(cacheKey, responsePayload, SUBSCRIPTION_CACHE_TTL);
 
-    return NextResponse.json(responsePayload);
+    return cachedJson(responsePayload);
   } catch (error) {
     console.error('Get subscription error:', error);
     return NextResponse.json(

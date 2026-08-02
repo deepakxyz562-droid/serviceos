@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { cache } from '@/lib/cache';
+import { cachedJson } from '@/lib/cache-headers';
 
 // Cache unread-count for 30s. This endpoint is polled every 60s by the
 // header bell badge (header.tsx). With 1000 users polling, that's 1000
@@ -32,7 +33,7 @@ export async function GET(_request: NextRequest) {
     const cacheKey = `unread:${user.id}`;
     const cached = cache.get<number>(cacheKey);
     if (cached !== undefined) {
-      return NextResponse.json({ unreadCount: cached });
+      return cachedJson({ unreadCount: cached });
     }
 
     const unreadCount = await db.appNotification.count({
@@ -45,7 +46,7 @@ export async function GET(_request: NextRequest) {
     });
 
     cache.set(cacheKey, unreadCount, UNREAD_TTL);
-    return NextResponse.json({ unreadCount });
+    return cachedJson({ unreadCount });
   } catch (error) {
     console.error('[notifications] unread-count GET failed:', error);
     return NextResponse.json(

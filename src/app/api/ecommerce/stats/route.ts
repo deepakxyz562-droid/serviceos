@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { cache } from '@/lib/cache'
+import { cachedJson } from '@/lib/cache-headers'
 
 // 90s cache — ecommerce stats are computed from order history and don't
 // change second-by-second. The dashboard only loads this on mount.
@@ -23,7 +24,7 @@ export async function GET() {
     const cacheKey = `ecommerce-stats:${tenantId}`
     const cached = cache.get<Record<string, unknown>>(cacheKey)
     if (cached) {
-      return NextResponse.json(cached)
+      return cachedJson(cached)
     }
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -285,7 +286,7 @@ export async function GET() {
 
     cache.set(cacheKey, responsePayload, ECOMMERCE_STATS_CACHE_TTL)
 
-    return NextResponse.json(responsePayload)
+    return cachedJson(responsePayload)
   } catch (error) {
     console.error('Error fetching ecommerce stats:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

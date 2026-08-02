@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { cache } from '@/lib/cache'
+import { cachedJson } from '@/lib/cache-headers'
 
 /**
  * GET /api/pipeline/analytics
@@ -32,7 +33,7 @@ export async function GET() {
 
     const cacheKey = `pipeline-analytics:${user.tenantId}`
     const cached = cache.get(cacheKey)
-    if (cached) return NextResponse.json(cached)
+    if (cached) return cachedJson(cached)
 
     const now = new Date()
     const sixMonthsAgo = new Date(
@@ -142,7 +143,7 @@ export async function GET() {
     }
 
     cache.set(cacheKey, result, ANALYTICS_CACHE_TTL)
-    return NextResponse.json(result)
+    return cachedJson(result)
   } catch (error) {
     console.error('[PipelineAnalytics] Error:', error)
     return NextResponse.json(

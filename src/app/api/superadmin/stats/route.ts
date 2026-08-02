@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { cache } from '@/lib/cache';
+import { cachedJson } from '@/lib/cache-headers';
 
 const CACHE_KEY = 'superadmin:stats';
 const CACHE_TTL = 30_000; // 30 seconds
@@ -34,7 +35,7 @@ export async function GET() {
     // Check cache first
     const cached = cache.get<Record<string, unknown>>(CACHE_KEY);
     if (cached) {
-      return NextResponse.json(cached);
+      return cachedJson(cached);
     }
 
     // ── Core tenant & user stats ──
@@ -197,7 +198,7 @@ export async function GET() {
     // Cache the result
     cache.set(CACHE_KEY, result, CACHE_TTL);
 
-    return NextResponse.json(result);
+    return cachedJson(result);
   } catch (error) {
     console.error('[SuperAdmin Stats] Error:', error);
     return NextResponse.json({

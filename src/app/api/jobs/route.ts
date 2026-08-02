@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { cache } from '@/lib/cache'
+import { cachedJson } from '@/lib/cache-headers'
 import { notifyCustomerBookingConfirmed, notifyEmployeeJobAssigned } from '@/lib/whatsapp-notifications'
 import { dispatchJobEvent } from '@/lib/event-webhook-dispatcher'
 import { logActivity } from '@/lib/activity-log'
@@ -130,7 +131,7 @@ export async function GET(request: NextRequest) {
       const cacheKey = `jobs:${user.tenantId}:${status || ''}:${type || ''}:${priority || ''}:${assigneeId || ''}:${customerId || ''}:${historyMode ? 'h' : 'a'}:${excludeDeleted ? 'xd' : 'ad'}:${searchParams.get('tenantId') || ''}`;
       const cached = cache.get<unknown>(cacheKey);
       if (cached !== undefined) {
-        return NextResponse.json(cached);
+        return cachedJson(cached);
       }
       // Store the cache key so we can set it after the query succeeds.
       (request as unknown as { _jobsCacheKey?: string })._jobsCacheKey = cacheKey;
@@ -259,7 +260,7 @@ export async function GET(request: NextRequest) {
       })
       const cacheKey = (request as unknown as { _jobsCacheKey?: string })._jobsCacheKey;
       if (cacheKey) cache.set(cacheKey, historyJobs, JOBS_TTL);
-      return NextResponse.json(historyJobs)
+      return cachedJson(historyJobs)
     }
 
     const jobs = await db.job.findMany({
@@ -274,7 +275,7 @@ export async function GET(request: NextRequest) {
 
     const cacheKey = (request as unknown as { _jobsCacheKey?: string })._jobsCacheKey;
     if (cacheKey) cache.set(cacheKey, jobs, JOBS_TTL);
-    return NextResponse.json(jobs)
+    return cachedJson(jobs)
   } catch (error) {
     console.error('Error fetching jobs:', error)
     return NextResponse.json({ error: 'Failed to fetch jobs' }, { status: 500 })

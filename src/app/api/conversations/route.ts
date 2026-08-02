@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { cache } from '@/lib/cache'
+import { cachedJson } from '@/lib/cache-headers'
 
 // 60s cache for the dashboard's WhatsApp widget — polls every 60s.
 const CONVERSATION_LIST_CACHE_TTL = 60_000
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
     if (isCacheable) {
       const cached = cache.get<{ conversations: unknown[]; pagination: unknown }>(cacheKey)
       if (cached) {
-        return NextResponse.json(cached)
+        return cachedJson(cached)
       }
     }
 
@@ -104,7 +105,7 @@ export async function GET(request: NextRequest) {
       cache.set(cacheKey, result, CONVERSATION_LIST_CACHE_TTL)
     }
 
-    return NextResponse.json(result)
+    return cachedJson(result)
   } catch (error) {
     console.error('Error listing conversations:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

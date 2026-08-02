@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { cache } from '@/lib/cache';
+import { cachedJson } from '@/lib/cache-headers';
 
 const GLOBAL_CONFIG_KEY = 'globalMenuConfig';
 
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
     const cacheKey = `menu-visibility:${tenantId}`;
     const cached = cache.get<{ disabledMenus: string[] }>(cacheKey);
     if (cached) {
-      return NextResponse.json(cached);
+      return cachedJson(cached);
     }
 
     const disabledKeys = new Set<string>();
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest) {
     const result = { disabledMenus: Array.from(disabledKeys) };
     cache.set(cacheKey, result, MENU_VISIBILITY_CACHE_TTL);
 
-    return NextResponse.json(result);
+    return cachedJson(result);
   } catch (error) {
     console.error('[Menu Visibility] Error:', error);
     return NextResponse.json({ disabledMenus: [] });

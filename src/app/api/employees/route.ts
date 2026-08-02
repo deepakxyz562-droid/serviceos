@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { cache } from '@/lib/cache'
+import { cachedJson } from '@/lib/cache-headers'
 
 // 60s cache for the dashboard's presence section. The dashboard polls every
 // 60s, so caching halves the DB load. Cache key includes auth user so each
@@ -103,7 +104,7 @@ export async function GET(request: NextRequest) {
     if (isCacheable) {
       const cached = cache.get<unknown[]>(cacheKey)
       if (cached) {
-        return NextResponse.json(cached)
+        return cachedJson(cached)
       }
     }
 
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest) {
       cache.set(cacheKey, employees, EMPLOYEE_LIST_CACHE_TTL)
     }
 
-    return NextResponse.json(employees)
+    return cachedJson(employees)
   } catch (error) {
     console.error('Error fetching employees:', error)
     return NextResponse.json({ error: 'Failed to fetch employees' }, { status: 500 })

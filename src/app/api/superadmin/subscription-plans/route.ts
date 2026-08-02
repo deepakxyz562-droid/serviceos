@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { cache } from '@/lib/cache';
+import { cachedJson } from '@/lib/cache-headers';
 
 // Default subscription plans as fallback
 const DEFAULT_PLANS = [
@@ -89,7 +90,7 @@ export async function GET() {
     const cacheKey = 'superadmin:subscription-plans';
     const cached = cache.get<Record<string, unknown>[]>(cacheKey);
     if (cached) {
-      return NextResponse.json({ plans: cached });
+      return cachedJson({ plans: cached });
     }
 
     const plans = await safeQuery(
@@ -125,7 +126,7 @@ export async function GET() {
 
     cache.set(cacheKey, formatted, 60_000);
 
-    return NextResponse.json({ plans: formatted });
+    return cachedJson({ plans: formatted });
   } catch (error) {
     console.error('[SuperAdmin SubscriptionPlans GET] Error:', error);
     return NextResponse.json({

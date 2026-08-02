@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { JourneyEngine } from '@/lib/journey-engine'
 import { cache } from '@/lib/cache'
+import { cachedJson } from '@/lib/cache-headers'
 
 // 90s cache — journeys change infrequently (only on stage transitions).
 const JOURNEY_LIST_CACHE_TTL = 90_000
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
     const cacheKey = `journey:${authUser.id}:${authUser.tenantId || ''}:${stage || ''}:${jobId || ''}:${customerId || ''}:${page}:${limit}`
     const cached = cache.get<{ journeys: unknown[]; pagination: unknown }>(cacheKey)
     if (cached) {
-      return NextResponse.json(cached)
+      return cachedJson(cached)
     }
 
     const [journeys, total] = await Promise.all([
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
 
     cache.set(cacheKey, result, JOURNEY_LIST_CACHE_TTL)
 
-    return NextResponse.json(result)
+    return cachedJson(result)
   } catch (error) {
     console.error('Error listing journeys:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
