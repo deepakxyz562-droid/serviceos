@@ -10,12 +10,16 @@ import {
   Globe,
   Clock,
   CreditCard,
+  Receipt,
+  CalendarClock,
+  Users,
+  Award,
 } from "lucide-react";
 import { InvoiceGeneratorClient } from "./invoice-generator-client";
 import { AiReceptionistSection } from "@/components/seo/ai-receptionist-section";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://serviceos.com"),
+  metadataBase: new URL("https://serviceos.cc"),
   title: "Free Invoice Generator — Create & Download PDF Invoices Online | ServiceOS",
   description:
     "100% free online invoice generator. Create professional invoices with your logo, add line items, tax, discounts, and download as PDF instantly. No sign-up, no watermark, no limits. Works on mobile and desktop.",
@@ -32,13 +36,13 @@ export const metadata: Metadata = {
     "GST invoice generator",
   ],
   alternates: {
-    canonical: "https://serviceos.com/invoice-generator",
+    canonical: "https://serviceos.cc/invoice-generator",
   },
   openGraph: {
     title: "Free Invoice Generator — Create & Download PDF Invoices Online",
     description:
       "Create professional invoices with your logo, line items, tax, and discounts. Download as PDF instantly. No sign-up, no watermark, 100% free.",
-    url: "https://serviceos.com/invoice-generator",
+    url: "https://serviceos.cc/invoice-generator",
     siteName: "ServiceOS",
     type: "website",
   },
@@ -58,7 +62,7 @@ const jsonLd = {
   name: "Free Invoice Generator",
   description:
     "Free online invoice generator. Create professional invoices with your logo, line items, tax, discounts and download as PDF. No sign-up required.",
-  url: "https://serviceos.com/invoice-generator",
+  url: "https://serviceos.cc/invoice-generator",
   applicationCategory: "BusinessApplication",
   operatingSystem: "Web",
   browserRequirements: "Requires JavaScript. Requires HTML5.",
@@ -81,7 +85,7 @@ const jsonLd = {
   publisher: {
     "@type": "Organization",
     name: "ServiceOS",
-    url: "https://serviceos.com",
+    url: "https://serviceos.cc",
   },
 };
 
@@ -375,6 +379,41 @@ export default function InvoiceGeneratorPage() {
 
       {/* AI Receptionist showcase — surfaces the voice-agent feature on this
           standalone (non-cornerstone) marketing page too. */}
+      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
+          pages to distribute PageRank and help Google understand topical relationships. */}
+      <section className="border-t bg-muted/20">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
+            Related Field Service Software
+          </h2>
+          <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
+            Explore ServiceOS features built for other service industries.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/invoicing-and-payments" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Receipt className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Invoicing & Payments</h3>
+              <p className="text-sm text-muted-foreground">One-click invoices, online payments, auto reminders.</p>
+            </Link>
+            <Link href="/scheduling-and-dispatch" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <CalendarClock className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Scheduling & Dispatch</h3>
+              <p className="text-sm text-muted-foreground">Drag-and-drop calendar, smart dispatch, GPS tracking.</p>
+            </Link>
+            <Link href="/customer-crm" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Users className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Customer CRM</h3>
+              <p className="text-sm text-muted-foreground">360° customer view — history, assets, conversations.</p>
+            </Link>
+            <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Award className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Best Field Service Software</h3>
+              <p className="text-sm text-muted-foreground">Compare the top platforms side by side.</p>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <AiReceptionistSection />
 
       {/* ───── Footer ───── */}

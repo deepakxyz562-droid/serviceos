@@ -44,7 +44,7 @@ const BUILTIN_TEMPLATES = [
     variablesJson: JSON.stringify([
       { key: 'name', label: 'Customer Name', required: true, example: 'John Smith' },
       { key: 'company', label: 'Company Name', required: true, example: 'ServiceOS' },
-      { key: 'link', label: 'Activation Link', required: true, example: 'https://app.serviceos.com/activate?token=...' },
+      { key: 'link', label: 'Activation Link', required: true, example: 'https://app.serviceos.cc/activate?token=...' },
     ]),
   },
   {
@@ -66,7 +66,7 @@ const BUILTIN_TEMPLATES = [
       { key: 'name', label: 'Employee Name', required: true, example: 'Ravi Technician' },
       { key: 'company', label: 'Company Name', required: true, example: 'ServiceOS' },
       { key: 'role', label: 'Role', required: true, example: 'Technician' },
-      { key: 'link', label: 'Invitation Link', required: true, example: 'https://app.serviceos.com/invite?token=...' },
+      { key: 'link', label: 'Invitation Link', required: true, example: 'https://app.serviceos.cc/invite?token=...' },
     ]),
   },
   {
@@ -85,7 +85,7 @@ const BUILTIN_TEMPLATES = [
 </div>`,
     variablesJson: JSON.stringify([
       { key: 'name', label: 'User Name', required: true, example: 'John' },
-      { key: 'link', label: 'Reset Link', required: true, example: 'https://app.serviceos.com/reset?token=...' },
+      { key: 'link', label: 'Reset Link', required: true, example: 'https://app.serviceos.cc/reset?token=...' },
     ]),
   },
   {
@@ -137,7 +137,7 @@ const BUILTIN_TEMPLATES = [
       { key: 'invoiceNumber', label: 'Invoice Number', required: true, example: 'INV-2026-001' },
       { key: 'amount', label: 'Amount', required: true, example: '$250.00' },
       { key: 'dueDate', label: 'Due Date', required: true, example: 'July 5, 2026' },
-      { key: 'link', label: 'Invoice Link', required: true, example: 'https://app.serviceos.com/invoices/123' },
+      { key: 'link', label: 'Invoice Link', required: true, example: 'https://app.serviceos.cc/invoices/123' },
     ]),
   },
   {
@@ -164,7 +164,7 @@ const BUILTIN_TEMPLATES = [
       { key: 'customer', label: 'Customer Name', required: true, example: 'John Smith' },
       { key: 'address', label: 'Address', required: true, example: '123 Main St' },
       { key: 'scheduledAt', label: 'Scheduled Time', required: true, example: 'June 25, 10 AM' },
-      { key: 'link', label: 'Job Link', required: true, example: 'https://app.serviceos.com/jobs/123' },
+      { key: 'link', label: 'Job Link', required: true, example: 'https://app.serviceos.cc/jobs/123' },
     ]),
   },
   {
@@ -187,7 +187,7 @@ const BUILTIN_TEMPLATES = [
       { key: 'technician', label: 'Technician Name', required: true, example: 'Ravi' },
       { key: 'jobTitle', label: 'Job Title', required: true, example: 'AC Repair' },
       { key: 'company', label: 'Company Name', required: true, example: 'ServiceOS' },
-      { key: 'link', label: 'Review Link', required: true, example: 'https://app.serviceos.com/review/123' },
+      { key: 'link', label: 'Review Link', required: true, example: 'https://app.serviceos.cc/review/123' },
     ]),
   },
   {
@@ -232,7 +232,7 @@ const BUILTIN_TEMPLATES = [
     variablesJson: JSON.stringify([
       { key: 'name', label: 'Lead Name', required: true, example: 'John' },
       { key: 'company', label: 'Company Name', required: true, example: 'ServiceOS' },
-      { key: 'link', label: 'Website Link', required: false, example: 'https://serviceos.com' },
+      { key: 'link', label: 'Website Link', required: false, example: 'https://serviceos.cc' },
     ]),
   },
   {
