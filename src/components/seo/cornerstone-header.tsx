@@ -12,6 +12,7 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
     { href: "/scheduling-and-dispatch", label: "Features" },
     { href: "/#ai-receptionist", label: "AI Receptionist" },
     { href: "/jobber-alternatives", label: "Compare" },
+    { href: "/blog", label: "Blog" },
     { href: "/invoice-generator", label: "Free Tools" },
     { href: "/contact-us", label: "Contact" },
   ];

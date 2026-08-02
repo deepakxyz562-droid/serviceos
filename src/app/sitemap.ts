@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { listIndexableBusinessUrls } from "@/lib/public-business";
+import { getAllPosts } from "@/lib/blog";
 
 /**
  * Dynamic sitemap for ServiceOS public pages.
@@ -97,6 +98,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // ─── Free tools (link magnets) ───────────────────────────────────────
     { path: "/invoice-generator", priority: 0.9, changeFreq: "monthly" },
 
+    // ─── Blog (informational content hub — drives top-of-funnel traffic) ─
+    { path: "/blog", priority: 0.8, changeFreq: "weekly" },
+
     // ─── Contact & legal (low priority, rarely change) ───────────────────
     { path: "/contact-us", priority: 0.6, changeFreq: "monthly" },
     { path: "/privacy-policy", priority: 0.3, changeFreq: "yearly" },
@@ -158,5 +162,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error('[sitemap] failed to list indexable businesses:', err)
   }
 
-  return [...staticEntries, ...businessEntries];
+  // Dynamic: blog articles (from MDX files in content/blog/).
+  // Each article gets its own sitemap entry with its real publish date as
+  // lastModified — this gives Google an accurate freshness signal and helps
+  // the article qualify for "fresh content" ranking boosts.
+  const blogEntries: MetadataRoute.Sitemap = getAllPosts().map((post) => ({
+    url: `${base}/blog/${post.slug}`,
+    lastModified: post.date,
+    changeFrequency: "monthly" as const,
+    priority: 0.7,
+  }));
+
+  return [...staticEntries, ...blogEntries, ...businessEntries];
 }

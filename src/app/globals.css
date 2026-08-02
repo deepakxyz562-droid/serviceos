@@ -495,3 +495,201 @@ html {
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
 }
+
+/* ── Blog article typography (.blog-prose) ─────────────────────────────────
+   Custom prose styling for rendered MDX blog articles. Avoids the need for
+   the @tailwindcss/typography plugin — we style each element explicitly to
+   match the ServiceOS design system (emerald accents, muted-foreground body
+   text, consistent spacing rhythm). */
+.blog-prose {
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  color: rgb(var(--muted-foreground) / 1);
+}
+
+.blog-prose > * + * {
+  margin-top: 1.25em;
+}
+
+/* Headings — emerald accent for h2/h3 to match the cornerstone pages */
+.blog-prose h2 {
+  font-size: 1.625rem;
+  line-height: 1.3;
+  font-weight: 700;
+  color: rgb(var(--foreground) / 1);
+  margin-top: 2.5em;
+  margin-bottom: 0.75em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid rgb(var(--border) / 1);
+  scroll-margin-top: 5rem;
+}
+
+.blog-prose h3 {
+  font-size: 1.25rem;
+  line-height: 1.4;
+  font-weight: 700;
+  color: rgb(var(--foreground) / 1);
+  margin-top: 2em;
+  margin-bottom: 0.5em;
+  scroll-margin-top: 5rem;
+}
+
+.blog-prose h4 {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: rgb(var(--foreground) / 1);
+  margin-top: 1.5em;
+  margin-bottom: 0.4em;
+  scroll-margin-top: 5rem;
+}
+
+/* Paragraphs */
+.blog-prose p {
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+}
+
+/* Links — emerald, underline on hover */
+.blog-prose a {
+  color: #059669;
+  font-weight: 500;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+.blog-prose a:hover {
+  border-bottom-color: #059669;
+}
+.dark .blog-prose a {
+  color: #34d399;
+}
+.dark .blog-prose a:hover {
+  border-bottom-color: #34d399;
+}
+
+/* Strong / emphasis */
+.blog-prose strong {
+  color: rgb(var(--foreground) / 1);
+  font-weight: 700;
+}
+.blog-prose em {
+  font-style: italic;
+}
+
+/* Lists */
+.blog-prose ul,
+.blog-prose ol {
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+  padding-left: 1.5em;
+}
+.blog-prose ul {
+  list-style: disc;
+}
+.blog-prose ol {
+  list-style: decimal;
+}
+.blog-prose li {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding-left: 0.25em;
+}
+.blog-prose li::marker {
+  color: #059669;
+}
+.dark .blog-prose li::marker {
+  color: #34d399;
+}
+
+/* Blockquotes */
+.blog-prose blockquote {
+  margin-top: 1.5em;
+  margin-bottom: 1.5em;
+  padding: 0.75em 1.25em;
+  border-left: 4px solid #059669;
+  background: rgb(var(--muted) / 0.4);
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-style: italic;
+  color: rgb(var(--foreground) / 0.85);
+}
+.dark .blog-prose blockquote {
+  border-left-color: #34d399;
+}
+
+/* Code — inline */
+.blog-prose code {
+  font-size: 0.875em;
+  padding: 0.15em 0.4em;
+  border-radius: 0.3rem;
+  background: rgb(var(--muted) / 0.7);
+  color: rgb(var(--foreground) / 0.9);
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Code — block */
+.blog-prose pre {
+  margin-top: 1.5em;
+  margin-bottom: 1.5em;
+  padding: 1em 1.25em;
+  border-radius: 0.6rem;
+  background: rgb(var(--muted) / 0.6);
+  border: 1px solid rgb(var(--border) / 1);
+  overflow-x: auto;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.blog-prose pre code {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  font-size: inherit;
+}
+
+/* Tables — for GitHub-flavored markdown tables */
+.blog-prose table {
+  width: 100%;
+  margin-top: 1.5em;
+  margin-bottom: 1.5em;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+.blog-prose th,
+.blog-prose td {
+  padding: 0.6em 0.9em;
+  border: 1px solid rgb(var(--border) / 1);
+  text-align: left;
+}
+.blog-prose th {
+  background: rgb(var(--muted) / 0.5);
+  font-weight: 700;
+  color: rgb(var(--foreground) / 1);
+}
+.blog-prose tbody tr:nth-child(even) {
+  background: rgb(var(--muted) / 0.25);
+}
+
+/* Horizontal rule */
+.blog-prose hr {
+  margin-top: 2.5em;
+  margin-bottom: 2.5em;
+  border: 0;
+  border-top: 1px solid rgb(var(--border) / 1);
+}
+
+/* Images */
+.blog-prose img {
+  width: 100%;
+  border-radius: 0.75rem;
+  margin-top: 1.5em;
+  margin-bottom: 1.5em;
+  border: 1px solid rgb(var(--border) / 1);
+}
+
+/* Heading anchor links (from rehype-autolink-headings "wrap" behavior) */
+.blog-prose h2 a,
+.blog-prose h3 a,
+.blog-prose h4 a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: none;
+}

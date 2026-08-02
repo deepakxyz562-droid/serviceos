@@ -448,3 +448,53 @@ export function slugifyCity(city?: string | null): string {
   if (!city) return "unknown";
   return city.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
 }
+
+// ─── BlogPosting schema (for blog articles — rich result eligibility) ───────
+
+export function getBlogPostingSchema(opts: {
+  title: string;
+  description: string;
+  url: string;             // absolute canonical URL of the article
+  image?: string;          // absolute URL to cover image
+  datePublished: string;   // ISO 8601 date string
+  dateModified?: string;   // ISO 8601 date string
+  authorName?: string;
+  keywords?: string[];
+}) {
+  const schema: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: opts.title,
+    description: opts.description,
+    url: opts.url,
+    datePublished: opts.datePublished,
+    dateModified: opts.dateModified ?? opts.datePublished,
+    author: {
+      "@type": "Organization",
+      name: opts.authorName ?? "ServiceOS",
+      url: SITE_URL,
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "ServiceOS",
+      logo: { "@type": "ImageObject", url: LOGO_URL },
+    },
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": opts.url,
+    },
+  };
+
+  if (opts.image) {
+    schema.image = {
+      "@type": "ImageObject",
+      url: opts.image,
+    };
+  }
+
+  if (opts.keywords && opts.keywords.length > 0) {
+    schema.keywords = opts.keywords.join(", ");
+  }
+
+  return schema;
+}
