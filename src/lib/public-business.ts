@@ -713,7 +713,7 @@ function defaultCoverImageForIndustry(industry: string | null): string {
   if (i.includes('photo')) return '/images/industry/photography.webp'
   if (i.includes('tutor') || i.includes('education') || i.includes('teach')) return '/images/industry/tutoring.webp'
   if (i.includes('handyman') || i.includes('handy')) return '/images/industry/handyman.webp'
-  return '/images/industry/'
+  return '/images/industry/industry.webp'
 }
 
 /**
