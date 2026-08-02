@@ -13,12 +13,13 @@ import {
   Users,
   Inbox,
   ArrowRight,
+  CalendarClock,
+  Smartphone,
 } from "lucide-react";
 import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
-import { StructuredData } from "@/components/seo/structured-data";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
@@ -33,12 +34,12 @@ export const metadata: Metadata = {
     "job automation",
     "sms automation",
   ],
-  alternates: { canonical: "https://serviceos.com/automations" },
+  alternates: { canonical: "https://serviceos.cc/automations" },
   openGraph: {
     title: "Workflow Automations for Service Businesses | ServiceOS",
     description:
       "Automate Email & SMS reminders, invoice follow-ups, recurring job scheduling, technician notifications, and review requests. Set it once, let it run forever.",
-    url: "https://serviceos.com/automations",
+    url: "https://serviceos.cc/automations",
     siteName: "ServiceOS",
     type: "website",
   },
@@ -167,7 +168,7 @@ export default function AutomationsPage() {
     name: "ServiceOS — Workflow Automations",
     description:
       "Automate Email & SMS reminders, invoice follow-ups, recurring job scheduling, technician assignment rules, review requests, and status update notifications for service businesses. Pre-built recipes plus a no-code visual builder.",
-    url: "https://serviceos.com/automations",
+    url: "https://serviceos.cc/automations",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -176,13 +177,11 @@ export default function AutomationsPage() {
     <CornerstoneLayout
       activePath="/scheduling-and-dispatch"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.com" },
-        { name: "Automations", url: "https://serviceos.com/automations" },
+        { name: "Home", url: "https://serviceos.cc" },
+        { name: "Automations", url: "https://serviceos.cc/automations" },
       ]}
       additionalSchema={[appSchema]}
     >
-      <StructuredData data={[appSchema]} />
-
       <CornerstoneHero
         eyebrow="Feature"
         title="Automate the Busywork. Focus on the Work That Matters."
@@ -315,6 +314,41 @@ export default function AutomationsPage() {
         faqs={faqs}
         subtitle="Everything service businesses ask about workflow automation with ServiceOS."
       />
+
+      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
+          pages to distribute PageRank and help Google understand topical relationships. */}
+      <section className="border-t bg-muted/20">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
+            Related Field Service Software
+          </h2>
+          <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
+            Explore ServiceOS features built for other service industries.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/scheduling-and-dispatch" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <CalendarClock className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Scheduling & Dispatch</h3>
+              <p className="text-sm text-muted-foreground">Drag-and-drop calendar, smart dispatch, GPS tracking.</p>
+            </Link>
+            <Link href="/customer-crm" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Users className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Customer CRM</h3>
+              <p className="text-sm text-muted-foreground">360° customer view — history, assets, conversations.</p>
+            </Link>
+            <Link href="/invoicing-and-payments" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Receipt className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Invoicing & Payments</h3>
+              <p className="text-sm text-muted-foreground">One-click invoices, online payments, auto reminders.</p>
+            </Link>
+            <Link href="/technician-app" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Smartphone className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Technician App</h3>
+              <p className="text-sm text-muted-foreground">Offline-capable PWA for field technicians.</p>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <CtaSection
         title="Ready to stop doing the busywork?"

@@ -8,12 +8,15 @@ import {
   CalendarClock,
   Wrench,
   CheckCircle2,
+  Sun,
+  Paintbrush,
+  TreePine,
+  Award,
 } from "lucide-react";
 import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
-import { StructuredData } from "@/components/seo/structured-data";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
@@ -28,12 +31,12 @@ export const metadata: Metadata = {
     "roofing estimating software",
     "roofing project management",
   ],
-  alternates: { canonical: "https://serviceos.com/roofing-software" },
+  alternates: { canonical: "https://serviceos.cc/roofing-software" },
   openGraph: {
     title: "Roofing Software & CRM | ServiceOS",
     description:
       "Run re-roofs, repairs, and storm claims from one platform. Import aerial measurements, phase multi-day jobs, document tear-offs with photos, and bill by milestone.",
-    url: "https://serviceos.com/roofing-software",
+    url: "https://serviceos.cc/roofing-software",
     siteName: "ServiceOS",
     type: "website",
   },
@@ -117,7 +120,7 @@ export default function RoofingSoftwarePage() {
     name: "ServiceOS — Roofing Contractor Software",
     description:
       "Roofing CRM and project management software with aerial measurement import, multi-day project phasing, shingle takeoff, milestone invoicing, and insurance claim documentation.",
-    url: "https://serviceos.com/roofing-software",
+    url: "https://serviceos.cc/roofing-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -126,13 +129,11 @@ export default function RoofingSoftwarePage() {
     <CornerstoneLayout
       activePath="/roofing-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.com" },
-        { name: "Roofing Software", url: "https://serviceos.com/roofing-software" },
+        { name: "Home", url: "https://serviceos.cc" },
+        { name: "Roofing Software", url: "https://serviceos.cc/roofing-software" },
       ]}
       additionalSchema={[appSchema]}
     >
-      <StructuredData data={[appSchema]} />
-
       <CornerstoneHero
         eyebrow="Roofing Software"
         title="Roofing Contractor Software That Keeps Every Re-Roof on Schedule and on Margin"
@@ -237,6 +238,41 @@ export default function RoofingSoftwarePage() {
         faqs={faqs}
         subtitle="Everything roofing contractors ask before switching to ServiceOS."
       />
+
+      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
+          pages to distribute PageRank and help Google understand topical relationships. */}
+      <section className="border-t bg-muted/20">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
+            Related Field Service Software
+          </h2>
+          <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
+            Explore ServiceOS features built for other service industries.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/solar-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Sun className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Solar Software</h3>
+              <p className="text-sm text-muted-foreground">Site surveys, PTO tracking, and O&M contracts.</p>
+            </Link>
+            <Link href="/painting-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Paintbrush className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Painting Software</h3>
+              <p className="text-sm text-muted-foreground">Estimates, paint calculators, milestone invoicing.</p>
+            </Link>
+            <Link href="/tree-care-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <TreePine className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Tree Care Software</h3>
+              <p className="text-sm text-muted-foreground">Crew dispatch, cert tracking, insurance-ready docs.</p>
+            </Link>
+            <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Award className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Best Field Service Software</h3>
+              <p className="text-sm text-muted-foreground">Compare the top platforms side by side.</p>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <CtaSection />
     </CornerstoneLayout>

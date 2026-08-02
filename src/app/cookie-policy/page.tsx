@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     title: "Cookie Policy — ServiceOS CRM",
     description:
       "Learn how ServiceOS CRM uses cookies and similar technologies to operate our service, remember your preferences, and measure performance.",
-    url: "https://serviceos.com/cookie-policy",
+    url: "https://serviceos.cc/cookie-policy",
     siteName: "ServiceOS",
     type: "website",
   },
@@ -186,10 +186,10 @@ export default function CookiePolicyPage() {
                   tracking technologies (collectively, &quot;cookies&quot;) on
                   our website at{" "}
                   <a
-                    href="https://serviceos.com"
+                    href="https://serviceos.cc"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    serviceos.com
+                    serviceos.cc
                   </a>{" "}
                   and across the ServiceOS CRM platform (the
                   &quot;Service&quot;). Cookies are small text files placed on
@@ -506,10 +506,10 @@ export default function CookiePolicyPage() {
                   <p className="text-muted-foreground leading-relaxed mb-1">
                     <span className="font-medium text-foreground">Email: </span>
                     <a
-                      href="mailto:privacy@serviceos.com"
+                      href="mailto:privacy@serviceos.cc"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      privacy@serviceos.com
+                      privacy@serviceos.cc
                     </a>
                   </p>
                   <p className="text-muted-foreground leading-relaxed mb-1">

@@ -23,10 +23,14 @@ export function getOrganizationSchema() {
     description:
       "ServiceOS is the operating system for service businesses — scheduling, dispatch, invoicing, Email, SMS & Push notifications, and field service management.",
     foundingDate: "2024",
+    // P2-2 (SEO): sameAs links Google's Knowledge Graph to our social profiles.
+    // This consolidates entity identity and enables knowledge panel features.
     sameAs: [
       "https://twitter.com/serviceos",
       "https://www.linkedin.com/company/serviceos",
       "https://github.com/deepakxyz562-droid",
+      "https://www.youtube.com/@serviceos",
+      "https://www.facebook.com/serviceos",
     ],
     contactPoint: {
       "@type": "ContactPoint",
@@ -45,9 +49,18 @@ export function getWebsiteSchema() {
     "@type": "WebSite",
     name: "ServiceOS",
     url: SITE_URL,
+    // P2-3 (SEO): SearchAction enables the Google sitelinks search box rich
+    // result. The target MUST point to a real, working search results page.
+    // Previously this pointed to /?q={search_term_string} which doesn't exist
+    // — the actual search lives on the marketplace at /marketplace?search=.
+    // Google validates this by fetching the target URL; a 404 disables the
+    // sitelinks search box feature.
     potentialAction: {
       "@type": "SearchAction",
-      target: `${SITE_URL}/?q={search_term_string}`,
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate: `${SITE_URL}/marketplace?search={search_term_string}`,
+      },
       "query-input": "required name=search_term_string",
     },
   };

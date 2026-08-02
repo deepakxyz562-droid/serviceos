@@ -247,33 +247,29 @@ export async function generateMetadata({
       'Browse 2,500+ verified local service professionals across 25 industries — HVAC, plumbing, electrical, cleaning, landscaping, pest control, roofing, painting, locksmiths, appliance repair, pool & spa, and automotive. Read real reviews, compare quotes, and book instantly or request emergency dispatch.';
   }
 
-  // Relative canonical URL — Next.js resolves against the request origin
-  // automatically for metadata.alternates.canonical and openGraph.url. This
-  // keeps the page portable across localhost / serviceos.cc / custom domains
-  // (the previous absolute `https://serviceos.com/...` URL pointed at a
-  // stale domain that doesn't match the actual deployment).
-  const url = `/marketplace${
-    verticalFilter || industryFilter || cityFilter || searchFilter
-      ? '?' +
-        [
-          verticalFilter ? `vertical=${verticalFilter}` : '',
-          industryFilter ? `industry=${industryFilter}` : '',
-          cityFilter ? `city=${encodeURIComponent(cityFilter)}` : '',
-          searchFilter ? `search=${encodeURIComponent(searchFilter)}` : '',
-        ]
-          .filter(Boolean)
-          .join('&')
-      : ''
-  }`;
+  // P0-5 (SEO): Force canonical to the base /marketplace URL regardless of
+  // query params. Faceted nav (vertical/industry/city/search filters) creates
+  // thousands of low-value URL variants (?category=plumbing&city=...&feature=...).
+  // Without a forced canonical, Google indexes each variant as a separate page
+  // (index bloat), diluting the ranking signal of the main /marketplace page.
+  //
+  // Additionally, when ANY filter is active we set robots.index=false so the
+  // filtered URL is never indexed (but follow=true so Google can still crawl
+  // the provider links on the page to discover their canonical hub URLs).
+  const hasFilters = !!(verticalFilter || industryFilter || cityFilter || searchFilter);
+  const canonicalUrl = '/marketplace';
 
   return {
     title,
     description,
-    alternates: { canonical: url },
+    alternates: { canonical: canonicalUrl },
+    robots: hasFilters
+      ? { index: false, follow: true }
+      : { index: true, follow: true },
     openGraph: {
       title,
       description,
-      url,
+      url: canonicalUrl,
       type: 'website',
     },
   };

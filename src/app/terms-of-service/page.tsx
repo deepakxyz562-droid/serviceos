@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     title: "Terms of Service — ServiceOS CRM",
     description:
       "Read the Terms of Service for ServiceOS CRM, the all-in-one operations platform for service businesses. Covers subscriptions, integrations, data handling, and more.",
-    url: "https://serviceos.com/terms-of-service",
+    url: "https://serviceos.cc/terms-of-service",
     siteName: "ServiceOS",
     type: "website",
   },
@@ -821,19 +821,19 @@ export default function TermsOfServicePage() {
                   <div className="flex items-start gap-3">
                     <span className="text-sm font-semibold text-foreground">Website:</span>
                     <a
-                      href="https://serviceos.com"
+                      href="https://serviceos.cc"
                       className="text-sm text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      serviceos.com
+                      serviceos.cc
                     </a>
                   </div>
                   <div className="flex items-start gap-3">
                     <span className="text-sm font-semibold text-foreground">Email:</span>
                     <a
-                      href="mailto:legal@serviceos.com"
+                      href="mailto:legal@serviceos.cc"
                       className="text-sm text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      legal@serviceos.com
+                      legal@serviceos.cc
                     </a>
                   </div>
                   <div className="flex items-start gap-3">

@@ -9,12 +9,15 @@ import {
   DoorOpen,
   Wrench,
   CheckCircle2,
+  Hammer,
+  HardHat,
+  Plug,
+  Award,
 } from "lucide-react";
 import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
-import { StructuredData } from "@/components/seo/structured-data";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
@@ -29,12 +32,12 @@ export const metadata: Metadata = {
     "garage door install software",
     "overhead door software",
   ],
-  alternates: { canonical: "https://serviceos.com/garage-door-software" },
+  alternates: { canonical: "https://serviceos.cc/garage-door-software" },
   openGraph: {
     title: "Garage Door Software | ServiceOS",
     description:
       "Dispatch same-day repairs with the right spring on the van, document worn parts with photos, run safety inspections, and offer financing on new installs. Built for garage door companies.",
-    url: "https://serviceos.com/garage-door-software",
+    url: "https://serviceos.cc/garage-door-software",
     siteName: "ServiceOS",
     type: "website",
   },
@@ -118,7 +121,7 @@ export default function GarageDoorSoftwarePage() {
     name: "ServiceOS — Garage Door Contractor Software",
     description:
       "Garage door CRM and dispatch software with same-day repair routing, torsion-spring SKU catalog, photo proof of worn parts, safety inspections, recurring tune-up contracts, and install financing.",
-    url: "https://serviceos.com/garage-door-software",
+    url: "https://serviceos.cc/garage-door-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -127,13 +130,11 @@ export default function GarageDoorSoftwarePage() {
     <CornerstoneLayout
       activePath="/garage-door-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.com" },
-        { name: "Garage Door Software", url: "https://serviceos.com/garage-door-software" },
+        { name: "Home", url: "https://serviceos.cc" },
+        { name: "Garage Door Software", url: "https://serviceos.cc/garage-door-software" },
       ]}
       additionalSchema={[appSchema]}
     >
-      <StructuredData data={[appSchema]} />
-
       <CornerstoneHero
         eyebrow="Garage Door Software"
         title="Garage Door Software That Wins Same-Day Repairs, Documents Every Worn Part, and Closes More Installs"
@@ -238,6 +239,41 @@ export default function GarageDoorSoftwarePage() {
         faqs={faqs}
         subtitle="Everything garage door business owners ask before switching to ServiceOS."
       />
+
+      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
+          pages to distribute PageRank and help Google understand topical relationships. */}
+      <section className="border-t bg-muted/20">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
+            Related Field Service Software
+          </h2>
+          <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
+            Explore ServiceOS features built for other service industries.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/handyman-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Hammer className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Handyman Software</h3>
+              <p className="text-sm text-muted-foreground">Same-day scheduling, flat-rate quoting, on-site pay.</p>
+            </Link>
+            <Link href="/concrete-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <HardHat className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Concrete Software</h3>
+              <p className="text-sm text-muted-foreground">Pour scheduling, yardage calculators, milestone billing.</p>
+            </Link>
+            <Link href="/electrical-contractor-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Plug className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Electrical Software</h3>
+              <p className="text-sm text-muted-foreground">Job costing, code compliance, and parts tracking.</p>
+            </Link>
+            <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Award className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Best Field Service Software</h3>
+              <p className="text-sm text-muted-foreground">Compare the top platforms side by side.</p>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <CtaSection />
     </CornerstoneLayout>

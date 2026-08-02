@@ -9,12 +9,14 @@ import {
   Flame,
   Wrench,
   CheckCircle2,
+  Home,
+  Award,
+  Plug,
 } from "lucide-react";
 import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
-import { StructuredData } from "@/components/seo/structured-data";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
@@ -29,12 +31,12 @@ export const metadata: Metadata = {
     "hvac service management",
     "air conditioning software",
   ],
-  alternates: { canonical: "https://serviceos.com/hvac-software" },
+  alternates: { canonical: "https://serviceos.cc/hvac-software" },
   openGraph: {
     title: "HVAC Software — Dispatch, Service & Invoice | ServiceOS",
     description:
       "Handle summer and winter demand spikes, track equipment service history, schedule preventive maintenance, and dispatch certified technicians — all in one HVAC CRM with Email, SMS, and Push notifications.",
-    url: "https://serviceos.com/hvac-software",
+    url: "https://serviceos.cc/hvac-software",
     siteName: "ServiceOS",
     type: "website",
   },
@@ -118,7 +120,7 @@ export default function HvacSoftwarePage() {
     name: "ServiceOS — HVAC Service Software",
     description:
       "HVAC CRM and dispatch software with seasonal demand scheduling, equipment asset tracking, preventive maintenance contracts, certified technician dispatch, and Email & SMS invoicing.",
-    url: "https://serviceos.com/hvac-software",
+    url: "https://serviceos.cc/hvac-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -127,13 +129,11 @@ export default function HvacSoftwarePage() {
     <CornerstoneLayout
       activePath="/hvac-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.com" },
-        { name: "HVAC Software", url: "https://serviceos.com/hvac-software" },
+        { name: "Home", url: "https://serviceos.cc" },
+        { name: "HVAC Software", url: "https://serviceos.cc/hvac-software" },
       ]}
       additionalSchema={[appSchema]}
     >
-      <StructuredData data={[appSchema]} />
-
       <CornerstoneHero
         eyebrow="HVAC Software"
         title="HVAC Service Software for Cooling, Heating & Everything in Between"
@@ -277,6 +277,41 @@ export default function HvacSoftwarePage() {
         faqs={faqs}
         subtitle="Everything HVAC business owners ask before switching to ServiceOS."
       />
+
+      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
+          pages to distribute PageRank and help Google understand topical relationships. */}
+      <section className="border-t bg-muted/20">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
+            Related Field Service Software
+          </h2>
+          <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
+            Explore ServiceOS features built for other service industries.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/roofing-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Home className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Roofing Software</h3>
+              <p className="text-sm text-muted-foreground">Aerial measurements, project phasing, storm claims.</p>
+            </Link>
+            <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Award className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Best Field Service Software</h3>
+              <p className="text-sm text-muted-foreground">Compare the top platforms side by side.</p>
+            </Link>
+            <Link href="/plumbing-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Wrench className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Plumbing Software</h3>
+              <p className="text-sm text-muted-foreground">Emergency dispatch, parts inventory, and asset history.</p>
+            </Link>
+            <Link href="/electrical-contractor-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Plug className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Electrical Software</h3>
+              <p className="text-sm text-muted-foreground">Job costing, code compliance, and parts tracking.</p>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <CtaSection />
     </CornerstoneLayout>

@@ -3,7 +3,6 @@ import { CornerstoneHeader } from "./cornerstone-header";
 import { CornerstoneFooter } from "./cornerstone-footer";
 import { Breadcrumbs, type BreadcrumbItem } from "./breadcrumbs";
 import { StructuredData } from "./structured-data";
-import { getOrganizationSchema, getWebsiteSchema } from "@/lib/seo/schemas";
 import { AiReceptionistSection } from "./ai-receptionist-section";
 
 /**
@@ -39,10 +38,13 @@ export function CornerstoneLayout({
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <CornerstoneHeader activePath={activePath} />
 
-      {/* Site-wide structured data */}
-      <StructuredData
-        data={[getOrganizationSchema(), getWebsiteSchema(), ...additionalSchema]}
-      />
+      {/* Page-specific structured data only.
+          Organization + WebSite are injected globally by the root layout
+          (src/app/layout.tsx) so we do NOT duplicate them here. Previously
+          this rendered [getOrganizationSchema(), getWebsiteSchema(), ...additionalSchema]
+          which caused duplicate Organization + WebSite JSON-LD on every
+          cornerstone page (flagged by Google Search Console). */}
+      {additionalSchema.length > 0 && <StructuredData data={additionalSchema} />}
 
       <main className="flex-1">
         {/* Breadcrumb bar */}

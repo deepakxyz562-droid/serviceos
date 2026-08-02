@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     title: "Privacy Policy — ServiceOS CRM",
     description:
       "Learn how ServiceOS CRM collects, uses, and protects your personal information, payment details, and business data.",
-    url: "https://serviceos.com/privacy-policy",
+    url: "https://serviceos.cc/privacy-policy",
     siteName: "ServiceOS",
     type: "website",
   },
@@ -105,10 +105,10 @@ export default function PrivacyPolicyPage() {
                   &quot;us,&quot; or &quot;our&quot;) operates the ServiceOS CRM
                   platform available at{" "}
                   <a
-                    href="https://serviceos.com"
+                    href="https://serviceos.cc"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    serviceos.com
+                    serviceos.cc
                   </a>{" "}
                   and related mobile applications (collectively, the
                   &quot;Service&quot;). This Privacy Policy explains how we
@@ -577,10 +577,10 @@ export default function PrivacyPolicyPage() {
                 <p className="text-muted-foreground leading-relaxed">
                   To exercise any of these rights, please contact us at{" "}
                   <a
-                    href="mailto:privacy@serviceos.com"
+                    href="mailto:privacy@serviceos.cc"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@serviceos.com
+                    privacy@serviceos.cc
                   </a>
                   . We will respond to your request within 30 days (or within the
                   timeframe required by applicable law).
@@ -641,10 +641,10 @@ export default function PrivacyPolicyPage() {
                   you believe that a child under 16 has provided us with personal
                   data, please contact us at{" "}
                   <a
-                    href="mailto:privacy@serviceos.com"
+                    href="mailto:privacy@serviceos.cc"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@serviceos.com
+                    privacy@serviceos.cc
                   </a>
                   .
                 </p>
@@ -697,19 +697,19 @@ export default function PrivacyPolicyPage() {
                   <p className="text-muted-foreground leading-relaxed">
                     <span className="font-medium text-foreground">Email: </span>
                     <a
-                      href="mailto:privacy@serviceos.com"
+                      href="mailto:privacy@serviceos.cc"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      privacy@serviceos.com
+                      privacy@serviceos.cc
                     </a>
                   </p>
                   <p className="text-muted-foreground leading-relaxed">
                     <span className="font-medium text-foreground">Website: </span>
                     <a
-                      href="https://serviceos.com"
+                      href="https://serviceos.cc"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      serviceos.com
+                      serviceos.cc
                     </a>
                   </p>
                   <p className="text-muted-foreground leading-relaxed">

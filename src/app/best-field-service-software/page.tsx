@@ -14,6 +14,9 @@ import {
   Globe,
   ShieldCheck,
   Award,
+  LayoutGrid,
+  CalendarClock,
+  Users,
 } from "lucide-react";
 import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
 import { FaqSection } from "@/components/seo/faq-section";
@@ -33,12 +36,12 @@ export const metadata: Metadata = {
     "top fsm software",
     "field service software reviews",
   ],
-  alternates: { canonical: "https://serviceos.com/best-field-service-software" },
+  alternates: { canonical: "https://serviceos.cc/best-field-service-software" },
   openGraph: {
     title: "10 Best Field Service Software in 2026 | ServiceOS",
     description:
       "We reviewed 20+ FSM platforms and ranked the top 10 on features, pricing, ease of use, and support. See the full comparison.",
-    url: "https://serviceos.com/best-field-service-software",
+    url: "https://serviceos.cc/best-field-service-software",
     siteName: "ServiceOS",
     type: "article",
   },
@@ -76,7 +79,7 @@ const tools: {
       "Smaller ecosystem than Jobber or Housecall Pro",
       "Less depth on enterprise payroll / call tracking",
     ],
-    url: "https://serviceos.com",
+    url: "https://serviceos.cc",
     highlight: true,
   },
   {
@@ -381,7 +384,7 @@ export default function BestFieldServiceSoftwarePage() {
     name: "ServiceOS — Best Field Service Software 2026",
     description:
       "ServiceOS ranked #1 in the 2026 review of the best field service management software.",
-    url: "https://serviceos.com/best-field-service-software",
+    url: "https://serviceos.cc/best-field-service-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -390,7 +393,7 @@ export default function BestFieldServiceSoftwarePage() {
     name: "10 Best Field Service Management Software in 2026",
     description:
       "A ranked, reviewed list of the top 10 field service management platforms of 2026 based on features, pricing, ease of use, mobile experience, and support.",
-    url: "https://serviceos.com/best-field-service-software",
+    url: "https://serviceos.cc/best-field-service-software",
     items: tools.map((t) => ({
       position: t.position,
       name: t.name,
@@ -403,9 +406,9 @@ export default function BestFieldServiceSoftwarePage() {
     <CornerstoneLayout
       activePath="/best-field-service-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.com" },
-        { name: "Compare", url: "https://serviceos.com/jobber-alternatives" },
-        { name: "Best Field Service Software", url: "https://serviceos.com/best-field-service-software" },
+        { name: "Home", url: "https://serviceos.cc" },
+        { name: "Compare", url: "https://serviceos.cc/jobber-alternatives" },
+        { name: "Best Field Service Software", url: "https://serviceos.cc/best-field-service-software" },
       ]}
       additionalSchema={[appSchema, itemListSchema]}
     >
@@ -721,6 +724,41 @@ export default function BestFieldServiceSoftwarePage() {
         title="Best field service software — FAQ"
         subtitle="The questions service business owners ask most when evaluating FSM platforms."
       />
+
+      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
+          pages to distribute PageRank and help Google understand topical relationships. */}
+      <section className="border-t bg-muted/20">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
+            Related Field Service Software
+          </h2>
+          <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
+            Explore ServiceOS features built for other service industries.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <LayoutGrid className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Field Service Software</h3>
+              <p className="text-sm text-muted-foreground">All-in-one platform for modern service businesses.</p>
+            </Link>
+            <Link href="/scheduling-and-dispatch" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <CalendarClock className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Scheduling & Dispatch</h3>
+              <p className="text-sm text-muted-foreground">Drag-and-drop calendar, smart dispatch, GPS tracking.</p>
+            </Link>
+            <Link href="/technician-app" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Smartphone className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Technician App</h3>
+              <p className="text-sm text-muted-foreground">Offline-capable PWA for field technicians.</p>
+            </Link>
+            <Link href="/customer-crm" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Users className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Customer CRM</h3>
+              <p className="text-sm text-muted-foreground">360° customer view — history, assets, conversations.</p>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <CtaSection
         title="Find your best-fit FSM today"

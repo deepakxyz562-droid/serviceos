@@ -13,6 +13,9 @@ import {
   MessageSquare,
   Clock,
   Receipt,
+  Building2,
+  Award,
+  LayoutGrid,
 } from "lucide-react";
 import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
 import { FaqSection } from "@/components/seo/faq-section";
@@ -33,12 +36,12 @@ export const metadata: Metadata = {
     "jobber competitors",
     "jobber replacement",
   ],
-  alternates: { canonical: "https://serviceos.com/jobber-alternatives" },
+  alternates: { canonical: "https://serviceos.cc/jobber-alternatives" },
   openGraph: {
     title: "10 Best Jobber Alternatives in 2026 | ServiceOS",
     description:
       "Compare the top 10 Jobber alternatives — features, pricing, Email & SMS messaging, and which fits your field service business.",
-    url: "https://serviceos.com/jobber-alternatives",
+    url: "https://serviceos.cc/jobber-alternatives",
     siteName: "ServiceOS",
     type: "article",
   },
@@ -74,7 +77,7 @@ const alternatives: {
     name: "ServiceOS",
     bestFor: "Service businesses in India, LATAM & SEA",
     pricing: "Free tier → paid plans",
-    url: "https://serviceos.com",
+    url: "https://serviceos.cc",
     description:
       "A modern, multi-channel field service platform built for non-US markets. PWA technician app, free invoice generator, multi-currency, and transparent pricing without per-user surprises.",
     highlight: true,
@@ -228,7 +231,7 @@ export default function JobberAlternativesPage() {
     name: "ServiceOS — Jobber Alternative",
     description:
       "Email & SMS-native field service management software and Jobber alternative for India, LATAM, and SEA service businesses.",
-    url: "https://serviceos.com/jobber-alternatives",
+    url: "https://serviceos.cc/jobber-alternatives",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -237,7 +240,7 @@ export default function JobberAlternativesPage() {
     name: "10 Best Jobber Alternatives in 2026",
     description:
       "A ranked, compared list of the top 10 Jobber alternatives and competitors for field service businesses.",
-    url: "https://serviceos.com/jobber-alternatives",
+    url: "https://serviceos.cc/jobber-alternatives",
     items: alternatives.map((a) => ({
       position: a.position,
       name: a.name,
@@ -250,9 +253,9 @@ export default function JobberAlternativesPage() {
     <CornerstoneLayout
       activePath="/jobber-alternatives"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.com" },
-        { name: "Compare", url: "https://serviceos.com/jobber-alternatives" },
-        { name: "Jobber Alternatives", url: "https://serviceos.com/jobber-alternatives" },
+        { name: "Home", url: "https://serviceos.cc" },
+        { name: "Compare", url: "https://serviceos.cc/jobber-alternatives" },
+        { name: "Jobber Alternatives", url: "https://serviceos.cc/jobber-alternatives" },
       ]}
       additionalSchema={[appSchema, itemListSchema]}
     >
@@ -518,6 +521,41 @@ export default function JobberAlternativesPage() {
         title="Jobber alternatives — FAQ"
         subtitle="Honest answers to the questions we hear most from teams evaluating Jobber alternatives."
       />
+
+      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
+          pages to distribute PageRank and help Google understand topical relationships. */}
+      <section className="border-t bg-muted/20">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
+            Related Field Service Software
+          </h2>
+          <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
+            Explore ServiceOS features built for other service industries.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/housecall-pro-alternatives" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Star className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Housecall Pro Alternatives</h3>
+              <p className="text-sm text-muted-foreground">Best Housecall Pro alternatives for service teams.</p>
+            </Link>
+            <Link href="/servicetitan-alternatives" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Building2 className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">ServiceTitan Alternatives</h3>
+              <p className="text-sm text-muted-foreground">Right-sized FSM options for SMBs.</p>
+            </Link>
+            <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Award className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Best Field Service Software</h3>
+              <p className="text-sm text-muted-foreground">Compare the top platforms side by side.</p>
+            </Link>
+            <Link href="/field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <LayoutGrid className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Field Service Software</h3>
+              <p className="text-sm text-muted-foreground">All-in-one platform for modern service businesses.</p>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <CtaSection
         title="Switch from Jobber to ServiceOS this week"

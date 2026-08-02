@@ -6,6 +6,7 @@ import { QueryProvider } from "@/providers/query-provider";
 import { PwaProvider } from "@/components/pwa/pwa-provider";
 import { CookieConsentBanner } from "@/components/legal/cookie-consent-banner";
 import { StructuredData } from "@/components/seo/structured-data";
+import { WebVitalsReporter } from "@/components/seo/web-vitals-reporter";
 import { getOrganizationSchema, getWebsiteSchema } from "@/lib/seo/schemas";
 
 // P5 (Font CLS fix): Poppins with `display: "swap"` causes a FOUT (flash of
@@ -47,13 +48,24 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "ServiceOS - The Operating System for Service Businesses",
-  description: "ServiceOS — The Operating System for service businesses. Replace scattered texts, emails, and spreadsheets. Leads, dispatch, invoicing, and automated Email, SMS & Push operations.",
-  applicationName: "ServiceOS",
+  // P0-3 (SEO): metadataBase makes all relative metadata URLs (canonical,
+  // openGraph.url, openGraph.images, alternates) resolve to absolute
+  // https://serviceos.cc/... URLs. Without this, social scrapers and Google
+  // see relative paths like "/og/og-default.png" which they can't resolve —
+  // resulting in broken OG cards and canonical warnings in Search Console.
+  metadataBase: new URL('https://serviceos.cc'),
+  title: 'ServiceOS - The Operating System for Service Businesses',
+  description: 'ServiceOS — The Operating System for service businesses. Replace scattered texts, emails, and spreadsheets. Leads, dispatch, invoicing, and automated Email, SMS & Push operations.',
+  applicationName: 'ServiceOS',
   keywords: ["ServiceOS", "field service", "SaaS", "job management", "email notifications", "SMS notifications", "push notifications", "invoicing", "workflow automation", "service business"],
-  authors: [{ name: "ServiceOS Team" }],
-  manifest: "/manifest.json",
+  authors: [{ name: 'ServiceOS Team' }],
+  creator: 'ServiceOS',
+  publisher: 'ServiceOS',
+  manifest: '/manifest.json',
   formatDetection: { telephone: false },
+  alternates: {
+    canonical: '/',
+  },
   icons: {
     icon: [
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
@@ -74,15 +86,26 @@ export const metadata: Metadata = {
     title: "ServiceOS",
   },
   openGraph: {
-    title: "ServiceOS - The Operating System for Service Businesses",
-    description: "Replace scattered texts, emails, and spreadsheets with one powerful platform",
-    type: "website",
-    siteName: "ServiceOS",
+    title: 'ServiceOS - The Operating System for Service Businesses',
+    description: 'Replace scattered texts, emails, and spreadsheets with one powerful platform',
+    type: 'website',
+    siteName: 'ServiceOS',
+    url: '/',
+    locale: 'en_US',
+    images: [
+      {
+        url: '/og/og-default.png',
+        width: 1200,
+        height: 630,
+        alt: 'ServiceOS — The Operating System for Service Businesses',
+      },
+    ],
   },
   twitter: {
-    card: "summary_large_image",
-    title: "ServiceOS - The Operating System for Service Businesses",
-    description: "Replace scattered texts, emails, and spreadsheets with one powerful platform",
+    card: 'summary_large_image',
+    title: 'ServiceOS - The Operating System for Service Businesses',
+    description: 'Replace scattered texts, emails, and spreadsheets with one powerful platform',
+    images: ['/og/og-default.png'],
   },
 };
 
@@ -104,6 +127,12 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="msapplication-TileColor" content="#10b981" />
+        {/* P3-2 (SEO): preconnect to third-party origins used on the page to
+            cut DNS/TLS/TCP setup time. dns-prefetch is a lighter hint for
+            less-critical origins. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
         <link rel="icon" href="/favicon.png" type="image/png" sizes="32x32" />
         <link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16" />
         <link rel="apple-touch-icon" href="/icon-180.png" />
@@ -152,6 +181,9 @@ export default function RootLayout({
           <Toaster position="top-center" />
           <PwaProvider />
           <CookieConsentBanner />
+          {/* P3-1 (SEO): Core Web Vitals RUM — reports field CLS/INP/LCP/FCP/TTFB
+              to /api/vitals for production performance monitoring. */}
+          <WebVitalsReporter />
         </QueryProvider>
       </body>
     </html>

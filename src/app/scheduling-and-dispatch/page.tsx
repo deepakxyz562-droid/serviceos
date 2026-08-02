@@ -12,12 +12,14 @@ import {
   Zap,
   Sparkle,
   ArrowRight,
+  Smartphone,
+  Users,
+  Receipt,
 } from "lucide-react";
 import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
-import { StructuredData } from "@/components/seo/structured-data";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
@@ -32,12 +34,12 @@ export const metadata: Metadata = {
     "technician dispatch",
     "job scheduling software",
   ],
-  alternates: { canonical: "https://serviceos.com/scheduling-and-dispatch" },
+  alternates: { canonical: "https://serviceos.cc/scheduling-and-dispatch" },
   openGraph: {
     title: "Scheduling & Dispatch Software for Field Service | ServiceOS",
     description:
       "Drag-and-drop scheduling, smart dispatch, real-time GPS tracking, and smart auto-dispatch in one platform. Stop juggling text messages and Excel — start dispatching.",
-    url: "https://serviceos.com/scheduling-and-dispatch",
+    url: "https://serviceos.cc/scheduling-and-dispatch",
     siteName: "ServiceOS",
     type: "website",
   },
@@ -148,7 +150,7 @@ export default function SchedulingAndDispatchPage() {
     name: "ServiceOS — Scheduling & Dispatch Software",
     description:
       "Drag-and-drop scheduling, smart technician dispatch based on skills and location, recurring job automation, real-time GPS tracking, and smart auto-dispatch for field service businesses.",
-    url: "https://serviceos.com/scheduling-and-dispatch",
+    url: "https://serviceos.cc/scheduling-and-dispatch",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -157,13 +159,11 @@ export default function SchedulingAndDispatchPage() {
     <CornerstoneLayout
       activePath="/scheduling-and-dispatch"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.com" },
-        { name: "Scheduling & Dispatch", url: "https://serviceos.com/scheduling-and-dispatch" },
+        { name: "Home", url: "https://serviceos.cc" },
+        { name: "Scheduling & Dispatch", url: "https://serviceos.cc/scheduling-and-dispatch" },
       ]}
       additionalSchema={[appSchema]}
     >
-      <StructuredData data={[appSchema]} />
-
       <CornerstoneHero
         eyebrow="Feature"
         title="Smart Scheduling & Dispatch Software for Field Service Businesses"
@@ -291,6 +291,41 @@ export default function SchedulingAndDispatchPage() {
         faqs={faqs}
         subtitle="Everything service businesses ask about scheduling and dispatch with ServiceOS."
       />
+
+      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
+          pages to distribute PageRank and help Google understand topical relationships. */}
+      <section className="border-t bg-muted/20">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
+            Related Field Service Software
+          </h2>
+          <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
+            Explore ServiceOS features built for other service industries.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/technician-app" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Smartphone className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Technician App</h3>
+              <p className="text-sm text-muted-foreground">Offline-capable PWA for field technicians.</p>
+            </Link>
+            <Link href="/customer-crm" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Users className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Customer CRM</h3>
+              <p className="text-sm text-muted-foreground">360° customer view — history, assets, conversations.</p>
+            </Link>
+            <Link href="/invoicing-and-payments" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Receipt className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Invoicing & Payments</h3>
+              <p className="text-sm text-muted-foreground">One-click invoices, online payments, auto reminders.</p>
+            </Link>
+            <Link href="/automations" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Zap className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Workflow Automations</h3>
+              <p className="text-sm text-muted-foreground">Reminders, follow-ups, and recurring jobs on autopilot.</p>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <CtaSection
         title="Ready to stop juggling group texts and Excel calendars?"

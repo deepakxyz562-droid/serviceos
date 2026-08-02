@@ -76,7 +76,7 @@ async function main() {
   console.log('👑 Creating platform SuperAdmin...');
   const superAdmin = await db.user.create({
     data: {
-      email: 'admin@serviceos.com',
+      email: 'admin@serviceos.cc',
       name: 'Platform Admin',
       role: 'admin',
       passwordHash: adminPasswordHash,
@@ -84,7 +84,7 @@ async function main() {
       tenantId: null, // Platform admin, not tied to any tenant
     },
   });
-  console.log('  ✅ SuperAdmin: admin@serviceos.com / Admin@123\n');
+  console.log('  ✅ SuperAdmin: admin@serviceos.cc / Admin@123\n');
 
   // ══════════════════════════════════════════════════════════════
   // 3. TENANT 1: AquaFlow Plumbing (Starter Plan — Plumbing)
@@ -1269,7 +1269,7 @@ async function main() {
   console.log('📋 DEMO ACCOUNTS:');
   console.log('─────────────────────────────────────────────────────');
   console.log('  👑 SuperAdmin:');
-  console.log('     admin@serviceos.com  / Admin@123     (Platform Admin — sees all tenants)');
+  console.log('     admin@serviceos.cc  / Admin@123     (Platform Admin — sees all tenants)');
   console.log('');
   console.log('  🔧 Tenant 1 — AquaFlow Plumbing (Starter):');
   console.log('     rajesh@aquaflow.com  / Owner@123     (Owner)');

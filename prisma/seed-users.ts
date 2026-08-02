@@ -91,7 +91,7 @@ async function main() {
   console.log('👑 Creating SuperAdmin...');
   const superAdmin = await db.user.create({
     data: {
-      email: 'admin@serviceos.com',
+      email: 'admin@serviceos.cc',
       name: 'Vikram Mehta',
       role: 'admin',
       passwordHash: superAdminHash,
@@ -103,7 +103,7 @@ async function main() {
       workspaceId: null,
     },
   });
-  console.log('  ✅ SuperAdmin: admin@serviceos.com / SuperAdmin@123\n');
+  console.log('  ✅ SuperAdmin: admin@serviceos.cc / SuperAdmin@123\n');
 
   // ══════════════════════════════════════════════════════════════
   // 3. TENANT: ServiceOS Demo Corp (Growth Plan — Multi-Service)
@@ -933,7 +933,7 @@ async function main() {
   console.log('='.repeat(70));
   console.log('');
   console.log('👤 USERS (5):');
-  console.log('  1. SuperAdmin: admin@serviceos.com / SuperAdmin@123 (Platform Admin)');
+  console.log('  1. SuperAdmin: admin@serviceos.cc / SuperAdmin@123 (Platform Admin)');
   console.log('  2. Owner:      rajesh@serviceos-demo.com / Owner@123');
   console.log('  3. Manager:    priya@serviceos-demo.com / Manager@123');
   console.log('  4. Technician: amit@serviceos-demo.com / Technician@123');

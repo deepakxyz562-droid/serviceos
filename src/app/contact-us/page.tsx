@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     title: "Contact Us — ServiceOS CRM",
     description:
       "Get in touch with the ServiceOS CRM team. Reach out for sales inquiries, technical support, integration help, billing questions, or partnership opportunities.",
-    url: "https://serviceos.com/contact-us",
+    url: "https://serviceos.cc/contact-us",
     siteName: "ServiceOS",
     type: "website",
   },
@@ -46,7 +46,7 @@ const faqs = [
     question: "Do you offer custom enterprise plans?",
     answer:
       "Absolutely! We offer tailored enterprise solutions with custom pricing, dedicated support, and SLA guarantees. Contact our sales team to discuss your needs.",
-    link: { href: "mailto:sales@serviceos.com", label: "Email sales@serviceos.com" },
+    link: { href: "mailto:sales@serviceos.cc", label: "Email sales@serviceos.cc" },
   },
 ];
 
@@ -113,10 +113,10 @@ export default function ContactUsPage() {
                       General Inquiries
                     </p>
                     <a
-                      href="mailto:hello@serviceos.com"
+                      href="mailto:hello@serviceos.cc"
                       className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
                     >
-                      hello@serviceos.com
+                      hello@serviceos.cc
                     </a>
                   </div>
                   <div>
@@ -124,10 +124,10 @@ export default function ContactUsPage() {
                       Technical Support
                     </p>
                     <a
-                      href="mailto:support@serviceos.com"
+                      href="mailto:support@serviceos.cc"
                       className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
                     >
-                      support@serviceos.com
+                      support@serviceos.cc
                     </a>
                   </div>
                   <div>
@@ -135,10 +135,10 @@ export default function ContactUsPage() {
                       Privacy & Data Requests
                     </p>
                     <a
-                      href="mailto:privacy@serviceos.com"
+                      href="mailto:privacy@serviceos.cc"
                       className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
                     >
-                      privacy@serviceos.com
+                      privacy@serviceos.cc
                     </a>
                   </div>
                 </CardContent>

@@ -8,12 +8,15 @@ import {
   Repeat,
   Wrench,
   CheckCircle2,
+  Bug,
+  Sparkles,
+  Droplets,
+  Award,
 } from "lucide-react";
 import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
-import { StructuredData } from "@/components/seo/structured-data";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
@@ -28,12 +31,12 @@ export const metadata: Metadata = {
     "mobile grooming software",
     "pet business CRM",
   ],
-  alternates: { canonical: "https://serviceos.com/pet-services-software" },
+  alternates: { canonical: "https://serviceos.cc/pet-services-software" },
   openGraph: {
     title: "Pet Services Software | ServiceOS",
     description:
       "Schedule recurring walks per pet, keep vaccination and behavior profiles, track dog walks with GPS and photo proof, dispatch sitters with check-in, and bill subscriptions automatically. Built for pet services businesses.",
-    url: "https://serviceos.com/pet-services-software",
+    url: "https://serviceos.cc/pet-services-software",
     siteName: "ServiceOS",
     type: "website",
   },
@@ -117,7 +120,7 @@ export default function PetServicesSoftwarePage() {
     name: "ServiceOS — Pet Services Business Software",
     description:
       "Pet services CRM and dispatch software with recurring per-pet scheduling, customer pet profiles, geo-tracked dog walks, sitter GPS check-in, customer app for live updates, and subscription billing.",
-    url: "https://serviceos.com/pet-services-software",
+    url: "https://serviceos.cc/pet-services-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -126,13 +129,11 @@ export default function PetServicesSoftwarePage() {
     <CornerstoneLayout
       activePath="/pet-services-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.com" },
-        { name: "Pet Services Software", url: "https://serviceos.com/pet-services-software" },
+        { name: "Home", url: "https://serviceos.cc" },
+        { name: "Pet Services Software", url: "https://serviceos.cc/pet-services-software" },
       ]}
       additionalSchema={[appSchema]}
     >
-      <StructuredData data={[appSchema]} />
-
       <CornerstoneHero
         eyebrow="Pet Services Software"
         title="Pet Services Software That Proves Every Walk, Protects Every Pet, and Bills Every Subscription on Autopilot"
@@ -237,6 +238,41 @@ export default function PetServicesSoftwarePage() {
         faqs={faqs}
         subtitle="Everything pet services business owners ask before switching to ServiceOS."
       />
+
+      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
+          pages to distribute PageRank and help Google understand topical relationships. */}
+      <section className="border-t bg-muted/20">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
+            Related Field Service Software
+          </h2>
+          <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
+            Explore ServiceOS features built for other service industries.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/pest-control-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Bug className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Pest Control Software</h3>
+              <p className="text-sm text-muted-foreground">Quarterly schedules, chemical records, termite bonds.</p>
+            </Link>
+            <Link href="/cleaning-business-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Sparkles className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Cleaning Software</h3>
+              <p className="text-sm text-muted-foreground">Recurring schedules, crew routing, and quality checks.</p>
+            </Link>
+            <Link href="/pool-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Droplets className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Pool Service Software</h3>
+              <p className="text-sm text-muted-foreground">Weekly routes, chemical logs, recurring billing.</p>
+            </Link>
+            <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Award className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Best Field Service Software</h3>
+              <p className="text-sm text-muted-foreground">Compare the top platforms side by side.</p>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <CtaSection />
     </CornerstoneLayout>

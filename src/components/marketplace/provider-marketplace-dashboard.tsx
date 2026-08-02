@@ -701,7 +701,7 @@ function FeaturedUpgradeCTA({ isFeatured }: { isFeatured: boolean }) {
         </div>
         <Button
           className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5"
-          onClick={() => toast.info('Coming soon — contact sales@serviceos.com to get featured.')}
+          onClick={() => toast.info('Coming soon — contact sales@serviceos.cc to get featured.')}
         >
           <Crown className="size-4" /> Upgrade
         </Button>

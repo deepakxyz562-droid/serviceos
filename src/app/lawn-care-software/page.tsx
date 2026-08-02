@@ -9,12 +9,15 @@ import {
   Droplets,
   Wrench,
   CheckCircle2,
+  Trees,
+  TreePine,
+  Snowflake,
+  Award,
 } from "lucide-react";
 import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
-import { StructuredData } from "@/components/seo/structured-data";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
@@ -29,12 +32,12 @@ export const metadata: Metadata = {
     "weed control software",
     "lawn care routing",
   ],
-  alternates: { canonical: "https://serviceos.com/lawn-care-software" },
+  alternates: { canonical: "https://serviceos.cc/lawn-care-software" },
   openGraph: {
     title: "Lawn Care Software & CRM | ServiceOS",
     description:
       "Optimize recurring routes, track chemical applications per state regulations, give customers a self-serve portal, and auto-invoice after every visit. Lawn care software built for fertilization and weed-control businesses.",
-    url: "https://serviceos.com/lawn-care-software",
+    url: "https://serviceos.cc/lawn-care-software",
     siteName: "ServiceOS",
     type: "website",
   },
@@ -118,7 +121,7 @@ export default function LawnCareSoftwarePage() {
     name: "ServiceOS — Lawn Care Business Software",
     description:
       "Lawn care CRM and routing software with recurring route optimization, chemical application tracking, customer self-serve portal, weather rescheduling, and auto-invoicing.",
-    url: "https://serviceos.com/lawn-care-software",
+    url: "https://serviceos.cc/lawn-care-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -127,13 +130,11 @@ export default function LawnCareSoftwarePage() {
     <CornerstoneLayout
       activePath="/lawn-care-software"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.com" },
-        { name: "Lawn Care Software", url: "https://serviceos.com/lawn-care-software" },
+        { name: "Home", url: "https://serviceos.cc" },
+        { name: "Lawn Care Software", url: "https://serviceos.cc/lawn-care-software" },
       ]}
       additionalSchema={[appSchema]}
     >
-      <StructuredData data={[appSchema]} />
-
       <CornerstoneHero
         eyebrow="Lawn Care Software"
         title="Lawn Care Software Built for Recurring Routes, Chemical Tracking, and Faster Payments"
@@ -280,6 +281,41 @@ export default function LawnCareSoftwarePage() {
         faqs={faqs}
         subtitle="Everything lawn care operators ask before switching to ServiceOS."
       />
+
+      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
+          pages to distribute PageRank and help Google understand topical relationships. */}
+      <section className="border-t bg-muted/20">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
+            Related Field Service Software
+          </h2>
+          <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
+            Explore ServiceOS features built for other service industries.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/landscaping-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Trees className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Landscaping Software</h3>
+              <p className="text-sm text-muted-foreground">Crew routing, design-build quotes, material inventory.</p>
+            </Link>
+            <Link href="/tree-care-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <TreePine className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Tree Care Software</h3>
+              <p className="text-sm text-muted-foreground">Crew dispatch, cert tracking, insurance-ready docs.</p>
+            </Link>
+            <Link href="/snow-removal-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Snowflake className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Snow Removal Software</h3>
+              <p className="text-sm text-muted-foreground">Weather-triggered dispatch and per-inch billing.</p>
+            </Link>
+            <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Award className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Best Field Service Software</h3>
+              <p className="text-sm text-muted-foreground">Compare the top platforms side by side.</p>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <CtaSection />
     </CornerstoneLayout>

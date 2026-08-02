@@ -9,15 +9,18 @@ const nextConfig: NextConfig = {
   reactStrictMode: false,
   serverExternalPackages: ["bcryptjs", "jsonwebtoken"],
   images: {
-    // A3 (Image Cache): The marketplace's SafeImage component intentionally
-    // bypasses next/image and uses Supabase's built-in image transform API
-    // (see src/components/marketplace/safe-image.tsx). The landing page uses
-    // next/image for static local PNGs in /images/landing/ — those are
-    // already optimized at build time, so server-side optimization adds
-    // latency without benefit. We keep `unoptimized: true` and instead rely
-    // on browser Cache-Control headers (below) + Supabase transforms for
-    // marketplace images.
-    unoptimized: true,
+    // P1-6 (SEO): Enable next/image optimization for AVIF + WebP output.
+    // AVIF is ~50% smaller than JPEG, WebP ~30% smaller — both cut LCP
+    // image payload significantly. Browsers that support AVIF get it, others
+    // fall back to WebP, then to the original format.
+    //
+    // The marketplace's SafeImage component intentionally bypasses next/image
+    // and uses Supabase's built-in image transform API (see safe-image.tsx).
+    // This config applies to the landing page's static local PNGs in
+    // /images/landing/ and any <Image> usage across the site.
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     // A3: Pre-register Supabase Storage remote patterns so that IF we later
     // switch SafeImage to next/image, the URLs will be allowed. This is
     // preparatory — currently no next/image usage points at Supabase.

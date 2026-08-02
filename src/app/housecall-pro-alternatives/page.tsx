@@ -14,6 +14,9 @@ import {
   Settings2,
   Receipt,
   SlidersHorizontal,
+  Building2,
+  Award,
+  LayoutGrid,
 } from "lucide-react";
 import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
 import { FaqSection } from "@/components/seo/faq-section";
@@ -33,12 +36,12 @@ export const metadata: Metadata = {
     "apps like housecall pro",
     "housecall pro competitors",
   ],
-  alternates: { canonical: "https://serviceos.com/housecall-pro-alternatives" },
+  alternates: { canonical: "https://serviceos.cc/housecall-pro-alternatives" },
   openGraph: {
     title: "Best Housecall Pro Alternatives in 2026 | ServiceOS",
     description:
       "Compare the top 8 Housecall Pro alternatives — features, pricing, Email & SMS messaging, and which fits your field service business.",
-    url: "https://serviceos.com/housecall-pro-alternatives",
+    url: "https://serviceos.cc/housecall-pro-alternatives",
     siteName: "ServiceOS",
     type: "article",
   },
@@ -73,7 +76,7 @@ const alternatives: {
     name: "ServiceOS",
     bestFor: "Service businesses outside the US",
     pricing: "Free tier → paid plans",
-    url: "https://serviceos.com",
+    url: "https://serviceos.cc",
     description:
       "A modern, multi-channel FSM built for India, LATAM, and SEA. Transparent pricing, free tier, PWA technician app, and multi-currency support without the per-seat pricing surprises.",
     highlight: true,
@@ -208,7 +211,7 @@ export default function HousecallProAlternativesPage() {
     name: "ServiceOS — Housecall Pro Alternative",
     description:
       "Email & SMS-native field service management software and Housecall Pro alternative for India, LATAM, and SEA service businesses.",
-    url: "https://serviceos.com/housecall-pro-alternatives",
+    url: "https://serviceos.cc/housecall-pro-alternatives",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -217,7 +220,7 @@ export default function HousecallProAlternativesPage() {
     name: "8 Best Housecall Pro Alternatives in 2026",
     description:
       "A ranked, compared list of the top 8 Housecall Pro alternatives and competitors for field service businesses.",
-    url: "https://serviceos.com/housecall-pro-alternatives",
+    url: "https://serviceos.cc/housecall-pro-alternatives",
     items: alternatives.map((a) => ({
       position: a.position,
       name: a.name,
@@ -230,9 +233,9 @@ export default function HousecallProAlternativesPage() {
     <CornerstoneLayout
       activePath="/housecall-pro-alternatives"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.com" },
-        { name: "Compare", url: "https://serviceos.com/jobber-alternatives" },
-        { name: "Housecall Pro Alternatives", url: "https://serviceos.com/housecall-pro-alternatives" },
+        { name: "Home", url: "https://serviceos.cc" },
+        { name: "Compare", url: "https://serviceos.cc/jobber-alternatives" },
+        { name: "Housecall Pro Alternatives", url: "https://serviceos.cc/housecall-pro-alternatives" },
       ]}
       additionalSchema={[appSchema, itemListSchema]}
     >
@@ -496,6 +499,41 @@ export default function HousecallProAlternativesPage() {
         title="Housecall Pro alternatives — FAQ"
         subtitle="Straight answers to the questions teams ask when comparing Housecall Pro alternatives."
       />
+
+      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
+          pages to distribute PageRank and help Google understand topical relationships. */}
+      <section className="border-t bg-muted/20">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
+            Related Field Service Software
+          </h2>
+          <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
+            Explore ServiceOS features built for other service industries.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/jobber-alternatives" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Trophy className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Jobber Alternatives</h3>
+              <p className="text-sm text-muted-foreground">Top 10 Jobber alternatives compared side by side.</p>
+            </Link>
+            <Link href="/servicetitan-alternatives" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Building2 className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">ServiceTitan Alternatives</h3>
+              <p className="text-sm text-muted-foreground">Right-sized FSM options for SMBs.</p>
+            </Link>
+            <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Award className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Best Field Service Software</h3>
+              <p className="text-sm text-muted-foreground">Compare the top platforms side by side.</p>
+            </Link>
+            <Link href="/field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <LayoutGrid className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Field Service Software</h3>
+              <p className="text-sm text-muted-foreground">All-in-one platform for modern service businesses.</p>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <CtaSection
         title="Switch from Housecall Pro to ServiceOS"

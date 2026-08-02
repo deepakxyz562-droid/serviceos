@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     title: "Data Deletion Policy — ServiceOS CRM",
     description:
       "Learn how to request deletion of your personal data from ServiceOS CRM. Covers account holders, end customers, and Meta platform users. Compliant with GDPR, CCPA, and Meta Platform Terms.",
-    url: "https://serviceos.com/data-deletion",
+    url: "https://serviceos.cc/data-deletion",
     siteName: "ServiceOS",
     type: "website",
   },
@@ -113,10 +113,10 @@ export default function DataDeletionPage() {
                       <li>
                         Send an email to{" "}
                         <a
-                          href="mailto:privacy@serviceos.com"
+                          href="mailto:privacy@serviceos.cc"
                           className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700 font-medium"
                         >
-                          privacy@serviceos.com
+                          privacy@serviceos.cc
                         </a>{" "}
                         with the subject line &quot;Data Deletion Request.&quot;
                       </li>
@@ -136,7 +136,7 @@ export default function DataDeletionPage() {
                   </div>
                   <div className="shrink-0">
                     <a
-                      href="mailto:privacy@serviceos.com?subject=Data%20Deletion%20Request"
+                      href="mailto:privacy@serviceos.cc?subject=Data%20Deletion%20Request"
                       className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-3 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg hover:from-emerald-600 hover:to-teal-700"
                     >
                       Email Us Now
@@ -286,10 +286,10 @@ export default function DataDeletionPage() {
                     <strong className="text-foreground">Email Request:</strong>{" "}
                     Send an email to{" "}
                     <a
-                      href="mailto:privacy@serviceos.com"
+                      href="mailto:privacy@serviceos.cc"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      privacy@serviceos.com
+                      privacy@serviceos.cc
                     </a>{" "}
                     with the subject line &quot;Account Deletion Request.&quot;
                     Include your registered email address and a clear statement
@@ -316,7 +316,7 @@ export default function DataDeletionPage() {
                       href="/contact-us"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      serviceos.com/contact-us
+                      serviceos.cc/contact-us
                     </Link>{" "}
                     and select &quot;Data Deletion Request.&quot; You will need
                     to provide your name, email address, and the name of the
@@ -326,10 +326,10 @@ export default function DataDeletionPage() {
                     <strong className="text-foreground">Email Request:</strong>{" "}
                     Send an email to{" "}
                     <a
-                      href="mailto:privacy@serviceos.com"
+                      href="mailto:privacy@serviceos.cc"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      privacy@serviceos.com
+                      privacy@serviceos.cc
                     </a>{" "}
                     with the subject line &quot;Customer Data Deletion
                     Request.&quot; Include your full name and any identifying
@@ -365,10 +365,10 @@ export default function DataDeletionPage() {
                     <strong className="text-foreground">Email Request:</strong>{" "}
                     Send an email to{" "}
                     <a
-                      href="mailto:privacy@serviceos.com"
+                      href="mailto:privacy@serviceos.cc"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      privacy@serviceos.com
+                      privacy@serviceos.cc
                     </a>{" "}
                     with the subject line &quot;Meta Data Deletion Request.&quot;
                     Include your Facebook User ID so we
@@ -724,10 +724,10 @@ export default function DataDeletionPage() {
                   also be provided to you upon request. If you need your
                   confirmation code, please contact us at{" "}
                   <a
-                    href="mailto:privacy@serviceos.com"
+                    href="mailto:privacy@serviceos.cc"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@serviceos.com
+                    privacy@serviceos.cc
                   </a>
                   .
                 </p>
@@ -872,10 +872,10 @@ export default function DataDeletionPage() {
                   categories of data deleted, and our authorized signature. To
                   request a Deletion Certificate, please contact{" "}
                   <a
-                    href="mailto:privacy@serviceos.com"
+                    href="mailto:privacy@serviceos.cc"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@serviceos.com
+                    privacy@serviceos.cc
                   </a>{" "}
                   after receiving your deletion confirmation.
                 </p>
@@ -936,10 +936,10 @@ export default function DataDeletionPage() {
                   To withdraw consent more broadly or for processing activities
                   not listed above, please contact us at{" "}
                   <a
-                    href="mailto:privacy@serviceos.com"
+                    href="mailto:privacy@serviceos.cc"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@serviceos.com
+                    privacy@serviceos.cc
                   </a>
                   .
                 </p>
@@ -996,10 +996,10 @@ export default function DataDeletionPage() {
                   If you do not have access to your account or are an end
                   customer, please contact{" "}
                   <a
-                    href="mailto:privacy@serviceos.com"
+                    href="mailto:privacy@serviceos.cc"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@serviceos.com
+                    privacy@serviceos.cc
                   </a>{" "}
                   to request a data export. We will verify your identity and
                   provide your data in your preferred format within 30 days.
@@ -1024,10 +1024,10 @@ export default function DataDeletionPage() {
                   become aware that a child under 16 has provided personal data
                   to ServiceOS, please contact us immediately at{" "}
                   <a
-                    href="mailto:privacy@serviceos.com"
+                    href="mailto:privacy@serviceos.cc"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@serviceos.com
+                    privacy@serviceos.cc
                   </a>{" "}
                   so that we can take appropriate action.
                 </p>
@@ -1077,10 +1077,10 @@ export default function DataDeletionPage() {
                     <div>
                       <p className="font-semibold text-foreground">Email</p>
                       <a
-                        href="mailto:privacy@serviceos.com"
+                        href="mailto:privacy@serviceos.cc"
                         className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                       >
-                        privacy@serviceos.com
+                        privacy@serviceos.cc
                       </a>
                     </div>
                   </div>
@@ -1109,7 +1109,7 @@ export default function DataDeletionPage() {
                         href="/contact-us"
                         className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                       >
-                        serviceos.com/contact-us
+                        serviceos.cc/contact-us
                       </Link>
                     </div>
                   </div>
@@ -1133,10 +1133,10 @@ export default function DataDeletionPage() {
                     <div>
                       <p className="font-semibold text-foreground">Website</p>
                       <a
-                        href="https://serviceos.com"
+                        href="https://serviceos.cc"
                         className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                       >
-                        serviceos.com
+                        serviceos.cc
                       </a>
                     </div>
                   </div>

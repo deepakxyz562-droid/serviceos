@@ -8,12 +8,14 @@ import {
   Globe,
   ArrowRight,
   Zap,
+  CalendarClock,
+  Users,
+  FileText,
 } from "lucide-react";
 import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
-import { StructuredData } from "@/components/seo/structured-data";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
@@ -28,12 +30,12 @@ export const metadata: Metadata = {
     "invoice automation",
     "field service invoicing",
   ],
-  alternates: { canonical: "https://serviceos.com/invoicing-and-payments" },
+  alternates: { canonical: "https://serviceos.cc/invoicing-and-payments" },
   openGraph: {
     title: "Invoicing & Payment Software for Service Businesses | ServiceOS",
     description:
       "One-click invoices from completed jobs, online payments, Email & SMS delivery, automatic reminders, recurring billing, and multi-currency. Get paid faster.",
-    url: "https://serviceos.com/invoicing-and-payments",
+    url: "https://serviceos.cc/invoicing-and-payments",
     siteName: "ServiceOS",
     type: "website",
   },
@@ -117,7 +119,7 @@ export default function InvoicingAndPaymentsPage() {
     name: "ServiceOS — Invoicing & Payment Software",
     description:
       "One-click invoicing from completed jobs, online payment acceptance, Email & SMS invoice delivery, automatic payment reminders, recurring billing, and multi-currency support for service businesses.",
-    url: "https://serviceos.com/invoicing-and-payments",
+    url: "https://serviceos.cc/invoicing-and-payments",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
   });
@@ -126,13 +128,11 @@ export default function InvoicingAndPaymentsPage() {
     <CornerstoneLayout
       activePath="/scheduling-and-dispatch"
       breadcrumbs={[
-        { name: "Home", url: "https://serviceos.com" },
-        { name: "Invoicing & Payments", url: "https://serviceos.com/invoicing-and-payments" },
+        { name: "Home", url: "https://serviceos.cc" },
+        { name: "Invoicing & Payments", url: "https://serviceos.cc/invoicing-and-payments" },
       ]}
       additionalSchema={[appSchema]}
     >
-      <StructuredData data={[appSchema]} />
-
       <CornerstoneHero
         eyebrow="Feature"
         title="Invoicing & Payment Software That Gets You Paid Faster"
@@ -254,6 +254,41 @@ export default function InvoicingAndPaymentsPage() {
         faqs={faqs}
         subtitle="Everything service businesses ask about invoicing and payments with ServiceOS."
       />
+
+      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
+          pages to distribute PageRank and help Google understand topical relationships. */}
+      <section className="border-t bg-muted/20">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
+            Related Field Service Software
+          </h2>
+          <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
+            Explore ServiceOS features built for other service industries.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/scheduling-and-dispatch" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <CalendarClock className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Scheduling & Dispatch</h3>
+              <p className="text-sm text-muted-foreground">Drag-and-drop calendar, smart dispatch, GPS tracking.</p>
+            </Link>
+            <Link href="/customer-crm" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Users className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Customer CRM</h3>
+              <p className="text-sm text-muted-foreground">360° customer view — history, assets, conversations.</p>
+            </Link>
+            <Link href="/automations" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Zap className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Workflow Automations</h3>
+              <p className="text-sm text-muted-foreground">Reminders, follow-ups, and recurring jobs on autopilot.</p>
+            </Link>
+            <Link href="/invoice-generator" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <FileText className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Free Invoice Generator</h3>
+              <p className="text-sm text-muted-foreground">Create PDF invoices online — no signup, no watermark.</p>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <CtaSection
         title="Ready to get paid faster?"

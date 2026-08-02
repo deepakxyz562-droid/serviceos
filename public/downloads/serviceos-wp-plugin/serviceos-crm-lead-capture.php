@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: ServiceOS CRM - Lead Capture
- * Plugin URI: https://serviceos.com
+ * Plugin URI: https://serviceos.cc
  * Description: Injects a universal JavaScript form capture script on every page. Works with Contact Form 7, WPForms, Gravity Forms, Ninja Forms, Fluent Forms, Elementor Forms, Formidable, MetForm, Everest Forms, HTML forms, and custom forms — automatically.
  * Version: 2.0.0
  * Author: ServiceOS
- * Author URI: https://serviceos.com
+ * Author URI: https://serviceos.cc
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: serviceos-crm-lead-capture
@@ -653,8 +653,8 @@ add_filter('plugin_row_meta', 'serviceos_plugin_row_meta', 10, 2);
 
 function serviceos_plugin_row_meta($links, $file) {
     if (plugin_basename(__FILE__) === $file) {
-        $links[] = '<a href="https://serviceos.com/docs/wordpress" target="_blank">Documentation</a>';
-        $links[] = '<a href="https://serviceos.com/support" target="_blank">Support</a>';
+        $links[] = '<a href="https://serviceos.cc/docs/wordpress" target="_blank">Documentation</a>';
+        $links[] = '<a href="https://serviceos.cc/support" target="_blank">Support</a>';
     }
     return $links;
 }
