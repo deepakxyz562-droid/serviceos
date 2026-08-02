@@ -329,11 +329,19 @@ async function buildPublicBusinessData(
   const descriptionLongEnough = Boolean(
     tenant.description && tenant.description.trim().length >= 40,
   )
-  const hasEnoughServices = publicServiceCount >= 3
+  // SEO FIX: Removed the `hasEnoughServices (publicServiceCount >= 3)` gate.
+  // 81/100 production marketplace providers are UNCLAIMED listings (like
+  // Yelp/Manta/YellowPages) — they have 0 services in our DB but still render
+  // 97KB of useful HTML (name, industry, address, phone, hours, FAQs,
+  // LocalBusiness JSON-LD, claim CTA). Excluding them from indexing was
+  // incorrect for a directory model. The detail-page service section simply
+  // shows a "no services listed yet" state, which is fine — the page still
+  // has unique, indexable content. `publicServiceCount` is kept in the
+  // signature for backward compat (the caller still fetches services for the
+  // rendered service list) but no longer gates indexability.
   const isIndexable = Boolean(
     tenant.publicProfileEnabled &&
     descriptionLongEnough &&
-    hasEnoughServices &&
     hasImage,
   )
 
@@ -609,19 +617,27 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
       },
     })
 
-    // ── Pre-filter tenants in JS (cheap, no DB round-trips) ──
-    // Apply the description + image "rich enough" checks first so we only
-    // include tenants that pass BOTH criteria. This shrinks the set before
-    // the (batched) service-count check below.
+    // ── Filter tenants in JS (cheap, zero DB round-trips) ──
+    // Apply the description + image "rich enough" checks. This is the ONLY
+    // filtering step now — the old `service count >= 3` gate was removed
+    // (see SEO FIX note in buildPublicBusinessData()).
     //
-    // SEO FIX (production sitemap empty): Mirrors the fix in
-    // buildPublicBusinessData() — (1) apply defaultCoverImageForIndustry()
-    // fallback so tenants with NULL coverImage still pass the hasImage gate,
-    // and (2) relax the description minimum from 100 → 40 chars so real
-    // short business summaries ("Established HVAC business serving sydney."
-    // = 41 chars) are accepted. Without these two changes, 32/50 production
-    // tenants fail the filter → sitemap has ~0 business URLs →
-    // GSC shows "Discovered pages: 0".
+    // SEO FIX (production sitemap empty — ROOT CAUSE):
+    // The previous version used `db.service.groupBy()` to batch-count
+    // services per tenant. BUT the Supabase REST adapter (supabase-db.ts:1709)
+    // has a STUB `groupBy()` that always returns `[]` — it's not implemented.
+    // So in production (USE_SUPABASE_DB=true), every tenant got
+    // serviceCount=0 → ALL failed the `>= 3` check → 0 business URLs in the
+    // sitemap → GSC "Discovered pages: 0".
+    //
+    // Additionally, 81/100 production marketplace providers are UNCLAIMED
+    // listings (like Yelp/Manta) with 0 services in our DB — they SHOULD be
+    // in the sitemap regardless. Removing the service-count gate fixes both
+    // issues at once: no more broken groupBy dependency, and unclaimed
+    // listings get indexed (they have 97KB of unique HTML each).
+    //
+    // Mirrors buildPublicBusinessData(): (1) defaultCoverImageForIndustry()
+    // fallback for NULL coverImage, (2) description minimum 40 chars.
     const candidates = tenants.filter((t) => {
       const descriptionLongEnough = Boolean(
         t.description && t.description.trim().length >= 40,
@@ -640,41 +656,8 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
       return hasImage
     })
 
-    // ── Batched service-count check (1 query total, NOT 1 per tenant) ──
-    // Previously this loop did `db.service.count({ where: { tenantId } })`
-    // inside the for-loop — an N+1 pattern that scaled as O(N) DB calls.
-    // On the Supabase REST adapter each call is a separate HTTP round-trip
-    // (~100ms), so 100 tenants = ~10s, exceeding Google's ~30s sitemap
-    // fetch timeout and causing GSC to report "Sitemap could not be read".
-    //
-    // Now we issue a SINGLE `groupBy` that returns per-tenant counts in one
-    // request, then look them up in a Map. O(1) DB calls regardless of
-    // tenant count. The `where.tenantId: { in: [...] }` filter scopes the
-    // aggregation to only the candidate tenants (after description+image
-    // filtering), keeping the query cheap even at 10k+ total tenants.
-    const tenantIds = candidates.map((t) => t.id)
-    const serviceCountRows = tenantIds.length > 0
-      ? await db.service.groupBy({
-          by: ['tenantId'],
-          where: {
-            tenantId: { in: tenantIds },
-            isActive: true,
-            isPublic: true,
-          },
-          _count: { _all: true },
-        })
-      : []
-    // Build a Map<tenantId, count> for O(1) lookup in the loop below.
-    const serviceCountByTenant = new Map<string, number>()
-    for (const row of serviceCountRows) {
-      serviceCountByTenant.set(row.tenantId as string, row._count?._all ?? 0)
-    }
-
     const entries: IndexableBusinessUrl[] = []
     for (const t of candidates) {
-      const serviceCount = serviceCountByTenant.get(t.id) ?? 0
-      if (serviceCount < 3) continue
-
       const industrySlug = mapIndustryToUrlSlug(t.industry)
       const citySlug = slugifyCity(t.city)
       // Normalize updatedAt to ISO string. Prisma returns Date; the Supabase
