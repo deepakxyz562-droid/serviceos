@@ -537,13 +537,35 @@ export function revalidatePublicBusiness(_slugOrTenantId?: string): void {
 }
 
 /**
- * List all indexable businesses for the sitemap.
- * Returns an array of canonical URLs.
+ * A sitemap entry for an indexable business — the canonical URL plus the
+ * tenant's real `updatedAt` timestamp so Google gets an accurate freshness
+ * signal (Concern #3 SEO fix).
  */
-export async function listIndexableBusinessUrls(): Promise<string[]> {
+export interface IndexableBusinessUrl {
+  url: string
+  lastModified?: string
+}
+
+/**
+ * List all indexable businesses for the sitemap.
+ *
+ * Returns `{ url, lastModified }` tuples so the sitemap can emit a real
+ * `<lastmod>` per URL (the tenant's `updatedAt`), giving Google an accurate
+ * freshness signal. Previously this returned plain `string[]` which forced
+ * the sitemap to use a shared "now" timestamp for every entry — providing
+ * zero freshness differentiation.
+ *
+ * The `lastModified` field is optional so callers that only need URLs can
+ * ignore it. The sitemap.ts consumer uses it; other callers (if any) can
+ * just read `.url`.
+ */
+export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[]> {
   try {
     // Fetch tenants with publicProfileEnabled=true (cheap filter first),
     // then apply the rest of the "rich enough" rule in JS.
+    //
+    // SEO FIX (Concern #3): We now also select `updatedAt` so the sitemap
+    // can emit a real `<lastmod>` per URL instead of a shared "now".
     const tenants = await db.tenant.findMany({
       where: {
         publicProfileEnabled: true,
@@ -558,10 +580,11 @@ export async function listIndexableBusinessUrls(): Promise<string[]> {
         coverImage: true,
         logo: true,
         galleryJson: true,
+        updatedAt: true,
       },
     })
 
-    const urls: string[] = []
+    const entries: IndexableBusinessUrl[] = []
     for (const t of tenants) {
       const descriptionLongEnough = Boolean(
         t.description && t.description.trim().length >= 100,
@@ -586,9 +609,21 @@ export async function listIndexableBusinessUrls(): Promise<string[]> {
 
       const industrySlug = mapIndustryToUrlSlug(t.industry)
       const citySlug = slugifyCity(t.city)
-      urls.push(`${SITE_URL}/${industrySlug}/${citySlug}/${t.slug}`)
+      // Normalize updatedAt to ISO string. Prisma returns Date; the Supabase
+      // REST adapter may return a string. Both .toISOString() safely (Date
+      // directly, string via new Date(...).toISOString()).
+      const lastModified =
+        t.updatedAt instanceof Date
+          ? t.updatedAt.toISOString()
+          : t.updatedAt
+            ? new Date(t.updatedAt as string).toISOString()
+            : undefined
+      entries.push({
+        url: `${SITE_URL}/${industrySlug}/${citySlug}/${t.slug}`,
+        lastModified,
+      })
     }
-    return urls
+    return entries
   } catch (err) {
     console.error('[public-business] listIndexableBusinessUrls error:', err)
     return []

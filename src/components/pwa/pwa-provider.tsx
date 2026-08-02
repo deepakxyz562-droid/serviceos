@@ -25,6 +25,14 @@ import UpdatePrompt from './update-prompt';
  *   to the console in development. The actual registration is owned by the
  *   inline script in layout.tsx.
  *
+ * OFFLINE SYNC (Concern #4):
+ *   The offline mutation queue replay logic lives in
+ *   `src/lib/offline-queue.ts`. It's loaded on-demand by the
+ *   `useOfflineSync` hook (which client components can import directly).
+ *   We don't wire it here to avoid bundling Dexie into the root layout's
+ *   initial JS chunk — the hook is designed to be called from authed views
+ *   (AppLayout) where the offline mutation feature is actually used.
+ *
  * Renders nothing of its own besides the two prompt components, which
  * themselves render nothing unless they have something to show.
  */

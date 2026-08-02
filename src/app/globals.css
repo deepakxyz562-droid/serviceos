@@ -382,7 +382,14 @@ html {
    the nav, making it invisible in both light and dark mode. */
 @media all and (display-mode: standalone) {
   html, body {
-    height: 100vh;
+    /* `min-height: 100dvh` (not `height: 100vh`) so the body can grow taller
+       than the viewport on long pages (e.g. the landing page) and remain
+       scrollable. With `height: 100vh` iOS Safari standalone locks the body
+       to the viewport height and the page becomes unscrollable. `100dvh`
+       also correctly spans the home-indicator safe-area zone when paired
+       with `viewport-fit=cover`. `overscroll-behavior: none` still disables
+       the iOS rubber-band bounce. */
+    min-height: 100dvh;
     overscroll-behavior: none;
     background-color: var(--background);
   }

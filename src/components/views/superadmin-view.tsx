@@ -31,7 +31,7 @@ import {
   // New icons for the expanded enterprise nav
   LayoutGrid, Palette, Mail, MessageCircle, Bell, Lock,
   ListTodo, Terminal, LifeBuoy, ClipboardList, Languages,
-  ChevronLeft, X, LayoutList, Tags, KeyRound,
+  ChevronLeft, X, LayoutList,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -54,7 +54,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
-import { MENU_CATALOG } from '@/lib/menu-catalog';
 import { IntegrationsTab } from '@/components/views/superadmin-integrations-tab';
 import { ProvidersTab } from '@/components/views/superadmin-providers-tab';
 import {
@@ -63,33 +62,12 @@ import {
 } from 'recharts';
 import { lazy, Suspense } from 'react';
 
-// ─── Extracted Tab components ──────────────────────────────────────────────
-// Previously these 7 tabs were defined INSIDE `SuperAdminView`'s function
-// body. Each parent re-render created a new function reference, so React
-// unmounted/remounted the active tab — losing internal state and re-firing
-// effects every time. They're now hoisted into module-level files under
-// `superadmin/sections/` and receive all data + handlers via explicit props.
-import { DashboardTab } from '@/components/views/superadmin/sections/dashboard-tab';
-import { TenantsTab } from '@/components/views/superadmin/sections/tenants-tab';
-import { SubscriptionsTab } from '@/components/views/superadmin/sections/subscriptions-tab';
-import { ModulesTab } from '@/components/views/superadmin/sections/modules-tab';
-import { UsersTab } from '@/components/views/superadmin/sections/users-tab';
-import { AuditLogsTab } from '@/components/views/superadmin/sections/audit-logs-tab';
-import { CreditsTab } from '@/components/views/superadmin/sections/credits-tab';
-// Shared data-model types + TabKey union (hoisted out so the extracted tabs
-// and the parent share one source of truth).
-import type {
-  PlatformStats, Tenant, Subscription, FeatureFlagDef, MenuItemDef,
-  UserRecord, AuditLog, CreditInfo, StorageStatus, TabKey,
-} from '@/components/views/superadmin/types';
-
 // ─── Lazy-loaded enterprise sections ─────────────────────────────────────────
 // Each new section is a separate file under superadmin/sections/. Lazy-loading
 // keeps the initial bundle small (the dev server OOMs on 8k-line files in this
 // 4GB container) and lets each section code-split naturally.
 const CommandCenterSection = lazy(() => import('@/components/views/superadmin/sections/command-center').then(m => ({ default: m.CommandCenterSection })));
 const AICenterSection = lazy(() => import('@/components/views/superadmin/sections/ai-center').then(m => ({ default: m.AICenterSection })));
-const DirectoryListingsSection = lazy(() => import('@/components/views/superadmin/sections/directory-listings').then(m => ({ default: m.DirectoryListingsSection })));
 const MarketplaceSection = lazy(() => import('@/components/views/superadmin/sections/marketplace').then(m => ({ default: m.MarketplaceSection })));
 const IndustryTemplatesSection = lazy(() => import('@/components/views/superadmin/sections/industry-templates').then(m => ({ default: m.IndustryTemplatesSection })));
 const PlatformSettingsSection = lazy(() => import('@/components/views/superadmin/sections/platform-settings').then(m => ({ default: m.PlatformSettingsSection })));
@@ -98,7 +76,6 @@ const EmailServicesSection = lazy(() => import('@/components/views/superadmin/se
 const SMSServicesSection = lazy(() => import('@/components/views/superadmin/sections/sms-services').then(m => ({ default: m.SMSServicesSection })));
 const WhatsAppProvidersSection = lazy(() => import('@/components/views/superadmin/sections/whatsapp-providers').then(m => ({ default: m.WhatsAppProvidersSection })));
 const PushNotificationsSection = lazy(() => import('@/components/views/superadmin/sections/push-notifications').then(m => ({ default: m.PushNotificationsSection })));
-const IntegrationCredentialsSection = lazy(() => import('@/components/views/superadmin/sections/integration-credentials').then(m => ({ default: m.IntegrationCredentialsSection })));
 const AuthenticationSection = lazy(() => import('@/components/views/superadmin/sections/authentication').then(m => ({ default: m.AuthenticationSection })));
 const SecurityCenterSection = lazy(() => import('@/components/views/superadmin/sections/security-center').then(m => ({ default: m.SecurityCenterSection })));
 const AbuseDetectionSection = lazy(() => import('@/components/views/superadmin/sections/abuse-detection').then(m => ({ default: m.AbuseDetectionSection })));
@@ -114,10 +91,6 @@ const StorageSection = lazy(() => import('@/components/views/superadmin/sections
 const InfrastructureSection = lazy(() => import('@/components/views/superadmin/sections/infrastructure').then(m => ({ default: m.InfrastructureSection })));
 const SystemHealthSection = lazy(() => import('@/components/views/superadmin/sections/system-health').then(m => ({ default: m.SystemHealthSection })));
 const MenuManagementSection = lazy(() => import('@/components/views/superadmin/sections/menu-management').then(m => ({ default: m.MenuManagementSection })));
-const CreemBillingSection = lazy(() => import('@/components/views/superadmin/sections/creem-billing').then(m => ({ default: m.CreemBillingSection })));
-const PlanFeaturesSection = lazy(() => import('@/components/views/superadmin/sections/plan-features').then(m => ({ default: m.PlanFeaturesSection })));
-const PlanCatalogSection = lazy(() => import('@/components/views/superadmin/sections/plan-catalog').then(m => ({ default: m.PlanCatalogSection })));
-const BackupSection = lazy(() => import('@/components/views/superadmin/sections/backup').then(m => ({ default: m.BackupSection })));
 
 // Lightweight Suspense fallback for lazy-loaded sections.
 function SectionLoader() {
@@ -131,17 +104,189 @@ function SectionLoader() {
   );
 }
 
-// ─── Module constants (used by parent's feature-flag/menu-item useMemos) ─────
-// `SECTION_META`, `MODULE_SECTIONS`, and `FEATURE_MODULE_MAP` were hoisted
-// to `superadmin/constants.ts` (they're only consumed by `ModulesTab`, which
-// is now its own file). What stays here are the two constants the parent
-// itself uses to derive initial `featureFlags` + `menuItems` state.
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-// Derive DEFAULT_MENU_ITEMS from MENU_CATALOG so the legacy Modules tab shows
-// exactly the same items as the Menu Management tab and the live sidebar.
-const DEFAULT_MENU_ITEMS: { key: string; label: string; section: string }[] = MENU_CATALOG.map(
-  (item) => ({ key: item.key, label: item.label, section: item.section })
-);
+interface PlatformStats {
+  totalTenants: number;
+  activeTenants: number;
+  suspendedTenants: number;
+  trialTenants: number;
+  totalUsers: number;
+  activeUsers: number;
+  totalRevenue: number;
+  mrr: number;
+  arr: number;
+  avgChurnRate: number;
+  activeSubscriptions: number;
+  communication: { totalConversations: number; activeConversations: number };
+  healthMetrics: { metric: string; value: number; dimensions: Record<string, unknown>; recordedAt: string }[];
+  recentSecurityEvents: { id: string; eventType: string; severity: string; userId: string; tenantId: string; ip: string; createdAt: string }[];
+  recentAuditLogs: { id: string; userId: string; tenantId: string | null; action: string; resourceType: string; resourceId: string; ip: string; createdAt: string }[];
+  trends: { tenants: number; users: number; revenue: number; subscriptions: number };
+}
+
+interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
+  email: string;
+  phone: string;
+  plan: string;
+  planStatus: string;
+  industry: string;
+  country: string;
+  currency: string;
+  onboardingCompleted: boolean;
+  suspendedAt: string | null;
+  suspensionReason: string | null;
+  mrr: number;
+  arr: number;
+  createdAt: string;
+  userCount: number;
+  subscriptionStatus: string | null;
+}
+
+interface Subscription {
+  id: string;
+  tenantId: string;
+  tenantName: string;
+  tenantEmail: string;
+  plan: string;
+  status: string;
+  amount: number;
+  currency: string;
+  billingCycle: string;
+  startDate: string | null;
+  endDate: string | null;
+  pausedDate: string | null;
+  pauseReason: string | null;
+  seatCount: number;
+  aiQuota: number;
+  aiUsageCount: number;
+  whatsappQuota: number;
+  whatsappUsageCount: number;
+  createdAt: string | null;
+}
+
+interface FeatureFlagDef {
+  key: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+  config?: Record<string, unknown>;
+}
+
+interface MenuItemDef {
+  id: string;
+  key: string;
+  label: string;
+  icon?: string;
+  section: string;
+  enabled: boolean;
+  sortOrder?: number;
+}
+
+interface UserRecord {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  role: string;
+  isActive: boolean;
+  avatar?: string | null;
+  authProvider?: string | null;
+  lastLoginAt?: string | null;
+  tenantId?: string | null;
+  tenantName?: string | null;
+  createdAt: string;
+}
+
+interface AuditLog {
+  id: string;
+  userId: string | null;
+  tenantId: string | null;
+  action: string;
+  resourceType: string | null;
+  resourceId: string | null;
+  ip: string | null;
+  metadata?: Record<string, unknown>;
+  createdAt: string | null;
+}
+
+interface CreditInfo {
+  tenantId: string;
+  tenantName: string;
+  plan: string;
+  trialWhatsappCredits: number;
+  trialWhatsappUsed: number;
+  platformWhatsappEnabled: boolean;
+  ownWhatsappConnected: boolean;
+  ownEmailProviderConnected: boolean;
+}
+
+// ─── Constants: Product Module Structure (aligned with the app sidebar) ──────
+
+const MODULE_SECTIONS = [
+  { key: 'CRM', label: 'CRM', icon: UsersRound, color: 'emerald' },
+  { key: 'Communication', label: 'Communication', icon: MessageSquare, color: 'sky' },
+  { key: 'Marketing', label: 'Marketing', icon: Megaphone, color: 'amber' },
+  { key: 'Automation', label: 'Automation', icon: Bot, color: 'violet' },
+  { key: 'Operations', label: 'Operations', icon: LayoutDashboard, color: 'orange' },
+  { key: 'Finance', label: 'Finance', icon: Wallet, color: 'teal' },
+  { key: 'System', label: 'System', icon: Settings2, color: 'slate' },
+  { key: 'Portals', label: 'Portals', icon: Globe, color: 'rose' },
+  { key: 'AI & More', label: 'AI & More', icon: Cpu, color: 'indigo' },
+] as const;
+
+const DEFAULT_MENU_ITEMS: { key: string; label: string; section: string }[] = [
+  // CRM
+  { key: 'leads', label: 'Leads', section: 'CRM' },
+  { key: 'contacts', label: 'Contacts', section: 'CRM' },
+  { key: 'customers', label: 'Customers', section: 'CRM' },
+  { key: 'customer360', label: 'Customer 360', section: 'CRM' },
+  { key: 'salesPipeline', label: 'Sales Pipeline', section: 'CRM' },
+  // Communication
+  { key: 'omnichannel', label: 'Omnichannel', section: 'Communication' },
+  { key: 'broadcast', label: 'Broadcast', section: 'Communication' },
+  { key: 'marketingTemplates', label: 'Marketing Templates', section: 'Communication' },
+  // Marketing
+  { key: 'campaigns', label: 'Campaigns', section: 'Marketing' },
+  { key: 'segments', label: 'Segments', section: 'Marketing' },
+  { key: 'retargeting', label: 'Retargeting', section: 'Marketing' },
+  { key: 'marketingAnalytics', label: 'Analytics', section: 'Marketing' },
+  // Automation
+  { key: 'workflows', label: 'Workflows', section: 'Automation' },
+  { key: 'triggers', label: 'Triggers', section: 'Automation' },
+  { key: 'variables', label: 'Variables', section: 'Automation' },
+  { key: 'executions', label: 'Executions', section: 'Automation' },
+  { key: 'formBuilder', label: 'Form Builder', section: 'Automation' },
+  { key: 'workflowAutomations', label: 'Workflow Automations', section: 'Automation' },
+  // Operations
+  { key: 'booking', label: 'Booking', section: 'Operations' },
+  { key: 'calendar', label: 'Calendar', section: 'Operations' },
+  { key: 'jobs', label: 'Jobs', section: 'Operations' },
+  { key: 'dispatch', label: 'Dispatch', section: 'Operations' },
+  { key: 'employees', label: 'Employees', section: 'Operations' },
+  // Finance
+  { key: 'quotes', label: 'Quotes', section: 'Finance' },
+  { key: 'invoices', label: 'Invoices', section: 'Finance' },
+  { key: 'billing', label: 'Billing', section: 'Finance' },
+  // System
+  { key: 'credentials', label: 'Credentials', section: 'System' },
+  { key: 'integrations', label: 'Integrations', section: 'System' },
+  { key: 'settings', label: 'Settings', section: 'System' },
+  { key: 'auditLogs', label: 'Audit Logs', section: 'System' },
+  { key: 'reports', label: 'Reports', section: 'System' },
+  // Portals
+  { key: 'customerPortal', label: 'Customer Portal', section: 'Portals' },
+  { key: 'employeePortal', label: 'Employee Portal', section: 'Portals' },
+  // AI & More
+  { key: 'aiAssistant', label: 'AI Assistant', section: 'AI & More' },
+  { key: 'chatbotBuilder', label: 'Chatbot Builder', section: 'AI & More' },
+  { key: 'serviceCatalog', label: 'Service Catalog', section: 'AI & More' },
+  { key: 'communicationProviders', label: 'Providers', section: 'AI & More' },
+  { key: 'reviews', label: 'Reviews', section: 'AI & More' },
+];
 
 const FEATURE_DEFINITIONS = [
   { key: 'whatsapp_crm', label: 'WhatsApp CRM', description: 'Manage WhatsApp conversations and customer relationships' },
@@ -151,7 +296,7 @@ const FEATURE_DEFINITIONS = [
   { key: 'chatbot_builder', label: 'Chatbot Builder', description: 'Build and deploy custom chatbots' },
   { key: 'form_builder', label: 'Form Builder', description: 'Create custom forms and surveys' },
   { key: 'omnichannel', label: 'Omnichannel', description: 'Unified communication across multiple channels' },
-  { key: 'salesPipeline', label: 'Sales Pipeline', description: 'Manage deals and sales pipeline stages' },
+  { key: 'sales_pipeline', label: 'Sales Pipeline', description: 'Manage deals and sales pipeline stages' },
   { key: 'journey_automation', label: 'Journey Automation', description: 'Create automated customer journey workflows' },
   { key: 'knowledge_base', label: 'Knowledge Base', description: 'Build and manage a knowledge base for support' },
   { key: 'marketplace', label: 'Marketplace', description: 'Access integrations and templates marketplace' },
@@ -161,19 +306,56 @@ const FEATURE_DEFINITIONS = [
   { key: 'advanced_analytics', label: 'Advanced Analytics', description: 'Detailed analytics with custom reports and dashboards' },
 ];
 
+// Map each feature-flag key to the product module it belongs in.
+// This drives the merged "Modules" tab — features + menu items grouped by module.
+const FEATURE_MODULE_MAP: Record<string, string> = {
+  whatsapp_crm: 'Communication',
+  ai_assistant: 'AI & More',
+  campaigns: 'Marketing',
+  workflows: 'Automation',
+  chatbot_builder: 'AI & More',
+  form_builder: 'Automation',
+  omnichannel: 'Communication',
+  sales_pipeline: 'CRM',
+  journey_automation: 'Automation',
+  knowledge_base: 'AI & More',
+  marketplace: 'System',
+  custom_domains: 'System',
+  api_access: 'System',
+  bulk_operations: 'System',
+  advanced_analytics: 'System',
+};
+
 const PLAN_AMOUNTS: Record<string, number> = {
-  trial: 0, starter: 10, growth: 25, pro: 50, enterprise: 0,
+  trial: 0, starter: 29, growth: 79, pro: 149, enterprise: 0,
 };
 
 // ─── Navigation config (left sub-nav) ────────────────────────────────────────
 //
 // Enterprise structure: 8 groups, 30 items. Mirrors the user's spec:
 //   Overview · BUSINESS · PLATFORM · COMMUNICATION · SECURITY · OPERATIONS · SUPPORT · SYSTEM
-// The 7 inline tabs (Dashboard, Tenants, Subscriptions, Modules→Feature Flags,
-// Users, Audit Logs, Credits) are now hoisted into module-level files under
-// `superadmin/sections/*-tab.tsx` and receive all data + handlers via props.
-// The 21 enterprise sections are lazy-loaded from `superadmin/sections/*.tsx`
-// for code-splitting.
+// Existing tabs (Tenants, Subscriptions, Users, Credits, Modules→Feature Flags,
+// Integrations, Audit Logs) stay inline in this file (their closures depend on
+// shared hooks/state above). The 21 NEW sections are lazy-loaded from
+// `superadmin/sections/*.tsx` for code-splitting.
+
+type TabKey =
+  // Overview
+  | 'dashboard'
+  // BUSINESS
+  | 'tenants' | 'subscriptions' | 'users' | 'credits' | 'industry-templates'
+  // PLATFORM
+  | 'platform-settings' | 'theme-branding' | 'marketplace' | 'integrations' | 'ai-center' | 'menu-management'
+  // COMMUNICATION
+  | 'email-services' | 'sms-services' | 'whatsapp-providers' | 'push-notifications'
+  // SECURITY
+  | 'authentication' | 'security-center' | 'audit-logs' | 'abuse-detection'
+  // OPERATIONS
+  | 'analytics' | 'platform-reports' | 'background-jobs' | 'system-logs'
+  // SUPPORT
+  | 'support-center' | 'knowledge-base' | 'announcements'
+  // SYSTEM
+  | 'feature-flags' | 'localization' | 'storage' | 'infrastructure' | 'system-health';
 
 interface NavGroup {
   label: string;
@@ -195,16 +377,12 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'users', label: 'Users', icon: Users },
       { key: 'credits', label: 'Credits', icon: Wallet },
       { key: 'industry-templates', label: 'Industry Templates', icon: LayoutGrid },
-      { key: 'directory-listings', label: 'Directory Listings', icon: Store },
-      { key: 'creem-billing', label: 'Creem Billing', icon: CreditCard },
     ],
   },
   {
     label: 'Platform',
     items: [
       { key: 'platform-settings', label: 'Platform Settings', icon: Settings },
-      { key: 'plan-features', label: 'Plan Features', icon: Lock },
-      { key: 'plan-catalog', label: 'Plan Catalog', icon: Tags },
       { key: 'theme-branding', label: 'Theme & Branding', icon: Palette },
       { key: 'marketplace', label: 'Marketplace', icon: Store },
       { key: 'integrations', label: 'Integrations', icon: Plug },
@@ -219,7 +397,6 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'sms-services', label: 'SMS Services', icon: MessageSquare },
       { key: 'whatsapp-providers', label: 'WhatsApp Providers', icon: MessageCircle },
       { key: 'push-notifications', label: 'Push Notifications', icon: Bell },
-      { key: 'integration-credentials', label: 'Integration Credentials', icon: KeyRound },
     ],
   },
   {
@@ -256,7 +433,6 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'storage', label: 'Storage', icon: HardDrive },
       { key: 'infrastructure', label: 'Infrastructure', icon: Server },
       { key: 'system-health', label: 'System Health', icon: Activity },
-      { key: 'backup', label: 'Database Backup', icon: Database },
     ],
   },
 ];
@@ -453,82 +629,6 @@ function KpiCard({ label, value, icon: Icon, trend, color, sub }: {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// STATUS BAR + LAST SYNCED BADGE
-// ═════════════════════════════════════════════════════════════════════════════
-// Extracted from `SuperAdminView` so the 8-second polling interval only
-// re-renders these tiny subtrees. Previously the polling state lived on
-// `SuperAdminView` itself, which meant the entire 2900-line component (and
-// its nested function-body Tab components) re-rendered every 8 seconds —
-// because the Tab components are redefined on every parent render, React
-// unmounts and remounts the active tab, losing all internal state and
-// re-firing all effects. Moving both pieces here isolates the re-render
-// to just these two small children.
-
-function SuperAdminStatusBar() {
-  const [statusItems, setStatusItems] = useState<StatusBarItem[]>(INITIAL_STATUS);
-  useEffect(() => {
-    const id = setInterval(() => {
-      setStatusItems((prev) => prev.map((item) => {
-        // Light jitter on the value; status stays healthy (real warnings
-        // would come from a real /api/health endpoint).
-        if (item.key === 'api') return { ...item, value: `${8 + Math.floor(Math.random() * 8)}ms` };
-        if (item.key === 'db') return { ...item, value: `${2 + Math.floor(Math.random() * 4)}ms` };
-        if (item.key === 'queue') return { ...item, value: `${Math.floor(Math.random() * 6)}` };
-        if (item.key === 'storage') return { ...item, value: `${77 + Math.floor(Math.random() * 3)}%` };
-        return item;
-      }));
-    }, 8000);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <footer className="shrink-0 z-20 px-4 sm:px-6 lg:px-8 py-2 bg-background/95 backdrop-blur border-t border-border">
-      <div className="flex items-center gap-3 overflow-x-auto scrollbar-thin">
-        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground shrink-0">
-          <span className="size-1.5 bg-emerald-500 rounded-full animate-pulse" />
-          PLATFORM HEALTH
-        </span>
-        <div className="h-3 w-px bg-border shrink-0" />
-        {statusItems.map((item) => {
-          const dotColor = item.status === 'healthy' ? 'bg-emerald-500' : item.status === 'warning' ? 'bg-amber-500' : 'bg-red-500';
-          return (
-            <div key={item.key} className="flex items-center gap-1.5 shrink-0">
-              <span className={cn('size-1.5 rounded-full', dotColor, item.status === 'healthy' && 'animate-pulse')} />
-              <span className="text-[11px] font-medium text-muted-foreground">{item.label}</span>
-              <span className="text-[11px] font-mono text-foreground">{item.value}</span>
-            </div>
-          );
-        })}
-        <div className="h-3 w-px bg-border shrink-0" />
-        <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-medium shrink-0 ml-auto">
-          <span className="size-1 rounded-full bg-amber-500" />
-          Demo data
-        </span>
-      </div>
-    </footer>
-  );
-}
-
-function LastSyncedBadge() {
-  // Initialise with the current time so the badge shows a real value on the
-  // very first render — no need to synchronously setState inside the effect
-  // (which would trip the `react-hooks/set-state-in-effect` rule and cause
-  // a cascading re-render on mount).
-  const [lastSynced, setLastSynced] = useState<Date | null>(new Date());
-  useEffect(() => {
-    const id = setInterval(() => setLastSynced(new Date()), 8000);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-muted-foreground mr-2">
-      <CheckCircle2 className="size-3.5 text-emerald-500" />
-      <span>Synced {lastSynced ? lastSynced.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}</span>
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -543,14 +643,27 @@ export function SuperAdminView() {
   // Mobile sidebar drawer (slides in from the left below `lg:`).
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  // NOTE: The bottom status-bar polling (8s interval) and the "Synced" badge
-  // in the top bar used to live here on `SuperAdminView` itself. That caused
-  // the entire 2900-line component (and its nested function-body Tab
-  // components) to re-render every 8 seconds, which unmounted/remounted the
-  // active tab and re-fired all its effects. Both pieces now live in the
-  // isolated child components `<SuperAdminStatusBar />` and
-  // `<LastSyncedBadge />` defined above — the parent no longer re-renders
-  // on the polling tick.
+  // Bottom status bar — simulated live health data. Updates every 8s with
+  // small jittered values to feel alive. Real platform-health endpoints
+  // don't exist yet — this is a clearly-labeled demo indicator.
+  const [statusItems, setStatusItems] = useState<StatusBarItem[]>(INITIAL_STATUS);
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  useEffect(() => {
+    setLastSynced(new Date());
+    const id = setInterval(() => {
+      setStatusItems((prev) => prev.map((item) => {
+        // Light jitter on the value; status stays healthy (real warnings
+        // would come from a real /api/health endpoint).
+        if (item.key === 'api') return { ...item, value: `${8 + Math.floor(Math.random() * 8)}ms` };
+        if (item.key === 'db') return { ...item, value: `${2 + Math.floor(Math.random() * 4)}ms` };
+        if (item.key === 'queue') return { ...item, value: `${Math.floor(Math.random() * 6)}` };
+        if (item.key === 'storage') return { ...item, value: `${77 + Math.floor(Math.random() * 3)}%` };
+        return item;
+      }));
+      setLastSynced(new Date());
+    }, 8000);
+    return () => clearInterval(id);
+  }, []);
 
   // Guard: Only superadmin users can access this view
   const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin' || auth.user?.role === 'super_admin' || (auth.user?.role === 'admin' && !auth.user?.tenantId));
@@ -689,18 +802,10 @@ export function SuperAdminView() {
   }, [tenants]);
 
   useEffect(() => {
-    // Gate the credits waterfall on the Credits tab being active. This is a
-    // sequential N+1 fetch (1 HTTP round-trip per tenant) that previously
-    // fired on every mount regardless of which tab was open — for 100
-    // tenants that's ~100 sequential round-trips = 10+ seconds of dead
-    // network time spent even if the user never opens Credits. We still
-    // keep the existing serial logic (batching is a separate API change),
-    // but only kick it off when the user actually navigates to Credits,
-    // and only once per session (guarded by `creditsData.length === 0`).
-    if (activeTab === 'credits' && tenants.length > 0 && creditsData.length === 0) {
+    if (tenants.length > 0 && creditsData.length === 0) {
       fetchAllCredits();
     }
-  }, [activeTab, tenants.length, creditsData.length, fetchAllCredits]);
+  }, [tenants.length, creditsData.length, fetchAllCredits]);
 
   useEffect(() => {
     if (tenants.length > 0 && !selectedTenantForFlags) {
@@ -715,15 +820,1802 @@ export function SuperAdminView() {
   }, [tenants, selectedTenantForMenu, menuScope]);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TAB COMPONENTS
+  // 1. DASHBOARD TAB — Command Center
   // ═══════════════════════════════════════════════════════════════════════════
-  // The 7 Tab components (DashboardTab, TenantsTab, SubscriptionsTab, ModulesTab,
-  // UsersTab, AuditLogsTab, CreditsTab) were previously defined INSIDE this
-  // function body. Each parent re-render created a new function reference, so
-  // React unmounts/remounts the active tab — losing state and re-firing
-  // effects. They're now hoisted into module-level files under
-  // `superadmin/sections/*-tab.tsx` and receive all data + handlers via props
-  // (see `renderActiveSection` below).
+
+  function DashboardTab() {
+    const stats = (statsData as PlatformStats) || null;
+    const loading = statsLoading;
+
+    const handleRefresh = useCallback(() => {
+      refetchStats();
+      refetchTenants();
+    }, [refetchStats, refetchTenants]);
+
+    // Revenue & tenant growth data (6 months) for recharts
+    const growthChartData = useMemo(() => {
+      const months: Record<string, { tenants: number; revenue: number }> = {};
+      const now = new Date();
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = d.toLocaleDateString('en-US', { month: 'short' });
+        months[key] = { tenants: 0, revenue: 0 };
+      }
+      tenants.forEach((t) => {
+        try {
+          const d = new Date(t.createdAt);
+          const key = d.toLocaleDateString('en-US', { month: 'short' });
+          if (key in months) {
+            months[key].tenants++;
+            months[key].revenue += t.mrr;
+          }
+        } catch { /* ignore */ }
+      });
+      return Object.entries(months).map(([month, v]) => ({ month, ...v }));
+    }, [tenants]);
+
+    const recentSignups = useMemo(() =>
+      [...tenants].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5),
+    [tenants]);
+
+    const alerts = useMemo(() => {
+      const list: { type: 'warning' | 'error' | 'info'; message: string; tenant?: string }[] = [];
+      tenants.filter((t) => t.planStatus === 'suspended').slice(0, 3).forEach((t) => {
+        list.push({ type: 'error', message: `Tenant "${t.name}" is suspended`, tenant: t.name });
+      });
+      tenants.filter((t) => t.planStatus === 'trial').slice(0, 3).forEach((t) => {
+        list.push({ type: 'warning', message: `Tenant "${t.name}" is on trial`, tenant: t.name });
+      });
+      if (list.length === 0) {
+        list.push({ type: 'info', message: 'No active alerts. Platform is healthy.' });
+      }
+      return list.slice(0, 6);
+    }, [tenants]);
+
+    // Platform health score: weighted metric (0-100)
+    const healthScore = useMemo(() => {
+      const total = tenants.length || 1;
+      const active = tenants.filter((t) => t.planStatus === 'active').length;
+      const suspended = tenants.filter((t) => t.planStatus === 'suspended').length;
+      const trial = tenants.filter((t) => t.planStatus === 'trial').length;
+      const score = Math.round(((active * 1.0) + (trial * 0.6) + (suspended * 0)) / total * 100);
+      return Math.min(score, 100);
+    }, [tenants]);
+
+    const trialCount = tenants.filter((t) => t.planStatus === 'trial').length;
+    const suspendedCount = tenants.filter((t) => t.planStatus === 'suspended').length;
+
+    if (loading) return (
+      <div className="space-y-6">
+        <KPISkeleton count={4} />
+        <Skeleton className="h-64 rounded-lg" />
+      </div>
+    );
+
+    return (
+      <div className="space-y-6">
+        {/* Row 1: 4 KPI cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiCard
+            label="Total Tenants"
+            value={stats?.totalTenants ?? tenants.length}
+            icon={Building2}
+            trend={stats?.trends?.tenants}
+            color="emerald"
+            sub={`${stats?.activeTenants ?? tenants.filter(t => t.planStatus === 'active').length} active`}
+          />
+          <KpiCard
+            label="Active Users"
+            value={stats?.activeUsers ?? stats?.totalUsers ?? users.length}
+            icon={Users}
+            trend={stats?.trends?.users}
+            color="sky"
+            sub={`${stats?.totalUsers ?? users.length} total`}
+          />
+          <KpiCard
+            label="Monthly Revenue"
+            value={format(stats?.mrr ?? 0)}
+            icon={DollarSign}
+            trend={stats?.trends?.revenue}
+            color="emerald"
+            sub={`ARR ${format(stats?.arr ?? 0)}`}
+          />
+          <KpiCard
+            label="Platform Health"
+            value={`${healthScore}%`}
+            icon={ShieldCheck}
+            color={healthScore >= 80 ? 'emerald' : healthScore >= 60 ? 'amber' : 'red'}
+            sub={`${suspendedCount} suspended · ${trialCount} trial`}
+          />
+        </div>
+
+        {/* Row 2: Revenue & Tenant Growth chart (2/3) + Platform Health (1/3) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="card-shadow lg:col-span-2">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <LineChart className="size-4 text-primary" />
+                    Growth & Revenue
+                  </CardTitle>
+                  <CardDescription className="text-xs text-muted-foreground">New tenants and MRR by month</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={240}>
+                <AreaChart data={growthChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorTenants" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="oklch(0.696 0.17 162.48)" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="oklch(0.696 0.17 162.48)" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="oklch(0.6 0.118 184.704)" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="oklch(0.6 0.118 184.704)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.928 0.005 256)" strokeOpacity={0.5} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'oklch(0.55 0.015 256)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: 'oklch(0.55 0.015 256)' }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'oklch(1 0 0)',
+                      border: '1px solid oklch(0.928 0.005 256)',
+                      borderRadius: '0.5rem',
+                      fontSize: '12px',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    }}
+                  />
+                  <Area type="monotone" dataKey="tenants" stroke="oklch(0.696 0.17 162.48)" strokeWidth={2} fill="url(#colorTenants)" name="New Tenants" />
+                  <Area type="monotone" dataKey="revenue" stroke="oklch(0.6 0.118 184.704)" strokeWidth={2} fill="url(#colorRevenue)" name="MRR Added" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Platform Health panel */}
+          <Card className="card-shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Activity className="size-4 text-primary" />
+                Platform Health
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Health score gauge */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-muted-foreground">Health Score</span>
+                  <span className={cn(
+                    'text-sm font-bold',
+                    healthScore >= 80 ? 'text-emerald-600 dark:text-emerald-400' :
+                    healthScore >= 60 ? 'text-amber-600 dark:text-amber-400' :
+                    'text-red-600 dark:text-red-400'
+                  )}>{healthScore}%</span>
+                </div>
+                <Progress value={healthScore} className="h-2" />
+              </div>
+
+              {/* Mini stats */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-muted/50 p-2.5">
+                  <p className="text-[10px] text-muted-foreground">Trial</p>
+                  <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{trialCount}</p>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-2.5">
+                  <p className="text-[10px] text-muted-foreground">Suspended</p>
+                  <p className="text-lg font-bold text-red-600 dark:text-red-400">{suspendedCount}</p>
+                </div>
+              </div>
+
+              {/* Storage status */}
+              {storageStatus && (
+                <div className="rounded-lg border border-border p-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground">File Storage</span>
+                    <Badge variant="outline" className={cn(
+                      'text-[10px] capitalize',
+                      storageStatus.activeProvider === 's3'
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                        : storageStatus.activeProvider === 'supabase'
+                        ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20'
+                        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                    )}>
+                      {storageStatus.activeProvider}
+                    </Badge>
+                  </div>
+                </div>
+              )}
+
+              {/* Alerts */}
+              <div className="space-y-1.5">
+                {alerts.slice(0, 3).map((alert, i) => (
+                  <div key={i} className={cn(
+                    'flex items-start gap-2 p-2 rounded-md text-xs',
+                    alert.type === 'error' ? 'bg-red-500/5 text-red-600 dark:text-red-400' :
+                    alert.type === 'warning' ? 'bg-amber-500/5 text-amber-600 dark:text-amber-400' :
+                    'bg-muted text-muted-foreground'
+                  )}>
+                    {alert.type === 'error' ? <ShieldAlert className="size-3.5 shrink-0 mt-0.5" /> :
+                     alert.type === 'warning' ? <AlertTriangle className="size-3.5 shrink-0 mt-0.5" /> :
+                     <CheckCircle2 className="size-3.5 shrink-0 mt-0.5" />}
+                    <span className="line-clamp-2">{alert.message}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Row 3: Recent Signups (1/2) + Quick Actions (1/2) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="card-shadow">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Building2 className="size-4 text-primary" />
+                  Recent Signups
+                </CardTitle>
+                <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => setActiveTab('tenants')}>
+                  View all <ChevronRight className="size-3 ml-0.5" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {recentSignups.length === 0 ? (
+                <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                  No tenants yet
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {recentSignups.map((t) => (
+                    <div key={t.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 transition-colors">
+                      <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <Building2 className="size-4 text-primary" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground truncate">{t.name}</p>
+                        <p className="text-[11px] text-muted-foreground">{timeAgo(t.createdAt)}</p>
+                      </div>
+                      <Badge variant="outline" className={cn('text-[10px] capitalize', getPlanBadgeClasses(t.plan))}>
+                        {t.plan}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="card-shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Zap className="size-4 text-primary" />
+                Quick Actions
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">Jump to common admin tasks</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setActiveTab('tenants')}
+                  className="flex flex-col items-start gap-2 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
+                >
+                  <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Plus className="size-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Add Tenant</p>
+                    <p className="text-[11px] text-muted-foreground">Create new workspace</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('credits')}
+                  className="flex flex-col items-start gap-2 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
+                >
+                  <div className="size-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                    <Wallet className="size-4 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Grant Credits</p>
+                    <p className="text-[11px] text-muted-foreground">Manage WhatsApp credits</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('feature-flags')}
+                  className="flex flex-col items-start gap-2 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
+                >
+                  <div className="size-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                    <Flag className="size-4 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Toggle Features</p>
+                    <p className="text-[11px] text-muted-foreground">Enable/disable modules</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('audit-logs')}
+                  className="flex flex-col items-start gap-2 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
+                >
+                  <div className="size-8 rounded-lg bg-sky-500/10 flex items-center justify-center">
+                    <FileText className="size-4 text-sky-600 dark:text-sky-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">View Audit Log</p>
+                    <p className="text-[11px] text-muted-foreground">Track platform activity</p>
+                  </div>
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Row 4: Churn / extra metrics */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card className="card-shadow">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-teal-500/10 flex items-center justify-center shrink-0">
+                <TrendingUp className="size-5 text-teal-600 dark:text-teal-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">ARR</p>
+                <p className="text-xl font-bold text-foreground">{format(stats?.arr ?? 0)}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="card-shadow">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+                <TrendingDown className="size-5 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Churn Rate</p>
+                <p className="text-xl font-bold text-foreground">{stats?.avgChurnRate ?? 0}%</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="card-shadow">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <CreditCard className="size-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Active Subscriptions</p>
+                <p className="text-xl font-bold text-foreground">{stats?.activeSubscriptions ?? subscriptions.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 2. TENANT MANAGEMENT TAB
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function TenantsTab() {
+    const [search, setSearch] = useState('');
+    const [planFilter, setPlanFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [suspendDialog, setSuspendDialog] = useState<{ tenant: Tenant; action: 'suspend' | 'reactivate' | 'delete' } | null>(null);
+    const [suspendReason, setSuspendReason] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [viewTenant, setViewTenant] = useState<Tenant | null>(null);
+    const [editPlanDialog, setEditPlanDialog] = useState<Tenant | null>(null);
+    const [newPlan, setNewPlan] = useState('');
+    const [createDialog, setCreateDialog] = useState(false);
+    const [newTenantForm, setNewTenantForm] = useState({ name: '', email: '', plan: 'starter', ownerName: '', password: '' });
+    const [creating, setCreating] = useState(false);
+    const [creditEditTenant, setCreditEditTenant] = useState<CreditInfo | null>(null);
+    const [creditEditForm, setCreditEditForm] = useState({
+      trialWhatsappCredits: 10,
+      platformWhatsappEnabled: true,
+      ownWhatsappConnected: false,
+      ownEmailProviderConnected: false,
+    });
+    const [creditSaving, setCreditSaving] = useState(false);
+
+    const filteredTenants = useMemo(() => {
+      return tenants.filter((t) => {
+        const matchesSearch = !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.email.toLowerCase().includes(search.toLowerCase());
+        const matchesPlan = planFilter === 'all' || t.plan === planFilter;
+        const matchesStatus = statusFilter === 'all' || t.planStatus === statusFilter || (statusFilter === 'suspended' && t.suspendedAt);
+        return matchesSearch && matchesPlan && matchesStatus;
+      });
+    }, [tenants, search, planFilter, statusFilter]);
+
+    const handleAction = async () => {
+      if (!suspendDialog) return;
+      if (suspendDialog.action === 'suspend' && !suspendReason.trim()) {
+        toast.error('Please provide a reason for suspension');
+        return;
+      }
+      setSaving(true);
+      try {
+        const endpoint = `/api/superadmin/tenants/${suspendDialog.tenant.id}`;
+        const method = suspendDialog.action === 'delete' ? 'DELETE' : 'PATCH';
+        const body = suspendDialog.action === 'suspend'
+          ? { status: 'suspended', reason: suspendReason.trim() }
+          : suspendDialog.action === 'reactivate'
+          ? { status: 'active' }
+          : undefined;
+
+        const res = await fetch(endpoint, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        if (res.ok) {
+          toast.success(`Tenant ${suspendDialog.action === 'delete' ? 'deleted' : suspendDialog.action === 'suspend' ? 'suspended' : 'reactivated'} successfully`);
+          refetchTenants();
+        } else {
+          const data = await res.json();
+          toast.error(data.error || `Failed to ${suspendDialog.action} tenant`);
+        }
+      } catch {
+        toast.error('Network error');
+      } finally {
+        setSaving(false);
+        setSuspendDialog(null);
+        setSuspendReason('');
+      }
+    };
+
+    const handleEditPlan = async () => {
+      if (!editPlanDialog || !newPlan) return;
+      setSaving(true);
+      try {
+        const res = await fetch(`/api/superadmin/tenants/${editPlanDialog.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan: newPlan }),
+        });
+        if (res.ok) {
+          toast.success(`Plan updated to ${newPlan}`);
+          refetchTenants();
+        } else {
+          toast.error('Failed to update plan');
+        }
+      } catch {
+        toast.error('Network error');
+      } finally {
+        setSaving(false);
+        setEditPlanDialog(null);
+      }
+    };
+
+    const handleCreateTenant = async () => {
+      if (!newTenantForm.name.trim() || !newTenantForm.email.trim()) {
+        toast.error('Name and email are required');
+        return;
+      }
+      setCreating(true);
+      try {
+        const res = await fetch('/api/superadmin/tenants', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newTenantForm),
+        });
+        if (res.ok) {
+          toast.success('Tenant created successfully');
+          setCreateDialog(false);
+          setNewTenantForm({ name: '', email: '', plan: 'starter', ownerName: '', password: '' });
+          refetchTenants();
+        } else {
+          const data = await res.json();
+          toast.error(data.error || 'Failed to create tenant');
+        }
+      } catch {
+        toast.error('Network error');
+      } finally {
+        setCreating(false);
+      }
+    };
+
+    const handleCreditEdit = (tenant: Tenant) => {
+      const existing = creditsData.find((c) => c.tenantId === tenant.id);
+      const creditInfo: CreditInfo = existing ?? {
+        tenantId: tenant.id, tenantName: tenant.name, plan: tenant.plan,
+        trialWhatsappCredits: 10, trialWhatsappUsed: 0,
+        platformWhatsappEnabled: true, ownWhatsappConnected: false, ownEmailProviderConnected: false,
+      };
+      setCreditEditTenant(creditInfo);
+      setCreditEditForm({
+        trialWhatsappCredits: creditInfo.trialWhatsappCredits,
+        platformWhatsappEnabled: creditInfo.platformWhatsappEnabled,
+        ownWhatsappConnected: creditInfo.ownWhatsappConnected,
+        ownEmailProviderConnected: creditInfo.ownEmailProviderConnected,
+      });
+    };
+
+    const handleCreditSave = async () => {
+      if (!creditEditTenant) return;
+      setCreditSaving(true);
+      try {
+        const res = await fetch('/api/admin/credits', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tenantId: creditEditTenant.tenantId, ...creditEditForm }),
+        });
+        if (res.ok) {
+          toast.success('Credit settings updated');
+          setCreditEditTenant(null);
+          fetchAllCredits();
+        } else {
+          const data = await res.json();
+          toast.error(data.error || 'Failed to update credit settings');
+        }
+      } catch {
+        toast.error('Network error');
+      } finally {
+        setCreditSaving(false);
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        {/* Search, Filters, Create */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search tenants by name or email..."
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Select value={planFilter} onValueChange={setPlanFilter}>
+            <SelectTrigger className="w-full sm:w-[140px]"><SelectValue placeholder="Plan" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Plans</SelectItem>
+              <SelectItem value="trial">Trial</SelectItem>
+              <SelectItem value="starter">Starter</SelectItem>
+              <SelectItem value="growth">Growth</SelectItem>
+              <SelectItem value="pro">Pro</SelectItem>
+              <SelectItem value="enterprise">Enterprise</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="trial">Trial</SelectItem>
+              <SelectItem value="suspended">Suspended</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={() => setCreateDialog(true)} className="shrink-0">
+            <Plus className="size-4 mr-1.5" /> New Tenant
+          </Button>
+        </div>
+
+        {/* Table */}
+        {tenantsLoading ? <TableSkeleton /> : filteredTenants.length === 0 ? (
+          <EmptyState
+            icon={Building2}
+            title="No tenants found"
+            subtitle="Try adjusting your filters, or create a new tenant to get started."
+            action={<Button onClick={() => setCreateDialog(true)}><Plus className="size-4 mr-1.5" /> New Tenant</Button>}
+          />
+        ) : (
+          <Card className="card-shadow">
+            <ScrollArea className="max-h-[calc(100vh-320px)]">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Name</TableHead>
+                    <TableHead>Plan</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-center">WA Credits</TableHead>
+                    <TableHead className="text-center">Email</TableHead>
+                    <TableHead className="text-right">MRR</TableHead>
+                    <TableHead className="text-center">Users</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTenants.map((tenant) => {
+                    const tenantCredit = creditsData.find((c) => c.tenantId === tenant.id);
+                    const isPaidWithOwnWhatsApp = tenantCredit && tenantCredit.plan !== 'trial' && tenantCredit.ownWhatsappConnected;
+                    return (
+                      <TableRow key={tenant.id}>
+                        <TableCell className="font-medium text-foreground">
+                          <div className="flex items-center gap-2">
+                            <div className="size-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                              <Building2 className="size-3.5 text-primary" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate">{tenant.name}</p>
+                              <p className="text-[11px] text-muted-foreground truncate">{tenant.email}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadgeClasses(tenant.plan))}>
+                            {tenant.plan}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadgeClasses(tenant.planStatus))}>
+                            {tenant.planStatus}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {isPaidWithOwnWhatsApp ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Unlimited</Badge>
+                          ) : tenantCredit ? (
+                            <span className="text-xs text-muted-foreground">{tenantCredit.trialWhatsappUsed}/{tenantCredit.trialWhatsappCredits}</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {tenantCredit?.ownEmailProviderConnected ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Own</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] text-muted-foreground">Platform</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-foreground">{format(tenant.mrr)}</TableCell>
+                        <TableCell className="text-center text-muted-foreground">{tenant.userCount}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-0.5">
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setViewTenant(tenant)} title="View">
+                              <Eye className="size-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setEditPlanDialog(tenant); setNewPlan(tenant.plan); }} title="Edit Plan">
+                              <Edit3 className="size-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleCreditEdit(tenant)} title="Credits">
+                              <Wallet className="size-3.5" />
+                            </Button>
+                            {tenant.planStatus === 'suspended' ? (
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => setSuspendDialog({ tenant, action: 'reactivate' })} title="Reactivate">
+                                <PlayCircle className="size-3.5" />
+                              </Button>
+                            ) : (
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700" onClick={() => { setSuspendReason(''); setSuspendDialog({ tenant, action: 'suspend' }); }} title="Suspend">
+                                <Pause className="size-3.5" />
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => setSuspendDialog({ tenant, action: 'delete' })} title="Delete">
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </Card>
+        )}
+
+        {/* View Tenant Dialog */}
+        <Dialog open={!!viewTenant} onOpenChange={(open) => { if (!open) setViewTenant(null); }}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Building2 className="size-5 text-primary" /> {viewTenant?.name}
+              </DialogTitle>
+              <DialogDescription>Tenant details</DialogDescription>
+            </DialogHeader>
+            {viewTenant && (
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><Label className="text-muted-foreground text-xs">Email</Label><p className="text-foreground">{viewTenant.email || '—'}</p></div>
+                <div><Label className="text-muted-foreground text-xs">Phone</Label><p className="text-foreground">{viewTenant.phone || '—'}</p></div>
+                <div><Label className="text-muted-foreground text-xs">Plan</Label><Badge variant="outline" className={cn('capitalize', getPlanBadgeClasses(viewTenant.plan))}>{viewTenant.plan}</Badge></div>
+                <div><Label className="text-muted-foreground text-xs">Status</Label><Badge variant="outline" className={cn('capitalize', getStatusBadgeClasses(viewTenant.planStatus))}>{viewTenant.planStatus}</Badge></div>
+                <div><Label className="text-muted-foreground text-xs">Industry</Label><p className="text-foreground">{viewTenant.industry || '—'}</p></div>
+                <div><Label className="text-muted-foreground text-xs">Country</Label><p className="text-foreground">{viewTenant.country || '—'}</p></div>
+                <div><Label className="text-muted-foreground text-xs">Currency</Label><p className="text-foreground">{viewTenant.currency || '—'}</p></div>
+                <div><Label className="text-muted-foreground text-xs">Users</Label><p className="text-foreground">{viewTenant.userCount}</p></div>
+                <div><Label className="text-muted-foreground text-xs">MRR</Label><p className="text-foreground">{format(viewTenant.mrr)}</p></div>
+                <div><Label className="text-muted-foreground text-xs">ARR</Label><p className="text-foreground">{format(viewTenant.arr)}</p></div>
+                <div><Label className="text-muted-foreground text-xs">Created</Label><p className="text-foreground">{formatDate(viewTenant.createdAt)}</p></div>
+                <div><Label className="text-muted-foreground text-xs">Onboarding</Label><p className="text-foreground">{viewTenant.onboardingCompleted ? 'Completed' : 'Pending'}</p></div>
+                {viewTenant.suspendedAt && (
+                  <div className="col-span-2"><Label className="text-muted-foreground text-xs">Suspended</Label><p className="text-red-600 dark:text-red-400 text-xs">{formatDateTime(viewTenant.suspendedAt)} — {viewTenant.suspensionReason || 'No reason'}</p></div>
+                )}
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setViewTenant(null)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Suspend/Reactivate/Delete Dialog */}
+        <Dialog open={!!suspendDialog} onOpenChange={(open) => { if (!open) { setSuspendDialog(null); setSuspendReason(''); } }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {suspendDialog?.action === 'suspend' ? <Pause className="size-5 text-amber-500" /> :
+                 suspendDialog?.action === 'delete' ? <Trash2 className="size-5 text-red-500" /> :
+                 <PlayCircle className="size-5 text-emerald-500" />}
+                {suspendDialog?.action === 'suspend' ? 'Suspend Tenant' : suspendDialog?.action === 'delete' ? 'Delete Tenant' : 'Reactivate Tenant'}
+              </DialogTitle>
+              <DialogDescription>
+                {suspendDialog?.action === 'delete'
+                  ? `This will permanently delete "${suspendDialog?.tenant.name}" and all its data. This cannot be undone.`
+                  : suspendDialog?.action === 'suspend'
+                  ? `This will block access for "${suspendDialog?.tenant.name}".`
+                  : `This will restore access for "${suspendDialog?.tenant.name}".`}
+              </DialogDescription>
+            </DialogHeader>
+            {suspendDialog?.action === 'suspend' && (
+              <div className="space-y-2">
+                <Label>Reason for suspension</Label>
+                <Textarea
+                  placeholder="e.g. Payment failure, policy violation..."
+                  value={suspendReason}
+                  onChange={(e) => setSuspendReason(e.target.value)}
+                  rows={3}
+                />
+              </div>
+            )}
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => { setSuspendDialog(null); setSuspendReason(''); }}>Cancel</Button>
+              <Button
+                variant={suspendDialog?.action === 'reactivate' ? 'default' : 'destructive'}
+                onClick={handleAction}
+                disabled={saving || (suspendDialog?.action === 'suspend' && !suspendReason.trim())}
+              >
+                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null}
+                {suspendDialog?.action === 'suspend' ? 'Suspend' : suspendDialog?.action === 'delete' ? 'Delete' : 'Reactivate'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Plan Dialog */}
+        <Dialog open={!!editPlanDialog} onOpenChange={(open) => { if (!open) setEditPlanDialog(null); }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Edit3 className="size-5 text-primary" /> Change Plan</DialogTitle>
+              <DialogDescription>Update the plan for {editPlanDialog?.name}</DialogDescription>
+            </DialogHeader>
+            <Select value={newPlan} onValueChange={setNewPlan}>
+              <SelectTrigger><SelectValue placeholder="Select plan" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="trial">Trial</SelectItem>
+                <SelectItem value="starter">Starter</SelectItem>
+                <SelectItem value="growth">Growth</SelectItem>
+                <SelectItem value="pro">Pro</SelectItem>
+                <SelectItem value="enterprise">Enterprise</SelectItem>
+              </SelectContent>
+            </Select>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setEditPlanDialog(null)}>Cancel</Button>
+              <Button onClick={handleEditPlan} disabled={saving || !newPlan}>
+                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null} Update Plan
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Create Tenant Dialog */}
+        <Dialog open={createDialog} onOpenChange={setCreateDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Plus className="size-5 text-primary" /> Create New Tenant</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div><Label>Company Name *</Label><Input className="mt-1" value={newTenantForm.name} onChange={(e) => setNewTenantForm((p) => ({ ...p, name: e.target.value }))} placeholder="Acme Corp" /></div>
+              <div><Label>Owner Email *</Label><Input className="mt-1" type="email" value={newTenantForm.email} onChange={(e) => setNewTenantForm((p) => ({ ...p, email: e.target.value }))} placeholder="admin@acme.com" /></div>
+              <div><Label>Owner Name</Label><Input className="mt-1" value={newTenantForm.ownerName} onChange={(e) => setNewTenantForm((p) => ({ ...p, ownerName: e.target.value }))} placeholder="John Doe" /></div>
+              <div><Label>Password</Label><Input className="mt-1" type="password" value={newTenantForm.password} onChange={(e) => setNewTenantForm((p) => ({ ...p, password: e.target.value }))} placeholder="••••••••" /></div>
+              <div><Label>Plan</Label>
+                <Select value={newTenantForm.plan} onValueChange={(v) => setNewTenantForm((p) => ({ ...p, plan: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="trial">Trial</SelectItem>
+                    <SelectItem value="starter">Starter</SelectItem>
+                    <SelectItem value="growth">Growth</SelectItem>
+                    <SelectItem value="pro">Pro</SelectItem>
+                    <SelectItem value="enterprise">Enterprise</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setCreateDialog(false)}>Cancel</Button>
+              <Button onClick={handleCreateTenant} disabled={creating || !newTenantForm.name.trim() || !newTenantForm.email.trim()}>
+                {creating ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Plus className="size-4 mr-1.5" />} Create
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Credit Edit Dialog */}
+        <Dialog open={!!creditEditTenant} onOpenChange={(open) => { if (!open) setCreditEditTenant(null); }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Wallet className="size-5 text-primary" /> Edit Credit Settings</DialogTitle>
+              <DialogDescription>Manage credits for {creditEditTenant?.tenantName}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Trial WhatsApp Credits</Label>
+                <Input
+                  type="number" min={0}
+                  value={creditEditForm.trialWhatsappCredits}
+                  onChange={(e) => setCreditEditForm((p) => ({ ...p, trialWhatsappCredits: parseInt(e.target.value) || 0 }))}
+                />
+                <p className="text-[11px] text-muted-foreground">Current usage: {creditEditTenant?.trialWhatsappUsed ?? 0} credits used</p>
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Platform WhatsApp</Label>
+                  <p className="text-[11px] text-muted-foreground">Enable platform-provided WhatsApp</p>
+                </div>
+                <Switch checked={creditEditForm.platformWhatsappEnabled} onCheckedChange={(checked) => setCreditEditForm((p) => ({ ...p, platformWhatsappEnabled: checked }))} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Own WhatsApp Connected</Label>
+                  <p className="text-[11px] text-muted-foreground">Tenant has connected their own WhatsApp</p>
+                </div>
+                <Switch checked={creditEditForm.ownWhatsappConnected} onCheckedChange={(checked) => setCreditEditForm((p) => ({ ...p, ownWhatsappConnected: checked }))} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Own Email Provider</Label>
+                  <p className="text-[11px] text-muted-foreground">Tenant has connected their own email provider</p>
+                </div>
+                <Switch checked={creditEditForm.ownEmailProviderConnected} onCheckedChange={(checked) => setCreditEditForm((p) => ({ ...p, ownEmailProviderConnected: checked }))} />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setCreditEditTenant(null)}>Cancel</Button>
+              <Button onClick={handleCreditSave} disabled={creditSaving}>
+                {creditSaving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="size-4 mr-1.5" />} Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 3. SUBSCRIPTION MANAGEMENT TAB
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function SubscriptionsTab() {
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [actionDialog, setActionDialog] = useState<{ sub: Subscription; action: 'pause' | 'resume' | 'cancel' | 'change_plan' } | null>(null);
+    const [actionReason, setActionReason] = useState('');
+    const [newPlan, setNewPlan] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const filteredSubs = useMemo(() => {
+      if (statusFilter === 'all') return subscriptions;
+      return subscriptions.filter((s) => s.status === statusFilter);
+    }, [subscriptions, statusFilter]);
+
+    const planDistribution = useMemo(() => {
+      const dist: Record<string, number> = {};
+      subscriptions.forEach((s) => { dist[s.plan] = (dist[s.plan] || 0) + 1; });
+      return dist;
+    }, [subscriptions]);
+
+    const totalSubs = subscriptions.length;
+    const maxDist = Math.max(...Object.values(planDistribution), 1);
+
+    const planChartColors: Record<string, string> = {
+      trial: 'oklch(0.7 0 0)',
+      starter: 'oklch(0.6 0.15 245)',
+      growth: 'oklch(0.696 0.17 162.48)',
+      pro: 'oklch(0.6 0.118 184.704)',
+      enterprise: 'oklch(0.55 0.2 303)',
+    };
+
+    const handleAction = async () => {
+      if (!actionDialog) return;
+      setSaving(true);
+      try {
+        const res = await fetch('/api/superadmin/subscriptions', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subscriptionId: actionDialog.sub.id,
+            action: actionDialog.action,
+            reason: actionReason.trim() || undefined,
+            newPlan: actionDialog.action === 'change_plan' ? newPlan : undefined,
+          }),
+        });
+        if (res.ok) {
+          toast.success(`Subscription ${actionDialog.action === 'pause' ? 'paused' : actionDialog.action === 'resume' ? 'resumed' : actionDialog.action === 'cancel' ? 'cancelled' : 'plan changed'} successfully`);
+        } else {
+          const data = await res.json();
+          toast.error(data.error || 'Failed to update subscription');
+        }
+      } catch {
+        toast.error('Network error');
+      } finally {
+        setSaving(false);
+        setActionDialog(null);
+        setActionReason('');
+        setNewPlan('');
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        {/* Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { label: 'Active', value: subscriptions.filter((s) => s.status === 'active').length, icon: CheckCircle2, color: 'emerald' as const },
+            { label: 'Trial', value: subscriptions.filter((s) => s.status === 'trial').length, icon: Clock, color: 'amber' as const },
+            { label: 'Paused', value: subscriptions.filter((s) => s.status === 'paused').length, icon: Pause, color: 'sky' as const },
+            { label: 'Cancelled', value: subscriptions.filter((s) => s.status === 'cancelled').length, icon: XCircle, color: 'red' as const },
+          ].map((stat) => <KpiCard key={stat.label} label={stat.label} value={stat.value} icon={stat.icon} color={stat.color} />)}
+        </div>
+
+        {/* Plan Distribution + Table */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="card-shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <BarChart3 className="size-4 text-primary" />
+                Plan Distribution
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={Object.entries(planDistribution).map(([plan, count]) => ({ plan, count }))} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.928 0.005 256)" strokeOpacity={0.5} />
+                  <XAxis dataKey="plan" tick={{ fontSize: 10, fill: 'oklch(0.55 0.015 256)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: 'oklch(0.55 0.015 256)' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={{ backgroundColor: 'oklch(1 0 0)', border: '1px solid oklch(0.928 0.005 256)', borderRadius: '0.5rem', fontSize: '12px' }} />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                    {Object.entries(planDistribution).map(([plan]) => (
+                      <Cell key={plan} fill={planChartColors[plan] || 'oklch(0.696 0.17 162.48)'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card className="card-shadow lg:col-span-2">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-semibold text-foreground">All Subscriptions</CardTitle>
+                  <CardDescription className="text-xs text-muted-foreground">{filteredSubs.length} found</CardDescription>
+                </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[130px] text-xs">
+                    <Filter className="size-3 mr-1" /><SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="trial">Trial</SelectItem>
+                    <SelectItem value="paused">Paused</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {subsLoading ? <TableSkeleton /> : filteredSubs.length === 0 ? (
+                <EmptyState icon={CreditCard} title="No subscriptions found" />
+              ) : (
+                <ScrollArea className="max-h-80">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead>Tenant</TableHead>
+                        <TableHead>Plan</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredSubs.map((sub) => (
+                        <TableRow key={sub.id}>
+                          <TableCell className="font-medium text-foreground">{sub.tenantName}</TableCell>
+                          <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadgeClasses(sub.plan))}>{sub.plan}</Badge></TableCell>
+                          <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadgeClasses(sub.status))}>{sub.status}</Badge></TableCell>
+                          <TableCell className="text-right text-foreground">{format(sub.amount)}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-0.5">
+                              {sub.status === 'active' && (
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700" onClick={() => { setActionReason(''); setActionDialog({ sub, action: 'pause' }); }} title="Pause">
+                                  <Pause className="size-3.5" />
+                                </Button>
+                              )}
+                              {sub.status === 'paused' && (
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => setActionDialog({ sub, action: 'resume' })} title="Resume">
+                                  <PlayCircle className="size-3.5" />
+                                </Button>
+                              )}
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-sky-600 hover:text-sky-700" onClick={() => { setNewPlan(sub.plan); setActionDialog({ sub, action: 'change_plan' }); }} title="Change Plan">
+                                <Edit3 className="size-3.5" />
+                              </Button>
+                              {sub.status !== 'cancelled' && (
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => { setActionReason(''); setActionDialog({ sub, action: 'cancel' }); }} title="Cancel">
+                                  <XCircle className="size-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Action Dialog */}
+        <Dialog open={!!actionDialog} onOpenChange={(open) => { if (!open) { setActionDialog(null); setActionReason(''); setNewPlan(''); } }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {actionDialog?.action === 'pause' ? 'Pause Subscription' :
+                 actionDialog?.action === 'resume' ? 'Resume Subscription' :
+                 actionDialog?.action === 'cancel' ? 'Cancel Subscription' : 'Change Plan'}
+              </DialogTitle>
+              <DialogDescription>{actionDialog?.sub.tenantName} — {actionDialog?.sub.plan} plan</DialogDescription>
+            </DialogHeader>
+            {actionDialog?.action === 'change_plan' ? (
+              <Select value={newPlan} onValueChange={setNewPlan}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="trial">Trial</SelectItem>
+                  <SelectItem value="starter">Starter</SelectItem>
+                  <SelectItem value="growth">Growth</SelectItem>
+                  <SelectItem value="pro">Pro</SelectItem>
+                  <SelectItem value="enterprise">Enterprise</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (actionDialog?.action === 'pause' || actionDialog?.action === 'cancel') ? (
+              <div className="space-y-2">
+                <Label>Reason (optional)</Label>
+                <Textarea placeholder="e.g. Customer request, payment issue..." value={actionReason} onChange={(e) => setActionReason(e.target.value)} rows={3} />
+              </div>
+            ) : null}
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => { setActionDialog(null); setActionReason(''); setNewPlan(''); }}>Cancel</Button>
+              <Button
+                variant={actionDialog?.action === 'resume' ? 'default' : actionDialog?.action === 'change_plan' ? 'default' : 'destructive'}
+                onClick={handleAction}
+                disabled={saving || (actionDialog?.action === 'change_plan' && !newPlan)}
+              >
+                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null} Confirm
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 4. MODULES TAB (merged Feature Flags + Menu Items, grouped by product module)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function ModulesTab() {
+    const [expandedModule, setExpandedModule] = useState<string | null>('CRM');
+    const [localFlags, setLocalFlags] = useState<FeatureFlagDef[]>([]);
+    const [localMenuItems, setLocalMenuItems] = useState<MenuItemDef[]>([]);
+    const [moduleView, setModuleView] = useState<'features' | 'menu'>('features');
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => { setLocalFlags(featureFlags); }, [featureFlags]);
+    useEffect(() => { setLocalMenuItems(menuItems); }, [menuItems]);
+
+    const effectiveTenantId = moduleView === 'features' ? selectedTenantForFlags : (menuScope === 'tenant' ? selectedTenantForMenu : undefined);
+
+    const handleToggleFlag = (flagKey: string) => {
+      if (!selectedTenantForFlags) { toast.error('Please select a tenant first'); return; }
+      const flag = localFlags.find((f) => f.key === flagKey);
+      if (!flag) return;
+      const newEnabled = !flag.enabled;
+      setLocalFlags((prev) => prev.map((f) => f.key === flagKey ? { ...f, enabled: newEnabled } : f));
+      toggleFeatureFlagMutation.mutate(
+        { tenantId: selectedTenantForFlags, flagKey, enabled: newEnabled },
+        {
+          onError: () => {
+            setLocalFlags((prev) => prev.map((f) => f.key === flagKey ? { ...f, enabled: !newEnabled } : f));
+            toast.error('Failed to toggle feature');
+          },
+          onSuccess: () => toast.success(`${flag.label} ${newEnabled ? 'enabled' : 'disabled'}`),
+        },
+      );
+    };
+
+    const handleToggleMenuItem = (itemKey: string) => {
+      const item = localMenuItems.find((i) => i.key === itemKey);
+      if (!item) return;
+      if (menuScope === 'tenant' && !selectedTenantForMenu) { toast.error('Please select a tenant first'); return; }
+      const newEnabled = !item.enabled;
+      setLocalMenuItems((prev) => prev.map((i) => i.key === itemKey ? { ...i, enabled: newEnabled } : i));
+      toggleMenuItemMutation.mutate(
+        { tenantId: effectiveTenantId, menuKey: itemKey, enabled: newEnabled, scope: menuScope },
+        {
+          onError: () => {
+            setLocalMenuItems((prev) => prev.map((i) => i.key === itemKey ? { ...i, enabled: !newEnabled } : i));
+            toast.error('Failed to toggle menu item');
+          },
+          onSuccess: () => toast.success(`${item.label} ${newEnabled ? 'enabled' : 'disabled'} ${menuScope === 'global' ? 'globally' : 'for tenant'}`),
+        },
+      );
+    };
+
+    const handleEnableAllFlags = () => {
+      if (!selectedTenantForFlags) { toast.error('Please select a tenant first'); return; }
+      setLocalFlags((prev) => prev.map((f) => ({ ...f, enabled: true })));
+      setSaving(true);
+      fetch('/api/superadmin/feature-flags', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId: selectedTenantForFlags, flags: localFlags.map((f) => ({ key: f.key, enabled: true })) }),
+      }).then(() => { toast.success('All features enabled'); setSaving(false); }).catch(() => { toast.error('Failed'); setSaving(false); });
+    };
+
+    const handleEnableAllMenu = () => {
+      if (menuScope === 'tenant' && !selectedTenantForMenu) { toast.error('Please select a tenant first'); return; }
+      setLocalMenuItems((prev) => prev.map((i) => ({ ...i, enabled: true })));
+      setSaving(true);
+      fetch('/api/superadmin/menu-items', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId: effectiveTenantId, scope: menuScope, items: localMenuItems.map((i) => ({ key: i.key, enabled: true })) }),
+      }).then((res) => {
+        if (!res.ok) return res.json().then((d: { error?: string }) => { throw new Error(d.error || 'Failed'); });
+        toast.success('All menu items enabled');
+        queryClient.invalidateQueries({ queryKey: ['globalMenuItems'] });
+        queryClient.invalidateQueries({ queryKey: ['menuItems'] });
+        setSaving(false);
+      }).catch((err: Error) => { toast.error(`Failed: ${err.message}`); setSaving(false); });
+    };
+
+    // Group features by module
+    const featuresByModule = useMemo(() => {
+      const map: Record<string, FeatureFlagDef[]> = {};
+      MODULE_SECTIONS.forEach((s) => { map[s.key] = []; });
+      localFlags.forEach((f) => {
+        const moduleKey = FEATURE_MODULE_MAP[f.key] || 'System';
+        if (!map[moduleKey]) map[moduleKey] = [];
+        map[moduleKey].push(f);
+      });
+      return map;
+    }, [localFlags]);
+
+    const menuByModule = useMemo(() => {
+      const map: Record<string, MenuItemDef[]> = {};
+      MODULE_SECTIONS.forEach((s) => { map[s.key] = []; });
+      localMenuItems.forEach((item) => {
+        const sectionKey = item.section || 'System';
+        if (!map[sectionKey]) map[sectionKey] = [];
+        map[sectionKey].push(item);
+      });
+      return map;
+    }, [localMenuItems]);
+
+    return (
+      <div className="space-y-4">
+        {/* Scope controls */}
+        <Card className="card-shadow">
+          <CardContent className="p-4">
+            <div className="flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Feature vs Menu toggle */}
+                <div className="flex rounded-lg border border-border p-0.5 bg-muted/30">
+                  <button
+                    onClick={() => setModuleView('features')}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                      moduleView === 'features' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <Flag className="size-3.5" /> Features
+                  </button>
+                  <button
+                    onClick={() => setModuleView('menu')}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                      moduleView === 'menu' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <Menu className="size-3.5" /> Menu Items
+                  </button>
+                </div>
+
+                {/* Tenant selector for features */}
+                {moduleView === 'features' ? (
+                  <Select value={selectedTenantForFlags} onValueChange={setSelectedTenantForFlags}>
+                    <SelectTrigger className="w-[180px] text-xs h-8"><SelectValue placeholder="Select tenant..." /></SelectTrigger>
+                    <SelectContent>
+                      {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <>
+                    <div className="flex rounded-lg border border-border p-0.5 bg-muted/30">
+                      <button
+                        onClick={() => setMenuScope('global')}
+                        className={cn('flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors',
+                          menuScope === 'global' ? 'bg-red-500 text-white' : 'text-muted-foreground hover:text-foreground')}
+                      >
+                        <Shield className="size-3" /> Global
+                      </button>
+                      <button
+                        onClick={() => setMenuScope('tenant')}
+                        className={cn('flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors',
+                          menuScope === 'tenant' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+                      >
+                        <Building2 className="size-3" /> Tenant
+                      </button>
+                    </div>
+                    {menuScope === 'tenant' && (
+                      <Select value={selectedTenantForMenu} onValueChange={setSelectedTenantForMenu}>
+                        <SelectTrigger className="w-[180px] text-xs h-8"><SelectValue placeholder="Select tenant..." /></SelectTrigger>
+                        <SelectContent>
+                          {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <Button variant="outline" size="sm" onClick={moduleView === 'features' ? handleEnableAllFlags : handleEnableAllMenu} disabled={saving} className="shrink-0">
+                <ToggleRight className="size-4 mr-1.5 text-primary" /> Enable All
+              </Button>
+            </div>
+
+            {/* Summary bar */}
+            <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground border-t border-border pt-3">
+              <span>
+                {moduleView === 'features' ? 'Features' : 'Menu items'} enabled:&nbsp;
+                <span className="font-semibold text-foreground">
+                  {moduleView === 'features' ? localFlags.filter(f => f.enabled).length : localMenuItems.filter(i => i.enabled).length}
+                </span>
+                /{moduleView === 'features' ? localFlags.length : localMenuItems.length}
+              </span>
+              {moduleView === 'menu' && menuScope === 'global' && (
+                <Badge variant="outline" className="text-[10px] text-red-600 dark:text-red-400 border-red-500/20 bg-red-500/5">
+                  Global changes affect ALL tenants
+                </Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Module cards grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {MODULE_SECTIONS.map((section) => {
+            const features = featuresByModule[section.key] || [];
+            const menus = menuByModule[section.key] || [];
+            const items = moduleView === 'features' ? features : menus;
+            const enabledCount = items.filter(i => i.enabled).length;
+            const SectionIcon = section.icon;
+            const isExpanded = expandedModule === section.key;
+            if (items.length === 0) return null;
+
+            const colorMap: Record<string, string> = {
+              emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+              sky: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+              amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+              violet: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+              orange: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+              teal: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
+              slate: 'bg-muted text-muted-foreground',
+              rose: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+              indigo: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
+            };
+
+            return (
+              <Card key={section.key} className="card-shadow card-hover">
+                <CardHeader className="pb-3">
+                  <button
+                    onClick={() => setExpandedModule(isExpanded ? null : section.key)}
+                    className="flex items-center justify-between w-full text-left"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className={cn('size-9 rounded-lg flex items-center justify-center', colorMap[section.color])}>
+                        <SectionIcon className="size-4.5" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-sm font-semibold text-foreground">{section.label}</CardTitle>
+                        <p className="text-[11px] text-muted-foreground">{enabledCount}/{items.length} enabled</p>
+                      </div>
+                    </div>
+                    <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', isExpanded && 'rotate-180')} />
+                  </button>
+                </CardHeader>
+                {isExpanded && (
+                  <CardContent className="pt-0 space-y-1.5">
+                    {(moduleView === 'features' ? flagsLoading : (menuScope === 'global' ? globalMenuLoading : menuLoading)) ? (
+                      <div className="space-y-2">
+                        {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 rounded-md" />)}
+                      </div>
+                    ) : (
+                      items.map((item) => (
+                        <div key={(item as { id?: string; key: string }).id || (item as { key: string }).key} className={cn(
+                          'flex items-center justify-between gap-2 rounded-md border p-2.5 transition-colors',
+                          item.enabled ? 'border-primary/20 bg-primary/5' : 'border-border bg-muted/30'
+                        )}>
+                          <div className="min-w-0 flex-1">
+                            <p className={cn('text-sm font-medium truncate', item.enabled ? 'text-foreground' : 'text-muted-foreground')}>
+                              {(item as { label: string }).label}
+                            </p>
+                            {'description' in item && (item as { description?: string }).description && (
+                              <p className="text-[11px] text-muted-foreground truncate">{(item as { description?: string }).description}</p>
+                            )}
+                          </div>
+                          <Switch
+                            checked={item.enabled}
+                            onCheckedChange={() => moduleView === 'features' ? handleToggleFlag((item as FeatureFlagDef).key) : handleToggleMenuItem((item as MenuItemDef).key)}
+                          />
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 5. USERS TAB
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function UsersTab() {
+    const [search, setSearch] = useState('');
+    const [roleFilter, setRoleFilter] = useState('all');
+    const [actionDialog, setActionDialog] = useState<{ user: UserRecord; action: 'activate' | 'deactivate' | 'change_role' } | null>(null);
+    const [newRole, setNewRole] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const filteredUsers = useMemo(() => {
+      return users.filter((u) => {
+        const q = search.toLowerCase();
+        const matchesSearch = !search || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.tenantName || '').toLowerCase().includes(q);
+        const matchesRole = roleFilter === 'all' || u.role === roleFilter;
+        return matchesSearch && matchesRole;
+      });
+    }, [users, search, roleFilter]);
+
+    const handleAction = async () => {
+      if (!actionDialog) return;
+      setSaving(true);
+      try {
+        const res = await fetch('/api/admin/users', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: actionDialog.user.id,
+            action: actionDialog.action === 'activate' ? 'unlock' : actionDialog.action === 'deactivate' ? 'lock' : 'change_role',
+            role: actionDialog.action === 'change_role' ? newRole : undefined,
+          }),
+        });
+        if (res.ok) {
+          toast.success(`User ${actionDialog.action === 'activate' ? 'activated' : actionDialog.action === 'deactivate' ? 'deactivated' : 'role changed'} successfully`);
+        } else {
+          toast.error('Failed to update user');
+        }
+      } catch {
+        toast.error('Network error');
+      } finally {
+        setSaving(false);
+        setActionDialog(null);
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input className="pl-9" placeholder="Search users by name, email, or tenant..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger className="w-full sm:w-[140px]"><SelectValue placeholder="Role" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Roles</SelectItem>
+              <SelectItem value="owner">Owner</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+              <SelectItem value="manager">Manager</SelectItem>
+              <SelectItem value="employee">Employee</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {usersLoading ? <TableSkeleton /> : filteredUsers.length === 0 ? (
+          <EmptyState icon={Users} title="No users found" subtitle="Try adjusting your search or filters." />
+        ) : (
+          <Card className="card-shadow">
+            <ScrollArea className="max-h-[calc(100vh-320px)]">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Tenant</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium text-foreground">{user.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn('capitalize text-[10px]', ROLE_BADGE_CLASSES[user.role] || ROLE_BADGE_CLASSES.employee)}>
+                          {user.role}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn('text-[10px]', user.isActive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20')}>
+                          {user.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{user.tenantName || '—'}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-0.5">
+                          {user.isActive ? (
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => setActionDialog({ user, action: 'deactivate' })} title="Deactivate">
+                              <Ban className="size-3.5" />
+                            </Button>
+                          ) : (
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => setActionDialog({ user, action: 'activate' })} title="Activate">
+                              <CheckCircle2 className="size-3.5" />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-sky-600 hover:text-sky-700" onClick={() => { setNewRole(user.role); setActionDialog({ user, action: 'change_role' }); }} title="Change Role">
+                            <UserCog className="size-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </Card>
+        )}
+
+        {/* Action Dialog */}
+        <Dialog open={!!actionDialog} onOpenChange={(open) => { if (!open) setActionDialog(null); }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {actionDialog?.action === 'activate' ? 'Activate User' : actionDialog?.action === 'deactivate' ? 'Deactivate User' : 'Change Role'}
+              </DialogTitle>
+              <DialogDescription>User: {actionDialog?.user.name} ({actionDialog?.user.email})</DialogDescription>
+            </DialogHeader>
+            {actionDialog?.action === 'change_role' && (
+              <Select value={newRole} onValueChange={setNewRole}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="owner">Owner</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="employee">Employee</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setActionDialog(null)}>Cancel</Button>
+              <Button
+                variant={actionDialog?.action === 'deactivate' ? 'destructive' : 'default'}
+                onClick={handleAction} disabled={saving}
+              >
+                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null} Confirm
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 6. AUDIT LOGS TAB
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function AuditLogsTab() {
+    const [logs, setLogs] = useState<AuditLog[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [actionFilter, setActionFilter] = useState('');
+    const [tenantFilter, setTenantFilter] = useState('');
+
+    const fetchLogs = useCallback(async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (actionFilter) params.set('action', actionFilter);
+        if (tenantFilter && tenantFilter !== 'all') params.set('tenantId', tenantFilter);
+        const res = await fetch(`/api/superadmin/audit-logs?${params.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          setLogs(Array.isArray(data.auditLogs) ? data.auditLogs : []);
+        } else {
+          setLogs([]);
+        }
+      } catch {
+        setLogs([]);
+      } finally {
+        setLoading(false);
+      }
+    }, [actionFilter, tenantFilter]);
+
+    useEffect(() => { fetchLogs(); }, [fetchLogs]);
+
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input className="pl-9" placeholder="Filter by action (e.g. login, update, delete)..." value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} />
+          </div>
+          <Select value={tenantFilter || 'all'} onValueChange={setTenantFilter}>
+            <SelectTrigger className="w-full sm:w-[200px]"><SelectValue placeholder="All Tenants" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Tenants</SelectItem>
+              {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={fetchLogs} className="shrink-0">
+            <RefreshCw className="size-3.5 mr-1.5" /> Refresh
+          </Button>
+        </div>
+
+        {loading ? <TableSkeleton /> : logs.length === 0 ? (
+          <EmptyState icon={FileText} title="No audit logs found" subtitle="Audit logs will appear here as platform activity occurs." />
+        ) : (
+          <Card className="card-shadow">
+            <ScrollArea className="max-h-[calc(100vh-320px)]">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Action</TableHead>
+                    <TableHead>Resource</TableHead>
+                    <TableHead>User</TableHead>
+                    <TableHead>Tenant</TableHead>
+                    <TableHead>IP</TableHead>
+                    <TableHead>When</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {logs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20">
+                          {log.action}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-foreground text-sm">
+                        {log.resourceType ? `${log.resourceType}${log.resourceId ? ` #${log.resourceId.slice(0, 8)}` : ''}` : '—'}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs font-mono">{log.userId ? log.userId.slice(0, 8) + '…' : '—'}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs font-mono">{log.tenantId ? log.tenantId.slice(0, 8) + '…' : '—'}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs font-mono">{log.ip || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{formatDateTime(log.createdAt)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 7. CREDITS TAB
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function CreditsTab() {
+    const [search, setSearch] = useState('');
+    const [editDialog, setEditDialog] = useState<CreditInfo | null>(null);
+    const [editForm, setEditForm] = useState({
+      trialWhatsappCredits: 10,
+      platformWhatsappEnabled: true,
+      ownWhatsappConnected: false,
+      ownEmailProviderConnected: false,
+    });
+    const [saving, setSaving] = useState(false);
+
+    const filteredCredits = useMemo(() => {
+      if (!search) return creditsData;
+      const q = search.toLowerCase();
+      return creditsData.filter((c) => c.tenantName.toLowerCase().includes(q));
+    }, [creditsData, search]);
+
+    const trialTenants = creditsData.filter((c) => c.plan === 'trial');
+    const avgCreditsUsed = trialTenants.length > 0
+      ? (trialTenants.reduce((s, c) => s + c.trialWhatsappUsed, 0) / trialTenants.length).toFixed(1)
+      : '0';
+    const exhaustedTenants = trialTenants.filter((c) => c.trialWhatsappUsed >= c.trialWhatsappCredits);
+
+    const handleEdit = (credit: CreditInfo) => {
+      setEditDialog(credit);
+      setEditForm({
+        trialWhatsappCredits: credit.trialWhatsappCredits,
+        platformWhatsappEnabled: credit.platformWhatsappEnabled,
+        ownWhatsappConnected: credit.ownWhatsappConnected,
+        ownEmailProviderConnected: credit.ownEmailProviderConnected,
+      });
+    };
+
+    const handleSave = async () => {
+      if (!editDialog) return;
+      setSaving(true);
+      try {
+        const res = await fetch('/api/admin/credits', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tenantId: editDialog.tenantId, ...editForm }),
+        });
+        if (res.ok) {
+          toast.success('Credit settings updated successfully');
+          setEditDialog(null);
+          fetchAllCredits();
+        } else {
+          const data = await res.json();
+          toast.error(data.error || 'Failed to update credit settings');
+        }
+      } catch {
+        toast.error('Network error');
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        {/* Credit Overview Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <KpiCard label="Trial Tenants" value={trialTenants.length} icon={Clock} color="amber" />
+          <KpiCard label="Avg Credits Used" value={avgCreditsUsed} icon={BarChart3} color="sky" />
+          <KpiCard label="Exhausted Credits" value={exhaustedTenants.length} icon={AlertTriangle} color="red" />
+        </div>
+
+        {/* Search + Refresh */}
+        <div className="flex gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input placeholder="Search tenants..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <Button variant="outline" size="sm" onClick={() => fetchAllCredits()} disabled={creditsLoading} className="shrink-0">
+            {creditsLoading ? <Loader2 className="size-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="size-3.5 mr-1.5" />}
+            Refresh
+          </Button>
+        </div>
+
+        {/* Table */}
+        {creditsLoading && creditsData.length === 0 ? <TableSkeleton /> : filteredCredits.length === 0 ? (
+          <EmptyState icon={Wallet} title="No credit data found" subtitle="Credit data loads after tenants are fetched." />
+        ) : (
+          <Card className="card-shadow">
+            <ScrollArea className="max-h-[calc(100vh-380px)]">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Tenant</TableHead>
+                    <TableHead>Plan</TableHead>
+                    <TableHead className="text-center">WhatsApp Credits</TableHead>
+                    <TableHead className="text-center">Platform WA</TableHead>
+                    <TableHead className="text-center">Own WA</TableHead>
+                    <TableHead className="text-center">Email Provider</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCredits.map((credit) => {
+                    const isPaidWithOwnWhatsApp = credit.plan !== 'trial' && credit.ownWhatsappConnected;
+                    return (
+                      <TableRow key={credit.tenantId}>
+                        <TableCell className="font-medium text-foreground">{credit.tenantName}</TableCell>
+                        <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadgeClasses(credit.plan))}>{credit.plan}</Badge></TableCell>
+                        <TableCell className="text-center">
+                          {isPaidWithOwnWhatsApp ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Unlimited</Badge>
+                          ) : (
+                            <div className="flex items-center justify-center gap-2">
+                              <Progress value={credit.trialWhatsappCredits > 0 ? (credit.trialWhatsappUsed / credit.trialWhatsappCredits) * 100 : 0} className="h-1.5 w-16" />
+                              <span className={cn('text-xs', credit.trialWhatsappUsed >= credit.trialWhatsappCredits ? 'text-red-600 dark:text-red-400 font-medium' : 'text-muted-foreground')}>
+                                {credit.trialWhatsappUsed}/{credit.trialWhatsappCredits}
+                              </span>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {credit.platformWhatsappEnabled ? <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 inline-block" /> : <XCircle className="size-4 text-red-600 dark:text-red-400 inline-block" />}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {credit.ownWhatsappConnected ? <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 inline-block" /> : <XCircle className="size-4 text-muted-foreground inline-block" />}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {credit.ownEmailProviderConnected ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Own</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] text-muted-foreground">Platform</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleEdit(credit)} title="Edit Credits">
+                            <Edit3 className="size-3.5" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </Card>
+        )}
+
+        {/* Edit Credits Dialog */}
+        <Dialog open={!!editDialog} onOpenChange={(open) => { if (!open) setEditDialog(null); }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Wallet className="size-5 text-primary" /> Edit Credit Settings</DialogTitle>
+              <DialogDescription>Manage credits for {editDialog?.tenantName}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Trial WhatsApp Credits</Label>
+                <Input type="number" min={0} value={editForm.trialWhatsappCredits} onChange={(e) => setEditForm((p) => ({ ...p, trialWhatsappCredits: parseInt(e.target.value) || 0 }))} />
+                <p className="text-[11px] text-muted-foreground">Current usage: {editDialog?.trialWhatsappUsed ?? 0} credits used</p>
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Platform WhatsApp</Label>
+                  <p className="text-[11px] text-muted-foreground">Enable platform-provided WhatsApp</p>
+                </div>
+                <Switch checked={editForm.platformWhatsappEnabled} onCheckedChange={(checked) => setEditForm((p) => ({ ...p, platformWhatsappEnabled: checked }))} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Own WhatsApp Connected</Label>
+                  <p className="text-[11px] text-muted-foreground">Tenant has connected their own WhatsApp</p>
+                </div>
+                <Switch checked={editForm.ownWhatsappConnected} onCheckedChange={(checked) => setEditForm((p) => ({ ...p, ownWhatsappConnected: checked }))} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Own Email Provider</Label>
+                  <p className="text-[11px] text-muted-foreground">Tenant has connected their own email provider</p>
+                </div>
+                <Switch checked={editForm.ownEmailProviderConnected} onCheckedChange={(checked) => setEditForm((p) => ({ ...p, ownEmailProviderConnected: checked }))} />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setEditDialog(null)}>Cancel</Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="size-4 mr-1.5" />} Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // RENDER
@@ -732,74 +2624,25 @@ export function SuperAdminView() {
   const currentNavLabel = NAV_GROUPS.flatMap(g => g.items).find(i => i.key === activeTab)?.label || 'Command Center';
   const currentNavGroup = NAV_GROUPS.find(g => g.items.some(i => i.key === activeTab))?.label || 'Overview';
 
-  // Helper to render the active section. The 7 formerly-inline tabs are now
-  // module-level components (imported above) and receive all data + handlers
-  // via explicit props. The 21 enterprise sections are lazy-loaded inside
-  // <Suspense> for code-splitting.
-  //
-  // NOTE: `DashboardTab` is extracted to its own file but is intentionally
-  // NOT rendered here — the original code also never wired it up. The
-  // 'dashboard' route falls through to the lazy `<CommandCenterSection />`
-  // (the rebuilt flagship dashboard). Preserving that routing keeps this
-  // refactor purely structural.
+  // Helper to render the active section. Existing inline tabs (which depend
+  // on closure state) are rendered directly; new sections are lazy-loaded
+  // inside <Suspense> for code-splitting.
   const renderActiveSection = () => {
-    // Extracted inline tabs (module-level components, props-driven)
-    if (activeTab === 'tenants') return (
-      <TenantsTab
-        tenants={tenants}
-        tenantsLoading={tenantsLoading}
-        creditsData={creditsData}
-        format={format}
-        refetchTenants={refetchTenants}
-        fetchAllCredits={fetchAllCredits}
-      />
-    );
-    if (activeTab === 'subscriptions') return (
-      <SubscriptionsTab
-        subscriptions={subscriptions}
-        subsLoading={subsLoading}
-        format={format}
-      />
-    );
-    if (activeTab === 'feature-flags') return (
-      <ModulesTab
-        featureFlags={featureFlags}
-        menuItems={menuItems}
-        selectedTenantForFlags={selectedTenantForFlags}
-        setSelectedTenantForFlags={setSelectedTenantForFlags}
-        selectedTenantForMenu={selectedTenantForMenu}
-        setSelectedTenantForMenu={setSelectedTenantForMenu}
-        menuScope={menuScope}
-        setMenuScope={setMenuScope}
-        tenants={tenants}
-        toggleFeatureFlagMutation={toggleFeatureFlagMutation}
-        toggleMenuItemMutation={toggleMenuItemMutation}
-        flagsLoading={flagsLoading}
-        menuLoading={menuLoading}
-        globalMenuLoading={globalMenuLoading}
-      />
-    );
+    // Existing inline tabs (closure-dependent)
+    if (activeTab === 'tenants') return <TenantsTab />;
+    if (activeTab === 'subscriptions') return <SubscriptionsTab />;
+    if (activeTab === 'feature-flags') return <ModulesTab />;
     if (activeTab === 'integrations') return <IntegrationsTab />;
-    if (activeTab === 'users') return <UsersTab users={users} usersLoading={usersLoading} />;
-    if (activeTab === 'audit-logs') return <AuditLogsTab tenants={tenants} />;
-    if (activeTab === 'credits') return (
-      <CreditsTab
-        creditsData={creditsData}
-        creditsLoading={creditsLoading}
-        fetchAllCredits={fetchAllCredits}
-      />
-    );
+    if (activeTab === 'users') return <UsersTab />;
+    if (activeTab === 'audit-logs') return <AuditLogsTab />;
+    if (activeTab === 'credits') return <CreditsTab />;
 
     // New lazy-loaded enterprise sections
     return (
       <Suspense fallback={<SectionLoader />}>
         {activeTab === 'dashboard' && <CommandCenterSection />}
         {activeTab === 'industry-templates' && <IndustryTemplatesSection />}
-        {activeTab === 'directory-listings' && <DirectoryListingsSection />}
-        {activeTab === 'creem-billing' && <CreemBillingSection />}
         {activeTab === 'platform-settings' && <PlatformSettingsSection />}
-        {activeTab === 'plan-features' && <PlanFeaturesSection />}
-        {activeTab === 'plan-catalog' && <PlanCatalogSection />}
         {activeTab === 'theme-branding' && <ThemeBrandingSection />}
         {activeTab === 'marketplace' && <MarketplaceSection />}
         {activeTab === 'ai-center' && <AICenterSection />}
@@ -808,7 +2651,6 @@ export function SuperAdminView() {
         {activeTab === 'sms-services' && <SMSServicesSection />}
         {activeTab === 'whatsapp-providers' && <WhatsAppProvidersSection />}
         {activeTab === 'push-notifications' && <PushNotificationsSection />}
-        {activeTab === 'integration-credentials' && <IntegrationCredentialsSection />}
         {activeTab === 'authentication' && <AuthenticationSection />}
         {activeTab === 'security-center' && <SecurityCenterSection />}
         {activeTab === 'abuse-detection' && <AbuseDetectionSection />}
@@ -823,7 +2665,6 @@ export function SuperAdminView() {
         {activeTab === 'storage' && <StorageSection />}
         {activeTab === 'infrastructure' && <InfrastructureSection />}
         {activeTab === 'system-health' && <SystemHealthSection />}
-        {activeTab === 'backup' && <BackupSection />}
       </Suspense>
     );
   };
@@ -919,9 +2760,11 @@ export function SuperAdminView() {
           </div>
 
           <div className="flex items-center gap-1.5 ml-auto">
-            {/* Last synced indicator — isolated child so the 8s polling
-                re-render doesn't bubble back up into SuperAdminView. */}
-            <LastSyncedBadge />
+            {/* Last synced indicator */}
+            <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-muted-foreground mr-2">
+              <CheckCircle2 className="size-3.5 text-emerald-500" />
+              <span>Synced {lastSynced ? lastSynced.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}</span>
+            </div>
             {/* Refresh */}
             <Button variant="ghost" size="sm" className="h-9 w-9 p-0" onClick={() => { refetchStats(); refetchTenants(); }} aria-label="Refresh data">
               <RefreshCw className="size-4" />
@@ -979,11 +2822,31 @@ export function SuperAdminView() {
         </main>
       </div>
 
-      {/* ─── Bottom Status Bar ────────────────────────────────────────────────
-          Rendered by `<SuperAdminStatusBar />` — an isolated child that
-          owns its own polling state so the 8s tick doesn't re-render
-          SuperAdminView (and thus the active tab). */}
-      <SuperAdminStatusBar />
+      {/* ─── Bottom Status Bar ──────────────────────────────────────────────── */}
+      <footer className="shrink-0 z-20 px-4 sm:px-6 lg:px-8 py-2 bg-background/95 backdrop-blur border-t border-border">
+        <div className="flex items-center gap-3 overflow-x-auto scrollbar-thin">
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground shrink-0">
+            <span className="size-1.5 bg-emerald-500 rounded-full animate-pulse" />
+            PLATFORM HEALTH
+          </span>
+          <div className="h-3 w-px bg-border shrink-0" />
+          {statusItems.map((item) => {
+            const dotColor = item.status === 'healthy' ? 'bg-emerald-500' : item.status === 'warning' ? 'bg-amber-500' : 'bg-red-500';
+            return (
+              <div key={item.key} className="flex items-center gap-1.5 shrink-0">
+                <span className={cn('size-1.5 rounded-full', dotColor, item.status === 'healthy' && 'animate-pulse')} />
+                <span className="text-[11px] font-medium text-muted-foreground">{item.label}</span>
+                <span className="text-[11px] font-mono text-foreground">{item.value}</span>
+              </div>
+            );
+          })}
+          <div className="h-3 w-px bg-border shrink-0" />
+          <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-medium shrink-0 ml-auto">
+            <span className="size-1 rounded-full bg-amber-500" />
+            Demo data
+          </span>
+        </div>
+      </footer>
     </div>
   );
 }

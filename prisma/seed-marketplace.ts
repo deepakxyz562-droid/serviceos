@@ -88,6 +88,49 @@ const STD_BUSINESS_HOURS = {
   sun: null,
 };
 
+/**
+ * Map an industry string to a default cover image under /images/landing/.
+ *
+ * SEO FIX (Concern #2): The public business hub page at
+ * /{industry}/{city}/{slug} applies `robots: { index: false }` when the
+ * tenant's `isIndexable` flag is false. The `isIndexable` check requires
+ * `hasImage = coverImage || logo || gallery.length > 0`. All 12 seed
+ * providers had `coverImage: null`, empty galleries, and no logo — so
+ * EVERY seed marketplace business was excluded from Google's index with
+ * a noindex robots tag. This also meant the sitemap (which uses the same
+ * filter via `listIndexableBusinessUrls()`) listed ZERO marketplace URLs.
+ *
+ * Fix: assign an industry-appropriate cover image to every seed provider
+ * so the "rich enough" gate passes. These are local build assets under
+ * /public/images/landing/ that already exist in the repo.
+ *
+ * IMPORTANT: This must match the `defaultCoverImageForIndustry()` logic
+ * in src/lib/public-business.ts so seed data and runtime defaults agree.
+ */
+function defaultCoverImageForIndustry(industry: string): string {
+  const i = (industry || '').toLowerCase()
+  if (i.includes('plumb')) return '/images/landing/pillar-operations.png'
+  if (i.includes('hvac') || i.includes('air cond') || i.includes('heating') || i.includes('cooling')) return '/images/landing/pillar-operations.png'
+  if (i.includes('electric')) return '/images/landing/pillar-operations.png'
+  if (i.includes('clean')) return '/images/landing/pillar-communication.png'
+  if (i.includes('pest')) return '/images/landing/pillar-operations.png'
+  if (i.includes('mov')) return '/images/landing/pillar-operations.png'
+  if (i.includes('landscape') || i.includes('lawn') || i.includes('garden')) return '/images/landing/pillar-operations.png'
+  if (i.includes('roof')) return '/images/landing/pillar-operations.png'
+  if (i.includes('paint')) return '/images/landing/pillar-operations.png'
+  if (i.includes('auto') || i.includes('car') || i.includes('mechanic')) return '/images/landing/pillar-operations.png'
+  if (i.includes('locksmith')) return '/images/landing/pillar-operations.png'
+  if (i.includes('appliance')) return '/images/landing/pillar-operations.png'
+  if (i.includes('pool') || i.includes('spa')) return '/images/landing/pillar-operations.png'
+  if (i.includes('salon') || i.includes('spa') || i.includes('beauty')) return '/images/landing/pillar-crm.png'
+  if (i.includes('pet') || i.includes('vet') || i.includes('groom')) return '/images/landing/pillar-crm.png'
+  if (i.includes('food') || i.includes('restaurant') || i.includes('cater')) return '/images/landing/pillar-finance.png'
+  if (i.includes('photo')) return '/images/landing/pillar-crm.png'
+  if (i.includes('tutor') || i.includes('education') || i.includes('teach')) return '/images/landing/pillar-crm.png'
+  if (i.includes('handyman') || i.includes('handy')) return '/images/landing/pillar-operations.png'
+  return '/images/landing/pillar-operations.png'
+}
+
 const PROVIDERS: ProviderSeed[] = [
   // ── 1. HVAC — featured ───────────────────────────────────────────────
   {
@@ -941,6 +984,13 @@ async function seedProvider(p: ProviderSeed, index: number) {
       ? p.reviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount
       : 5;
 
+  // SEO FIX (Concern #2): Fall back to an industry-appropriate default cover
+  // image when the seed definition doesn't specify one. Without a coverImage
+  // (or logo, or gallery), the tenant fails the "rich enough" isIndexable
+  // gate and the public hub page renders robots:noindex — excluding it from
+  // Google's index AND omitting it from the sitemap.
+  const effectiveCoverImage = p.coverImage || defaultCoverImageForIndustry(p.industry);
+
   // 1. Upsert tenant
   const tenant = await db.tenant.upsert({
     where: { slug: p.slug },
@@ -956,7 +1006,7 @@ async function seedProvider(p: ProviderSeed, index: number) {
       currency: p.currency,
       phone: p.phone,
       email: p.email,
-      coverImage: p.coverImage,
+      coverImage: effectiveCoverImage,
       galleryJson: JSON.stringify(p.gallery),
       businessHoursJson: JSON.stringify(p.businessHours),
       serviceAreasJson: JSON.stringify(p.serviceAreas),
@@ -1003,7 +1053,7 @@ async function seedProvider(p: ProviderSeed, index: number) {
       description: p.description,
       city: p.city,
       state: p.state,
-      coverImage: p.coverImage,
+      coverImage: effectiveCoverImage,
       galleryJson: JSON.stringify(p.gallery),
       businessHoursJson: JSON.stringify(p.businessHours),
       serviceAreasJson: JSON.stringify(p.serviceAreas),

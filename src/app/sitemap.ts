@@ -18,6 +18,13 @@ import { listIndexableBusinessUrls } from "@/lib/public-business";
  *     is "rich enough": description ≥100 chars, ≥3 active public services,
  *     ≥1 image, publicProfileEnabled=true. See listIndexableBusinessUrls().
  *
+ * SEO FIX (Concern #3): Business entries now use each tenant's real
+ * `updatedAt` timestamp for `<lastmod>` (instead of a shared "now" value).
+ * This gives Google an accurate freshness signal — a page that was updated
+ * yesterday gets crawled sooner than one unchanged for 6 months. Previously
+ * every entry shared the same `new Date().toISOString()` which provided
+ * zero freshness differentiation.
+ *
  * Authenticated app routes and API routes are intentionally omitted —
  * they should not be indexed.
  */
@@ -120,15 +127,31 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Priority 0.8 (raised from 0.7) because these are now the canonical
   // marketplace landing pages too, not just SEO hub pages. Change freq =
   // weekly because reviews & profile edits update them.
+  //
+  // SEO FIX (Concern #3): `listIndexableBusinessUrls()` now returns
+  // `{ url, lastModified }` tuples (the tenant's real `updatedAt`) so
+  // Google gets an accurate freshness signal per URL. If it returns plain
+  // strings (backward compat), we fall back to `now`.
   let businessEntries: MetadataRoute.Sitemap = []
   try {
     const businessUrls = await listIndexableBusinessUrls()
-    businessEntries = businessUrls.map((url) => ({
-      url,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.8,
-    }))
+    businessEntries = businessUrls.map((entry) => {
+      // Support both new { url, lastModified } shape and legacy string.
+      if (typeof entry === 'string') {
+        return {
+          url: entry,
+          lastModified: now,
+          changeFrequency: "weekly" as const,
+          priority: 0.8,
+        }
+      }
+      return {
+        url: entry.url,
+        lastModified: entry.lastModified || now,
+        changeFrequency: "weekly" as const,
+        priority: 0.8,
+      }
+    })
   } catch (err) {
     // If the DB query fails, still emit the static routes — don't 500 the
     // sitemap and break Google's view of the entire site.

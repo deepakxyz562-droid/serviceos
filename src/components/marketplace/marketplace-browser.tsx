@@ -67,6 +67,47 @@ export function MarketplaceBrowser({
   providers,
   initialFilters,
 }: MarketplaceBrowserProps) {
+  // Concern #4: Cache the provider list to IndexedDB for offline browsing.
+  // We use a dynamic import inside useEffect so Dexie (IndexedDB) is only
+  // loaded in the browser — a static import would bundle Dexie into the
+  // marketplace page's initial JS chunk and cause Turbopack SSR issues.
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (providers.length === 0) return;
+    // Fire-and-forget — caching is best-effort and doesn't block rendering.
+    // mapIndustryToUrlSlug/slugifyCity are already imported at the top of
+    // this file (static import is fine — they're pure functions, no Dexie).
+    import('@/lib/offline-db')
+      .then(({ cacheProviders }) => {
+        const cached = providers.map((p) => ({
+          id: p.id,
+          slug: p.slug || p.publicSlug || p.id,
+          name: p.name,
+          industry: p.industry ?? null,
+          industryUrlSlug: mapIndustryToUrlSlug(p.industry),
+          city: p.city ?? null,
+          cityUrlSlug: slugifyCity(p.city),
+          state: p.state ?? null,
+          tagline: p.tagline ?? null,
+          description: p.description ?? null,
+          logo: p.logo ?? null,
+          coverImage: p.coverImage ?? null,
+          rating: p.rating ?? 0,
+          reviewCount: p.reviewCount ?? 0,
+          phone: p.phone ?? null,
+          plan: p.plan ?? null,
+          claimed: p.claimed ?? false,
+          marketplaceOptIn: p.marketplaceOptIn ?? true,
+          cardType: p.cardType ?? 'normal-minimal',
+          cachedAt: Date.now(),
+        }));
+        return cacheProviders(cached);
+      })
+      .catch(() => {
+        // silent — offline caching is best-effort
+      });
+  }, [providers]);
+
   // ── Filter state (hydrated from URL on first render) ───────────────────
   // searchInput / cityInput live in a shared Zustand store so the hero
   // search bar (MarketplaceHeroSearch) and this component stay in sync
