@@ -29,33 +29,33 @@ import { db } from '../src/lib/db';
  */
 function defaultCoverImageForIndustry(industry: string | null): string {
   const i = (industry || '').toLowerCase();
-  if (i.includes('plumb')) return '/images/landing/industries.webp';
+  if (i.includes('plumb')) return '/images/industry/plumbing.webp';
   if (i.includes('hvac') || i.includes('air cond') || i.includes('heating') || i.includes('cooling'))
-    return '/images/landing/industries.webp';
-  if (i.includes('electric')) return '/images/landing/industries.webp';
-  if (i.includes('clean')) return '/images/landing/pillar-communication.png';
-  if (i.includes('pest')) return '/images/landing/industries.webp';
-  if (i.includes('mov')) return '/images/landing/industries.webp';
+    return '/images/industry/hvac.webp';
+  if (i.includes('electric')) return '/images/industry/electrical.webp';
+  if (i.includes('clean')) return '/images/industry/cleaning.webp';
+  if (i.includes('pest')) return '/images/industry/pest.webp';
+  if (i.includes('mov')) return '/images/industry/moving.webp';
   if (i.includes('landscape') || i.includes('lawn') || i.includes('garden'))
-    return '/images/landing/industries.webp';
-  if (i.includes('roof')) return '/images/landing/industries.webp';
-  if (i.includes('paint')) return '/images/landing/industries.webp';
+    return '/images/industry/landscape.webp';
+  if (i.includes('roof')) return '/images/industry/roofing.webp';
+  if (i.includes('paint')) return '/images/industry/painting.webp';
   if (i.includes('auto') || i.includes('car') || i.includes('mechanic'))
-    return '/images/landing/industries.webp';
-  if (i.includes('locksmith')) return '/images/landing/industries.webp';
-  if (i.includes('appliance')) return '/images/landing/industries.webp';
-  if (i.includes('pool') || i.includes('spa')) return '/images/landing/industries.webp';
+    return '/images/industry/auto.webp';
+  if (i.includes('locksmith')) return '/images/industry/locksmith.webp';
+  if (i.includes('appliance')) return '/images/industry/appliance.webp';
+  if (i.includes('pool') || i.includes('spa')) return '/images/industry/pool.webp';
   if (i.includes('salon') || i.includes('spa') || i.includes('beauty'))
-    return '/images/landing/pillar-crm.png';
+    return '/images/industry/salon.webp';
   if (i.includes('pet') || i.includes('vet') || i.includes('groom'))
-    return '/images/landing/pillar-crm.png';
+    return '/images/industry/pet.webp';
   if (i.includes('food') || i.includes('restaurant') || i.includes('cater'))
-    return '/images/landing/pillar-finance.png';
-  if (i.includes('photo')) return '/images/landing/pillar-crm.png';
+    return '/images/industry/food.webp';
+  if (i.includes('photo')) return '/images/industry/photography.webp';
   if (i.includes('tutor') || i.includes('education') || i.includes('teach'))
-    return '/images/landing/pillar-crm.png';
-  if (i.includes('handyman') || i.includes('handy')) return '/images/landing/industries.webp';
-  return '/images/landing/industries.webp';
+    return '/images/industry/tutoring.webp';
+  if (i.includes('handyman') || i.includes('handy')) return '/images/industry/handyman.webp';
+  return '/images/landing/pillar-operations.png';
 }
 
 function isGalleryEmpty(galleryJson: string | null): boolean {
