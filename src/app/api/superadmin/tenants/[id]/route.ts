@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { cache } from '@/lib/cache';
+import { submitTenantUrlToIndexNow } from '@/lib/indexnow';
 
 export async function GET(
   request: NextRequest,
@@ -146,6 +147,17 @@ export async function PATCH(
 
     // Invalidate relevant caches
     cache.invalidateByPrefix('superadmin:');
+
+    // Notify IndexNow so Bing/Yandex recrawl the public business hub page
+    // (/{industry}/{city}/{slug}) sooner. Fire-and-forget — never block the
+    // admin response on a search-engine ping. Only submits in production.
+    void submitTenantUrlToIndexNow({
+      slug: tenant.slug,
+      industry: tenant.industry,
+      city: tenant.city,
+    }).catch(() => {
+      /* IndexNow failures are non-fatal — logged inside the lib */
+    });
 
     return NextResponse.json({ tenant });
   } catch (error) {

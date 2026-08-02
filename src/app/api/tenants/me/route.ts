@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { submitTenantUrlToIndexNow } from '@/lib/indexnow';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,6 +100,17 @@ export async function PATCH(request: NextRequest) {
       where: { id: user.tenantId },
       data: updateData,
       select: PUBLIC_FIELDS,
+    });
+
+    // Notify IndexNow so Bing/Yandex recrawl the public business hub page
+    // (/{industry}/{city}/{slug}) sooner. Fire-and-forget — never block the
+    // user response on a search-engine ping. Only submits in production.
+    void submitTenantUrlToIndexNow({
+      slug: updated.slug,
+      industry: updated.industry,
+      city: updated.city,
+    }).catch(() => {
+      /* IndexNow failures are non-fatal — logged inside the lib */
     });
 
     return NextResponse.json(updated);
