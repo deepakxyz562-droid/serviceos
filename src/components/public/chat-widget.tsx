@@ -124,9 +124,14 @@ export function ChatWidget({ businessSlug, businessName }: ChatWidgetProps) {
   }, [sessionId, tenantId, visitorName, visitorEmail, storageKey])
 
   // ─── Presence query (PUBLIC — no auth token) ──────────────────────────
-  // Polls every 15s. We default `adminOnline` to `true` if the API fails so
-  // we never show the "offline" banner on a backend hiccup — visitors
+  // Polls every 30s (was 15s — reduced to cut Supabase API Gateway hits
+  // per Concern #5b). We default `adminOnline` to `true` if the API fails
+  // so we never show the "offline" banner on a backend hiccup — visitors
   // shouldn't see "we're offline" just because of a network blip.
+  //
+  // Polling is paused when the tab is hidden (`refetchIntervalInBackground:
+  // false`) so background tabs don't burn mobile data/battery or generate
+  // unnecessary gateway requests.
   const { data: presenceData } = useQuery<PresenceResponse | null>({
     queryKey: ['public-presence', tenantId],
     queryFn: async () => {
@@ -138,7 +143,8 @@ export function ChatWidget({ businessSlug, businessName }: ChatWidgetProps) {
       return res.json() as Promise<PresenceResponse>
     },
     enabled: !!tenantId,
-    refetchInterval: 15000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
     retry: 1,
   })
 
