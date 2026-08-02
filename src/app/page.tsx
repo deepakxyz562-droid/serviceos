@@ -1,6 +1,16 @@
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import HomePageClient from '@/components/home/home-page-client';
 import { HomeSeoContent } from '@/components/seo/home-seo-content';
+
+/**
+ * The HTTP-only auth cookie name. Mirrors `TOKEN_NAME` in `src/lib/auth.ts`.
+ * Kept as a local constant (not imported) because `auth.ts` is a server-only
+ * module that pulls in `next/headers` + the JWT lib — importing it here would
+ * needlessly bloat the page's server bundle. We only need the cookie NAME to
+ * check presence (we never decode the token on the client shell).
+ */
+const AUTH_COOKIE = 'serviceos_session';
 
 /**
  * Homepage — server component shell (P0-1 SEO fix).
@@ -85,11 +95,35 @@ export const metadata: Metadata = {
   },
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  // ── FOUC fix: skip SEO content for authenticated users ─────────────────
+  // On hard refresh while authenticated, the server-rendered <HomeSeoContent>
+  // (hero H1, feature cards, FAQ, CTAs) would briefly appear before the
+  // client-side `checkSession()` resolves and swaps to the CRM dashboard —
+  // a visible "flash of unauthenticated content" (FOUC).
+  //
+  // Fix: detect the auth cookie on the server. When present, skip rendering
+  // <HomeSeoContent /> entirely so the initial HTML contains only the
+  // <HomePageClient /> shell (which shows a spinner while the authed view
+  // loads). The client then renders the correct dashboard with no flash.
+  //
+  // Crawlers and anonymous visitors never send the cookie → they always get
+  // the full SEO content (preserving the P0-1 SEO fix). The cookie check
+  // opts the page out of static caching, but this route was already
+  // effectively dynamic (all views use ssr:false) so there's no regression.
+  //
+  // Edge case (expired JWT inside the cookie): the server still skips SEO
+  // content, the client calls /api/auth/me, gets 401, falls back to the
+  // landing page. The user sees: spinner → landing page. No wrong-content
+  // flash — strictly better than the previous behavior.
+  const cookieStore = await cookies();
+  const hasAuthCookie = Boolean(cookieStore.get(AUTH_COOKIE)?.value);
+
   return (
     <>
-      {/* Server-rendered SEO content — visible to crawlers in initial HTML */}
-      <HomeSeoContent />
+      {/* Server-rendered SEO content — visible to crawlers + anonymous visitors.
+          Skipped for authenticated users to prevent FOUC on hard refresh. */}
+      {!hasAuthCookie && <HomeSeoContent />}
       {/* Interactive client app — auth routing + landing page */}
       <HomePageClient />
     </>

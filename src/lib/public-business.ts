@@ -584,12 +584,15 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
       },
     })
 
-    const entries: IndexableBusinessUrl[] = []
-    for (const t of tenants) {
+    // ── Pre-filter tenants in JS (cheap, no DB round-trips) ──
+    // Apply the description + image "rich enough" checks first so we only
+    // include tenants that pass BOTH criteria. This shrinks the set before
+    // the (batched) service-count check below.
+    const candidates = tenants.filter((t) => {
       const descriptionLongEnough = Boolean(
         t.description && t.description.trim().length >= 100,
       )
-      if (!descriptionLongEnough) continue
+      if (!descriptionLongEnough) return false
 
       let gallery: Array<{ url?: string }> = []
       try {
@@ -598,13 +601,42 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
         gallery = []
       }
       const hasImage = Boolean(t.coverImage || t.logo || gallery.length > 0)
-      if (!hasImage) continue
+      return hasImage
+    })
 
-      // Service count check (separate query per tenant is expensive at scale,
-      // but fine for the first 1k tenants — beyond that we'd batch with a groupBy)
-      const serviceCount = await db.service.count({
-        where: { tenantId: t.id, isActive: true, isPublic: true },
-      })
+    // ── Batched service-count check (1 query total, NOT 1 per tenant) ──
+    // Previously this loop did `db.service.count({ where: { tenantId } })`
+    // inside the for-loop — an N+1 pattern that scaled as O(N) DB calls.
+    // On the Supabase REST adapter each call is a separate HTTP round-trip
+    // (~100ms), so 100 tenants = ~10s, exceeding Google's ~30s sitemap
+    // fetch timeout and causing GSC to report "Sitemap could not be read".
+    //
+    // Now we issue a SINGLE `groupBy` that returns per-tenant counts in one
+    // request, then look them up in a Map. O(1) DB calls regardless of
+    // tenant count. The `where.tenantId: { in: [...] }` filter scopes the
+    // aggregation to only the candidate tenants (after description+image
+    // filtering), keeping the query cheap even at 10k+ total tenants.
+    const tenantIds = candidates.map((t) => t.id)
+    const serviceCountRows = tenantIds.length > 0
+      ? await db.service.groupBy({
+          by: ['tenantId'],
+          where: {
+            tenantId: { in: tenantIds },
+            isActive: true,
+            isPublic: true,
+          },
+          _count: { _all: true },
+        })
+      : []
+    // Build a Map<tenantId, count> for O(1) lookup in the loop below.
+    const serviceCountByTenant = new Map<string, number>()
+    for (const row of serviceCountRows) {
+      serviceCountByTenant.set(row.tenantId as string, row._count?._all ?? 0)
+    }
+
+    const entries: IndexableBusinessUrl[] = []
+    for (const t of candidates) {
+      const serviceCount = serviceCountByTenant.get(t.id) ?? 0
       if (serviceCount < 3) continue
 
       const industrySlug = mapIndustryToUrlSlug(t.industry)
