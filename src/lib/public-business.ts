@@ -697,7 +697,7 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
  */
 function defaultCoverImageForIndustry(industry: string | null): string {
   const i = (industry || '').toLowerCase()
-  if (i.includes('plumb')) return '/images/industry/plumbing.webpp'
+  if (i.includes('plumb')) return '/images/industry/plumbing.webp'
   if (i.includes('hvac') || i.includes('air cond') || i.includes('heating') || i.includes('cooling')) return '/images/industry/hvac.webp'
   if (i.includes('electric')) return '/images/industry/electric.webp'
   if (i.includes('clean')) return '/images/industry/cleaning.webp'
