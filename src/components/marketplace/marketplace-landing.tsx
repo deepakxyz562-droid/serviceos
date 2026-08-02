@@ -548,13 +548,14 @@ export function MarketplaceLanding({
             </div>
           ) : null}
 
-          {/* Trust stats */}
+          {/* Trust stats — factual product capabilities, not customer-count claims
+              (Creem compliance: avoid "N+ providers" / "N+ jobs" without evidence) */}
           <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-4">
             {[
-              { value: '2,500+', label: 'Verified Providers' },
-              { value: '500K+', label: 'Jobs Completed' },
-              { value: '4.9/5', label: 'Avg. Rating' },
-              { value: '< 35 min', label: 'Emergency ETA' },
+              { value: '25+', label: 'Categories' },
+              { value: 'Instant', label: 'Booking' },
+              { value: 'Verified', label: 'Providers' },
+              { value: '24/7', label: 'Emergency dispatch' },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p className="text-2xl font-bold text-foreground sm:text-3xl">{stat.value}</p>

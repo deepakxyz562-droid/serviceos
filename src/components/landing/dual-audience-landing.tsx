@@ -102,11 +102,14 @@ type Audience = 'crm' | 'marketplace';
 
 // ─── CRM marketing data ─────────────────────────────────────────────────────
 
+// NOTE (Creem compliance): Stats below are factual product capabilities, not
+// customer-count claims. Avoid reinstating "N+ businesses" / "N+ jobs" style
+// stats without verifiable evidence — app store reviewers flag these.
 const stats = [
-  { value: '2,500+', label: 'Businesses' },
-  { value: '500K+', label: 'Jobs Completed' },
-  { value: '4.9/5', label: 'Customer Rating' },
-  { value: '99.9%', label: 'Uptime' },
+  { value: '25+', label: 'Industries served' },
+  { value: '3-in-1', label: 'Email · SMS · Push' },
+  { value: '14-day', label: 'Free trial' },
+  { value: '99.9%', label: 'Uptime target' },
 ];
 
 // Industries for the scrolling marquee — instantly signals "this is for service businesses"
@@ -151,12 +154,14 @@ const problemPains = [
   },
 ];
 
-// ROI metrics with animated counters
+// ROI metrics — factual product capabilities (not customer-outcome claims).
+// NOTE (Creem compliance): Previous values ("8+ hrs saved", "2× faster payments",
+// "35% fewer no-shows") implied aggregated customer results we cannot evidence.
 const roiMetrics = [
-  { target: 8, suffix: '+ hrs', label: 'Saved per week', description: 'Less admin, more time on the tools' },
-  { target: 2, suffix: '×', label: 'Faster payment collection', description: 'Invoices paid in days, not weeks' },
-  { target: 35, suffix: '%', label: 'Fewer no-shows', description: 'SMS reminders actually work' },
-  { target: 28, suffix: '%', label: 'More repeat business', description: 'Stay top-of-mind automatically' },
+  { target: 25, suffix: '+', label: 'Industries supported', description: 'From plumbing to pet services' },
+  { target: 3, suffix: '', label: 'Notification channels', description: 'Email, SMS, and Push built in' },
+  { target: 14, suffix: '', label: 'Day free trial', description: 'Full access, no card required' },
+  { target: 24, suffix: '/7', label: 'AI receptionist', description: 'Answers every call, day or night' },
 ];
 
 // Channels section — "works out of the box"
@@ -321,33 +326,6 @@ const personas = [
     title: 'Customer',
     image: '/images/landing/persona-customer.png',
     points: ['Self-service booking portal', 'Email & SMS reminders', 'One-tap invoice payment'],
-  },
-];
-
-const testimonials = [
-  {
-    name: 'Rajesh Kumar',
-    business: 'Kumar Plumbing Co.',
-    industry: 'Plumbing · Chennai',
-    quote: 'Before Fieseros, I was losing leads in scattered text messages every week. Now every inquiry lands in one inbox and I get paid the same day the job finishes.',
-    metric: '+42% revenue in 3 months',
-    avatar: '/images/landing/testimonial-1.png',
-  },
-  {
-    name: 'Sarah Mitchell',
-    business: 'Sparkle Clean Services',
-    industry: 'Cleaning · Manchester',
-    quote: 'Every lead from my website and SMS lands in one inbox now — no more missed inquiries. My customers love getting SMS reminders before appointments.',
-    metric: '−35% no-show rate',
-    avatar: '/images/landing/testimonial-2.png',
-  },
-  {
-    name: 'Daniel Okafor',
-    business: 'Okafor HVAC Solutions',
-    industry: 'HVAC · Lagos',
-    quote: 'Dispatching used to be a whiteboard and phone calls. Now my techs get jobs on their phones with route maps. Invoices go out automatically and payments hit my account in days.',
-    metric: '2× faster payments',
-    avatar: '/images/landing/testimonial-3.png',
   },
 ];
 
@@ -914,12 +892,12 @@ function CrmRoiMetrics() {
     <section className="border-t bg-gradient-to-br from-emerald-50 via-teal-50/40 to-cyan-50 dark:from-emerald-950/30 dark:via-teal-950/20 dark:to-cyan-950/20 py-14 sm:py-20">
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
         <div className="mb-10 text-center">
-          <Badge variant="outline" className="border-emerald-200 bg-white/70 text-emerald-700 mb-3 font-medium">Real Results</Badge>
+          <Badge variant="outline" className="border-emerald-200 bg-white/70 text-emerald-700 mb-3 font-medium">Included</Badge>
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
-            Real results, <span className="text-emerald-600">measurable impact</span>
+            Everything included, <span className="text-emerald-600">ready from day one</span>
           </h2>
           <p className="text-muted-foreground mt-3 max-w-2xl mx-auto text-sm">
-            Aggregated averages from Fieseros customers in their first 90 days. Individual results vary by industry and adoption.
+            No add-ons, no approvals, no waiting. Every channel and workflow ships with every Fieseros account.
           </p>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
@@ -1344,53 +1322,73 @@ function CrmPersonas() {
   );
 }
 
-// ─── CRM: Testimonials ──────────────────────────────────────────────────────
+// ─── CRM: Built for service businesses ──────────────────────────────────────
+// NOTE (Creem compliance): This section previously showed fabricated customer
+// testimonials with specific names and outcome metrics. App store reviewers
+// require verifiable evidence for testimonials, so it was replaced with a
+// factual feature overview (no persona claims, no outcome percentages).
 
-function CrmTestimonials() {
+const crmBuiltForFeatures = [
+  {
+    icon: Inbox,
+    title: 'One unified inbox',
+    description: 'Every lead from email, SMS, web forms, and calls lands in one place. Nothing missed, nothing duplicated.',
+  },
+  {
+    icon: CalendarCheck,
+    title: 'Smart scheduling',
+    description: 'Assign jobs to the nearest technician with route maps, checklists, and live status tracking on their phone.',
+  },
+  {
+    icon: Wallet,
+    title: 'Get paid faster',
+    description: 'Send invoices and payment links the moment a job finishes. Built-in reminders chase unpaid bills automatically.',
+  },
+  {
+    icon: Headphones,
+    title: 'AI receptionist',
+    description: 'Answer every call 24/7, capture lead details, book appointments, and route emergencies — even after hours.',
+  },
+  {
+    icon: Target,
+    title: 'Lead capture',
+    description: 'Web forms, click-to-call, and landing pages all feed into the same CRM. No lead ever falls through the cracks.',
+  },
+  {
+    icon: Clock,
+    title: 'Automated reminders',
+    description: 'SMS and email reminders reduce no-shows and keep customers informed — sent automatically, no manual work.',
+  },
+];
+
+function CrmBuiltFor() {
   return (
     <section className="border-t bg-background py-14 sm:py-20">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="mb-10 text-center">
-          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-3 font-medium">Testimonials</Badge>
+          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-3 font-medium">Built for service businesses</Badge>
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
-            Loved by <span className="text-emerald-600">service businesses</span>
+            Everything you need to <span className="text-emerald-600">run and grow</span>
           </h2>
           <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
-            Real stories from owners who replaced chaos with clarity.
+            Replace scattered texts, emails, and spreadsheets with one platform built for the way service businesses actually work.
           </p>
         </div>
-        <div className="grid md:grid-cols-3 gap-5">
-          {testimonials.map((t) => (
-            <Card key={t.name} className="bg-white border-border hover:border-emerald-300 hover:shadow-lg transition-all h-full flex flex-col">
-              <CardHeader>
-                <div className="flex items-center gap-1 mb-3">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <Star key={s} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                  ))}
-                </div>
-                <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold w-fit mb-2">{t.metric}</Badge>
-                <p className="text-sm text-foreground/80 leading-relaxed italic">&ldquo;{t.quote}&rdquo;</p>
-              </CardHeader>
-              <CardContent className="mt-auto pt-4">
-                <div className="flex items-center gap-3">
-                  <div className="relative w-12 h-12 rounded-full overflow-hidden border border-border bg-muted flex-shrink-0">
-                    <Image
-                      src={t.avatar}
-                      alt={t.name}
-                      fill
-                      sizes="48px"
-                      className="object-cover"
-                    />
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {crmBuiltForFeatures.map((f) => {
+            const Icon = f.icon;
+            return (
+              <Card key={f.title} className="bg-white border-border hover:border-emerald-300 hover:shadow-md transition-all h-full">
+                <CardHeader>
+                  <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-3">
+                    <Icon className="w-5 h-5 text-emerald-600" />
                   </div>
-                  <div>
-                    <div className="text-sm font-semibold text-foreground">{t.name}</div>
-                    <div className="text-xs text-muted-foreground">{t.business}</div>
-                    <div className="text-xs text-emerald-600 font-medium">{t.industry}</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  <CardTitle className="text-lg text-foreground">{f.title}</CardTitle>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{f.description}</p>
+                </CardHeader>
+              </Card>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -1469,7 +1467,7 @@ function CrmForProviders({ onGetStarted }: { onGetStarted?: () => void }) {
             Ready to transform your business?
           </h3>
           <p className="text-emerald-50 text-lg mb-6 max-w-2xl mx-auto">
-            Join 2,500+ service businesses already running on Fieseros. Email &amp; SMS work from day one — no approvals, no waiting.
+            Join service businesses switching to Fieseros. Email &amp; SMS work from day one — no approvals, no waiting.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             {onGetStarted ? (
@@ -1594,7 +1592,7 @@ export function DualAudienceLanding({
             <CrmAiReceptionist onGetStarted={onGetStarted} />
             <CrmRoiMetrics />
             <CrmPersonas />
-            <CrmTestimonials />
+            <CrmBuiltFor />
             <CrmPricing onGetStarted={onGetStarted} />
             <CrmFaq />
             <CrmForProviders onGetStarted={onGetStarted} />

@@ -244,7 +244,7 @@ export async function generateMetadata({
   } else {
     title = 'Fieseros Marketplace — Find Trusted Local Service Professionals';
     description =
-      'Browse 2,500+ verified local service professionals across 25 industries — HVAC, plumbing, electrical, cleaning, landscaping, pest control, roofing, painting, locksmiths, appliance repair, pool & spa, and automotive. Read real reviews, compare quotes, and book instantly or request emergency dispatch.';
+      'Browse verified local service professionals across 25 industries — HVAC, plumbing, electrical, cleaning, landscaping, pest control, roofing, painting, locksmiths, appliance repair, pool & spa, and automotive. Read real reviews, compare quotes, and book instantly or request emergency dispatch.';
   }
 
   // P0-5 (SEO): Force canonical to the base /marketplace URL regardless of

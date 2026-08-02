@@ -98,11 +98,14 @@ const staggerItem = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] } },
 };
 
+// NOTE (Creem compliance): Stats below are factual product capabilities, not
+// customer-count claims. Avoid reinstating "N+ businesses" / "N+ jobs" style
+// stats without verifiable evidence — app store reviewers flag these.
 const stats = [
-  { value: '2,500+', label: 'Businesses' },
-  { value: '500K+', label: 'Jobs Completed' },
-  { value: '4.9/5', label: 'Rating' },
-  { value: '99.9%', label: 'Uptime' },
+  { value: '25+', label: 'Industries served' },
+  { value: '3-in-1', label: 'Email · SMS · Push' },
+  { value: '14-day', label: 'Free trial' },
+  { value: '99.9%', label: 'Uptime target' },
 ];
 
 const channelPills = [
@@ -345,38 +348,15 @@ const personas = [
   },
 ];
 
+// NOTE (Creem compliance): These are factual product capabilities (not
+// customer-outcome claims). Previous values like "8 hrs saved", "2× faster
+// payments", or "35% fewer no-shows" implied aggregated customer results we
+// cannot evidence. App store reviewers require verifiable proof for such claims.
 const roiStats = [
-  { value: 8, suffix: ' hrs', label: 'Saved per week', icon: Clock },
-  { value: 2, suffix: '×', label: 'Faster payment collection', icon: Wallet },
-  { value: 35, suffix: '%', label: 'Fewer no-shows', icon: CalendarClock },
-  { value: 27, suffix: '%', label: 'More repeat business', icon: TrendingUp },
-];
-
-const testimonials = [
-  {
-    name: 'Rajesh Kumar',
-    business: 'Kumar Plumbing Co.',
-    industry: 'Plumbing · Chennai',
-    quote: 'Before Fieseros, I was losing leads in scattered text messages and spreadsheets every week. Now every inquiry lands in one inbox, and I get paid the same day the job finishes. Email and SMS work right away — no approvals needed.',
-    avatar: '/images/landing/testimonial-1.png',
-    metric: '+42% revenue in 3 months',
-  },
-  {
-    name: 'Sarah Mitchell',
-    business: 'Sparkle Clean Services',
-    industry: 'Cleaning · Manchester',
-    quote: 'Every lead from my website and SMS lands in one inbox now — no more missed inquiries. My customers love getting SMS reminders before appointments, and I get push notifications on my phone the moment a new lead comes in.',
-    avatar: '/images/landing/testimonial-2.png',
-    metric: '−35% no-show rate',
-  },
-  {
-    name: 'Daniel Okafor',
-    business: 'Okafor HVAC Solutions',
-    industry: 'HVAC · Lagos',
-    quote: 'Dispatching used to be a whiteboard and phone calls. Now my techs get jobs on their phones with route maps and checklists. Invoices go out automatically and payments hit my account in days, not weeks.',
-    avatar: '/images/landing/testimonial-3.png',
-    metric: '2× faster payments',
-  },
+  { value: 25, suffix: '+', label: 'Industries supported', icon: Briefcase },
+  { value: 3, suffix: '', label: 'Notification channels', icon: Bell },
+  { value: 14, suffix: '', label: 'Day free trial', icon: CalendarCheck },
+  { value: 24, suffix: '/7', label: 'AI receptionist', icon: Bot },
 ];
 
 interface PricingPlan {
@@ -1439,12 +1419,12 @@ function RoiSection() {
       <AnimatedSection>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div variants={staggerItem} className="text-center mb-16">
-            <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-4 font-medium">Outcomes</Badge>
+            <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-4 font-medium">Included</Badge>
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground mt-4">
-              Real results, <span className="text-primary">measurable impact</span>
+              Everything included, <span className="text-primary">ready from day one</span>
             </h2>
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
-              Based on aggregated data from 2,500+ service businesses running on Fieseros.
+              No add-ons, no approvals, no waiting. Every channel and workflow below ships with every Fieseros account.
             </p>
           </motion.div>
 
@@ -1469,7 +1449,7 @@ function RoiSection() {
             })}
           </div>
           <motion.p variants={staggerItem} className="text-center text-xs text-muted-foreground mt-6">
-            * Aggregated averages from Fieseros customers in their first 90 days. Individual results vary by industry and adoption.
+            * All features available during the 14-day free trial. No credit card required.
           </motion.p>
         </div>
       </AnimatedSection>
@@ -1500,56 +1480,77 @@ function CountUp({ target, suffix }: { target: number; suffix: string }) {
   return <span ref={ref}>{value}{suffix}</span>;
 }
 
-function TestimonialsSection() {
+// NOTE (Creem compliance): This section previously showed fabricated customer
+// testimonials with specific names, businesses, and outcome metrics (e.g.
+// "+42% revenue", "-35% no-shows"). App store reviewers require verifiable
+// evidence for testimonials, so the section was replaced with a factual
+// feature overview (no persona claims, no outcome percentages).
+const builtForFeatures = [
+  {
+    icon: Inbox,
+    title: 'One unified inbox',
+    description: 'Every lead from email, SMS, web forms, and calls lands in one place. Nothing missed, nothing duplicated.',
+  },
+  {
+    icon: Route,
+    title: 'Smart dispatch',
+    description: 'Assign jobs to the nearest technician with route maps, checklists, and live status tracking — right on their phone.',
+  },
+  {
+    icon: Wallet,
+    title: 'Get paid faster',
+    description: 'Send invoices and payment links the moment a job finishes. Built-in reminders chase unpaid bills automatically.',
+  },
+  {
+    icon: Megaphone,
+    title: 'Automated follow-ups',
+    description: 'Win back past customers with scheduled email and SMS campaigns. Set it once, it runs in the background.',
+  },
+  {
+    icon: Bot,
+    title: 'AI receptionist',
+    description: 'Answer every call 24/7, capture lead details, book appointments, and route emergencies — even after hours.',
+  },
+  {
+    icon: Bell,
+    title: 'Multi-channel alerts',
+    description: 'Push, email, and SMS notifications for new leads, job updates, and payments — so nothing slips through.',
+  },
+];
+
+function BuiltForSection() {
   return (
     <section className="relative py-24 bg-muted/30 border-y border-border">
       <AnimatedSection>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div variants={staggerItem} className="text-center mb-16">
-            <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-4 font-medium">Testimonials</Badge>
+            <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-4 font-medium">Built for service businesses</Badge>
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground mt-4">
-              Loved by <span className="text-primary">service businesses</span>
+              Everything you need to <span className="text-primary">run and grow</span>
             </h2>
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
-              Real stories from owners who replaced chaos with clarity.
+              Replace scattered texts, emails, and spreadsheets with one platform built for the way service businesses actually work.
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {testimonials.map((t) => (
-              <motion.div key={t.name} variants={staggerItem}>
-                <Card className="bg-white border-border hover:border-primary/30 hover:shadow-lg transition-all duration-300 h-full flex flex-col">
-                  <CardHeader>
-                    <div className="flex items-center gap-1 mb-3">
-                      {[1, 2, 3, 4, 5].map((s) => (
-                        <Star key={s} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-1 mb-2">
-                      <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">{t.metric}</Badge>
-                    </div>
-                    <p className="text-sm text-foreground/80 leading-relaxed italic">&ldquo;{t.quote}&rdquo;</p>
-                  </CardHeader>
-                  <CardContent className="mt-auto pt-4">
-                    <div className="flex items-center gap-3">
-                      <div className="relative w-11 h-11 rounded-full overflow-hidden border border-border bg-muted flex-shrink-0">
-                        <Image src={t.avatar} alt={t.name} fill sizes="44px" className="object-cover" />
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {builtForFeatures.map((f) => {
+              const Icon = f.icon;
+              return (
+                <motion.div key={f.title} variants={staggerItem}>
+                  <Card className="bg-white border-border hover:border-primary/30 hover:shadow-md transition-all duration-300 h-full">
+                    <CardHeader>
+                      <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-3">
+                        <Icon className="w-5 h-5 text-primary" />
                       </div>
-                      <div>
-                        <div className="text-sm font-semibold text-foreground">{t.name}</div>
-                        <div className="text-xs text-muted-foreground">{t.business}</div>
-                        <div className="text-xs text-primary font-medium">{t.industry}</div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+                      <CardTitle className="text-lg text-foreground">{f.title}</CardTitle>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{f.description}</p>
+                    </CardHeader>
+                  </Card>
+                </motion.div>
+              );
+            })}
           </div>
-
-          <motion.p variants={staggerItem} className="text-center text-xs text-muted-foreground mt-6">
-            * Testimonials are illustrative and represent typical customer outcomes, not specific endorsements.
-          </motion.p>
         </div>
       </AnimatedSection>
     </section>
@@ -1757,7 +1758,7 @@ function FinalCTASection({ onGetStarted }: { onGetStarted: () => void }) {
             </h2>
           </motion.div>
           <motion.p variants={staggerItem} className="text-muted-foreground text-lg mb-8">
-            Join 2,500+ service businesses already running on Fieseros. Email & SMS work from day one — no Meta approvals, no waiting.
+            Join service businesses switching to Fieseros. Email & SMS work from day one — no Meta approvals, no waiting.
           </motion.p>
           <motion.div variants={staggerItem} className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button size="lg" onClick={onGetStarted} className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-10 h-14 text-lg shadow-lg shadow-emerald-200">
@@ -1796,14 +1797,23 @@ function Footer() {
             <p className="text-background/70 text-sm max-w-xs leading-relaxed">
               The operating system for service businesses. From leads to invoices, manage everything in one place — with Email, SMS, Push, and In-App notifications.
             </p>
-            <div className="flex items-center gap-3 mt-6">
+            {/* Visible support email — required by app store compliance (Creem)
+                so the store support email matches an address shown on the site. */}
+            <a
+              href="mailto:support@fieseros.com"
+              className="inline-flex items-center gap-1.5 text-background/80 text-sm hover:text-background transition-colors mt-5"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              support@fieseros.com
+            </a>
+            <div className="flex items-center gap-3 mt-4">
               <a href="#" className="w-9 h-9 rounded-lg bg-background/10 border border-background/10 flex items-center justify-center hover:bg-emerald-600/30 hover:border-emerald-500/40 transition-colors" aria-label="Twitter">
                 <Globe className="w-4 h-4 text-background/80" />
               </a>
               <a href="#" className="w-9 h-9 rounded-lg bg-background/10 border border-background/10 flex items-center justify-center hover:bg-emerald-600/30 hover:border-emerald-500/40 transition-colors" aria-label="LinkedIn">
                 <Building2 className="w-4 h-4 text-background/80" />
               </a>
-              <a href="#" className="w-9 h-9 rounded-lg bg-background/10 border border-background/10 flex items-center justify-center hover:bg-emerald-600/30 hover:border-emerald-500/40 transition-colors" aria-label="Email">
+              <a href="mailto:support@fieseros.com" className="w-9 h-9 rounded-lg bg-background/10 border border-background/10 flex items-center justify-center hover:bg-emerald-600/30 hover:border-emerald-500/40 transition-colors" aria-label="Email support">
                 <Mail className="w-4 h-4 text-background/80" />
               </a>
               <a href="#" className="w-9 h-9 rounded-lg bg-background/10 border border-background/10 flex items-center justify-center hover:bg-emerald-600/30 hover:border-emerald-500/40 transition-colors" aria-label="Phone">
@@ -1882,7 +1892,7 @@ export function LandingPage({ onGetStarted, onSignIn, onTryDemo }: LandingPagePr
       <ChannelsSection />
       <PersonasSection />
       <RoiSection />
-      <TestimonialsSection />
+      <BuiltForSection />
       <PricingSection onGetStarted={onGetStarted} />
       <FAQSection />
       <FinalCTASection onGetStarted={onGetStarted} />

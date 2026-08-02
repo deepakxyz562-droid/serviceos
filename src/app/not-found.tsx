@@ -26,7 +26,7 @@ const popularLinks = [
   {
     href: '/marketplace',
     label: 'Marketplace',
-    description: 'Browse 2,500+ verified service professionals',
+    description: 'Browse verified service professionals',
     icon: Search,
   },
   {
