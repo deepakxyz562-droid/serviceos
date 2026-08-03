@@ -92,8 +92,10 @@ export default function CustomerPortalJobPage() {
     }
   })();
 
-  const isCompleted = job.status === 'completed';
-  const isInProgress = job.status === 'in_progress';
+  const status = job?.status || 'pending';
+  const isCompleted = status === 'completed';
+  const isInProgress = status === 'in_progress';
+  const statusText = status.replace(/_/g, ' ');
 
   return (
     <div className="min-h-screen bg-muted/30 py-8 px-4 sm:px-6">
@@ -116,7 +118,7 @@ export default function CustomerPortalJobPage() {
               ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20'
               : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
           }`}>
-            {job.status.replace('_', ' ')}
+            {statusText}
           </span>
         </div>
 

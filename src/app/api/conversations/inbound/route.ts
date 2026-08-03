@@ -180,7 +180,7 @@ async function handleButtonReply(
     if (action.intent === 'status_inquiry' && conversation.jobId) {
       const job = await db.job.findUnique({ where: { id: conversation.jobId } })
       if (job) {
-        replyText = `📋 *Job Status*\n\nTitle: ${job.title}\nStatus: ${job.status.replace(/_/g, ' ')}\n${job.assigneeName ? `Technician: ${job.assigneeName}\n` : ''}${job.scheduledAt ? `Scheduled: ${new Date(job.scheduledAt).toLocaleDateString()}\n` : ''}Address: ${job.address || 'TBD'}`
+        replyText = `📋 *Job Status*\n\nTitle: ${job.title}\nStatus: ${(job.status || 'pending').replace(/_/g, ' ')}\n${job.assigneeName ? `Technician: ${job.assigneeName}\n` : ''}${job.scheduledAt ? `Scheduled: ${new Date(job.scheduledAt).toLocaleDateString()}\n` : ''}Address: ${job.address || 'TBD'}`
       } else {
         replyText = 'I couldn\'t find your booking. Could you provide more details?'
       }

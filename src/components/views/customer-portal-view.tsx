@@ -459,8 +459,8 @@ function LiveJobTracker({ booking, portalToken, onSwitchBooking, otherActiveBook
               )}
             </CardDescription>
           </div>
-          <Badge variant="outline" className={`${getStatusColor(liveBooking.status)} text-xs capitalize`}>
-            {liveBooking.status.replace('_', ' ')}
+          <Badge variant="outline" className={`${getStatusColor(liveBooking.status || 'pending')} text-xs capitalize`}>
+            {(liveBooking.status || 'pending').replace('_', ' ')}
           </Badge>
         </div>
       </CardHeader>
@@ -753,8 +753,8 @@ function PortalExperience({ portalData, onRefresh, portalToken }: {
                               </div>
                             )}
                           </div>
-                          <Badge variant="outline" className={`${getStatusColor(booking.status)} text-[10px]`}>
-                            {booking.status.replace('_', ' ')}
+                          <Badge variant="outline" className={`${getStatusColor(booking.status || 'pending')} text-[10px]`}>
+                            {(booking.status || 'pending').replace('_', ' ')}
                           </Badge>
                         </div>
                       </CardContent>
@@ -780,8 +780,8 @@ function PortalExperience({ portalData, onRefresh, portalToken }: {
                               </div>
                             )}
                           </div>
-                          <Badge variant="outline" className={`${getStatusColor(booking.status)} text-[10px]`}>
-                            {booking.status.replace('_', ' ')}
+                          <Badge variant="outline" className={`${getStatusColor(booking.status || 'pending')} text-[10px]`}>
+                            {(booking.status || 'pending').replace('_', ' ')}
                           </Badge>
                         </div>
                       </CardContent>
