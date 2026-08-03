@@ -39,6 +39,15 @@
       "method": "POST",
       "headers": { "x-cron-secret": "YOUR_CRON_SECRET" },
       "_comment": "Schedules customer reminders for upcoming JobVisits (1h / 24h / 2d before). Has 24h lookahead window so hourly is plenty."
+    },
+    {
+      "name": "featured-location",
+      "url": "https://YOUR-DOMAIN.com/api/cron/featured-location",
+      "schedule": "0 * * * *",
+      "scheduleHuman": "Every hour at minute 0",
+      "method": "POST",
+      "headers": { "x-cron-secret": "YOUR_CRON_SECRET" },
+      "_comment": "Standalone hourly cron (NOT wired into master). Picks a random European city (population-weighted) from DirectoryLocation and stores it as the current FeaturedLocation, which the homepage reads to render the 'Featured European location' hero. Stagger from appointment-reminders by ~5 minutes if cron-job.org allows offset (or run both at :00 — they're independent and idempotent)."
     }
   ],
   "_daily_crons_handled_by_vercel_master": [

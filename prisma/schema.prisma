@@ -5925,3 +5925,77 @@ model ClaimRequest {
   @@index([status])
   @@index([completionToken])
 }
+
+// ─── Directory Location (European country/city catalogue) ───────────────────
+// A static-ish catalogue of European countries + their major cities, used to
+// power the public directory pages (`/directory/{country}/{city}`), the
+// homepage "featured European location" hero (rotated hourly by an external
+// cron at /api/cron/featured-location), and SEO internal-link distribution.
+//
+// Seeded once via `prisma/seed-directory.ts` (~300–400 cities across 30+
+// European countries). Rows are not tenant-scoped — they describe real-world
+// geography shared by all tenants/marketplace listings.
+//
+// `citySlug` + `countryCode` form a unique composite key used for URL routing.
+// `population` is used to weight random selection (larger cities surface more
+// often without freezing smaller capitals out entirely).
+model DirectoryLocation {
+  id              String   @id @default(cuid())
+  countryCode     String   // ISO-3166 alpha-2, e.g. "DE", "FR", "GB"
+  countryName     String   // human-readable, e.g. "Germany"
+  city            String   // human-readable, e.g. "Berlin"
+  citySlug        String   // URL-safe slug, e.g. "berlin"
+  region          String?  // state / province / region, e.g. "Berlin"
+  latitude        Float?
+  longitude       Float?
+  timezone        String?  // IANA tz, e.g. "Europe/Berlin"
+  currency        String?  // ISO-4217, e.g. "EUR"
+  locale          String?  // BCP-47 lang, e.g. "de"
+  population      Int      @default(0) // weighting hint for random selection
+  heroImageUrl    String?  // optional hero image (filled in later)
+  description     String?  // short marketing blurb shown on directory page
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Back-relation: 0..N FeaturedLocation rows point at this location
+  // (in practice only 1, since FeaturedLocation.key is unique "current").
+  featuredSelections FeaturedLocation[]
+
+  @@unique([countryCode, citySlug])
+  @@index([countryCode])
+  @@index([citySlug])
+  @@index([isActive])
+  @@index([population])
+}
+
+// ─── Featured Location (singleton — current "hourly spotlight") ─────────────
+// A single-row table (enforced by `key` unique with the constant
+// "current") that stores the currently-featured European location. Updated
+// every hour by `/api/cron/featured-location` (external cron-job.org trigger).
+//
+// Why a table instead of a PlatformMetric key/value? Two reasons:
+//   1. Foreign key to DirectoryLocation gives us cascading integrity + a
+//      single `include` to hydrate the full city record on the homepage.
+//   2. `selectedAt` + `hourBucket` make it trivial to detect stale selections
+//      (e.g. if the external cron stops firing, the homepage can show the
+//      last-known location with a "featured {time} ago" hint rather than a
+//      blank).
+//
+// The cron picks a random European DirectoryLocation (weighted by population),
+// then upserts this row. The homepage reads it via `getCurrentFeaturedLocation()`
+// in `src/lib/featured-location.ts` (5-minute in-memory cache to survive
+// traffic spikes).
+model FeaturedLocation {
+  id              String   @id @default(cuid())
+  // Singleton enforcement — always "current". Using a unique string column
+  // (instead of a singleton boolean) lets us extend later to "next" /
+  // "previous" slots without a schema change.
+  key             String   @unique @default("current")
+  locationId      String
+  hourBucket      String   // ISO hour, e.g. "2025-01-15T14:00:00.000Z"
+  selectedAt      DateTime @default(now())
+  location        DirectoryLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([selectedAt])
+}

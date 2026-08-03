@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import HomePageClient from '@/components/home/home-page-client';
+import { FeaturedEuropeanLocation } from '@/components/home/featured-european-location';
 import { HomeSeoContent } from '@/components/seo/home-seo-content';
 
 /**
@@ -152,6 +153,10 @@ export default async function HomePage() {
       {/* Server-rendered SEO content — visible to crawlers + anonymous visitors.
           Skipped for authenticated users to prevent FOUC on hard refresh. */}
       {!hasAuthCookie && <HomeSeoContent />}
+      {/* Hourly-rotating European city spotlight — server-rendered, populated
+          by the standalone external cron at /api/cron/featured-location.
+          Skipped for authenticated users (they go straight to the dashboard). */}
+      {!hasAuthCookie && <FeaturedEuropeanLocation />}
       {/* Interactive client app — auth routing + landing page */}
       <HomePageClient />
     </>
