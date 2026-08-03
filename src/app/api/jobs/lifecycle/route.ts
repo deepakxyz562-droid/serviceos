@@ -241,6 +241,33 @@ export async function POST(request: NextRequest) {
           resourceType: 'job', resourceId: updatedJob.id,
         }, { tenantId: updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined }))
 
+        // ─── Notify the tenant owner that the job was assigned (background) ────
+        fireAndForget('owner assign notification', async () => {
+          const jobNumber = updatedJob.jobNumber || String(updatedJob.id).slice(-6).toUpperCase()
+          const scheduledDate = updatedJob.scheduledAt
+            ? new Date(updatedJob.scheduledAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+            : 'TBD'
+          const scheduledTime = (updatedJob.scheduledTime as string) || (updatedJob.scheduledAt ? new Date(updatedJob.scheduledAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'TBD')
+          const waMessage = [
+            '📋 *Job Assigned*',
+            '',
+            `*Job #:* ${jobNumber}`,
+            `*Title:* ${updatedJob.title || 'N/A'}`,
+            `*Customer:* ${updatedJob.customerName || 'N/A'}`,
+            `*Assigned To:* ${updatedJob.assigneeName || 'Unassigned'}`,
+            `*Date:* ${scheduledDate}`,
+            `*Time:* ${scheduledTime}`,
+            updatedJob.address ? `*Address:* ${updatedJob.address}` : '',
+          ].filter(Boolean).join('\n')
+
+          await notifyOwner(updatedJob.workspaceId, {
+            eventType: 'job.assigned',
+            eventLabel: 'Job Assigned',
+            whatsappMessage: waMessage,
+            jobId: updatedJob.id,
+          })
+        })
+
         break
       }
 

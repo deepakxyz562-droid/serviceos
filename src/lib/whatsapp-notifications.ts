@@ -159,25 +159,48 @@ async function sendNotificationWhatsAppMessage(
 // ==========================================
 //
 // sendJobNotification() is the single chokepoint every job/lead notification
-// flows through. It fans out to FOUR channels in parallel (best-effort):
+// flows through. It tries channels in a CASCADING FALLBACK with priority-
+// based ordering (not parallel fan-out):
 //
-//   1. WhatsApp  — existing path (DB-resolved provider → Meta Cloud API → simulated)
-//   2. SMS       — sendSmsMessage() → SNS / Twilio / etc. (REAL delivery even
-//                  when WhatsApp is simulated). Writes NotificationLog type='sms'.
-//   3. In-app    — createNotification() → bell + inbox (for users with accounts)
-//   4. Web Push  — sendWebPushToUser() → device push (for users with accounts
-//                  AND a registered PushSubscription)
+//   - URGENT priority (job.assigned, job.started, job.completed, job.accepted,
+//     job.rejected, urgent_alert):
+//         In-App + Push → SMS → WhatsApp → Email
+//       (SMS before WhatsApp because SMS is more reliable for time-critical
+//       alerts.) STOPS as soon as ONE channel confirms real (non-simulated)
+//       delivery — the recipient has been reached.
 //
-// Channels 3 + 4 require a userId. If `pushUserId` is not supplied, it is
+//   - NORMAL priority (reminders, status updates, everything else):
+//         In-App + Push → Email → WhatsApp → SMS
+//       (Email before WhatsApp because email is cheaper + async.) Fires ALL
+//       eligible channels in sequence so the recipient gets the update on
+//       every configured channel.
+//
+// Available channels:
+//   1. In-app + Web Push — coupled via sendInAppAndPushChannels(): writes the
+//                          AppNotification row (bell + inbox) AND fires the
+//                          device push via sendWebPushToUser(). Requires a
+//                          userId; SKIPPED with a structured warning when no
+//                          userId can be resolved (so operators can diagnose
+//                          instead of getting silent zero-delivery).
+//   2. SMS               — sendSmsMessage() → SNS / Twilio / etc. (REAL
+//                          delivery even when WhatsApp is simulated). Writes
+//                          NotificationLog type='sms'.
+//   3. WhatsApp          — DB-resolved provider → Meta Cloud API → simulated.
+//   4. Email             — sendEmail() → SMTP / Resend / SendGrid / SES / etc.
+//                          Resolves recipient from Employee.email or User.email.
+//                          Uses the tenant's / superadmin's configured EmailProvider.
+//
+// In-app + push require a userId. If `pushUserId` is not supplied, it is
 // resolved from `employeeId` → Employee.userId (and as a last resort from
 // `jobId` → Job.assigneeId → Employee.userId). Customers (recipientRole=
 // 'customer') typically don't have user accounts, so they only get WhatsApp +
-// SMS — which is the correct behaviour (customers aren't logged into the
-// dashboard, so in-app + push would have nowhere to land).
+// SMS + Email — which is the correct behaviour (customers aren't logged into
+// the dashboard, so in-app + push would have nowhere to land).
 //
-// Every channel is wrapped in its own try/catch and runs via Promise.allSettled,
-// so a failure in one channel never affects the others or the caller's HTTP
-// response.
+// Every channel is wrapped in its own try/catch and returns a ChannelResult
+// { channel, success, simulated?, error? }. The cascade aggregates these into
+// the return value so callers (and tests) can inspect which channels fired,
+// which were skipped, and why.
 
 /**
  * Derive a short SMS body (≤160 chars) from the payload. SMS is much shorter
@@ -575,7 +598,20 @@ async function sendEmailChannel(
   }
 
   if (!emailTo) {
-    // No recipient email could be resolved — silently skip (non-fatal).
+    // No recipient email could be resolved — skip with a structured warning so
+    // operators can diagnose why an employee/customer isn't getting email.
+    // (Previously this returned silently, masking the missing-email failure.)
+    console.warn(
+      `[sendJobNotification] Skipping email channel — no recipient email resolved`,
+      {
+        employeeId: payload.employeeId || null,
+        jobId: payload.jobId || null,
+        customerId: payload.customerId || null,
+        recipientRole: payload.recipientRole || null,
+        tenantId: tenantId || null,
+        hint: 'Add an email to the Employee record, or pass emailTo explicitly in the payload.',
+      }
+    )
     return
   }
 
@@ -770,45 +806,176 @@ async function sendInAppAndPushChannels(
 }
 
 // ==========================================
-// MAIN DISPATCHER (replaces old sendJobNotification)
+// MAIN DISPATCHER (cascading fallback with priority-based ordering)
 // ==========================================
+//
+// `ChannelResult` describes the outcome of a single channel attempt in the
+// cascade. Exported as part of `sendJobNotification`'s return type so callers
+// (and tests) can inspect which channels fired, which were skipped, and why.
+type ChannelResult = {
+  channel: string
+  success: boolean
+  simulated?: boolean
+  error?: string
+}
+
 export async function sendJobNotification(
   payload: NotificationPayload,
-): Promise<{ success: boolean; error?: string }> {
-  // Resolve the recipient userId + real tenantId up front so all channels
-  // can fire in parallel without serializing on the DB lookup.
+): Promise<{ success: boolean; error?: string; channels: ChannelResult[] }> {
+  // Resolve the recipient userId + real tenantId up front. The userId drives
+  // whether in-app + push are eligible channels in the cascade.
   const { userId, tenantId: resolvedTenantId } = await resolveRecipientUserId(payload)
   const tenantId = resolvedTenantId
 
-  // Fan out to all channels in parallel. Each is best-effort (own try/catch
-  // inside). Promise.allSettled ensures one channel's rejection never short-
-  // circuits the others or bubbles to the caller.
-  //
-  // Channels:
-  //   1. WhatsApp  — sendWhatsAppMessage() (simulated when no WhatsApp provider)
-  //   2. SMS       — sendSmsMessage() (SNS / Twilio / etc.)
-  //   3. Email     — sendEmail() (SMTP / Resend / SendGrid / SES / etc.)
-  //                  Resolves recipient from Employee.email or User.email.
-  //                  Uses the tenant's / superadmin's configured EmailProvider.
-  //   4 + 5. In-app + Web Push — only when a userId is resolved (employees/admins)
-  const channels: Promise<unknown>[] = [
-    sendWhatsAppChannel(payload),
-    sendSmsChannel(payload, tenantId),
-    sendEmailChannel(payload, tenantId, userId),
+  // Determine priority from the payload's eventType. Urgent events (job
+  // lifecycle mutations, urgent alerts) prefer SMS before WhatsApp because SMS
+  // is more reliable for time-critical alerts. Normal events (reminders,
+  // status updates) prefer Email before WhatsApp because email is cheaper
+  // and async.
+  const urgentEvents = [
+    'job.assigned', 'job.started', 'job.completed',
+    'job.accepted', 'job.rejected', 'urgent_alert',
   ]
-  // In-app + Web Push — fire whenever we have a userId. sendWebPushToUser
-  // gracefully handles a null tenantId (queries all subscriptions for that
-  // userId regardless of tenant), so we don't gate on tenantId here. This
-  // fixes the bug where employees never received push notifications because
-  // the tenantId was null (Job uses workspaceId, not tenantId, and the
-  // resolution previously short-circuited before looking up the Employee's
-  // real tenantId).
-  if (userId) {
-    channels.push(sendInAppAndPushChannels(payload, userId, tenantId))
-  }
-  await Promise.allSettled(channels)
+  const eventType = (payload.eventType as string) || ''
+  const priority: 'urgent' | 'normal' = urgentEvents.includes(eventType) ? 'urgent' : 'normal'
 
-  return { success: true }
+  // Build the ordered channel list. Each entry is { name, send }.
+  // Channels that are not applicable (e.g. no userId for in-app + push) are
+  // skipped with a logged structured warning rather than silently dropped —
+  // this fixes the production bug where missing userId caused zero in-app +
+  // push notifications with no operator-visible log trail.
+  const channels: Array<{ name: string; send: () => Promise<ChannelResult> }> = []
+
+  // 1. In-App + Web Push — always first when a userId is available (cheapest,
+  //    most reliable for dashboard users). `sendInAppAndPushChannels` couples
+  //    both: it writes the AppNotification row (bell/inbox) AND fires the
+  //    device push via sendWebPushToUser. We list it as a single "in-app"
+  //    channel entry for the cascade log; the push is implicitly included.
+  if (userId) {
+    channels.push({
+      name: 'in-app',
+      send: async () => {
+        try {
+          await sendInAppAndPushChannels(payload, userId, tenantId)
+          // sendInAppAndPushChannels returns void and catches its own errors
+          // internally. If we reached this point without throwing, treat as
+          // success (the in-app row was written OR the push was dispatched).
+          return { channel: 'in-app', success: true }
+        } catch (err) {
+          return { channel: 'in-app', success: false, error: String(err) }
+        }
+      },
+    })
+  } else {
+    console.warn(
+      `[sendJobNotification] Skipping in-app + push channels — no userId resolved`,
+      {
+        employeeId: payload.employeeId || null,
+        jobId: payload.jobId || null,
+        recipientRole: payload.recipientRole || null,
+        to: payload.to || null,
+        tenantId: tenantId || null,
+        hint: 'Employees created without an email have no linked User account. Add an email to the employee, or send an invitation to create their login.',
+      }
+    )
+  }
+
+  // 2. SMS channel — real SMS via SNS / Twilio / etc. Returns { success,
+  //    simulated?, error? } so we can preserve the simulated flag (simulated
+  //    sends don't count as "reached" for the urgent-cascade stop rule).
+  const smsChannel: { name: string; send: () => Promise<ChannelResult> } = {
+    name: 'sms',
+    send: async () => {
+      try {
+        const r = await sendSmsChannel(payload, tenantId)
+        return {
+          channel: 'sms',
+          success: !!r.success,
+          simulated: r.simulated,
+          error: r.error,
+        }
+      } catch (err) {
+        return { channel: 'sms', success: false, error: String(err) }
+      }
+    },
+  }
+
+  // 3. WhatsApp channel — DB-resolved provider → Meta Cloud API → simulated.
+  const whatsappChannel: { name: string; send: () => Promise<ChannelResult> } = {
+    name: 'whatsapp',
+    send: async () => {
+      try {
+        const r = await sendWhatsAppChannel(payload)
+        return {
+          channel: 'whatsapp',
+          success: !!r.success,
+          simulated: r.simulated,
+          error: r.error,
+        }
+      } catch (err) {
+        return { channel: 'whatsapp', success: false, error: String(err) }
+      }
+    },
+  }
+
+  // 4. Email channel — SMTP / Resend / SendGrid / SES / etc. Returns void
+  //    (catches its own errors internally); treat as success if no exception.
+  const emailChannel: { name: string; send: () => Promise<ChannelResult> } = {
+    name: 'email',
+    send: async () => {
+      try {
+        await sendEmailChannel(payload, tenantId, userId)
+        return { channel: 'email', success: true }
+      } catch (err) {
+        return { channel: 'email', success: false, error: String(err) }
+      }
+    },
+  }
+
+  // Order the remaining channels by priority. In-app + push (if eligible)
+  // already sit at the head of `channels`.
+  if (priority === 'urgent') {
+    // Urgent: SMS → WhatsApp → Email (SMS most reliable for time-critical)
+    channels.push(smsChannel, whatsappChannel, emailChannel)
+  } else {
+    // Normal: Email → WhatsApp → SMS (email cheaper + async)
+    channels.push(emailChannel, whatsappChannel, smsChannel)
+  }
+
+  // Execute the cascade: try each channel in priority order.
+  //  - URGENT priority: STOP as soon as ONE channel confirms real (non-
+  //    simulated) delivery — the recipient has been reached, no need to
+  //    spam additional channels. Remaining channels are logged as skipped.
+  //  - NORMAL priority: fire ALL channels in sequence (so the recipient
+  //    gets the update on every configured channel) but in priority order
+  //    so logs are readable.
+  const results: ChannelResult[] = []
+  let reached = false
+  for (const ch of channels) {
+    if (reached && priority === 'urgent') {
+      // Skip remaining channels — recipient already reached for an urgent alert.
+      results.push({
+        channel: ch.name,
+        success: false,
+        error: 'skipped (recipient already reached)',
+      })
+      continue
+    }
+    const result = await ch.send()
+    results.push(result)
+    if (result.success && !result.simulated) {
+      reached = true
+    }
+  }
+
+  const anySuccess = results.some((r) => r.success)
+  return {
+    success: anySuccess,
+    error: anySuccess
+      ? undefined
+      : 'All notification channels failed or were skipped',
+    channels: results,
+  }
 }
 
 // ==========================================

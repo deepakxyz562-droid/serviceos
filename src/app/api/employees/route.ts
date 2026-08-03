@@ -179,11 +179,67 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Auto-create a linked User account so the employee can receive in-app + push
+    // notifications immediately (without waiting for an explicit "Invite"). The
+    // User is created inactive (no password) — the owner can later send a real
+    // invitation so the employee can set a password and log in. This fixes the
+    // production bug where employees created from the dashboard had userId=null
+    // and silently received NO notifications.
+    if (email && !userId && employee.workspaceId) {
+      try {
+        const normalizedEmail = email.trim().toLowerCase()
+        // Reuse an existing User with the same email if one exists (avoid unique constraint violation)
+        const existingUser = await db.user.findUnique({
+          where: { email: normalizedEmail },
+          select: { id: true },
+        })
+        const linkedUserId = existingUser?.id
+        if (linkedUserId) {
+          await db.employee.update({
+            where: { id: employee.id },
+            data: { userId: linkedUserId },
+          })
+        } else {
+          // Resolve tenantId from the workspaceId (Employee has workspaceId, not tenantId)
+          const workspace = await db.workspace.findUnique({
+            where: { id: employee.workspaceId },
+            select: { tenantId: true },
+          })
+          const newUser = await db.user.create({
+            data: {
+              email: normalizedEmail,
+              name: employee.name,
+              phone: employee.phone,
+              role: employee.role === 'owner' ? 'owner' : 'employee',
+              isActive: false, // inactive until the owner sends a formal invitation
+              tenantId: workspace?.tenantId || null,
+              workspaceId: employee.workspaceId,
+            },
+          })
+          await db.employee.update({
+            where: { id: employee.id },
+            data: { userId: newUser.id },
+          })
+        }
+      } catch (linkErr) {
+        // Log but do NOT fail the employee creation — the Employee row is already
+        // saved. The owner can still invite later to create the User account.
+        console.error('[employees POST] Auto-link User account failed:', linkErr)
+      }
+    }
+
+    // Re-fetch the employee with the (possibly newly linked) userId populated so
+    // the response reflects the final state. When userId was explicitly passed,
+    // the original `employee` row is already correct.
+    const finalEmployee = userId
+      ? employee
+      : await db.employee.findUnique({ where: { id: employee.id } })
+
     // Invalidate list caches — new employee affects all list queries for
     // this tenant. Prefix-match clears every variant (role/status/workspace).
     cache.invalidateByPrefix('employees:')
 
-    return NextResponse.json(employee, { status: 201 })
+    return NextResponse.json(finalEmployee || employee, { status: 201 })
   } catch (error) {
     console.error('Error creating employee:', error)
     return NextResponse.json({ error: 'Failed to create employee' }, { status: 500 })

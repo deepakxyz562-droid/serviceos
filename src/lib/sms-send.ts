@@ -52,6 +52,10 @@ interface ResolvedSmsProvider {
   provider: string
   config: Record<string, string>
   source: string
+  /** True when the resolved provider is the platform/shared SuperAdmin-configured provider.
+   *  Used by the quota gate: tenants using the shared provider are subject to the monthly SMS quota;
+   *  tenants who connect their OWN SMS provider bypass the quota (they pay their provider directly). */
+  isPlatform: boolean
 }
 
 async function resolveSmsProvider(
@@ -63,6 +67,7 @@ async function resolveSmsProvider(
       provider: options.providerOverride,
       config: options.configOverride,
       source: 'override',
+      isPlatform: false,
     }
   }
 
@@ -73,7 +78,7 @@ async function resolveSmsProvider(
       if (credential) {
         const credData = safeJsonParse(credential.encryptedData, {}) as Record<string, string>
         const provider = credData.provider || credData.type || 'twilio'
-        return { provider, config: credData, source: `credential:${credential.id}` }
+        return { provider, config: credData, source: `credential:${credential.id}`, isPlatform: false }
       }
     } catch { /* fall through */ }
   }
@@ -85,9 +90,14 @@ async function resolveSmsProvider(
       id: string; name: string; provider: string; configJson: string | null;
       credential: { encryptedData: string | null } | null;
     } | null = null
+    // Track whether the resolved provider is the platform/shared provider.
+    // Tenant-owned providers (2a/2b) → false. Platform/shared providers
+    // (2c/2d) → true. This drives the SMS quota gate in sendSmsMessage.
+    let isPlatform = false
 
     if (tenantId) {
       // 2a. Tenant's own default SMS provider
+      isPlatform = false
       providerRow = await db.communicationProvider.findFirst({
         where: { type: 'sms', status: 'active', sendingEnabled: true, isPlatform: false, isDefault: true, tenantId },
         orderBy: { updatedAt: 'desc' },
@@ -95,6 +105,7 @@ async function resolveSmsProvider(
       })
       // 2b. Any tenant's own active SMS provider
       if (!providerRow) {
+        isPlatform = false
         providerRow = await db.communicationProvider.findFirst({
           where: { type: 'sms', status: 'active', sendingEnabled: true, isPlatform: false, tenantId },
           orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
@@ -104,6 +115,7 @@ async function resolveSmsProvider(
     }
     // 2c. Platform (shared) SMS provider
     if (!providerRow) {
+      isPlatform = true
       providerRow = await db.communicationProvider.findFirst({
         where: { type: 'sms', status: 'active', sendingEnabled: true, isPlatform: true, isDefault: true },
         orderBy: { updatedAt: 'desc' },
@@ -112,6 +124,7 @@ async function resolveSmsProvider(
     }
     // 2d. Legacy: any active SMS provider
     if (!providerRow) {
+      isPlatform = true
       providerRow = await db.communicationProvider.findFirst({
         where: { type: 'sms', status: 'active', sendingEnabled: true },
         orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
@@ -132,6 +145,7 @@ async function resolveSmsProvider(
         provider: providerRow.provider,
         config: cfg,
         source: `communicationProvider:${providerRow.id}(${providerRow.name})`,
+        isPlatform,
       }
     }
   } catch (err) {
@@ -148,6 +162,7 @@ async function resolveSmsProvider(
         fromNumber: process.env.TWILIO_PHONE_NUMBER,
       },
       source: 'env',
+      isPlatform: true,
     }
   }
 
@@ -172,24 +187,125 @@ function normalisePhone(raw: string): string {
 
 // ─── Per-provider senders ───────────────────────────────────────────────────
 
-async function sendTwilio(cfg: Record<string, string>, to: string, message: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const sid = cfg.accountSid
-  const token = cfg.authToken
-  const from = cfg.fromNumber
-  if (!sid || !token || !from) return { success: false, error: 'Twilio requires accountSid, authToken, fromNumber' }
+async function sendTwilio(
+  cfg: Record<string, string>,
+  to: string,
+  message: string,
+): Promise<{ success: boolean; messageId?: string; error?: string; rawResponse?: string; httpStatus?: number }> {
+  // ── Auth resolution ────────────────────────────────────────────────────
+  // Twilio supports TWO authentication methods:
+  //
+  // 1. Account SID + Auth Token (legacy):
+  //      Basic auth = base64(`${accountSid}:${authToken}`)
+  //      URL  = /Accounts/${accountSid}/Messages.json
+  //
+  // 2. API Key SID + API Key Secret (recommended — what Fieseros uses):
+  //      Basic auth = base64(`${apiKeySid}:${apiKeySecret}`)
+  //      URL  = /Accounts/${accountSid}/Messages.json  (accountSid still needed in URL)
+  //
+  // The config can provide EITHER set. We detect which is present and build
+  // the Authorization header accordingly. This fixes the 401 error that
+  // occurred when the SuperAdmin stored an API Key SID in the `accountSid`
+  // field but the code tried to use it as the Basic-auth username with the
+  // account authToken.
+  const accountSid = cfg.accountSid
+  const authToken = cfg.authToken
+  const apiKeySid = cfg.apiKeySid
+  const apiKeySecret = cfg.apiKeySecret
+  const fromNumber = cfg.fromNumber
+  const alphanumericSender = cfg.alphanumericSender || 'Fieseros'
+
+  if (!accountSid) {
+    return { success: false, error: 'Twilio requires accountSid' }
+  }
+
+  // Determine the auth credentials to use.
+  let authUser: string
+  let authPass: string
+  if (apiKeySid && apiKeySecret) {
+    // API Key auth (recommended)
+    authUser = apiKeySid
+    authPass = apiKeySecret
+  } else if (authToken) {
+    // Legacy account token auth
+    authUser = accountSid
+    authPass = authToken
+  } else {
+    return {
+      success: false,
+      error: 'Twilio requires either (apiKeySid + apiKeySecret) or (accountSid + authToken)',
+    }
+  }
+
+  // ── Sender ID resolution ───────────────────────────────────────────────
+  // Alphanumeric sender IDs (e.g. "Fieseros") work internationally but NOT
+  // in the US/CA (Twilio requires a dedicated long code or short code there).
+  //
+  // Strategy:
+  //   - If the recipient is a US/CA number (+1...) AND fromNumber is set →
+  //     use the numeric fromNumber, but PREFIX the message body with
+  //     "Fieseros: " so the brand is still visible.
+  //   - For all other destinations → use the alphanumeric sender "Fieseros"
+  //     (overrides fromNumber) for better brand recognition + no per-message
+  //     number cost.
+  //   - If no alphanumericSender is configured → fall back to fromNumber.
+  const isUsOrCanada = /^\+1\d{10}$/.test(to)
+  let fromField: string
+  let bodyField: string
+  if (isUsOrCanada) {
+    // US/CA: must use a numeric sender. Prefix the message with the brand.
+    if (!fromNumber) {
+      return {
+        success: false,
+        error: 'Twilio requires fromNumber (numeric) for US/CA recipients — alphanumeric sender IDs are not supported in these regions',
+      }
+    }
+    fromField = fromNumber
+    bodyField = `${alphanumericSender}: ${message}`
+  } else {
+    // International: prefer the alphanumeric sender for brand recognition.
+    // Fall back to fromNumber if no alphanumeric sender is configured.
+    fromField = alphanumericSender || fromNumber
+    bodyField = message
+    if (!fromField) {
+      return {
+        success: false,
+        error: 'Twilio requires either alphanumericSender or fromNumber',
+      }
+    }
+  }
 
   try {
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${sid}:${token}`).toString('base64')}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
+    const res = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${authUser}:${authPass}`).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          From: fromField,
+          To: to,
+          Body: bodyField,
+        }).toString(),
       },
-      body: new URLSearchParams({ From: from, To: to, Body: message }).toString(),
-    })
+    )
     const data = (await res.json()) as Record<string, unknown>
-    if (res.ok) return { success: true, messageId: data.sid as string }
-    return { success: false, error: (data.message as string) || `Twilio API error: ${res.status}` }
+    if (res.ok) {
+      return {
+        success: true,
+        messageId: data.sid as string,
+        rawResponse: JSON.stringify(data),
+        httpStatus: res.status,
+      }
+    }
+    return {
+      success: false,
+      error: (data.message as string) || `Twilio API error: ${res.status}`,
+      rawResponse: JSON.stringify(data),
+      httpStatus: res.status,
+    }
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : String(err) }
   }
@@ -447,6 +563,38 @@ export async function sendSmsMessage(options: SendSmsOptions): Promise<SendSmsRe
   const to = normalisePhone(rawTo)
 
   const resolved = await resolveSmsProvider(options)
+
+  // ── SMS quota gate (mirrors email quota in email-send.ts) ────────────────
+  // Only enforce when using the platform/shared SMS provider. Tenants who
+  // connect their OWN SMS provider pay that provider directly and bypass the
+  // monthly quota (same policy as email).
+  if (options.tenantId && resolved && resolved.isPlatform) {
+    try {
+      const subscription = await db.subscription.findFirst({
+        where: { tenantId: options.tenantId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          smsQuota: true,
+          smsUsageCount: true,
+          status: true,
+        },
+      })
+      if (subscription && subscription.smsUsageCount >= subscription.smsQuota) {
+        console.warn(
+          `[SMS QUOTA EXCEEDED] Tenant: ${options.tenantId}, Used: ${subscription.smsUsageCount}/${subscription.smsQuota}`
+        )
+        return {
+          success: false,
+          error: `Monthly SMS quota exceeded (${subscription.smsUsageCount}/${subscription.smsQuota}). Connect your own SMS provider in Settings → Providers to send unlimited messages.`,
+          credentialUsed: resolved.source,
+          provider: resolved.provider,
+        }
+      }
+    } catch (quotaErr) {
+      console.warn('[SMS] Quota check failed (non-blocking):', quotaErr)
+    }
+  }
+
   if (!resolved) {
     console.log(`[SMS SIMULATED] To: ${to}, Body: ${message.slice(0, 80)}`)
     return { success: true, messageId: `sim_sms_${Date.now()}`, simulated: true, credentialUsed: 'none' }
@@ -496,6 +644,20 @@ export async function sendSmsMessage(options: SendSmsOptions): Promise<SendSmsRe
         }
       } catch (e) {
         console.warn('[SMS] Failed to bump provider counters:', e)
+      }
+    }
+
+    // Increment the tenant's monthly SMS usage counter (only when using the
+    // platform/shared provider — tenants using their own provider don't count
+    // against the platform quota).
+    if (resolved.isPlatform && options.tenantId && r.success) {
+      try {
+        await db.subscription.updateMany({
+          where: { tenantId: options.tenantId },
+          data: { smsUsageCount: { increment: 1 } },
+        })
+      } catch (e) {
+        console.warn('[SMS] Failed to increment tenant usage counter:', e)
       }
     }
 
