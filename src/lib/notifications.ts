@@ -331,6 +331,103 @@ export async function shouldDeliverNotification(
 }
 
 /**
+ * Decide whether an EMAIL notification of the given type should be delivered
+ * to the given user, based on their NotificationPreference.
+ *
+ * Mirrors `shouldDeliverNotification` but checks `emailEnabled` (the email
+ * master switch, defaults to `false`) instead of `inAppEnabled`. Used by
+ * `sendEmailChannel` in `whatsapp-notifications.ts` so that marketing and
+ * non-transactional emails respect the user's opt-in, while operational
+ * event types (job.assigned, job.started, job.completed) bypass this gate
+ * by being marked as urgent priority — those are always sent because they
+ * are critical to job execution.
+ *
+ * Returns `true` when:
+ *   1. Priority is `urgent` (operational/transactional — always send); OR
+ *   2. The user has `emailEnabled = true`; AND
+ *   3. The specific type isn't explicitly disabled in `typePrefsJson`; AND
+ *   4. We're not currently inside the user's quiet hours window.
+ *
+ * When the user has no NotificationPreference row at all, returns `false`
+ * for `normal` priority (because `emailEnabled` defaults to `false`).
+ */
+export async function shouldDeliverEmailNotification(
+  userId: string,
+  type: string,
+  priority: string = 'normal'
+): Promise<boolean> {
+  try {
+    // Urgent / operational notifications always go through.
+    if (priority === 'urgent') return true;
+
+    const pref = await db.notificationPreference.findFirst({
+      where: { userId },
+    });
+
+    // No preference row = defaults. emailEnabled defaults to false, so
+    // non-urgent emails are NOT sent until the user opts in.
+    if (!pref) return false;
+
+    // Email master switch.
+    if (!pref.emailEnabled) return false;
+
+    // Per-type opt-out. typePrefsJson is `{ "job_completed": false, ... }`.
+    if (pref.typePrefsJson) {
+      try {
+        const typePrefs = JSON.parse(pref.typePrefsJson) as Record<string, boolean>;
+        if (type in typePrefs && typePrefs[type] === false) {
+          return false;
+        }
+      } catch {
+        // Malformed JSON — ignore and treat as no per-type overrides.
+      }
+    }
+
+    // Quiet hours — only non-urgent types are gated.
+    if (pref.quietHoursStart && pref.quietHoursEnd) {
+      const now = new Date();
+      const tz = pref.quietHoursTz || 'UTC';
+      let hour: number;
+      let minute: number;
+      try {
+        const fmt = new Intl.DateTimeFormat('en-US', {
+          timeZone: tz,
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        });
+        const parts = fmt.formatToParts(now);
+        const h = parts.find((p) => p.type === 'hour')?.value ?? '0';
+        const m = parts.find((p) => p.type === 'minute')?.value ?? '0';
+        hour = parseInt(h, 10) % 24;
+        minute = parseInt(m, 10);
+      } catch {
+        hour = now.getHours();
+        minute = now.getMinutes();
+      }
+      const nowMinutes = hour * 60 + minute;
+      const [sh, sm] = pref.quietHoursStart.split(':').map((x) => parseInt(x, 10));
+      const [eh, em] = pref.quietHoursEnd.split(':').map((x) => parseInt(x, 10));
+      if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
+        const startMinutes = sh * 60 + sm;
+        const endMinutes = eh * 60 + em;
+        const inQuiet =
+          startMinutes <= endMinutes
+            ? nowMinutes >= startMinutes && nowMinutes < endMinutes
+            : nowMinutes >= startMinutes || nowMinutes < endMinutes;
+        if (inQuiet) return false;
+      }
+    }
+
+    return true;
+  } catch (err) {
+    console.warn('[notifications] shouldDeliverEmailNotification failed:', err);
+    // Fail open for email — better to deliver than to miss a transactional msg.
+    return true;
+  }
+}
+
+/**
  * Read VAPID keys from environment. Returns nulls if not configured so
  * callers can feature-detect (the PWA push card shows a warning).
  */

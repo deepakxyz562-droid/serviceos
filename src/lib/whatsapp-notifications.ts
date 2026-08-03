@@ -2,12 +2,17 @@ import { db } from '@/lib/db'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 import { resolveWhatsAppConfig } from '@/lib/whatsapp-config'
 import { deductWhatsAppCredit } from '@/lib/credit-management'
-import { createNotification } from '@/lib/notifications'
+import { createNotification, shouldDeliverEmailNotification } from '@/lib/notifications'
 import { sendWebPushToUser } from '@/lib/web-push-send'
 import { sendSmsMessage } from '@/lib/sms-send'
 import { sendEmail } from '@/lib/email-send'
 import { resolveTenantId } from '@/lib/owner-notifications'
 import { hasRecentPush, markPushSent } from '@/lib/lifecycle-push-dispatcher'
+import {
+  renderJobAssignmentEmail,
+  JOB_ASSIGNMENT_EMAIL_SUBJECT,
+} from '@/lib/email-templates/job-assignment'
+import { getAppUrl } from '@/lib/brand'
 
 // ==========================================
 // TYPES
@@ -59,6 +64,14 @@ interface NotificationPayload {
   emailTo?: string
   /** Optional HTML body for the email channel. Defaults to the `message` field wrapped in <pre>. */
   emailHtml?: string
+  /**
+   * Email delivery priority. When set to `'operational'`, the email bypasses
+   * the user's `emailEnabled` preference check (used for transactional /
+   * operationally-critical emails like job assignment, which must always be
+   * delivered). Defaults to `'normal'`, which respects `emailEnabled` and
+   * quiet-hours preferences.
+   */
+  emailPriority?: 'operational' | 'normal'
 }
 
 interface SendResult {
@@ -494,6 +507,7 @@ async function sendSmsChannel(
 async function sendEmailChannel(
   payload: NotificationPayload,
   tenantId: string | null,
+  userId?: string | null,
 ): Promise<void> {
   // Resolve the recipient email:
   //   1. Explicit payload.emailTo (when set to a non-empty string)
@@ -501,6 +515,10 @@ async function sendEmailChannel(
   //   3. Job.assignee → Employee.email (when only jobId is known)
   //   4. User.email (when pushUserId / resolved userId is available)
   let emailTo = payload.emailTo ?? ''
+  // Track the resolved userId so we can run the email-preference check below
+  // even when the dispatcher didn't pass one in (e.g. when only employeeId
+  // was supplied). Falls back to payload.pushUserId / dispatcher-supplied userId.
+  let resolvedUserId = userId || payload.pushUserId || ''
 
   if (!emailTo && payload.employeeId) {
     try {
@@ -510,7 +528,11 @@ async function sendEmailChannel(
       })
       if (emp?.email) {
         emailTo = emp.email
-      } else if (emp?.userId) {
+      }
+      if (emp?.userId && !resolvedUserId) {
+        resolvedUserId = emp.userId
+      }
+      if (!emailTo && emp?.userId) {
         const user = await db.user.findUnique({
           where: { id: emp.userId },
           select: { email: true },
@@ -535,7 +557,11 @@ async function sendEmailChannel(
         })
         if (emp?.email) {
           emailTo = emp.email
-        } else if (emp?.userId) {
+        }
+        if (emp?.userId && !resolvedUserId) {
+          resolvedUserId = emp.userId
+        }
+        if (!emailTo && emp?.userId) {
           const user = await db.user.findUnique({
             where: { id: emp.userId },
             select: { email: true },
@@ -551,6 +577,37 @@ async function sendEmailChannel(
   if (!emailTo) {
     // No recipient email could be resolved — silently skip (non-fatal).
     return
+  }
+
+  // Email preference + quiet-hours gating.
+  //
+  // Operational priority (set by `notifyEmployeeJobAssigned` and other
+  // transactional lifecycle senders) bypasses the preference check — these
+  // emails are critical to job execution and MUST be delivered regardless
+  // of the user's opt-in status (matches industry practice for transactional
+  // emails like order receipts, password resets, etc.).
+  //
+  // Normal priority emails (marketing, digests) respect the user's
+  // `emailEnabled` preference and quiet-hours window. When no userId can be
+  // resolved, we fail open and send (preserves previous behavior for
+  // ad-hoc sends to raw email addresses).
+  const priority = payload.emailPriority === 'operational' ? 'urgent' : 'normal'
+  if (resolvedUserId) {
+    try {
+      const allowed = await shouldDeliverEmailNotification(
+        resolvedUserId,
+        payload.eventType || 'reminder',
+        priority,
+      )
+      if (!allowed) {
+        // User has email notifications disabled (or is in quiet hours) for
+        // this non-operational type. Skip silently — non-fatal.
+        return
+      }
+    } catch (e) {
+      // Preference check failed — fail open (send the email anyway).
+      console.warn('[sendJobNotification] email preference check failed:', e)
+    }
   }
 
   const subject = payload.subject || 'Fieseros Notification'
@@ -737,7 +794,7 @@ export async function sendJobNotification(
   const channels: Promise<unknown>[] = [
     sendWhatsAppChannel(payload),
     sendSmsChannel(payload, tenantId),
-    sendEmailChannel(payload, tenantId),
+    sendEmailChannel(payload, tenantId, userId),
   ]
   // In-app + Web Push — fire whenever we have a userId. sendWebPushToUser
   // gracefully handles a null tenantId (queries all subscriptions for that
@@ -828,6 +885,63 @@ export async function notifyEmployeeJobAssigned(
     },
   }
 
+  // ── Render the Jobber-style "New task assignment" HTML email ──────────
+  //
+  // The email body is a polished, branded HTML template (matching the
+  // Jobber task-assignment email structure) — see
+  // src/lib/email-templates/job-assignment.ts. Subject is the exact string
+  // "New task assignment" (matches Jobber).
+  //
+  // `emailPriority: 'operational'` ensures the email is delivered even when
+  // the employee hasn't explicitly opted in to email notifications
+  // (NotificationPreference.emailEnabled defaults to false). Job assignment
+  // is operationally critical — same category as password-reset emails.
+  //
+  // The end-time is derived from `scheduledAt + estimatedDuration` (in
+  // minutes — see invoice-automation.ts line 278: `estimatedDuration / 60`
+  // gives hours). When either field is missing, the template gracefully
+  // shows just the start time.
+  const scheduledAtRaw = job.scheduledAt as string | null
+  const estimatedDurationMins = (job.estimatedDuration as number | null) || 0
+  let scheduledEndTime: Date | null = null
+  if (scheduledAtRaw && estimatedDurationMins > 0) {
+    try {
+      const start = new Date(scheduledAtRaw)
+      if (!isNaN(start.getTime())) {
+        scheduledEndTime = new Date(start.getTime() + estimatedDurationMins * 60 * 1000)
+      }
+    } catch {
+      scheduledEndTime = null
+    }
+  }
+
+  // Absolute URL for the email's "View Job" button. The in-app `actionUrl`
+  // (below) stays relative because the dashboard SPA handles it internally.
+  const appUrl = getAppUrl()
+  const viewJobUrl = `${appUrl}/?view=jobs&job=${job.id as string}`
+
+  // Best-effort: rendering never throws — if data is missing, the template
+  // shows '—' / 'TBD' placeholders rather than crashing the dispatcher.
+  let jobAssignmentEmailHtml = ''
+  try {
+    jobAssignmentEmailHtml = renderJobAssignmentEmail({
+      assigneeName: (employee.name as string) || '',
+      jobNumber,
+      jobTitle: (job.title as string) || undefined,
+      scheduledAt: scheduledAtRaw,
+      scheduledEndTime,
+      address: (job.address as string) || undefined,
+      customerName: (job.customerName as string) || '',
+      customerPhone: (job.customerPhone as string) || undefined,
+      customerEmail: (job.customerEmail as string) || undefined,
+      viewJobUrl,
+    })
+  } catch (err) {
+    // Rendering failed — fall back to the legacy <pre>-wrapped body by
+    // leaving emailHtml empty. The dispatcher still sends the email.
+    console.error('[notifyEmployeeJobAssigned] template render failed:', err)
+  }
+
   try {
     await sendJobNotification({
       to: employeePhone,
@@ -836,7 +950,10 @@ export async function notifyEmployeeJobAssigned(
       interactive,
       recipientName: (employee.name as string) || undefined,
       recipientRole: 'employee',
-      subject: `New Job Assigned: #${jobNumber}`,
+      // Override the email subject to match the Jobber "New task assignment"
+      // format. (In-app + push titles still use the legacy "New job assigned"
+      // wording — only the EMAIL subject changes.)
+      subject: JOB_ASSIGNMENT_EMAIL_SUBJECT,
       jobId: job.id as string,
       employeeId: employee.id as string,
       customerId: (job.customerId as string) || undefined,
@@ -852,6 +969,10 @@ export async function notifyEmployeeJobAssigned(
       pushBody: notifBody,
       smsMessage: `New Job #${jobNumber}: ${job.title || 'Untitled'} - ${job.customerName || 'Customer'} - ${scheduledDate} ${scheduledTime}. Confirm arrival.`,
       actionUrl: `/?view=jobs&job=${job.id}`,
+      // Email channel overrides — Jobber-style HTML template + operational
+      // priority (bypasses emailEnabled preference check).
+      emailHtml: jobAssignmentEmailHtml,
+      emailPriority: 'operational',
     })
   } catch (err) {
     console.error('[notifyEmployeeJobAssigned] dispatcher failed:', err)
