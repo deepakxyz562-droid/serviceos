@@ -1,70 +1,26 @@
 {
-  "_comment": "cron-job.org bulk import config. Import these 12 jobs at https://cron-job.org. Set the URL to https://YOUR-DOMAIN.com/api/cron/{path} and add request header 'x-cron-secret: YOUR_CRON_SECRET'. All times are UTC.",
-  "_setup": "1) Generate CRON_SECRET: openssl rand -hex 32. 2) Set CRON_SECRET env var on your Next.js app. 3) Sign up at cron-job.org. 4) Create each job below with the specified schedule + URL + header. 5) Method: POST (or GET — all routes accept both).",
+  "_comment": "cron-job.org bulk import config. Import these jobs at https://cron-job.org. Set the URL to https://YOUR-DOMAIN.com/api/cron/{path} and add request header 'x-cron-secret: YOUR_CRON_SECRET'. All times are UTC.",
+  "_setup": "1) Generate CRON_SECRET: openssl rand -hex 32. 2) Set CRON_SECRET env var on your Next.js app (Vercel → Settings → Environment Variables). 3) Sign up at cron-job.org (FREE). 4) Create each job below with the specified schedule + URL + header. 5) Method: POST (or GET — all routes accept both). 6) Replace YOUR-DOMAIN.com with your actual domain (e.g., fieseros.com).",
+  "_architecture": "This file contains ONLY the 4 HIGH-FREQUENCY crons that need sub-daily cadence (5-min / 15-min / hourly). The 9 DAILY crons + 1 MONTHLY cron are handled by the Vercel Master Cron at /api/cron/master (configured in vercel.json). Do NOT duplicate the daily crons here — that would cause double-execution. See README-cron-setup.md for the full architecture diagram.",
+  "_domain_placeholder": "Replace YOUR-DOMAIN.com with your production domain (e.g., fieseros.com) before importing.",
   "jobs": [
     {
-      "name": "marketplace-settlement",
-      "url": "https://YOUR-DOMAIN.com/api/cron/marketplace-settlement",
-      "schedule": "0 2 * * *",
-      "scheduleHuman": "Daily at 02:00 UTC",
-      "method": "GET",
-      "_comment": "Releases escrowed marketplace funds to providers"
+      "name": "scheduled-messages",
+      "url": "https://YOUR-DOMAIN.com/api/cron/scheduled-messages",
+      "schedule": "*/5 * * * *",
+      "scheduleHuman": "Every 5 minutes",
+      "method": "POST",
+      "headers": { "x-cron-secret": "YOUR_CRON_SECRET" },
+      "_comment": "Dispatches due ScheduledMessage rows (appointment / payment / overdue / follow-up reminders). Time-critical — late runs = customer reminders arrive late."
     },
     {
-      "name": "trial-expire",
-      "url": "https://YOUR-DOMAIN.com/api/cron/trial-expire",
-      "schedule": "30 0 * * *",
-      "scheduleHuman": "Daily at 00:30 UTC",
+      "name": "scheduled-executions",
+      "url": "https://YOUR-DOMAIN.com/api/cron/scheduled-executions",
+      "schedule": "*/5 * * * *",
+      "scheduleHuman": "Every 5 minutes",
       "method": "POST",
-      "_comment": "Expires ended trials + sends trial-expired email"
-    },
-    {
-      "name": "trial-reminders",
-      "url": "https://YOUR-DOMAIN.com/api/cron/trial-reminders",
-      "schedule": "0 9 * * *",
-      "scheduleHuman": "Daily at 09:00 UTC",
-      "method": "POST",
-      "_comment": "Sends 3-day & 1-day trial-ending reminders"
-    },
-    {
-      "name": "renewal",
-      "url": "https://YOUR-DOMAIN.com/api/cron/renewal",
-      "schedule": "0 3 * * *",
-      "scheduleHuman": "Daily at 03:00 UTC",
-      "method": "POST",
-      "_comment": "Processes subscription renewals + downgrades"
-    },
-    {
-      "name": "pre-charge-reminder",
-      "url": "https://YOUR-DOMAIN.com/api/cron/pre-charge-reminder",
-      "schedule": "0 8 * * *",
-      "scheduleHuman": "Daily at 08:00 UTC",
-      "method": "POST",
-      "_comment": "Pre-charge warning email (reduces disputes)"
-    },
-    {
-      "name": "recurring-invoices",
-      "url": "https://YOUR-DOMAIN.com/api/cron/recurring-invoices",
-      "schedule": "0 1 * * *",
-      "scheduleHuman": "Daily at 01:00 UTC",
-      "method": "POST",
-      "_comment": "Generates & sends due recurring invoices"
-    },
-    {
-      "name": "recurring-jobs",
-      "url": "https://YOUR-DOMAIN.com/api/cron/recurring-jobs",
-      "schedule": "0 6 * * *",
-      "scheduleHuman": "Daily at 06:00 UTC",
-      "method": "POST",
-      "_comment": "Generates recurring jobs + JobVisits"
-    },
-    {
-      "name": "overdue-detector",
-      "url": "https://YOUR-DOMAIN.com/api/cron/overdue-detector",
-      "schedule": "0 8 * * *",
-      "scheduleHuman": "Daily at 08:00 UTC",
-      "method": "POST",
-      "_comment": "Marks overdue invoices + enqueues reminders"
+      "headers": { "x-cron-secret": "YOUR_CRON_SECRET" },
+      "_comment": "Fires due delayed workflow automations (replaces setTimeout in trigger-engine). Time-critical — late runs = workflows fire late."
     },
     {
       "name": "campaigns",
@@ -72,35 +28,31 @@
       "schedule": "*/15 * * * *",
       "scheduleHuman": "Every 15 minutes",
       "method": "POST",
-      "_comment": "Dispatches scheduled email campaigns"
-    },
-    {
-      "name": "scheduled-messages",
-      "url": "https://YOUR-DOMAIN.com/api/cron/scheduled-messages",
-      "schedule": "*/15 * * * *",
-      "scheduleHuman": "Every 15 minutes",
-      "method": "POST",
-      "_comment": "Sends appointment/payment/overdue/follow-up reminders"
-    },
-    {
-      "name": "scheduled-executions",
-      "url": "https://YOUR-DOMAIN.com/api/cron/scheduled-executions",
-      "schedule": "*/15 * * * *",
-      "scheduleHuman": "Every 15 minutes",
-      "method": "POST",
-      "_comment": "Runs delayed workflow automations"
+      "headers": { "x-cron-secret": "YOUR_CRON_SECRET" },
+      "_comment": "Dispatches scheduled email campaigns whose scheduledAt has passed. 15-min cadence is acceptable for marketing."
     },
     {
       "name": "appointment-reminders",
       "url": "https://YOUR-DOMAIN.com/api/cron/appointment-reminders",
-      "schedule": "0 */6 * * *",
-      "scheduleHuman": "Every 6 hours",
+      "schedule": "0 * * * *",
+      "scheduleHuman": "Every hour at minute 0",
       "method": "POST",
-      "_comment": "Schedules upcoming visit reminders"
+      "headers": { "x-cron-secret": "YOUR_CRON_SECRET" },
+      "_comment": "Schedules customer reminders for upcoming JobVisits (1h / 24h / 2d before). Has 24h lookahead window so hourly is plenty."
     }
   ],
-  "_authHeader": {
-    "name": "x-cron-secret",
-    "value": "YOUR_CRON_SECRET"
-  }
+  "_daily_crons_handled_by_vercel_master": [
+    "marketplace-settlement",
+    "archive-old-won-deals",
+    "recurring-jobs",
+    "overdue-detector",
+    "trial-reminders",
+    "pre-charge-reminder",
+    "recurring-invoices",
+    "trial-expire",
+    "renewal"
+  ],
+  "_monthly_crons_handled_by_vercel_master": [
+    "sms-quota-reset (runs only on the 1st of each month via date guard in master route)"
+  ]
 }

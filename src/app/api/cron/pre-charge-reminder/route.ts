@@ -34,16 +34,55 @@ export async function POST(request: NextRequest) {
     // Find tenants 0.5–1.5 days from trial end
     const tenants = await findTenantsInTrialWindow(0.5, 1.5);
 
+    // ── Dedup window: start of today (UTC) ──────────────────────────────
+    // Prevents duplicate pre-charge emails if the cron is triggered twice
+    // in one day (manual retry, double-trigger, master-cron re-run, etc.).
+    // We check for a BillingEvent with type='trial_reminder' + isPreCharge
+    // metadata for this tenant since midnight UTC.
+    const startOfTodayUtc = new Date();
+    startOfTodayUtc.setUTCHours(0, 0, 0, 0);
+
     const results: Array<{
       tenantId: string;
       tenantName: string;
       sent: boolean;
+      skipped: boolean;
+      reason?: string;
       planName: string;
       planPrice: string;
       error?: string;
     }> = [];
 
     for (const tenant of tenants) {
+      // ── Dedup check ──────────────────────────────────────────────────
+      try {
+        const alreadySentToday = await db.billingEvent.findFirst({
+          where: {
+            tenantId: tenant.id,
+            type: 'trial_reminder',
+            createdAt: { gte: startOfTodayUtc },
+            // metadataJson contains { isPreCharge: true, templateSlug: 'trial-ending-1-day' }
+            metadataJson: { contains: 'isPreCharge' },
+          },
+          select: { id: true },
+        });
+        if (alreadySentToday) {
+          results.push({
+            tenantId: tenant.id,
+            tenantName: tenant.name,
+            sent: false,
+            skipped: true,
+            reason: 'Already sent today (dedup)',
+            planName: '',
+            planPrice: '',
+          });
+          continue;
+        }
+      } catch (dedupErr) {
+        // Non-blocking — if the dedup check fails, still send the email.
+        console.warn(`[pre-charge-reminder] Dedup check failed for tenant ${tenant.id}:`, dedupErr);
+      }
+
       // Look up the tenant's most recent subscription to find the plan they
       // were on (or default to 'growth' for the email).
       const lastSub = await db.subscription.findFirst({
@@ -82,6 +121,7 @@ export async function POST(request: NextRequest) {
         tenantId: r.tenantId,
         tenantName: r.tenantName,
         sent: r.sent,
+        skipped: false,
         planName,
         planPrice,
         error: r.error,
@@ -93,6 +133,7 @@ export async function POST(request: NextRequest) {
       ranAt: new Date().toISOString(),
       count: results.length,
       sent: results.filter((r) => r.sent).length,
+      skipped: results.filter((r) => r.skipped).length,
       results,
     });
   } catch (error) {
