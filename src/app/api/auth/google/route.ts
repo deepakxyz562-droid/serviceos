@@ -1,72 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
+import { getAppUrl } from '@/lib/auth';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 
 /**
- * Determine the redirect URI dynamically based on the request origin.
- * This allows Google OAuth to work in any environment (localhost, sandbox, production)
- * without needing to hardcode the APP_URL.
+ * Compute the canonical OAuth redirect URI.
  *
- * Priority:
- * 1. `origin` query parameter (sent from client-side — most reliable)
- * 2. NEXT_PUBLIC_APP_URL env variable
- * 3. Referer header (contains the actual external URL the user came from)
- * 4. X-Forwarded-Host + X-Forwarded-Proto (set by reverse proxy)
- * 5. Host header + X-Forwarded-Proto (Caddy forwards original Host)
- * 6. Fallback to the request URL's origin
+ * SECURITY: Always derives from `NEXT_PUBLIC_APP_URL` (falling back to
+ * `https://fieseros.com` via `getAppUrl()`). NEVER trusts the client-supplied
+ * `origin` query param, the `Referer` header, or the `Host` header — those
+ * were the previous behavior and caused the
+ * `https://serviceos.cc/?google_login=success` bug: when a user landed on
+ * a stale/parked alias domain (e.g. serviceos.cc), the OAuth round-trip
+ * used that alias as the redirect target, and the session cookie got bound
+ * to the wrong host.
+ *
+ * Pinning the redirect URI to a single canonical value also means Google
+ * Cloud Console only needs ONE authorized redirect URI per environment
+ * (`https://fieseros.com/api/auth/google/callback` for prod,
+ *  `http://localhost:3000/api/auth/google/callback` for dev).
  */
-function getRedirectUri(request: NextRequest, clientOrigin?: string): string {
+function getRedirectUri(): string {
   const callbackPath = '/api/auth/google/callback';
-
-  // 1. Client-origin from query param (the browser knows its own origin)
-  if (clientOrigin) {
-    try {
-      const originUrl = new URL(clientOrigin);
-      return `${originUrl.origin}${callbackPath}`;
-    } catch {
-      // Invalid origin, fall through
-    }
-  }
-
-  // 2. Check NEXT_PUBLIC_APP_URL env variable
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (appUrl) {
-    return `${appUrl}${callbackPath}`;
-  }
-
-  // 3. Try Referer header — the browser sends this with navigation requests
-  const referer = request.headers.get('referer');
-  if (referer) {
-    try {
-      const refererUrl = new URL(referer);
-      if (refererUrl.host && !refererUrl.host.startsWith('localhost')) {
-        return `${refererUrl.protocol}//${refererUrl.host}${callbackPath}`;
-      }
-      if (refererUrl.protocol === 'https:') {
-        return `${refererUrl.origin}${callbackPath}`;
-      }
-    } catch {
-      // Ignore malformed referer
-    }
-  }
-
-  // 4. X-Forwarded-Host + X-Forwarded-Proto (set by reverse proxy)
-  const forwardedHost = request.headers.get('x-forwarded-host');
-  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
-  if (forwardedHost && !forwardedHost.startsWith('localhost')) {
-    return `${forwardedProto}://${forwardedHost}${callbackPath}`;
-  }
-
-  // 5. Host header + protocol (Caddy forwards original Host)
-  const hostHeader = request.headers.get('host');
-  if (hostHeader && !hostHeader.startsWith('localhost')) {
-    return `${forwardedProto}://${hostHeader}${callbackPath}`;
-  }
-
-  // 6. Fallback to request origin (last resort — likely localhost, may not work with OAuth)
-  const url = new URL(request.url);
-  return `${url.protocol}//${url.host}${callbackPath}`;
+  const appUrl = getAppUrl(); // returns NEXT_PUBLIC_APP_URL or 'https://fieseros.com'
+  return `${appUrl.replace(/\/+$/, '')}${callbackPath}`;
 }
 
 export async function GET(request: NextRequest) {
@@ -75,7 +33,7 @@ export async function GET(request: NextRequest) {
 
   if (!GOOGLE_CLIENT_ID) {
     console.error('Google OAuth: GOOGLE_CLIENT_ID is not configured');
-    const baseUrl = getRedirectUri(request).replace('/api/auth/google/callback', '');
+    const baseUrl = getAppUrl();
     return NextResponse.redirect(
       new URL('/?auth_error=google_not_configured', baseUrl)
     );
@@ -84,22 +42,23 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get('mode') || 'login'; // login or register
   const redirectTo = searchParams.get('redirect') || '';
-  const clientOrigin = searchParams.get('origin') || undefined;
+  // NOTE: `origin` query param is intentionally ignored. Previously the
+  // client passed `window.location.origin` here, which let a user on
+  // serviceos.cc (or any other alias) hijack the OAuth redirect URI.
+  // The server now always uses the canonical app URL.
 
-  // Dynamically determine the redirect URI from the request
-  const redirectUri = getRedirectUri(request, clientOrigin);
-  console.log('[Google OAuth] Debug:', {
-    clientOrigin: clientOrigin || '(not provided)',
-    referer: request.headers.get('referer'),
-    'x-forwarded-host': request.headers.get('x-forwarded-host'),
-    'x-forwarded-proto': request.headers.get('x-forwarded-proto'),
-    host: request.headers.get('host'),
+  // Derive the canonical redirect URI from NEXT_PUBLIC_APP_URL.
+  const redirectUri = getRedirectUri();
+  console.log('[Google OAuth] Using canonical redirect URI:', redirectUri, {
     'NEXT_PUBLIC_APP_URL': process.env.NEXT_PUBLIC_APP_URL || '(not set)',
+    host: request.headers.get('host'),
+    'x-forwarded-host': request.headers.get('x-forwarded-host'),
   });
-  console.log('[Google OAuth] Computed redirect URI:', redirectUri);
 
-  // Build state parameter to pass mode, redirect info, AND the redirect URI used
-  // so the callback can verify it matches
+  // Build state parameter to pass mode, redirect info, AND the redirect URI
+  // used so the callback can verify it matches. The callback validates that
+  // `state.redirectUri` host matches BRAND.domain before using it (defense
+  // against tampered state).
   const state = Buffer.from(
     JSON.stringify({ mode, redirect: redirectTo, redirectUri })
   ).toString('base64');

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiLimiter, getClientIp } from '@/lib/rate-limit';
 import { generateRequestId } from '@/lib/logger';
+import { BRAND } from '@/lib/brand';
 
 /**
  * Trial-expiry paywall middleware (server-side layer) + global API rate limit
@@ -74,6 +75,79 @@ function nextWithRequestId(requestId: string, extraHeaders?: Record<string, stri
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // ── Canonical-host redirect ────────────────────────────────────────────
+  //
+  // SECURITY: Force every request to the canonical app host (fieseros.com).
+  // This is the primary defense against the
+  // `https://serviceos.cc/?google_login=success` bug: even if a user lands
+  // on a stale/parked alias domain (serviceos.cc, www.serviceos.cc, an old
+  // preview domain, etc.), they are 308-redirected to the canonical host
+  // BEFORE any page renders or any OAuth flow starts. This ensures:
+  //   - Session cookies bind to the canonical domain (.fieseros.com)
+  //   - `window.location.origin` in client code returns the canonical host
+  //   - OAuth round-trips use the canonical redirect URI
+  //   - SEO consolidates link equity on the canonical host
+  //
+  // The canonical host is derived from `NEXT_PUBLIC_APP_URL` (env var, set
+  // in production) with a fallback to `BRAND.domain` (`fieseros.com`) for
+  // local dev where the env var may not be set.
+  //
+  // Skipped for:
+  //   - localhost / 127.0.0.1 / IP literals (dev)
+  //   - Vercel/Netlify preview domains (*.vercel.app, *.netlify.app) —
+  //     these are deployment previews and should not be redirected.
+  //   - Static assets + _next internals (handled below)
+  //   - Webhook paths (POST requests with non-GET methods are never
+  //     redirectable anyway; webhooks shouldn't be redirected)
+  const host = request.headers.get('host') || '';
+  const canonicalHost = (() => {
+    try {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${BRAND.domain}`;
+      return new URL(appUrl).host;
+    } catch {
+      return BRAND.domain;
+    }
+  })();
+
+  const isPreviewDomain =
+    host.endsWith('.vercel.app') ||
+    host.endsWith('.netlify.app') ||
+    host.endsWith('.preview.fieseros.com');
+
+  const isLocal =
+    !host ||
+    host.startsWith('localhost') ||
+    host.startsWith('127.0.0.1') ||
+    /^\d+\.\d+\.\d+\.\d+(:\d+)?$/.test(host);
+
+  // Any host on the canonical root domain is allowed (fieseros.com,
+  // admin.fieseros.com, {tenant}.fieseros.com, www.fieseros.com, etc.).
+  // This preserves multi-tenant routing — only NON-fieseros hosts
+  // (e.g. serviceos.cc) get redirected.
+  const isCanonicalRootDomain =
+    host === canonicalHost ||
+    host === BRAND.domain ||
+    host.endsWith(`.${BRAND.domain}`);
+
+  if (
+    host &&
+    !isCanonicalRootDomain &&
+    !isLocal &&
+    !isPreviewDomain &&
+    request.method === 'GET' &&
+    !pathname.startsWith('/api/webhook') &&
+    !pathname.startsWith('/api/webhooks') &&
+    !pathname.startsWith('/api/whatsapp/callback') &&
+    !pathname.startsWith('/api/cron')
+  ) {
+    const canonicalUrl = new URL(request.url);
+    canonicalUrl.host = canonicalHost;
+    canonicalUrl.protocol = 'https';
+    const response = NextResponse.redirect(canonicalUrl, 308);
+    response.headers.set('X-Request-Id', request.headers.get('x-request-id') || generateRequestId());
+    return response;
+  }
 
   // Generate / propagate request ID for tracing. We do this FIRST so that even
   // requests that bypass rate limiting (static assets, public paths) still get

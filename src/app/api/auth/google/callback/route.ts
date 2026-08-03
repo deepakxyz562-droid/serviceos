@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { generateToken, generateSlug, COOKIE_OPTIONS } from '@/lib/auth';
+import { generateToken, generateSlug, COOKIE_OPTIONS, getAppUrl } from '@/lib/auth';
+import { BRAND } from '@/lib/brand';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -189,37 +190,51 @@ async function getUserInfo(accessToken: string): Promise<GoogleUserInfo> {
 }
 
 /**
- * Get the base URL for redirects, respecting reverse proxy headers.
+ * Get the canonical base URL for success/error redirects after OAuth.
  *
- * Priority:
- * 1. NEXT_PUBLIC_APP_URL env variable (most reliable if set)
- * 2. X-Forwarded-Host + X-Forwarded-Proto (set by reverse proxy)
- * 3. Host header + X-Forwarded-Proto (Caddy forwards original Host)
- * 4. Fallback to the request URL's origin
+ * SECURITY: Always returns `getAppUrl()` — which resolves to
+ * `NEXT_PUBLIC_APP_URL` env var, falling back to `https://fieseros.com`.
+ * Never trusts the `Host` header or `X-Forwarded-Host` because those
+ * reflect whatever host the user landed on (which could be a stale/parked
+ * alias like `serviceos.cc`). Pinning the success redirect to the
+ * canonical app URL prevents the post-OAuth cookie from binding to the
+ * wrong host.
+ *
+ * The `request` parameter is kept for signature compatibility with callers
+ * but is intentionally unused.
  */
-function getBaseUrl(request: NextRequest): string {
-  // 1. Check env variable first (most reliable)
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (appUrl) {
-    return appUrl;
+function getBaseUrl(_request: NextRequest): string {
+  return getAppUrl();
+}
+
+/**
+ * Validate that a `state.redirectUri` (round-tripped from the OAuth
+ * initiator) is on an allowed host before using it for the token-exchange
+ * call. Allowed hosts are:
+ *   - the canonical app host derived from `NEXT_PUBLIC_APP_URL` / BRAND.url
+ *   - localhost (dev only)
+ *
+ * This is defense-in-depth: even if an attacker tampers with the base64
+ * `state` parameter, they cannot trick the token-exchange call into using
+ * a different `redirect_uri` (which would have to match what was registered
+ * in Google Cloud Console anyway, but this adds an explicit boundary).
+ */
+function isAllowedRedirectUri(uri: string): boolean {
+  try {
+    const url = new URL(uri);
+    const canonicalUrl = getAppUrl();
+    const canonicalHost = new URL(canonicalUrl).host;
+    // Allow exact match on canonical host.
+    if (url.host === canonicalHost) return true;
+    // Allow subdomains of the canonical root domain (e.g. tenant.fieseros.com).
+    const rootDomain = BRAND.domain;
+    if (url.host === rootDomain || url.host.endsWith(`.${rootDomain}`)) return true;
+    // Allow localhost (dev).
+    if (url.host.startsWith('localhost') || /^\d+\.\d+\.\d+\.\d+$/.test(url.host)) return true;
+    return false;
+  } catch {
+    return false;
   }
-
-  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
-
-  // 2. X-Forwarded-Host (set by reverse proxy)
-  const forwardedHost = request.headers.get('x-forwarded-host');
-  if (forwardedHost && !forwardedHost.startsWith('localhost')) {
-    return `${forwardedProto}://${forwardedHost}`;
-  }
-
-  // 3. Host header forwarded by Caddy contains the external host
-  const hostHeader = request.headers.get('host');
-  if (hostHeader && !hostHeader.startsWith('localhost')) {
-    return `${forwardedProto}://${hostHeader}`;
-  }
-
-  // 4. Fallback to request origin
-  return new URL('/', request.url).origin;
 }
 
 export async function GET(request: NextRequest) {
@@ -270,11 +285,22 @@ export async function GET(request: NextRequest) {
       // Ignore invalid state
     }
 
-    // Determine the redirect URI that was used when initiating the OAuth flow
-    // This must match exactly what was sent to Google in the authorization URL
-    const redirectUri = state.redirectUri || 
-      `${process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com'}/api/auth/google/callback`;
-    console.log('[Google OAuth Callback] Using redirect URI:', redirectUri);
+    // Determine the redirect URI that was used when initiating the OAuth flow.
+    // This must match exactly what was sent to Google in the authorization URL.
+    //
+    // SECURITY: `state.redirectUri` is round-tripped from the initiator. We
+    // validate its host against the canonical app host before using it, and
+    // fall back to the canonical redirect URI if validation fails. This
+    // prevents a tampered `state` from redirecting the token-exchange call
+    // to an attacker-controlled host.
+    const canonicalRedirectUri = `${getAppUrl()}/api/auth/google/callback`;
+    const redirectUri = (state.redirectUri && isAllowedRedirectUri(state.redirectUri))
+      ? state.redirectUri
+      : canonicalRedirectUri;
+    console.log('[Google OAuth Callback] Using redirect URI:', redirectUri, {
+      stateRedirectUri: state.redirectUri || '(none)',
+      validated: redirectUri === state.redirectUri,
+    });
 
     // Exchange code for tokens
     const tokens = await exchangeCodeForTokens(code, redirectUri);

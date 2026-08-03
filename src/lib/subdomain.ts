@@ -66,7 +66,7 @@ export function extractSubdomain(hostname: string): string | null {
 
   // Fallback for custom domains or when NEXT_PUBLIC_APP_URL is not set:
   // For *.netlify.app: subdomain is the first part when we have 4+ parts
-  // e.g., abc.fieseros.com → parts = ['abc', 'fieseros', 'cc']
+  // e.g., abc.fieseros.com → parts = ['abc', 'fieseros', 'com']
   if (parts.length >= 4) {
     const subdomain = parts[0];
     if (subdomain === 'www') return null;

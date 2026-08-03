@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { cookies, headers } from 'next/headers';
 import { recordUserActivity } from '@/lib/presence';
+import { getCookieDomain } from '@/lib/brand';
 
 // JWT secret resolution.
 // NOTE: We intentionally do NOT throw at module-load time. During `next build`,
@@ -200,6 +201,15 @@ export function getAppUrl(request?: { headers: { get(name: string): string | nul
 // In HTTPS-through-proxy setups, Node sees HTTP internally,
 // so the secure flag would prevent cookies from being set.
 // Caddy handles HTTPS termination, so cookies are still secure in transit.
+//
+// DOMAIN: `getCookieDomain()` returns `.fieseros.com` in production (so the
+// session cookie is shared across the root domain + all subdomains like
+// `acme-plumbing.fieseros.com` and `admin.fieseros.com`), or `undefined` in
+// dev (localhost has no subdomain concept — leaving `domain` unset is the
+// correct behavior). This is defense-in-depth against the
+// `serviceos.cc/?google_login=success` bug: even if the OAuth round-trip
+// somehow lands on an alias domain, the cookie's `domain=.fieseros.com`
+// constraint means the browser will refuse to set it for the wrong host.
 export const COOKIE_OPTIONS = {
   name: TOKEN_NAME,
   httpOnly: true,
@@ -207,6 +217,7 @@ export const COOKIE_OPTIONS = {
   sameSite: 'lax' as const,
   path: '/',
   maxAge: 60 * 60 * 24 * 7, // 7 days
+  domain: getCookieDomain(), // '.fieseros.com' in prod, undefined in dev
 };
 
 /**

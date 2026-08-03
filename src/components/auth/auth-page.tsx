@@ -308,8 +308,12 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
                   variant="outline"
                   className="w-full h-10 border-slate-200 hover:bg-slate-50 cursor-pointer"
                   onClick={() => {
-                    const origin = encodeURIComponent(window.location.origin);
-                    window.location.href = `/api/auth/google?mode=login&XTransformPort=3000&origin=${origin}`;
+                    // Do NOT pass `window.location.origin` here — the server
+                    // derives the OAuth redirect URI from NEXT_PUBLIC_APP_URL
+                    // (canonical app URL) so login always round-trips through
+                    // fieseros.com, even if the user is browsing on a stale
+                    // serviceos.cc link or a parked alias domain.
+                    window.location.href = `/api/auth/google?mode=login&XTransformPort=3000`;
                   }}
                 >
                   <GoogleIcon />
@@ -412,8 +416,9 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
                   variant="outline"
                   className="w-full h-10 border-slate-200 hover:bg-slate-50 cursor-pointer"
                   onClick={() => {
-                    const origin = encodeURIComponent(window.location.origin);
-                    window.location.href = `/api/auth/google?mode=register&XTransformPort=3000&origin=${origin}`;
+                    // Do NOT pass `window.location.origin` here — see comment
+                    // on the login button above.
+                    window.location.href = `/api/auth/google?mode=register&XTransformPort=3000`;
                   }}
                 >
                   <GoogleIcon />
