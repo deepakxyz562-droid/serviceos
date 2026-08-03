@@ -231,7 +231,9 @@ export const useAppStore = create<AppState>()(
       // This is critical because Next.js renders client components on the
       // server during SSR and the store creation runs during module eval.
       storage: createJSONStorage(() =>
-        typeof window !== 'undefined' ? window.localStorage : undefined,
+        typeof window !== 'undefined'
+          ? window.localStorage
+          : { getItem: () => null, setItem: () => {}, removeItem: () => {} },
       ),
       // Only persist UI preferences — never auth or transient cross-view signals.
       partialize: (state) => ({

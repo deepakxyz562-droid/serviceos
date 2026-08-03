@@ -8,6 +8,9 @@ import { logActivity } from '@/lib/activity-log';
 import { EventBus } from '@/lib/event-bus';
 import { requireCrmTenant } from '@/lib/require-crm-tenant';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 /**
  * Resolves a tenant ID from the auth user, falling back to the first tenant
  * for demo / cookieless sessions.

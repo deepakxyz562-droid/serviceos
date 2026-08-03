@@ -6,6 +6,9 @@ import { getAuthUser } from '@/lib/auth';
 import { EventBus } from '@/lib/event-bus';
 import { requireCrmTenant } from '@/lib/require-crm-tenant';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(req: NextRequest) {
   try {
     const crmGuard = await requireCrmTenant(req);

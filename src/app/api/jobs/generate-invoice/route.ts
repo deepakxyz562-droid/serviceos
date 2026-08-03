@@ -21,17 +21,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
 
-    // Check if invoice already exists for this job (jobId is NOT unique on Invoice,
-    // so we use findFirst instead of findUnique)
+    // Check if invoice already exists for this job (make idempotent — return 200 OK with existing invoice)
     const existingInvoice = await db.invoice.findFirst({ where: { jobId } })
     if (existingInvoice) {
-      return NextResponse.json({ error: 'Invoice already exists for this job', invoice: existingInvoice }, { status: 409 })
+      return NextResponse.json(existingInvoice, { status: 200 })
     }
 
-    // Generate a globally-unique invoice number. The `number` column is
-    // @unique globally, so use the shared collision-safe generator (same one
-    // used by the auto-invoice path) instead of a naive "last + 1" which
-    // races on Postgres and collides across tenants.
+    // Generate a globally-unique invoice number with robust tenantId fallback
     let invoiceTenantId: string | undefined = undefined
     if (job.workspaceId) {
       const ws = await db.workspace.findUnique({
@@ -39,6 +35,9 @@ export async function POST(request: NextRequest) {
         select: { tenantId: true },
       })
       invoiceTenantId = ws?.tenantId || undefined
+    }
+    if (!invoiceTenantId && authUser?.tenantId) {
+      invoiceTenantId = authUser.tenantId
     }
     const invoiceNumber = await generateInvoiceNumber(invoiceTenantId || null)
 

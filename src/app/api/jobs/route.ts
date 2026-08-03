@@ -10,12 +10,11 @@ import { EventBus } from '@/lib/event-bus'
 import { setDefaultResultOrder } from 'dns'
 import { requireCrmTenant } from '@/lib/require-crm-tenant'
 
-// Cache jobs GET for 30s per tenant+filter combo. The dashboard polls jobs
-// regularly; without caching each poll = 4 PostgREST calls (workspace +
-// job.findMany + 3 relation includes). Cache is busted on POST/PUT via
-// `cache.invalidateByPrefix('jobs:${tenantId}:')`. Search queries are NOT
-// cached (dynamic results).
-const JOBS_TTL = 30_000;
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+// Set JOBS_TTL = 0 to ensure live CRM data refresh returns instant fresh database rows
+const JOBS_TTL = 0;
 
 // Force IPv4-first for server-side Nominatim fetches (same reason as the
 // geocode proxy route — IPv6 route is unreachable in this sandbox).

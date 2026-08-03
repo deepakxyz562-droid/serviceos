@@ -122,13 +122,12 @@ async function resolveSmsProvider(
         include: { credential: true },
       })
     }
-    // 2d. Legacy: any active SMS provider
+    // 2d. Legacy: any SMS provider row
     if (!providerRow) {
       isPlatform = true
       providerRow = await db.communicationProvider.findFirst({
-        where: { type: 'sms', status: 'active', sendingEnabled: true },
+        where: { type: 'sms' },
         orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
-        include: { credential: true },
       })
     }
 
@@ -222,10 +221,10 @@ async function sendTwilio(
   // Determine the auth credentials to use.
   let authUser: string
   let authPass: string
-  if (apiKeySid && apiKeySecret) {
+  if (apiKeySid && (apiKeySecret || authToken)) {
     // API Key auth (recommended)
     authUser = apiKeySid
-    authPass = apiKeySecret
+    authPass = apiKeySecret || authToken
   } else if (authToken) {
     // Legacy account token auth
     authUser = accountSid

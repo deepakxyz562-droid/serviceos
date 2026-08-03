@@ -198,13 +198,19 @@ export async function PUT(
     //   - Deal → Quote: this hook (auto-create on stage change)
     //   - Quote → Deal: `autoCloseDealAsWonByQuote` (auto-close on
     //     Quote accepted) in `deal-auto-close.ts`
-    if (body.stage === 'quote_draft' && body.stage !== currentDeal.stage) {
+    const isQuoteStage = (s?: string) => {
+      if (!s) return false;
+      const lower = s.toLowerCase();
+      return lower.includes('quote') || lower.includes('proposal') || lower.includes('quoting');
+    };
+
+    if (body.stage && isQuoteStage(body.stage) && body.stage !== currentDeal.stage) {
       // Fire-and-forget — never blocks the PUT response. The helper
       // itself also never throws (it has its own try/catch), so this
       // outer .catch() is just defense-in-depth.
       ensureQuoteForDeal(deal.id).catch((quoteErr) => {
         console.error(
-          '[DealsUpdate] ensureQuoteForDeal on quote_draft failed (non-blocking):',
+          '[DealsUpdate] ensureQuoteForDeal on quote stage failed (non-blocking):',
           quoteErr,
         )
       })

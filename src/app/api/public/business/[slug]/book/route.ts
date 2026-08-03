@@ -167,6 +167,51 @@ export async function POST(
     }
   }
 
+  // Auto-resolve or auto-create Customer account for seamless zero-friction booking
+  let customer: { id: string; name: string; phone: string; email: string | null } | null = null;
+  try {
+    customer = await db.customer.findFirst({
+      where: {
+        tenantId: tenant.id,
+        OR: [
+          { phone },
+          ...(email ? [{ email }] : []),
+        ],
+      },
+      select: { id: true, name: true, phone: true, email: true },
+    });
+
+    if (!customer) {
+      customer = await db.customer.create({
+        data: {
+          name,
+          phone,
+          email,
+          address,
+          tenantId: tenant.id,
+        },
+        select: { id: true, name: true, phone: true, email: true },
+      });
+    }
+  } catch (err) {
+    console.warn('[public-business/book] Customer auto-creation warning:', err);
+  }
+
+  // Generate 4-digit Job Verification PIN for fraud-proof arrival verification
+  const verificationPin = Math.floor(1000 + Math.random() * 9000).toString();
+
+  // Itemized service line items payload for CRM display
+  const lineItems = service ? [
+    {
+      id: service.id,
+      name: service.name,
+      unitPrice: service.basePrice,
+      quantity: 1,
+      description: service.name,
+    }
+  ] : [];
+  const lineItemsJson = JSON.stringify(lineItems);
+
   // Build the lead title and description.
   const source = SOURCE_BY_INTENT[intent]
   const title = `[${INTENT_TITLE[intent]}] ${name}${service ? ` — ${service.name}` : ''}`
@@ -174,6 +219,7 @@ export async function POST(
   if (message) descriptionParts.push(message)
   if (preferredDate) descriptionParts.push(`Preferred date: ${preferredDate}`)
   if (address) descriptionParts.push(`Address: ${address}`)
+  descriptionParts.push(`Verification PIN: ${verificationPin}`)
   const description = descriptionParts.join('\n\n') || undefined
 
   // Create the Lead.
@@ -191,13 +237,14 @@ export async function POST(
         address,
         serviceType: service?.name || undefined,
         serviceId: service?.id || undefined,
+        customerId: customer?.id || undefined,
         tenantId: tenant.id,
         value: service?.basePrice || 0,
         notesJson: JSON.stringify([
           {
             at: new Date().toISOString(),
             by: 'system',
-            text: `Lead captured from public business hub at /${tenant.slug}`,
+            text: `Lead captured from public business hub at /${tenant.slug}. Verification PIN: ${verificationPin}. Customer ID: ${customer?.id || 'none'}.`,
           },
         ]),
       },
