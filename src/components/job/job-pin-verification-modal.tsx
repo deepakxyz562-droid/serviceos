@@ -45,7 +45,7 @@ export function JobPinVerificationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="w-full max-w-md rounded-2xl bg-card border border-border p-6 shadow-2xl space-y-5 relative">
         <button
           onClick={onClose}

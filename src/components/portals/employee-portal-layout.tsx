@@ -1316,7 +1316,7 @@ function HomeView({
                       {job.scheduledAt ? formatTime(job.scheduledAt) : 'TBD'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+                      <p className="text-sm font-medium text-foreground break-words group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
                         {job.title}
                       </p>
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
@@ -1353,7 +1353,7 @@ function HomeView({
                     <item.icon className={cn('size-4', item.color)} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-foreground truncate">{item.text}</p>
+                    <p className="text-sm text-foreground break-words">{item.text}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{item.time}</p>
                   </div>
                 </div>
@@ -2927,8 +2927,8 @@ function AttendanceView({ onShiftChange }: { onShiftChange?: (hasShift: boolean)
                   <Button
                     onClick={() => handleShiftAction('break')}
                     disabled={actionLoading === 'shift-break'}
-                    variant="outline"
-                    className="border-white/30 text-white hover:bg-white/10"
+                    variant="ghost"
+                    className="border border-white/30 text-white hover:bg-white/10 hover:text-white"
                   >
                     {actionLoading === 'shift-break' ? (
                       <Loader2 className="size-4 mr-2 animate-spin" />
@@ -2940,8 +2940,8 @@ function AttendanceView({ onShiftChange }: { onShiftChange?: (hasShift: boolean)
                   <Button
                     onClick={() => handleShiftAction('clockout')}
                     disabled={actionLoading === 'shift-clockout'}
-                    variant="outline"
-                    className="border-white/30 text-white hover:bg-white/10"
+                    variant="ghost"
+                    className="border border-white/30 text-white hover:bg-white/10 hover:text-white"
                   >
                     {actionLoading === 'shift-clockout' ? (
                       <Loader2 className="size-4 mr-2 animate-spin" />
@@ -3795,7 +3795,7 @@ function MobileBottomNav({
   return (
     <nav
       className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      style={{ paddingBottom: 'max(0px, calc(env(safe-area-inset-bottom, 0px) - 10px))' }}
       aria-label="Primary"
     >
       <div className="grid grid-cols-5 h-14">
@@ -3860,6 +3860,12 @@ function GpsStatusBanner() {
 
 export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
   const [activeView, setActiveView] = useState<EmployeeSubView>('home');
+  const [visitedViews, setVisitedViews] = useState<Record<string, boolean>>({ home: true });
+
+  useEffect(() => {
+    setVisitedViews((prev) => ({ ...prev, [activeView]: true }));
+  }, [activeView]);
+
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const isMobile = useIsMobile();
   const { auth } = useAppStore();
@@ -3966,43 +3972,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
     setMobileSidebarOpen(false);
   };
 
-  // Render the active sub-view
-  const renderSubView = () => {
-    if (!employeeId) {
-      return (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <AlertCircle className="size-12 mx-auto mb-3 text-amber-500" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">Employee ID Not Found</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Your account is not linked to an employee record. Please log out and try again, or contact your administrator.
-            </p>
-            <Button onClick={onLogout} variant="outline" size="sm">
-              <LogOut className="size-4 mr-2" />
-              Re-login
-            </Button>
-          </CardContent>
-        </Card>
-      );
-    }
 
-    switch (activeView) {
-      case 'home':
-        return <HomeView employeeId={employeeId} onViewChange={handleViewChange} />;
-      case 'my-jobs':
-        return <MyJobsView employeeId={employeeId} />;
-      case 'schedule':
-        return <ScheduleView employeeId={employeeId} />;
-      case 'attendance':
-        return <AttendanceView onShiftChange={setHasActiveShift} />;
-      case 'inbox':
-        return <InboxView />;
-      case 'profile':
-        return <ProfileView employeeId={employeeId} />;
-      default:
-        return <HomeView employeeId={employeeId} onViewChange={handleViewChange} />;
-    }
-  };
 
   return (
     <GpsTrackingProvider employeeId={employeeId}>
@@ -4153,7 +4123,54 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
               "My Jobs" or "Schedule" first still gets the one-tap enable
               prompt instead of silently missing push notifications. */}
           <PushEnableBanner />
-          {renderSubView()}
+          {!employeeId ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <AlertCircle className="size-12 mx-auto mb-3 text-amber-500" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">Employee ID Not Found</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Your account is not linked to an employee record. Please log out and try again, or contact your administrator.
+                </p>
+                <Button onClick={onLogout} variant="outline" size="sm">
+                  <LogOut className="size-4 mr-2" />
+                  Re-login
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {visitedViews.home && (
+                <div className={cn(activeView !== 'home' && 'hidden')}>
+                  <HomeView employeeId={employeeId} onViewChange={handleViewChange} />
+                </div>
+              )}
+              {visitedViews['my-jobs'] && (
+                <div className={cn(activeView !== 'my-jobs' && 'hidden')}>
+                  <MyJobsView employeeId={employeeId} />
+                </div>
+              )}
+              {visitedViews.schedule && (
+                <div className={cn(activeView !== 'schedule' && 'hidden')}>
+                  <ScheduleView employeeId={employeeId} />
+                </div>
+              )}
+              {visitedViews.attendance && (
+                <div className={cn(activeView !== 'attendance' && 'hidden')}>
+                  <AttendanceView onShiftChange={setHasActiveShift} />
+                </div>
+              )}
+              {visitedViews.inbox && (
+                <div className={cn(activeView !== 'inbox' && 'hidden')}>
+                  <InboxView />
+                </div>
+              )}
+              {visitedViews.profile && (
+                <div className={cn(activeView !== 'profile' && 'hidden')}>
+                  <ProfileView employeeId={employeeId} />
+                </div>
+              )}
+            </>
+          )}
         </main>
       </div>
 
