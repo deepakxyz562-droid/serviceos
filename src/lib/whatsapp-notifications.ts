@@ -751,7 +751,7 @@ async function sendInAppAndPushChannels(
   payload: NotificationPayload,
   userId: string,
   tenantId: string | null,
-): Promise<void> {
+): Promise<{ pushDelivered: boolean; pushNotConfigured: boolean; inAppCreated: boolean }> {
   const title = derivePushTitle(payload)
   const body = derivePushBody(payload)
   const actionUrl = payload.actionUrl || (payload.jobId ? `/?view=jobs&job=${payload.jobId}` : '/')
@@ -761,18 +761,23 @@ async function sendInAppAndPushChannels(
   // this (userId, eventType, resourceId), skip the ad-hoc in-app + push.
   const dedupResourceId = payload.jobId || payload.leadId || payload.customerId || payload.employeeId || null
   if (payload.eventType && hasRecentPush(userId, payload.eventType, dedupResourceId)) {
-    return
+    // Dedup hit — treat as "not delivered" so the cascade continues to
+    // fallback channels (WhatsApp / Email). The in-app row was already
+    // created by the dispatcher, but push may not have reached a device.
+    return { pushDelivered: false, pushNotConfigured: false, inAppCreated: false }
   }
   if (payload.eventType) {
     markPushSent(userId, payload.eventType, dedupResourceId)
   }
+
+  let inAppCreated = false
 
   // 3. In-app notification (bell + inbox) — only when tenantId is resolved
   //    (AppNotification.tenantId is a required FK). Push (below) fires
   //    regardless because sendWebPushToUser handles null tenantId.
   if (tenantId) {
     try {
-      await createNotification({
+      const result = await createNotification({
         tenantId,
         recipientId: userId,
         type: inAppType,
@@ -786,23 +791,38 @@ async function sendInAppAndPushChannels(
         sourceType: payload.jobId ? 'Job' : undefined,
         sourceId: payload.jobId || undefined,
       })
+      inAppCreated = !!result
     } catch (err) {
       console.error('[sendJobNotification] in-app create failed:', err)
     }
   }
 
   // 4. Web Push (device notification)
+  //    Returns { sent, failed, notConfigured } — we use `sent > 0` to
+  //    determine if a real device was reached. If sent === 0 (no VAPID keys,
+  //    no push subscription, or all subscriptions expired), the cascade
+  //    should continue to fallback channels (WhatsApp / Email) rather than
+  //    treating the recipient as "reached". This fixes the production bug
+  //    where the employee got an in-app bell notification but NO email and
+  //    NO actual device push — the cascade saw in-app success:true and
+  //    stopped, even though the push never reached a device.
+  let pushDelivered = false
+  let pushNotConfigured = false
   try {
-    await sendWebPushToUser(userId, tenantId, {
+    const pushResult = await sendWebPushToUser(userId, tenantId, {
       title,
       body,
       url: actionUrl,
       tag: `${inAppType}_${payload.jobId || payload.employeeId || Date.now()}`,
       requireInteraction: payload.recipientRole === 'employee',
     })
+    pushDelivered = (pushResult as { sent?: number }).sent > 0
+    pushNotConfigured = !!(pushResult as { notConfigured?: boolean }).notConfigured
   } catch (err) {
     console.error('[sendJobNotification] web push failed:', err)
   }
+
+  return { pushDelivered, pushNotConfigured, inAppCreated }
 }
 
 // ==========================================
@@ -865,11 +885,26 @@ export async function sendJobNotification(
       name: 'in-app',
       send: async () => {
         try {
-          await sendInAppAndPushChannels(payload, userId, tenantId)
-          // sendInAppAndPushChannels returns void and catches its own errors
-          // internally. If we reached this point without throwing, treat as
-          // success (the in-app row was written OR the push was dispatched).
-          return { channel: 'in-app', success: true }
+          const result = await sendInAppAndPushChannels(payload, userId, tenantId)
+          // The in-app row (bell notification) is always "successful" in the
+          // sense that it was written to the DB. BUT for the cascade's
+          // "reached" logic, we only mark the recipient as reached if the
+          // WEB PUSH actually delivered to a real device (sent > 0).
+          //
+          // CRITICAL FIX: Previously this channel ALWAYS returned
+          // { success: true } (without `simulated`), which caused the urgent
+          // cascade to mark `reached = true` and SKIP WhatsApp + Email —
+          // even when web push didn't deliver (no VAPID keys configured, no
+          // PushSubscription for the user, or all subscriptions expired).
+          // The result: the employee got an in-app bell notification (which
+          // they'd only see if actively looking at the dashboard) but NO
+          // email and NO actual device push. Now we set `simulated: true`
+          // when push didn't deliver, so the cascade continues to Email.
+          return {
+            channel: 'in-app',
+            success: true,
+            simulated: !result.pushDelivered, // ← simulated = push didn't reach a device
+          }
         } catch (err) {
           return { channel: 'in-app', success: false, error: String(err) }
         }
@@ -1529,11 +1564,14 @@ export async function notifyCustomerVerificationPin(
   job: Record<string, unknown>,
 ): Promise<void> {
   const customerPhone = (job.customerPhone as string) || ''
+  const customerEmail = (job.customerEmail as string) || ''
   const pin = (job.verificationPin as string) || ''
 
-  if (!customerPhone) {
+  // Need at least one reachable channel. If neither phone nor email is
+  // present, there is nothing we can deliver to — log and bail.
+  if (!customerPhone && !customerEmail) {
     console.warn(
-      '[notifyCustomerVerificationPin] No customer phone on job',
+      '[notifyCustomerVerificationPin] No customer phone AND no customer email on job',
       { jobId: job.id, hasPin: !!pin },
     )
     return
@@ -1546,23 +1584,38 @@ export async function notifyCustomerVerificationPin(
   const jobNumber = getJobNumber(job)
   const assigneeName = (job.assigneeName as string) || 'your technician'
 
-  // Resolve tenantId for SMS provider resolution. Job carries `workspaceId`
+  // Resolve tenantId for provider resolution. Job carries `workspaceId`
   // (not `tenantId`), so normalize via resolveTenantId().
   let resolvedTenantId: string | null = null
   try {
     const raw = (job.tenantId as string) || (job.workspaceId as string)
     resolvedTenantId = await resolveTenantId(raw)
   } catch {
-    // leave null — sendSmsMessage falls back to platform default provider
+    // leave null — providers fall back to platform default
   }
 
-  // Consolidated customer assignment SMS: technician name + scheduled
-  // date/time + PIN + tracking link. This replaces the older two-SMS flow
-  // (notifyCustomerJobAssigned + notifyCustomerVerificationPin) which sent
-  // the customer two partial, confusing messages. The duplicate
-  // notifyCustomerJobAssigned calls in the assignment routes have been
-  // suppressed — this is now the single source of truth for the
-  // "your tech has been assigned" customer notification.
+  // Consolidated customer assignment message: technician name + scheduled
+  // date/time + PIN + tracking link. This single message body is reused
+  // across SMS, WhatsApp, and Email so the customer sees one consistent
+  // notification regardless of which channel actually delivers it.
+  //
+  // CRITICAL FIX (previously broken): this function used to call
+  // sendSmsMessage() DIRECTLY, bypassing the multi-channel dispatcher
+  // (sendJobNotification). When no SMS provider was configured (or the
+  // tenant's SMS quota was exhausted), sendSmsMessage silently fell back
+  // to "simulated" mode and returned success:true — but NO real message
+  // ever reached the customer. There was no fallback to WhatsApp / Email /
+  // Push, so on assign the customer received NOTHING while the employee
+  // (routed through sendJobNotification) got WhatsApp + Email + Push.
+  //
+  // Now we route through sendJobNotification() with eventType 'job.assigned'
+  // (urgent priority) and recipientRole 'customer' (SMS channel included).
+  // The cascade tries SMS → WhatsApp → Email in priority order and STOPS
+  // as soon as ONE channel confirms real (non-simulated) delivery. We
+  // also pass `emailTo: customerEmail` explicitly because sendEmailChannel
+  // only resolves employees/users by id — it does NOT look up
+  // Customer.email from customerId, so without emailTo the email channel
+  // would silently skip the customer.
   const scheduledDate = formatDate(job.scheduledAt as string | null)
   const scheduledTime =
     (job.scheduledTime as string) || formatTime(job.scheduledAt as string | null)
@@ -1573,25 +1626,57 @@ export async function notifyCustomerVerificationPin(
     `Your job verification pin is ${pin}. ` +
     `Track: ${trackingUrl}`
 
+  // Short SMS body (kept under 160 chars where possible). The dispatcher's
+  // sendSmsChannel uses `smsMessage` when present instead of deriving from
+  // subject + message.
+  const smsMessage =
+    `Your technician ${assigneeName} is scheduled for ${scheduledDate} at ${scheduledTime}. ` +
+    `Verification PIN: ${pin}. Track: ${trackingUrl}`
+
   try {
-    const result = await sendSmsMessage({
+    const result = await sendJobNotification({
       to: customerPhone,
       message,
+      type: 'text',
+      recipientName: (job.customerName as string) || undefined,
+      recipientRole: 'customer',
+      subject: `Technician Assigned • PIN ${pin}`,
+      jobId: job.id as string,
+      customerId: (job.customerId as string) || undefined,
       tenantId: resolvedTenantId || undefined,
+      eventType: 'job.assigned',
+      smsMessage,
+      // Explicitly pass the customer's email so the email channel delivers
+      // to the CUSTOMER (sendEmailChannel cannot resolve Customer.email
+      // from customerId on its own — it only looks at Employee/User).
+      ...(customerEmail ? { emailTo: customerEmail } : {}),
+      emailPriority: 'operational',
+      pushTitle: `Technician Assigned • PIN ${pin}`,
+      pushBody: `${assigneeName} • ${scheduledDate} ${scheduledTime}`,
+      actionUrl: `/portal/${job.id as string}`,
     })
 
-    // Log the PIN SMS delivery attempt to NotificationLog for audit.
+    // Audit log entry summarising the cascade outcome. The individual
+    // channel helpers (sendSmsChannel / sendEmailChannel) already write
+    // their own NotificationLog rows; this extra row gives operators a
+    // single "verification PIN dispatch" record with the full channel
+    // breakdown + the PIN itself (useful for support debugging).
     try {
+      const channelSummary = (result.channels || []).map((c) => ({
+        channel: c.channel,
+        success: c.success,
+        simulated: c.simulated,
+        error: c.error,
+      }))
       await db.notificationLog.create({
         data: {
           type: 'sms',
-          recipient: customerPhone,
+          recipient: customerPhone || customerEmail,
           recipientName: (job.customerName as string) || undefined,
           recipientRole: 'customer',
           subject: `Job Verification PIN: ${pin}`,
           message,
           status: result.success ? 'sent' : 'failed',
-          externalId: result.messageId,
           jobId: job.id as string,
           customerId: (job.customerId as string) || undefined,
           tenantId: resolvedTenantId || undefined,
@@ -1600,9 +1685,10 @@ export async function notifyCustomerVerificationPin(
             jobId: job.id,
             jobNumber,
             pin,
-            simulated: !!result.simulated,
-            provider: result.provider,
-            error: result.error,
+            dispatchSuccess: result.success,
+            dispatchError: result.error,
+            channels: channelSummary,
+            customerEmailProvided: !!customerEmail,
           }),
         },
       })
@@ -1612,8 +1698,16 @@ export async function notifyCustomerVerificationPin(
 
     if (!result.success) {
       console.warn(
-        '[notifyCustomerVerificationPin] SMS send failed (non-blocking):',
-        { jobId: job.id, customerPhone, error: result.error },
+        '[notifyCustomerVerificationPin] All notification channels failed (non-blocking):',
+        { jobId: job.id, customerPhone, customerEmail, error: result.error, channels: result.channels },
+      )
+    } else {
+      const delivered = (result.channels || [])
+        .filter((c) => c.success && !c.simulated)
+        .map((c) => c.channel)
+      console.info(
+        '[notifyCustomerVerificationPin] Customer PIN dispatched via:',
+        { jobId: job.id, channels: delivered, allChannels: result.channels },
       )
     }
   } catch (err) {
