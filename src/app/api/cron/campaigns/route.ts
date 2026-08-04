@@ -181,3 +181,11 @@ export async function POST(request: NextRequest) {
     ranAt: now.toISOString(),
   })
 }
+
+// GET alias — allows cron-job.org's "Test run" button (which fires GET) and
+// easy browser/curl manual testing. Same pattern as /api/cron/master and
+// /api/cron/featured-location. Without this, a GET request returns 405
+// Method Not Allowed (Next.js default when only POST is exported).
+export async function GET(request: NextRequest) {
+  return POST(request)
+}

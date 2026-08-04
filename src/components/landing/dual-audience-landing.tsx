@@ -486,73 +486,73 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
           ) : null}
         </div>
 
-        <button onClick={() => setMobileOpen(!mobileOpen)} className="md:hidden text-foreground p-2" aria-label="Toggle menu">
+        <button onClick={() => setMobileOpen(!mobileOpen)} className="md:hidden text-foreground inline-flex items-center justify-center min-h-[44px] min-w-[44px] -mr-2 rounded-lg hover:bg-muted/60 active:bg-muted transition-colors" aria-label="Toggle menu" aria-expanded={mobileOpen}>
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
 
       {mobileOpen ? (
-        <div className="md:hidden border-t bg-background max-h-[calc(100dvh-3.5rem)] overflow-y-auto">
-          <div className="px-4 py-3 space-y-1">
+        <div className="md:hidden border-t bg-background max-h-[calc(100dvh-3.5rem)] overflow-y-auto overscroll-contain pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
+          <div className="px-2 py-2 space-y-0.5">
             {/* Solutions — collapsible accordion with all marketing pages */}
             <Accordion type="single" collapsible className="w-full">
               <AccordionItem value="solutions" className="border-0">
-                <AccordionTrigger className="text-sm text-muted-foreground hover:text-foreground py-2 hover:no-underline">
+                <AccordionTrigger className="text-sm text-muted-foreground hover:text-foreground min-h-12 px-3 rounded-lg hover:bg-muted/60 hover:no-underline text-left">
                   Solutions
                 </AccordionTrigger>
-                <AccordionContent className="pb-2 space-y-3">
+                <AccordionContent className="pb-1 space-y-3 px-1">
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 px-1 mb-1">Industries</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 px-3 mb-1">Industries</p>
                     <div className="space-y-0.5">
                       {solutionsLinks.industries.map((link) => (
-                        <a key={link.href} href={link.href} className="block text-sm text-muted-foreground hover:text-foreground py-1 px-1 rounded hover:bg-muted/60" onClick={() => setMobileOpen(false)}>{link.label}</a>
+                        <a key={link.href} href={link.href} className="block text-sm text-muted-foreground hover:text-foreground min-h-11 flex items-center px-3 rounded-lg hover:bg-muted/60 active:bg-muted" onClick={() => setMobileOpen(false)}>{link.label}</a>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 px-1 mb-1">Features</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 px-3 mb-1">Features</p>
                     <div className="space-y-0.5">
                       {solutionsLinks.features.map((link) => (
-                        <a key={link.href} href={link.href} className="block text-sm text-muted-foreground hover:text-foreground py-1 px-1 rounded hover:bg-muted/60" onClick={() => setMobileOpen(false)}>{link.label}</a>
+                        <a key={link.href} href={link.href} className="block text-sm text-muted-foreground hover:text-foreground min-h-11 flex items-center px-3 rounded-lg hover:bg-muted/60 active:bg-muted" onClick={() => setMobileOpen(false)}>{link.label}</a>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 px-1 mb-1">Compare</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 px-3 mb-1">Compare</p>
                     <div className="space-y-0.5">
                       {solutionsLinks.compare.map((link) => (
-                        <a key={link.href} href={link.href} className="block text-sm text-muted-foreground hover:text-foreground py-1 px-1 rounded hover:bg-muted/60" onClick={() => setMobileOpen(false)}>{link.label}</a>
+                        <a key={link.href} href={link.href} className="block text-sm text-muted-foreground hover:text-foreground min-h-11 flex items-center px-3 rounded-lg hover:bg-muted/60 active:bg-muted" onClick={() => setMobileOpen(false)}>{link.label}</a>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 px-1 mb-1">Free Tools</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 px-3 mb-1">Free Tools</p>
                     <div className="space-y-0.5">
                       {solutionsLinks.freeTools.map((link) => (
-                        <a key={link.href} href={link.href} className="block text-sm text-muted-foreground hover:text-foreground py-1 px-1 rounded hover:bg-muted/60" onClick={() => setMobileOpen(false)}>{link.label}</a>
+                        <a key={link.href} href={link.href} className="block text-sm text-muted-foreground hover:text-foreground min-h-11 flex items-center px-3 rounded-lg hover:bg-muted/60 active:bg-muted" onClick={() => setMobileOpen(false)}>{link.label}</a>
                       ))}
                     </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
-            <a href="#crm-features" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={(e) => crmAnchorClick('#crm-features', e)}>Features</a>
-            <a href="#ai-receptionist" className="block text-sm text-emerald-600 py-1.5" onClick={(e) => crmAnchorClick('#ai-receptionist', e)}>AI Receptionist</a>
-            <a href="#pricing" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={(e) => crmAnchorClick('#pricing', e)}>Pricing</a>
-            <a href="/marketplace" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileOpen(false)}>Marketplace</a>
-            <a href="#faq" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={(e) => crmAnchorClick('#faq', e)}>FAQ</a>
+            <a href="#crm-features" className="block text-sm text-muted-foreground hover:text-foreground min-h-12 flex items-center px-3 rounded-lg hover:bg-muted/60 active:bg-muted" onClick={(e) => crmAnchorClick('#crm-features', e)}>Features</a>
+            <a href="#ai-receptionist" className="block text-sm text-emerald-600 min-h-12 flex items-center px-3 rounded-lg hover:bg-emerald-50/60 active:bg-emerald-50" onClick={(e) => crmAnchorClick('#ai-receptionist', e)}>AI Receptionist</a>
+            <a href="#pricing" className="block text-sm text-muted-foreground hover:text-foreground min-h-12 flex items-center px-3 rounded-lg hover:bg-muted/60 active:bg-muted" onClick={(e) => crmAnchorClick('#pricing', e)}>Pricing</a>
+            <a href="/marketplace" className="block text-sm text-muted-foreground hover:text-foreground min-h-12 flex items-center px-3 rounded-lg hover:bg-muted/60 active:bg-muted" onClick={() => setMobileOpen(false)}>Marketplace</a>
+            <a href="#faq" className="block text-sm text-muted-foreground hover:text-foreground min-h-12 flex items-center px-3 rounded-lg hover:bg-muted/60 active:bg-muted" onClick={(e) => crmAnchorClick('#faq', e)}>FAQ</a>
             <Separator className="my-2" />
             {/* Issue 1: PWA-accessible employee login entry point (mobile) */}
             <Button
               variant="outline"
               size="sm"
-              className="w-full border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+              className="w-full min-h-12 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
               onClick={() => { setEmpLoginOpen(true); setMobileOpen(false); }}
             >
               Employee Login
             </Button>
-            {onSignIn ? <Button variant="outline" size="sm" className="w-full" onClick={onSignIn}>Sign In</Button> : null}
-            {onGetStarted ? <Button size="sm" className="w-full bg-emerald-600 text-white hover:bg-emerald-700" onClick={onGetStarted}>Get Started</Button> : null}
+            {onSignIn ? <Button variant="outline" size="sm" className="w-full min-h-12" onClick={onSignIn}>Sign In</Button> : null}
+            {onGetStarted ? <Button size="sm" className="w-full min-h-12 bg-emerald-600 text-white hover:bg-emerald-700" onClick={onGetStarted}>Get Started</Button> : null}
           </div>
         </div>
       ) : null}
@@ -613,7 +613,7 @@ function HeroFork({
           </Badge>
         </div>
 
-        <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl md:text-6xl">
+        <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl md:text-6xl leading-[1.1]">
           Fieseros —{' '}
           <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent dark:from-emerald-400 dark:via-teal-400 dark:to-cyan-400">
             The AI Operating System
@@ -632,7 +632,7 @@ function HeroFork({
               type="button"
               onClick={() => onPick('crm')}
               className={cn(
-                'group relative overflow-hidden rounded-2xl border-2 p-5 text-left transition-all',
+                'group relative overflow-hidden rounded-2xl border-2 p-5 text-left transition-all min-h-[88px] sm:min-h-0',
                 audience === 'crm'
                   ? 'border-emerald-500 bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-200 dark:shadow-emerald-900/40'
                   : 'border-border bg-card hover:border-emerald-400 hover:shadow-md',
@@ -661,7 +661,7 @@ function HeroFork({
               type="button"
               onClick={() => onPick('marketplace')}
               className={cn(
-                'group relative overflow-hidden rounded-2xl border-2 p-5 text-left transition-all',
+                'group relative overflow-hidden rounded-2xl border-2 p-5 text-left transition-all min-h-[88px] sm:min-h-0',
                 audience === 'marketplace'
                   ? 'border-amber-500 bg-gradient-to-br from-amber-500 to-rose-500 text-white shadow-lg shadow-amber-200 dark:shadow-amber-900/40'
                   : 'border-border bg-card hover:border-amber-400 hover:shadow-md',
@@ -692,13 +692,13 @@ function HeroFork({
               <button
                 type="button"
                 onClick={onTryDemo}
-                className="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 font-medium"
+                className="inline-flex items-center justify-center min-h-11 gap-1.5 text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 font-medium px-2"
               >
                 <Play className="h-3.5 w-3.5" /> Try the live demo
               </button>
             ) : null}
-            <span className="text-muted-foreground">·</span>
-            <a href="/marketplace" className="inline-flex items-center gap-1.5 text-amber-700 hover:text-amber-800 dark:text-amber-300 font-medium">
+            <span className="text-muted-foreground hidden sm:inline" aria-hidden>·</span>
+            <a href="/marketplace" className="inline-flex items-center justify-center min-h-11 gap-1.5 text-amber-700 hover:text-amber-800 dark:text-amber-300 font-medium px-2">
               Browse the marketplace <ArrowRight className="h-3.5 w-3.5" />
             </a>
           </div>
@@ -987,16 +987,16 @@ function CrmHowItWorks() {
               );
             })}
           </div>
-          <div className="lg:hidden flex gap-2 overflow-x-auto pb-3 px-1 snap-x" style={{ scrollbarWidth: 'none' }}>
+          <div className="lg:hidden flex gap-2 overflow-x-auto pb-4 -mx-4 px-4 snap-x snap-mandatory scroll-px-4 overscroll-x-contain" style={{ scrollbarWidth: 'none' }}>
             {coreFlowSteps.map((step, i) => {
               const Icon = step.icon;
               return (
-                <div key={step.label} className="flex items-center flex-shrink-0 snap-start">
-                  <div className="flex flex-col items-center">
+                <div key={step.label} className="flex items-center flex-shrink-0 snap-start w-[84px] sm:w-[96px]">
+                  <div className="flex flex-col items-center w-full">
                     <div className="w-12 h-12 rounded-xl bg-white border border-border shadow-sm flex items-center justify-center mb-1.5">
                       <Icon className="w-5 h-5 text-emerald-600" />
                     </div>
-                    <span className="text-xs text-muted-foreground font-medium">{step.label}</span>
+                    <span className="text-xs text-muted-foreground font-medium text-center leading-tight">{step.label}</span>
                   </div>
                   {i < coreFlowSteps.length - 1 ? <ArrowRight className="w-3 h-3 text-emerald-400 ml-1 flex-shrink-0" /> : null}
                 </div>
@@ -1504,9 +1504,9 @@ function StickyCta({
   const [hidden, setHidden] = React.useState(false);
   if (hidden) return null;
   return (
-    <div className="sticky bottom-0 z-40 border-t bg-background/95 backdrop-blur px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom,0px))] sm:px-6">
+    <div className="sticky bottom-0 z-40 border-t bg-background/95 backdrop-blur px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom,0px))] sm:px-6 shadow-[0_-2px_12px_rgba(0,0,0,0.04)]">
       <div className="mx-auto max-w-6xl flex items-center gap-2 sm:gap-3">
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 hidden sm:block">
           <p className="text-xs text-muted-foreground truncate">
             {audience === 'crm'
               ? 'Fieseros CRM — run your business from lead to invoice'
@@ -1519,12 +1519,12 @@ function StickyCta({
               variant="outline"
               size="sm"
               onClick={() => onPick('marketplace')}
-              className="gap-1 border-amber-300 text-amber-700 hover:bg-amber-50 hidden sm:inline-flex"
+              className="gap-1 border-amber-300 text-amber-700 hover:bg-amber-50 hidden sm:inline-flex min-h-11"
             >
               <Search className="h-3.5 w-3.5" /> I need a service
             </Button>
             {onGetStarted ? (
-              <Button size="sm" onClick={onGetStarted} className="gap-1 bg-emerald-600 text-white hover:bg-emerald-700">
+              <Button size="sm" onClick={onGetStarted} className="gap-1 bg-emerald-600 text-white hover:bg-emerald-700 min-h-11 flex-1 sm:flex-none w-full sm:w-auto">
                 Start free <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             ) : null}
@@ -1535,13 +1535,13 @@ function StickyCta({
               variant="outline"
               size="sm"
               onClick={() => onPick('crm')}
-              className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hidden sm:inline-flex"
+              className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hidden sm:inline-flex min-h-11"
             >
               <Briefcase className="h-3.5 w-3.5" /> I run a business
             </Button>
             <a
               href="/marketplace"
-              className="inline-flex items-center gap-1 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-amber-600 px-4 py-2 min-h-11 text-sm font-semibold text-white hover:bg-amber-700 flex-1 sm:flex-none w-full sm:w-auto"
             >
               Browse all <ArrowRight className="h-3.5 w-3.5" />
             </a>
@@ -1551,9 +1551,9 @@ function StickyCta({
           type="button"
           onClick={() => setHidden(true)}
           aria-label="Dismiss"
-          className="ml-1 p-1 rounded text-muted-foreground hover:bg-muted"
+          className="ml-1 inline-flex items-center justify-center min-h-11 min-w-11 p-2 rounded-lg text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="h-4 w-4" />
         </button>
       </div>
     </div>

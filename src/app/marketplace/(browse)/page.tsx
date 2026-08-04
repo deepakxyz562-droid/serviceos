@@ -6,6 +6,7 @@ import { MarketplaceBrowser } from '@/components/marketplace/marketplace-browser
 import { MarketplaceHeader } from '@/components/marketplace/marketplace-header';
 import { MarketplaceSidebar } from '@/components/marketplace/marketplace-sidebar';
 import { MarketplaceSortControl } from '@/components/marketplace/marketplace-sort-control';
+import { MarketplaceMobileNav } from '@/components/marketplace/marketplace-mobile-nav';
 import type { ProviderListItem } from '@/components/marketplace/types';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import {
@@ -449,7 +450,7 @@ export default async function MarketplaceBrowsePage({
           />
 
           {/* Main column — ONLY THIS PROVIDER LIST AREA SCROLLS */}
-          <main className="flex-1 h-full overflow-y-auto pb-12 scroll-smooth">
+          <main className="flex-1 h-full overflow-y-auto pb-28 lg:pb-12 scroll-smooth">
             {/* FIXED/STICKY BREADCRUMB & SORT FILTER BAR — INSIDE LISTING AREA */}
             <nav
               aria-label="Breadcrumb"
@@ -601,6 +602,9 @@ export default async function MarketplaceBrowsePage({
           </main>
         </div>
       </div>
+
+      {/* Mobile bottom tab bar — Home / Browse / Search / Saved / Bookings */}
+      <MarketplaceMobileNav />
     </div>
   );
 }

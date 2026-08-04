@@ -39,6 +39,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { notifyOwner } from '@/lib/owner-notifications'
+import { sendEmail } from '@/lib/email-send'
+import { issueCustomerMagicLink } from '@/lib/customer-magic-link'
 
 export const runtime = 'nodejs'
 
@@ -421,6 +423,106 @@ export async function POST(
     }).catch((err) => {
       console.error('[public-business/book] notification error:', err)
     })
+
+    // ── Send booking confirmation + magic link to the CUSTOMER ────────────
+    // Only send if we have an email address. The magic link lets the customer
+    // one-click log into their portal (/) to see bookings, invoices, messages.
+    // The tracking URL is the public job tracking page (no login needed).
+    if (customer?.email && job?.id) {
+      Promise.resolve().then(async () => {
+        try {
+          // Issue a 7-day magic link (long-lived so customers can return easily)
+          const magicLink = await issueCustomerMagicLink({
+            customerId: customer.id,
+            redirect: '/bookings',
+            expiresInHours: 24 * 7,
+          })
+
+          const customerSubject = `${INTENT_TITLE[intent]} confirmed — ${tenant.name}`
+          const trackingUrl = `${magicLink.url.split('/?mgl=')[0]}/portal/${job.id}`
+
+          const customerText = [
+            `Hi ${name},`,
+            ``,
+            `Your ${intent} with ${tenant.name} has been received.`,
+            ``,
+            `What happens next:`,
+            `1. ${tenant.name} will contact you shortly to confirm the appointment time.`,
+            `2. You'll receive SMS updates as your appointment progresses.`,
+            `3. When the technician arrives, show them this 4-digit PIN: ${verificationPin}`,
+            ``,
+            `Track your appointment live:`,
+            `${trackingUrl}`,
+            ``,
+            `Your verification PIN: ${verificationPin}`,
+            ``,
+            `Access your customer portal (bookings, invoices, messages):`,
+            `${magicLink.url}`,
+            `(This link expires in 7 days and logs you in automatically.)`,
+            ``,
+            service ? `Service: ${service.name}` : '',
+            service ? `Price: ${tenant.currency} ${service.basePrice}` : '',
+            preferredDate ? `Preferred date: ${preferredDate}` : '',
+            address ? `Address: ${address}` : '',
+            ``,
+            `Thank you for choosing ${tenant.name}.`,
+          ].filter(Boolean).join('\n')
+
+          const customerHtml = `
+            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0f172a;">
+              <h2 style="margin:0 0 8px 0;color:#0f766e;">Hi ${name},</h2>
+              <p style="margin:0 0 20px 0;font-size:16px;color:#475569;">
+                Your ${intent.toLowerCase()} with <strong>${tenant.name}</strong> has been received. Here's everything you need.
+              </p>
+
+              <div style="background:#f0fdfa;border:1px solid #ccfbf1;border-radius:12px;padding:16px;margin:20px 0;">
+                <p style="margin:0 0 8px 0;font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:#0f766e;font-weight:600;">Your Verification PIN</p>
+                <p style="margin:0;font-size:32px;font-weight:700;letter-spacing:0.3em;color:#0f766e;">${verificationPin}</p>
+                <p style="margin:8px 0 0 0;font-size:13px;color:#475569;">Show this PIN to the technician when they arrive to verify the appointment.</p>
+              </div>
+
+              ${service ? `
+              <div style="background:#f8fafc;border-radius:8px;padding:14px;margin:16px 0;">
+                <p style="margin:0 0 6px 0;font-size:13px;color:#64748b;">Service</p>
+                <p style="margin:0;font-weight:600;">${service.name}</p>
+                <p style="margin:4px 0 0 0;font-size:14px;color:#475569;">${tenant.currency} ${service.basePrice}</p>
+              </div>` : ''}
+
+              ${preferredDate ? `<p style="margin:12px 0;font-size:14px;"><strong>Preferred date:</strong> ${preferredDate}</p>` : ''}
+              ${address ? `<p style="margin:12px 0;font-size:14px;"><strong>Service address:</strong> ${address}</p>` : ''}
+
+              <div style="margin:28px 0;">
+                <p style="margin:0 0 12px 0;font-size:15px;font-weight:600;">Track your appointment live</p>
+                <p style="margin:0 0 8px 0;font-size:14px;color:#475569;">See real-time status updates, technician ETA, and job progress.</p>
+                <a href="${trackingUrl}" style="display:inline-block;background:#0f766e;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">Track My Appointment →</a>
+              </div>
+
+              <div style="margin:28px 0;border-top:1px solid #e2e8f0;padding-top:24px;">
+                <p style="margin:0 0 12px 0;font-size:15px;font-weight:600;">Access your customer portal</p>
+                <p style="margin:0 0 8px 0;font-size:14px;color:#475569;">View all your bookings, invoices, quotes, and messages in one place.</p>
+                <a href="${magicLink.url}" style="display:inline-block;background:#fff;color:#0f766e;border:2px solid #0f766e;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">Open My Portal →</a>
+                <p style="margin:8px 0 0 0;font-size:12px;color:#94a3b8;">This link logs you in automatically and expires in 7 days.</p>
+              </div>
+
+              <p style="margin:32px 0 0 0;font-size:14px;color:#475569;">${tenant.name} will contact you shortly to confirm your appointment time.</p>
+              <p style="margin:8px 0 0 0;font-size:13px;color:#94a3b8;">Thank you for choosing ${tenant.name}.</p>
+            </div>
+          `
+
+          await sendEmail({
+            to: customer.email,
+            subject: customerSubject,
+            html: customerHtml,
+            text: customerText,
+            usageType: 'transactional',
+            tenantId: tenant.id,
+          })
+          console.log(`[public-business/book] ✅ Confirmation email sent to ${customer.email}`)
+        } catch (emailErr) {
+          console.error('[public-business/book] customer confirmation email failed (non-fatal):', emailErr)
+        }
+      })
+    }
 
     return NextResponse.json({
       success: true,

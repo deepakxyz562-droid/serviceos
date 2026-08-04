@@ -44,6 +44,7 @@ import {
   Shield,
   FileText,
   Loader2,
+  Navigation,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authFetch } from '@/lib/client-auth';
@@ -108,7 +109,7 @@ const AddPaymentMethodDialog = lazy(() => import('./add-payment-method-dialog').
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type CustomerView = 'dashboard' | 'bookings' | 'orders' | 'invoices' | 'payments' | 'messages' | 'reviews' | 'profile' | 'quotes';
+type CustomerView = 'dashboard' | 'bookings' | 'orders' | 'invoices' | 'payments' | 'messages' | 'reviews' | 'profile' | 'quotes' | 'marketplace' | 'tracking';
 
 interface CustomerPortalLayoutProps {
   onLogout?: () => void;
@@ -119,13 +120,27 @@ interface CustomerPortalLayoutProps {
 const SIDEBAR_ITEMS: { key: CustomerView; label: string; icon: React.ElementType }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'bookings', label: 'Bookings', icon: CalendarCheck },
-  { key: 'orders', label: 'My Orders', icon: ShoppingBag },
+  { key: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
+  { key: 'tracking', label: 'Live Tracking', icon: Navigation },
+  { key: 'orders', label: 'My Orders', icon: Package },
   { key: 'invoices', label: 'Invoices', icon: Receipt },
   { key: 'quotes', label: 'Quotes', icon: FileText },
   { key: 'payments', label: 'Payments', icon: CreditCard },
   { key: 'messages', label: 'Messages', icon: MessageSquare },
   { key: 'reviews', label: 'Reviews', icon: Star },
   { key: 'profile', label: 'Profile', icon: UserCircle },
+];
+
+// ─── Mobile Bottom Nav Items ────────────────────────────────────────────────
+// The 5 most important views for one-thumb mobile navigation. Mirrors the
+// employee portal's MobileBottomNav pattern (5 tabs, teal accent for the
+// customer portal vs emerald for employees).
+const BOTTOM_NAV_ITEMS: { id: CustomerView; label: string; icon: React.ElementType }[] = [
+  { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
+  { id: 'bookings', label: 'Bookings', icon: CalendarCheck },
+  { id: 'tracking', label: 'Track', icon: Navigation },
+  { id: 'marketplace', label: 'Browse', icon: ShoppingBag },
+  { id: 'profile', label: 'Profile', icon: UserCircle },
 ];
 
 // ─── Helper Functions ───────────────────────────────────────────────────────
@@ -400,6 +415,8 @@ function CustomerHeader({
     messages: 'Messages',
     reviews: 'Reviews',
     profile: 'Profile',
+    marketplace: 'Marketplace',
+    tracking: 'Live Tracking',
   };
 
   return (
@@ -2879,6 +2896,49 @@ function ProfileView() {
   );
 }
 
+// ─── Mobile Bottom Tab Bar ──────────────────────────────────────────────────
+// Persistent one-thumb navigation for phones. Shown only < lg (1024px). On
+// desktop the sidebar handles nav. 5 tabs: Home, Bookings, Track, Browse,
+// Profile. Uses the customer portal's teal accent (vs emerald for employees).
+function MobileBottomNav({
+  activeView,
+  onViewChange,
+}: {
+  activeView: CustomerView;
+  onViewChange: (v: CustomerView) => void;
+}) {
+  return (
+    <nav
+      className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      aria-label="Primary"
+    >
+      <div className="grid grid-cols-5 h-14">
+        {BOTTOM_NAV_ITEMS.map((item) => {
+          const isActive = activeView === item.id;
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              onClick={() => onViewChange(item.id)}
+              className={cn(
+                'flex flex-col items-center justify-center gap-0.5 transition-colors',
+                isActive
+                  ? 'text-teal-600 dark:text-teal-400'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              <Icon className={cn('size-[22px]', isActive && 'scale-110 transition-transform')} />
+              <span className="text-[10px] font-medium leading-none">{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 // ─── Main Layout Component ──────────────────────────────────────────────────
 
 export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
@@ -3089,6 +3149,61 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
         return <ReviewsView />;
       case 'profile':
         return <ProfileView />;
+      case 'marketplace':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Browse Marketplace</CardTitle>
+              <CardDescription>Discover and book trusted local service providers.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Explore verified providers across various verticals — read reviews, compare prices, and book instantly.
+              </p>
+              <a href="/marketplace" target="_blank" rel="noopener noreferrer">
+                <Button className="bg-teal-600 hover:bg-teal-700 text-white">Open Marketplace →</Button>
+              </a>
+            </CardContent>
+          </Card>
+        );
+      case 'tracking': {
+        const activeBookings = bookings.filter(b =>
+          ['assigned', 'en_route', 'in_progress', 'started', 'on_the_way'].includes(b.status)
+        );
+        if (activeBookings.length === 0) {
+          return (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Navigation className="size-10 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground">No active jobs to track right now.</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">
+                  When a technician is assigned to your job, you&apos;ll see live tracking here.
+                </p>
+              </CardContent>
+            </Card>
+          );
+        }
+        return (
+          <div className="space-y-4">
+            {activeBookings.map(booking => (
+              <Card key={booking.id}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">{booking.title}</CardTitle>
+                    <Badge>{booking.status}</Badge>
+                  </div>
+                  <CardDescription>Job #{booking.id.slice(0, 8)}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <a href={`/portal/${booking.id}`} target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" size="sm">Track Live →</Button>
+                  </a>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+      }
       default:
         return (
           <DashboardView
@@ -3146,11 +3261,14 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+          <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto pb-20 lg:pb-8">
             {renderContent()}
           </div>
         </main>
       </div>
+
+      {/* Mobile Bottom Tab Bar */}
+      <MobileBottomNav activeView={activeView} onViewChange={handleViewChange} />
 
       {/* Lazy-loaded Dialogs */}
       <Suspense fallback={null}>
