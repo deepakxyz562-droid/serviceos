@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { KeyRound, CheckCircle2, AlertCircle, Loader2, X } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 interface JobPinVerificationModalProps {
   isOpen: boolean;
@@ -21,8 +22,6 @@ export function JobPinVerificationModal({
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,10 +43,21 @@ export function JobPinVerificationModal({
     }
   };
 
+  const handleOpenChange = (open: boolean) => {
+    if (!open && !loading) {
+      onClose();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-md rounded-2xl bg-card border border-border p-6 shadow-2xl space-y-5 relative">
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="z-[70] bg-black/60 backdrop-blur-sm"
+        className="z-[70] w-full max-w-md rounded-2xl bg-card border border-border p-6 shadow-2xl space-y-5 focus:outline-none"
+      >
         <button
+          type="button"
           onClick={onClose}
           disabled={loading}
           className="absolute top-4 right-4 text-muted-foreground hover:text-foreground p-1 rounded-full hover:bg-muted transition-colors"
@@ -88,7 +98,7 @@ export function JobPinVerificationModal({
                 if (error) setError(null);
               }}
               placeholder="e.g. 4829"
-              className="w-full text-center text-3xl font-mono tracking-[0.5em] font-bold py-3 rounded-xl border border-input bg-background focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+              className="w-full text-center text-3xl font-mono tracking-[0.5em] font-bold py-3 rounded-xl border border-input bg-background focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all focus:outline-none"
             />
           </div>
 
@@ -104,14 +114,14 @@ export function JobPinVerificationModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="flex-1 py-3 px-4 rounded-xl border border-input text-sm font-semibold hover:bg-muted transition-colors"
+              className="flex-1 py-3 px-4 rounded-xl border border-input text-sm font-semibold hover:bg-muted transition-colors focus:outline-none"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading || pin.length !== 4}
-              className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
+              className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all focus:outline-none"
             >
               {loading ? (
                 <>
@@ -127,7 +137,7 @@ export function JobPinVerificationModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -144,11 +144,11 @@ export async function POST(
       }
 
       case 'start_travel': {
-        // Set job status to in_progress and record start travel time
+        // Set job status to travelling and record start travel time
         updatedJob = await db.job.update({
           where: { id: jobId },
           data: {
-            status: 'in_progress',
+            status: 'travelling',
             actualStartTime: now,
             checkInLat: typeof latitude === 'number' ? latitude : job.checkInLat,
             checkInLng: typeof longitude === 'number' ? longitude : job.checkInLng,
@@ -207,6 +207,7 @@ export async function POST(
         updatedJob = await db.job.update({
           where: { id: jobId },
           data: {
+            status: 'arrived',
             notificationLogJson: logJson,
             checkInLat: typeof latitude === 'number' ? latitude : job.checkInLat,
             checkInLng: typeof longitude === 'number' ? longitude : job.checkInLng,
