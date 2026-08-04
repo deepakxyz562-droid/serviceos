@@ -1,10 +1,12 @@
 /**
- * Public Business Hub — lead submission endpoint.
+ * Public Business Hub — booking submission endpoint.
  *
  * POST /api/public/business/[slug]/book
  *
  * Accepts unauthenticated submissions from the public business hub page's
- * booking form. Creates a Lead in the matching tenant's CRM.
+ * booking form. Creates BOTH a Lead (for CRM pipeline visibility) AND a
+ * trackable Job (for customer-facing tracking + technician PIN verification)
+ * in the matching tenant's CRM.
  *
  * Body:
  *   {
@@ -15,8 +17,20 @@
  *     message?: string,
  *   }
  *
+ * Response:
+ *   {
+ *     success: true,
+ *     leadId: string,          // for the CRM Leads view
+ *     jobId: string | null,    // for /portal/[id] tracking + PIN verification
+ *     jobNumber: string | null,
+ *     trackingUrl: string | null,  // '/portal/{jobId}'
+ *     verificationPin: string, // 4-digit PIN (also SMS'd to customer on assign)
+ *     message: string,
+ *   }
+ *
  * The lead source is set to 'public_booking' | 'public_quote' | 'public_request'
- * so businesses can filter by channel in their CRM.
+ * so businesses can filter by channel in their CRM. The Job's metadataJson
+ * stores { leadId, source, intent, publicBooking: true } for back-traceability.
  *
  * Rate-limited by visitor fingerprint (IP + User-Agent hash) to 10 submissions
  * per hour per visitor — prevents abuse without breaking legitimate use.
@@ -222,7 +236,26 @@ export async function POST(
   descriptionParts.push(`Verification PIN: ${verificationPin}`)
   const description = descriptionParts.join('\n\n') || undefined
 
-  // Create the Lead.
+  // Create the Lead AND a trackable Job.
+  //
+  // Why both?
+  //   - Lead → preserves CRM pipeline visibility (Leads → Deals → Quotes flow).
+  //     The business owner sees this booking in their Leads view, can convert
+  //     it to a Deal, send a Quote, etc.
+  //   - Job → gives the CUSTOMER a trackable appointment. The public tracking
+  //     page (/portal/[id]) fetches /api/jobs/[id], and the technician's
+  //     "Start Work" PIN verification validates against job.verificationPin.
+  //     Without a Job row, the SMS tracking link 404s and the PIN flow is dead.
+  //
+  // The Job is created with status 'pending' (no technician assigned yet) and
+  // the verificationPin is pre-set so that when a tech IS later assigned (via
+  // /api/jobs/[id] PUT → status 'assigned'), the existing PIN-generation guard
+  // (`if (isAssignTransition && !existingJob.verificationPin)`) sees the PIN
+  // already exists and does NOT regenerate/SMS a second time — the customer
+  // already received this PIN in their booking confirmation.
+  //
+  // The two records are linked via Job.metadataJson.leadId + the Lead's
+  // notesJson recording the jobId.
   try {
     const lead = await db.lead.create({
       data: {
@@ -249,6 +282,90 @@ export async function POST(
         ]),
       },
     })
+
+    // Resolve a workspace for this tenant so the Job is scoped correctly
+    // (Job uses workspaceId, not tenantId, as its tenant link). Mirrors the
+    // resolveWorkspaceId() pattern in /api/jobs/route.ts but tenant-scoped.
+    let workspaceId: string | null = null
+    try {
+      const ws = await db.workspace.findFirst({
+        where: { tenantId: tenant.id },
+        select: { id: true },
+      })
+      if (ws) {
+        workspaceId = ws.id
+      } else {
+        // No workspace for this tenant yet — create one so the Job isn't orphaned.
+        const created = await db.workspace.create({
+          data: {
+            name: tenant.name,
+            slug: tenant.slug,
+            ownerId: 'system',
+            tenantId: tenant.id,
+          },
+        })
+        workspaceId = created.id
+      }
+    } catch (wsErr) {
+      console.warn('[public-business/book] workspace resolution failed (non-fatal):', wsErr)
+    }
+
+    // Create the trackable Job. Best-effort: if this throws (e.g. schema drift),
+    // the Lead still succeeded so the owner gets notified — we just won't have
+    // a tracking link / PIN for this booking.
+    let job: { id: string; jobNumber: string | null } | null = null
+    try {
+      job = await db.job.create({
+        data: {
+          title,
+          description,
+          status: 'pending',
+          priority: intent === 'book' ? 'high' : 'medium',
+          type: 'service',
+          address: address || null,
+          scheduledAt: preferredDate ? new Date(preferredDate) : null,
+          notes: message || null,
+          customerId: customer?.id || null,
+          customerName: name,
+          customerPhone: phone,
+          customerEmail: email || null,
+          serviceId: service?.id || null,
+          quotedAmount: service?.basePrice || null,
+          lineItemsJson: lineItemsJson,
+          verificationPin,
+          workspaceId,
+          metadataJson: JSON.stringify({
+            leadId: lead.id,
+            source,
+            intent,
+            publicBooking: true,
+            publicSlug: tenant.slug,
+          }),
+        },
+        select: { id: true, jobNumber: true },
+      })
+
+      // Backlink: record the jobId on the Lead's notesJson so the CRM can
+      // deep-link from the Lead card to the Job / tracking page.
+      try {
+        const existingNotes = (() => {
+          try { return JSON.parse(lead.notesJson || '[]') as unknown[] } catch { return [] }
+        })()
+        existingNotes.push({
+          at: new Date().toISOString(),
+          by: 'system',
+          text: `Trackable Job created: ${job.id}. Tracking link: /portal/${job.id}. Verification PIN: ${verificationPin}.`,
+        })
+        await db.lead.update({
+          where: { id: lead.id },
+          data: { notesJson: JSON.stringify(existingNotes) },
+        })
+      } catch (backlinkErr) {
+        console.warn('[public-business/book] lead backlink failed (non-fatal):', backlinkErr)
+      }
+    } catch (jobErr) {
+      console.error('[public-business/book] job creation failed (lead still created):', jobErr)
+    }
 
     // Fire-and-forget: notify the business owner via Email + in-app Bell
     // notification (the two channels the user asked for).
@@ -308,6 +425,12 @@ export async function POST(
     return NextResponse.json({
       success: true,
       leadId: lead.id,
+      jobId: job?.id || null,
+      jobNumber: job?.jobNumber || null,
+      // Tracking link for the customer — resolves to /portal/[id] which fetches
+      // /api/jobs/[id]. Null only if Job creation failed (Lead still succeeded).
+      trackingUrl: job?.id ? `/portal/${job.id}` : null,
+      verificationPin,
       message: `${INTENT_TITLE[intent]} received. ${tenant.name} will contact you shortly.`,
     })
   } catch (err) {

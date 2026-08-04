@@ -49,7 +49,11 @@ export default function CustomerPortalJobPage() {
         return res.json();
       })
       .then((data) => {
-        setJob(data);
+        // /api/jobs/[id] GET returns { job: {...} } (the job wrapped in a
+        // `job` key). Unwrap it here so the rest of the component can read
+        // job.status / job.id / job.title directly — otherwise job.id is
+        // undefined and `job.id.slice(0, 8)` throws a TypeError.
+        setJob(data?.job ?? data);
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : 'Failed to load tracking details');

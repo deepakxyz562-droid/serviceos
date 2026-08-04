@@ -1,8 +1,17 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { generateInvoiceNumber } from '@/lib/invoice-automation'
+import { getAuthUser } from '@/lib/auth'
 
 // POST /api/jobs/generate-invoice — Generate invoice from a completed job
+//
+// Auth: optional. This endpoint is hit both interactively (owner/admin clicking
+// "Generate Invoice" in the UI — authenticated) AND by the fire-and-forget
+// auto-invoice flow on job completion (autoCreateInvoiceFromJob — may run
+// without a session cookie, e.g. when a job is completed via a system trigger).
+// We therefore call getAuthUser() but tolerate `null` — tenantId is resolved
+// from the job's workspace chain first, falling back to the auth user only
+// when present.
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -27,7 +36,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(existingInvoice, { status: 200 })
     }
 
-    // Generate a globally-unique invoice number with robust tenantId fallback
+    // Resolve the calling user (optional — auto-invoice flow may be anonymous).
+    const authUser = await getAuthUser().catch(() => null)
+
+    // Generate a globally-unique invoice number with robust tenantId fallback.
+    // Resolution order:
+    //   1. job.workspaceId → Workspace.tenantId
+    //   2. authUser.tenantId (when the caller is authenticated)
+    //   3. null (generateInvoiceNumber handles null by using a global counter)
     let invoiceTenantId: string | undefined = undefined
     if (job.workspaceId) {
       const ws = await db.workspace.findUnique({
