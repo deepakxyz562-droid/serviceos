@@ -207,13 +207,17 @@ export async function POST(request: NextRequest) {
 
   // ── 4. Optionally validate serviceId belongs to this provider ────────
   let serviceName: string | null = null;
+  let service: { id: string; name: string; basePrice: number | null } | null = null;
   if (serviceId) {
     try {
       const svc = await db.service.findFirst({
         where: { id: serviceId, tenantId: provider.id, isActive: true },
-        select: { id: true, name: true },
+        select: { id: true, name: true, basePrice: true },
       });
-      if (svc) serviceName = svc.name;
+      if (svc) {
+        serviceName = svc.name;
+        service = svc;
+      }
     } catch {
       // Service table missing — soft-fail (booking proceeds without service)
     }
@@ -303,6 +307,54 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // 7c-pre. Auto-resolve or auto-create Customer in the provider's CRM
+      // (scoped via the provider tenant's workspace so the Job is linked to
+      // a real Customer row that shows up in the provider's CRM 360 view).
+      let customer: { id: string } | null = null;
+      if (workspaceId) {
+        try {
+          const existing = await tx.customer.findFirst({
+            where: {
+              workspaceId,
+              OR: [
+                { phone: customerPhone },
+                ...(customerEmail ? [{ email: customerEmail }] : []),
+              ],
+            },
+            select: { id: true },
+          });
+          if (existing) {
+            customer = existing;
+          } else {
+            customer = await tx.customer.create({
+              data: {
+                name: customerName,
+                phone: customerPhone,
+                email: customerEmail,
+                address,
+                workspaceId,
+              },
+              select: { id: true },
+            });
+          }
+        } catch (custErr) {
+          log.warn(
+            { err: custErr, providerTenantId: provider.id },
+            'marketplace/book/instant: customer auto-creation failed (non-fatal)',
+          );
+        }
+      }
+
+      // 7c-pre2. Generate 4-digit PIN + itemized service line items for CRM
+      const verificationPin = Math.floor(1000 + Math.random() * 9000).toString();
+      const lineItemsJson = JSON.stringify(service ? [{
+        id: service.id,
+        name: service.name,
+        unitPrice: service.basePrice ?? amount ?? 0,
+        quantity: 1,
+        description: service.name,
+      }] : []);
+
       // 7c. Job — link back to the booking via externalId
       const j = await tx.job.create({
         data: {
@@ -318,9 +370,13 @@ export async function POST(request: NextRequest) {
           customerName,
           customerPhone,
           customerEmail,
+          customerId: customer?.id || null,
           externalId: b.id,
           externalSource: 'marketplace_booking',
           serviceId: serviceId,
+          quotedAmount: grossAmount > 0 ? grossAmount : (service?.basePrice ?? null),
+          lineItemsJson,
+          verificationPin,
           assignmentStatus: 'accepted',
           metadataJson: JSON.stringify({
             marketplaceFlow: 'instant',

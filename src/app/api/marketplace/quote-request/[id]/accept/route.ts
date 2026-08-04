@@ -80,6 +80,7 @@ export async function POST(
             tenantId: true,
             status: true,
             validUntil: true,
+            itemsJson: true,
           },
         },
       },
@@ -156,6 +157,20 @@ export async function POST(
     workspaceId = ws?.id ?? null;
   } catch {
     // ignore — Job will be created without workspace
+  }
+
+  // Fetch the Service row (if jobRequest.serviceId is set) so we can build
+  // proper itemized line items for the Job's CRM display.
+  let service: { id: string; name: string; basePrice: number | null } | null = null;
+  if (jobRequest.serviceId) {
+    try {
+      service = await db.service.findFirst({
+        where: { id: jobRequest.serviceId, tenantId: provider.id, isActive: true },
+        select: { id: true, name: true, basePrice: true },
+      });
+    } catch {
+      // ignore — fall back to title-based line items
+    }
   }
 
   // ── 4. Compute commission + provider amount ────────────────────────
@@ -258,6 +273,81 @@ export async function POST(
       });
 
       // Job — linked to the booking via externalId
+      // 5-pre. Auto-resolve or auto-create Customer in the provider's CRM
+      // (scoped via the provider tenant's workspace so the Job is linked to
+      // a real Customer row that shows up in the provider's CRM 360 view).
+      let customer: { id: string } | null = null;
+      const custName = jobRequest.customerName;
+      const custPhone = jobRequest.customerPhone;
+      const custEmail = jobRequest.customerEmail;
+      const custAddress = jobRequest.address;
+      if (workspaceId && custName && custPhone) {
+        try {
+          const existing = await tx.customer.findFirst({
+            where: {
+              workspaceId,
+              OR: [
+                { phone: custPhone },
+                ...(custEmail ? [{ email: custEmail }] : []),
+              ],
+            },
+            select: { id: true },
+          });
+          if (existing) {
+            customer = existing;
+          } else {
+            customer = await tx.customer.create({
+              data: {
+                name: custName,
+                phone: custPhone,
+                email: custEmail,
+                address: custAddress,
+                workspaceId,
+              },
+              select: { id: true },
+            });
+          }
+        } catch (custErr) {
+          log.warn(
+            { err: custErr, providerTenantId: provider.id },
+            'marketplace/quote-accept: customer auto-creation failed (non-fatal)',
+          );
+        }
+      }
+
+      // 5-pre2. Generate 4-digit PIN + itemized service line items for CRM.
+      // Prefer the winning quote's itemsJson (already itemized by the
+      // provider when they submitted the quote); fall back to a single line
+      // built from the Service row, then to a title-based fallback.
+      const verificationPin = Math.floor(1000 + Math.random() * 9000).toString();
+      let lineItemsJson: string;
+      const winningItems = (() => {
+        try {
+          const parsed = JSON.parse(winningQuote.itemsJson || '[]');
+          return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+        } catch {
+          return null;
+        }
+      })();
+      if (winningItems) {
+        lineItemsJson = JSON.stringify(winningItems);
+      } else if (service) {
+        lineItemsJson = JSON.stringify([{
+          id: service.id,
+          name: service.name,
+          unitPrice: service.basePrice ?? grossAmount,
+          quantity: 1,
+          description: service.name,
+        }]);
+      } else {
+        lineItemsJson = JSON.stringify([{
+          name: jobRequest.title,
+          unitPrice: grossAmount,
+          quantity: 1,
+          description: jobRequest.title,
+        }]);
+      }
+
       const job = await tx.job.create({
         data: {
           title,
@@ -272,9 +362,13 @@ export async function POST(
           customerName: jobRequest.customerName,
           customerPhone: jobRequest.customerPhone,
           customerEmail: jobRequest.customerEmail,
+          customerId: customer?.id || null,
           externalId: booking.id,
           externalSource: 'marketplace_booking',
           serviceId: jobRequest.serviceId,
+          quotedAmount: grossAmount > 0 ? grossAmount : (service?.basePrice ?? null),
+          lineItemsJson,
+          verificationPin,
           assignmentStatus: 'accepted',
           metadataJson: JSON.stringify({
             marketplaceFlow: 'quote_request',

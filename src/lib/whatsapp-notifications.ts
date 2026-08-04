@@ -1556,11 +1556,22 @@ export async function notifyCustomerVerificationPin(
     // leave null — sendSmsMessage falls back to platform default provider
   }
 
+  // Consolidated customer assignment SMS: technician name + scheduled
+  // date/time + PIN + tracking link. This replaces the older two-SMS flow
+  // (notifyCustomerJobAssigned + notifyCustomerVerificationPin) which sent
+  // the customer two partial, confusing messages. The duplicate
+  // notifyCustomerJobAssigned calls in the assignment routes have been
+  // suppressed — this is now the single source of truth for the
+  // "your tech has been assigned" customer notification.
+  const scheduledDate = formatDate(job.scheduledAt as string | null)
+  const scheduledTime =
+    (job.scheduledTime as string) || formatTime(job.scheduledAt as string | null)
+  const trackingUrl = `${getAppUrl()}/portal/${job.id as string}`
   const message =
-    `Your Job Verification PIN is ${pin}.\n\n` +
-    `Job #${jobNumber}: ${job.title || 'Service visit'}\n` +
-    `Technician: ${assigneeName}\n\n` +
-    `Please share this PIN with the technician when they arrive to authorize starting work.`
+    `Your technician ${assigneeName} is scheduled for your job. ` +
+    `Date: ${scheduledDate}, time: ${scheduledTime}. ` +
+    `Your job verification pin is ${pin}. ` +
+    `Track: ${trackingUrl}`
 
   try {
     const result = await sendSmsMessage({

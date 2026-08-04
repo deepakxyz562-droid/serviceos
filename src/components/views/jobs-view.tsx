@@ -1085,7 +1085,8 @@ export function JobsView() {
 
   // V1.5: Signatures displayed inline in the job detail page
   const [jobSignatures, setJobSignatures] = useState<SavedSignature[]>([]);
-  const [showSignaturePad, setShowSignaturePad] = useState(false);
+  // null = pad hidden; 'customer' | 'employee' = which pad to render.
+  const [signaturePadType, setSignaturePadType] = useState<'customer' | 'employee' | null>(null);
 
   // V1.5: Lifecycle + Time Tracking + GPS state for the job detail page
   const [lifecycleData, setLifecycleData] = useState<{
@@ -1975,7 +1976,7 @@ export function JobsView() {
     }
     // V1.5: load any saved signatures for this job (for the inline display)
     fetchJobSignatures(job.id);
-    setShowSignaturePad(false);
+    setSignaturePadType(null);
     // V1.5: load lifecycle state (timestamps + active time entry + active route)
     fetchLifecycleData(job.id);
     // Reset route modal state
@@ -3517,37 +3518,57 @@ export function JobsView() {
                   <p className="text-sm text-muted-foreground italic">No signatures collected yet.</p>
                 )}
 
-                {showSignaturePad ? (
+                {signaturePadType ? (
                   <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3">
                     <div className="flex items-center justify-between gap-2">
-                      <h4 className="text-sm font-semibold">Add a signature</h4>
+                      <h4 className="text-sm font-semibold capitalize">
+                        Add {signaturePadType} signature
+                      </h4>
                       <button
                         type="button"
-                        onClick={() => setShowSignaturePad(false)}
+                        onClick={() => setSignaturePadType(null)}
                         className="text-xs text-muted-foreground hover:text-foreground"
                       >
                         <X className="size-3.5" />
                       </button>
                     </div>
                     <SignaturePad
+                      key={`${job.id}-${signaturePadType}`}
                       jobId={job.id}
-                      signatoryType="customer"
-                      defaultSignatoryRole="Customer"
+                      signatoryType={signaturePadType}
+                      defaultSignatoryName={
+                        signaturePadType === 'employee'
+                          ? (currentUser?.name || job.assigneeName || '')
+                          : (job.customerName || '')
+                      }
+                      defaultSignatoryRole={
+                        signaturePadType === 'employee' ? 'Technician' : 'Customer'
+                      }
                       onSaved={() => {
                         fetchJobSignatures(job.id);
-                        setShowSignaturePad(false);
+                        setSignaturePadType(null);
                       }}
                     />
                   </div>
                 ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowSignaturePad(true)}
-                    className="bg-background"
-                  >
-                    <ImagePlus className="size-4 mr-1.5" /> Add Signature
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setSignaturePadType('customer')}
+                      className="bg-background"
+                    >
+                      <User className="size-4 mr-1.5" /> Add Customer Signature
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setSignaturePadType('employee')}
+                      className="bg-background"
+                    >
+                      <Wrench className="size-4 mr-1.5" /> Add Employee Signature
+                    </Button>
+                  </div>
                 )}
               </div>
             </FormSectionCard>

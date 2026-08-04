@@ -395,6 +395,16 @@ export async function POST(request: NextRequest) {
 
       // Only auto-assign if the top match is available or has a decent score
       if (topMatch.score > 0) {
+        // ── Job Verification PIN: generate on FIRST assignment if missing ──
+        // Mirrors the pattern in src/app/api/jobs/[id]/route.ts (lines 178-182).
+        // The 4-digit PIN is SMS'd to the customer via notifyCustomerVerificationPin
+        // (below) so the technician can verify on-site arrival. We generate it
+        // here (rather than at job creation) so the PIN is tied to the assignment
+        // event — when a job is re-assigned, the same PIN stays valid.
+        const newPin = job.verificationPin
+          ? null
+          : Math.floor(1000 + Math.random() * 9000).toString();
+
         // Update the job with the top match
         await db.job.update({
           where: { id: job.id },
@@ -404,6 +414,7 @@ export async function POST(request: NextRequest) {
             assigneePhone: topMatch.employee.phone,
             status: 'assigned',
             assignmentStatus: 'accepted',
+            ...(newPin ? { verificationPin: newPin } : {}),
           },
         });
 
@@ -415,9 +426,14 @@ export async function POST(request: NextRequest) {
 
         assignedEmployee = topMatch.employee;
 
-        // ─── Send WhatsApp notification to the assigned employee ───────
+        // ─── Send WhatsApp notification to the assigned employee + customer ───
         try {
-          const { notifyEmployeeJobAssigned, notifyCustomerJobAssigned } = await import('@/lib/whatsapp-notifications');
+          // notifyCustomerVerificationPin replaces notifyCustomerJobAssigned
+          // here — it sends a consolidated SMS (tech name + date/time + PIN +
+          // tracking link) instead of the old partial "Technician assigned"
+          // message that lacked the PIN and tracking link.
+          const { notifyEmployeeJobAssigned, notifyCustomerVerificationPin } =
+            await import('@/lib/whatsapp-notifications');
 
           // Fetch the updated job with full details for notification
           const notifJob = await db.job.findUnique({
@@ -439,6 +455,10 @@ export async function POST(request: NextRequest) {
               scheduledTime: notifJob.scheduledTime,
               customerId: notifJob.customerId,
               tenantId: notifJob.tenantId,
+              // Required by notifyCustomerVerificationPin:
+              verificationPin: notifJob.verificationPin,
+              assigneeName: notifJob.assigneeName,
+              workspaceId: notifJob.workspaceId,
             };
 
             await notifyEmployeeJobAssigned(jobForNotif, {
@@ -447,13 +467,17 @@ export async function POST(request: NextRequest) {
               phone: assignedEmployee.phone,
             });
 
-            // Also notify the customer about the technician assignment
+            // Consolidated customer assignment SMS — fire-and-forget so the
+            // smart-assign response isn't blocked on SMS delivery. Mirrors
+            // the fireAndForget pattern in src/app/api/jobs/[id]/route.ts
+            // (lines 319-328). The helper itself catches + logs errors.
             if (jobForNotif.customerPhone) {
-              await notifyCustomerJobAssigned(jobForNotif, {
-                id: assignedEmployee.id,
-                name: assignedEmployee.name,
-                phone: assignedEmployee.phone,
-              });
+              notifyCustomerVerificationPin(jobForNotif).catch((pinErr) =>
+                console.error(
+                  '[SmartAssign] notifyCustomerVerificationPin failed:',
+                  pinErr,
+                ),
+              );
             }
           }
         } catch (notifyErr) {

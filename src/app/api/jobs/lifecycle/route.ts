@@ -220,18 +220,23 @@ export async function POST(request: NextRequest) {
           fireAndForget('employee assign notification', notifyEmployeeJobAssigned(updatedJob, employee))
         }
 
-        // Send WhatsApp notification to customer (background)
-        // NOTE: notifyCustomerJobAssigned(job, employee) uses `employee.name` for
-        // the "Technician:" field — so we MUST pass the assigned employee here,
-        // NOT the customer. Falling back to updatedJob.assigneeName/Phone covers
-        // the resource-only assignment case (no Employee row).
-        if (job.customerPhone) {
-          const technician =
-            employee
-              ? { id: employee.id, name: employee.name, phone: employee.phone }
-              : { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone }
-          fireAndForget('customer assign notification', notifyCustomerJobAssigned(updatedJob, technician))
-        }
+        // ─── Customer assignment SMS ─────────────────────────────────
+        // Suppressed: notifyCustomerVerificationPin now sends a consolidated
+        // SMS with tech name + date/time + PIN + tracking link. The previous
+        // notifyCustomerJobAssigned call here sent a second, partial SMS
+        // ("Technician assigned: X. Arrival: Y. Service: Z.") with no PIN
+        // and no tracking link, which confused customers. The PIN SMS is
+        // triggered by the PUT /api/jobs/[id] route (which generates the
+        // verificationPin + fires notifyCustomerVerificationPin) on the
+        // same assignment event.
+        //
+        // if (job.customerPhone) {
+        //   const technician =
+        //     employee
+        //       ? { id: employee.id, name: employee.name, phone: employee.phone }
+        //       : { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone }
+        //   fireAndForget('customer assign notification', notifyCustomerJobAssigned(updatedJob, technician))
+        // }
 
         // ─── Emit event via EventBus (background) ────────────────
         fireAndForget('job.assigned event', EventBus.emit('job.assigned', {

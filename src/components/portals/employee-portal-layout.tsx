@@ -619,7 +619,11 @@ function useJobDetailSheet({
   }, [jobs, selectedJob]);
 
   // ── V1.5 Job lifecycle action handler ──
-  const handleLifecycleAction = async (action: string, jobId: string, extra?: { pin?: string }) => {
+  // Returns `true` on success, `false` on failure (HTTP non-2xx or network
+  // error). Callers that need to branch on the result (e.g. the PIN modal,
+  // which must NOT close on a wrong-PIN 403) can `await` this and inspect the
+  // boolean. Errors are still surfaced via toast for backwards compatibility.
+  const handleLifecycleAction = async (action: string, jobId: string, extra?: { pin?: string }): Promise<boolean> => {
     setActionLoading(`${action}-${jobId}`);
     try {
       // For travel/arrive/complete, capture the current GPS position so the
@@ -677,12 +681,15 @@ function useJobDetailSheet({
         if (action === 'complete') {
           setSelectedJob(null);
         }
+        return true;
       } else {
         const err = await res.json().catch(() => ({ error: `Failed to ${action} job` }));
         toast.error(err.error || `Failed to ${action} job`);
+        return false;
       }
     } catch {
       toast.error('Network error');
+      return false;
     } finally {
       setActionLoading(null);
     }
@@ -1754,7 +1761,7 @@ function JobDetailSheet({
   job: Job | null;
   open: boolean;
   onClose: () => void;
-  onAction: (action: string, jobId: string, extra?: { pin?: string }) => void;
+  onAction: (action: string, jobId: string, extra?: { pin?: string }) => Promise<boolean> | void;
   /** Called after the JobCompletionScreen successfully completes the job.
    *  The parent uses this to refetch the jobs list + close the sheet.
    *  NOT called for other lifecycle actions (those go through onAction). */
@@ -1787,7 +1794,8 @@ function JobDetailSheet({
   // technician enters the 4-digit PIN.
   const handleStartWork = () => setShowPinModal(true);
   const handlePinConfirm = async (pin: string) => {
-    onAction('start_work', job.id, { pin });
+    const ok = await onAction('start_work', job.id, { pin });
+    if (!ok) throw new Error('Invalid verification PIN. Please ask the customer for the 4-digit PIN sent via SMS and try again.');
   };
   const handlePause = () => onAction('pause', job.id);
   const handleResume = () => onAction('resume', job.id);

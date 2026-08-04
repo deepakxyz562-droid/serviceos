@@ -521,6 +521,7 @@ export async function autoCreateInvoiceFromJob(jobId: string): Promise<AutoInvoi
           sendResult = await sendInvoice(invoice.id, {
             sendEmail: settings.autoSendEmail,
             sendWhatsApp: settings.autoSendWhatsApp,
+            sendSms: false, // Rule 5b: invoice creation = email only
           })
           // Check if all attempted channels failed
           const channels = [sendResult?.email, sendResult?.whatsapp].filter(Boolean) as { success: boolean; error?: string }[]
@@ -626,6 +627,7 @@ export async function createDepositInvoiceFromBooking(bookingId: string, percent
         await sendInvoice(invoice.id, {
           sendEmail: settings.autoSendEmail,
           sendWhatsApp: settings.autoSendWhatsApp,
+          sendSms: false, // Rule 5b: invoice creation = email only
         })
       } catch (sendErr) {
         console.error('[InvoiceAutomation] deposit sendInvoice error:', sendErr)
@@ -1232,7 +1234,7 @@ export async function generateRecurringInvoice(scheduleId: string): Promise<Auto
 
     // Auto-send email + WhatsApp
     try {
-      await sendInvoice(invoice.id, { sendEmail: true, sendWhatsApp: true })
+      await sendInvoice(invoice.id, { sendEmail: true, sendWhatsApp: true, sendSms: false }) // Rule 5b: invoice creation = email only
     } catch (sendErr) {
       console.error('[InvoiceAutomation] recurring send error:', sendErr)
     }
