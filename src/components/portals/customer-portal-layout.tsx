@@ -419,9 +419,14 @@ function CustomerHeader({
     tracking: 'Live Tracking',
   };
 
+  // shrink-0 (not sticky top-0) — the parent <div> has overflow-hidden,
+  // so sticky was a no-op. The header is pinned by the flex column layout,
+  // exactly like the employee portal header.
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-4 sm:px-6 bg-card border-b border-border">
-      <div className="flex items-center gap-3">
+    <header className="shrink-0 z-30 flex items-center justify-between h-16 px-4 sm:px-6 bg-card border-b border-border">
+      {/* min-w-0 + flex-1 so long view titles wrap/truncate instead of pushing
+          the right-side action buttons off-screen on narrow phones (≤360px). */}
+      <div className="flex items-center gap-3 min-w-0 flex-1">
         <Button
           variant="ghost"
           size="icon"
@@ -431,14 +436,16 @@ function CustomerHeader({
           <Menu className="size-5" />
           <span className="sr-only">Toggle menu</span>
         </Button>
-        <h1 className="text-lg sm:text-xl font-semibold text-foreground">{viewTitle[activeView]}</h1>
+        <h1 className="text-lg sm:text-xl font-semibold text-foreground truncate min-w-0">{viewTitle[activeView]}</h1>
         {/* Show company name on mobile (sidebar hidden) for context */}
         <span className="hidden sm:block text-xs text-muted-foreground font-normal ml-1 truncate max-w-[140px] lg:hidden">
           · {companyName}
         </span>
       </div>
 
-      <div className="flex items-center gap-1 sm:gap-2">
+      {/* shrink-0 so the theme/notifications/avatar buttons never get
+          squeezed or pushed off-screen by a long title on the left. */}
+      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         {/* Dark Mode Toggle */}
         <Button
           variant="ghost"
@@ -3219,7 +3226,12 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
 
   return (
     <div
-      className="flex h-screen bg-muted/30 overflow-hidden"
+      // h-[100dvh] (not h-screen) so the layout accounts for iOS Safari's
+      // dynamic toolbar / home indicator in PWA standalone mode. h-screen
+      // (=100vh) doesn't shrink when the toolbar appears, leaving the bottom
+      // nav underlapping content or a permanent gap. Matches the employee
+      // portal's root wrapper.
+      className="flex h-[100dvh] bg-muted/30 overflow-hidden"
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
       {/* Desktop Sidebar */}
