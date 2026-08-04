@@ -72,6 +72,8 @@ interface NotificationPayload {
    * quiet-hours preferences.
    */
   emailPriority?: 'operational' | 'normal'
+  /** Optional array of allowed channels to send through, e.g. ['email', 'sms'] */
+  channels?: string[]
 }
 
 interface SendResult {
@@ -543,7 +545,34 @@ async function sendEmailChannel(
   // was supplied). Falls back to payload.pushUserId / dispatcher-supplied userId.
   let resolvedUserId = userId || payload.pushUserId || ''
 
-  if (!emailTo && payload.employeeId) {
+  // Customer email lookup (only if recipientRole is customer)
+  if (!emailTo && payload.recipientRole === 'customer') {
+    if (payload.customerId) {
+      try {
+        const cust = await db.customer.findUnique({
+          where: { id: payload.customerId },
+          select: { email: true },
+        })
+        if (cust?.email) emailTo = cust.email
+      } catch (e) {
+        console.warn('[sendJobNotification] email resolve (customer) failed:', e)
+      }
+    }
+    if (!emailTo && payload.jobId) {
+      try {
+        const job = await db.job.findUnique({
+          where: { id: payload.jobId },
+          select: { customerEmail: true },
+        })
+        if (job?.customerEmail) emailTo = job.customerEmail
+      } catch (e) {
+        console.warn('[sendJobNotification] email resolve (customer from job) failed:', e)
+      }
+    }
+  }
+
+  // Employee email lookup (only if recipientRole is not customer)
+  if (!emailTo && payload.recipientRole !== 'customer' && payload.employeeId) {
     try {
       const emp = await db.employee.findUnique({
         where: { id: payload.employeeId },
@@ -567,7 +596,7 @@ async function sendEmailChannel(
     }
   }
 
-  if (!emailTo && payload.jobId) {
+  if (!emailTo && payload.recipientRole !== 'customer' && payload.jobId) {
     try {
       const job = await db.job.findUnique({
         where: { id: payload.jobId },
@@ -1006,9 +1035,15 @@ export async function sendJobNotification(
   //  - NORMAL priority: fire ALL channels in sequence (so the recipient
   //    gets the update on every configured channel) but in priority order
   //    so logs are readable.
+  // Filter channels based on custom payload channels if provided
+  let filteredChannels = channels
+  if (payload.channels && payload.channels.length > 0) {
+    filteredChannels = channels.filter((ch) => payload.channels!.includes(ch.name))
+  }
+
   const results: ChannelResult[] = []
   let reached = false
-  for (const ch of channels) {
+  for (const ch of filteredChannels) {
     if (reached && priority === 'urgent') {
       // Skip remaining channels — recipient already reached for an urgent alert.
       results.push({
@@ -1503,9 +1538,13 @@ export async function notifyCustomerLeadAssigned(
   })
 }
 
-export async function notifyCustomerBookingConfirmed(job: Record<string, unknown>): Promise<void> {
+export async function notifyCustomerBookingConfirmed(
+  job: Record<string, unknown>,
+  options?: { emailOnly?: boolean }
+): Promise<void> {
   const customerPhone = (job.customerPhone as string) || ''
-  if (!customerPhone) return
+  const customerEmail = (job.customerEmail as string) || ''
+  if (!customerPhone && !customerEmail) return
 
   const jobNumber = getJobNumber(job)
   const scheduledDate = formatDate(job.scheduledAt as string | null)
@@ -1532,6 +1571,9 @@ export async function notifyCustomerBookingConfirmed(job: Record<string, unknown
     tenantId: (job.tenantId as string) || undefined,
     eventType: 'booking.confirmed',
     smsMessage: `Booking confirmed: #${jobNumber}, ${job.title || 'N/A'}, scheduled ${scheduledDate}. We will assign a technician shortly.`,
+    ...(customerEmail ? { emailTo: customerEmail } : {}),
+    emailPriority: 'operational',
+    ...(options?.emailOnly ? { channels: ['email'] } : {}),
   })
 }
 

@@ -325,10 +325,23 @@ export async function POST(request: NextRequest) {
             updatedJob.address ? `*Address:* ${updatedJob.address}` : '',
           ].filter(Boolean).join('\n')
 
+          const emailSubject = `Job #${jobNumber} Assigned to ${updatedJob.assigneeName || 'Unassigned'}`
+          const emailText = [
+            `Job Assigned: ${updatedJob.title || 'N/A'}`,
+            `Job Number: #${jobNumber}`,
+            `Customer: ${updatedJob.customerName || 'N/A'}`,
+            `Assigned To: ${updatedJob.assigneeName || 'Unassigned'}`,
+            `Scheduled Date: ${scheduledDate}`,
+            `Scheduled Time: ${scheduledTime}`,
+            updatedJob.address ? `Address: ${updatedJob.address}` : '',
+          ].filter(Boolean).join('\n')
+
           await notifyOwner(updatedJob.workspaceId, {
             eventType: 'job.assigned',
             eventLabel: 'Job Assigned',
             whatsappMessage: waMessage,
+            emailSubject,
+            emailText,
             jobId: updatedJob.id,
           })
         })

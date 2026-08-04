@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { cache } from '@/lib/cache'
 import { cachedJson } from '@/lib/cache-headers'
-import { notifyEmployeeJobAssigned } from '@/lib/whatsapp-notifications'
+import { notifyEmployeeJobAssigned, notifyCustomerBookingConfirmed } from '@/lib/whatsapp-notifications'
 import { dispatchJobEvent } from '@/lib/event-webhook-dispatcher'
 import { logActivity } from '@/lib/activity-log'
 import { EventBus } from '@/lib/event-bus'
@@ -405,7 +405,9 @@ export async function POST(request: NextRequest) {
       .then(([employee, customer]) => {
         // Rule 5a: New job creation = email only. CRM-created jobs do not notify the customer via SMS.
         // The customer will be notified when an employee is assigned (consolidated SMS with PIN + tracking link).
-        // (Previously: `notifyCustomerBookingConfirmed(job)` sent an SMS to the customer here — removed per Rule 5a.)
+        notifyCustomerBookingConfirmed(job, { emailOnly: true }).catch((e) =>
+          console.error('Failed to send customer email booking confirmation:', e)
+        )
         // Assignment WhatsApp to employee
         if (employee) {
           notifyEmployeeJobAssigned(job, employee).catch((e) =>
