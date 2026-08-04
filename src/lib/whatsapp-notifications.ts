@@ -846,6 +846,15 @@ export async function sendJobNotification(
   // push notifications with no operator-visible log trail.
   const channels: Array<{ name: string; send: () => Promise<ChannelResult> }> = []
 
+  // ── Employee recipient policy: ZERO SMS to employees. ──
+  // The product rule is "employee receives Push Notification ONLY" on job
+  // assignments / starts / completions. SMS is reserved for customer-side
+  // notifications (PIN delivery, completion thank-you, etc.) and for owner
+  // alerts. When `recipientRole === 'employee'`, the SMS channel is removed
+  // entirely — even if no userId is resolved, the cascade falls through to
+  // WhatsApp + Email, never SMS.
+  const isEmployeeRecipient = payload.recipientRole === 'employee'
+
   // 1. In-App + Web Push — always first when a userId is available (cheapest,
   //    most reliable for dashboard users). `sendInAppAndPushChannels` couples
   //    both: it writes the AppNotification row (bell/inbox) AND fires the
@@ -883,6 +892,7 @@ export async function sendJobNotification(
   // 2. SMS channel — real SMS via SNS / Twilio / etc. Returns { success,
   //    simulated?, error? } so we can preserve the simulated flag (simulated
   //    sends don't count as "reached" for the urgent-cascade stop rule).
+  //    SKIPPED entirely for employee recipients (push-only policy).
   const smsChannel: { name: string; send: () => Promise<ChannelResult> } = {
     name: 'sms',
     send: async () => {
@@ -934,12 +944,24 @@ export async function sendJobNotification(
 
   // Order the remaining channels by priority. In-app + push (if eligible)
   // already sit at the head of `channels`.
+  //
+  // Employee recipients NEVER receive SMS (push-only policy). The SMS channel
+  // is omitted from the cascade so even when no userId is resolved (no in-app
+  // /push), the cascade falls through to WhatsApp + Email, never SMS.
   if (priority === 'urgent') {
     // Urgent: SMS → WhatsApp → Email (SMS most reliable for time-critical)
-    channels.push(smsChannel, whatsappChannel, emailChannel)
+    if (isEmployeeRecipient) {
+      channels.push(whatsappChannel, emailChannel)
+    } else {
+      channels.push(smsChannel, whatsappChannel, emailChannel)
+    }
   } else {
     // Normal: Email → WhatsApp → SMS (email cheaper + async)
-    channels.push(emailChannel, whatsappChannel, smsChannel)
+    if (isEmployeeRecipient) {
+      channels.push(emailChannel, whatsappChannel)
+    } else {
+      channels.push(emailChannel, whatsappChannel, smsChannel)
+    }
   }
 
   // Execute the cascade: try each channel in priority order.
@@ -1477,3 +1499,114 @@ export async function notifyCustomerBookingConfirmed(job: Record<string, unknown
     smsMessage: `Booking confirmed: #${jobNumber}, ${job.title || 'N/A'}, scheduled ${scheduledDate}. We will assign a technician shortly.`,
   })
 }
+
+// ==========================================
+// CUSTOMER VERIFICATION PIN — sent on job assignment
+// ==========================================
+
+/**
+ * Send the customer their 4-digit Job Verification PIN via SMS.
+ *
+ * Called whenever a job is assigned to a technician (dispatch board PUT,
+ * POST /api/jobs, smart-assign, lifecycle assign). The PIN proves the
+ * technician is physically on-site with the customer before they can start
+ * the work timer (fraud-proof arrival verification).
+ *
+ * Behaviour:
+ *   - If `job.verificationPin` is empty/null, the function exits silently
+ *     (no PIN to send — older jobs created before this feature don't have one).
+ *   - SMS is sent via the multi-provider sendSmsMessage() pipeline. If no
+ *     SMS provider is configured, the call is logged and returns gracefully
+ *     (the customer can still see the PIN in the customer portal).
+ *   - Never throws — failures are caught + logged so they don't break the
+ *     surrounding job-assignment flow.
+ *
+ * @param job  The Job row (must include `customerPhone`, `verificationPin`,
+ *             `tenantId` or `workspaceId`, `jobNumber`, `title`,
+ *             `assigneeName`).
+ */
+export async function notifyCustomerVerificationPin(
+  job: Record<string, unknown>,
+): Promise<void> {
+  const customerPhone = (job.customerPhone as string) || ''
+  const pin = (job.verificationPin as string) || ''
+
+  if (!customerPhone) {
+    console.warn(
+      '[notifyCustomerVerificationPin] No customer phone on job',
+      { jobId: job.id, hasPin: !!pin },
+    )
+    return
+  }
+  if (!pin) {
+    // Older jobs created before this feature have no PIN — silently skip.
+    return
+  }
+
+  const jobNumber = getJobNumber(job)
+  const assigneeName = (job.assigneeName as string) || 'your technician'
+
+  // Resolve tenantId for SMS provider resolution. Job carries `workspaceId`
+  // (not `tenantId`), so normalize via resolveTenantId().
+  let resolvedTenantId: string | null = null
+  try {
+    const raw = (job.tenantId as string) || (job.workspaceId as string)
+    resolvedTenantId = await resolveTenantId(raw)
+  } catch {
+    // leave null — sendSmsMessage falls back to platform default provider
+  }
+
+  const message =
+    `Your Job Verification PIN is ${pin}.\n\n` +
+    `Job #${jobNumber}: ${job.title || 'Service visit'}\n` +
+    `Technician: ${assigneeName}\n\n` +
+    `Please share this PIN with the technician when they arrive to authorize starting work.`
+
+  try {
+    const result = await sendSmsMessage({
+      to: customerPhone,
+      message,
+      tenantId: resolvedTenantId || undefined,
+    })
+
+    // Log the PIN SMS delivery attempt to NotificationLog for audit.
+    try {
+      await db.notificationLog.create({
+        data: {
+          type: 'sms',
+          recipient: customerPhone,
+          recipientName: (job.customerName as string) || undefined,
+          recipientRole: 'customer',
+          subject: `Job Verification PIN: ${pin}`,
+          message,
+          status: result.success ? 'sent' : 'failed',
+          externalId: result.messageId,
+          jobId: job.id as string,
+          customerId: (job.customerId as string) || undefined,
+          tenantId: resolvedTenantId || undefined,
+          metadataJson: JSON.stringify({
+            eventType: 'customer.verification_pin',
+            jobId: job.id,
+            jobNumber,
+            pin,
+            simulated: !!result.simulated,
+            provider: result.provider,
+            error: result.error,
+          }),
+        },
+      })
+    } catch (logErr) {
+      console.error('[notifyCustomerVerificationPin] NotificationLog create failed:', logErr)
+    }
+
+    if (!result.success) {
+      console.warn(
+        '[notifyCustomerVerificationPin] SMS send failed (non-blocking):',
+        { jobId: job.id, customerPhone, error: result.error },
+      )
+    }
+  } catch (err) {
+    console.error('[notifyCustomerVerificationPin] Unexpected error:', err)
+  }
+}
+

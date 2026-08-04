@@ -1,5 +1,5 @@
 /*
- * Fieseros Service Worker (v4)
+ * Fieseros Service Worker (v5)
  * ------------------------------
  * Capabilities:
  *   1. App-shell pre-caching on install (/, /marketplace, /manifest.json, /logo.svg, /icon.svg, /offline.html)
@@ -7,7 +7,11 @@
  *   2. Cache cleanup + clients.claim() on activate
  *   3. Fetch strategies (ALL SKIPPED in dev mode — passthrough — so Next.js
  *      HMR and dev renders are never cached/served stale):
- *        - Network-first for /api/ (fall back to cache, then offline JSON)
+ *        - Network-first for /api/ (fall back to cache ONLY when offline, then offline JSON)
+ *          — v5: NEVER caches /api/ responses that come back with a no-store
+ *            Cache-Control header (CRM live-refresh fix). Only caches when
+ *            the network is unreachable so the user gets stale-but-present
+ *            data instead of a 503.
  *        - Stale-while-revalidate for /_next/static/ assets
  *        - Cache-first for images and fonts
  *        - Network-first with cache fallback for HTML navigation, falling back to /offline.html
@@ -26,7 +30,7 @@
  *   stale dev pages. The push + notificationclick handlers stay active.
  */
 
-const CACHE_NAME = 'fieseros-v4';
+const CACHE_NAME = 'fieseros-v5';
 const OFFLINE_URL = '/offline.html';
 
 // Detect dev mode from the SW's own URL. PwaProvider registers this script
@@ -115,14 +119,47 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/_next/') && url.pathname.includes('.hot-update')) return;
   if (url.pathname.startsWith('/__nextjs')) return;
 
-  // 1. Network-first for /api/ requests (fall back to cache, then offline JSON)
+  // 1. Network-first for /api/ requests (fall back to cache ONLY when offline)
+  //
+  // v5 fix: previously the SW cached EVERY successful /api/ GET indefinitely,
+  // which defeated CRM live-refresh — the dashboard kept showing 30s-stale
+  // jobs/pipeline data even after the server had fresh rows. Now:
+  //   - If the response has `Cache-Control: no-store` (or no-cache), DON'T
+  //     cache it — pass it straight through. This is the new default for all
+  //     CRM list routes (see src/lib/cache-headers.ts).
+  //   - If the response is cacheable (e.g. a static config endpoint), cache
+  //     it with a 60s TTL via the `sw-cache-time` header we attach on put.
+  //   - On network failure (offline), fall back to whatever is in the cache
+  //     so the user sees stale-but-present data instead of a 503.
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request)
         .then((response) => {
           if (response.ok) {
-            const cloned = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+            const cc = response.headers.get('Cache-Control') || '';
+            const isNoStore = /no-store|no-cache/i.test(cc);
+            // Only cache the response if the server explicitly allows it
+            // (no `no-store` / `no-cache` directive). This respects the
+            // CRM live-refresh policy set in src/lib/cache-headers.ts.
+            if (!isNoStore && request.method === 'GET') {
+              const cloned = response.clone();
+              caches.open(CACHE_NAME).then((cache) => {
+                // Attach a cache-time header so the activate handler can
+                // prune entries older than the TTL (60s for /api/).
+                const headers = new Headers(cloned.headers);
+                headers.set('sw-cache-time', Date.now().toString());
+                cloned.text().then((body) => {
+                  cache.put(
+                    request,
+                    new Response(body, {
+                      status: cloned.status,
+                      statusText: cloned.statusText,
+                      headers,
+                    })
+                  );
+                });
+              });
+            }
           }
           return response;
         })

@@ -1484,6 +1484,10 @@ model Job {
   // the pipeline "Attention Center" can efficiently query cancelled jobs.
   // Enables the Deal.jobCancelledAt sync (see src/lib/deal-archive.ts).
   cancelledAt        DateTime?
+  // ── 4-digit Job Verification PIN: SMS'd to the customer on job assignment.
+  // The technician must enter this PIN before starting the work timer, proving
+  // they are physically on-site with the customer (fraud-proof arrival verification).
+  verificationPin    String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

@@ -85,6 +85,7 @@ import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
 import { getVapidPublicKey, urlBase64ToUint8Array } from '@/lib/push-client';
 import { JobCompletionScreen } from '@/components/job/job-completion-screen';
+import { JobPinVerificationModal } from '@/components/job/job-pin-verification-modal';
 // Product / Service (line items) + Expenses + Scheduled visits sections
 // — employees can add & edit these directly from the job detail sheet.
 import {
@@ -618,7 +619,7 @@ function useJobDetailSheet({
   }, [jobs, selectedJob]);
 
   // ── V1.5 Job lifecycle action handler ──
-  const handleLifecycleAction = async (action: string, jobId: string) => {
+  const handleLifecycleAction = async (action: string, jobId: string, extra?: { pin?: string }) => {
     setActionLoading(`${action}-${jobId}`);
     try {
       // For travel/arrive/complete, capture the current GPS position so the
@@ -632,6 +633,14 @@ function useJobDetailSheet({
           body.latitude = coords.latitude;
           body.longitude = coords.longitude;
         }
+      }
+      // Forward the verification PIN (from JobPinVerificationModal) to the
+      // backend for `start_work`. The backend validates it against
+      // job.verificationPin (the 4-digit code SMS'd to the customer on
+      // assignment). If the PIN is wrong, the backend returns 403 and we
+      // surface the error via toast — the modal stays open for retry.
+      if (action === 'start_work' && extra?.pin) {
+        body.pin = extra.pin;
       }
       const res = await authFetch(
         `/api/employee/jobs/${jobId}/lifecycle?XTransformPort=3000`,
@@ -1745,7 +1754,7 @@ function JobDetailSheet({
   job: Job | null;
   open: boolean;
   onClose: () => void;
-  onAction: (action: string, jobId: string) => void;
+  onAction: (action: string, jobId: string, extra?: { pin?: string }) => void;
   /** Called after the JobCompletionScreen successfully completes the job.
    *  The parent uses this to refetch the jobs list + close the sheet.
    *  NOT called for other lifecycle actions (those go through onAction). */
@@ -1753,6 +1762,10 @@ function JobDetailSheet({
   actionLoading: string | null;
 }) {
   const [showCompletionScreen, setShowCompletionScreen] = useState(false);
+  // PIN verification modal state — shown before `start_work` can proceed.
+  // The technician must enter the 4-digit PIN that was SMS'd to the customer
+  // on assignment, proving they're physically on-site with the customer.
+  const [showPinModal, setShowPinModal] = useState(false);
 
   if (!job) return null;
 
@@ -1769,7 +1782,13 @@ function JobDetailSheet({
   };
   const handleStartTravel = () => onAction('start_travel', job.id);
   const handleArrive = () => onAction('arrive', job.id);
-  const handleStartWork = () => onAction('start_work', job.id);
+  // Open the PIN verification modal before starting the work timer. The
+  // actual `start_work` lifecycle call happens in handlePinConfirm after the
+  // technician enters the 4-digit PIN.
+  const handleStartWork = () => setShowPinModal(true);
+  const handlePinConfirm = async (pin: string) => {
+    onAction('start_work', job.id, { pin });
+  };
   const handlePause = () => onAction('pause', job.id);
   const handleResume = () => onAction('resume', job.id);
   // Open the full JobCompletionScreen (captures before/after photos,
@@ -2141,6 +2160,21 @@ function JobDetailSheet({
           // would double-POST and fail.
           onJobCompleted?.(job.id);
         }}
+      />
+
+      {/* PIN Verification Modal — shown before `start_work` can proceed.
+          The technician must enter the 4-digit PIN that was SMS'd to the
+          customer on assignment. The modal calls handlePinConfirm which
+          forwards the PIN to onAction('start_work', ...). */}
+      <JobPinVerificationModal
+        isOpen={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onConfirm={async (pin) => {
+          await handlePinConfirm(pin);
+          setShowPinModal(false);
+        }}
+        jobTitle={job.title}
+        jobNumber={job.jobNumber}
       />
     </>
   );

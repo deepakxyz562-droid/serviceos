@@ -386,12 +386,13 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
-    const { action, latitude, longitude, notes, resourceId } = (body ?? {}) as {
+    const { action, latitude, longitude, notes, resourceId, pin } = (body ?? {}) as {
       action?: string;
       latitude?: number;
       longitude?: number;
       notes?: string;
       resourceId?: string;
+      pin?: string;
     };
 
     if (!action) {
@@ -515,6 +516,13 @@ export async function POST(
       updateData.assigneePhone = emp.phone;
       updateData.assignmentStatus = 'pending';
 
+      // ── Generate a 4-digit Verification PIN on assignment if the job
+      // doesn't already have one. The PIN is SMS'd to the customer (below,
+      // after the update) so the technician can verify on-site arrival.
+      if (!job.verificationPin) {
+        updateData.verificationPin = Math.floor(1000 + Math.random() * 9000).toString();
+      }
+
       // Mark employee busy + set currentJobId.
       fireAndForget('employee.set-busy', async () => {
         await db.employee.update({
@@ -555,6 +563,32 @@ export async function POST(
 
     const actorName = authUser?.name ?? employee?.name ?? updatedJob.assigneeName ?? 'System';
     const actorId = authUser?.id ?? employee?.userId ?? null;
+
+    // ── Invalidate CRM caches so the dashboard sees the lifecycle change ──
+    // Busts jobs + pipeline KPIs/alerts/stage-stats caches for the tenant.
+    // Without this, the dispatch board and pipeline widgets show 30-60s-stale
+    // data after every lifecycle transition (assign/start/complete/etc.).
+    try {
+      const { bustPipelineCaches } = await import('@/lib/pipeline-cache-bust');
+      bustPipelineCaches(tenantId);
+    } catch (cacheErr) {
+      console.error('[lifecycle] bustPipelineCaches failed (non-blocking):', cacheErr);
+    }
+
+    // ── Customer Verification PIN SMS on assignment ──
+    // Send the 4-digit PIN to the customer so the technician can verify
+    // on-site arrival before starting the work timer. Fire-and-forget —
+    // never blocks the lifecycle response. Only fires on the `assign` action.
+    if (effectiveAction === 'assign' && updatedJob.customerPhone && updatedJob.verificationPin) {
+      fireAndForget('customer PIN SMS', async () => {
+        try {
+          const { notifyCustomerVerificationPin } = await import('@/lib/whatsapp-notifications');
+          await notifyCustomerVerificationPin(updatedJob);
+        } catch (err) {
+          console.error('[lifecycle/assign] customer PIN SMS failed:', err);
+        }
+      });
+    }
 
     // Activity log — common to every transition
     fireAndForget('activity.log', () =>
@@ -728,6 +762,19 @@ export async function POST(
       }
 
       case 'start_work': {
+        // ── PIN verification: 4-digit Job Verification PIN ──
+        // The technician must enter the PIN that was SMS'd to the customer
+        // on assignment before the work timer can start. Skip the check
+        // for backwards-compat if the job has no `verificationPin` set.
+        if (job.verificationPin) {
+          if (!pin || pin.trim() !== job.verificationPin) {
+            return NextResponse.json(
+              { error: 'Invalid or missing verification PIN. Ask the customer for the 4-digit PIN sent to them via SMS.', code: 'PIN_INVALID' },
+              { status: 403 },
+            );
+          }
+        }
+
         // Create a JobTimeEntry (active, work).
         if (employee) {
           fireAndForget('timeentry.start', async () => {
@@ -900,6 +947,20 @@ export async function POST(
             }),
           );
         }
+
+        // ── Auto-create invoice + email to customer on completion ──
+        // The invoice automation helper is idempotent (skips if an invoice
+        // already exists) and sends the invoice via email + SMS based on
+        // tenant invoice settings. Fire-and-forget so the lifecycle response
+        // isn't blocked by email/SMS latency.
+        fireAndForget('auto-invoice on completion', async () => {
+          try {
+            const { autoCreateInvoiceFromJob } = await import('@/lib/invoice-automation');
+            await autoCreateInvoiceFromJob(job.id);
+          } catch (err) {
+            console.error('[lifecycle/complete] auto-invoice failed:', err);
+          }
+        });
         break;
       }
 

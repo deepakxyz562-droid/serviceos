@@ -216,6 +216,16 @@ export async function PUT(
       })
     }
 
+    // ── Invalidate pipeline caches so the Kanban + KPIs refresh instantly ──
+    // Without this, the pipeline widgets show 60s-stale data after every
+    // deal stage change / value edit / archive toggle.
+    try {
+      const { bustPipelineCaches } = await import('@/lib/pipeline-cache-bust');
+      bustPipelineCaches(currentDeal.tenantId);
+    } catch (cacheErr) {
+      console.error('[DealsUpdate] bustPipelineCaches failed (non-blocking):', cacheErr);
+    }
+
     return NextResponse.json({ data: deal })
   } catch (error) {
     console.error('Error updating deal:', error)

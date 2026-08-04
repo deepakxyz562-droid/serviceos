@@ -6,6 +6,21 @@ import { getAuthUser } from '@/lib/auth';
 import { autoRecordAssetServiceHistory } from '@/lib/asset-service-history';
 import { validateJobCompletionProof } from '@/lib/job-completion-validation';
 import { reopenDealOnJobCancel } from '@/lib/deal-archive';
+import { notifyCustomerVerificationPin } from '@/lib/whatsapp-notifications';
+import { autoCreateInvoiceFromJob } from '@/lib/invoice-automation';
+import { bustPipelineCaches } from '@/lib/pipeline-cache-bust';
+
+/**
+ * fireAndForget — runs a promise in the background, logging any rejection.
+ * Used for SMS / invoice / event emits so they never block the HTTP response.
+ */
+function fireAndForget<T>(
+  label: string,
+  task: Promise<T> | (() => Promise<T>),
+): void {
+  const p = typeof task === 'function' ? task() : task;
+  p.catch((err) => console.error(`[JobsRoute] ${label} failed:`, err));
+}
 
 export async function GET(
   request: NextRequest,
@@ -154,6 +169,18 @@ export async function PUT(
       });
     }
 
+    // ── Job Verification PIN: generate on FIRST assignment if missing ──
+    // The 4-digit PIN is SMS'd to the customer so the technician can verify
+    // on-site arrival (they must enter the PIN before starting the work timer).
+    // We generate it here (rather than at job creation) so the PIN is tied to
+    // the assignment event — when a job is re-assigned to a different tech,
+    // the same PIN stays valid (no customer re-SMS needed).
+    const isAssignTransition =
+      body.status === 'assigned' && existingJob.status !== 'assigned';
+    if (isAssignTransition && !existingJob.verificationPin) {
+      updateData.verificationPin = Math.floor(1000 + Math.random() * 9000).toString();
+    }
+
     // If status is being changed to 'completed', set actualEndTime and free up assignee.
     // Validation: require before/after photos + customer signature (and a
     // completed checklist if linked/expected) before a job can be marked
@@ -278,6 +305,26 @@ export async function PUT(
       } catch (e) {
         console.error('Failed to auto-record asset service history on PUT:', e);
       }
+
+      // ── Auto-create invoice + email to customer on completion ──
+      // The invoice automation helper is idempotent (skips if an invoice
+      // already exists for this job) and sends the invoice via email + SMS
+      // to the customer. Fire-and-forget so the PUT response isn't blocked.
+      fireAndForget(
+        'auto-invoice on completion',
+        autoCreateInvoiceFromJob(job.id),
+      );
+    }
+
+    // ── Customer Verification PIN SMS on assignment ──
+    // Fire-and-forget — never blocks the PUT response. The helper itself
+    // catches its own errors and logs them, so this outer .catch() is just
+    // defense-in-depth.
+    if (isAssignTransition && job.customerPhone) {
+      fireAndForget(
+        'customer PIN SMS',
+        notifyCustomerVerificationPin(job),
+      );
     }
 
     // Emit events via EventBus based on status change
@@ -328,6 +375,28 @@ export async function PUT(
       }
     } catch (eventErr) {
       console.error('[JobsUpdate] Failed to emit event:', eventErr);
+    }
+
+    // ── Invalidate CRM caches so the dashboard sees the update immediately ──
+    // The dispatch board PUT previously didn't call cache.invalidateByPrefix
+    // at all, so the jobs list, pipeline KPIs, alerts, and stage stats all
+    // showed 30-60s-stale data after every dispatch mutation. This single
+    // call busts all of them in one shot (best-effort, never throws).
+    try {
+      let jobTenantId: string | null = null;
+      if (job.workspaceId) {
+        const ws = await db.workspace.findUnique({
+          where: { id: job.workspaceId },
+          select: { tenantId: true },
+        });
+        jobTenantId = ws?.tenantId ?? null;
+      }
+      if (!jobTenantId && authUser?.tenantId) {
+        jobTenantId = authUser.tenantId;
+      }
+      bustPipelineCaches(jobTenantId);
+    } catch (cacheErr) {
+      console.error('[JobsUpdate] bustPipelineCaches failed (non-blocking):', cacheErr);
     }
 
     // ─── V1.5 Activity Log ──────────────────────────────────────────

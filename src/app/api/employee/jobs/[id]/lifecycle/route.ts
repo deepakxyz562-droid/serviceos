@@ -5,6 +5,7 @@ import { resolveEmployee } from '@/app/api/employee/shift/route';
 import { validateJobCompletionProof } from '@/lib/job-completion-validation';
 import { EventBus } from '@/lib/event-bus';
 import { setLifecycleTimestamp } from '@/lib/job-lifecycle';
+import { autoCreateInvoiceFromJob } from '@/lib/invoice-automation';
 
 /**
  * fireAndForget — runs a promise in the background, logging any rejection.
@@ -57,10 +58,11 @@ export async function POST(
 
     const { id: jobId } = await params;
     const body = await request.json();
-    const { action, latitude, longitude } = body as {
+    const { action, latitude, longitude, pin } = body as {
       action: string;
       latitude?: number;
       longitude?: number;
+      pin?: string;
     };
 
     const validActions = [
@@ -262,11 +264,30 @@ export async function POST(
       }
 
       case 'start_work': {
+        // ── PIN verification: the technician must enter the 4-digit Job
+        // Verification PIN that was SMS'd to the customer on assignment.
+        // This proves the technician is physically on-site with the customer
+        // (fraud-proof arrival verification) before the work timer starts.
+        //
+        // - If the job has a `verificationPin` set, the supplied `pin` MUST
+        //   match. Mismatch → 403 (the UI shows the PIN modal again).
+        // - If the job has NO `verificationPin` (created before this feature
+        //   was rolled out), the PIN check is skipped — backwards-compatible.
+        if (job.verificationPin) {
+          if (!pin || pin.trim() !== job.verificationPin) {
+            return NextResponse.json(
+              { error: 'Invalid or missing verification PIN. Ask the customer for the 4-digit PIN sent to them via SMS.', code: 'PIN_INVALID' },
+              { status: 403 },
+            );
+          }
+        }
+
         updatedJob = await db.job.update({
           where: { id: jobId },
           data: {
             status: 'in_progress',
             notificationLogJson: logJson,
+            metadataJson: setLifecycleTimestamp(job.metadataJson, 'workStarted', now),
           },
           include: { assignee: true, customer: true },
         });
@@ -526,11 +547,30 @@ export async function POST(
           customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
           resourceType: 'job', resourceId: updatedJob.id,
         }, { tenantId: user.tenantId || updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined }));
+
+        // ── Auto-create invoice + email to customer on completion ──
+        // The invoice automation helper is idempotent (skips if an invoice
+        // already exists for this job) and sends the invoice via email + SMS
+        // to the customer based on tenant invoice settings. Fire-and-forget
+        // so the lifecycle response isn't blocked by email/SMS latency.
+        fireAndForget('auto-invoice on completion', autoCreateInvoiceFromJob(job.id));
         break;
       }
 
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
+    }
+
+    // ── Invalidate CRM caches so the dashboard sees the lifecycle change ──
+    // Busts jobs + pipeline KPIs/alerts/stage-stats caches for the tenant.
+    // Without this, the dispatch board and pipeline widgets show 30-60s-stale
+    // data after every employee-side lifecycle transition (accept/start/
+    // complete). Best-effort — never throws.
+    try {
+      const { bustPipelineCaches } = await import('@/lib/pipeline-cache-bust');
+      bustPipelineCaches(user.tenantId);
+    } catch (cacheErr) {
+      console.error('[employee/lifecycle] bustPipelineCaches failed (non-blocking):', cacheErr);
     }
 
     return NextResponse.json({ job: updatedJob });
