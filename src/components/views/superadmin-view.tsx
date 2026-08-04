@@ -31,7 +31,7 @@ import {
   // New icons for the expanded enterprise nav
   LayoutGrid, Palette, Mail, MessageCircle, Bell, Lock,
   ListTodo, Terminal, LifeBuoy, ClipboardList, Languages,
-  ChevronLeft, X, LayoutList,
+  ChevronLeft, X, LayoutList, MapPin,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -91,6 +91,7 @@ const StorageSection = lazy(() => import('@/components/views/superadmin/sections
 const InfrastructureSection = lazy(() => import('@/components/views/superadmin/sections/infrastructure').then(m => ({ default: m.InfrastructureSection })));
 const SystemHealthSection = lazy(() => import('@/components/views/superadmin/sections/system-health').then(m => ({ default: m.SystemHealthSection })));
 const MenuManagementSection = lazy(() => import('@/components/views/superadmin/sections/menu-management').then(m => ({ default: m.MenuManagementSection })));
+const DirectoryListingsSection = lazy(() => import('@/components/views/superadmin/sections/directory-listings').then(m => ({ default: m.DirectoryListingsSection })));
 
 // Lightweight Suspense fallback for lazy-loaded sections.
 function SectionLoader() {
@@ -385,6 +386,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'platform-settings', label: 'Platform Settings', icon: Settings },
       { key: 'theme-branding', label: 'Theme & Branding', icon: Palette },
       { key: 'marketplace', label: 'Marketplace', icon: Store },
+      { key: 'directory-listings', label: 'Directory Listings', icon: MapPin },
       { key: 'integrations', label: 'Integrations', icon: Plug },
       { key: 'ai-center', label: 'AI Center', icon: Sparkles },
       { key: 'menu-management', label: 'Menu Management', icon: LayoutList },
@@ -2645,6 +2647,7 @@ export function SuperAdminView() {
         {activeTab === 'platform-settings' && <PlatformSettingsSection />}
         {activeTab === 'theme-branding' && <ThemeBrandingSection />}
         {activeTab === 'marketplace' && <MarketplaceSection />}
+        {activeTab === 'directory-listings' && <DirectoryListingsSection />}
         {activeTab === 'ai-center' && <AICenterSection />}
         {activeTab === 'menu-management' && <MenuManagementSection />}
         {activeTab === 'email-services' && <EmailServicesSection />}

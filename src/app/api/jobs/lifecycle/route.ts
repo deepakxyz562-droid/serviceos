@@ -6,6 +6,7 @@ import {
   notifyCustomerJobStarted,
   notifyCustomerJobCompleted,
   notifyEmployeeJobCompleted,
+  notifyCustomerVerificationPin,
 } from '@/lib/whatsapp-notifications'
 import { EventBus } from '@/lib/event-bus'
 import { notifyOwner } from '@/lib/owner-notifications'
@@ -170,6 +171,46 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Resource is not available' }, { status: 400 })
         }
 
+        // ── Re-assignment fix: clear the OLD assignee's currentJobId BEFORE
+        // setting the new one. Employee.currentJobId is @unique, so setting
+        // the new employee's currentJobId while the old one still points at
+        // this job throws P2002 Unique constraint failed → 500 error. This
+        // was the root cause of "Failed to handle job lifecycle action" on
+        // the Re-assign button.
+        if (job.assigneeId && job.assigneeId !== employee?.id) {
+          try {
+            const oldEmpOtherActive = await db.job.count({
+              where: {
+                assigneeId: job.assigneeId,
+                id: { not: jobId },
+                status: { in: ['assigned', 'in_progress', 'en_route'] },
+              },
+            })
+            await db.employee.update({
+              where: { id: job.assigneeId },
+              data: {
+                currentJobId: null,
+                status: oldEmpOtherActive > 0 ? 'busy' : 'available',
+              },
+            })
+          } catch (e) {
+            // Non-fatal — log and continue. The old employee staying "busy"
+            // is better than failing the whole re-assignment.
+            console.error('[JobLifecycle] failed to reset old assignee:', e)
+          }
+        }
+        // Also free up the old resource if re-assigning to a different one
+        if (job.resourceId && job.resourceId !== resource?.id) {
+          try {
+            await db.resource.update({
+              where: { id: job.resourceId },
+              data: { status: 'available' },
+            })
+          } catch (e) {
+            console.error('[JobLifecycle] failed to reset old resource:', e)
+          }
+        }
+
         const assigneeName = employee?.name ?? resource?.name ?? 'Unknown'
         const assigneePhone = employee?.phone ?? resource?.phone ?? ''
 
@@ -182,6 +223,17 @@ export async function POST(request: NextRequest) {
         }
         const newLogJson = addNotificationLog(job.notificationLogJson, logEntry)
 
+        // ── Generate verificationPin if missing ──────────────────────
+        // The 4-digit PIN is SMS'd to the customer so the technician can
+        // verify on-site arrival. Generate it here (on first assignment AND
+        // on re-assignment if the job somehow has no PIN yet) so the
+        // customer notification below can include it. The PIN stays the same
+        // across re-assignments (no re-SMS needed) — we only generate if
+        // the job.verificationPin field is null/empty.
+        const pinForUpdate = !job.verificationPin
+          ? Math.floor(1000 + Math.random() * 9000).toString()
+          : undefined
+
         updatedJob = await db.job.update({
           where: { id: jobId },
           data: {
@@ -191,28 +243,38 @@ export async function POST(request: NextRequest) {
             assigneePhone,
             status: 'assigned',
             assignmentStatus: 'pending',
+            ...(pinForUpdate ? { verificationPin: pinForUpdate } : {}),
             notificationLogJson: newLogJson,
           },
           include: { assignee: true, customer: true, resource: true },
         })
 
-        // Update employee/resource status
+        // Update employee/resource status — wrapped in try/catch so a
+        // side-effect failure never 500s the main assignment.
         if (employee) {
-          await db.employee.update({
-            where: { id: employee.id },
-            data: {
-              status: 'busy',
-              // Track the current job so the dispatch board / employee portal
-              // can show "on job: X". Cleared when the job is completed.
-              currentJobId: jobId,
-            },
-          })
+          try {
+            await db.employee.update({
+              where: { id: employee.id },
+              data: {
+                status: 'busy',
+                // Track the current job so the dispatch board / employee portal
+                // can show "on job: X". Cleared when the job is completed.
+                currentJobId: jobId,
+              },
+            })
+          } catch (e) {
+            console.error('[JobLifecycle] failed to set new employee status:', e)
+          }
         }
         if (resource) {
-          await db.resource.update({
-            where: { id: resource.id },
-            data: { status: 'busy' },
-          })
+          try {
+            await db.resource.update({
+              where: { id: resource.id },
+              data: { status: 'busy' },
+            })
+          } catch (e) {
+            console.error('[JobLifecycle] failed to set new resource status:', e)
+          }
         }
 
         // Send WhatsApp notification to employee (background — don't block response)
@@ -220,23 +282,21 @@ export async function POST(request: NextRequest) {
           fireAndForget('employee assign notification', notifyEmployeeJobAssigned(updatedJob, employee))
         }
 
-        // ─── Customer assignment SMS ─────────────────────────────────
-        // Suppressed: notifyCustomerVerificationPin now sends a consolidated
-        // SMS with tech name + date/time + PIN + tracking link. The previous
-        // notifyCustomerJobAssigned call here sent a second, partial SMS
-        // ("Technician assigned: X. Arrival: Y. Service: Z.") with no PIN
-        // and no tracking link, which confused customers. The PIN SMS is
-        // triggered by the PUT /api/jobs/[id] route (which generates the
-        // verificationPin + fires notifyCustomerVerificationPin) on the
-        // same assignment event.
+        // ─── Customer assignment SMS (consolidated) ─────────────────
+        // notifyCustomerVerificationPin sends a single SMS with technician
+        // name + scheduled date/time + 4-digit PIN + tracking link. This is
+        // the ONLY customer notification on assignment — we do NOT also call
+        // notifyCustomerJobAssigned (which sent a second, partial SMS with
+        // no PIN, confusing customers).
         //
-        // if (job.customerPhone) {
-        //   const technician =
-        //     employee
-        //       ? { id: employee.id, name: employee.name, phone: employee.phone }
-        //       : { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone }
-        //   fireAndForget('customer assign notification', notifyCustomerJobAssigned(updatedJob, technician))
-        // }
+        // This was previously suppressed here because the PUT /api/jobs/[id]
+        // route was expected to fire it. But the frontend Assign/Re-assign
+        // buttons call POST /api/jobs/lifecycle (this route), NOT PUT, so
+        // the customer never received any notification. Now we fire it here
+        // directly.
+        if (updatedJob.customerPhone && updatedJob.verificationPin) {
+          fireAndForget('customer PIN SMS', notifyCustomerVerificationPin(updatedJob))
+        }
 
         // ─── Emit event via EventBus (background) ────────────────
         fireAndForget('job.assigned event', EventBus.emit('job.assigned', {

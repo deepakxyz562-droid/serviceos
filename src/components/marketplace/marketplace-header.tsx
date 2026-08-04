@@ -27,6 +27,21 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+// ─── Bot detection ─────────────────────────────────────────────────────
+// Crawlers (Googlebot, Bingbot, etc.) should NOT fire the /api/auth/me XHR
+// on mount. When Googlebot's renderer discovers that fetch, the crawler then
+// tries GET /api/auth/me?XTransformPort=3000, which is blocked by robots.txt
+// (Disallow: /api/), producing a "Googlebot blocked by robots.txt" error in
+// Google Search Console. Skipping the auth-hydration fetch for bots avoids
+// this entirely. This is NOT cloaking — the rendered HTML is identical for
+// bots and users; we only suppress a client-side analytics/session XHR.
+const BOT_PATTERN = /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|sogou|exabot|facebot|ia_archiver|semrushbot|ahrefsbot|headless|puppeteer|phantomjs|webdriver|lighthouse|pagespeed|chrome-lighthouse|googleother|google-inspectiontool/i;
+
+function isBot(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return BOT_PATTERN.test(navigator.userAgent);
+}
+
 /**
  * MarketplaceHeader
  * ------------------
@@ -214,6 +229,16 @@ function HeaderAction() {
   // The fetch hits the cached /api/auth/me endpoint (30s TTL — Task ID 8),
   // so subsequent page loads within 30s resolve in ~20ms instead of ~100ms.
   React.useEffect(() => {
+    // Skip the auth-hydration fetch for crawlers/bots so Googlebot doesn't
+    // discover the /api/auth/me XHR (which is blocked by robots.txt and
+    // produces a Search Console error). Bots see the anonymous CTA, which
+    // is the correct render for a crawler.
+    if (isBot()) {
+      setHydrated(true);
+      setAuthHydrated(true);
+      return;
+    }
+
     let cancelled = false;
     async function hydrateAuth() {
       try {

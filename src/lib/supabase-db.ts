@@ -226,6 +226,11 @@ const TABLES_WITHOUT_UPDATED_AT = new Set<string>([
   'MetaLead',
   'GoogleAdsLead',
   'TicketAttachment',
+  // FeaturedLocation has no updatedAt column in the Prisma schema.
+  // Without this entry, every upsert() auto-adds updatedAt → PostgREST 400 →
+  // triggers a retry round-trip to strip it. Listing it here skips the
+  // wasted round-trip on every hourly cron tick.
+  'FeaturedLocation',
 ]);
 
 // ── Relation Mapping ───────────────────────────────────────────────────────
@@ -382,6 +387,14 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   BillingEvent: {
     tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
     subscription: { targetTable: 'Subscription', fkColumn: 'subscriptionId' },
+  },
+  // ── Featured European Location (homepage hero) ──
+  // Without this entry, `db.featuredLocation.findFirst({ include: { location: true } })`
+  // silently skips the join → row.location is undefined → getCurrentFeaturedLocation()
+  // returns null → homepage never shows the featured city even though the cron
+  // successfully wrote it to the DB.
+  FeaturedLocation: {
+    location: { targetTable: 'DirectoryLocation', fkColumn: 'locationId' },
   },
 };
 
