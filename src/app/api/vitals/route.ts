@@ -48,3 +48,17 @@ export async function OPTIONS() {
     },
   });
 }
+
+// Handle GET — defensive 204 for crawlers that discover /api/vitals.
+//
+// Why this exists: the WebVitalsReporter fires navigator.sendBeacon('/api/vitals')
+// on every page render. Googlebot's renderer executes that JS and records the
+// network request. Googlebot's crawler then tries GET /api/vitals — without a
+// GET handler, it received 405 Method Not Allowed, which surfaced as "Other
+// error" in Google Search Console. Returning 204 (No Content) tells the
+// crawler "this endpoint exists but has nothing for you," which is a clean,
+// non-error response. The endpoint is also covered by robots.txt's /api/
+// disallow, so this is belt-and-suspenders.
+export async function GET() {
+  return new NextResponse(null, { status: 204 });
+}
