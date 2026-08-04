@@ -1172,7 +1172,9 @@ function HomeView({
       <Card className="border-0 bg-gradient-to-br from-emerald-600 to-emerald-700 text-white shadow-lg">
         <CardContent className="p-6">
           <div className="flex items-start justify-between">
-            <div>
+            {/* min-w-0 so the greeting text wraps cleanly instead of pushing
+                the avatar off-screen on narrow phones (≤320px). */}
+            <div className="min-w-0">
               <h2 className="text-2xl font-bold">{getGreeting()}, {firstName}! 👋</h2>
               <p className="mt-1 text-emerald-100">Here&apos;s your overview for today, {formatTodayDate()}.</p>
             </div>
@@ -1195,7 +1197,7 @@ function HomeView({
             <div className="size-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
               <Briefcase className="size-5 text-blue-600 dark:text-blue-400" />
             </div>
-            <div>
+            <div className="min-w-0">
               {loading ? (
                 <div className="h-7 w-8 bg-muted rounded animate-pulse" />
               ) : (
@@ -1210,7 +1212,7 @@ function HomeView({
             <div className="size-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
               <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <div>
+            <div className="min-w-0">
               {loading ? (
                 <div className="h-7 w-8 bg-muted rounded animate-pulse" />
               ) : (
@@ -1225,7 +1227,7 @@ function HomeView({
             <div className="size-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
               <Calendar className="size-5 text-amber-600 dark:text-amber-400" />
             </div>
-            <div>
+            <div className="min-w-0">
               {loading ? (
                 <div className="h-7 w-8 bg-muted rounded animate-pulse" />
               ) : (
@@ -1240,7 +1242,7 @@ function HomeView({
             <div className="size-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
               <Star className="size-5 text-purple-600 dark:text-purple-400" />
             </div>
-            <div>
+            <div className="min-w-0">
               {loading ? (
                 <div className="h-7 w-8 bg-muted rounded animate-pulse" />
               ) : (
@@ -1815,7 +1817,19 @@ function JobDetailSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-        <SheetContent className="w-full sm:max-w-xl flex flex-col gap-0 p-0">
+        {/* Override the shadcn Sheet's default inline paddingTop of
+            `calc(env(safe-area-inset-top, 0px) + 20px)` with just the safe-area
+            inset. The default +20px was designed to clear the close (X) button
+            on standard sheets, but THIS sheet uses p-0 + a custom Back button
+            at the top, so the extra 20px created a permanent empty gap above
+            the sticky header (Issue 3: job detail header/footer space).
+            Tailwind classes can't override inline styles, so we set our own
+            inline style here. The env() evaluates to 0px on non-notched
+            devices, so this is a no-op on desktop/Android. */}
+        <SheetContent
+          className="w-full sm:max-w-xl flex flex-col gap-0 p-0"
+          style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+        >
           {/* Sticky header — stays visible at the top while the body scrolls.
               shrink-0 so it never collapses; bottom border separates it from
               the scrollable content below. */}
@@ -4120,7 +4134,17 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
         </header>
 
         {/* Content — extra bottom padding on mobile clears the fixed bottom tab bar */}
-        <main className="flex-1 overflow-auto bg-muted/30 p-4 lg:p-6 pb-20 md:pb-6">
+        {/* ── Mobile layout hardening ──
+            - overflow-y-auto + overflow-x-hidden: prevents horizontal scroll
+              from any sub-pixel rendering / box-shadow / border-radius on
+              children (Issue 1: dashboard horizontal scroll on mobile).
+            - pb-[calc(4rem+env(safe-area-inset-bottom,0px))] on mobile:
+              tightly clears the 56px (h-14) fixed bottom nav + iPhone home
+              indicator, leaving a consistent ~8px gap on ALL devices instead
+              of the previous ~48px dead zone on Android/desktop (Issue 2).
+              md:pb-6 restores normal 24px padding on desktop where the bottom
+              nav is hidden (md:hidden). */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/30 p-4 lg:p-6 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-6">
           <GpsStatusBanner />
           {/* Push permission prompt — hoisted to the main layout so it shows
               across ALL employee sub-views (not just Home). The banner
