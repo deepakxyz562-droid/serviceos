@@ -16,6 +16,7 @@ import { unstable_cache, revalidateTag } from 'next/cache'
 import type { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas'
+import { mapIndustryToPluralSlug } from '@/lib/seo/plural-industry-slugs'
 import { getIndustryKit, durationToMinutes } from '@/lib/industry-kits'
 
 /**
@@ -228,7 +229,19 @@ async function _getPublicBusinessByUrl(
     return { business: null, needsRedirect: false, canonicalUrl: null }
   }
 
-  const expectedIndustry = mapIndustryToUrlSlug(tenant.industry)
+  // ── Canonical URL = PLURAL industry slug ─────────────────────────────
+  // The canonical URL scheme is now /{pluralIndustry}/{city}/{slug}
+  // (e.g. /plumbers/london/abc-plumbing) — see
+  // src/lib/seo/plural-industry-slugs.ts. The plural form is the
+  // SEO-friendly browse URL (matching /plumbers/london for the browse
+  // route), so the 3-segment profile route lives under the same plural
+  // prefix for URL consistency.
+  //
+  // The legacy `mapIndustryToUrlSlug()` (singular: 'plumber') is still
+  // exported for callers that need the OLD singular form (e.g. the offline
+  // IndexedDB cache key on `industryUrlSlug`); only the canonical URL
+  // builder switches to plural here.
+  const expectedIndustry = mapIndustryToPluralSlug(tenant.industry)
   const expectedCity = slugifyCity(tenant.city)
 
   // If the URL segments don't match the DB-derived canonical segments,
@@ -275,7 +288,8 @@ export async function getCanonicalUrlBySlug(slugSeg: string): Promise<string | n
   }
 
   if (!tenant) return null
-  const expectedIndustry = mapIndustryToUrlSlug(tenant.industry)
+  // PLURAL canonical URL — see _getPublicBusinessByUrl for rationale.
+  const expectedIndustry = mapIndustryToPluralSlug(tenant.industry)
   const expectedCity = slugifyCity(tenant.city)
   return `${SITE_URL}/${expectedIndustry}/${expectedCity}/${tenant.slug}`
 }
@@ -658,7 +672,9 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
 
     const entries: IndexableBusinessUrl[] = []
     for (const t of candidates) {
-      const industrySlug = mapIndustryToUrlSlug(t.industry)
+      // PLURAL industry slug — matches the new /{pluralIndustry}/{city}/{slug}
+      // canonical URL scheme.
+      const industrySlug = mapIndustryToPluralSlug(t.industry)
       const citySlug = slugifyCity(t.city)
       // Normalize updatedAt to ISO string. Prisma returns Date; the Supabase
       // REST adapter may return a string. Both .toISOString() safely (Date

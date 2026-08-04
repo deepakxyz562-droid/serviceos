@@ -79,6 +79,29 @@ export interface ProviderListItem {
   responseTimeMins?: number | null;
   /** Whether this provider offers 24/7 emergency service. */
   emergencyServiceAvailable?: boolean;
+  /**
+   * Geocoded latitude of the provider's primary address (Tenant.latitude).
+   * Populated by GET /api/marketplace/providers when the provider has a
+   * geocoded address. Used by client-side ranking (rankProviders) + the
+   * 'distance' sort + the "X.X km away" badge on provider cards.
+   */
+  latitude?: number | null;
+  /** Geocoded longitude of the provider's primary address (Tenant.longitude). */
+  longitude?: number | null;
+  /**
+   * How far the provider is willing to travel to a customer (km). 0 or null =
+   * "will travel anywhere". Used by the rankProviders service-radius filter
+   * (when the user's location is known) to exclude providers who are too far.
+   */
+  serviceRadiusKm?: number | null;
+  /**
+   * Haversine distance (km) from the user's location to this provider's
+   * address. Populated by GET /api/marketplace/providers when the request
+   * included lat/lng query params, OR by client-side rankProviders when the
+   * 'recommended' / 'distance' sort is active. null when no user location is
+   * available. Used for the "X.X km away" badge on provider cards.
+   */
+  distanceKm?: number | null;
 }
 
 export interface ProviderListResponse {

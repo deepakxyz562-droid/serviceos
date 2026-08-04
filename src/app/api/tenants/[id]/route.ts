@@ -111,6 +111,9 @@ export async function GET(
         reviewCount: tenant.reviewCount,
         seoTitle: tenant.seoTitle,
         seoDescription: tenant.seoDescription,
+        // Provider service radius in km — powers marketplace "near me" search.
+        // 0 / null = "will travel anywhere". Default 25 (see schema).
+        serviceRadiusKm: tenant.serviceRadiusKm,
         // Computed canonical public URL (for the "Preview" button)
         publicUrl: tenant.publicProfileEnabled
           ? `/${mapIndustryToUrlSlug(tenant.industry)}/${slugifyCity(tenant.city)}/${tenant.publicSlug || tenant.slug}`
@@ -188,6 +191,9 @@ export async function PUT(
       faqsJson,
       seoTitle,
       seoDescription,
+      // Provider service radius (km) — powers marketplace "near me" search.
+      // 0 / null = "will travel anywhere". Default 25 (see schema).
+      serviceRadiusKm,
     } = body;
 
     // ── Detect onboarding completion transition ─────────────────────────
@@ -252,6 +258,14 @@ export async function PUT(
     if (faqsJson !== undefined) updateData.faqsJson = typeof faqsJson === 'string' ? faqsJson : JSON.stringify(faqsJson || []);
     if (seoTitle !== undefined) updateData.seoTitle = seoTitle?.trim() || null;
     if (seoDescription !== undefined) updateData.seoDescription = seoDescription?.trim() || null;
+    // Provider service radius (km). 0 = "will travel anywhere" (stored as 0 —
+    // marketplace-ranking treats 0/null identically). Clamp to [0, 500].
+    if (serviceRadiusKm !== undefined) {
+      const n = Number(serviceRadiusKm);
+      if (!isNaN(n)) {
+        updateData.serviceRadiusKm = Math.min(500, Math.max(0, n));
+      }
+    }
 
     const tenant = await db.tenant.update({
       where: { id },
@@ -360,6 +374,7 @@ export async function PUT(
         reviewCount: finalTenant?.reviewCount ?? tenant.reviewCount,
         seoTitle: finalTenant?.seoTitle ?? tenant.seoTitle,
         seoDescription: finalTenant?.seoDescription ?? tenant.seoDescription,
+        serviceRadiusKm: finalTenant?.serviceRadiusKm ?? tenant.serviceRadiusKm,
         publicUrl: (finalTenant?.publicProfileEnabled ?? tenant.publicProfileEnabled)
           ? `/${mapIndustryToUrlSlug(finalTenant?.industry ?? tenant.industry)}/${slugifyCity(finalTenant?.city ?? tenant.city)}/${finalTenant?.publicSlug || tenant.publicSlug || tenant.slug}`
           : null,
@@ -457,6 +472,9 @@ export async function PATCH(
       // Geo-coordinates (set by the OSM Nominatim address autocomplete in step 1)
       latitude,
       longitude,
+      // Provider service radius (km) — powers marketplace "near me" search.
+      // 0 / null = "will travel anywhere". Default 25 (see schema).
+      serviceRadiusKm,
       // Canonical industry (single-select derived from businessCategories[0])
       industry,
       // Free-form JSON settings object. The client is expected to send a
@@ -582,6 +600,15 @@ export async function PATCH(
         : JSON.stringify(settingsJson || {});
     }
 
+    // Provider service radius (km). 0 = "will travel anywhere" (stored as 0 —
+    // marketplace-ranking treats 0/null identically). Clamp to [0, 500].
+    if (serviceRadiusKm !== undefined) {
+      const n = Number(serviceRadiusKm);
+      if (!isNaN(n)) {
+        updateData.serviceRadiusKm = Math.min(500, Math.max(0, n));
+      }
+    }
+
     // ── Persist ────────────────────────────────────────────────────────────
     const tenant = await db.tenant.update({
       where: { id },
@@ -653,6 +680,7 @@ export async function PATCH(
         profileCompletionPct,
         onboardingStep: tenant.onboardingStep,
         onboardingCompleted: tenant.onboardingCompleted,
+        serviceRadiusKm: tenant.serviceRadiusKm,
         updatedAt: tenant.updatedAt,
       },
     });

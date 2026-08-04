@@ -25,7 +25,9 @@
 import { SlidersHorizontal } from 'lucide-react';
 import { useMarketplaceSearch, type MarketplaceSortKey } from './use-marketplace-search';
 
-const SORTS: Array<{ key: MarketplaceSortKey; label: string }> = [
+const SORTS: Array<{ key: MarketplaceSortKey; label: string; requiresLocation?: boolean }> = [
+  { key: 'recommended', label: 'Recommended' },
+  { key: 'distance', label: 'Nearest first', requiresLocation: true },
   { key: 'rating', label: 'Top rated' },
   { key: 'reviews', label: 'Most reviewed' },
   { key: 'response', label: 'Fastest response' },
@@ -36,6 +38,11 @@ const SORTS: Array<{ key: MarketplaceSortKey; label: string }> = [
 export function MarketplaceSortControl() {
   const sort = useMarketplaceSearch((s) => s.sort);
   const setSort = useMarketplaceSearch((s) => s.setSort);
+  // Read userLocation so the 'distance' option can be greyed out when no
+  // location has been detected yet (the pure-Haversine sort requires a
+  // reference point). 'recommended' is always available — it falls back to
+  // the no-location 50/33/17 ranking split when userLocation is null.
+  const userLocation = useMarketplaceSearch((s) => s.userLocation);
 
   return (
     <div className="hidden items-center gap-2 sm:flex">
@@ -52,11 +59,15 @@ export function MarketplaceSortControl() {
         className="h-8 rounded-md border border-border bg-background px-2.5 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
         aria-label="Sort providers"
       >
-        {SORTS.map((s) => (
-          <option key={s.key} value={s.key}>
-            {s.label}
-          </option>
-        ))}
+        {SORTS.map((s) => {
+          const disabled = !!s.requiresLocation && !userLocation;
+          return (
+            <option key={s.key} value={s.key} disabled={disabled}>
+              {s.label}
+              {disabled ? ' (enable location)' : ''}
+            </option>
+          );
+        })}
       </select>
     </div>
   );

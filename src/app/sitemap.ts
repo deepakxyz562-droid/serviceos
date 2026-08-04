@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { listIndexableBusinessUrls } from "@/lib/public-business";
 import { getAllPosts } from "@/lib/blog";
+import { db } from "@/lib/db";
+import { mapIndustryToPluralSlug } from "@/lib/seo/plural-industry-slugs";
 
 /**
  * Dynamic sitemap for Fieseros public pages.
@@ -173,5 +175,50 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  return [...staticEntries, ...blogEntries, ...businessEntries];
+  // ── Dynamic: plural browse pages (/{pluralIndustry}/{city}) ───────────────
+  //
+  // Top 50 cities × 4 most popular industries = up to 200 high-intent
+  // "category + location" landing pages (e.g. /plumbers/london,
+  // /electricians/manchester, /hvac/berlin, /cleaners/paris). These are the
+  // highest-commercial-intent URLs on the site — someone searching "plumber
+  // in london" lands directly on a curated list of verified local plumbers.
+  //
+  // We cap at 200 (50 cities × 4 industries) to avoid sitemap bloat. The
+  // missing (city, industry) combos still resolve at runtime via the
+  // [companySlug]/[city] route (force-dynamic) — Google discovers them via
+  // internal links from the static pages we DO list here.
+  //
+  // Priority 0.8 — higher than the 0.5 default and below the 1.0 homepage.
+  // These pages have strong commercial intent but less freshness than the
+  // individual business profile pages (which inherit tenant.updatedAt).
+  let browseEntries: MetadataRoute.Sitemap = [];
+  try {
+    const cities = await db.directoryLocation.findMany({
+      where: { isActive: true },
+      orderBy: { population: "desc" },
+      take: 50,
+      select: { citySlug: true },
+    });
+    // The 4 most popular industries on the marketplace (by search volume +
+    // provider count). Adding more here linearly increases sitemap size.
+    const topIndustries = ["plumbing", "electrical", "cleaning", "hvac"];
+    for (const city of cities) {
+      for (const industry of topIndustries) {
+        const plural = mapIndustryToPluralSlug(industry);
+        browseEntries.push({
+          url: `${base}/${plural}/${city.citySlug}`,
+          lastModified: now,
+          changeFrequency: "weekly" as const,
+          priority: 0.8,
+        });
+      }
+    }
+  } catch (err) {
+    // If the DirectoryLocation query fails (e.g. DB unavailable during
+    // build), still emit the other sitemap sections — don't 500 the
+    // sitemap and break Google's view of the entire site.
+    console.error("[sitemap] failed to list plural browse URLs:", err);
+  }
+
+  return [...staticEntries, ...blogEntries, ...businessEntries, ...browseEntries];
 }

@@ -212,6 +212,11 @@ function ProviderCardImpl({
   const claimed = listItem.claimed ?? false;
   const listingTier = listItem.listingTier ?? 'none';
   const isClaimedFree = listingTier === 'claimed_free';
+  // Haversine distance from the user's location (set by the 'recommended' /
+  // 'distance' sort or the lat/lng query params on the providers API). Only
+  // shown when it's a real number — null/undefined means no user location
+  // was provided, so we hide the badge rather than show "0 km away".
+  const distanceKm = listItem.distanceKm ?? null;
 
   const gates = buildVerificationGates(provider);
   const allGatesPassed = gates.every((g) => g.passed);
@@ -285,6 +290,17 @@ function ProviderCardImpl({
                 <span className="text-border-strong" aria-hidden>•</span>
                 <MapPin className="h-3 w-3 shrink-0" />
                 <span className="truncate">{location}</span>
+              </>
+            ) : null}
+            {distanceKm != null ? (
+              <>
+                <span className="text-border-strong" aria-hidden>•</span>
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  {distanceKm < 1
+                    ? `${Math.round(distanceKm * 1000)} m`
+                    : `${distanceKm.toFixed(1)} km`}{' '}
+                  away
+                </span>
               </>
             ) : null}
           </p>
@@ -405,6 +421,8 @@ function MinimalCard({
   const isEmergency = provider.emergencyServiceAvailable ?? false;
   const profileHref = href ?? '#';
   const avatar = avatarColors(provider.name);
+  // Haversine distance from the user's location (see main card for details).
+  const distanceKm = provider.distanceKm ?? null;
   const handleView = () => {
     if (onViewProfile) onViewProfile(provider);
   };
@@ -452,6 +470,17 @@ function MinimalCard({
                 <span className="text-border-strong" aria-hidden>•</span>
                 <MapPin className="h-3 w-3 shrink-0" />
                 <span className="truncate">{location}</span>
+              </>
+            ) : null}
+            {distanceKm != null ? (
+              <>
+                <span className="text-border-strong" aria-hidden>•</span>
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  {distanceKm < 1
+                    ? `${Math.round(distanceKm * 1000)} m`
+                    : `${distanceKm.toFixed(1)} km`}{' '}
+                  away
+                </span>
               </>
             ) : null}
           </p>

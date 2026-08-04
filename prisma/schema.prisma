@@ -88,6 +88,8 @@ model Tenant {
   // marketplace proximity search and map views.
   latitude              Float?
   longitude             Float?
+  // Provider service radius in km (default 25). Null-friendly: providers can set large value for "will travel anywhere". Powers marketplace radius search WHERE distance <= serviceRadiusKm.
+  serviceRadiusKm       Float    @default(25)
   // Marketplace listing tier — drives what's shown on the public marketplace:
   //   none          → not listed (default for businesses that haven't opted in)
   //   free          → unclaimed seed listing (name, address, phone, rating, "Call Now" only — no booking)
@@ -212,6 +214,8 @@ model Tenant {
   @@index([slug])
   @@index([plan])
   @@index([planStatus])
+  @@index([city])
+  @@index([latitude, longitude])
 }
 
 model Subscription {

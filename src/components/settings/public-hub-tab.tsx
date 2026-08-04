@@ -20,7 +20,7 @@
  * The API also calls revalidatePath so the public page refreshes instantly.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Globe,
   MapPin,
@@ -40,6 +40,7 @@ import {
   Image as ImageIcon,
   Upload,
   X,
+  Navigation,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -88,6 +89,10 @@ interface HubForm {
   gallery: GalleryItem[];
   businessHours: BusinessHours;
   serviceAreas: string[];
+  // Provider service radius (km). 0 / null = "will travel anywhere".
+  // Default 25 (mirrors the Prisma schema). Powers the marketplace
+  // "near me" radius search filter.
+  serviceRadiusKm: number;
   socialLinks: SocialLinks;
   faqs: FaqItem[];
   seoTitle: string;
@@ -129,6 +134,7 @@ function emptyForm(): HubForm {
     gallery: [],
     businessHours: defaultBusinessHours(),
     serviceAreas: [],
+    serviceRadiusKm: 25,
     socialLinks: {},
     faqs: [],
     seoTitle: '',
@@ -163,6 +169,16 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
   // Upload state — shown as a small spinner overlay on the upload tile.
   const [uploadingCover, setUploadingCover] = useState(false);
   const [uploadingGalleryIdx, setUploadingGalleryIdx] = useState<number | null>(null);
+
+  // ── Service radius auto-save state ────────────────────────────────────────
+  // `serviceRadiusKm` PATCHes the tenant on change (debounced) — independent
+  // of the main "Save changes" button — so the user gets instant feedback.
+  // `radiusSavedAt` is a timestamp used to show a temporary "Saved ✓" badge
+  // next to the input. Initial-load value is captured in a ref so the first
+  // loadHub() effect doesn't trigger a spurious PATCH.
+  const [radiusSaving, setRadiusSaving] = useState(false);
+  const [radiusSavedAt, setRadiusSavedAt] = useState<number | null>(null);
+  const initialRadiusRef = useRef<number | null>(null);
 
   // ── Load existing Hub data from the API ──────────────────────────────────
   const loadHub = useCallback(async () => {
@@ -205,6 +221,7 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
         gallery,
         businessHours,
         serviceAreas,
+        serviceRadiusKm: typeof t.serviceRadiusKm === 'number' ? t.serviceRadiusKm : 25,
         socialLinks,
         faqs,
         seoTitle: t.seoTitle || '',
@@ -250,6 +267,7 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
           faqsJson: JSON.stringify(form.faqs),
           seoTitle: form.seoTitle,
           seoDescription: form.seoDescription,
+          serviceRadiusKm: form.serviceRadiusKm,
         }),
       });
       if (res.ok) {
@@ -266,6 +284,58 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
       setSaving(false);
     }
   };
+
+  // ── Service radius: debounced auto-PATCH on change ────────────────────────
+  // Skips the initial load value (so loading the form doesn't fire a save).
+  // Sends only `{ serviceRadiusKm }` to the PATCH endpoint (not the full
+  // form) so concurrent edits to other fields don't get clobbered.
+  useEffect(() => {
+    if (!tenantId) return;
+    const value = form.serviceRadiusKm;
+    // Capture the initial value the first time we have one, then skip
+    // PATCHing if the value hasn't actually changed from the server state.
+    if (initialRadiusRef.current === null) {
+      initialRadiusRef.current = value;
+      return;
+    }
+    if (initialRadiusRef.current === value) return;
+
+    setRadiusSaving(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await authFetch(`/api/tenants/${tenantId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ serviceRadiusKm: value }),
+        });
+        if (res.ok) {
+          initialRadiusRef.current = value;
+          setRadiusSavedAt(Date.now());
+          toast.success(
+            value === 0
+              ? 'Service radius saved — you will travel anywhere'
+              : `Service radius saved — ${value} km`
+          );
+        } else {
+          const err = await res.json().catch(() => ({}));
+          toast.error(err.error || 'Failed to save service radius');
+        }
+      } catch {
+        toast.error('Network error saving service radius');
+      } finally {
+        setRadiusSaving(false);
+      }
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [form.serviceRadiusKm, tenantId]);
+
+  // ── Auto-clear the "Saved ✓" inline badge after 2.5s ──────────────────────
+  useEffect(() => {
+    if (radiusSavedAt === null) return;
+    const t = setTimeout(() => setRadiusSavedAt(null), 2500);
+    return () => clearTimeout(t);
+  }, [radiusSavedAt]);
 
   // ── URL preview ──────────────────────────────────────────────────────────
   const urlIndustry = industry || 'industry';
@@ -585,6 +655,65 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
                   </Badge>
                 ))}
               </div>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Service radius — numeric input with debounced auto-PATCH.
+              Powers the marketplace "near me" radius search filter:
+              providers within `serviceRadiusKm` of the customer's location
+              appear in results. 0 / blank = "will travel anywhere". */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="service-radius" className="text-sm font-medium flex items-center gap-1.5">
+                <Navigation className="size-3.5 text-emerald-600" />
+                Service radius (km)
+              </Label>
+              {/* Inline status indicator — spinner while saving, "Saved ✓"
+                  for ~2s after a successful PATCH. Kept compact so the row
+                  doesn't shift when status changes. */}
+              <span className="text-xs text-muted-foreground flex items-center gap-1 min-h-[16px]">
+                {radiusSaving ? (
+                  <>
+                    <Loader2 className="size-3 animate-spin" />
+                    Saving…
+                  </>
+                ) : radiusSavedAt !== null ? (
+                  <>
+                    <CheckCircle2 className="size-3 text-emerald-600" />
+                    Saved
+                  </>
+                ) : null}
+              </span>
+            </div>
+            <Input
+              id="service-radius"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={500}
+              step={5}
+              value={Number.isFinite(form.serviceRadiusKm) ? form.serviceRadiusKm : 0}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                // Clamp to [0, 500]. Blank input → 0 ("will travel anywhere").
+                const clamped = Number.isNaN(n) ? 0 : Math.min(500, Math.max(0, n));
+                setForm({ ...form, serviceRadiusKm: clamped });
+              }}
+              className="max-w-[180px]"
+              aria-describedby="service-radius-help"
+            />
+            <p id="service-radius-help" className="text-xs text-muted-foreground">
+              How far are you willing to travel for jobs? Providers within this radius will see
+              you in their &lsquo;near me&rsquo; search results. Default: 25 km. Set to 0 or leave
+              blank for &lsquo;will travel anywhere&rsquo;.
+            </p>
+            {form.serviceRadiusKm === 0 && (
+              <p className="text-xs flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                <CheckCircle2 className="size-3.5" />
+                You&rsquo;ll appear in marketplace results regardless of customer distance.
+              </p>
             )}
           </div>
         </CardContent>

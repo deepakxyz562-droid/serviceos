@@ -35,6 +35,10 @@ import {
   type LocalBusinessHours,
 } from '@/lib/seo/schemas'
 import {
+  mapIndustryToPluralSlug,
+  resolveIndustryFromAnySlug,
+} from '@/lib/seo/plural-industry-slugs'
+import {
   getPublicBusinessByUrl,
   getPublicServices,
   getPublicReviews,
@@ -122,6 +126,30 @@ export default async function PublicBusinessHubPage({
   params: Promise<{ companySlug: string; city: string; slug: string }>
 }) {
   const { companySlug: industry, city, slug } = await params
+
+  // ── Singular → Plural canonical redirect ───────────────────────────────
+  // The canonical URL scheme is now /{pluralIndustry}/{city}/{slug} (e.g.
+  // /plumbers/london/abc-plumbing). Legacy singular URLs (e.g.
+  // /plumber/london/abc-plumbing) are 301-redirected to the plural form so
+  // link equity consolidates onto a single canonical URL per business.
+  //
+  // We try pluralSlugToIndustry first (the canonical form). If that fails we
+  // try singularSlugToIndustry (the legacy form) — when a singular slug is
+  // detected we permanentRedirect() to the plural URL and never reach the
+  // rest of the page. Unknown industry slugs fall through to the existing
+  // lookup-by-slug path below (the existing getPublicBusinessByUrl redirect
+  // logic handles canonicalization for those).
+  //
+  // NOTE: permanentRedirect() throws a NEXT_REDIRECT error internally — must
+  // NOT be wrapped in try/catch.
+  const resolvedIndustryId = resolveIndustryFromAnySlug(industry)
+  if (resolvedIndustryId) {
+    const pluralSlug = mapIndustryToPluralSlug(resolvedIndustryId)
+    if (pluralSlug && industry !== pluralSlug) {
+      permanentRedirect(`/${pluralSlug}/${city}/${slug}`)
+    }
+  }
+
   const { business, needsRedirect, canonicalUrl } = await getPublicBusinessByUrl(industry, city, slug)
 
   // 301 redirect to canonical URL when segments don't match the DB.
@@ -285,13 +313,19 @@ export default async function PublicBusinessHubPage({
   //
   // Home → /marketplace (NOT /): this page is part of the marketplace
   // surface, so "Home" should land the user on the marketplace browse page,
-  // not the marketing landing page. Industry and City also point to
-  // /marketplace — no per-industry / per-city browse page exists yet, so we
-  // funnel both back to the main browse grid (where the user can refine).
+  // not the marketing landing page.
+  //
+  // Industry and City now link to the new plural browse routes:
+  //   • Industry → /{pluralIndustry}            (e.g. /plumbers)
+  //   • City     → /{pluralIndustry}/{citySlug} (e.g. /plumbers/london)
+  // Both routes are SEO-indexable + render a filtered marketplace grid.
+  const pluralIndustrySlug = mapIndustryToPluralSlug(business.industry)
+  const industryBrowseUrl = `/${pluralIndustrySlug}`
+  const cityBrowseUrl = `/${pluralIndustrySlug}/${business.cityUrlSlug}`
   const breadcrumbItems = [
     { name: 'Home', url: '/marketplace' },
-    { name: business.industry || 'Service', url: '/marketplace' },
-    { name: business.city || 'Area', url: '/marketplace' },
+    { name: business.industry || 'Service', url: industryBrowseUrl },
+    { name: business.city || 'Area', url: cityBrowseUrl },
     { name: business.name, url: business.canonicalUrl },
   ]
 

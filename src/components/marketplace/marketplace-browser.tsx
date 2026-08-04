@@ -41,6 +41,7 @@ import { useMarketplaceSearch, type MarketplaceSortKey } from './use-marketplace
 import type { ProviderListItem } from './types';
 import { getIndustry, VERTICALS } from '@/lib/industry-catalog';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
+import { rankProviders, haversineKm } from '@/lib/marketplace-ranking';
 import { cn } from '@/lib/utils';
 
 interface MarketplaceBrowserProps {
@@ -131,6 +132,12 @@ export function MarketplaceBrowser({
   // Sort now lives in the shared Zustand store so the breadcrumb Sort
   // dropdown (rendered by the server page) and this grid stay in sync.
   const sort = useMarketplaceSearch((s) => s.sort);
+  // User location (GPS / IP / manual) drives the 'recommended' composite
+  // ranking (40/30/20/10 distance/rating/verified/featured) and the 'distance'
+  // pure-Haversine sort. null = no location → 'recommended' falls back to the
+  // 50/33/17 (rating/verified/featured) split; 'distance' is disabled in the
+  // dropdown.
+  const userLocation = useMarketplaceSearch((s) => s.userLocation);
   // Trust filters (sidebar) — instant client-side filtering
   const trustFullyVerified = useMarketplaceSearch((s) => s.trustFullyVerified);
   const trustRatingHigh = useMarketplaceSearch((s) => s.trustRatingHigh);
@@ -282,49 +289,107 @@ export function MarketplaceBrowser({
     });
 
     // Sort
-    list = list.slice().sort((a, b) => {
-      // Featured cards ALWAYS sort first, regardless of the selected sort key.
-      // This is the OLX-style "premium listings at the top" behaviour.
-      if (!!a.featured !== !!b.featured) return a.featured ? -1 : 1;
-
-      switch (sort) {
-        case 'reviews':
-          return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
-        case 'response': {
-          // Fastest response first (lower minutes = faster). Nulls sort last.
-          const aResp = a.responseTimeMins ?? 9999;
-          const bResp = b.responseTimeMins ?? 9999;
-          if (aResp !== bResp) return aResp - bResp;
-          return (b.rating ?? 0) - (a.rating ?? 0);
-        }
-        case 'name':
-          return (a.name ?? '').localeCompare(b.name ?? '');
-        case 'verified': {
-          // Fully-verified (all 4 gates) first, then by rating
-          const aScore =
-            (a.identityVerified ? 1 : 0) +
-            (a.businessVerified ? 1 : 0) +
-            (a.insuranceVerified ? 1 : 0) +
-            (a.stripeConnected ? 1 : 0);
-          const bScore =
-            (b.identityVerified ? 1 : 0) +
-            (b.businessVerified ? 1 : 0) +
-            (b.insuranceVerified ? 1 : 0) +
-            (b.stripeConnected ? 1 : 0);
-          if (bScore !== aScore) return bScore - aScore;
-          return (b.rating ?? 0) - (a.rating ?? 0);
-        }
-        case 'rating':
-        default:
-          // Rating, then reviewCount (featured already sorted above)
-          if ((b.rating ?? 0) !== (a.rating ?? 0))
-            return (b.rating ?? 0) - (a.rating ?? 0);
-          return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
+    //
+    // Two location-aware sorts delegate to src/lib/marketplace-ranking.ts:
+    //   • 'recommended' — composite 40% distance / 30% rating / 20% verified /
+    //     10% featured (FEATURED cards always first, then non-featured, each
+    //     group sorted by composite score). When no userLocation is available
+    //     the ranking lib redistributes the distance weight (50/33/17 split).
+    //     When lowAccuracy (IP-derived), the distance weight is halved.
+    //   • 'distance' — pure Haversine ascending (FEATURED cards still first).
+    //     Requires userLocation; falls back to 'recommended' ranking if the
+    //     location got cleared while this sort was active.
+    // The legacy single-key sorts (rating / reviews / response / name /
+    // verified) keep their existing featured-first behavior unchanged.
+    if ((sort === 'recommended' || sort === 'distance') && userLocation) {
+      if (sort === 'distance') {
+        // Pure Haversine ascending — FEATURED cards still dominate the top
+        // group, then non-featured, each sorted by distance asc.
+        const featured = list.filter((p) => p.featured);
+        const nonFeatured = list.filter((p) => !p.featured);
+        const sortByDistance = (arr: typeof list) =>
+          arr.slice().sort((a, b) => {
+            const da =
+              haversineKm(userLocation.lat, userLocation.lng, a.latitude, a.longitude) ?? 99999;
+            const db =
+              haversineKm(userLocation.lat, userLocation.lng, b.latitude, b.longitude) ?? 99999;
+            return da - db;
+          });
+        list = [...sortByDistance(featured), ...sortByDistance(nonFeatured)];
+      } else {
+        // 'recommended' with a user location → composite 40/30/20/10 ranking.
+        // rankProviders already handles FEATURED-first + serviceRadiusKm
+        // filtering + tie-break by rating then reviewCount, and augments each
+        // item with `distanceKm` + `_rankScore` for display/debugging.
+        list = rankProviders(
+          list.map((p) => ({
+            ...p,
+            featured: !!p.featured,
+            // ProviderListItem has latitude/longitude via the augmented shape
+            // from the API (added in the providers route when lat/lng query
+            // params are present). They may be undefined for providers with no
+            // geocoded address — scoreProvider treats that as distanceScore 0.
+          })),
+          {
+            userLat: userLocation.lat,
+            userLng: userLocation.lng,
+            lowAccuracy: userLocation.lowAccuracy,
+          },
+        ) as typeof list;
       }
-    });
+    } else if (sort === 'recommended' || sort === 'distance') {
+      // No userLocation — 'recommended' (and 'distance' as a defensive
+      // fallback when location was cleared mid-session) both use the
+      // rankProviders no-location path (50/33/17 rating/verified/featured).
+      list = rankProviders(
+        list.map((p) => ({ ...p, featured: !!p.featured })),
+        { userLat: null, userLng: null },
+      ) as typeof list;
+    } else {
+      list = list.slice().sort((a, b) => {
+        // Featured cards ALWAYS sort first, regardless of the selected sort key.
+        // This is the OLX-style "premium listings at the top" behaviour.
+        if (!!a.featured !== !!b.featured) return a.featured ? -1 : 1;
+
+        switch (sort) {
+          case 'reviews':
+            return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
+          case 'response': {
+            // Fastest response first (lower minutes = faster). Nulls sort last.
+            const aResp = a.responseTimeMins ?? 9999;
+            const bResp = b.responseTimeMins ?? 9999;
+            if (aResp !== bResp) return aResp - bResp;
+            return (b.rating ?? 0) - (a.rating ?? 0);
+          }
+          case 'name':
+            return (a.name ?? '').localeCompare(b.name ?? '');
+          case 'verified': {
+            // Fully-verified (all 4 gates) first, then by rating
+            const aScore =
+              (a.identityVerified ? 1 : 0) +
+              (a.businessVerified ? 1 : 0) +
+              (a.insuranceVerified ? 1 : 0) +
+              (a.stripeConnected ? 1 : 0);
+            const bScore =
+              (b.identityVerified ? 1 : 0) +
+              (b.businessVerified ? 1 : 0) +
+              (b.insuranceVerified ? 1 : 0) +
+              (b.stripeConnected ? 1 : 0);
+            if (bScore !== aScore) return bScore - aScore;
+            return (b.rating ?? 0) - (a.rating ?? 0);
+          }
+          case 'rating':
+          default:
+            // Rating, then reviewCount (featured already sorted above)
+            if ((b.rating ?? 0) !== (a.rating ?? 0))
+              return (b.rating ?? 0) - (a.rating ?? 0);
+            return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
+        }
+      });
+    }
 
     return list;
-  }, [providers, searchQuery, cityFilter, verticalFilter, industryFilter, sort, trustFullyVerified, trustRatingHigh, trustEmergency]);
+  }, [providers, searchQuery, cityFilter, verticalFilter, industryFilter, sort, userLocation, trustFullyVerified, trustRatingHigh, trustEmergency]);
 
   const visible = filtered.slice(0, visibleCount);
   const hasMore = visibleCount < filtered.length;

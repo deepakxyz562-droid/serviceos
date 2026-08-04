@@ -44,7 +44,34 @@
 import { create } from 'zustand';
 
 /** Sort keys kept in sync with MarketplaceBrowser.SORTS. */
-export type MarketplaceSortKey = 'rating' | 'reviews' | 'response' | 'name' | 'verified';
+export type MarketplaceSortKey =
+  | 'recommended'
+  | 'distance'
+  | 'rating'
+  | 'reviews'
+  | 'response'
+  | 'name'
+  | 'verified';
+
+/**
+ * Shared user-location state for the marketplace.
+ *
+ * This is set by the "Use my location" button in MarketplaceHeroSearch (GPS /
+ * reverse-geocoded city) and consumed by MarketplaceBrowser to drive the
+ * 'recommended' (composite ranking) and 'distance' (pure Haversine) sorts.
+ *
+ * `lowAccuracy` is true when the location came from an IP-geolocation lookup
+ * (vs. GPS or manual entry) — the marketplace-ranking lib penalizes the
+ * distance weight in that case so a far-but-high-rated provider can still
+ * outrank a close-but-low-rated one.
+ */
+export interface MarketplaceUserLocation {
+  lat: number;
+  lng: number;
+  city: string | null;
+  source: 'gps' | 'ip' | 'manual';
+  lowAccuracy: boolean;
+}
 
 interface MarketplaceSearchState {
   /** Raw text inside the keyword search <input> (instant, not debounced). */
@@ -65,6 +92,12 @@ interface MarketplaceSearchState {
   trustRatingHigh: boolean;
   /** Trust filter: only show providers offering 24/7 emergency dispatch. */
   trustEmergency: boolean;
+  /**
+   * User location for distance-based sorts ('recommended' composite ranking
+   * and 'distance' pure Haversine). null = no location context (falls back
+   * to the no-location 50/33/17 ranking split).
+   */
+  userLocation: MarketplaceUserLocation | null;
   setSearchInput: (v: string) => void;
   setCityInput: (v: string) => void;
   setSort: (v: MarketplaceSortKey) => void;
@@ -78,15 +111,20 @@ interface MarketplaceSearchState {
   toggleTrustFullyVerified: () => void;
   toggleTrustRatingHigh: () => void;
   toggleTrustEmergency: () => void;
+  /** Set or clear the user location used by the 'recommended' and 'distance' sorts. */
+  setUserLocation: (loc: MarketplaceUserLocation | null) => void;
 }
 
 export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
   searchInput: '',
   cityInput: '',
-  // Default sort = 'rating' (a.k.a. "Top rated" — the first option in the
-  // SORTS array in MarketplaceBrowser). Kept here so the breadcrumb Sort
-  // dropdown and the grid start in sync on first paint.
-  sort: 'rating',
+  // Default sort = 'recommended' (composite 40/30/20/10 ranking from
+  // src/lib/marketplace-ranking.ts — featured-first, then by distance /
+  // rating / verified / featured). When no user location is available the
+  // ranking lib falls back to a 50/33/17 (rating/verified/featured) split.
+  // Kept here so the breadcrumb Sort dropdown and the grid start in sync on
+  // first paint.
+  sort: 'recommended',
   verticalFilter: null,
   industryFilter: null,
   // No verticals expanded by default — the active vertical auto-expands via
@@ -95,6 +133,10 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
   trustFullyVerified: false,
   trustRatingHigh: false,
   trustEmergency: false,
+  // No user location until the user clicks "Use my location" or selects
+  // the "Near Me" mobile tab. When null, 'recommended' falls back to the
+  // no-location ranking split and 'distance' is disabled in the dropdown.
+  userLocation: null,
   setSearchInput: (v) => set({ searchInput: v }),
   setCityInput: (v) => set({ cityInput: v }),
   setSort: (v) => set({ sort: v }),
@@ -118,4 +160,5 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
   toggleTrustFullyVerified: () => set((s) => ({ trustFullyVerified: !s.trustFullyVerified })),
   toggleTrustRatingHigh: () => set((s) => ({ trustRatingHigh: !s.trustRatingHigh })),
   toggleTrustEmergency: () => set((s) => ({ trustEmergency: !s.trustEmergency })),
+  setUserLocation: (loc) => set({ userLocation: loc }),
 }));
