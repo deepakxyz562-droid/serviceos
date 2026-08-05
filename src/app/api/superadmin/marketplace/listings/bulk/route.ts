@@ -204,13 +204,127 @@ export async function DELETE(request: NextRequest) {
       }
     } else {
       // Hard delete — permanently remove rows.
+      //
+      // Tenant has 68+ child tables (User, Service, Review, Lead, Invoice,
+      // ProviderCertification, ProviderPortfolio, FeaturedListing, etc.).
+      // A direct deleteMany on Tenant fails with a foreign-key constraint
+      // violation (Postgres error 23503) because child rows still reference
+      // the tenant IDs.
+      //
+      // Fix: cascade-delete the top child tables FIRST (in parallel), then
+      // delete the tenants. This covers 99% of cases. Tables are listed in
+      // order of likelihood to have rows.
+      const childTables = [
+        'user',
+        'service',
+        'review',
+        'providerCertification',
+        'providerPortfolio',
+        'featuredListing',
+        'lead',
+        'invoice',
+        'quote',
+        'conversation',
+        'notification',
+        'form',
+        'workspace',
+        'subscription',
+        'subscriptionPayment',
+        'billingEvent',
+        'aiCredit',
+        'usageCharge',
+        'payout',
+        'claimRequest',
+        'jobRequest',
+        'membership',
+        'promotion',
+        'loyaltyPoint',
+        'referral',
+        'assessment',
+        'qualityInspection',
+        'branch',
+        'serviceRegion',
+        'taxRule',
+        'numberSequence',
+        'customField',
+        'approvalFlow',
+        'commissionRule',
+        'paymentGatewayConfig',
+        'inventoryItem',
+        'warehouse',
+        'supplier',
+        'purchaseOrder',
+        'stockTransfer',
+        'stockTransaction',
+        'servicePlan',
+        'servicePlanSubscription',
+        'warranty',
+        'warrantyClaim',
+        'recurringInvoice',
+        'addonSubscription',
+        'recurringJobSchedule',
+        'scheduledMessage',
+        'scheduledExecution',
+        'emergencyDispatch',
+        'publicChatSession',
+        'aiAgent',
+        'aiPhoneNumber',
+        'aiCall',
+        'marketplaceTransaction',
+        'metaLead',
+        'googleAdsLead',
+        'pricingRule',
+        'notificationLog',
+        'workflowAutomation',
+        'workflow',
+        'menuItemConfig',
+        'featureFlag',
+        'invitation',
+        'holidayCalendar',
+        'hubIntegrationConnection',
+        'credential',
+        'execution',
+        'executionNodeData',
+        'webhookRegistration',
+        'auditLog',
+        'apiKey',
+        'variable',
+        'folder',
+        'template',
+        'formResponse',
+        'workflowVersion',
+      ] as const;
+
       try {
+        // Delete child records in parallel batches of 10
+        for (let i = 0; i < childTables.length; i += 10) {
+          const batch = childTables.slice(i, i + 10);
+          await Promise.all(
+            batch.map(async (table) => {
+              try {
+                // Use a type assertion to bypass Prisma's strict model typing
+                // — these are all valid Prisma models, but TS doesn't know
+                // that the string maps to a model.
+                await (db as unknown as Record<string, {
+                  deleteMany: (args: { where: { tenantId: { in: string[] } } }) => Promise<{ count: number }>;
+                }>)[table]?.deleteMany({
+                  where: { tenantId: { in: ids } },
+                });
+              } catch {
+                // Table may not exist in this schema version, or may not
+                // have a tenantId column — safe to skip.
+              }
+            }),
+          );
+        }
+
+        // Now safe to delete tenants
         const res = await db.tenant.deleteMany({
           where: { id: { in: ids } },
         });
         deleted = res.count;
       } catch (err) {
-        console.error('[bulk DELETE hard] deleteMany failed:', err);
+        console.error('[bulk DELETE hard] cascade failed:', err);
         throw err;
       }
     }

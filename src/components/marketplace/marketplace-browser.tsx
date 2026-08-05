@@ -35,6 +35,7 @@ import {
   Star,
   ShieldCheck,
   Loader2,
+  Globe,
 } from 'lucide-react';
 import { ProviderCard } from './provider-card';
 import { useMarketplaceSearch, type MarketplaceSortKey } from './use-marketplace-search';
@@ -54,6 +55,10 @@ interface MarketplaceBrowserProps {
     city: string | null;
     search: string | null;
   };
+  /** ISO country code detected from GeoIP (or ?country= override).
+   *  Null = no country filter (show all). Used to show a "Showing
+   *  providers in Australia" banner. */
+  detectedCountry?: string | null;
 }
 
 // SortKey is now shared with the breadcrumb Sort dropdown via the
@@ -67,6 +72,7 @@ const PAGE_SIZE = 12;
 export function MarketplaceBrowser({
   providers,
   initialFilters,
+  detectedCountry,
 }: MarketplaceBrowserProps) {
   // Concern #4: Cache the provider list to IndexedDB for offline browsing.
   // We use a dynamic import inside useEffect so Dexie (IndexedDB) is only
@@ -679,6 +685,25 @@ export function MarketplaceBrowser({
 
   return (
     <div className="pl-4 pr-3 sm:pr-3 lg:pr-3 py-4">
+      {/* ── Country banner ──────────────────────────────────────────────── */}
+      {/* When GeoIP detects the visitor's country (or ?country= is set),
+          show a banner so the user knows the results are country-filtered.
+          Includes a "Browse all countries" link to clear the filter. */}
+      {detectedCountry ? (
+        <div className="mb-4 flex items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-2 text-xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+          <span className="flex items-center gap-1.5">
+            <Globe className="h-3.5 w-3.5" />
+            Showing providers in <strong className="font-semibold">{detectedCountry}</strong>
+          </span>
+          <a
+            href="/marketplace?country="
+            className="underline hover:no-underline"
+          >
+            Browse all countries
+          </a>
+        </div>
+      ) : null}
+
       {/* The search bar now lives in the hero (MarketplaceHeroSearch) and
           shares its input state via the useMarketplaceSearch Zustand store.
           Typing in the hero instantly filters the grid below — no reload,

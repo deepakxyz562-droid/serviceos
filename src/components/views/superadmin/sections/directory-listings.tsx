@@ -50,62 +50,17 @@ import {
 } from '@/components/ui/table';
 import { SectionHeader } from '@/components/views/superadmin/_shared';
 import { INDUSTRY_CATALOG, getIndustry } from '@/lib/industry-catalog';
+import { getAllCountryOptions, getCitiesForCountry } from '@/lib/marketplace-cities';
 import { ClaimReview } from '@/components/views/superadmin/sections/claim-review';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-// All 43 European countries (matches EUROPEAN_COUNTRY_CODES in
-// src/lib/featured-location.ts and prisma/seed-directory.ts). Replacing the
-// old 8-country list (AU/US/GB/IN/CA/NZ/AE/SG) lets the superadmin seed
-// marketplace providers across the full European footprint that the
-// featured-location cron + directory pages operate on.
-const COUNTRIES = [
-  // EU-27
-  { code: 'AT', label: 'Austria' },
-  { code: 'BE', label: 'Belgium' },
-  { code: 'BG', label: 'Bulgaria' },
-  { code: 'HR', label: 'Croatia' },
-  { code: 'CY', label: 'Cyprus' },
-  { code: 'CZ', label: 'Czechia' },
-  { code: 'DK', label: 'Denmark' },
-  { code: 'EE', label: 'Estonia' },
-  { code: 'FI', label: 'Finland' },
-  { code: 'FR', label: 'France' },
-  { code: 'DE', label: 'Germany' },
-  { code: 'GR', label: 'Greece' },
-  { code: 'HU', label: 'Hungary' },
-  { code: 'IE', label: 'Ireland' },
-  { code: 'IT', label: 'Italy' },
-  { code: 'LV', label: 'Latvia' },
-  { code: 'LT', label: 'Lithuania' },
-  { code: 'LU', label: 'Luxembourg' },
-  { code: 'MT', label: 'Malta' },
-  { code: 'NL', label: 'Netherlands' },
-  { code: 'PL', label: 'Poland' },
-  { code: 'PT', label: 'Portugal' },
-  { code: 'RO', label: 'Romania' },
-  { code: 'SK', label: 'Slovakia' },
-  { code: 'SI', label: 'Slovenia' },
-  { code: 'ES', label: 'Spain' },
-  { code: 'SE', label: 'Sweden' },
-  // Non-EU European
-  { code: 'GB', label: 'United Kingdom' },
-  { code: 'CH', label: 'Switzerland' },
-  { code: 'NO', label: 'Norway' },
-  { code: 'IS', label: 'Iceland' },
-  { code: 'LI', label: 'Liechtenstein' },
-  { code: 'TR', label: 'Turkey' },
-  { code: 'UA', label: 'Ukraine' },
-  { code: 'RU', label: 'Russia' },
-  { code: 'BY', label: 'Belarus' },
-  { code: 'MD', label: 'Moldova' },
-  { code: 'MK', label: 'North Macedonia' },
-  { code: 'AL', label: 'Albania' },
-  { code: 'RS', label: 'Serbia' },
-  { code: 'BA', label: 'Bosnia and Herzegovina' },
-  { code: 'ME', label: 'Montenegro' },
-  { code: 'XK', label: 'Kosovo' },
-];
+// All countries: 7 global (US/AU/CA/NZ/IN/AE/SG) + 43 European.
+// Sourced from src/lib/marketplace-cities.ts so the superadmin can seed
+// and manage listings across the full global footprint. Countries with a
+// full city catalogue (18 countries) power the cascading city dropdown —
+// the admin picks a country first, then sees only that country's cities.
+const COUNTRIES = getAllCountryOptions();
 
 const TIERS = [
   { value: 'free', label: 'Free' },
@@ -566,6 +521,7 @@ function ManageTab() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [tier, setTier] = useState('all');
+  const [countryFilter, setCountryFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
 
   // Data
@@ -756,6 +712,7 @@ function ManageTab() {
       if (search) params.set('search', search);
       if (category !== 'all') params.set('category', category);
       if (tier !== 'all') params.set('tier', tier);
+      if (countryFilter !== 'all') params.set('country', countryFilter);
       if (cityFilter !== 'all') params.set('city', cityFilter);
 
       const res = await fetch(`/api/superadmin/marketplace/listings?${params.toString()}`);
@@ -771,7 +728,7 @@ function ManageTab() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, category, tier, cityFilter]);
+  }, [page, search, category, tier, countryFilter, cityFilter]);
 
   useEffect(() => {
     void fetchListings();
@@ -780,13 +737,30 @@ function ManageTab() {
   // Reset selection when page/filter changes
   useEffect(() => {
     setSelected(new Set());
-  }, [page, search, category, tier, cityFilter]);
+  }, [page, search, category, tier, countryFilter, cityFilter]);
 
-  const distinctCities = useMemo(() => {
+  // When country changes, reset city filter (the old city may not exist
+  // in the new country's city list)
+  useEffect(() => {
+    setCityFilter('all');
+  }, [countryFilter]);
+
+  // Cities for the cascading dropdown: if a country is selected and has
+  // a city catalogue, show those cities. Otherwise, show whatever cities
+  // exist in the current page of data (fallback for countries without a
+  // full catalogue).
+  const availableCities = useMemo(() => {
+    if (countryFilter !== 'all') {
+      const catalogueCities = getCitiesForCountry(countryFilter);
+      if (catalogueCities.length > 0) {
+        return catalogueCities.map((c) => c.city);
+      }
+    }
+    // Fallback: cities from the current page of data
     const set = new Set<string>();
     items.forEach((it) => { if (it.city) set.add(it.city); });
     return Array.from(set).sort();
-  }, [items]);
+  }, [countryFilter, items]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const allOnPageSelected = items.length > 0 && items.every((it) => selected.has(it.id));
@@ -895,8 +869,17 @@ function ManageTab() {
       if (!res.ok || !data.success) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
-      const verb = deleteMode === 'hard' ? 'permanently deleted' : 'soft-deleted';
-      toast.success(`${data.deleted} listing${data.deleted === 1 ? '' : 's'} ${verb}`);
+      if (data.deleted === 0) {
+        toast.warning('0 listings deleted', {
+          description:
+            deleteMode === 'hard'
+              ? 'No rows were removed. Child records may still be blocking deletion — try soft delete first, then hard delete.'
+              : 'No rows were updated. The selected listings may have already been soft-deleted.',
+        });
+      } else {
+        const verb = deleteMode === 'hard' ? 'permanently deleted' : 'soft-deleted';
+        toast.success(`${data.deleted} listing${data.deleted === 1 ? '' : 's'} ${verb}`);
+      }
       setDeleteOpen(false);
       setSelected(new Set());
       await fetchListings();
@@ -956,14 +939,35 @@ function ManageTab() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">City</Label>
-              <Select value={cityFilter} onValueChange={(v) => { setCityFilter(v); setPage(1); }}>
+              <Label className="text-xs text-muted-foreground">Country</Label>
+              <Select
+                value={countryFilter}
+                onValueChange={(v) => { setCountryFilter(v); setPage(1); }}
+              >
                 <SelectTrigger className="w-[160px]">
                   <SelectValue placeholder="All" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px]">
+                  <SelectItem value="all">All countries</SelectItem>
+                  {COUNTRIES.map((c) => (
+                    <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">City</Label>
+              <Select
+                value={cityFilter}
+                onValueChange={(v) => { setCityFilter(v); setPage(1); }}
+                disabled={countryFilter === 'all' && availableCities.length === 0}
+              >
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
                   <SelectItem value="all">All cities</SelectItem>
-                  {distinctCities.map((c) => (
+                  {availableCities.map((c) => (
                     <SelectItem key={c} value={c}>{c}</SelectItem>
                   ))}
                 </SelectContent>

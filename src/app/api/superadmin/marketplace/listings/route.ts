@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
     const category = (searchParams.get('category') || '').trim();
     const tier = (searchParams.get('tier') || '').trim();
     const city = (searchParams.get('city') || '').trim();
+    const country = (searchParams.get('country') || '').trim();
 
     // ── Build where clause ───────────────────────────────────────────────
     // Include tenants where listingTier is NULL (treat as 'none' = hidden) OR
@@ -71,6 +72,12 @@ export async function GET(request: NextRequest) {
       where.AND = [
         ...((where.AND as unknown[]) || []),
         { city },
+      ];
+    }
+    if (country && country !== 'all') {
+      where.AND = [
+        ...((where.AND as unknown[]) || []),
+        { country },
       ];
     }
 

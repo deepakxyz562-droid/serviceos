@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { unstable_cache } from 'next/cache';
+import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import { VERTICALS, getIndustry } from '@/lib/industry-catalog';
 import { MarketplaceBrowser } from '@/components/marketplace/marketplace-browser';
@@ -51,30 +52,25 @@ export const dynamic = 'force-dynamic';
  */
 
 // A5: Wrap the expensive DB query in `unstable_cache` with a 30s TTL.
-// The cache key is a constant (the query has no per-request params — it
-// always fetches all opted-in, non-suspended tenants). This means every
-// marketplace browse request within a 30s window reuses the same DB result,
-// cutting DB load from N queries/request to 1 query/30s.
+// The cache key includes the country code so each country has its own
+// 30s cache entry — when a user in AU visits, the DB query filters to
+// country=AU and caches that result; a US visitor gets a separate cache
+// entry for country=US.
 //
 // We use `unstable_cache` (not `export const revalidate`) because the PAGE
 // must stay force-dynamic (SuperAdmin changes need to appear immediately in
 // the HTML), but the QUERY can be cached. unstable_cache gives us this
 // granular control — the page re-renders on every request, but the query
 // result is reused for 30s.
-//
-// The `tags` array enables on-demand invalidation via `revalidateTag()`.
-// When SuperAdmin changes seed/featured/trial data, a `revalidateTag('marketplace-providers')`
-// call (not yet wired up) would bust this cache immediately. For now, the
-// 30s TTL is the fallback.
 const fetchProvidersCached = unstable_cache(
-  async (): Promise<ProviderListItem[]> => {
-    return fetchProvidersUncached();
+  async (countryCode: string | null): Promise<ProviderListItem[]> => {
+    return fetchProvidersUncached(countryCode);
   },
   ['marketplace-providers'],
   { revalidate: 30 }, // 30 seconds
 );
 
-async function fetchProvidersUncached(): Promise<ProviderListItem[]> {
+async function fetchProvidersUncached(countryCode: string | null = null): Promise<ProviderListItem[]> {
   // ── 3-gate eligibility ──────────────────────────────────────────────────
   // A provider appears on the marketplace browse grid when ALL three are true:
   //   1. publicProfileEnabled  — has a public Business Hub page
@@ -90,6 +86,11 @@ async function fetchProvidersUncached(): Promise<ProviderListItem[]> {
       publicProfileEnabled: true,
       marketplaceOptIn: true,
       suspendedAt: null,
+      // Country filter: when a countryCode is provided (from GeoIP or
+      // ?country= URL param), only providers in that country are returned.
+      // This is the key fix for the "selected Australia but seeing US data"
+      // issue — the proxy sets x-vercel-ip-country=AU and we filter to AU.
+      ...(countryCode ? { country: countryCode } : {}),
     },
     select: {
       id: true,
@@ -229,6 +230,7 @@ export async function generateMetadata({
     industry?: string;
     city?: string;
     search?: string;
+    country?: string;
   }>;
 }): Promise<Metadata> {
   const params = await searchParams;
@@ -299,18 +301,45 @@ export default async function MarketplaceBrowsePage({
     industry?: string;
     city?: string;
     search?: string;
+    country?: string;
   }>;
 }) {
   const params = await searchParams;
   const verticalFilter = params.vertical ?? null;
   const industryFilter = params.industry ?? null;
 
+  // ── Country detection ──────────────────────────────────────────────────
+  // Priority: ?country= URL param (manual override) > x-vercel-ip-country
+  // header (Vercel GeoIP, auto-set by edge network) > cf-ipcountry (Cloudflare
+  // proxy) > null (show all countries — localhost/dev fallback).
+  //
+  // When the user changes country "through a proxy", the proxy routes their
+  // traffic through a server in the target country. Vercel's edge network
+  // sees the proxy's IP and sets x-vercel-ip-country to that country's ISO
+  // code (e.g. "AU"). We use that to filter the marketplace.
+  //
+  // No Vercel configuration is needed — the GeoIP headers are automatically
+  // injected on ALL Vercel deployments (including Hobby tier). On localhost,
+  // no GeoIP headers are present, so we fall back to showing all countries.
+  const headerList = await headers();
+  const geoCountry =
+    params.country?.toUpperCase() ||
+    headerList.get('x-vercel-ip-country') ||
+    headerList.get('cf-ipcountry') ||
+    null;
+  // Normalize: strip whitespace, validate it's a 2-letter code
+  const detectedCountry = geoCountry
+    ? geoCountry.trim().toUpperCase().substring(0, 2)
+    : null;
+
   let providers: ProviderListItem[] = [];
   let dbError = false;
   try {
     // A5: use the unstable_cache-wrapped version (30s TTL).
     // On a cache hit, this returns instantly without hitting the DB.
-    providers = await fetchProvidersCached();
+    // The cache key includes the country code so each country gets its
+    // own 30s cache entry.
+    providers = await fetchProvidersCached(detectedCountry);
   } catch (err) {
     console.error('[marketplace/page] failed to fetch providers:', err);
     dbError = true;
@@ -567,6 +596,7 @@ export default async function MarketplaceBrowsePage({
             ) : (
               <MarketplaceBrowser
                 providers={providers}
+                detectedCountry={detectedCountry}
                 initialFilters={{
                   vertical: verticalFilter,
                   industry: industryFilter,
