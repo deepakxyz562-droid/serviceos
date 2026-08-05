@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import { unstable_cache } from 'next/cache';
 import { headers } from 'next/headers';
-import { db } from '@/lib/db';
-import { VERTICALS, getIndustry } from '@/lib/industry-catalog';
+import { INDUSTRY_CATALOG, VERTICALS, getIndustry } from '@/lib/industry-catalog';
 import { MarketplaceBrowser } from '@/components/marketplace/marketplace-browser';
 import { MarketplaceHeader } from '@/components/marketplace/marketplace-header';
 import { MarketplaceSidebar } from '@/components/marketplace/marketplace-sidebar';
@@ -11,9 +10,13 @@ import { MarketplaceMobileNav } from '@/components/marketplace/marketplace-mobil
 import type { ProviderListItem } from '@/components/marketplace/types';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import {
-  computeCardType,
-  fetchFeaturedListingsMap,
-} from '@/lib/marketplace-featured';
+  MARKETPLACE_PAGE_SIZE,
+  fetchFeaturedTenantIds,
+  fetchProviderPage,
+  mapTenantToProviderListItem,
+  type ProviderFilterOptions,
+} from '@/lib/marketplace-pagination';
+import { fetchFeaturedListingsMap } from '@/lib/marketplace-featured';
 import {
   Wrench,
   Search,
@@ -62,162 +65,66 @@ export const dynamic = 'force-dynamic';
 // the HTML), but the QUERY can be cached. unstable_cache gives us this
 // granular control — the page re-renders on every request, but the query
 // result is reused for 30s.
+/**
+ * The SSR fetch result — page 1 items + the cursor for page 2 + total count.
+ * Passed to MarketplaceBrowser so the client can seed its React Query cache
+ * without re-fetching page 1.
+ */
+interface SsrProviderPage {
+  items: ProviderListItem[];
+  nextCursor: string | null;
+  total: number;
+}
+
 const fetchProvidersCached = unstable_cache(
-  async (countryCode: string | null): Promise<ProviderListItem[]> => {
+  async (countryCode: string | null): Promise<SsrProviderPage> => {
     return fetchProvidersUncached(countryCode);
   },
-  ['marketplace-providers'],
+  ['marketplace-providers-page1'],
   { revalidate: 30 }, // 30 seconds
 );
 
-async function fetchProvidersUncached(countryCode: string | null = null): Promise<ProviderListItem[]> {
-  // ── 3-gate eligibility ──────────────────────────────────────────────────
+async function fetchProvidersUncached(countryCode: string | null = null): Promise<SsrProviderPage> {
+  // ── 3-gate eligibility + country filter ────────────────────────────────
   // A provider appears on the marketplace browse grid when ALL three are true:
   //   1. publicProfileEnabled  — has a public Business Hub page
   //   2. marketplaceOptIn      — explicitly opted into marketplace listing
-  //                              (toggle in Settings → Public Hub tab)
   //   3. suspendedAt IS null   — not suspended
-  // marketplaceOptIn is the toggle providers control from their settings. New
-  // registrations default it to true (see api/auth/register), so providers are
-  // visible by default but can opt out anytime. Verification status is SELECTed
-  // and rendered as badges on each card so users can see how verified a pro is.
-  const tenants = await db.tenant.findMany({
-    where: {
-      publicProfileEnabled: true,
-      marketplaceOptIn: true,
-      suspendedAt: null,
-      // Country filter: when a countryCode is provided (from GeoIP or
-      // ?country= URL param), only providers in that country are returned.
-      // This is the key fix for the "selected Australia but seeing US data"
-      // issue — the proxy sets x-vercel-ip-country=AU and we filter to AU.
-      ...(countryCode ? { country: countryCode } : {}),
-    },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      publicSlug: true,
-      tagline: true,
-      industry: true,
-      city: true,
-      state: true,
-      country: true,
-      currency: true,
-      rating: true,
-      reviewCount: true,
-      description: true,
-      coverImage: true,
-      pricingType: true,
-      callOutFee: true,
-      emergencyServiceAvailable: true,
-      businessCategoriesJson: true,
-      serviceAreasJson: true,
-      identityVerified: true,
-      businessVerified: true,
-      insuranceVerified: true,
-      stripeConnected: true,
-      planStatus: true,
-      plan: true,
-      claimed: true,
-      listingTier: true,
-      trialEndsAt: true,
-      phone: true,
-      googleBusinessProfileUrl: true,
-      googleBusinessVerified: true,
-      // Geolocation + service radius — REQUIRED for the client-side
-      // `rankProviders()` / `haversineKm()` distance scoring used by the
-      // 'recommended' and 'distance' sorts. Without these, every provider
-      // arrives at the client with latitude/longitude = undefined →
-      // haversineKm() returns null → distance score = 0 for all → the
-      // 'recommended' sort degrades to rating/verified/featured only and
-      // auto-detected userLocation appears to do nothing (Issue 4).
-      latitude: true,
-      longitude: true,
-      serviceRadiusKm: true,
-    },
-    orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }],
-    take: 500,
+  //
+  // PAGINATION (server-side cursor): The SSR page fetches ONLY the first page
+  // (24 items) for SEO + instant first paint. The client fetches subsequent
+  // pages via /api/marketplace/providers?cursor=... as the user scrolls. This
+  // replaces the old `take: 1000` approach which shipped the entire provider
+  // list as serialized HTML props (huge payload, expensive hydration, every
+  // keystroke re-filtered 1000 rows in JS).
+  //
+  // fetchProviderPage() handles the keyset pagination: featured-first on page
+  // 1 (capped at 8), then non-featured by (rating DESC, reviewCount DESC,
+  // id DESC). It also computes nextCursor (for page 2) + total (via COUNT).
+  const filters: ProviderFilterOptions = {
+    ...(countryCode ? { country: countryCode } : {}),
+  };
+
+  // Fetch the set of featured tenant IDs (for featured-first sorting on page 1).
+  const featuredIds = await fetchFeaturedTenantIds();
+
+  // Fetch the featured map (metadata for cardType computation). Only needed
+  // on page 1 — subsequent pages fetch non-featured items only.
+  const featuredMap = await fetchFeaturedListingsMap(Array.from(featuredIds));
+
+  const page = await fetchProviderPage({
+    filters,
+    cursor: null, // page 1
+    pageSize: MARKETPLACE_PAGE_SIZE,
+    featuredTenantIds: featuredIds,
+    mapItem: (t) => mapTenantToProviderListItem(t, featuredMap),
   });
 
-  // Fetch featured listing flags via the shared helper (single source of truth)
-  const tenantIds = tenants.map((t) => t.id);
-  const featuredMap = await fetchFeaturedListingsMap(tenantIds);
-
-  // NOTE: jobs-count per tenant would require a join through Workspace
-  // (Job has workspaceId, not tenantId). Skipping the DB query for
-  // performance — we derive a pseudo "jobs done" from reviewCount below.
-
-  return tenants.map((t) => {
-    let serviceAreas: string[] = [];
-    try {
-      const arr = JSON.parse(t.serviceAreasJson || '[]');
-      if (Array.isArray(arr)) serviceAreas = arr.slice(0, 10);
-    } catch {
-      // ignore
-    }
-    const hasFL = featuredMap.has(t.id);
-    const cardType = computeCardType(
-      {
-        claimed: t.claimed,
-        plan: t.plan,
-        planStatus: t.planStatus,
-        trialEndsAt: t.trialEndsAt,
-        listingTier: t.listingTier,
-      },
-      hasFL,
-    );
-    return {
-      id: t.id,
-      name: t.name,
-      slug: t.slug,
-      publicSlug: t.publicSlug,
-      tagline: t.tagline,
-      industry: t.industry,
-      city: t.city,
-      state: t.state,
-      country: t.country,
-      currency: t.currency,
-      rating: t.rating,
-      reviewCount: t.reviewCount,
-      description: t.description,
-      coverImage: t.coverImage,
-      pricingType: t.pricingType,
-      callOutFee: t.callOutFee,
-      emergencyServiceAvailable: t.emergencyServiceAvailable,
-      serviceAreas,
-      services: [],
-      // `featured` is set to 'featured' when the card type is featured, so the
-      // existing ProviderCard "featured" prop logic + the MarketplaceBrowser
-      // sort (featured-first) continue to work unchanged.
-      featured: cardType === 'featured' ? 'featured' : null,
-      // New: card-type + claim flags so ProviderCard can render minimal vs full
-      cardType,
-      claimed: t.claimed,
-      listingTier: t.listingTier,
-      phone: t.phone,
-      identityVerified: t.identityVerified,
-      businessVerified: t.businessVerified,
-      insuranceVerified: t.insuranceVerified,
-      stripeConnected: t.stripeConnected,
-      planStatus: t.planStatus,
-      plan: t.plan,
-      googleBusinessProfileUrl: t.googleBusinessProfileUrl,
-      googleBusinessVerified: t.googleBusinessVerified,
-      // Geolocation + service radius — consumed by client-side rankProviders()
-      // / haversineKm() for the 'recommended' + 'distance' sorts (Issue 4).
-      latitude: t.latitude,
-      longitude: t.longitude,
-      serviceRadiusKm: t.serviceRadiusKm,
-      // "Jobs done" proxy: use reviewCount * ~3 (most jobs don't get reviews).
-      // This gives a reasonable-looking number for the stats bar without a
-      // costly cross-table query.
-      jobsCount: Math.round((t.reviewCount ?? 0) * 3),
-      // Response time: we don't track this yet per tenant, so we derive a
-      // pseudo-value from reviewCount (busier providers respond faster).
-      // 0 reviews → 60m, 500+ reviews → 5m, linear in between.
-      responseTimeMins: t.reviewCount >= 500 ? 5 : Math.max(8, 60 - Math.floor((t.reviewCount ?? 0) / 10)),
-    } satisfies ProviderListItem;
-  });
+  return {
+    items: page.items as ProviderListItem[],
+    nextCursor: page.nextCursor,
+    total: page.total ?? 0,
+  };
 }
 
 // ── Dynamic per-facet metadata ─────────────────────────────────────────────
@@ -333,13 +240,24 @@ export default async function MarketplaceBrowsePage({
     : null;
 
   let providers: ProviderListItem[] = [];
+  let nextCursor: string | null = null;
+  let totalProviders = 0;
   let dbError = false;
   try {
     // A5: use the unstable_cache-wrapped version (30s TTL).
     // On a cache hit, this returns instantly without hitting the DB.
     // The cache key includes the country code so each country gets its
     // own 30s cache entry.
-    providers = await fetchProvidersCached(detectedCountry);
+    //
+    // PAGINATION: fetchProvidersCached returns only the FIRST PAGE (24 items)
+    // + nextCursor (for the client to fetch page 2) + totalProviders (for the
+    // sidebar's "Active providers" stat). The client's useMarketplaceProviders
+    // hook seeds its React Query cache with this data — NO duplicate fetch
+    // of page 1.
+    const ssrPage = await fetchProvidersCached(detectedCountry);
+    providers = ssrPage.items;
+    nextCursor = ssrPage.nextCursor;
+    totalProviders = ssrPage.total;
   } catch (err) {
     console.error('[marketplace/page] failed to fetch providers:', err);
     dbError = true;
@@ -349,32 +267,31 @@ export default async function MarketplaceBrowsePage({
   // regular providers, just with an amber "Featured" tag (OLX-style). The
   // MarketplaceBrowser client component sorts featured-first automatically.
 
-  // Build industry groups for the sidebar — 9 verticals, each with its industries
+  // Build industry groups for the sidebar — from the INDUSTRY_CATALOG (not
+  // from the loaded providers). With server-side pagination, only 24 providers
+  // are loaded on the first paint — building the sidebar from those would hide
+  // most industries. Building from the catalog ensures ALL industries are
+  // always visible in the sidebar (with count 0 if none loaded yet). The
+  // per-industry counts are computed client-side from the loaded pages.
   const verticalGroups = VERTICALS.map((v) => {
-    const industries = Array.from(
-      new Set(
-        providers
-          .filter((p) => {
-            const meta = p.industry ? getIndustry(p.industry) : undefined;
-            return meta?.vertical === v.id;
-          })
-          .map((p) => p.industry),
-      ),
-    )
-      .filter(Boolean)
-      .map((id) => {
-        const meta = id ? getIndustry(id) : undefined;
-        return { id: id as string, name: meta?.name ?? id, emoji: meta?.emoji ?? '🔧' };
-      });
+    const industries = INDUSTRY_CATALOG.filter((i) => i.vertical === v.id).map((i) => ({
+      id: i.id,
+      name: i.name,
+      emoji: i.emoji ?? '🔧',
+    }));
     return { vertical: v, industries };
   });
 
   // ── Build JSON-LD ItemList schema for SEO ───────────────────────────────
+  // Only the first 24 providers are in the SSR HTML (the rest load via API as
+  // the user scrolls). We render all 24 in the JSON-LD so search engines see
+  // a substantial sample. `numberOfItems` uses the TOTAL count (not the
+  // loaded count) so Google knows the full catalog size.
   const itemListLd = {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
     name: 'Fieseros Marketplace Providers',
-    numberOfItems: providers.length,
+    numberOfItems: totalProviders,
     itemListElement: providers.slice(0, 30).map((p, i) => {
       const slug = p.slug || p.publicSlug;
       const canonicalHref = slug
@@ -487,6 +404,7 @@ export default async function MarketplaceBrowsePage({
           {/* Sidebar — categories + trust filters + stats card (Fixed left sidebar) */}
           <MarketplaceSidebar
             providers={providers}
+            total={totalProviders}
             verticals={VERTICALS}
             activeVertical={verticalFilter}
             activeIndustry={industryFilter}
@@ -596,6 +514,8 @@ export default async function MarketplaceBrowsePage({
             ) : (
               <MarketplaceBrowser
                 providers={providers}
+                initialNextCursor={nextCursor}
+                initialTotal={totalProviders}
                 detectedCountry={detectedCountry}
                 initialFilters={{
                   vertical: verticalFilter,

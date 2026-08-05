@@ -42,7 +42,12 @@ export interface SidebarVerticalGroup {
 
 interface MarketplaceSidebarProps {
   providers: ProviderListItem[];
-  verticals: readonly Array<{ id: string; name: string; icon: string; description: string }>;
+  /** Total count of matching providers (from the SSR COUNT query). Used for
+   *  the "Active providers" stat. When the client-side hook fetches a fresh
+   *  total (after filter changes), it publishes to the store and we prefer
+   *  that over this prop. */
+  total?: number;
+  verticals: ReadonlyArray<{ id: string; name: string; icon: string; description: string }>;
   activeVertical: string | null;
   activeIndustry: string | null;
   /** Pre-computed vertical → industries groups (from the server page). */
@@ -51,6 +56,7 @@ interface MarketplaceSidebarProps {
 
 export function MarketplaceSidebar({
   providers,
+  total,
   verticals,
   activeVertical,
   activeIndustry,
@@ -78,18 +84,43 @@ export function MarketplaceSidebar({
   const currentVertical = storeVertical ?? activeVertical;
   const currentIndustry = storeIndustry ?? activeIndustry;
 
-  // Compute network stats from the full provider list
-  const totalProviders = providers.length;
-  const avgRating = totalProviders > 0
-    ? (providers.reduce((sum, p) => sum + (p.rating ?? 0), 0) / totalProviders).toFixed(2)
+  // ── Use the FILTERED provider list for counts (not the raw server list) ──
+  // MarketplaceBrowser publishes its computed filtered list to the shared
+  // store. We read it here so the sidebar counts ("Plumbing (5)", avg rating,
+  // fully-verified %, median response) always match what's actually visible
+  // in the grid — not the raw server-fetched list.
+  //
+  // On first paint (SSR + before hydration) the store is null; we fall back
+  // to the raw `providers` prop so the sidebar renders with correct-looking
+  // counts during the brief pre-hydration window. Once the browser hydrates
+  // + computes `filtered`, the store updates and we re-render with accurate
+  // counts.
+  const storeFiltered = useMarketplaceSearch((s) => s.filteredProviders);
+  const activeProviders = storeFiltered ?? providers;
+
+  // The TOTAL count (from the API's COUNT query) — preferred over the
+  // loaded-items count for the "Active providers" stat. With server-side
+  // pagination, only 24 items are loaded initially, but the total might be
+  // 10,000. We read the fresh total from the store (published by the browser
+  // after each API response) and fall back to the SSR `total` prop.
+  const storeTotal = useMarketplaceSearch((s) => s.totalProvidersCount);
+  const totalProviders = storeTotal ?? total ?? activeProviders.length;
+  // NOTE: avgRating / escrowPct / medianResponse are computed from the LOADED
+  // items (activeProviders), not the total. With server-side pagination, only
+  // 24 items are loaded initially — these stats are approximate (based on the
+  // top-rated 24) and become more accurate as the user scrolls. The "Active
+  // providers" stat uses `totalProviders` (the real total from the COUNT query).
+  const loadedCount = activeProviders.length;
+  const avgRating = loadedCount > 0
+    ? (activeProviders.reduce((sum, p) => sum + (p.rating ?? 0), 0) / loadedCount).toFixed(2)
     : '0.00';
-  const fullyVerifiedCount = providers.filter(
+  const fullyVerifiedCount = activeProviders.filter(
     (p) => p.identityVerified && p.businessVerified && p.insuranceVerified && p.stripeConnected,
   ).length;
-  const escrowPct = totalProviders > 0
-    ? Math.round((fullyVerifiedCount / totalProviders) * 100)
+  const escrowPct = loadedCount > 0
+    ? Math.round((fullyVerifiedCount / loadedCount) * 100)
     : 0;
-  const responseTimes = providers
+  const responseTimes = activeProviders
     .map((p) => p.responseTimeMins ?? 60)
     .sort((a, b) => a - b);
   const medianResponse = responseTimes.length > 0
@@ -98,33 +129,30 @@ export function MarketplaceSidebar({
   const medianResponseLabel = medianResponse < 60 ? `${medianResponse}m` : `${Math.floor(medianResponse / 60)}h`;
 
   // A2 (Component Cache): Memoize the per-vertical and per-industry counts
-  // so they're not recomputed on every render. The `providers` array is the
-  // only dependency; when it changes (new server fetch), the counts recompute.
-  // Previously these were inline arrow functions that allocated a new closure
-  // + ran a full .filter() pass on every render — called inside .map() for
-  // each of the 9 verticals + their industries, this was ~50-100 filter
-  // passes per render. Now it's a single pass per vertical, memoized.
+  // so they're not recomputed on every render. `activeProviders` is the
+  // only dependency; when it changes (filter/search/sort update from the
+  // browser), the counts recompute to match the visible grid.
   const verticalCounts = React.useMemo(() => {
     const counts = new Map<string, number>();
-    for (const p of providers) {
+    for (const p of activeProviders) {
       const meta = p.industry ? getIndustry(p.industry) : undefined;
       if (meta?.vertical) {
         counts.set(meta.vertical, (counts.get(meta.vertical) ?? 0) + 1);
       }
     }
     return counts;
-  }, [providers]);
+  }, [activeProviders]);
 
   const industryCounts = React.useMemo(() => {
     const counts = new Map<string, number>();
-    for (const p of providers) {
+    for (const p of activeProviders) {
       const key = (p.industry ?? '').toLowerCase().trim();
       if (key) {
         counts.set(key, (counts.get(key) ?? 0) + 1);
       }
     }
     return counts;
-  }, [providers]);
+  }, [activeProviders]);
 
   // Helper: count providers in a vertical (O(1) lookup into the memoized map)
   const countForVertical = (verticalId: string) => verticalCounts.get(verticalId) ?? 0;

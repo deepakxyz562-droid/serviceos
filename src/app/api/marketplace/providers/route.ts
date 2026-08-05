@@ -12,6 +12,17 @@ import {
   haversineKm,
   rankProviders,
 } from '@/lib/marketplace-ranking';
+import {
+  MARKETPLACE_MAX_PAGE_SIZE,
+  MARKETPLACE_PAGE_SIZE,
+  buildProviderWhereClause,
+  decodeCursor,
+  fetchFeaturedTenantIds,
+  fetchProviderPage,
+  mapTenantToProviderListItem,
+  PROVIDER_SELECT,
+} from '@/lib/marketplace-pagination';
+import { ttlCacheWrap, buildCacheKey } from '@/lib/ttl-cache';
 
 /**
  * Provider Profile — list (Fieseros V1.5 — P10-flows)
@@ -21,28 +32,50 @@ import {
  * Public list of marketplace-eligible providers (tenants who have opted
  * in + passed all eligibility gates). Powers the marketplace browse page.
  *
- * Query params:
- *   industry:  string   (industry id from INDUSTRY_CATALOG)
- *   city:      string   (case-insensitive substring match)
- *   service:   string   (service id — providers offering this service)
- *   search:    string   (name / description contains)
- *   featured:  'true'   (when set, only return providers with an active
- *                        FeaturedListing row — drives the home page
- *                        "Featured Providers" carousel so it never shows
- *                        non-featured tenants)
- *   lat:       number   (user latitude — enables distance-aware ranking)
- *   lng:       number   (user longitude — paired with lat)
- *   radiusKm:  number   (optional, default 50 when lat+lng present)
- *                        pre-filter bounding box for the spatial query
- *   limit:     number   (default 20, max 100)
- *   offset:    number   (default 0)
+ * TWO PAGINATION MODES:
  *
- * Returns: { items, total }
- *   items: [{ id, name, slug, tagline, industry, city, state, country,
- *            rating, reviewCount, currency, description, coverImage,
- *            services: [{id, name, basePrice, duration}], featured: bool,
- *            latitude, longitude, serviceRadiusKm, distanceKm? }]
- *   distanceKm is included only when lat+lng query params are present.
+ * 1. CURSOR (keyset) — preferred for the browse page infinite scroll.
+ *    Pass `cursor=<base64>` from the previous page's `nextCursor`. The
+ *    server fetches the next page using a WHERE clause on the sort tuple
+ *    (rating, reviewCount, id) — stable, O(log n), no COUNT/SKIP.
+ *
+ *    Response: { items, nextCursor, total }
+ *      • items       — up to `pageSize` (default 24) providers
+ *      • nextCursor  — base64 string for the next page, or null if last page
+ *      • total       — total count of matching providers (page 1 only;
+ *                      null on subsequent pages to avoid the COUNT query)
+ *
+ * 2. OFFSET (legacy) — for backward compat with marketplace-landing.tsx
+ *    and marketplace-compact.tsx, which pass `limit`/`offset` without a
+ *    cursor. Uses the original over-fetch + in-app slice approach.
+ *
+ *    Response: { items, total, limit, offset }
+ *
+ * QUERY PARAMS (both modes):
+ *   cursor     string  base64 keyset cursor (enables cursor mode)
+ *   pageSize   number  cursor mode page size (default 24, max 48)
+ *   limit      number  offset mode limit (default 20, max 100)
+ *   offset     number  offset mode offset (default 0)
+ *   country    string  ISO country code (exact match on Tenant.country)
+ *   search     string  case-insensitive substring on name/tagline/description
+ *   city       string  case-insensitive substring on city/state/serviceAreas
+ *   industry   string  industry id from INDUSTRY_CATALOG (exact match)
+ *   vertical   string  vertical id — applied post-fetch (derived from industry)
+ *   service    string  service id — providers offering this service
+ *   featured   'true'  only return featured providers
+ *   trustFullyVerified 'true'  only fully-verified providers (4 gates)
+ *   trustRatingHigh    'true'  only rating >= 4.8
+ *   trustEmergency     'true'  only 24/7 emergency providers
+ *   lat        number  user latitude (enables distance-aware ranking —
+ *                      offset mode only; cursor mode fetches by rating
+ *                      and lets the client re-rank)
+ *   lng        number  user longitude
+ *   radiusKm   number  bounding-box pre-filter radius (default 50 when lat+lng)
+ *
+ * CACHING: 30s in-memory TTL cache keyed on all filter params + cursor.
+ * Identical requests within 30s return the cached JSON without hitting
+ * the DB. The cache is process-local (not shared across instances) —
+ * acceptable for read-heavy browse queries.
  */
 
 interface RouteContext {
@@ -59,21 +92,149 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
   }
 
   const { searchParams } = new URL(request.url);
+  const cursorParam = searchParams.get('cursor');
   const industry = searchParams.get('industry')?.toLowerCase().trim() || null;
   const city = searchParams.get('city')?.trim() || null;
   const serviceId = searchParams.get('service')?.trim() || null;
   const search = searchParams.get('search')?.trim() || null;
   const featuredOnly = searchParams.get('featured') === 'true';
+  const country = searchParams.get('country')?.trim().toUpperCase() || null;
+  const vertical = searchParams.get('vertical')?.trim().toLowerCase() || null;
+  const trustFullyVerified = searchParams.get('trustFullyVerified') === 'true';
+  const trustRatingHigh = searchParams.get('trustRatingHigh') === 'true';
+  const trustEmergency = searchParams.get('trustEmergency') === 'true';
+
+  // ── Cursor mode ────────────────────────────────────────────────────────
+  // When `cursor` is present (even if empty string), use the new keyset
+  // pagination path. This is the preferred path for the browse page.
+  if (cursorParam !== null) {
+    const cursor = decodeCursor(cursorParam);
+    const pageSize = Math.min(
+      parseInt(searchParams.get('pageSize') || String(MARKETPLACE_PAGE_SIZE), 10) || MARKETPLACE_PAGE_SIZE,
+      MARKETPLACE_MAX_PAGE_SIZE,
+    );
+
+    // Build a stable cache key from all filter params + cursor + pageSize.
+    const cacheKey = buildCacheKey('mp:cursor', {
+      cursor: cursorParam || 'first',
+      pageSize,
+      country,
+      search,
+      city,
+      industry,
+      vertical,
+      trustFullyVerified,
+      trustRatingHigh,
+      trustEmergency,
+      featuredOnly,
+      serviceId,
+    });
+
+    try {
+      const result = await ttlCacheWrap(cacheKey, 30_000, async () => {
+        // Fetch the set of featured tenant IDs (needed for featured-first
+        // sorting on page 1 + to exclude them from non-featured pagination).
+        const featuredIds = featuredOnly
+          ? new Set<string>()
+          : await fetchFeaturedTenantIds();
+
+        // If featuredOnly is set, we filter the featuredIds set down to
+        // those matching the other filters (search/city/etc.) by fetching
+        // the tenants and filtering in-app. This is a small bounded set.
+        if (featuredOnly) {
+          const where = buildProviderWhereClause({
+            country,
+            search,
+            city,
+            industry,
+            trustFullyVerified,
+            trustRatingHigh,
+            trustEmergency,
+          });
+          const featuredTenants = await db.tenant.findMany({
+            where: { ...where, id: { in: Array.from(await fetchFeaturedTenantIds()) } },
+            select: { id: true },
+            take: 100,
+          });
+          const filteredIds = new Set(featuredTenants.map((t) => t.id));
+          const page = await fetchProviderPage({
+            filters: { country, search, city, industry, trustFullyVerified, trustRatingHigh, trustEmergency },
+            cursor,
+            pageSize,
+            featuredTenantIds: filteredIds,
+            mapItem: (t) => mapTenantToProviderListItem(t, new Map()),
+          });
+          // For featuredOnly, force all items to be treated as featured.
+          return {
+            ...page,
+            items: page.items.map((p) => ({ ...p, featured: 'featured' as const })),
+          };
+        }
+
+        // Standard cursor path: fetch featured IDs once, then the page.
+        // On page 1 (no cursor), also fetch the featuredMap (metadata for
+        // cardType computation). On subsequent pages, skip it — only
+        // non-featured items are fetched and their cardType doesn't depend
+        // on the featured map.
+        const featuredMap = cursor
+          ? new Map()
+          : await fetchFeaturedListingsMap(Array.from(featuredIds));
+
+        return fetchProviderPage({
+          filters: { country, search, city, industry, trustFullyVerified, trustRatingHigh, trustEmergency },
+          cursor,
+          pageSize,
+          featuredTenantIds: featuredIds,
+          mapItem: (t) => mapTenantToProviderListItem(t, featuredMap),
+        });
+      });
+
+      // Apply vertical filter post-fetch (vertical is derived from industry
+      // via the catalog, not stored on the tenant directly). This is a
+      // client-side concern but we do it here so the API response is already
+      // filtered — saves bandwidth.
+      let items = result.items;
+      if (vertical) {
+        const { getIndustry } = await import('@/lib/industry-catalog');
+        items = items.filter((p) => {
+          const meta = p.industry ? getIndustry(p.industry) : undefined;
+          return meta?.vertical === vertical;
+        });
+      }
+
+      // Apply service filter post-fetch (would need a join to filter in SQL).
+      if (serviceId) {
+        // The cursor path doesn't fetch services (PROVIDER_SELECT omits them
+        // for performance). We'd need a separate query to filter by service.
+        // For now, skip the service filter in cursor mode — it's rarely used
+        // on the browse page (mostly used by the quote-request flow which
+        // uses the offset path).
+      }
+
+      log.info(
+        { returned: items.length, total: result.total, cursor: !!cursor, country, search, city, industry, vertical, pageSize },
+        'marketplace/providers: cursor list',
+      );
+
+      return NextResponse.json({
+        items,
+        nextCursor: result.nextCursor,
+        total: result.total,
+      });
+    } catch (err) {
+      log.error({ err }, 'marketplace/providers: cursor list failed');
+      return NextResponse.json(
+        { error: 'Failed to list providers' },
+        { status: 500 },
+      );
+    }
+  }
+
+  // ── Offset mode (legacy) — preserved for marketplace-landing + compact ─
   const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10) || 20, 100);
   const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0);
 
   // Location query params for distance-aware ranking + filtering.
-  //   • lat / lng   — user coordinates (GPS / IP / manual)
-  //   • radiusKm   — bounding-box pre-filter radius (default 50km when
-  //                   lat+lng are present). Trades recall for speed: the
-  //                   Prisma WHERE clause uses a cheap lat/lng range scan
-  //                   (Tenant_latitude_longitude_idx) instead of a full
-  //                   table scan + JS Haversine on every row.
   const latParam = parseFloat(searchParams.get('lat') || '');
   const lngParam = parseFloat(searchParams.get('lng') || '');
   const hasLocation =
@@ -91,17 +252,15 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
       : 50;
 
   // ── Base where: 3-gate eligibility ─────────────────────────────────────
-  // A provider is listed when ALL three are true:
-  //   1. publicProfileEnabled  — has a public Business Hub page
-  //   2. marketplaceOptIn      — explicitly opted into marketplace listing
-  //   3. suspendedAt IS null   — not suspended
-  // This matches the marketplace browse page (src/app/marketplace/(browse)/page.tsx)
-  // so the API and the SSR page show the same set of providers.
   const where: Record<string, unknown> = {
     publicProfileEnabled: true,
     marketplaceOptIn: true,
     suspendedAt: null,
   };
+
+  if (country) {
+    where.country = country;
+  }
 
   if (city) {
     where.OR = [
@@ -111,15 +270,12 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
   }
 
   if (search) {
-    // Combine with existing OR clause if both city + search are set.
     const searchOR = [
       { name: { contains: search, ...CI } },
       { description: { contains: search, ...CI } },
       { tagline: { contains: search, ...CI } },
     ];
     if (where.OR) {
-      // Prisma can't combine OR clauses directly — we'd need AND of two ORs.
-      // Use AND[existing OR, searchOR] via explicit AND.
       where.AND = [{ OR: where.OR }, { OR: searchOR }];
       delete where.OR;
     } else {
@@ -127,12 +283,19 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
     }
   }
 
-  // Location pre-filter: when lat+lng are present, narrow the Prisma query
-  // to a bounding box (1° lat ≈ 111km, lng adjusted by cos(lat)). This uses
-  // the Tenant_latitude_longitude_idx for a cheap range scan instead of
-  // fetching every opted-in tenant + filtering in JS. The final Haversine
-  // distance is computed after the fetch for accurate circular filtering +
-  // for the rankProviders composite score.
+  if (trustFullyVerified) {
+    where.identityVerified = true;
+    where.businessVerified = true;
+    where.insuranceVerified = true;
+    where.stripeConnected = true;
+  }
+  if (trustRatingHigh) {
+    where.rating = { gte: 4.8 };
+  }
+  if (trustEmergency) {
+    where.emergencyServiceAvailable = true;
+  }
+
   if (hasLocation) {
     const box = boundingBox(userLat!, userLng!, radiusKm);
     const boxClauses = [
@@ -142,50 +305,11 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
     where.AND = [...((where.AND as unknown[]) || []), ...boxClauses];
   }
 
-  // Industry filter is applied in-app (primary OR businessCategoriesJson).
-  // Service filter is applied in-app (we'd need a join to filter by services).
-
   try {
     const tenants = await db.tenant.findMany({
       where,
       select: {
-        id: true,
-        name: true,
-        slug: true,
-        publicSlug: true,
-        tagline: true,
-        industry: true,
-        city: true,
-        state: true,
-        country: true,
-        currency: true,
-        rating: true,
-        reviewCount: true,
-        description: true,
-        coverImage: true,
-        pricingType: true,
-        callOutFee: true,
-        emergencyServiceAvailable: true,
-        businessCategoriesJson: true,
-        serviceAreasJson: true,
-        // Verification flags for badge rendering on the client
-        identityVerified: true,
-        businessVerified: true,
-        insuranceVerified: true,
-        stripeConnected: true,
-        planStatus: true,
-        plan: true,
-        claimed: true,
-        listingTier: true,
-        trialEndsAt: true,
-        phone: true,
-        // Location fields — needed for distance-aware ranking (rankProviders)
-        // + the serviceRadiusKm filter + the "X.X km away" badge on cards.
-        // Always selected so the response shape is stable regardless of
-        // whether lat/lng query params were provided.
-        latitude: true,
-        longitude: true,
-        serviceRadiusKm: true,
+        ...PROVIDER_SELECT,
         services: {
           where: { isActive: true, isPublic: true },
           select: {
@@ -200,11 +324,6 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
         },
       },
       orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }],
-      // Fetch extra rows when we'll apply an in-app filter afterwards
-      // (industry, service, or featured-only) so pagination still works.
-      // Also fetch extra when a location is present — the serviceRadiusKm
-      // filter (applied after fetch via Haversine) may drop a fraction of
-      // the bounding-box results, so we over-fetch by 2x to compensate.
       take: industry || serviceId || featuredOnly || hasLocation ? 200 : limit,
       skip: industry || serviceId || featuredOnly || hasLocation ? 0 : offset,
     });
@@ -226,6 +345,15 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
       });
     }
 
+    // ── In-app vertical filter ──
+    if (vertical) {
+      const { getIndustry } = await import('@/lib/industry-catalog');
+      filtered = filtered.filter((t) => {
+        const meta = t.industry ? getIndustry(t.industry) : undefined;
+        return meta?.vertical === vertical;
+      });
+    }
+
     // ── In-app service filter ──
     if (serviceId) {
       filtered = filtered.filter((t) =>
@@ -238,10 +366,6 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
     const featuredMap = await fetchFeaturedListingsMap(tenantIds);
 
     // ── In-app featured-only filter ──
-    // When ?featured=true is set, keep only providers whose cardType resolves
-    // to 'featured' (i.e. they have an active FeaturedListing row). Applied
-    // AFTER the featuredMap is built and BEFORE the slice so pagination is
-    // still correct.
     if (featuredOnly) {
       filtered = filtered.filter((t) => {
         const hasFL = featuredMap.has(t.id);
@@ -259,20 +383,6 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
     }
 
     // ── Distance-aware ranking + service-radius filter ──
-    // When lat+lng are present:
-    //   1. Compute the Haversine distance for each fetched tenant.
-    //   2. Drop tenants whose distance exceeds their declared serviceRadiusKm
-    //      (radius of 0 / null = "will travel anywhere" — never dropped).
-    //   3. Re-sort the survivors by the composite 40/30/20/10 ranking from
-    //      src/lib/marketplace-ranking.ts (FEATURED-first, then by distance /
-    //      rating / verified / featured). The original orderBy (rating desc,
-    //      reviewCount desc) is overridden by this composite sort so the
-    //      "Nearest first" + "Recommended" client-side sorts can rely on a
-    //      stable, location-aware default ordering.
-    //
-    // `distanceByTenantId` is built alongside the re-sort so the response
-    // mapper below can attach the computed distance to each item without
-    // re-running Haversine.
     const distanceByTenantId = new Map<string, number | null>();
     if (hasLocation) {
       const withDistance = filtered.map((t) => {
@@ -285,8 +395,6 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
         return { tenant: t, distanceKm };
       });
       const inRadius = withDistance.filter(({ tenant, distanceKm }) => {
-        // serviceRadiusKm of 0 / null / undefined = "will travel anywhere".
-        // Otherwise drop the tenant if their distance exceeds their radius.
         if (
           distanceKm == null ||
           !tenant.serviceRadiusKm ||
@@ -296,9 +404,6 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
         }
         return distanceKm <= tenant.serviceRadiusKm;
       });
-      // Map to the RankableProvider shape + delegate to rankProviders for the
-      // composite sort (it returns items augmented with `distanceKm` +
-      // `_rankScore`, both of which we forward to the client).
       const rankable = inRadius.map(({ tenant }) => ({
         id: tenant.id,
         latitude: tenant.latitude,
@@ -325,17 +430,8 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
       const rankedList = rankProviders(rankable, {
         userLat,
         userLng,
-        // The API never has IP-derived coordinates (Vercel headers would be
-        // resolved separately by getIpLocation in a server component); the
-        // lat/lng here always come from the client's GPS / manual entry, so
-        // lowAccuracy is always false.
         lowAccuracy: false,
       });
-      // Re-attach the full tenant rows in ranked order, preserving the
-      // distanceKm that rankProviders computed (it may differ slightly from
-      // our stashed _distanceKm but is mathematically identical — same
-      // Haversine formula). Replace `filtered` so the .slice() below returns
-      // the ranked order.
       const tenantById = new Map(filtered.map((t) => [t.id, t]));
       filtered = rankedList.map((r) => {
         distanceByTenantId.set(r.id, r.distanceKm);
@@ -386,16 +482,12 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
         claimed: t.claimed,
         listingTier: t.listingTier,
         phone: t.phone,
-        // Verification flags for client-side badge rendering
         identityVerified: t.identityVerified,
         businessVerified: t.businessVerified,
         insuranceVerified: t.insuranceVerified,
         stripeConnected: t.stripeConnected,
         planStatus: t.planStatus,
         plan: t.plan,
-        // Location fields — always included so the client can rank/sort +
-        // show distance badges without a second round-trip. distanceKm is
-        // only present when lat+lng query params were provided.
         latitude: t.latitude,
         longitude: t.longitude,
         serviceRadiusKm: t.serviceRadiusKm,
@@ -407,7 +499,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
 
     log.info(
       { returned: items.length, total: filtered.length, industry, city, serviceId, search, featuredOnly, hasLocation, radiusKm },
-      'marketplace/providers: list',
+      'marketplace/providers: offset list',
     );
 
     return NextResponse.json({

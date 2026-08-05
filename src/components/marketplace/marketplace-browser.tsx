@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { ProviderCard } from './provider-card';
 import { useMarketplaceSearch, type MarketplaceSortKey } from './use-marketplace-search';
+import { useMarketplaceProviders } from './use-marketplace-providers';
 import type { ProviderListItem } from './types';
 import { getIndustry, VERTICALS } from '@/lib/industry-catalog';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
@@ -46,8 +47,16 @@ import { rankProviders, haversineKm } from '@/lib/marketplace-ranking';
 import { cn } from '@/lib/utils';
 
 interface MarketplaceBrowserProps {
-  /** Full list of opted-in providers (server-fetched, up to 120). */
+  /** SSR-fetched first page (24 items) for SEO + instant paint. The client
+   *  useMarketplaceProviders hook seeds its React Query cache with this data
+   *  so page 1 is never re-fetched. Subsequent pages come from the API. */
   providers: ProviderListItem[];
+  /** SSR-computed cursor for page 2. null = no more pages. Passed to the
+   *  hook so fetchNextPage() can fetch page 2 without re-fetching page 1. */
+  initialNextCursor?: string | null;
+  /** SSR-computed total count of matching providers. Used for the sidebar's
+   *  "Active providers" stat before any client-side fetch completes. */
+  initialTotal?: number;
   /** Initial filters from the URL search params (SSR). */
   initialFilters: {
     vertical: string | null;
@@ -67,10 +76,10 @@ interface MarketplaceBrowserProps {
 // the active key from the store.
 type SortKey = MarketplaceSortKey;
 
-const PAGE_SIZE = 12;
-
 export function MarketplaceBrowser({
   providers,
+  initialNextCursor,
+  initialTotal,
   initialFilters,
   detectedCountry,
 }: MarketplaceBrowserProps) {
@@ -97,14 +106,18 @@ export function MarketplaceBrowser({
           state: p.state ?? null,
           tagline: p.tagline ?? null,
           description: p.description ?? null,
-          logo: p.logo ?? null,
+          // ProviderListItem doesn't carry a logo field (only coverImage) —
+          // pass null so the offline cache shape stays compatible.
+          logo: null,
           coverImage: p.coverImage ?? null,
           rating: p.rating ?? 0,
           reviewCount: p.reviewCount ?? 0,
           phone: p.phone ?? null,
           plan: p.plan ?? null,
           claimed: p.claimed ?? false,
-          marketplaceOptIn: p.marketplaceOptIn ?? true,
+          // All providers on the marketplace browse page have opted in
+          // (it's a WHERE clause in the fetch), so this is always true.
+          marketplaceOptIn: true,
           cardType: p.cardType ?? 'normal-minimal',
           cachedAt: Date.now(),
         }));
@@ -145,13 +158,56 @@ export function MarketplaceBrowser({
   // dropdown.
   const userLocation = useMarketplaceSearch((s) => s.userLocation);
   const setUserLocation = useMarketplaceSearch((s) => s.setUserLocation);
-  // Trust filters (sidebar) — instant client-side filtering
+  const setFilteredProviders = useMarketplaceSearch((s) => s.setFilteredProviders);
+  const setTotalProvidersCount = useMarketplaceSearch((s) => s.setTotalProvidersCount);
+  // Trust filters (sidebar) — sent to the API as query params so the server
+  // filters before pagination (otherwise the user would see fewer items per
+  // page after enabling a trust filter).
   const trustFullyVerified = useMarketplaceSearch((s) => s.trustFullyVerified);
   const trustRatingHigh = useMarketplaceSearch((s) => s.trustRatingHigh);
   const trustEmergency = useMarketplaceSearch((s) => s.trustEmergency);
-  const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
-  // Brief skeleton flash when filters change so the user sees the grid react.
-  const [filtering, setFiltering] = React.useState(false);
+
+  // ── Server-side cursor pagination via useInfiniteQuery ─────────────────
+  // The SSR page fetched page 1 (24 items) + computed nextCursor + total.
+  // We seed the hook's React Query cache with that data so page 1 is never
+  // re-fetched. When the user scrolls, fetchNextPage() hits the API for
+  // page 2, 3, etc. When any filter changes, the queryKey changes and React
+  // Query refetches from page 1.
+  //
+  // IMPORTANT: We only seed initialData when the URL has NO filters
+  // (search/city/vertical/industry). If the URL has filters, the SSR data
+  // (fetched without filters) wouldn't match the hook's queryKey, so we
+  // let the hook fetch fresh. This gives a brief loading state on deep-
+  // linked filter URLs, but the data is correct.
+  const ssrFiltersMatchUrl =
+    !initialFilters.search && !initialFilters.city && !initialFilters.vertical && !initialFilters.industry;
+  const {
+    providers: loadedProviders,
+    total: loadedTotal,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetching,
+    fetchNextPage,
+  } = useMarketplaceProviders(
+    {
+      country: detectedCountry ?? null,
+      search: searchQuery,
+      city: cityFilter,
+      vertical: verticalFilter,
+      industry: industryFilter,
+      trustFullyVerified,
+      trustRatingHigh,
+      trustEmergency,
+    },
+    ssrFiltersMatchUrl ? providers : undefined,
+    ssrFiltersMatchUrl ? initialNextCursor : null,
+    ssrFiltersMatchUrl ? initialTotal : undefined,
+  );
+
+  // `filtering` = true while the API is fetching (filter change or initial
+  // load). Used to dim the grid briefly so the user sees a visual cue that
+  // new data is loading. Replaces the old 180ms artificial skeleton flash.
+  const filtering = isFetching && !isFetchingNextPage;
 
   // ── Ref for latest userLocation ────────────────────────────────────────
   // Lets the geocode-city effect's async callback read the latest
@@ -392,18 +448,11 @@ export function MarketplaceBrowser({
     };
   }, [cityFilter, setUserLocation]);
 
-  // ── Flash skeleton on filter change & reset pagination ─────────────────
-  React.useEffect(() => {
-    const r = requestAnimationFrame(() => {
-      setFiltering(true);
-      setVisibleCount(PAGE_SIZE);
-    });
-    const t = setTimeout(() => setFiltering(false), 180);
-    return () => {
-      cancelAnimationFrame(r);
-      clearTimeout(t);
-    };
-  }, [searchQuery, cityFilter, verticalFilter, industryFilter, sort, trustFullyVerified, trustRatingHigh, trustEmergency]);
+  // NOTE: The old "flash skeleton on filter change" effect (which set
+  // `filtering` for 180ms + reset `visibleCount`) has been removed. With
+  // server-side cursor pagination, `filtering` is derived from the hook's
+  // `isFetching` state (true while the API request is in flight), and
+  // pagination is handled by `fetchNextPage()` (no `visibleCount` to reset).
 
   // ── Mirror filter state into the URL (replaceState, no reload) ─────────
   React.useEffect(() => {
@@ -427,75 +476,23 @@ export function MarketplaceBrowser({
   // (progressive enhancement: without JS, the link navigates normally;
   // with JS, preventDefault + store update = instant filter).
 
-  // ── Compute filtered + sorted list ─────────────────────────────────────
+  // ── Compute the sorted list (filters are server-side now) ──────────────
+  // With server-side cursor pagination, the API already applies all filters
+  // (search / city / vertical / industry / trust) before returning items.
+  // The hook's `loadedProviders` is the flattened list of all loaded pages —
+  // already filtered. We only need to SORT it here (the server fetches in a
+  // stable (rating DESC, reviewCount DESC, id DESC) order, but the user can
+  // pick a different client-side sort).
+  //
+  // Sort changes do NOT trigger a refetch — we just re-sort the already-
+  // loaded items. This is instant and avoids resetting the user's scroll.
+  // The trade-off: for 'distance' sort, the global order isn't perfectly by
+  // distance across pages (the server fetches by rating). This is acceptable
+  // for the browse grid — a future enhancement could send lat/lng to the
+  // server for true distance-sorted pagination.
   const filtered = React.useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    const c = cityFilter.toLowerCase();
-    let list = providers.filter((p) => {
-      // Industry filter
-      if (industryFilter) {
-        const ind = (p.industry ?? '').toLowerCase().trim();
-        if (ind !== industryFilter) return false;
-      }
-      // Vertical filter
-      if (verticalFilter) {
-        const meta = p.industry ? getIndustry(p.industry) : undefined;
-        if (!meta || meta.vertical !== verticalFilter) return false;
-      }
-      // City filter
-      if (c) {
-        const city = (p.city ?? '').toLowerCase();
-        const state = (p.state ?? '').toLowerCase();
-        const inAreas = p.serviceAreas.some((a) =>
-          String(a).toLowerCase().includes(c),
-        );
-        if (!city.includes(c) && !state.includes(c) && !inAreas) return false;
-      }
-      // Free-text search
-      if (q) {
-        const name = (p.name ?? '').toLowerCase();
-        const tagline = (p.tagline ?? '').toLowerCase();
-        const description = (p.description ?? '').toLowerCase();
-        const svcMatch = p.services.some((s) =>
-          (s.name ?? '').toLowerCase().includes(q),
-        );
-        if (
-          !name.includes(q) &&
-          !tagline.includes(q) &&
-          !description.includes(q) &&
-          !svcMatch
-        ) {
-          return false;
-        }
-      }
-      // Trust filters (sidebar)
-      if (trustFullyVerified) {
-        if (!(p.identityVerified && p.businessVerified && p.insuranceVerified && p.stripeConnected)) {
-          return false;
-        }
-      }
-      if (trustRatingHigh) {
-        if ((p.rating ?? 0) < 4.8) return false;
-      }
-      if (trustEmergency) {
-        if (!p.emergencyServiceAvailable) return false;
-      }
-      return true;
-    });
+    let list = loadedProviders;
 
-    // Sort
-    //
-    // Two location-aware sorts delegate to src/lib/marketplace-ranking.ts:
-    //   • 'recommended' — composite 40% distance / 30% rating / 20% verified /
-    //     10% featured (FEATURED cards always first, then non-featured, each
-    //     group sorted by composite score). When no userLocation is available
-    //     the ranking lib redistributes the distance weight (50/33/17 split).
-    //     When lowAccuracy (IP-derived), the distance weight is halved.
-    //   • 'distance' — pure Haversine ascending (FEATURED cards still first).
-    //     Requires userLocation; falls back to 'recommended' ranking if the
-    //     location got cleared while this sort was active.
-    // The legacy single-key sorts (rating / reviews / response / name /
-    // verified) keep their existing featured-first behavior unchanged.
     if ((sort === 'recommended' || sort === 'distance') && userLocation) {
       if (sort === 'distance') {
         // Pure Haversine ascending — FEATURED cards still dominate the top
@@ -513,44 +510,38 @@ export function MarketplaceBrowser({
         list = [...sortByDistance(featured), ...sortByDistance(nonFeatured)];
       } else {
         // 'recommended' with a user location → composite 40/30/20/10 ranking.
-        // rankProviders already handles FEATURED-first + serviceRadiusKm
-        // filtering + tie-break by rating then reviewCount, and augments each
-        // item with `distanceKm` + `_rankScore` for display/debugging.
+        // filterByRadius=false: the BROWSE page must show ALL opted-in
+        // providers, regardless of the user's geographic distance. Distance
+        // affects RANK ORDER only (closer providers float up via the 40%
+        // distance weight) but never FILTERS providers out. This is critical
+        // because a user in India viewing /marketplace?country=US would
+        // otherwise see 1 card (13,000km > serviceRadiusKm of 15-39km).
         list = rankProviders(
-          list.map((p) => ({
-            ...p,
-            featured: !!p.featured,
-            // ProviderListItem has latitude/longitude via the augmented shape
-            // from the API (added in the providers route when lat/lng query
-            // params are present). They may be undefined for providers with no
-            // geocoded address — scoreProvider treats that as distanceScore 0.
-          })),
+          list.map((p) => ({ ...p, featured: !!p.featured })),
           {
             userLat: userLocation.lat,
             userLng: userLocation.lng,
             lowAccuracy: userLocation.lowAccuracy,
           },
-        ) as typeof list;
+          false  // filterByRadius — browse page: sort by distance, never filter
+        ) as unknown as ProviderListItem[];
       }
     } else if (sort === 'recommended' || sort === 'distance') {
       // No userLocation — 'recommended' (and 'distance' as a defensive
-      // fallback when location was cleared mid-session) both use the
-      // rankProviders no-location path (50/33/17 rating/verified/featured).
+      // fallback) use the rankProviders no-location path (50/33/17 split).
       list = rankProviders(
         list.map((p) => ({ ...p, featured: !!p.featured })),
         { userLat: null, userLng: null },
-      ) as typeof list;
+      ) as unknown as ProviderListItem[];
     } else {
       list = list.slice().sort((a, b) => {
-        // Featured cards ALWAYS sort first, regardless of the selected sort key.
-        // This is the OLX-style "premium listings at the top" behaviour.
+        // Featured cards ALWAYS sort first (OLX-style premium-at-top).
         if (!!a.featured !== !!b.featured) return a.featured ? -1 : 1;
 
         switch (sort) {
           case 'reviews':
             return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
           case 'response': {
-            // Fastest response first (lower minutes = faster). Nulls sort last.
             const aResp = a.responseTimeMins ?? 9999;
             const bResp = b.responseTimeMins ?? 9999;
             if (aResp !== bResp) return aResp - bResp;
@@ -559,7 +550,6 @@ export function MarketplaceBrowser({
           case 'name':
             return (a.name ?? '').localeCompare(b.name ?? '');
           case 'verified': {
-            // Fully-verified (all 4 gates) first, then by rating
             const aScore =
               (a.identityVerified ? 1 : 0) +
               (a.businessVerified ? 1 : 0) +
@@ -575,7 +565,6 @@ export function MarketplaceBrowser({
           }
           case 'rating':
           default:
-            // Rating, then reviewCount (featured already sorted above)
             if ((b.rating ?? 0) !== (a.rating ?? 0))
               return (b.rating ?? 0) - (a.rating ?? 0);
             return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
@@ -584,31 +573,44 @@ export function MarketplaceBrowser({
     }
 
     return list;
-  }, [providers, searchQuery, cityFilter, verticalFilter, industryFilter, sort, userLocation, trustFullyVerified, trustRatingHigh, trustEmergency]);
+  }, [loadedProviders, sort, userLocation]);
 
-  const visible = filtered.slice(0, visibleCount);
-  const hasMore = visibleCount < filtered.length;
+  // All loaded items are visible (no client-side slicing — the hook's
+  // fetchNextPage() grows the list as the user scrolls).
+  const visible = filtered;
+  const hasMore = hasNextPage;
+
+  // ── Publish the filtered list + total to the shared store ─────────────
+  // The sidebar (rendered as a sibling, not a child) reads `filteredProviders`
+  // from the Zustand store to compute per-vertical counts + avg rating that
+  // match the visible grid. We also publish `totalProvidersCount` so the
+  // sidebar's "Active providers" stat can use the accurate total (from the
+  // API's COUNT query) rather than the loaded-items count (which starts at
+  // 24 and grows as the user scrolls).
+  React.useEffect(() => {
+    setFilteredProviders(filtered);
+  }, [filtered, setFilteredProviders]);
+
+  // Publish the total count (from the API's COUNT query) so the sidebar's
+  // "Active providers" stat shows the real total, not the loaded-items count.
+  React.useEffect(() => {
+    if (loadedTotal != null) {
+      setTotalProvidersCount(loadedTotal);
+    }
+  }, [loadedTotal, setTotalProvidersCount]);
 
   // ── Infinite scroll via IntersectionObserver ───────────────────────────
   // A sentinel <div> sits at the bottom of the grid. When it scrolls into
-  // view (and there are more items, and we're not mid-filter-flash) we bump
-  // visibleCount by PAGE_SIZE — so the next batch of 12 cards renders and
-  // the grid grows. This continues until all filtered providers are shown.
+  // view (and there are more pages, and we're not already fetching) we call
+  // fetchNextPage() to load the next 24 providers from the API. This is TRUE
+  // server-side pagination — the old approach just sliced an already-loaded
+  // 1000-item array (no actual network request on scroll).
   //
-  // Fix D: The old implementation had a 180ms artificial setTimeout delay
-  // and a 400px rootMargin. The delay created a window where the page
-  // height was in flux (spinner visible, no new cards yet) which made the
-  // sticky sidebar jerk and the footer shift as the grid height oscillated.
-  // The 400px rootMargin fired too aggressively, loading the next batch
-  // while the user was still 400px away — causing height jumps during
-  // normal scrolling. Now we render the next batch IMMEDIATELY when the
-  // sentinel intersects (no setTimeout) and use a tighter 200px rootMargin
-  // so the load fires closer to when the user actually needs the cards.
-  // The spinner still shows via the `loadingMore` state, but it's cleared
-  // synchronously in the same tick as setVisibleCount, so there's no
-  // height-flux gap.
+  // 200px rootMargin: fires the fetch when the user is ~200px from the
+  // bottom, so the next page loads before they actually reach it (smooth UX,
+  // no visible spinner in the common case).
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
-  const [loadingMore, setLoadingMore] = React.useState(false);
+  const loadingMore = isFetchingNextPage;
 
   React.useEffect(() => {
     const node = sentinelRef.current;
@@ -618,24 +620,16 @@ export function MarketplaceBrowser({
       (entries) => {
         const entry = entries[0];
         if (entry.isIntersecting) {
-          // Render the next batch immediately — no artificial delay. This
-          // eliminates the height-flux window that caused the sidebar/footer
-          // to jerk during infinite-scroll loading.
-          setLoadingMore(true);
-          // Use requestAnimationFrame instead of setTimeout so the spinner
-          // paints for exactly one frame (perceptible but not janky), then
-          // the new cards render in the next frame.
-          requestAnimationFrame(() => {
-            setVisibleCount((c) => c + PAGE_SIZE);
-            setLoadingMore(false);
-          });
+          // Fetch the next page from the API. The hook handles dedup (no-op
+          // if a fetch is already in flight) + race conditions.
+          fetchNextPage();
         }
       },
       { rootMargin: '200px 0px' },
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [hasMore, filtering, filtered.length]);
+  }, [hasMore, filtering, fetchNextPage, loadedProviders.length]);
 
   // ── Active filter chips ────────────────────────────────────────────────
   const activeChips: Array<{ label: string; onClear: () => void }> = [];
@@ -836,9 +830,10 @@ export function MarketplaceBrowser({
 
       {/* ── Infinite scroll sentinel ─────────────────────────────────────── */}
       {/* A zero-height sentinel observed by IntersectionObserver. When it
-          enters the viewport we load the next PAGE_SIZE providers. The
-          spinner shows while that batch is being added. Once everything is
-          loaded (hasMore === false) the sentinel is unmounted entirely. */}
+          enters the viewport we call fetchNextPage() to load the next 24
+          providers from the API. The spinner shows while the request is in
+          flight. Once all pages are loaded (hasMore === false) the sentinel
+          is unmounted entirely. */}
       {hasMore && !filtering ? (
         <div
           ref={sentinelRef}

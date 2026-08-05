@@ -42,6 +42,7 @@
  */
 
 import { create } from 'zustand';
+import type { ProviderListItem } from './types';
 
 /** Sort keys kept in sync with MarketplaceBrowser.SORTS. */
 export type MarketplaceSortKey =
@@ -98,6 +99,25 @@ interface MarketplaceSearchState {
    * to the no-location 50/33/17 ranking split).
    */
   userLocation: MarketplaceUserLocation | null;
+  /**
+   * The filtered + sorted provider list (the same list the grid renders).
+   * Published by MarketplaceBrowser so the sidebar can show accurate counts
+   * that match the visible cards. null on first paint (SSR) — sidebar falls
+   * back to its raw `providers` prop until the browser hydrates + computes.
+   *
+   * This fixes the long-standing "sidebar says 500 plumbing, grid shows 1 card"
+   * mismatch that happened when the sidebar received the raw server list while
+   * the grid filtered it down client-side.
+   */
+  filteredProviders: ProviderListItem[] | null;
+  /**
+   * The TOTAL count of matching providers (from the API's COUNT query, not
+   * the loaded-items count). Published by MarketplaceBrowser so the sidebar's
+   * "Active providers" stat shows the real total (e.g. "10,000") even though
+   * only 24 items are loaded. null on first paint — sidebar falls back to its
+   * `total` prop (from the SSR COUNT query).
+   */
+  totalProvidersCount: number | null;
   setSearchInput: (v: string) => void;
   setCityInput: (v: string) => void;
   setSort: (v: MarketplaceSortKey) => void;
@@ -113,6 +133,10 @@ interface MarketplaceSearchState {
   toggleTrustEmergency: () => void;
   /** Set or clear the user location used by the 'recommended' and 'distance' sorts. */
   setUserLocation: (loc: MarketplaceUserLocation | null) => void;
+  /** Publish the filtered + sorted list so the sidebar counts stay in sync with the grid. */
+  setFilteredProviders: (list: ProviderListItem[] | null) => void;
+  /** Publish the total count so the sidebar's "Active providers" stat is accurate. */
+  setTotalProvidersCount: (n: number | null) => void;
 }
 
 export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
@@ -137,6 +161,13 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
   // the "Near Me" mobile tab. When null, 'recommended' falls back to the
   // no-location ranking split and 'distance' is disabled in the dropdown.
   userLocation: null,
+  // No filtered providers until MarketplaceBrowser hydrates + computes its
+  // filtered list. The sidebar falls back to its raw `providers` prop on
+  // first paint (SSR), then subscribes to this once the browser publishes.
+  filteredProviders: null,
+  // No total count until the browser publishes (from the hook's API response).
+  // The sidebar falls back to its `total` prop (from the SSR COUNT query).
+  totalProvidersCount: null,
   setSearchInput: (v) => set({ searchInput: v }),
   setCityInput: (v) => set({ cityInput: v }),
   setSort: (v) => set({ sort: v }),
@@ -161,4 +192,6 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
   toggleTrustRatingHigh: () => set((s) => ({ trustRatingHigh: !s.trustRatingHigh })),
   toggleTrustEmergency: () => set((s) => ({ trustEmergency: !s.trustEmergency })),
   setUserLocation: (loc) => set({ userLocation: loc }),
+  setFilteredProviders: (list) => set({ filteredProviders: list }),
+  setTotalProvidersCount: (n) => set({ totalProvidersCount: n }),
 }));
