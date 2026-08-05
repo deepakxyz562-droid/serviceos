@@ -140,12 +140,28 @@ export function scoreProvider<T extends RankableProvider>(
  * provider has a serviceRadiusKm, providers whose distance exceeds their
  * radius are excluded (unless radius is null/0 = "will travel anywhere").
  *
+ * `filterByRadius` (default true):
+ *   - true  → apply the serviceRadiusKm hard filter (used by "find near me"
+ *             searches where we only want providers who actually service
+ *             the user's location).
+ *   - false → SKIP the radius filter entirely. Providers are still RANKED
+ *             by distance (closer = higher score) but none are removed.
+ *             Used by the marketplace BROWSE page so all opted-in providers
+ *             render regardless of where the user is. Without this, a user
+ *             in India viewing /marketplace?country=US would see 1 card
+ *             (because 13,000km > serviceRadiusKm of 15-39km filters out
+ *             all 500 US providers).
+ *
+ *   Note: lowAccuracy (IP-derived location) ALWAYS skips the radius filter,
+ *   regardless of filterByRadius — IP geolocation is too imprecise to filter on.
+ *
  * Returns a new sorted array. Each item is augmented with `distanceKm` and
  * `_rankScore` (for debugging/display). Does NOT mutate the input.
  */
 export function rankProviders<T extends RankableProvider>(
   providers: T[],
-  ctx: RankContext
+  ctx: RankContext,
+  filterByRadius: boolean = true
 ): (T & { distanceKm: number | null; _rankScore: number })[] {
   const { userLat, userLng, lowAccuracy } = ctx;
 
@@ -160,22 +176,27 @@ export function rankProviders<T extends RankableProvider>(
       // service radius (only when we have both a user location + a radius).
       // serviceRadiusKm of 0 or null = "will travel anywhere" (no filter).
       //
-      // IMPORTANT: Skip the radius filter entirely when the location is
-      // IP-derived (lowAccuracy). IP geolocation can be off by 50-200km,
-      // so filtering by a 15-39km serviceRadiusKm based on IP location
-      // wrongly excludes nearly all providers — leaving the grid showing
-      // only 1 card. With IP location we RANK by distance (weight halved
-      // in scoreProvider) but never FILTER OUT providers. Only GPS-derived
-      // (high-accuracy) locations apply the hard radius filter.
+      // SKIP the radius filter when ANY of these are true:
+      //   1. filterByRadius === false  → browse page wants all providers visible
+      //   2. lowAccuracy === true     → IP location too imprecise to filter on
+      //   3. no user location         → can't compute distance
+      //   4. provider has no radius   → "will travel anywhere"
+      //
+      // Why this matters: a user in India viewing the US marketplace has a
+      // GPS-derived location (lowAccuracy=false) that's ~13,000km from US
+      // providers. Without the filterByRadius=false escape hatch, ALL 500
+      // US providers get filtered out (13,000km > serviceRadiusKm 15-39km),
+      // leaving the grid showing only 1 card (providers with null coords).
       if (
+        !filterByRadius ||
+        lowAccuracy ||
         userLat == null ||
         userLng == null ||
         distanceKm == null ||
         !provider.serviceRadiusKm ||
-        provider.serviceRadiusKm <= 0 ||
-        lowAccuracy
+        provider.serviceRadiusKm <= 0
       ) {
-        return true; // no radius constraint (incl. low-accuracy IP location)
+        return true; // no radius constraint applies
       }
       return distanceKm <= provider.serviceRadiusKm;
     });

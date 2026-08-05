@@ -113,6 +113,11 @@ model Tenant {
   // Tenant.reviewCount (optionally synced by an admin or future GBP API job).
   googleBusinessProfileUrl String? @default("")
   googleBusinessVerified   Boolean @default(false)
+  // Google Places API — populated by the seed script (scripts/google-places-seed.ts).
+  // googlePlaceId is the canonical Google Place ID (idempotency + future re-sync).
+  // website is the business's primary website URL from Google Places.
+  googlePlaceId          String?  @unique
+  website                String?
   tagline               String?  // short one-liner under business name
   description           String?  // long-form About text (min 100 chars for indexing)
   coverImage            String?  // hero/cover image URL
