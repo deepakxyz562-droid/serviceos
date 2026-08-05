@@ -4120,7 +4120,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
               of the previous ~48px dead zone on Android/desktop (Issue 2).
               md:pb-6 restores normal 24px padding on desktop where the bottom
               nav is hidden (md:hidden). */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/30 p-4 lg:p-6 pb-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.5rem)] md:pb-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/30 p-4 lg:p-6 pb-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.25rem)] md:pb-6">
           <GpsStatusBanner />
           {/* Push permission prompt — hoisted to the main layout so it shows
               across ALL employee sub-views (not just Home). The banner

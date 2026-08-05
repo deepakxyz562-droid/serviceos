@@ -123,6 +123,16 @@ async function fetchProvidersUncached(): Promise<ProviderListItem[]> {
       phone: true,
       googleBusinessProfileUrl: true,
       googleBusinessVerified: true,
+      // Geolocation + service radius — REQUIRED for the client-side
+      // `rankProviders()` / `haversineKm()` distance scoring used by the
+      // 'recommended' and 'distance' sorts. Without these, every provider
+      // arrives at the client with latitude/longitude = undefined →
+      // haversineKm() returns null → distance score = 0 for all → the
+      // 'recommended' sort degrades to rating/verified/featured only and
+      // auto-detected userLocation appears to do nothing (Issue 4).
+      latitude: true,
+      longitude: true,
+      serviceRadiusKm: true,
     },
     orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }],
     take: 500,
@@ -192,6 +202,11 @@ async function fetchProvidersUncached(): Promise<ProviderListItem[]> {
       plan: t.plan,
       googleBusinessProfileUrl: t.googleBusinessProfileUrl,
       googleBusinessVerified: t.googleBusinessVerified,
+      // Geolocation + service radius — consumed by client-side rankProviders()
+      // / haversineKm() for the 'recommended' + 'distance' sorts (Issue 4).
+      latitude: t.latitude,
+      longitude: t.longitude,
+      serviceRadiusKm: t.serviceRadiusKm,
       // "Jobs done" proxy: use reviewCount * ~3 (most jobs don't get reviews).
       // This gives a reasonable-looking number for the stats bar without a
       // costly cross-table query.
@@ -450,7 +465,7 @@ export default async function MarketplaceBrowsePage({
           />
 
           {/* Main column — ONLY THIS PROVIDER LIST AREA SCROLLS */}
-          <main className="flex-1 h-full overflow-y-auto pb-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.75rem)] lg:pb-12 scroll-smooth">
+          <main className="flex-1 h-full overflow-y-auto pb-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.25rem)] lg:pb-12 scroll-smooth">
             {/* FIXED/STICKY BREADCRUMB & SORT FILTER BAR — INSIDE LISTING AREA */}
             <nav
               aria-label="Breadcrumb"

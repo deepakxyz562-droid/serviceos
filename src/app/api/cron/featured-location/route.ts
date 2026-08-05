@@ -114,11 +114,19 @@ import { pickRandomEuropeanLocation } from '@/lib/featured-location';
 
 /**
  * Window within which a duplicate cron tick in the same hour is short-circuited.
- * 50 minutes — generous enough to absorb cron-job.org's occasional double-fires,
- * narrow enough that a tick near the end of one hour (e.g. HH:59) won't block
- * the next hour's tick (HH+1:00).
+ * 5 minutes — just enough to absorb cron-job.org's occasional double-fires
+ * (which happen within seconds), while letting manual test triggers or a
+ * re-fire after a transient failure pick a fresh city after 5+ minutes.
+ *
+ * NOTE: the previous 50-minute window caused every manual trigger within the
+ * same hour to return the SAME city (skipped: true), which looked like the
+ * picker was stuck. 5 minutes keeps the double-fire protection but makes the
+ * endpoint behave correctly for ad-hoc testing.
+ *
+ * Pass `?force=true` to bypass the short-circuit entirely (manual testing /
+ * operator re-roll).
  */
-const SAME_HOUR_SKIP_MS = 50 * 60 * 1000;
+const SAME_HOUR_SKIP_MS = 5 * 60 * 1000;
 
 /**
  * Compute the current UTC hour bucket as an ISO string truncated to the hour,
@@ -186,51 +194,60 @@ export async function POST(request: NextRequest) {
     const hourBucket = computeHourBucket();
     const nowMs = Date.now();
 
-    // ─── Same-hour short-circuit (best-effort) ────────────────────────
+    // `?force=true` bypasses the same-hour short-circuit so operators can
+    // re-roll a fresh city on demand (manual testing, demo reset, etc.).
+    // Auth still applies — this is NOT a public bypass.
+    const force = request.nextUrl.searchParams.get('force') === 'true';
+
+    // ─── Same-hour short-circuit (best-effort, skippable via ?force=true) ──
     // cron-job.org occasionally double-fires within the same hour. If we
-    // already picked a location this hour (matching hourBucket, < 50 min
+    // already picked a location this hour (matching hourBucket, < 5 min
     // ago, and the joined location is still active), skip the re-pick.
     // Wrapped in its own try/catch so a failure here never blocks the main
     // pick path — at worst we waste one extra picker query.
-    try {
-      const existing = await db.featuredLocation.findUnique({
-        where: { key: 'current' },
-        include: { location: true },
-      });
+    if (!force) {
+      try {
+        const existing = await db.featuredLocation.findUnique({
+          where: { key: 'current' },
+          include: { location: true },
+        });
 
-      if (existing) {
-        const selectedAtMs = toEpochMs(existing.selectedAt);
-        // Defensive cast: Prisma types `existing.location` as non-null, but
-        // the Supabase REST adapter may not enforce FKs strictly.
-        const existingLocation =
-          existing.location as DirectoryLocation | null | undefined;
+        if (existing) {
+          const selectedAtMs = toEpochMs(existing.selectedAt);
+          // Defensive cast: Prisma types `existing.location` as non-null, but
+          // the Supabase REST adapter may not enforce FKs strictly.
+          const existingLocation =
+            existing.location as DirectoryLocation | null | undefined;
 
-        if (
-          selectedAtMs !== null &&
-          existing.hourBucket === hourBucket &&
-          nowMs - selectedAtMs < SAME_HOUR_SKIP_MS &&
-          existingLocation &&
-          existingLocation.isActive
-        ) {
-          console.log(
-            `[cron featured-location] ⏭️  Skipped (already selected this hour): ${existingLocation.city}, ${existingLocation.countryCode} (hourBucket=${hourBucket})`,
-          );
-          return NextResponse.json({
-            success: true,
-            skipped: true,
-            reason: 'already-selected-this-hour',
-            selectedAt: new Date(selectedAtMs).toISOString(),
-            hourBucket: existing.hourBucket,
-            location: formatLocationResponse(existingLocation),
-          });
+          if (
+            selectedAtMs !== null &&
+            existing.hourBucket === hourBucket &&
+            nowMs - selectedAtMs < SAME_HOUR_SKIP_MS &&
+            existingLocation &&
+            existingLocation.isActive
+          ) {
+            console.log(
+              `[cron featured-location] ⏭️  Skipped (already selected this hour): ${existingLocation.city}, ${existingLocation.countryCode} (hourBucket=${hourBucket})`,
+            );
+            return NextResponse.json({
+              success: true,
+              skipped: true,
+              reason: 'already-selected-this-hour',
+              selectedAt: new Date(selectedAtMs).toISOString(),
+              hourBucket: existing.hourBucket,
+              location: formatLocationResponse(existingLocation),
+            });
+          }
         }
+      } catch (shortCircuitErr) {
+        // Best-effort: log and fall through to the main pick path.
+        console.warn(
+          '[cron featured-location] short-circuit check failed, continuing to pick:',
+          shortCircuitErr,
+        );
       }
-    } catch (shortCircuitErr) {
-      // Best-effort: log and fall through to the main pick path.
-      console.warn(
-        '[cron featured-location] short-circuit check failed, continuing to pick:',
-        shortCircuitErr,
-      );
+    } else {
+      console.log('[cron featured-location] ?force=true — bypassing same-hour short-circuit');
     }
 
     // ─── Pick a random European location (population-weighted) ────────

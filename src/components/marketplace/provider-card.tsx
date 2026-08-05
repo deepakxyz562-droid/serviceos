@@ -243,7 +243,7 @@ function ProviderCardImpl({
   return (
     <article
       className={cn(
-        'group flex flex-col rounded-xl border border-border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md',
+        'group flex flex-col rounded-xl border border-border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md min-w-0 overflow-hidden',
         isFeat && 'ring-2 ring-amber-300/70',
         className,
       )}
@@ -430,7 +430,7 @@ function MinimalCard({
   return (
     <article
       className={cn(
-        'group flex flex-col rounded-xl border border-border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md',
+        'group flex flex-col rounded-xl border border-border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md min-w-0 overflow-hidden',
         className,
       )}
     >
