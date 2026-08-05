@@ -147,7 +147,7 @@ export function rankProviders<T extends RankableProvider>(
   providers: T[],
   ctx: RankContext
 ): (T & { distanceKm: number | null; _rankScore: number })[] {
-  const { userLat, userLng } = ctx;
+  const { userLat, userLng, lowAccuracy } = ctx;
 
   // Score + optional radius filter
   const scored = providers
@@ -159,14 +159,23 @@ export function rankProviders<T extends RankableProvider>(
       // Radius filter: exclude providers who are farther than their declared
       // service radius (only when we have both a user location + a radius).
       // serviceRadiusKm of 0 or null = "will travel anywhere" (no filter).
+      //
+      // IMPORTANT: Skip the radius filter entirely when the location is
+      // IP-derived (lowAccuracy). IP geolocation can be off by 50-200km,
+      // so filtering by a 15-39km serviceRadiusKm based on IP location
+      // wrongly excludes nearly all providers — leaving the grid showing
+      // only 1 card. With IP location we RANK by distance (weight halved
+      // in scoreProvider) but never FILTER OUT providers. Only GPS-derived
+      // (high-accuracy) locations apply the hard radius filter.
       if (
         userLat == null ||
         userLng == null ||
         distanceKm == null ||
         !provider.serviceRadiusKm ||
-        provider.serviceRadiusKm <= 0
+        provider.serviceRadiusKm <= 0 ||
+        lowAccuracy
       ) {
-        return true; // no radius constraint
+        return true; // no radius constraint (incl. low-accuracy IP location)
       }
       return distanceKm <= provider.serviceRadiusKm;
     });
