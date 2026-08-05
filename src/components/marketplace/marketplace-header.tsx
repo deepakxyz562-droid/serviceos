@@ -79,11 +79,20 @@ export function MarketplaceHeader({
   const cityInput = useMarketplaceSearch((s) => s.cityInput);
   const setCityInput = useMarketplaceSearch((s) => s.setCityInput);
 
-  // Seed store from URL params on first mount (deep-link support)
+  // Seed store from URL params on first mount (deep-link support).
+  // Runs ONCE — a `didSeedRef` guard survives React StrictMode's double-invoke.
+  // IMPORTANT: `cityInput` / `searchInput` are intentionally NOT in the deps.
+  // The old version listed them, so clearing the city filter re-fired this
+  // effect, which saw `initialCity` (from the SSR URL ?city=…) was truthy and
+  // `cityInput` was now empty → re-filled it back → the filter was impossible
+  // to clear. Mount-once + ref guard fixes that without breaking deep-links.
+  const didSeedRef = React.useRef(false);
   React.useEffect(() => {
+    if (didSeedRef.current) return;
+    didSeedRef.current = true;
     if (initialSearch && !searchInput) setSearchInput(initialSearch);
     if (initialCity && !cityInput) setCityInput(initialCity);
-  }, [initialSearch, initialCity, searchInput, cityInput, setSearchInput, setCityInput]);
+  }, []);
 
   // On the provider detail page, navigate to /marketplace when the user types
   if (navigateOnSearch) {

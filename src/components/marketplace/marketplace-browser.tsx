@@ -147,19 +147,11 @@ export function MarketplaceBrowser({
   // Brief skeleton flash when filters change so the user sees the grid react.
   const [filtering, setFiltering] = React.useState(false);
 
-  // ── Refs for latest cityInput / userLocation ───────────────────────────
-  // These let async callbacks (GPS reverse-geocode, IP fetch, city geocode)
-  // read the LATEST value of cityInput / userLocation WITHOUT having to list
-  // those values in their effect's dependency array. This is the key fix for
-  // the feedback loop: the auto-detect effect used to depend on `cityInput`,
-  // so every keystroke re-fired the whole IP+GPS detection, which called
-  // setCityInput(city), which re-fired the effect → infinite loop → page
-  // hang + impossible-to-clear city filter. Now the effect runs ONCE on mount
-  // and reads the latest values through these refs instead.
-  const cityInputRef = React.useRef(cityInput);
-  React.useEffect(() => {
-    cityInputRef.current = cityInput;
-  }, [cityInput]);
+  // ── Ref for latest userLocation ────────────────────────────────────────
+  // Lets the geocode-city effect's async callback read the latest
+  // userLocation WITHOUT listing `userLocation` in its deps (which would
+  // re-create a feedback loop: detect → setUserLocation → geocode effect
+  // re-fires → setUserLocation …).
   const userLocationRef = React.useRef(userLocation);
   React.useEffect(() => {
     userLocationRef.current = userLocation;
@@ -217,15 +209,16 @@ export function MarketplaceBrowser({
   }, []);
 
   // ── Auto-detect user location on mount (localStorage -> IP -> GPS) ──
-  // Runs EXACTLY ONCE. The old version listed `cityInput` in the deps, so
-  // every city keystroke re-fired the whole IP+GPS detection, which called
-  // setCityInput(city), which re-fired the effect → infinite loop → page
-  // hang + impossible-to-clear city filter.
+  // Runs EXACTLY ONCE (didDetectRef guards against StrictMode double-invoke).
   //
-  // Now: empty deps + a didDetectRef guard (survives React StrictMode's
-  // double-invoke in dev). Async callbacks read the latest cityInput via
-  // cityInputRef so they don't overwrite a city the user typed/cleared
-  // while the async fetch was in flight.
+  // IMPORTANT — auto-detect sets `userLocation` ONLY (for distance ranking +
+  // the 'recommended' composite sort). It does NOT write into `cityInput`.
+  // This is a deliberate design decision: coupling auto-detect to the city
+  // filter meant that a detected city with zero providers would empty the
+  // grid ("blank page"), and re-filling cityInput from async callbacks was
+  // the root cause of the feedback loop that hung the marketplace. The city
+  // input is now purely user-driven (type it, or click "Use my location").
+  // Auto-detect silently re-ranks the grid so nearby providers float up.
   const didDetectRef = React.useRef(false);
   React.useEffect(() => {
     if (didDetectRef.current) return;
@@ -248,9 +241,10 @@ export function MarketplaceBrowser({
               source: parsed.source,
               lowAccuracy: parsed.source === 'ip',
             });
-            if (parsed.city && !cityInputRef.current) {
-              setCityInput(parsed.city);
-            }
+            // NOTE: intentionally NOT calling setCityInput() here — see the
+            // effect header comment. userLocation (ranking) is restored; the
+            // city filter stays empty until the user types or clicks
+            // "Use my location".
             return;
           }
         }
@@ -271,11 +265,8 @@ export function MarketplaceBrowser({
             source: 'ip',
             lowAccuracy: true,
           });
-          // Guard with the ref so we DON'T overwrite a city the user
-          // already typed or cleared while the IP fetch was in flight.
-          if (data.city && !cityInputRef.current) {
-            setCityInput(data.city);
-          }
+          // NOTE: intentionally NOT calling setCityInput() — auto-detect
+          // only powers ranking, never the hard city filter.
         }
       } catch (err) {
         console.error('Failed to get IP location on mount:', err);
@@ -314,12 +305,8 @@ export function MarketplaceBrowser({
               source: 'gps',
               lowAccuracy: false,
             });
-            // Guard: only auto-fill the city if the user hasn't typed or
-            // cleared one since this GPS lookup started. Without this, a
-            // slow GPS resolve would clobber a freshly-cleared city filter.
-            if (city && !cityInputRef.current) {
-              setCityInput(city);
-            }
+            // NOTE: intentionally NOT calling setCityInput() — the city
+            // filter is user-driven only. See the effect header comment.
           } catch {}
         },
         () => {}, // ignore errors since we have IP fallback

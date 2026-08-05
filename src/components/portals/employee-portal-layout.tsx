@@ -3792,18 +3792,16 @@ function MobileBottomNav({
   activeView: EmployeeSubView;
   onViewChange: (v: EmployeeSubView) => void;
 }) {
-  const [isStandalone, setIsStandalone] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setIsStandalone(window.matchMedia('(display-mode: standalone)').matches);
-    }
-  }, []);
+  // The bottom nav now ALWAYS reserves space for the iOS safe-area inset
+  // (via env(safe-area-inset-bottom) in the nav + main padding). The old
+  // isStandalone gate meant non-PWA mobile browsers skipped the safe-area
+  // inset on the nav but the main content still reserved it → ~42px gap.
+  // viewportFit:'cover' is set in layout.tsx so the env() is live everywhere.
 
   return (
     <nav
       className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80"
-      style={{ paddingBottom: isStandalone ? 'env(safe-area-inset-bottom, 0px)' : '0px' }}
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       aria-label="Primary"
     >
       <div className="grid grid-cols-5 h-14">
@@ -4122,7 +4120,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
               of the previous ~48px dead zone on Android/desktop (Issue 2).
               md:pb-6 restores normal 24px padding on desktop where the bottom
               nav is hidden (md:hidden). */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/30 p-4 lg:p-6 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/30 p-4 lg:p-6 pb-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.5rem)] md:pb-6">
           <GpsStatusBanner />
           {/* Push permission prompt — hoisted to the main layout so it shows
               across ALL employee sub-views (not just Home). The banner

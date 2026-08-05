@@ -89,6 +89,17 @@ function StalenessBadge({ selectedAt }: { selectedAt: string }) {
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export async function FeaturedEuropeanLocation() {
+  // ─── TEMPORARILY DISABLED ───────────────────────────────────────────────
+  // The CTA links in this banner (/directory and /directory/{cc}/{city}) are
+  // 404s — the /directory route does not exist in src/app/ yet. Showing the
+  // banner sends anonymous visitors + crawlers to dead pages, which hurts SEO
+  // and UX. The banner is hidden until the /directory route is built.
+  //
+  // To re-enable: build the /directory route, verify the FeaturedLocation cron
+  // is rotating through a fully-seeded DirectoryLocation table, then delete
+  // this early return. Everything below is preserved as-is.
+  return null;
+
   let featured: FeaturedLocationInfo | null;
   try {
     featured = await getCurrentFeaturedLocation();

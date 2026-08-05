@@ -54,15 +54,57 @@ import { ClaimReview } from '@/components/views/superadmin/sections/claim-review
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
+// All 43 European countries (matches EUROPEAN_COUNTRY_CODES in
+// src/lib/featured-location.ts and prisma/seed-directory.ts). Replacing the
+// old 8-country list (AU/US/GB/IN/CA/NZ/AE/SG) lets the superadmin seed
+// marketplace providers across the full European footprint that the
+// featured-location cron + directory pages operate on.
 const COUNTRIES = [
-  { code: 'AU', label: 'Australia' },
-  { code: 'US', label: 'United States' },
+  // EU-27
+  { code: 'AT', label: 'Austria' },
+  { code: 'BE', label: 'Belgium' },
+  { code: 'BG', label: 'Bulgaria' },
+  { code: 'HR', label: 'Croatia' },
+  { code: 'CY', label: 'Cyprus' },
+  { code: 'CZ', label: 'Czechia' },
+  { code: 'DK', label: 'Denmark' },
+  { code: 'EE', label: 'Estonia' },
+  { code: 'FI', label: 'Finland' },
+  { code: 'FR', label: 'France' },
+  { code: 'DE', label: 'Germany' },
+  { code: 'GR', label: 'Greece' },
+  { code: 'HU', label: 'Hungary' },
+  { code: 'IE', label: 'Ireland' },
+  { code: 'IT', label: 'Italy' },
+  { code: 'LV', label: 'Latvia' },
+  { code: 'LT', label: 'Lithuania' },
+  { code: 'LU', label: 'Luxembourg' },
+  { code: 'MT', label: 'Malta' },
+  { code: 'NL', label: 'Netherlands' },
+  { code: 'PL', label: 'Poland' },
+  { code: 'PT', label: 'Portugal' },
+  { code: 'RO', label: 'Romania' },
+  { code: 'SK', label: 'Slovakia' },
+  { code: 'SI', label: 'Slovenia' },
+  { code: 'ES', label: 'Spain' },
+  { code: 'SE', label: 'Sweden' },
+  // Non-EU European
   { code: 'GB', label: 'United Kingdom' },
-  { code: 'IN', label: 'India' },
-  { code: 'CA', label: 'Canada' },
-  { code: 'NZ', label: 'New Zealand' },
-  { code: 'AE', label: 'United Arab Emirates' },
-  { code: 'SG', label: 'Singapore' },
+  { code: 'CH', label: 'Switzerland' },
+  { code: 'NO', label: 'Norway' },
+  { code: 'IS', label: 'Iceland' },
+  { code: 'LI', label: 'Liechtenstein' },
+  { code: 'TR', label: 'Turkey' },
+  { code: 'UA', label: 'Ukraine' },
+  { code: 'RU', label: 'Russia' },
+  { code: 'BY', label: 'Belarus' },
+  { code: 'MD', label: 'Moldova' },
+  { code: 'MK', label: 'North Macedonia' },
+  { code: 'AL', label: 'Albania' },
+  { code: 'RS', label: 'Serbia' },
+  { code: 'BA', label: 'Bosnia and Herzegovina' },
+  { code: 'ME', label: 'Montenegro' },
+  { code: 'XK', label: 'Kosovo' },
 ];
 
 const TIERS = [
@@ -166,7 +208,7 @@ function industryLabel(id: string): string {
 
 function SeedTab() {
   const [city, setCity] = useState('');
-  const [country, setCountry] = useState('AU');
+  const [country, setCountry] = useState('GB');
   const [selectedCats, setSelectedCats] = useState<string[]>([]);
   const [count, setCount] = useState(50);
   const [loading, setLoading] = useState(false);
