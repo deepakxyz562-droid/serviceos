@@ -117,6 +117,7 @@ export function ProviderProfile({ slug, onBack, backHref, initialData }: Provide
   const [error, setError] = React.useState<string | null>(null);
   const [instantOpen, setInstantOpen] = React.useState(false);
   const [quoteOpen, setQuoteOpen] = React.useState(false);
+  const [selectedServiceId, setSelectedServiceId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     // If server-rendered with initialData, no need to refetch on mount.
@@ -294,7 +295,10 @@ export function ProviderProfile({ slug, onBack, backHref, initialData }: Provide
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button
             type="button"
-            onClick={() => setInstantOpen(true)}
+            onClick={() => {
+              setSelectedServiceId(null);
+              setInstantOpen(true);
+            }}
             disabled={services.length === 0}
             className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700"
           >
@@ -415,7 +419,10 @@ export function ProviderProfile({ slug, onBack, backHref, initialData }: Provide
                         size="sm"
                         variant="ghost"
                         className="mt-2 h-7 gap-1 px-2 text-xs text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
-                        onClick={() => setInstantOpen(true)}
+                        onClick={() => {
+                          setSelectedServiceId(s.id);
+                          setInstantOpen(true);
+                        }}
                       >
                         <Calendar className="h-3 w-3" /> Book this
                       </Button>
@@ -698,6 +705,7 @@ export function ProviderProfile({ slug, onBack, backHref, initialData }: Provide
         providerName={tenant.name}
         currency={tenant.currency}
         services={services}
+        defaultServiceId={selectedServiceId}
       />
       <QuoteRequestDialog
         open={quoteOpen}

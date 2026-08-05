@@ -283,14 +283,14 @@ function HeaderAction() {
     );
   }
 
-  // Anonymous visitor → show the CTA
   if (!auth?.isAuthenticated) {
     return (
       <Link
         href="/?auth=register"
-        className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+        className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
       >
-        List your business
+        <span className="hidden sm:inline">List your business</span>
+        <span className="sm:hidden">List</span>
       </Link>
     );
   }

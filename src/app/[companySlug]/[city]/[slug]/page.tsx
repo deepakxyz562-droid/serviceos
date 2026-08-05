@@ -50,6 +50,7 @@ import {
 } from '@/lib/public-business'
 import { PublicBookingForm } from './booking-form'
 import { MarketplaceBookingPanel } from './marketplace-booking-panel'
+import { ServiceBookButton } from './service-book-button'
 import { ChatWidget } from '@/components/public/chat-widget'
 import {
   computeCardType,
@@ -432,7 +433,16 @@ export default async function PublicBusinessHubPage({
                   </h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {services.map((s) => (
-                      <ServiceCard key={s.id} service={s} currency={business.currency} businessSlug={business.slug} canonicalUrl={business.canonicalUrl} />
+                      <ServiceCard
+                        key={s.id}
+                        service={s}
+                        currency={business.currency}
+                        services={services}
+                        providerTenantId={business.id}
+                        providerName={business.name}
+                        marketplaceOptIn={business.marketplaceOptIn}
+                        isMinimalListing={isMinimalListing}
+                      />
                     ))}
                   </div>
                 </section>
@@ -617,7 +627,7 @@ export default async function PublicBusinessHubPage({
                     This keeps the detail page treatment consistent with the
                     browse card so users don't see a "Book Now" button on a
                     listing whose browse card only shows "Call Now". */}
-                <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
+                <div id="book" className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
                   {business.marketplaceOptIn && !isMinimalListing ? (
                     <MarketplaceBookingPanel
                       providerTenantId={business.id}
@@ -864,13 +874,19 @@ function PublicBusinessHero({
 function ServiceCard({
   service,
   currency,
-  businessSlug,
-  canonicalUrl,
+  services,
+  providerTenantId,
+  providerName,
+  marketplaceOptIn,
+  isMinimalListing,
 }: {
   service: PublicServiceData
   currency: string
-  businessSlug: string
-  canonicalUrl: string
+  services: PublicServiceData[]
+  providerTenantId: string
+  providerName: string
+  marketplaceOptIn: boolean
+  isMinimalListing: boolean
 }) {
   return (
     <div className="rounded-lg border bg-card text-card-foreground overflow-hidden hover:shadow-md transition-shadow">
@@ -905,12 +921,38 @@ function ServiceCard({
             {service.duration}min
           </span>
         </div>
-        <a
-          href={`#book`}
-          className="mt-3 block w-full text-center rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800 transition-colors"
-        >
-          Book this service
-        </a>
+        {marketplaceOptIn && !isMinimalListing ? (
+          <ServiceBookButton
+            service={{
+              id: service.id,
+              name: service.name,
+              slug: service.slug,
+              basePrice: service.basePrice,
+              duration: service.duration,
+              image: service.image,
+              description: service.description,
+            }}
+            services={services.map((svc) => ({
+              id: svc.id,
+              name: svc.name,
+              slug: svc.slug,
+              basePrice: svc.basePrice,
+              duration: svc.duration,
+              image: svc.image,
+              description: svc.description,
+            }))}
+            providerTenantId={providerTenantId}
+            providerName={providerName}
+            currency={currency}
+          />
+        ) : (
+          <a
+            href={`#book`}
+            className="mt-3 block w-full text-center rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800 transition-colors"
+          >
+            Book this service
+          </a>
+        )}
       </div>
     </div>
   )

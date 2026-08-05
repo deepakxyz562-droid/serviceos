@@ -58,7 +58,7 @@ const ClaimCompletion = dynamic(
 );
 
 import { useAppStore } from '@/store/app-store';
-import { authFetch } from '@/lib/client-auth';
+import { authFetch, removeToken } from '@/lib/client-auth';
 
 type UnauthView = 'landing' | 'auth';
 
@@ -598,6 +598,7 @@ export default function HomePageClient() {
 
     if (typeof window !== 'undefined') {
       localStorage.removeItem('fieseros_auth');
+      removeToken();
     }
 
     clearAuth();
