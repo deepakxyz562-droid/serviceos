@@ -450,7 +450,7 @@ export default async function MarketplaceBrowsePage({
           />
 
           {/* Main column — ONLY THIS PROVIDER LIST AREA SCROLLS */}
-          <main className="flex-1 h-full overflow-y-auto pb-28 lg:pb-12 scroll-smooth">
+          <main className="flex-1 h-full overflow-y-auto pb-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.75rem)] lg:pb-12 scroll-smooth">
             {/* FIXED/STICKY BREADCRUMB & SORT FILTER BAR — INSIDE LISTING AREA */}
             <nav
               aria-label="Breadcrumb"

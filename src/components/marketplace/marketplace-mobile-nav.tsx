@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useUserLocation } from '@/hooks/use-user-location';
 import { useMarketplaceSearch } from './use-marketplace-search';
+import { useAppStore } from '@/store/app-store';
 import { mapIndustryToPluralSlug } from '@/lib/seo/plural-industry-slugs';
 import { slugifyCity } from '@/lib/seo/schemas';
 
@@ -14,13 +15,18 @@ import { slugifyCity } from '@/lib/seo/schemas';
  * navigation). The 6th tab ("Near Me") is a client-side button that calls
  * useUserLocation().requestLocation() and then redirects to the
  * /{pluralIndustry}/{citySlug} route, so it's rendered separately below.
+ *
+ * Tabs marked `authRequired` (Saved, Bookings) are hidden for logged-out
+ * visitors so the mobile footer collapses from 6 columns to 4. This matches
+ * the marketplace UX: an anonymous browser can't have saved providers or
+ * bookings, so showing those tabs would just lead to dead-end links.
  */
 const TABS = [
-  { label: 'Home', href: '/', icon: Home },
-  { label: 'Browse', href: '/marketplace', icon: ShoppingBag },
-  { label: 'Search', href: '/marketplace?focus=search', icon: Search },
-  { label: 'Saved', href: '/marketplace?filter=saved', icon: Heart },
-  { label: 'Bookings', href: '/?redirect=bookings', icon: Calendar },
+  { label: 'Home', href: '/', icon: Home, authRequired: false },
+  { label: 'Browse', href: '/marketplace', icon: ShoppingBag, authRequired: false },
+  { label: 'Search', href: '/marketplace?focus=search', icon: Search, authRequired: false },
+  { label: 'Saved', href: '/marketplace?filter=saved', icon: Heart, authRequired: true },
+  { label: 'Bookings', href: '/?redirect=bookings', icon: Calendar, authRequired: true },
 ] as const;
 
 /**
@@ -44,6 +50,16 @@ export function MarketplaceMobileNav() {
   const industryFilter = useMarketplaceSearch((s) => s.industryFilter);
   const setCityInput = useMarketplaceSearch((s) => s.setCityInput);
   const setUserLocation = useMarketplaceSearch((s) => s.setUserLocation);
+
+  // Auth gating for the "Saved" / "Bookings" tabs. We use authHydrated so we
+  // DON'T briefly flash the 4-tab layout for logged-in users on first paint
+  // (auth.isAuthenticated starts false and only flips true once /api/auth/me
+  // resolves on mount). Until hydration completes we render the full 6 tabs;
+  // once we KNOW the visitor is anonymous, we collapse to 4 tabs.
+  const isAuthenticated = useAppStore((s) => s.auth.isAuthenticated);
+  const authHydrated = useAppStore((s) => s.authHydrated);
+  const showAuthTabs = isAuthenticated || !authHydrated;
+  const visibleTabs = showAuthTabs ? TABS : TABS.filter((t) => !t.authRequired);
 
   const [error, setError] = React.useState<string | null>(null);
 
@@ -92,8 +108,8 @@ export function MarketplaceMobileNav() {
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       aria-label="Marketplace navigation"
     >
-      <div className="grid grid-cols-6 h-14">
-        {TABS.map((tab) => {
+      <div className={`grid h-14 ${showAuthTabs ? 'grid-cols-6' : 'grid-cols-4'}`}>
+        {visibleTabs.map((tab) => {
           const Icon = tab.icon;
           return (
             <Link

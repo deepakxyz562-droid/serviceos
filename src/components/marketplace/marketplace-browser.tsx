@@ -147,6 +147,24 @@ export function MarketplaceBrowser({
   // Brief skeleton flash when filters change so the user sees the grid react.
   const [filtering, setFiltering] = React.useState(false);
 
+  // ── Refs for latest cityInput / userLocation ───────────────────────────
+  // These let async callbacks (GPS reverse-geocode, IP fetch, city geocode)
+  // read the LATEST value of cityInput / userLocation WITHOUT having to list
+  // those values in their effect's dependency array. This is the key fix for
+  // the feedback loop: the auto-detect effect used to depend on `cityInput`,
+  // so every keystroke re-fired the whole IP+GPS detection, which called
+  // setCityInput(city), which re-fired the effect → infinite loop → page
+  // hang + impossible-to-clear city filter. Now the effect runs ONCE on mount
+  // and reads the latest values through these refs instead.
+  const cityInputRef = React.useRef(cityInput);
+  React.useEffect(() => {
+    cityInputRef.current = cityInput;
+  }, [cityInput]);
+  const userLocationRef = React.useRef(userLocation);
+  React.useEffect(() => {
+    userLocationRef.current = userLocation;
+  }, [userLocation]);
+
   // ── Debounce the free-text search (250ms) ──────────────────────────────
   React.useEffect(() => {
     const handle = setTimeout(() => {
@@ -199,7 +217,20 @@ export function MarketplaceBrowser({
   }, []);
 
   // ── Auto-detect user location on mount (localStorage -> IP -> GPS) ──
+  // Runs EXACTLY ONCE. The old version listed `cityInput` in the deps, so
+  // every city keystroke re-fired the whole IP+GPS detection, which called
+  // setCityInput(city), which re-fired the effect → infinite loop → page
+  // hang + impossible-to-clear city filter.
+  //
+  // Now: empty deps + a didDetectRef guard (survives React StrictMode's
+  // double-invoke in dev). Async callbacks read the latest cityInput via
+  // cityInputRef so they don't overwrite a city the user typed/cleared
+  // while the async fetch was in flight.
+  const didDetectRef = React.useRef(false);
   React.useEffect(() => {
+    if (didDetectRef.current) return;
+    didDetectRef.current = true;
+
     let active = true;
 
     // 1. Try to load from localStorage first
@@ -217,7 +248,7 @@ export function MarketplaceBrowser({
               source: parsed.source,
               lowAccuracy: parsed.source === 'ip',
             });
-            if (parsed.city && !cityInput) {
+            if (parsed.city && !cityInputRef.current) {
               setCityInput(parsed.city);
             }
             return;
@@ -240,7 +271,9 @@ export function MarketplaceBrowser({
             source: 'ip',
             lowAccuracy: true,
           });
-          if (data.city && !cityInput) {
+          // Guard with the ref so we DON'T overwrite a city the user
+          // already typed or cleared while the IP fetch was in flight.
+          if (data.city && !cityInputRef.current) {
             setCityInput(data.city);
           }
         }
@@ -281,7 +314,10 @@ export function MarketplaceBrowser({
               source: 'gps',
               lowAccuracy: false,
             });
-            if (city) {
+            // Guard: only auto-fill the city if the user hasn't typed or
+            // cleared one since this GPS lookup started. Without this, a
+            // slow GPS resolve would clobber a freshly-cleared city filter.
+            if (city && !cityInputRef.current) {
               setCityInput(city);
             }
           } catch {}
@@ -294,7 +330,7 @@ export function MarketplaceBrowser({
     return () => {
       active = false;
     };
-  }, [setUserLocation, setCityInput, cityInput]);
+  }, []);
 
   // Geocode the city filter text automatically to get its lat/lng coordinates
   React.useEffect(() => {
@@ -323,8 +359,13 @@ export function MarketplaceBrowser({
       return;
     }
 
-    // Skip geocoding if the active location matches the typed city filter already
-    if (userLocation && (userLocation.source === 'gps' || userLocation.source === 'ip' || userLocation.source === 'manual') && userLocation.city?.toLowerCase() === cityFilter.toLowerCase()) {
+    // Skip geocoding if the active location already matches the typed city.
+    // Reads via userLocationRef so this effect does NOT depend on
+    // `userLocation` — otherwise every GPS/IP detection (from the mount-once
+    // effect above) would re-trigger this geocode effect, creating a second
+    // feedback path: detect → setUserLocation → geocode effect → setUserLocation…
+    const ul = userLocationRef.current;
+    if (ul && (ul.source === 'gps' || ul.source === 'ip' || ul.source === 'manual') && ul.city?.toLowerCase() === cityFilter.toLowerCase()) {
       return;
     }
 
@@ -356,7 +397,7 @@ export function MarketplaceBrowser({
     return () => {
       active = false;
     };
-  }, [cityFilter, setUserLocation, userLocation]);
+  }, [cityFilter, setUserLocation]);
 
   // ── Flash skeleton on filter change & reset pagination ─────────────────
   React.useEffect(() => {
