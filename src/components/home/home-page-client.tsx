@@ -591,7 +591,7 @@ export default function HomePageClient() {
 
   const handleLogout = useCallback(async () => {
     try {
-      await fetch('/api/auth/logout?XTransformPort=3000', { method: 'POST' });
+      await authFetch('/api/auth/logout?XTransformPort=3000', { method: 'POST' });
     } catch {
       // API logout failed
     }

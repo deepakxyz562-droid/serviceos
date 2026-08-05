@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import type { PublicBusinessData, PublicServiceData } from '@/lib/public-business'
 
@@ -34,6 +34,27 @@ export function PublicBookingForm({ business, services }: Props) {
     preferredDate: '',
     message: '',
   })
+
+  useEffect(() => {
+    function handleHashChange() {
+      const hash = window.location.hash;
+      if (hash && hash.startsWith('#book-')) {
+        const id = hash.slice(6);
+        const match = services.find((s) => s.id === id);
+        if (match) {
+          setForm((f) => ({ ...f, serviceId: id }));
+          setIntent('book');
+          const el = document.getElementById('book');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth' });
+          }
+        }
+      }
+    }
+    window.addEventListener('hashchange', handleHashChange);
+    handleHashChange();
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [services]);
 
   function update<K extends keyof typeof form>(key: K, value: string) {
     setForm((f) => ({ ...f, [key]: value }))

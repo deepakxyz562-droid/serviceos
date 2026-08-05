@@ -169,7 +169,7 @@ function SearchBox({
   navigateOnSearch?: boolean;
 }) {
   return (
-    <div className="flex h-10 flex-1 items-center rounded-xl border border-border bg-card pl-3 pr-1 transition-shadow focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-500/25 dark:bg-card/80">
+    <div className="flex h-10 flex-1 min-w-0 items-center rounded-xl border border-border bg-card pl-3 pr-1 transition-shadow focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-500/25 dark:bg-card/80">
       <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       <input
         type="search"

@@ -2914,10 +2914,18 @@ function MobileBottomNav({
   activeView: CustomerView;
   onViewChange: (v: CustomerView) => void;
 }) {
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsStandalone(window.matchMedia('(display-mode: standalone)').matches);
+    }
+  }, []);
+
   return (
     <nav
       className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      style={{ paddingBottom: isStandalone ? 'env(safe-area-inset-bottom, 0px)' : '0px' }}
       aria-label="Primary"
     >
       <div className="grid grid-cols-5 h-14">

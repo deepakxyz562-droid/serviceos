@@ -141,9 +141,9 @@ function StatsBar({
   jobsCount: number;
   responseTimeMins: number | null | undefined;
 }) {
-  const colClass = 'flex flex-col items-center justify-center px-2 py-2.5 min-w-0';
-  const valueClass = 'flex items-center gap-1 text-[13px] font-semibold text-foreground';
-  const labelClass = 'mt-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground';
+  const colClass = 'flex flex-col items-center justify-center px-1 py-2.5 min-w-0 w-full overflow-hidden';
+  const valueClass = 'flex items-center justify-center gap-1 text-[13px] font-semibold text-foreground truncate max-w-full';
+  const labelClass = 'mt-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground truncate w-full text-center block px-1';
   return (
     <div className="mt-3 grid grid-cols-3 divide-x divide-border border-y border-border bg-muted/40">
       <div className={colClass}>
@@ -151,21 +151,21 @@ function StatsBar({
           <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
           {rating > 0 ? rating.toFixed(1) : 'New'}
         </span>
-        <span className={labelClass}>{reviewCount} review{reviewCount === 1 ? '' : 's'}</span>
+        <span className={labelClass}>{reviewCount} Review{reviewCount === 1 ? '' : 's'}</span>
       </div>
       <div className={colClass}>
         <span className={valueClass}>
           <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
           {jobsCount > 0 ? jobsCount.toLocaleString() : '0'}
         </span>
-        <span className={labelClass}>Jobs done</span>
+        <span className={labelClass}>Jobs</span>
       </div>
       <div className={colClass}>
         <span className={valueClass}>
           <Clock className="h-3.5 w-3.5 text-muted-foreground" />
           {formatResponseTime(responseTimeMins)}
         </span>
-        <span className={labelClass}>Avg response</span>
+        <span className={labelClass}>Response</span>
       </div>
     </div>
   );

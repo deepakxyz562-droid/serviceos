@@ -138,6 +138,7 @@ export function MarketplaceBrowser({
   // 50/33/17 (rating/verified/featured) split; 'distance' is disabled in the
   // dropdown.
   const userLocation = useMarketplaceSearch((s) => s.userLocation);
+  const setUserLocation = useMarketplaceSearch((s) => s.setUserLocation);
   // Trust filters (sidebar) — instant client-side filtering
   const trustFullyVerified = useMarketplaceSearch((s) => s.trustFullyVerified);
   const trustRatingHigh = useMarketplaceSearch((s) => s.trustRatingHigh);
@@ -196,6 +197,166 @@ export function MarketplaceBrowser({
     // Intentionally run once on mount — we only want to seed from the URL
     // the first time this component mounts, not on every store change.
   }, []);
+
+  // ── Auto-detect user location on mount (localStorage -> IP -> GPS) ──
+  React.useEffect(() => {
+    let active = true;
+
+    // 1. Try to load from localStorage first
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('fieseros_user_location');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const age = Date.now() - parsed.timestamp;
+          if (age < 7 * 24 * 60 * 60 * 1000) {
+            setUserLocation({
+              lat: parsed.lat,
+              lng: parsed.lng,
+              city: parsed.city,
+              source: parsed.source,
+              lowAccuracy: parsed.source === 'ip',
+            });
+            if (parsed.city && !cityInput) {
+              setCityInput(parsed.city);
+            }
+            return;
+          }
+        }
+      } catch {}
+    }
+
+    // 2. Fetch IP location dynamically if not cached
+    async function detectIpLocation() {
+      try {
+        const res = await fetch('/api/geocode/ip');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.lat && data.lng && active) {
+          setUserLocation({
+            lat: data.lat,
+            lng: data.lng,
+            city: data.city,
+            source: 'ip',
+            lowAccuracy: true,
+          });
+          if (data.city && !cityInput) {
+            setCityInput(data.city);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to get IP location on mount:', err);
+      }
+    }
+    detectIpLocation();
+
+    // 3. Ask for high-accuracy GPS permission in parallel
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          if (!active) return;
+          const { latitude, longitude } = position.coords;
+          try {
+            const res = await fetch(`/api/geocode/reverse?lat=${latitude}&lng=${longitude}`);
+            let city: string | null = null;
+            if (res.ok) {
+              const data = await res.json();
+              city = data.city || null;
+            }
+            const loc = {
+              city,
+              state: null,
+              country: null,
+              lat: latitude,
+              lng: longitude,
+              source: 'gps' as const,
+              accuracy: 'gps' as const,
+              timestamp: Date.now(),
+            };
+            localStorage.setItem('fieseros_user_location', JSON.stringify(loc));
+            setUserLocation({
+              lat: latitude,
+              lng: longitude,
+              city,
+              source: 'gps',
+              lowAccuracy: false,
+            });
+            if (city) {
+              setCityInput(city);
+            }
+          } catch {}
+        },
+        () => {}, // ignore errors since we have IP fallback
+        { enableHighAccuracy: false, timeout: 5000 }
+      );
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [setUserLocation, setCityInput, cityInput]);
+
+  // Geocode the city filter text automatically to get its lat/lng coordinates
+  React.useEffect(() => {
+    if (!cityFilter) {
+      // If city filter is cleared, restore GPS/IP location from localStorage if available, else null
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem('fieseros_user_location');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            const age = Date.now() - parsed.timestamp;
+            if (age < 7 * 24 * 60 * 60 * 1000) {
+              setUserLocation({
+                lat: parsed.lat,
+                lng: parsed.lng,
+                city: parsed.city,
+                source: parsed.source,
+                lowAccuracy: parsed.source === 'ip',
+              });
+              return;
+            }
+          }
+        } catch {}
+      }
+      setUserLocation(null);
+      return;
+    }
+
+    // Skip geocoding if the active location matches the typed city filter already
+    if (userLocation && (userLocation.source === 'gps' || userLocation.source === 'ip' || userLocation.source === 'manual') && userLocation.city?.toLowerCase() === cityFilter.toLowerCase()) {
+      return;
+    }
+
+    let active = true;
+    async function geocodeCity() {
+      try {
+        const res = await fetch(`/api/geocode/search?q=${encodeURIComponent(cityFilter)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0 && active) {
+          const first = data[0];
+          const lat = parseFloat(first.lat);
+          const lng = parseFloat(first.lon);
+          if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+            setUserLocation({
+              lat,
+              lng,
+              city: cityFilter,
+              source: 'manual',
+              lowAccuracy: false,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to geocode city filter:', err);
+      }
+    }
+    geocodeCity();
+    return () => {
+      active = false;
+    };
+  }, [cityFilter, setUserLocation, userLocation]);
 
   // ── Flash skeleton on filter change & reset pagination ─────────────────
   React.useEffect(() => {
