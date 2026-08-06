@@ -3801,7 +3801,7 @@ function MobileBottomNav({
   return (
     <nav
       className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80"
-      style={{ paddingBottom: isStandalone ? 'env(safe-area-inset-bottom, 0px)' : '0px' }}
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       aria-label="Primary"
     >
       <div className="grid grid-cols-5 h-14">
