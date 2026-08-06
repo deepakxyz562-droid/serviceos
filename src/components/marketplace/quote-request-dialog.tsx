@@ -56,6 +56,15 @@ interface QuoteRequestDialogProps {
   defaultBudgetHigh?: number | null;
   /** Pre-fill urgency */
   defaultUrgency?: Urgency;
+  /**
+   * DIRECT MODE — when set, the request goes to this specific provider
+   * instead of broadcasting to nearby providers. Used on unclaimed provider
+   * profile pages where the customer wants a quote from that one business.
+   * The API will send the provider an email with the customer's details.
+   */
+  targetTenantId?: string;
+  /** Provider name for display in direct mode (title + success message) */
+  targetProviderName?: string;
 }
 
 type Step = 'form' | 'submitting' | 'success';
@@ -78,7 +87,10 @@ export function QuoteRequestDialog({
   defaultBudgetLow,
   defaultBudgetHigh,
   defaultUrgency,
+  targetTenantId,
+  targetProviderName,
 }: QuoteRequestDialogProps) {
+  const isDirectMode = !!targetTenantId;
   const [step, setStep] = React.useState<Step>('form');
   const [title, setTitle] = React.useState(defaultTitle ?? '');
   const [description, setDescription] = React.useState(defaultDescription ?? '');
@@ -184,6 +196,7 @@ export function QuoteRequestDialog({
           customerPhone: customerPhone.trim(),
           customerEmail: customerEmail.trim() || undefined,
           photos: photoUrls,
+          ...(targetTenantId ? { targetTenantId } : {}),
         }),
       });
 
@@ -192,13 +205,19 @@ export function QuoteRequestDialog({
         throw new Error(data?.error || 'Failed to submit request');
       }
 
-      const response = data as QuoteRequestResponse;
+      const response = data as QuoteRequestResponse & { directMode?: boolean; providerName?: string };
       setRequestId(response.jobRequest.id);
       setBroadcastCount(response.broadcastCount);
       setStep('success');
-      toast.success('Request broadcast!', {
-        description: `${response.broadcastCount} providers notified.`,
-      });
+      if (response.directMode) {
+        toast.success('Request sent!', {
+          description: `${targetProviderName || 'The provider'} has been notified by email.`,
+        });
+      } else {
+        toast.success('Request broadcast!', {
+          description: `${response.broadcastCount} providers notified.`,
+        });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to submit request';
       setErrorMsg(msg);
@@ -215,10 +234,14 @@ export function QuoteRequestDialog({
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
               <FileText className="h-4 w-4" />
             </span>
-            Request Quotes from Local Providers
+            {isDirectMode && targetProviderName
+              ? `Request a Quote from ${targetProviderName}`
+              : 'Request Quotes from Local Providers'}
           </DialogTitle>
           <DialogDescription>
-            Describe your project and nearby verified providers will respond with quotes — usually within 24 hours.
+            {isDirectMode && targetProviderName
+              ? `Describe your project below and ${targetProviderName} will receive your request by email. They will contact you directly with a quote.`
+              : 'Describe your project and nearby verified providers will respond with quotes — usually within 24 hours.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -229,7 +252,9 @@ export function QuoteRequestDialog({
             </div>
             <h3 className="text-lg font-semibold">Request Sent!</h3>
             <p className="max-w-md text-sm text-muted-foreground">
-              We&apos;ve notified <span className="font-semibold text-foreground">{broadcastCount}</span> marketplace-eligible providers about your request. You&apos;ll receive quotes by phone and email as they respond.
+              {isDirectMode && targetProviderName
+                ? <>We&apos;ve sent your request to <span className="font-semibold text-foreground">{targetProviderName}</span>. They will contact you directly by phone or email with a quote.</>
+                : <>We&apos;ve notified <span className="font-semibold text-foreground">{broadcastCount}</span> marketplace-eligible providers about your request. You&apos;ll receive quotes by phone and email as they respond.</>}
             </p>
             <div className="mt-2 rounded-lg border bg-muted/40 px-4 py-3 text-sm">
               <div className="flex items-center gap-2">

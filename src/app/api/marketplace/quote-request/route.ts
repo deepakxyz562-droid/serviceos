@@ -4,6 +4,7 @@ import { CI } from '@/lib/db-utils';
 import { logger, withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
 import { getIndustry } from '@/lib/industry-catalog';
+import { sendEmail } from '@/lib/email-send';
 
 /**
  * Flow 2: Quote Request — create (Fieseros V1.5 — P10-flows)
@@ -216,6 +217,19 @@ export async function POST(request: NextRequest) {
       .slice(0, MAX_PHOTOS);
   }
 
+  // targetTenantId: when set, this is a DIRECT quote request to a specific
+  // unclaimed provider (from their public profile page). Instead of
+  // broadcasting to nearby verified providers, we:
+  //   1. Verify the target tenant is unclaimed AND has an email
+  //   2. Create the JobRequest with tenantId = targetTenantId
+  //   3. Send a notification email to the provider's email address
+  // If the tenant is claimed or has no email, we reject (the form should
+  // not have been shown in those cases — this is a safety check).
+  const targetTenantId =
+    typeof body.targetTenantId === 'string' && body.targetTenantId.trim().length > 0
+      ? body.targetTenantId.trim()
+      : null;
+
   // ── Validate required fields ───────────────────────────────────────
   if (!title || title.length < 5 || title.length > 200) {
     return NextResponse.json(
@@ -270,6 +284,133 @@ export async function POST(request: NextRequest) {
     } catch {
       // ignore — best-effort
     }
+  }
+
+  // ── 3a. DIRECT MODE — quote request to a specific unclaimed provider ──
+  // When targetTenantId is set, we skip the broadcast entirely and route
+  // the request directly to that provider via email.
+  if (targetTenantId) {
+    const target = await db.tenant.findUnique({
+      where: { id: targetTenantId },
+      select: { id: true, name: true, email: true, claimed: true, industry: true, city: true, currency: true },
+    });
+
+    if (!target) {
+      return NextResponse.json(
+        { error: 'Target provider not found.' },
+        { status: 404 },
+      );
+    }
+    // Safety: claimed providers should use the booking flow, not this endpoint
+    if (target.claimed) {
+      return NextResponse.json(
+        { error: 'This provider accepts online bookings — please use the Book Now button.' },
+        { status: 400 },
+      );
+    }
+    // Safety: no email → cannot notify the provider → reject
+    if (!target.email) {
+      return NextResponse.json(
+        { error: 'This provider cannot receive quote requests. Please call them directly.' },
+        { status: 400 },
+      );
+    }
+
+    // Create the JobRequest tied directly to this provider
+    let jobRequest;
+    try {
+      jobRequest = await db.jobRequest.create({
+        data: {
+          tenantId: target.id, // direct to this provider
+          customerName,
+          customerPhone,
+          customerEmail,
+          title,
+          description,
+          industry: industry || target.industry,
+          serviceId,
+          serviceName,
+          urgency,
+          budgetLow,
+          budgetHigh,
+          currency: target.currency || 'USD',
+          photosJson: JSON.stringify(photos),
+          videosJson: JSON.stringify([]),
+          address,
+          city: city || target.city,
+          postalCode,
+          status: 'open',
+          expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+          metadataJson: JSON.stringify({
+            directToProvider: true,
+            providerEmail: target.email,
+            source: 'marketplace_profile',
+            createdAt: new Date().toISOString(),
+          }),
+        },
+      });
+    } catch (err) {
+      log.error({ err }, 'marketplace/quote-request: direct create failed');
+      return NextResponse.json(
+        { error: 'Failed to create quote request' },
+        { status: 500 },
+      );
+    }
+
+    // Send notification email to the provider (best-effort, non-blocking)
+    const emailHtml = buildProviderQuoteEmail({
+      providerName: target.name,
+      customerName,
+      customerPhone,
+      customerEmail,
+      title,
+      description,
+      urgency,
+      city: city || target.city,
+      budgetLow,
+      budgetHigh,
+    });
+
+    sendEmail({
+      to: target.email,
+      subject: `New quote request from ${customerName} — ${title.slice(0, 60)}`,
+      html: emailHtml,
+      usageType: 'transactional',
+      tenantId: target.id,
+    }).catch((err) => {
+      log.warn(
+        { err: err instanceof Error ? err.message : String(err), targetTenantId: target.id, jobRequestId: jobRequest.id },
+        'marketplace/quote-request: provider email send failed (non-fatal)',
+      );
+    });
+
+    // Also create an in-app Notification (for when the provider eventually
+    // claims their listing and logs in)
+    db.notification
+      .create({
+        data: {
+          title: 'New Quote Request',
+          message: `${title}${industry ? ` — ${industry}` : ''}${city ? ` (${city})` : ''}`,
+          type: 'marketplace_quote_request',
+          tenantId: target.id,
+        },
+      })
+      .catch(() => {});
+
+    log.info(
+      { jobRequestId: jobRequest.id, targetTenantId: target.id, providerEmail: target.email },
+      'marketplace/quote-request: direct mode created',
+    );
+
+    return NextResponse.json(
+      {
+        jobRequest,
+        broadcastCount: 1,
+        directMode: true,
+        providerName: target.name,
+      },
+      { status: 201 },
+    );
   }
 
   // ── 4. Find nearby providers to broadcast to ───────────────────────
@@ -420,4 +561,88 @@ export async function GET(request: NextRequest) {
     log.error({ err }, 'marketplace/quote-request: list failed');
     return NextResponse.json({ error: 'Failed to list quote requests' }, { status: 500 });
   }
+}
+
+// ─── Email template for direct-to-provider quote requests ────────────────────
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+interface ProviderQuoteEmailData {
+  providerName: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string | null;
+  title: string;
+  description: string | null;
+  urgency: string;
+  city: string | null;
+  budgetLow: number | null;
+  budgetHigh: number | null;
+}
+
+function buildProviderQuoteEmail(d: ProviderQuoteEmailData): string {
+  const urgencyLabel: Record<string, string> = {
+    low: 'Flexible',
+    medium: 'Within 1-2 weeks',
+    high: 'This week',
+    emergency: 'EMERGENCY — ASAP',
+  };
+  const budgetStr =
+    d.budgetLow != null && d.budgetHigh != null
+      ? `$${d.budgetLow} – $${d.budgetHigh}`
+      : d.budgetLow != null
+        ? `From $${d.budgetLow}`
+        : d.budgetHigh != null
+          ? `Up to $${d.budgetHigh}`
+          : 'Not specified';
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>New Quote Request</title></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
+  <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 24px;">
+    <h1 style="margin: 0 0 8px; font-size: 22px; color: #065f46;">New Quote Request</h1>
+    <p style="margin: 0 0 20px; color: #047857; font-size: 14px;">A customer found you on Fieseros and wants a quote.</p>
+  </div>
+
+  <div style="margin: 24px 0; padding: 20px; background: #f9fafb; border-radius: 8px;">
+    <h2 style="margin: 0 0 12px; font-size: 18px; color: #111827;">${escapeHtml(d.title)}</h2>
+    ${d.description ? `<p style="margin: 0 0 16px; font-size: 14px; line-height: 1.6; color: #4b5563; white-space: pre-wrap;">${escapeHtml(d.description)}</p>` : ''}
+
+    <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
+      <tr><td style="padding: 6px 0; color: #6b7280; width: 120px;">Urgency:</td><td style="padding: 6px 0; font-weight: 600;">${escapeHtml(urgencyLabel[d.urgency] || d.urgency)}</td></tr>
+      <tr><td style="padding: 6px 0; color: #6b7280;">Location:</td><td style="padding: 6px 0; font-weight: 600;">${escapeHtml(d.city || 'Not specified')}</td></tr>
+      <tr><td style="padding: 6px 0; color: #6b7280;">Budget:</td><td style="padding: 6px 0; font-weight: 600;">${escapeHtml(budgetStr)}</td></tr>
+    </table>
+  </div>
+
+  <div style="margin: 24px 0; padding: 20px; background: #ecfdf5; border-radius: 8px; border-left: 4px solid #10b981;">
+    <h3 style="margin: 0 0 12px; font-size: 15px; color: #065f46;">Customer Contact Details</h3>
+    <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
+      <tr><td style="padding: 4px 0; color: #6b7280; width: 100px;">Name:</td><td style="padding: 4px 0; font-weight: 600;">${escapeHtml(d.customerName)}</td></tr>
+      <tr><td style="padding: 4px 0; color: #6b7280;">Phone:</td><td style="padding: 4px 0;"><a href="tel:${escapeHtml(d.customerPhone.replace(/[^+\d]/g, ''))}" style="color: #059669; font-weight: 600; text-decoration: none;">${escapeHtml(d.customerPhone)}</a></td></tr>
+      ${d.customerEmail ? `<tr><td style="padding: 4px 0; color: #6b7280;">Email:</td><td style="padding: 4px 0;"><a href="mailto:${escapeHtml(d.customerEmail)}" style="color: #059669; font-weight: 600; text-decoration: none;">${escapeHtml(d.customerEmail)}</a></td></tr>` : ''}
+    </table>
+  </div>
+
+  <div style="margin: 24px 0; padding: 16px; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
+    <p style="margin: 0; font-size: 13px; color: #92400e; line-height: 1.5;">
+      <strong>Next step:</strong> Contact the customer directly using the details above.
+      Responding quickly increases your chances of winning the job.
+    </p>
+  </div>
+
+  <p style="margin: 24px 0 0; font-size: 12px; color: #9ca3af; text-align: center;">
+    This request was sent from your Fieseros business listing.
+    Claim your listing to manage quotes, bookings, and your profile online.
+  </p>
+</body>
+</html>`;
 }

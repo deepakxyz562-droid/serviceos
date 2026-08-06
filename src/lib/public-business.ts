@@ -612,6 +612,115 @@ export function revalidatePublicBusiness(_slugOrTenantId?: string): void {
   revalidateTag('public-business', { expire: 0 })
 }
 
+// ─── Similar Businesses ─────────────────────────────────────────────────────
+
+export interface SimilarBusiness {
+  id: string
+  name: string
+  slug: string
+  industry: string | null
+  city: string | null
+  state: string | null
+  country: string
+  phone: string | null
+  rating: number
+  reviewCount: number
+  tagline: string | null
+  coverImage: string | null
+  claimed: boolean
+  canonicalUrl: string
+}
+
+/**
+ * Find similar businesses for a given provider profile page.
+ *
+ * Strategy (2-tier, falls back gracefully):
+ *   1. Same `industry` + same `city` (most relevant — same service, same area)
+ *   2. If tier-1 returns fewer than `limit`, backfill from same `industry` +
+ *      same `country` (broader geographic match)
+ *
+ * Excludes:
+ *   - The current tenant (by id)
+ *   - Suspended tenants (suspendedAt != null)
+ *   - Tenants with marketplaceOptIn=false or publicProfileEnabled=false
+ *
+ * Sort: rating DESC, then reviewCount DESC (most reputable first).
+ *
+ * Returns at most `limit` (default 6) similar businesses.
+ * Cached for 5 minutes via unstable_cache.
+ */
+async function _getSimilarProviders(
+  tenantId: string,
+  industry: string | null,
+  city: string | null,
+  country: string,
+  limit: number = 6,
+): Promise<SimilarBusiness[]> {
+  if (!industry) return []
+
+  // Tier 1: same industry + same city
+  const whereCity = {
+    id: { not: tenantId },
+    industry,
+    city: city || undefined,
+    country,
+    publicProfileEnabled: true,
+    marketplaceOptIn: true,
+    suspendedAt: null,
+  }
+
+  let tenants = await db.tenant.findMany({
+    where: whereCity,
+    select: {
+      id: true, name: true, slug: true, industry: true, city: true, state: true,
+      country: true, phone: true, rating: true, reviewCount: true, tagline: true,
+      coverImage: true, claimed: true,
+    },
+    orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }],
+    take: limit,
+  })
+
+  // Tier 2: if not enough, backfill from same industry + same country (any city)
+  if (tenants.length < limit) {
+    const existingIds = new Set(tenants.map((t) => t.id))
+    existingIds.add(tenantId)
+    const more = await db.tenant.findMany({
+      where: {
+        id: { notIn: Array.from(existingIds) },
+        industry,
+        country,
+        publicProfileEnabled: true,
+        marketplaceOptIn: true,
+        suspendedAt: null,
+      },
+      select: {
+        id: true, name: true, slug: true, industry: true, city: true, state: true,
+        country: true, phone: true, rating: true, reviewCount: true, tagline: true,
+        coverImage: true, claimed: true,
+      },
+      orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }],
+      take: limit - tenants.length,
+    })
+    tenants = [...tenants, ...more]
+  }
+
+  // Build canonical URLs using the plural industry slug + slugified city
+  return tenants.map((t) => {
+    const industrySlug = mapIndustryToPluralSlug(t.industry)
+    const citySlug = slugifyCity(t.city)
+    return {
+      ...t,
+      canonicalUrl: `/${industrySlug}/${citySlug}/${t.slug}`,
+    }
+  })
+}
+
+export const getSimilarProviders = unstable_cache(
+  _getSimilarProviders,
+  ['public-business-similar'],
+  { revalidate: 300 }, // 5 minutes
+)
+
 /**
  * A sitemap entry for an indexable business — the canonical URL plus the
  * tenant's real `updatedAt` timestamp so Google gets an accurate freshness

@@ -20,7 +20,6 @@ import {
   Award,
   Globe,
   Mail,
-  MessageCircle,
   Navigation,
   type LucideIcon,
 } from 'lucide-react'
@@ -31,6 +30,7 @@ import { MarketplaceHeader } from '@/components/marketplace/marketplace-header'
 import { SafeImage } from '@/components/marketplace/safe-image'
 import { CornerstoneFooter } from '@/components/seo/cornerstone-footer'
 import { StickyMobileCta } from './sticky-mobile-cta'
+import { UnclaimedQuotePanel } from './unclaimed-quote-panel'
 import {
   getLocalBusinessSchema,
   getFaqSchema,
@@ -48,10 +48,12 @@ import {
   getPublicServices,
   getPublicReviews,
   getMarketplaceCertifications,
+  getSimilarProviders,
   formatAddressForDisplay,
   type PublicBusinessData,
   type PublicServiceData,
   type PublicCertificationData,
+  type SimilarBusiness,
 } from '@/lib/public-business'
 import { PublicBookingForm } from './booking-form'
 import { MarketplaceBookingPanel } from './marketplace-booking-panel'
@@ -191,11 +193,19 @@ export default async function PublicBusinessHubPage({
   const featuredPromise = business.marketplaceOptIn
     ? fetchFeaturedListingsMap([business.id]).catch(() => null)
     : Promise.resolve(null)
-  const [services, reviews, certifications, featuredMap] = await Promise.all([
+  const similarPromise = getSimilarProviders(
+    business.id,
+    business.industry,
+    business.city,
+    business.country,
+    6,
+  ).catch(() => [])
+  const [services, reviews, certifications, featuredMap, similarProviders] = await Promise.all([
     getPublicServices(business.id),
     getPublicReviews(business.id, 10),
     certificationsPromise,
     featuredPromise,
+    similarPromise,
   ])
 
   // ── Compute the marketplace card type for this business ──────────────────
@@ -599,6 +609,23 @@ export default async function PublicBusinessHubPage({
                   </div>
                 </section>
               )}
+
+              {/* Similar Businesses — same industry + same city (fallback: same country) */}
+              {similarProviders.length > 0 && (
+                <section id="similar" aria-labelledby="similar-heading">
+                  <h2 id="similar-heading" className="text-2xl font-bold tracking-tight mb-4">
+                    Similar Businesses
+                  </h2>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Other {business.industry || 'service'} providers near {business.city || 'you'}
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {similarProviders.map((p) => (
+                      <SimilarBusinessCard key={p.id} business={p} />
+                    ))}
+                  </div>
+                </section>
+              )}
             </div>
 
             {/* Right: sticky CTA card + contact info */}
@@ -621,14 +648,16 @@ export default async function PublicBusinessHubPage({
                   isClaimed={!!business.claimed}
                 />
 
-                {/* Booking CTA — three rendering modes, kept consistent with
+                {/* Booking CTA — rendering modes, kept consistent with
                     the marketplace browse grid's computeCardType() output:
                       • 'featured' / 'normal-full' (marketplaceOptIn && !isMinimalListing)
                         → full MarketplaceBookingPanel (Book Now + Request Quote)
                       • 'normal-minimal' (marketplaceOptIn && isMinimalListing)
-                        → minimal "Call Now" CTA only — no booking, no quote.
-                        Used for seed data (claimed=false), expired trials,
-                        and unsubscribed providers.
+                        → EMAIL-GATED for unclaimed providers:
+                          - unclaimed + has email → UnclaimedQuotePanel
+                            (stores JobRequest + emails the provider)
+                          - unclaimed + no email → minimal "Call Now" CTA only
+                          - claimed + minimal → minimal "Call Now" CTA (expired trial etc.)
                       • Non-marketplace businesses (marketplaceOptIn=false)
                         → lightweight PublicBookingForm (creates a Lead).
                     This keeps the detail page treatment consistent with the
@@ -655,6 +684,18 @@ export default async function PublicBusinessHubPage({
                       industry={business.industry}
                       city={business.city}
                       emergencyServiceAvailable={business.emergencyServiceAvailable}
+                    />
+                  ) : business.marketplaceOptIn && isMinimalListing && !business.claimed && business.email ? (
+                    /* Unclaimed provider WITH email → show Request Quote panel.
+                       The panel opens QuoteRequestDialog in DIRECT mode, which
+                       creates a JobRequest tied to this provider and emails
+                       them the customer's contact details. */
+                    <UnclaimedQuotePanel
+                      providerTenantId={business.id}
+                      providerName={business.name}
+                      providerPhone={business.phone}
+                      providerIndustry={business.industry}
+                      providerCity={business.city}
                     />
                   ) : business.marketplaceOptIn && isMinimalListing ? (
                     /* Minimal CTA for seed data / expired trials — Call Now
@@ -733,15 +774,6 @@ export default async function PublicBusinessHubPage({
                     <InfoRow icon={Phone} label="Phone" value={cleanPhone} href={`tel:${cleanPhone.replace(/[^+\d]/g, '')}`} />
                   )}
 
-                  {business.whatsappPhone && (
-                    <InfoRow
-                      icon={MessageCircle}
-                      label="WhatsApp"
-                      value={business.whatsappPhone}
-                      href={`https://wa.me/${business.whatsappPhone.replace(/[^\d]/g, '')}`}
-                      external
-                    />
-                  )}
                   {business.email && (
                     <InfoRow
                       icon={Mail}
@@ -1048,6 +1080,83 @@ function ReviewCard({
         </div>
       )}
     </div>
+  )
+}
+
+// ── Similar business card ───────────────────────────────────────────────────
+
+function SimilarBusinessCard({ business }: { business: SimilarBusiness }) {
+  return (
+    <Link
+      href={business.canonicalUrl}
+      className="group flex flex-col rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden transition-all hover:shadow-md hover:border-emerald-300"
+    >
+      {/* Cover image / gradient header */}
+      <div className="relative h-28 bg-gradient-to-br from-emerald-700 to-teal-700 overflow-hidden">
+        {business.coverImage ? (
+          <img
+            src={business.coverImage}
+            alt={business.name}
+            className="h-full w-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+            onError={(e) => {
+              ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+            }}
+          />
+        ) : null}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+        <div className="absolute bottom-2 left-3 right-3">
+          <h3 className="text-sm font-bold text-white line-clamp-1 drop-shadow-sm">
+            {business.name}
+          </h3>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="p-3 space-y-2 flex-1 flex flex-col">
+        {business.tagline && (
+          <p className="text-xs text-muted-foreground line-clamp-2">
+            {business.tagline}
+          </p>
+        )}
+
+        {/* Location + rating row */}
+        <div className="flex items-center justify-between gap-2 text-xs">
+          <span className="flex items-center gap-1 text-muted-foreground min-w-0">
+            <MapPin className="h-3 w-3 shrink-0" />
+            <span className="truncate">
+              {business.city || '—'}{business.state ? `, ${business.state}` : ''}
+            </span>
+          </span>
+          {business.rating > 0 && (
+            <span className="flex items-center gap-0.5 font-medium text-amber-600 shrink-0">
+              <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+              {business.rating.toFixed(1)}
+              {business.reviewCount > 0 && (
+                <span className="text-muted-foreground font-normal">
+                  {' '}({business.reviewCount})
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+
+        {/* Footer: claim status + CTA */}
+        <div className="mt-auto flex items-center justify-between pt-2 border-t">
+          {business.claimed ? (
+            <span className="flex items-center gap-1 text-xs text-emerald-700">
+              <BadgeCheck className="h-3.5 w-3.5" />
+              Claimed
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">Unclaimed</span>
+          )}
+          <span className="flex items-center gap-0.5 text-xs font-medium text-emerald-700 group-hover:gap-1 transition-all">
+            View
+            <ChevronRight className="h-3 w-3" />
+          </span>
+        </div>
+      </div>
+    </Link>
   )
 }
 
