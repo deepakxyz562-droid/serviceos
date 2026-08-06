@@ -575,8 +575,8 @@ function buildOrConditionPart(cond: WhereInput): string | null {
 
   if (parts.length === 0) return null;
   if (parts.length === 1) return parts[0];
-  // Multiple parts → wrap in parens so they're AND-ed inside the outer OR.
-  return `(${parts.join(',')})`;
+  // Multiple parts → wrap in and(...) so they're AND-ed inside the outer OR.
+  return `and(${parts.join(',')})`;
 }
 
 // ── Helper: Map Prisma where clause to Supabase filters ────────────────────
@@ -1719,8 +1719,50 @@ class SupabaseModel {
     return result;
   }
 
-  async groupBy(_options: Record<string, unknown>): Promise<unknown[]> {
-    return [];
+  async groupBy(options: Record<string, unknown>): Promise<unknown[]> {
+    if (this.isMissingTable) return [];
+
+    const by = options.by as string[];
+    const where = options.where as WhereInput | undefined;
+
+    if (!by || by.length === 0) return [];
+
+    // Select ONLY the group-by columns to minimize wire payload size.
+    const selectCols = by.join(',');
+    let query = this.client.from(this.tableName).select(selectCols);
+
+    if (where) applyWhereFilters(query, where);
+
+    const { data, error } = await query;
+    if (error) {
+      console.error(`[SupabaseDB] groupBy error on ${this.tableName}:`, error.message);
+      return [];
+    }
+
+    const rows = (data || []) as Record<string, unknown>[];
+
+    const countField = by[0]; // e.g. 'industry'
+    const countsMap = new Map<string | null, number>();
+    for (const r of rows) {
+      const val = r[countField] as string | null;
+      countsMap.set(val, (countsMap.get(val) || 0) + 1);
+    }
+
+    const countObj = options._count as Record<string, unknown> | undefined;
+    const countKeys = countObj ? Object.keys(countObj) : ['id'];
+
+    const result = Array.from(countsMap.entries()).map(([val, count]) => {
+      const _count: Record<string, number> = {};
+      for (const k of countKeys) {
+        _count[k] = count;
+      }
+      return {
+        [countField]: val,
+        _count
+      };
+    });
+
+    return result;
   }
 }
 

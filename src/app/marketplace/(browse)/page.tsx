@@ -78,34 +78,26 @@ interface SsrProviderPage {
   total: number;
 }
 
-const fetchProvidersCached = unstable_cache(
-  async (countryCode: string | null): Promise<SsrProviderPage> => {
-    return fetchProvidersUncached(countryCode);
-  },
-  ['marketplace-providers-page1'],
-  { revalidate: 30 }, // 30 seconds
-);
+const fetchProvidersCached = (filters: ProviderFilterOptions) =>
+  unstable_cache(
+    async (): Promise<SsrProviderPage> => {
+      return fetchProvidersUncached(filters);
+    },
+    [
+      'marketplace-providers-page1',
+      filters.country || 'all',
+      filters.search || '',
+      filters.city || '',
+      filters.vertical || '',
+      filters.industry || '',
+      String(filters.trustFullyVerified || false),
+      String(filters.trustRatingHigh || false),
+      String(filters.trustEmergency || false),
+    ],
+    { revalidate: 30 }, // 30 seconds
+  )();
 
-async function fetchProvidersUncached(countryCode: string | null = null): Promise<SsrProviderPage> {
-  // ── 3-gate eligibility + country filter ────────────────────────────────
-  // A provider appears on the marketplace browse grid when ALL three are true:
-  //   1. publicProfileEnabled  — has a public Business Hub page
-  //   2. marketplaceOptIn      — explicitly opted into marketplace listing
-  //   3. suspendedAt IS null   — not suspended
-  //
-  // PAGINATION (server-side cursor): The SSR page fetches ONLY the first page
-  // (24 items) for SEO + instant first paint. The client fetches subsequent
-  // pages via /api/marketplace/providers?cursor=... as the user scrolls. This
-  // replaces the old `take: 1000` approach which shipped the entire provider
-  // list as serialized HTML props (huge payload, expensive hydration, every
-  // keystroke re-filtered 1000 rows in JS).
-  //
-  // fetchProviderPage() handles the keyset pagination: featured-first on page
-  // 1 (capped at 8), then non-featured by (rating DESC, reviewCount DESC,
-  // id DESC). It also computes nextCursor (for page 2) + total (via COUNT).
-  const filters: ProviderFilterOptions = {
-    ...(countryCode ? { country: countryCode } : {}),
-  };
+async function fetchProvidersUncached(filters: ProviderFilterOptions): Promise<SsrProviderPage> {
 
   // Fetch the set of featured tenant IDs (for featured-first sorting on page 1).
   const featuredIds = await fetchFeaturedTenantIds();
@@ -241,6 +233,14 @@ export default async function MarketplaceBrowsePage({
     ? geoCountry.trim().toUpperCase().substring(0, 2)
     : null;
 
+  const filters: ProviderFilterOptions = {
+    country: detectedCountry,
+    search: params.search?.trim() || null,
+    city: params.city?.trim() || null,
+    vertical: verticalFilter,
+    industry: industryFilter,
+  };
+
   let providers: ProviderListItem[] = [];
   let nextCursor: string | null = null;
   let totalProviders = 0;
@@ -248,7 +248,7 @@ export default async function MarketplaceBrowsePage({
   try {
     // A5: use the unstable_cache-wrapped version (30s TTL).
     // On a cache hit, this returns instantly without hitting the DB.
-    // The cache key includes the country code so each country gets its
+    // The cache key includes the filters so each search gets its
     // own 30s cache entry.
     //
     // PAGINATION: fetchProvidersCached returns only the FIRST PAGE (24 items)
@@ -256,7 +256,7 @@ export default async function MarketplaceBrowsePage({
     // sidebar's "Active providers" stat). The client's useMarketplaceProviders
     // hook seeds its React Query cache with this data — NO duplicate fetch
     // of page 1.
-    const ssrPage = await fetchProvidersCached(detectedCountry);
+    const ssrPage = await fetchProvidersCached(filters);
     providers = ssrPage.items;
     nextCursor = ssrPage.nextCursor;
     totalProviders = ssrPage.total;

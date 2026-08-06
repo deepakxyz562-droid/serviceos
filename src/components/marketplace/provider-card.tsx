@@ -52,6 +52,11 @@ function isProfile(p: ProviderListItem | ProviderProfile): p is ProviderProfile 
   return 'identityVerified' in p && 'gallery' in p;
 }
 
+function stripHtml(html: string): string {
+  if (!html) return '';
+  return html.replace(/<\/?[^>]+(>|$)/g, '').replace(/&nbsp;/g, ' ').trim();
+}
+
 function buildInitials(name: string): string {
   return name
     .split(' ')
@@ -334,7 +339,7 @@ function ProviderCardImpl({
       {/* ─── Description (2-line clamp) ────────────────────────────────────── */}
       {description && !compact ? (
         <p className="mx-4 mt-3 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
-          {description}
+          {stripHtml(description)}
         </p>
       ) : null}
 
@@ -524,12 +529,7 @@ function MinimalCard({
         )}
       </div>
 
-      {/* 4-gate verification badges (all will show as "not yet verified" for seed data) */}
-      <div className="mx-4 mb-3 flex flex-wrap gap-1.5">
-        {buildVerificationGates(provider).map((g) => (
-          <GateBadge key={g.label} gate={g} />
-        ))}
-      </div>
+
 
       {/* Action row */}
       <div className="mt-auto flex items-center justify-between gap-2 p-4 pt-0">

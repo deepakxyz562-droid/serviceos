@@ -220,7 +220,6 @@ model Tenant {
   @@index([plan])
   @@index([planStatus])
   @@index([city])
-  @@index([latitude, longitude])
   // ── Marketplace browse optimization indexes ───────────────────────────
   // Added to support the public marketplace browse page's heavy filtering
   // and sorting. Without these, the SQLite query planner scans the full

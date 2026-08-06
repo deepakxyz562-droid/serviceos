@@ -216,8 +216,6 @@ export function MarketplaceBrowser({
   // (fetched without filters) wouldn't match the hook's queryKey, so we
   // let the hook fetch fresh. This gives a brief loading state on deep-
   // linked filter URLs, but the data is correct.
-  const ssrFiltersMatchUrl =
-    !initialFilters.search && !initialFilters.city && !initialFilters.vertical && !initialFilters.industry;
   const {
     providers: loadedProviders,
     total: loadedTotal,
@@ -244,9 +242,9 @@ export function MarketplaceBrowser({
       trustRatingHigh,
       trustEmergency,
     },
-    ssrFiltersMatchUrl ? providers : undefined,
-    ssrFiltersMatchUrl ? initialNextCursor : null,
-    ssrFiltersMatchUrl ? initialTotal : undefined,
+    providers,
+    initialNextCursor,
+    initialTotal,
   );
 
   // `filtering` = true while the API is fetching (filter change or initial

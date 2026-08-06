@@ -69,6 +69,8 @@ const PUBLIC_TENANT_SELECT = {
   licenceNumber: true,
   insuranceProvider: true,
   emergencyServiceAvailable: true,
+  googlePlaceId: true,
+  website: true,
 } satisfies Prisma.TenantSelect
 
 /**
@@ -143,6 +145,8 @@ export interface PublicBusinessData {
   emergencyServiceAvailable: boolean
   isIndexable: boolean  // computed: rich-enough check passed
   canonicalUrl: string
+  googlePlaceId: string | null
+  website: string | null
 }
 
 /**
@@ -437,6 +441,8 @@ async function buildPublicBusinessData(
     emergencyServiceAvailable: tenant.emergencyServiceAvailable,
     isIndexable,
     canonicalUrl,
+    googlePlaceId: tenant.googlePlaceId,
+    website: tenant.website,
   }
 }
 

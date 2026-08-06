@@ -177,6 +177,8 @@ export default async function PublicBusinessHubPage({
     notFound()
   }
 
+  const cleanPhone = business.phone ? business.phone.replace(/\s*\(\/\)\s*/g, '').trim() : null;
+
   // Fetch services + reviews + certifications + featured-listing in parallel.
   // Running all four queries concurrently (instead of awaiting services/reviews/
   // certifications first, then featuredMap separately) cuts the total data-fetch
@@ -671,13 +673,13 @@ export default async function PublicBusinessHubPage({
                         </p>
                       </div>
                       <div className="p-5">
-                        {business.phone ? (
+                        {cleanPhone ? (
                           <a
-                            href={`tel:${business.phone.replace(/[^+\d]/g, '')}`}
+                            href={`tel:${cleanPhone.replace(/[^+\d]/g, '')}`}
                             className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
                           >
                             <Phone className="h-5 w-5" />
-                            Call {business.phone}
+                            Call {cleanPhone}
                           </a>
                         ) : (
                           <p className="text-center text-sm text-muted-foreground">
@@ -701,10 +703,10 @@ export default async function PublicBusinessHubPage({
                   )}
 
                   {/* Call button — available to all businesses with a phone. */}
-                  {business.phone ? (
+                  {cleanPhone ? (
                     <div className="border-t px-5 py-3">
                       <a
-                        href={`tel:${business.phone}`}
+                        href={`tel:${cleanPhone.replace(/[^+\d]/g, '')}`}
                         className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
                       >
                         <Phone className="h-4 w-4" />
@@ -727,8 +729,16 @@ export default async function PublicBusinessHubPage({
                   {business.city && (
                     <InfoRow icon={MapPin} label="City" value={`${business.city}${business.state ? `, ${business.state}` : ''}`} />
                   )}
-                  {business.phone && (
-                    <InfoRow icon={Phone} label="Phone" value={business.phone} href={`tel:${business.phone.replace(/[^+\d]/g, '')}`} />
+                  {cleanPhone && (
+                    <InfoRow icon={Phone} label="Phone" value={cleanPhone} href={`tel:${cleanPhone.replace(/[^+\d]/g, '')}`} />
+                  )}
+                  {business.website && (
+                    <InfoRow
+                      icon={Globe}
+                      label="Website"
+                      value={business.website.replace(/^https?:\/\/(www\.)?/, '')}
+                      href={business.website.startsWith('http') ? business.website : `https://${business.website}`}
+                    />
                   )}
                   {business.whatsappPhone && (
                     <InfoRow
@@ -837,7 +847,7 @@ export default async function PublicBusinessHubPage({
           automatically when the booking panel (#book) scrolls into view so
           the CTA isn't duplicated. Desktop doesn't render this (the
           MarketplaceBookingPanel in the right column is already sticky). */}
-      <StickyMobileCta phone={business.phone} businessName={business.name} />
+      <StickyMobileCta phone={cleanPhone} businessName={business.name} />
     </div>
   )
 }
@@ -854,25 +864,7 @@ function PublicBusinessHero({
   if (!business) return null
   return (
     <section className="border-b bg-gradient-to-b from-emerald-50/60 to-background dark:from-emerald-950/20">
-      {/* Cover image — when no cover is set, hide the entire area (no
-          gradient fallback, no empty space). The hero content below still
-          renders with its own emerald-tinted background. */}
-      {business.coverImage ? (
-        <div className="h-40 sm:h-56 w-full overflow-hidden bg-muted">
-          <SafeImage
-            src={business.coverImage}
-            alt={`${business.name} cover`}
-            className="w-full h-full object-cover"
-            // LCP image — eager + high priority. Cover is rendered at up to
-            // 1920px wide × 224px tall on desktop; 1200×400 gives Supabase
-            // a sane target (cover resize crops to fit) while staying well
-            // below the original 2-5MB upload size.
-            priority
-            maxWidth={1200}
-            maxHeight={400}
-          />
-        </div>
-      ) : null}
+      {/* Cover image removed per user request */}
       <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
           {/* Logo — hidden entirely when null (the flex container's

@@ -106,7 +106,7 @@ export function MarketplaceFeaturedCarousel({
         onScroll={updateScrollState}
         role="region"
         aria-label="Featured providers carousel"
-        className="flex gap-4 overflow-x-auto scroll-smooth pb-2 pt-1 snap-x snap-mandatory [scrollbar-width:thin] [scrollbar-color:rgba(217,119,6,0.4)_transparent]"
+        className="flex gap-4 overflow-x-auto scroll-smooth pb-5 pt-1 snap-x snap-mandatory [scrollbar-width:thin] [scrollbar-color:rgba(217,119,6,0.4)_transparent]"
         style={{
           // Hide scrollbar on WebKit for cleaner carousel look
           scrollbarWidth: 'thin',

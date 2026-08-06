@@ -43,6 +43,7 @@ function isBot(): boolean {
   return BOT_PATTERN.test(navigator.userAgent);
 }
 
+
 /**
  * MarketplaceHeader
  * ------------------
