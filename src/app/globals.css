@@ -416,7 +416,7 @@ html {
        also correctly spans the home-indicator safe-area zone when paired
        with `viewport-fit=cover`. `overscroll-behavior: none` still disables
        the iOS rubber-band bounce. */
-    min-height: 100dvh;
+    min-height: 100vh;
     overscroll-behavior: none;
     background-color: var(--background);
   }

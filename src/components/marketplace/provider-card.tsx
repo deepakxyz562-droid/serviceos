@@ -15,6 +15,16 @@ import {
   Zap,
   Phone,
   ArrowRight,
+  Leaf,
+  Flame,
+  Droplets,
+  Sparkles,
+  Hammer,
+  Paintbrush,
+  Scissors,
+  Car,
+  Shield,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -85,6 +95,114 @@ function avatarColors(name: string): { bg: string; text: string } {
     hash = (hash * 31 + name.charCodeAt(i)) | 0;
   }
   return palettes[Math.abs(hash) % palettes.length];
+}
+
+function getIndustryIcon(industryId: string): { icon: LucideIcon; bg: string; text: string; labelBg: string } {
+  const id = (industryId || '').toLowerCase().trim();
+  if (id.includes('landscaping') || id.includes('lawn') || id.includes('garden')) {
+    return {
+      icon: Leaf,
+      bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900',
+      text: 'text-emerald-600 dark:text-emerald-400',
+      labelBg: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200/50 dark:border-emerald-800/50',
+    };
+  }
+  if (id.includes('hvac') || id.includes('heating') || id.includes('air conditioning') || id.includes('ac') || id.includes('furnace')) {
+    return {
+      icon: Flame,
+      bg: 'bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-900',
+      text: 'text-orange-600 dark:text-orange-400',
+      labelBg: 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300 border-orange-200/50 dark:border-orange-800/50',
+    };
+  }
+  if (id.includes('plumbing') || id.includes('drain') || id.includes('water')) {
+    return {
+      icon: Droplets,
+      bg: 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900',
+      text: 'text-blue-600 dark:text-blue-400',
+      labelBg: 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200/50 dark:border-blue-800/50',
+    };
+  }
+  if (id.includes('cleaning') || id.includes('maid') || id.includes('janitorial') || id.includes('carpet')) {
+    return {
+      icon: Sparkles,
+      bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-900',
+      text: 'text-teal-600 dark:text-teal-400',
+      labelBg: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-200/50 dark:border-teal-800/50',
+    };
+  }
+  if (id.includes('painting') || id.includes('decorating') || id.includes('drywall')) {
+    return {
+      icon: Paintbrush,
+      bg: 'bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-900',
+      text: 'text-purple-600 dark:text-purple-400',
+      labelBg: 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200/50 dark:border-purple-800/50',
+    };
+  }
+  if (id.includes('construction') || id.includes('builder') || id.includes('renovation') || id.includes('carpentry') || id.includes('handyman') || id.includes('home improvement')) {
+    return {
+      icon: Hammer,
+      bg: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900',
+      text: 'text-amber-600 dark:text-amber-400',
+      labelBg: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200/50 dark:border-amber-800/50',
+    };
+  }
+  if (id.includes('automotive') || id.includes('car') || id.includes('mechanic') || id.includes('towing')) {
+    return {
+      icon: Car,
+      bg: 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900',
+      text: 'text-rose-600 dark:text-rose-400',
+      labelBg: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200/50 dark:border-rose-800/50',
+    };
+  }
+  if (id.includes('security') || id.includes('locksmith') || id.includes('alarm')) {
+    return {
+      icon: Shield,
+      bg: 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900',
+      text: 'text-red-600 dark:text-red-400',
+      labelBg: 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300 border-red-200/50 dark:border-red-800/50',
+    };
+  }
+  if (id.includes('beauty') || id.includes('salon') || id.includes('hair') || id.includes('spa') || id.includes('barber')) {
+    return {
+      icon: Scissors,
+      bg: 'bg-fuchsia-50 dark:bg-fuchsia-950/40 border-fuchsia-200 dark:border-fuchsia-900',
+      text: 'text-fuchsia-600 dark:text-fuchsia-400',
+      labelBg: 'bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-950/60 dark:text-fuchsia-300 border-fuchsia-200/50 dark:border-fuchsia-800/50',
+    };
+  }
+
+  // Fallback
+  return {
+    icon: Wrench,
+    bg: 'bg-slate-50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800',
+    text: 'text-slate-600 dark:text-slate-400',
+    labelBg: 'bg-slate-100 text-slate-800 dark:bg-slate-950/60 dark:text-slate-300 border-slate-200/50 dark:border-slate-800/50',
+  };
+}
+
+function RatingStars({ rating }: { rating: number }) {
+  const fullStars = Math.floor(rating);
+  const hasHalf = rating % 1 >= 0.4;
+  return (
+    <div className="flex items-center gap-0.5" aria-hidden>
+      {[...Array(5)].map((_, i) => {
+        const isFull = i < fullStars;
+        const isHalf = !isFull && i === fullStars && hasHalf;
+        return (
+          <Star
+            key={i}
+            className={cn(
+              'h-3 w-3',
+              isFull ? 'fill-amber-400 text-amber-400' :
+              isHalf ? 'fill-amber-400/50 text-amber-400' :
+              'text-muted/60 dark:text-muted-foreground/30'
+            )}
+          />
+        );
+      })}
+    </div>
+  );
 }
 
 interface VerificationGate {
@@ -208,8 +326,9 @@ function ProviderCardImpl({
   const rating = provider.rating ?? 0;
   const reviewCount = provider.reviewCount ?? 0;
   const industry = provider.industry;
-  const industryMeta = industry ? getIndustry(industry) : undefined;
-  const industryLabel = industryMeta?.name ?? industry ?? 'Service Provider';
+  const industryMeta = getIndustryIcon(industry || '');
+  const industryCatalog = industry ? getIndustry(industry) : undefined;
+  const industryLabel = industryCatalog?.name ?? industry ?? 'Service Provider';
   const location = [provider.city, provider.state].filter(Boolean).join(', ');
   const phone = listItem.phone ?? null;
   const isFeat = featured ?? !!listItem.featured;
@@ -217,24 +336,13 @@ function ProviderCardImpl({
   const claimed = listItem.claimed ?? false;
   const listingTier = listItem.listingTier ?? 'none';
   const isClaimedFree = listingTier === 'claimed_free';
-  // Haversine distance from the user's location (set by the 'recommended' /
-  // 'distance' sort or the lat/lng query params on the providers API). Only
-  // shown when it's a real number — null/undefined means no user location
-  // was provided, so we hide the badge rather than show "0 km away".
   const distanceKm = listItem.distanceKm ?? null;
 
   const gates = buildVerificationGates(provider);
   const allGatesPassed = gates.every((g) => g.passed);
 
-  // ── Claim status badge logic ──
-  //   Verified    → claimed AND all 4 verification gates passed (emerald)
-  //   Unclaimed   → not claimed (muted gray)
-  //   (hidden)    → claimed but NOT yet verified — show no badge (per Q1 decision:
-  //                 hide "Claimed" if not verified, so visitors don't mistake an
-  //                 unverified claim for a verified business)
   const showVerifiedBadge = claimed && allGatesPassed;
   const showUnclaimedBadge = !claimed;
-  const avatar = avatarColors(provider.name);
 
   const description = provider.description ?? listItem.tagline ?? '';
   const profileHref = href ?? '#';
@@ -248,59 +356,59 @@ function ProviderCardImpl({
   return (
     <article
       className={cn(
-        'group flex flex-col rounded-xl border border-border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md min-w-0 overflow-hidden',
-        isFeat && 'ring-2 ring-amber-300/70',
+        'group flex flex-col rounded-xl border border-border bg-card shadow-sm transition-all duration-350 hover:-translate-y-1 hover:border-primary/40 hover:shadow-md min-w-0 overflow-hidden',
+        isFeat && 'ring-2 ring-amber-300/70 border-amber-300/40',
         className,
       )}
     >
       {/* ─── Identity row ──────────────────────────────────────────────────── */}
-      <div className="flex items-start gap-3 p-4 pb-3">
+      <div className="flex items-start gap-3 p-4 pb-2.5">
         <span
           className={cn(
-            'grid h-11 w-11 shrink-0 place-items-center rounded-lg text-sm font-bold uppercase',
-            avatar.bg,
-            avatar.text,
+            'grid h-11 w-11 shrink-0 place-items-center rounded-xl border text-sm font-bold shadow-sm transition-transform duration-350 group-hover:scale-105',
+            industryMeta.bg,
+            industryMeta.text,
           )}
           aria-hidden
         >
-          {buildInitials(provider.name)}
+          <industryMeta.icon className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1.5">
-            {href ? (
-              <Link href={profileHref} aria-label={`View ${provider.name} profile`} className="min-w-0">
-                <h3 className="truncate text-[15px] font-semibold tracking-tight text-foreground transition-colors group-hover:text-emerald-700">
-                  {provider.name}
-                </h3>
-              </Link>
-            ) : (
-              <button type="button" onClick={handleView} className="min-w-0 text-left" aria-label={`View ${provider.name} profile`}>
-                <h3 className="truncate text-[15px] font-semibold tracking-tight text-foreground transition-colors group-hover:text-emerald-700">
-                  {provider.name}
-                </h3>
-              </button>
-            )}
-            {allGatesPassed ? (
-              <BadgeCheck
-                className="h-4 w-4 shrink-0 fill-amber-400 text-amber-500"
-                aria-label="Fully verified"
-              />
-            ) : null}
+          <div className="flex min-w-0 items-center justify-between gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              {href ? (
+                <Link href={profileHref} aria-label={`View ${provider.name} profile`} className="min-w-0">
+                  <h3 className="truncate text-[15px] font-semibold tracking-tight text-foreground transition-colors group-hover:text-emerald-700">
+                    {provider.name}
+                  </h3>
+                </Link>
+              ) : (
+                <button type="button" onClick={handleView} className="min-w-0 text-left" aria-label={`View ${provider.name} profile`}>
+                  <h3 className="truncate text-[15px] font-semibold tracking-tight text-foreground transition-colors group-hover:text-emerald-700">
+                    {provider.name}
+                  </h3>
+                </button>
+              )}
+              {allGatesPassed ? (
+                <BadgeCheck
+                  className="h-4 w-4 shrink-0 fill-amber-400 text-amber-500"
+                  aria-label="Fully verified"
+                />
+              ) : null}
+            </div>
           </div>
-          <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-            <Briefcase className="h-3 w-3 shrink-0" />
-            <span className="truncate">{industryLabel}</span>
+          {/* Location and Distance Row — clean, horizontal flex-nowrap to prevent vertical stacking */}
+          <p className="mt-1 flex flex-nowrap items-center gap-1 text-[11px] text-muted-foreground w-full overflow-hidden">
             {location ? (
               <>
-                <span className="text-border-strong" aria-hidden>•</span>
-                <MapPin className="h-3 w-3 shrink-0" />
+                <MapPin className="h-3 w-3 text-muted-foreground/75 shrink-0" />
                 <span className="truncate">{location}</span>
               </>
             ) : null}
             {distanceKm != null ? (
               <>
-                <span className="text-border-strong" aria-hidden>•</span>
-                <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <span className="text-muted-foreground/45 shrink-0" aria-hidden>•</span>
+                <span className="shrink-0 text-emerald-600 dark:text-emerald-400 font-medium">
                   {distanceKm < 1
                     ? `${Math.round(distanceKm * 1000)} m`
                     : `${distanceKm.toFixed(1)} km`}{' '}
@@ -310,20 +418,21 @@ function ProviderCardImpl({
             ) : null}
           </p>
         </div>
-        {/* Claim status badge — 3-state logic:
-              Verified  → claimed + all verification gates passed (emerald, with check icon)
-              Unclaimed → not claimed (muted gray)
-              (hidden)  → claimed but not verified — no badge shown */}
-        {showVerifiedBadge ? (
-          <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-            <BadgeCheck className="h-3 w-3" />
-            Verified
+        <div className="flex flex-col items-end gap-1.5 shrink-0 ml-2">
+          {showVerifiedBadge ? (
+            <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/50">
+              <BadgeCheck className="h-3 w-3" />
+              Verified
+            </span>
+          ) : showUnclaimedBadge ? (
+            <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground border border-border/40">
+              Unclaimed
+            </span>
+          ) : null}
+          <span className={cn('text-[9px] font-semibold border px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0', industryMeta.labelBg)}>
+            {industryLabel}
           </span>
-        ) : showUnclaimedBadge ? (
-          <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-            Unclaimed
-          </span>
-        ) : null}
+        </div>
       </div>
 
       {/* ─── Stats bar (3 columns: rating | jobs | response) ───────────────── */}
@@ -419,40 +528,40 @@ function MinimalCard({
   const rating = provider.rating ?? 0;
   const reviewCount = provider.reviewCount ?? 0;
   const industry = provider.industry;
-  const industryMeta = industry ? getIndustry(industry) : undefined;
-  const industryLabel = industryMeta?.name ?? industry ?? 'Service Provider';
+  const industryMeta = getIndustryIcon(industry || '');
+  const industryCatalog = industry ? getIndustry(industry) : undefined;
+  const industryLabel = industryCatalog?.name ?? industry ?? 'Service Provider';
   const location = [provider.city, provider.state].filter(Boolean).join(', ');
   const phone = provider.phone ?? null;
   const isEmergency = provider.emergencyServiceAvailable ?? false;
   const profileHref = href ?? '#';
-  const avatar = avatarColors(provider.name);
-  // Haversine distance from the user's location (see main card for details).
   const distanceKm = provider.distanceKm ?? null;
   const handleView = () => {
     if (onViewProfile) onViewProfile(provider);
   };
+  const description = provider.description ?? provider.tagline ?? '';
 
   return (
     <article
       className={cn(
-        'group flex flex-col rounded-xl border border-border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md min-w-0 overflow-hidden',
+        'group flex flex-col rounded-xl border border-border/80 bg-card shadow-sm transition-all duration-350 hover:-translate-y-1 hover:border-emerald-500/30 hover:shadow-md min-w-0 overflow-hidden',
         className,
       )}
     >
       {/* Identity row */}
-      <div className="flex items-start gap-3 p-4 pb-3">
+      <div className="flex items-start gap-3 p-4 pb-2.5">
         <span
           className={cn(
-            'grid h-11 w-11 shrink-0 place-items-center rounded-lg text-sm font-bold uppercase',
-            avatar.bg,
-            avatar.text,
+            'grid h-11 w-11 shrink-0 place-items-center rounded-xl border text-sm font-bold shadow-sm transition-transform duration-350 group-hover:scale-105',
+            industryMeta.bg,
+            industryMeta.text
           )}
           aria-hidden
         >
-          {buildInitials(provider.name)}
+          <industryMeta.icon className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1.5">
+          <div className="flex min-w-0 items-center justify-between gap-1.5">
             {href ? (
               <Link href={profileHref} aria-label={`View ${provider.name} profile`} className="min-w-0">
                 <h3 className="truncate text-[15px] font-semibold tracking-tight text-foreground transition-colors group-hover:text-emerald-700">
@@ -467,20 +576,18 @@ function MinimalCard({
               </button>
             )}
           </div>
-          <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-            <Briefcase className="h-3 w-3 shrink-0" />
-            <span className="truncate">{industryLabel}</span>
+          {/* Location and Distance Row — clean, horizontal flex-nowrap to prevent vertical stacking */}
+          <p className="mt-1 flex flex-nowrap items-center gap-1 text-[11px] text-muted-foreground w-full overflow-hidden">
             {location ? (
               <>
-                <span className="text-border-strong" aria-hidden>•</span>
-                <MapPin className="h-3 w-3 shrink-0" />
+                <MapPin className="h-3 w-3 text-muted-foreground/75 shrink-0" />
                 <span className="truncate">{location}</span>
               </>
             ) : null}
             {distanceKm != null ? (
               <>
-                <span className="text-border-strong" aria-hidden>•</span>
-                <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <span className="text-muted-foreground/45 shrink-0" aria-hidden>•</span>
+                <span className="shrink-0 text-emerald-600 dark:text-emerald-400 font-medium">
                   {distanceKm < 1
                     ? `${Math.round(distanceKm * 1000)} m`
                     : `${distanceKm.toFixed(1)} km`}{' '}
@@ -507,7 +614,7 @@ function MinimalCard({
           }
           if (!cl) {
             return (
-              <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground border border-border/40">
                 Unclaimed
               </span>
             );
@@ -516,18 +623,30 @@ function MinimalCard({
         })()}
       </div>
 
-      {/* Minimal stats: just rating + reviews (single row, no dividers) */}
-      <div className="mx-4 mb-3 flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs">
-        {reviewCount > 0 ? (
-          <>
-            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-            <span className="font-semibold text-foreground">{rating.toFixed(1)}</span>
-            <span className="text-muted-foreground">({reviewCount} review{reviewCount === 1 ? '' : 's'})</span>
-          </>
-        ) : (
-          <span className="italic text-muted-foreground">No reviews yet</span>
-        )}
+      {/* Social proof and category badge row */}
+      <div className="mx-4 mb-2.5 flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-1.5 text-xs border border-border/30">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {reviewCount > 0 ? (
+            <>
+              <RatingStars rating={rating} />
+              <span className="font-bold text-foreground ml-0.5">{rating.toFixed(1)}</span>
+              <span className="text-muted-foreground text-[10px] truncate">({reviewCount})</span>
+            </>
+          ) : (
+            <span className="italic text-muted-foreground text-[11px]">No reviews yet</span>
+          )}
+        </div>
+        <span className={cn('text-[9px] font-semibold border px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0', industryMeta.labelBg)}>
+          {industryLabel}
+        </span>
       </div>
+
+      {/* Description snippet (2-line clamp) */}
+      {description ? (
+        <p className="mx-4 mb-3 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground/90">
+          {stripHtml(description)}
+        </p>
+      ) : null}
 
 
 
