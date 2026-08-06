@@ -732,14 +732,7 @@ export default async function PublicBusinessHubPage({
                   {cleanPhone && (
                     <InfoRow icon={Phone} label="Phone" value={cleanPhone} href={`tel:${cleanPhone.replace(/[^+\d]/g, '')}`} />
                   )}
-                  {business.website && (
-                    <InfoRow
-                      icon={Globe}
-                      label="Website"
-                      value={business.website.replace(/^https?:\/\/(www\.)?/, '')}
-                      href={business.website.startsWith('http') ? business.website : `https://${business.website}`}
-                    />
-                  )}
+
                   {business.whatsappPhone && (
                     <InfoRow
                       icon={MessageCircle}
