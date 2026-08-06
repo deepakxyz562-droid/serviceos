@@ -1,0 +1,2634 @@
+{
+  "query": "landscaping contractor in Hamilton, ON",
+  "regionCode": "ca",
+  "places": [
+    {
+      "id": "ChIJe9T-7sCxLIgRgFEPy0-LuMk",
+      "types": [
+        "swimming_pool",
+        "general_contractor",
+        "sports_activity_location",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 379-4585",
+      "internationalPhoneNumber": "+1 905-379-4585",
+      "formattedAddress": "PO312, 3055 Homestead Dr, Mount Hope, ON L0R 1W0",
+      "addressComponents": [
+        {
+          "longText": "PO312",
+          "languageCode": "en"
+        },
+        {
+          "longText": "3055",
+          "shortText": "3055",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Homestead Drive",
+          "shortText": "Homestead Dr",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Mount Hope",
+          "shortText": "Mount Hope",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L0R 1W0",
+          "shortText": "L0R 1W0",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.159799899999996,
+        "longitude": -79.9126064
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=14535520972163731840&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.twentycreek.net/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 63,
+      "displayName": {
+        "text": "Twenty Creek Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJnZfP9zKbLIgRWkAYtCmDpIM",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(437) 265-5107",
+      "internationalPhoneNumber": "+1 437-265-5107",
+      "formattedAddress": "924 Stone Church Rd E, Hamilton, ON L8W 1B1",
+      "addressComponents": [
+        {
+          "longText": "924",
+          "shortText": "924",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Stone Church Road East",
+          "shortText": "Stone Church Rd E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East Mountain",
+          "shortText": "East Mountain",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L8W 1B1",
+          "shortText": "L8W 1B1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.2005883,
+        "longitude": -79.84819019999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=9485850930287493210&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://opluslandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 37,
+      "displayName": {
+        "text": "Oplus Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ-yre_ziRLIgRNmpOIQ6AD8w",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(855) 533-8463",
+      "internationalPhoneNumber": "+1 855-533-8463",
+      "formattedAddress": "2888 Upper James St, Mount Hope, ON L0R 1W0",
+      "addressComponents": [
+        {
+          "longText": "2888",
+          "shortText": "2888",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Upper James Street",
+          "shortText": "Upper James St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Mount Hope",
+          "shortText": "Mount Hope",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L0R 1W0",
+          "shortText": "L0R 1W0",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.1652434,
+        "longitude": -79.9103179
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=14704112106564643382&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://devineimage.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 38,
+      "displayName": {
+        "text": "Devine Image Lawn and Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJJaumd1F9K4gRjNjphjJmcJ4",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 689-5433",
+      "internationalPhoneNumber": "+1 905-689-5433",
+      "formattedAddress": "831 Centre Rd, Hamilton, ON L9N 2Z7",
+      "addressComponents": [
+        {
+          "longText": "831",
+          "shortText": "831",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Centre Road",
+          "shortText": "Centre Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Waterdown",
+          "shortText": "Waterdown",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L9N 2Z7",
+          "shortText": "L9N 2Z7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.3524856,
+        "longitude": -79.92694089999999
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=11416737422582077580&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.gelderman.com/?utm_source=gmb&utm_medium=organic",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 445,
+      "displayName": {
+        "text": "Gelderman Landscape Services"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJMeE_xutdK4gRDwbdf3ozMiA",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 960-8459",
+      "internationalPhoneNumber": "+1 647-960-8459",
+      "formattedAddress": "Nordale Crescent, Stoney Creek, ON L8J 1H1",
+      "addressComponents": [
+        {
+          "longText": "Nordale Crescent",
+          "shortText": "Nordale Crescent",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Stoney Creek",
+          "shortText": "Stoney Creek",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L8J 1H1",
+          "shortText": "L8J 1H1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.187994499999995,
+        "longitude": -79.7939145
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=2319973359273444879&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.instagram.com/ablandscapinggta/?hl=en",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 87,
+      "displayName": {
+        "text": "A.B landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJT9gfgCWQLIgRw-50md7Pzxw",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 692-9624",
+      "internationalPhoneNumber": "+1 905-692-9624",
+      "formattedAddress": "5080 Airport Rd, Mount Hope, ON L0R 1W0",
+      "addressComponents": [
+        {
+          "longText": "5080",
+          "shortText": "5080",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Airport Road",
+          "shortText": "Airport Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Mount Hope",
+          "shortText": "Mount Hope",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L0R 1W0",
+          "shortText": "L0R 1W0",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.139514999999996,
+        "longitude": -79.841017
+      },
+      "rating": 4.5,
+      "googleMapsUri": "https://maps.google.com/?cid=2076106508205354691&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.danasylandscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 100,
+      "displayName": {
+        "text": "Danasy Landscaping & Maintenance"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ07_8rOxjLIgRIPvzZdNc0EM",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 577-5621",
+      "internationalPhoneNumber": "+1 905-577-5621",
+      "formattedAddress": "19 Pavarotti Ct, Hamilton, ON L8G 4P8",
+      "addressComponents": [
+        {
+          "longText": "19",
+          "shortText": "19",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Pavarotti Court",
+          "shortText": "Pavarotti Ct",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Redhill",
+          "shortText": "Redhill",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L8G 4P8",
+          "shortText": "L8G 4P8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.216310199999995,
+        "longitude": -79.7731708
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=4886507658715331360&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://grazielandscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 34,
+      "displayName": {
+        "text": "Grazie Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJUey1nk99LIgRqziXEDB9SRE",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 648-6395",
+      "internationalPhoneNumber": "+1 905-648-6395",
+      "formattedAddress": "1650 Powerline Rd W, Lynden, ON L0R 1T0",
+      "addressComponents": [
+        {
+          "longText": "1650",
+          "shortText": "1650",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Powerline Road West",
+          "shortText": "Powerline Rd W",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Lynden",
+          "shortText": "Lynden",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L0R 1T0",
+          "shortText": "L0R 1T0",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.223934899999996,
+        "longitude": -80.07236759999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=1245664417334900907&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://balsamcreeklandscape.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 32,
+      "displayName": {
+        "text": "Balsam Creek Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ9yVhnYxiz4MRgKb1uxhQLJM",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(226) 246-9086",
+      "internationalPhoneNumber": "+1 226-246-9086",
+      "formattedAddress": "20 Emerald St N, Hamilton, ON L8L 8A4",
+      "addressComponents": [
+        {
+          "longText": "20",
+          "shortText": "20",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Emerald Street North",
+          "shortText": "Emerald St N",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton Centre",
+          "shortText": "Hamilton Centre",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L8L 8A4",
+          "shortText": "L8L 8A4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.2531847,
+        "longitude": -79.8537009
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=10604939289713550976&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://hamiltonlandscaping.co/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 17,
+      "displayName": {
+        "text": "levos landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJOWe90SSjLIgRB6ZPBMsFUIc",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(289) 678-0549",
+      "internationalPhoneNumber": "+1 289-678-0549",
+      "formattedAddress": "Margaret Ave, Stoney Creek, ON L8E 2J2",
+      "addressComponents": [
+        {
+          "longText": "Margaret Avenue",
+          "shortText": "Margaret Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Stoney Creek",
+          "shortText": "Stoney Creek",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L8E 2J2",
+          "shortText": "L8E 2J2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.226379699999995,
+        "longitude": -79.7176684
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=9750299562765952519&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.creekviewlandscape.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 25,
+      "displayName": {
+        "text": "Creekview Landscape"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJkU1m53mGsUcRv6KAbbmaJbU",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(289) 887-9515",
+      "internationalPhoneNumber": "+1 289-887-9515",
+      "formattedAddress": "260 Burlington St E Ste B, Hamilton, ON L8L 4H4",
+      "addressComponents": [
+        {
+          "longText": "Suite B",
+          "shortText": "Ste B",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "260",
+          "shortText": "260",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Burlington Street East",
+          "shortText": "Burlington St E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Industrial Sector A and Keith",
+          "shortText": "Industrial Sector A and Keith",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L8L 4H4",
+          "shortText": "L8L 4H4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.2699693,
+        "longitude": -79.8515109
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=13053009216200024767&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://orangedale.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 60,
+      "displayName": {
+        "text": "Orangedale Outdoor Creations & Pools"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ8Y9NmzuaLIgRmtpUhNEqORg",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(289) 808-4879",
+      "internationalPhoneNumber": "+1 289-808-4879",
+      "formattedAddress": "14 Garner Rd E, Ancaster, ON L9G 2J8",
+      "addressComponents": [
+        {
+          "longText": "14",
+          "shortText": "14",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Garner Road East",
+          "shortText": "Garner Rd E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ancaster",
+          "shortText": "Ancaster",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L9G 2J8",
+          "shortText": "L9G 2J8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.2016637,
+        "longitude": -79.98153529999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=1745473409939462810&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.layoftheland.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 134,
+      "displayName": {
+        "text": "Lay of the Land"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJSy6bcSKbLIgRFid2sZwijCo",
+      "types": [
+        "corporate_office",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(289) 440-5213",
+      "internationalPhoneNumber": "+1 289-440-5213",
+      "formattedAddress": "1410 Garth St, Hamilton, ON L9B 1R6",
+      "addressComponents": [
+        {
+          "longText": "1410",
+          "shortText": "1410",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Garth Street",
+          "shortText": "Garth St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Falkirk East",
+          "shortText": "Falkirk East",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L9B 1R6",
+          "shortText": "L9B 1R6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.2149219,
+        "longitude": -79.90919029999999
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=3065863502720018198&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 48,
+      "displayName": {
+        "text": "Beecroft & Sons Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJx6gpws2WLIgRDNCrXwn3g5U",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(289) 797-2940",
+      "internationalPhoneNumber": "+1 289-797-2940",
+      "formattedAddress": "101 Swayze Rd, Hannon, ON L0R 1P0",
+      "addressComponents": [
+        {
+          "longText": "101",
+          "shortText": "101",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Swayze Road",
+          "shortText": "Swayze Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hannon",
+          "shortText": "Hannon",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L0R 1P0",
+          "shortText": "L0R 1P0",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.172339099999995,
+        "longitude": -79.7816926
+      },
+      "rating": 4.5,
+      "googleMapsUri": "https://maps.google.com/?cid=10773726353232220172&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.dicamlandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 98,
+      "displayName": {
+        "text": "DICAM Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ__8_ez6ZLIgRKxAXY1TsZ2Y",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 399-2887",
+      "internationalPhoneNumber": "+1 905-399-2887",
+      "formattedAddress": "43 Concession 7 E, Hamilton, ON L8B 1T7",
+      "addressComponents": [
+        {
+          "longText": "43",
+          "shortText": "43",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Concession 7 East",
+          "shortText": "Concession 7 E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Flamborough",
+          "shortText": "Flamborough",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L8B 1T7",
+          "shortText": "L8B 1T7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.3569198,
+        "longitude": -79.9710456
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=7379126361653710891&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.dutrascape.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 38,
+      "displayName": {
+        "text": "Dutra Landscape"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJw--mb9gbNycR2gxzKa8Qi_8",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(289) 531-2049",
+      "internationalPhoneNumber": "+1 289-531-2049",
+      "formattedAddress": "461 Kitty Murray Ln, Ancaster, ON L9K 0E7",
+      "addressComponents": [
+        {
+          "longText": "461",
+          "shortText": "461",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Kitty Murray Lane",
+          "shortText": "Kitty Murray Ln",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ancaster",
+          "shortText": "Ancaster",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L9K 0E7",
+          "shortText": "L9K 0E7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.209364799999996,
+        "longitude": -79.95282759999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=18413829845935131866&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://905landscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 41,
+      "displayName": {
+        "text": "905 Landscaping Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJtf3t-SCbLIgR6Q6La2keZ08",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 921-5959",
+      "internationalPhoneNumber": "+1 905-921-5959",
+      "formattedAddress": "7065 Airport Rd, Hamilton, ON L0R 1W0",
+      "addressComponents": [
+        {
+          "longText": "7065",
+          "shortText": "7065",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Airport Road",
+          "shortText": "Airport Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Glanbrook",
+          "shortText": "Glanbrook",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L0R 1W0",
+          "shortText": "L0R 1W0",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.1482406,
+        "longitude": -79.8842234
+      },
+      "rating": 4.5,
+      "googleMapsUri": "https://maps.google.com/?cid=5721575289722179305&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://threeseasonslandscapes.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 17,
+      "displayName": {
+        "text": "Three Seasons Landscapes"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJB3YA7rCbLIgRKL7LrIVHWcs",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 745-6567",
+      "internationalPhoneNumber": "+1 905-745-6567",
+      "formattedAddress": "7010 Airport Rd, Hamilton, ON L0R 1W0",
+      "addressComponents": [
+        {
+          "longText": "7010",
+          "shortText": "7010",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Airport Road",
+          "shortText": "Airport Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Glanbrook",
+          "shortText": "Glanbrook",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L0R 1W0",
+          "shortText": "L0R 1W0",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.148904699999996,
+        "longitude": -79.8806937
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=14652821502081875496&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.eastcoastyardworx.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 50,
+      "displayName": {
+        "text": "East Coast Yard Worx"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ-bTXAmiELIgRXjHuBVEIkLo",
+      "types": [
+        "home_improvement_store",
+        "home_goods_store",
+        "store",
+        "consultant",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 745-9145",
+      "internationalPhoneNumber": "+1 905-745-9145",
+      "formattedAddress": "241 King St W, Dundas, ON L9H 1V8",
+      "addressComponents": [
+        {
+          "longText": "241",
+          "shortText": "241",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "King Street West",
+          "shortText": "King St W",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Dundas",
+          "shortText": "Dundas",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L9H 1V8",
+          "shortText": "L9H 1V8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.2685319,
+        "longitude": -79.9647987
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=13443254031785800030&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.allinonelandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 71,
+      "displayName": {
+        "text": "All In One Landscaping Inc"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJlwyHnCGOLIgRE8CSqujXF8M",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(289) 339-2293",
+      "internationalPhoneNumber": "+1 289-339-2293",
+      "formattedAddress": "313 Sunnyridge Rd, Alberton, ON L0R 1A0",
+      "addressComponents": [
+        {
+          "longText": "313",
+          "shortText": "313",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Sunnyridge Road",
+          "shortText": "Sunnyridge Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberton",
+          "shortText": "Alberton",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L0R 1A0",
+          "shortText": "L0R 1A0",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.189519999999995,
+        "longitude": -80.10291
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=14057942156154421267&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.uniquelandscapeservices.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 67,
+      "displayName": {
+        "text": "Unique Landscape Services"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJs_r6RcCZLIgRLU0LjEAim6k",
+      "types": [
+        "garden_center",
+        "store",
+        "general_contractor",
+        "supplier",
+        "service",
+        "point_of_interest",
+        "food",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 570-5558",
+      "internationalPhoneNumber": "+1 905-570-5558",
+      "formattedAddress": "322 Russ Rd, Grimsby, ON L3M 4E7",
+      "addressComponents": [
+        {
+          "longText": "322",
+          "shortText": "322",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Russ Road",
+          "shortText": "Russ Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Grimsby",
+          "shortText": "Grimsby",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Grimsby",
+          "shortText": "Grimsby",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Regional Municipality of Niagara",
+          "shortText": "Regional Municipality of Niagara",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L3M 4E7",
+          "shortText": "L3M 4E7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.160707699999996,
+        "longitude": -79.5608852
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=12221399674422775085&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.klinkandson.com/?utm_source=gbp&utm_medium=organic&utm_campaign=gbp_listing",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 96,
+      "displayName": {
+        "text": "Klink & Son Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJYf86P9KaLIgRxgS2lVn3vRk",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 318-4464",
+      "internationalPhoneNumber": "+1 905-318-4464",
+      "formattedAddress": "5 Amore Blvd, Hamilton, ON L9B 2V3",
+      "addressComponents": [
+        {
+          "longText": "5",
+          "shortText": "5",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Amore Boulevard",
+          "shortText": "Amore Blvd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Falkirk East",
+          "shortText": "Falkirk East",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L9B 2V3",
+          "shortText": "L9B 2V3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.2140487,
+        "longitude": -79.91615329999999
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=1854910585682396358&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.crlandscape.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 11,
+      "displayName": {
+        "text": "CR Landscape"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJWSTIZEGFLIgRESKokz2on3E",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 648-4777",
+      "internationalPhoneNumber": "+1 905-648-4777",
+      "formattedAddress": "992 Garner Rd E, Ancaster, ON L9K 0K1",
+      "addressComponents": [
+        {
+          "longText": "992",
+          "shortText": "992",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Garner Road East",
+          "shortText": "Garner Rd E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ancaster",
+          "shortText": "Ancaster",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L9K 0K1",
+          "shortText": "L9K 0K1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.2080634,
+        "longitude": -79.9377423
+      },
+      "rating": 4.2,
+      "googleMapsUri": "https://maps.google.com/?cid=8187447630006592017&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://heritagegreen.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 50,
+      "displayName": {
+        "text": "Heritage Green Landscape Contractors"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJPSrK0E6DLIgRLMaUFcMoGE0",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(289) 800-0380",
+      "internationalPhoneNumber": "+1 289-800-0380",
+      "formattedAddress": "233 Concession 4 W, Waterdown, ON L0R 1V0",
+      "addressComponents": [
+        {
+          "longText": "233",
+          "shortText": "233",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Concession 4 West",
+          "shortText": "Concession 4 W",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Waterdown",
+          "shortText": "Waterdown",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L0R 1V0",
+          "shortText": "L0R 1V0",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.3217755,
+        "longitude": -79.9378351
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=5555234958707312172&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.beegreenlandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 50,
+      "displayName": {
+        "text": "BeeGreen Landscaping"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJh1WsvxudLIgRBVZbYtRtp10",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 638-0790",
+      "internationalPhoneNumber": "+1 905-638-0790",
+      "formattedAddress": "118 Concession 8 E, Freelton, ON L8B 1N7",
+      "addressComponents": [
+        {
+          "longText": "118",
+          "shortText": "118",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Concession 8 East",
+          "shortText": "Concession 8 E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Freelton",
+          "shortText": "Freelton",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hamilton",
+          "shortText": "Hamilton",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L8B 1N7",
+          "shortText": "L8B 1N7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.3726346,
+        "longitude": -79.97937670000002
+      },
+      "rating": 4.4,
+      "googleMapsUri": "https://maps.google.com/?cid=6748483325588624901&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://earthworks-landscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 77,
+      "displayName": {
+        "text": "Earthworks Landscaping"
+      },
+      "primaryType": "general_contractor"
+    }
+  ],
+  "fetchedAt": "2026-08-06T06:42:15.769Z"
+}

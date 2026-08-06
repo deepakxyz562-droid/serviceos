@@ -1,0 +1,6034 @@
+{
+  "query": "hvac contractor in Quebec City, QC",
+  "regionCode": "ca",
+  "places": [
+    {
+      "id": "ChIJWV4U1h-XuEwRTE0TuHUWrHo",
+      "types": [
+        "plumber",
+        "general_contractor",
+        "manufacturer",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 440-8516",
+      "internationalPhoneNumber": "+1 418-440-8516",
+      "formattedAddress": "345 Rue des Entrepreneurs, Québec, QC G1M 1B4",
+      "addressComponents": [
+        {
+          "longText": "345",
+          "shortText": "345",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue des Entrepreneurs",
+          "shortText": "Rue des Entrepreneurs",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1M 1B4",
+          "shortText": "G1M 1B4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8222021,
+        "longitude": -71.27237579999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=8839464863476698444&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.sglclimatisationchauffage.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1465,
+      "displayName": {
+        "text": "SGL Air Conditioning Heating inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJi0hnaGSWuEwRu6L-5RohU3o",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "supplier",
+        "store",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 622-7245",
+      "internationalPhoneNumber": "+1 418-622-7245",
+      "formattedAddress": "647 Rue Roussin, Québec, QC G3G 2C8",
+      "addressComponents": [
+        {
+          "longText": "647",
+          "shortText": "647",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Roussin",
+          "shortText": "Rue Roussin",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "La Haute-Saint-Charles",
+          "shortText": "La Haute-Saint-Charles",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G3G 2C8",
+          "shortText": "G3G 2C8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.888475899999996,
+        "longitude": -71.3712954
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=8814425295105729211&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.refrigerationeverest.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1909,
+      "displayName": {
+        "text": "Réfrigération Everest | Chauffage, ventilation & climatisation à Québec"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJJ42TwViGTiURWcjkMEy72ck",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(581) 703-1777",
+      "internationalPhoneNumber": "+1 581-703-1777",
+      "formattedAddress": "2680 B Av. Dalton, Québec, QC G1P 3S4",
+      "addressComponents": [
+        {
+          "longText": "2680 B",
+          "shortText": "2680 B",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue Dalton",
+          "shortText": "Av. Dalton",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Sainte-Foy–Sillery–Cap-Rouge",
+          "shortText": "Sainte-Foy–Sillery–Cap-Rouge",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1P 3S4",
+          "shortText": "G1P 3S4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.789363599999994,
+        "longitude": -71.30718639999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=14544862407481935961&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://innovaclim.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 274,
+      "displayName": {
+        "text": "InnovaClim"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJbfRKEku9uEwRA1dLgPcwRxw",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 571-8633",
+      "internationalPhoneNumber": "+1 418-571-8633",
+      "formattedAddress": "1765 Rte de l'Aéroport, L'Ancienne-Lorette, QC G2G 2P5",
+      "addressComponents": [
+        {
+          "longText": "1765",
+          "shortText": "1765",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Route de l'Aéroport",
+          "shortText": "Rte de l'Aéroport",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "L'Ancienne-Lorette",
+          "shortText": "L'Ancienne-Lorette",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2G 2P5",
+          "shortText": "G2G 2P5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8057976,
+        "longitude": -71.3788577
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=2037651195975915267&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.multiconfortfp.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 937,
+      "displayName": {
+        "text": "Multi confort FP"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJN0laenGRuEwRQEUkLJWXOnQ",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 956-4455",
+      "internationalPhoneNumber": "+1 418-956-4455",
+      "formattedAddress": "1396 Rue Noirefontaine, Québec, QC G1Y 1N1",
+      "addressComponents": [
+        {
+          "longText": "1396",
+          "shortText": "1396",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Noirefontaine",
+          "shortText": "Rue Noirefontaine",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Sainte-Foy–Sillery–Cap-Rouge",
+          "shortText": "Sainte-Foy–Sillery–Cap-Rouge",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1Y 1N1",
+          "shortText": "G1Y 1N1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.7580439,
+        "longitude": -71.3411977
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=8375173123995354432&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://climarefquebec.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 165,
+      "displayName": {
+        "text": "Climaref Quebec"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJEXIvcmWWuEwRDKsp2s_LmKI",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 640-4090",
+      "internationalPhoneNumber": "+1 418-640-4090",
+      "formattedAddress": "305 Bd Charest O, Québec, QC G1K 1X6",
+      "addressComponents": [
+        {
+          "longText": "305",
+          "shortText": "305",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Charest Ouest",
+          "shortText": "Bd Charest O",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "La Cité-Limoilou",
+          "shortText": "La Cité-Limoilou",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1K 1X6",
+          "shortText": "G1K 1X6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8096061,
+        "longitude": -71.2345458
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=11716338524183177996&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://nettoyage-exlor.ca/nettoyage-conduit-de-ventilation-quebec/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 918,
+      "displayName": {
+        "text": "Groupe Exl-Or"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJZx93jmdBaIERm_VT_peWSL8",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(581) 443-3661",
+      "internationalPhoneNumber": "+1 581-443-3661",
+      "formattedAddress": "570 Rue de l'Argon Local 400, Québec, QC G2N 2E1",
+      "addressComponents": [
+        {
+          "longText": "Local 400",
+          "shortText": "Local 400",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "570",
+          "shortText": "570",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue de l'Argon",
+          "shortText": "Rue de l'Argon",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Charlesbourg",
+          "shortText": "Charlesbourg",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2N 2E1",
+          "shortText": "G2N 2E1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.889903,
+        "longitude": -71.32147069999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=13783432239118546331&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://climatisationpaquet.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 184,
+      "displayName": {
+        "text": "Climatisation Paquet | Thermopompe à Québec"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ7ydhc8SXuEwR3bNWzsDeDJA",
+      "types": [
+        "plumber",
+        "electrician",
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 623-2323",
+      "internationalPhoneNumber": "+1 418-623-2323",
+      "formattedAddress": "850 Rue des Rocailles, Québec, QC G2J 1A5",
+      "addressComponents": [
+        {
+          "longText": "850",
+          "shortText": "850",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue des Rocailles",
+          "shortText": "Rue des Rocailles",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2J 1A5",
+          "shortText": "G2J 1A5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8348379,
+        "longitude": -71.280013
+      },
+      "rating": 4.3,
+      "googleMapsUri": "https://maps.google.com/?cid=10379916160859026397&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.boucherlortie.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1130,
+      "displayName": {
+        "text": "Boucher Lortie"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ1bJcez69uEwRipQHNbHUtCw",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(581) 999-6299",
+      "internationalPhoneNumber": "+1 581-999-6299",
+      "formattedAddress": "905 71e Rue E, Québec, QC G1H 1M6",
+      "addressComponents": [
+        {
+          "longText": "905",
+          "shortText": "905",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "71e Rue Est",
+          "shortText": "71e Rue E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Charlesbourg",
+          "shortText": "Charlesbourg",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1H 1M6",
+          "shortText": "G1H 1M6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.862086399999995,
+        "longitude": -71.2520103
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=3221433491040736394&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://climatisation-quebec.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 48,
+      "displayName": {
+        "text": "Climatisation Québec"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJWScYQem9uEwRirr3qz7C7sU",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(888) 596-4390",
+      "internationalPhoneNumber": "+1 888-596-4390",
+      "formattedAddress": "75 Rue Doyon, Québec, QC G1E 5G1",
+      "addressComponents": [
+        {
+          "longText": "75",
+          "shortText": "75",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Doyon",
+          "shortText": "Rue Doyon",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Beauport",
+          "shortText": "Beauport",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1E 5G1",
+          "shortText": "G1E 5G1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8674812,
+        "longitude": -71.1874356
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=14262550644357839498&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.climatisationdery.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 136,
+      "displayName": {
+        "text": "Climatisation Déry"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJjfcOASyXuEwRe5GOykZ3LcI",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(581) 221-1518",
+      "internationalPhoneNumber": "+1 581-221-1518",
+      "formattedAddress": "2355 Rue de Celles, Québec, QC G2C 2B8",
+      "addressComponents": [
+        {
+          "longText": "2355",
+          "shortText": "2355",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue de Celles",
+          "shortText": "Rue de Celles",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2C 2B8",
+          "shortText": "G2C 2B8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8250069,
+        "longitude": -71.3079146
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=13991970763239756155&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://airaplus.ca/?utm_campaign=gmb",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 153,
+      "displayName": {
+        "text": "AIRA+ | Chauffage - Climatisation - Thermopompe"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJw914P8OZuEwRnfaW9UJwbzs",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 554-7569",
+      "internationalPhoneNumber": "+1 418-554-7569",
+      "formattedAddress": "185 Ave Saint-Sacrement, Québec City, QC G1N 3X4",
+      "addressComponents": [
+        {
+          "longText": "185",
+          "shortText": "185",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue Saint-Sacrement",
+          "shortText": "Ave Saint-Sacrement",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "La Cité-Limoilou",
+          "shortText": "La Cité-Limoilou",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Québec City",
+          "shortText": "Québec City",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Quebec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1N 3X4",
+          "shortText": "G1N 3X4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8051727,
+        "longitude": -71.2647156
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=4282765203543094941&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://solutiondouxconfort.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 182,
+      "displayName": {
+        "text": "Solution Doux Confort inc"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJkeYeFHyXuEwRuGpAFL7BU54",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 683-2211",
+      "internationalPhoneNumber": "+1 418-683-2211",
+      "formattedAddress": "900 Pierre-Bertrand Blvd Local 100, Québec City, QC G1M 3K2",
+      "addressComponents": [
+        {
+          "longText": "Local 100",
+          "shortText": "Local 100",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "900",
+          "shortText": "900",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Pierre-Bertrand Boulevard",
+          "shortText": "Pierre-Bertrand Blvd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Québec City",
+          "shortText": "Québec City",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Quebec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1M 3K2",
+          "shortText": "G1M 3K2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8273261,
+        "longitude": -71.2744429
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=11408675303187311288&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://enviroconfort.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 217,
+      "displayName": {
+        "text": "Enviro Confort"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJcdZqxcWXuEwRZrKFzBGeAo0",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 626-5845",
+      "internationalPhoneNumber": "+1 418-626-5845",
+      "formattedAddress": "670 Rue Bouvier, Québec, QC G2J 1A7",
+      "addressComponents": [
+        {
+          "longText": "670",
+          "shortText": "670",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Bouvier",
+          "shortText": "Rue Bouvier",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2J 1A7",
+          "shortText": "G2J 1A7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.834676599999995,
+        "longitude": -71.2721943
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=10160857508584206950&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://miville.ca/fr/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 785,
+      "displayName": {
+        "text": "Miville Climatisation Chauffage"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJH30DLNGEZCgRyUZJRHJUF9g",
+      "types": [
+        "general_contractor",
+        "home_goods_store",
+        "supplier",
+        "store",
+        "association_or_organization",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 261-1480",
+      "internationalPhoneNumber": "+1 418-261-1480",
+      "formattedAddress": "1020 Rue Bouvier Bureau 400, Québec, QC G2K 0K9",
+      "addressComponents": [
+        {
+          "longText": "Bureau 400",
+          "shortText": "Bureau 400",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "1020",
+          "shortText": "1020",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Bouvier",
+          "shortText": "Rue Bouvier",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2K 0K9",
+          "shortText": "G2K 0K9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.830815799999996,
+        "longitude": -71.2831401
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=15571007086405437129&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.pronetclim.net/soumission-gratuite",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 371,
+      "displayName": {
+        "text": "ProNetClim - Entretien Thermopompe | Meilleur Rapport Qualité-Prix"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJk2EEJGqXuEwRNTepOc3X5wM",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(581) 891-5757",
+      "internationalPhoneNumber": "+1 581-891-5757",
+      "formattedAddress": "895 Rue Raoul-Jobin, Québec, QC G1N 3N8",
+      "addressComponents": [
+        {
+          "longText": "895",
+          "shortText": "895",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Raoul-Jobin",
+          "shortText": "Rue Raoul-Jobin",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "La Cité-Limoilou",
+          "shortText": "La Cité-Limoilou",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1N 3N8",
+          "shortText": "G1N 3N8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8056568,
+        "longitude": -71.24706239999999
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=281430778169603893&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://groupesoma.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 105,
+      "displayName": {
+        "text": "Groupe SOMA"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ5T6HP3GUuEwRlWT5GCX7YKs",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 839-3900",
+      "internationalPhoneNumber": "+1 418-839-3900",
+      "formattedAddress": "2840 Bd Guillaume-Couture Local 102, Levis, QC G6W 7Y1",
+      "addressComponents": [
+        {
+          "longText": "Local 102",
+          "shortText": "Local 102",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "2840",
+          "shortText": "2840",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Guillaume-Couture",
+          "shortText": "Bd Guillaume-Couture",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Chutes-de-la-Chaudière-Est",
+          "shortText": "Les Chutes-de-la-Chaudière-Est",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Levis",
+          "shortText": "Levis",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Levis",
+          "shortText": "Levis",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Chaudière-Appalaches",
+          "shortText": "Chaudière-Appalaches",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Quebec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G6W 7Y1",
+          "shortText": "G6W 7Y1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.762734699999996,
+        "longitude": -71.210681
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=12349146315001259157&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.enviroconfort.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 714,
+      "displayName": {
+        "text": "Enviro Confort"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJWT4ECbGXuEwR9iPrh79w6oE",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "supplier",
+        "store",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 527-5455",
+      "internationalPhoneNumber": "+1 418-527-5455",
+      "formattedAddress": "734 Av. Godin, Québec, QC G1M 2K4",
+      "addressComponents": [
+        {
+          "longText": "734",
+          "shortText": "734",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue Godin",
+          "shortText": "Av. Godin",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1M 2K4",
+          "shortText": "G1M 2K4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8209824,
+        "longitude": -71.2774335
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=9361418743364396022&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://filtreplus.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 734,
+      "displayName": {
+        "text": "Filtreplus.com"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ__6gPsS9uEwR4SqTobTEPuo",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 476-4687",
+      "internationalPhoneNumber": "+1 418-476-4687",
+      "formattedAddress": "322 71e Rue E, Québec, QC G1H 1L7",
+      "addressComponents": [
+        {
+          "longText": "322",
+          "shortText": "322",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "71e Rue Est",
+          "shortText": "71e Rue E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Charlesbourg",
+          "shortText": "Charlesbourg",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1H 1L7",
+          "shortText": "G1H 1L7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8591481,
+        "longitude": -71.2589713
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=16879144733515131617&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.psclimatisation.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 130,
+      "displayName": {
+        "text": "PS Climatisation - Thermopompe"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJOytU_hm_uEwRDPN2BAmoicQ",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 208-2449",
+      "internationalPhoneNumber": "+1 418-208-2449",
+      "formattedAddress": "172 Rue des Grenadiers, Boischatel, QC G0A 1H0",
+      "addressComponents": [
+        {
+          "longText": "172",
+          "shortText": "172",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue des Grenadiers",
+          "shortText": "Rue des Grenadiers",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Boischatel",
+          "shortText": "Boischatel",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "La Côte-de-Beaupré",
+          "shortText": "La Côte-de-Beaupré",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G0A 1H0",
+          "shortText": "G0A 1H0",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.891493999999994,
+        "longitude": -71.1419718
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=14162035259926311692&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://toundraref.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 29,
+      "displayName": {
+        "text": "Toundra Réfrigération Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ0RoOjLWZuEwRua0F6oEO0h4",
+      "types": [
+        "general_contractor",
+        "store",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 717-1147",
+      "internationalPhoneNumber": "+1 418-717-1147",
+      "formattedAddress": "2005 Av. Chauveau, Québec, QC G2C 1B2",
+      "addressComponents": [
+        {
+          "longText": "2005",
+          "shortText": "2005",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue Chauveau",
+          "shortText": "Av. Chauveau",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2C 1B2",
+          "shortText": "G2C 1B2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.845059299999996,
+        "longitude": -71.3217032
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=2220853517386886585&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.simetek.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 61,
+      "displayName": {
+        "text": "Simetek Climatisation"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ0-3vDq-9uEwRVOAgX5uu5Pw",
+      "types": [
+        "plumber",
+        "general_contractor",
+        "home_goods_store",
+        "store",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 520-1544",
+      "internationalPhoneNumber": "+1 418-520-1544",
+      "formattedAddress": "275 Ave Saint-Sacrement #190, Québec, QC G1N 1Y1",
+      "addressComponents": [
+        {
+          "longText": "190",
+          "shortText": "190",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "275",
+          "shortText": "275",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue Saint-Sacrement",
+          "shortText": "Ave Saint-Sacrement",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "La Cité-Limoilou",
+          "shortText": "La Cité-Limoilou",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1N 1Y1",
+          "shortText": "G1N 1Y1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8016627,
+        "longitude": -71.2603884
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=18222881974587023444&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://serviceslogic.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 517,
+      "displayName": {
+        "text": "Le Groupe Logic"
+      },
+      "primaryType": "plumber"
+    },
+    {
+      "id": "ChIJN-STwtyXuEwRgHvLnZBMgrg",
+      "types": [
+        "general_contractor",
+        "store",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 623-2022",
+      "internationalPhoneNumber": "+1 418-623-2022",
+      "formattedAddress": "6055 Rue des Tournelles, Québec, QC G2J 1P7",
+      "addressComponents": [
+        {
+          "longText": "6055",
+          "shortText": "6055",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue des Tournelles",
+          "shortText": "Rue des Tournelles",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2J 1P7",
+          "shortText": "G2J 1P7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8397462,
+        "longitude": -71.27970239999999
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=13295273233957485440&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.techno-pompes.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1274,
+      "displayName": {
+        "text": "Techno-Pompes Inc"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJsZvednaVuEwRbBgDmXenrbI",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(581) 309-4023",
+      "internationalPhoneNumber": "+1 581-309-4023",
+      "formattedAddress": "1029 Rue Mario Mauro, Lévis, QC G6Y 0A3",
+      "addressComponents": [
+        {
+          "longText": "1029",
+          "shortText": "1029",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Mario Mauro",
+          "shortText": "Rue Mario Mauro",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Desjardins",
+          "shortText": "Desjardins",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Lévis",
+          "shortText": "Lévis",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Lévis",
+          "shortText": "Lévis",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Chaudière-Appalaches",
+          "shortText": "Chaudière-Appalaches",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G6Y 0A3",
+          "shortText": "G6Y 0A3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8120905,
+        "longitude": -71.1554787
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=12875131041832179820&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.fixac.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 123,
+      "displayName": {
+        "text": "FixAC Heating and Air Conditioning"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJBwuXjUKUuEwRepOI_VNKiIU",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 839-7993",
+      "internationalPhoneNumber": "+1 418-839-7993",
+      "formattedAddress": "357 Av. Taniata, Saint-Romuald, QC G6W 5M6",
+      "addressComponents": [
+        {
+          "longText": "357",
+          "shortText": "357",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue Taniata",
+          "shortText": "Av. Taniata",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Chutes-de-la-Chaudière-Est",
+          "shortText": "Les Chutes-de-la-Chaudière-Est",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Lévis",
+          "shortText": "Lévis",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Lévis",
+          "shortText": "Lévis",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Chaudière-Appalaches",
+          "shortText": "Chaudière-Appalaches",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G6W 5M6",
+          "shortText": "G6W 5M6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.746168399999995,
+        "longitude": -71.2292343
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=9622022328473391994&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://icetecclimatisation.com/fr/?utm_campaign=gmb",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 733,
+      "displayName": {
+        "text": "Icetec Climatisation Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJebnvp5iXuEwRrEJMMh7AAd4",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(877) 915-0856",
+      "internationalPhoneNumber": "+1 877-915-0856",
+      "formattedAddress": "1832 Rue de Boulogne, L'Ancienne-Lorette, QC G2E 2T5",
+      "addressComponents": [
+        {
+          "longText": "1832",
+          "shortText": "1832",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue de Boulogne",
+          "shortText": "Rue de Boulogne",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "L'Ancienne-Lorette",
+          "shortText": "L'Ancienne-Lorette",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2E 2T5",
+          "shortText": "G2E 2T5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8119514,
+        "longitude": -71.3615781
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=15997278587322122924&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://grouperenox.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 231,
+      "displayName": {
+        "text": "Groupe RENOX"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ6dYoBumXuEwRt0MN70UXcJM",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 999-8316",
+      "internationalPhoneNumber": "+1 418-999-8316",
+      "formattedAddress": "331 Av. Turcotte, Québec, QC G1M 1S5",
+      "addressComponents": [
+        {
+          "longText": "331",
+          "shortText": "331",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue Turcotte",
+          "shortText": "Av. Turcotte",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1M 1S5",
+          "shortText": "G1M 1S5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8205683,
+        "longitude": -71.2574247
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=10624017110097806263&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://pro-confort.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 24,
+      "displayName": {
+        "text": "Ventilation Pro-Confort"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJjTpqwFq8uEwR1HujEzfmTnw",
+      "types": [
+        "general_contractor",
+        "store",
+        "manufacturer",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 663-6906",
+      "internationalPhoneNumber": "+1 418-663-6906",
+      "formattedAddress": "435 Rue Seigneuriale, Québec, QC G1C 3R2",
+      "addressComponents": [
+        {
+          "longText": "435",
+          "shortText": "435",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Seigneuriale",
+          "shortText": "Rue Seigneuriale",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Beauport",
+          "shortText": "Beauport",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1C 3R2",
+          "shortText": "G1C 3R2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.887839899999996,
+        "longitude": -71.2091851
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=8957349833113566164&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.isolationbeauport.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 511,
+      "displayName": {
+        "text": "Isolation Beauport"
+      }
+    },
+    {
+      "id": "ChIJrzqn58mXuEwRNzKvhRMyrpk",
+      "types": [
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 847-5556",
+      "internationalPhoneNumber": "+1 418-847-5556",
+      "formattedAddress": "255 Rue Fortin, Québec, QC G1M 3M2",
+      "addressComponents": [
+        {
+          "longText": "255",
+          "shortText": "255",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Fortin",
+          "shortText": "Rue Fortin",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1M 3M2",
+          "shortText": "G1M 3M2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.826985099999995,
+        "longitude": -71.27173470000001
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=11073843593179247159&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.ventilation-ncv.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 258,
+      "displayName": {
+        "text": "Conduit Nettoyage Ventilation (N C V)"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJQ2bAUHyXuEwRA68BprD0N0I",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 476-6826",
+      "internationalPhoneNumber": "+1 418-476-6826",
+      "formattedAddress": "650 Rue Graham Bell, Québec, QC G1N 4H5",
+      "addressComponents": [
+        {
+          "longText": "650",
+          "shortText": "650",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Graham Bell",
+          "shortText": "Rue Graham Bell",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Sainte-Foy–Sillery–Cap-Rouge",
+          "shortText": "Sainte-Foy–Sillery–Cap-Rouge",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1N 4H5",
+          "shortText": "G1N 4H5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.7942849,
+        "longitude": -71.2743902
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=4771551369758879491&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://climatproquebec.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 154,
+      "displayName": {
+        "text": "Climatpro Québec"
+      },
+      "primaryType": "manufacturer"
+    },
+    {
+      "id": "ChIJK-1PsMGZuEwROsQfwiUDmq8",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 977-4965",
+      "internationalPhoneNumber": "+1 418-977-4965",
+      "formattedAddress": "1875 Rue Notre Dame, L'Ancienne-Lorette, QC G2E 4K1",
+      "addressComponents": [
+        {
+          "longText": "1875",
+          "shortText": "1875",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Notre-Dame",
+          "shortText": "Rue Notre Dame",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "L'Ancienne-Lorette",
+          "shortText": "L'Ancienne-Lorette",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2E 4K1",
+          "shortText": "G2E 4K1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.809692,
+        "longitude": -71.3682865
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=12653429563756364858&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.cvrousseau.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 55,
+      "displayName": {
+        "text": "Climatisation Ventilation Rousseau"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJXXZXPJvv_wMRt2F4rEy5sK8",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 905-3958",
+      "internationalPhoneNumber": "+1 418-905-3958",
+      "formattedAddress": "1080 Bd Raymond, Québec, QC G1B 1J9",
+      "addressComponents": [
+        {
+          "longText": "1080",
+          "shortText": "1080",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Raymond",
+          "shortText": "Bd Raymond",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Beauport",
+          "shortText": "Beauport",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1B 1J9",
+          "shortText": "G1B 1J9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.907338499999994,
+        "longitude": -71.1914034
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=12659822291500687799&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://bpconfort.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 26,
+      "displayName": {
+        "text": "BP Confort"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJB-oicnqiuEwRRcns8N4dMrg",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 847-8000",
+      "internationalPhoneNumber": "+1 418-847-8000",
+      "formattedAddress": "630 Rue Chef Max Gros-Louis, Wendake, QC G0A 4V0",
+      "addressComponents": [
+        {
+          "longText": "630",
+          "shortText": "630",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Chef Max Gros-Louis",
+          "shortText": "Rue Chef Max Gros-Louis",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Loretteville",
+          "shortText": "Loretteville",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Wendake",
+          "shortText": "Wendake",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G0A 4V0",
+          "shortText": "G0A 4V0",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.870959,
+        "longitude": -71.3654577
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=13272703895176268101&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.expair.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 431,
+      "displayName": {
+        "text": "Expair.ca"
+      }
+    },
+    {
+      "id": "ChIJU3j3b5SRuEwR4v7P4Z2hD-k",
+      "types": [
+        "general_contractor",
+        "store",
+        "manufacturer",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 907-8216",
+      "internationalPhoneNumber": "+1 418-907-8216",
+      "formattedAddress": "#625, Québec, QC G1X 3G2",
+      "addressComponents": [
+        {
+          "longText": "625",
+          "shortText": "625",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Sainte-Foy–Sillery–Cap-Rouge",
+          "shortText": "Sainte-Foy–Sillery–Cap-Rouge",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1X 3G2",
+          "shortText": "G1X 3G2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.775292099999994,
+        "longitude": -71.3257323
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=16793819234958311138&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1,
+      "displayName": {
+        "text": "AMIN Climatisation & Réfrigération"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJsemRn2GXuEwRJ5Rm1yHTEnM",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 871-2960",
+      "internationalPhoneNumber": "+1 418-871-2960",
+      "formattedAddress": "5237 Bd Wilfrid-Hamel, Québec, QC G2E 2G9",
+      "addressComponents": [
+        {
+          "longText": "5237",
+          "shortText": "5237",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Wilfrid-Hamel",
+          "shortText": "Bd Wilfrid-Hamel",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2E 2G9",
+          "shortText": "G2E 2G9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.801139899999995,
+        "longitude": -71.33486669999999
+      },
+      "rating": 4.5,
+      "googleMapsUri": "https://maps.google.com/?cid=8291922006243709991&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.frimas.net/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 77,
+      "displayName": {
+        "text": "Les Services Frimas"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJw3dp7MmXuEwRh3dNeXLrruw",
+      "types": [
+        "manufacturer",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 683-2587",
+      "internationalPhoneNumber": "+1 418-683-2587",
+      "formattedAddress": "220 Rue Fortin #130, Québec, QC G1M 3S5",
+      "addressComponents": [
+        {
+          "longText": "130",
+          "shortText": "130",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "220",
+          "shortText": "220",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Fortin",
+          "shortText": "Rue Fortin",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1M 3S5",
+          "shortText": "G1M 3S5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8282563,
+        "longitude": -71.2703654
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=17054827715792566151&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.master.ca/fr",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 44,
+      "displayName": {
+        "text": "Le Groupe Master Quebec"
+      },
+      "primaryType": "manufacturer"
+    },
+    {
+      "id": "ChIJ8zPPH-OiuEwRjEUpbEY-izw",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 522-3807",
+      "internationalPhoneNumber": "+1 418-522-3807",
+      "formattedAddress": "6250 Rue Zéphirin-Paquet local 100, Québec, QC G2C 0M3",
+      "addressComponents": [
+        {
+          "longText": "local 100",
+          "shortText": "local 100",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "6250",
+          "shortText": "6250",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Zéphirin-Paquet",
+          "shortText": "Rue Zéphirin-Paquet",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2C 0M3",
+          "shortText": "G2C 0M3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.82015200000001,
+        "longitude": -71.33771999999999
+      },
+      "rating": 4.4,
+      "googleMapsUri": "https://maps.google.com/?cid=4362649136221734284&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.bonairsd.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 52,
+      "displayName": {
+        "text": "Bonair"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJF1rml7-VuEwRwec6y3XuFoU",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(581) 628-7445",
+      "internationalPhoneNumber": "+1 581-628-7445",
+      "formattedAddress": "513 Rue des Bois Francs, Québec, QC G3G 2E3",
+      "addressComponents": [
+        {
+          "longText": "513",
+          "shortText": "513",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue des Bois Francs",
+          "shortText": "Rue des Bois Francs",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "La Haute-Saint-Charles",
+          "shortText": "La Haute-Saint-Charles",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G3G 2E3",
+          "shortText": "G3G 2E3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8874646,
+        "longitude": -71.37258229999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=9590114646220269505&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://leradon.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 357,
+      "displayName": {
+        "text": "Radon Provincial"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJV37CmDa9uEwRcOEvGhBhU5U",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 627-2077",
+      "internationalPhoneNumber": "+1 418-627-2077",
+      "formattedAddress": "128 Ave Saint-Sacrement Ste 148, Québec, QC G1N 3X6",
+      "addressComponents": [
+        {
+          "longText": "Suite 148",
+          "shortText": "Ste 148",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "128",
+          "shortText": "128",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue Saint-Sacrement",
+          "shortText": "Ave Saint-Sacrement",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1N 3X6",
+          "shortText": "G1N 3X6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8063384,
+        "longitude": -71.2678615
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=10760050656504963440&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1,
+      "displayName": {
+        "text": "Ventilation 2000 Inc"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJiSc6w_yWuEwRES_ClzLFzYc",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 624-8966",
+      "internationalPhoneNumber": "+1 418-624-8966",
+      "formattedAddress": "345 Av. Marconi, Québec, QC G1N 4A5",
+      "addressComponents": [
+        {
+          "longText": "345",
+          "shortText": "345",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue Marconi",
+          "shortText": "Av. Marconi",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1N 4A5",
+          "shortText": "G1N 4A5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.799217899999995,
+        "longitude": -71.2778186
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=9785694386431078161&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://thermo-energie.qc.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 5,
+      "displayName": {
+        "text": "Thermo Energie"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJO3EqIbJBx0wRAOlBzqS6hK4",
+      "types": [
+        "plumber",
+        "general_contractor",
+        "supplier",
+        "manufacturer",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(581) 992-5177",
+      "internationalPhoneNumber": "+1 581-992-5177",
+      "formattedAddress": "769 Rue de Coligny, Québec, QC G2K 2M6",
+      "addressComponents": [
+        {
+          "longText": "769",
+          "shortText": "769",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue de Coligny",
+          "shortText": "Rue de Coligny",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2K 2M6",
+          "shortText": "G2K 2M6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8406069,
+        "longitude": -71.291348
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=12575381276523096320&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://plomberielevasseuretfils.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 89,
+      "displayName": {
+        "text": "Plomberie Levasseur & Fils | Plombier à Québec"
+      },
+      "primaryType": "plumber"
+    },
+    {
+      "id": "ChIJTycQY7-ZuEwRqHpRRaFRFvc",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 872-5632",
+      "internationalPhoneNumber": "+1 418-872-5632",
+      "formattedAddress": "4290 Bd Wilfrid-Hamel #101, Québec, QC G1P 2J8",
+      "addressComponents": [
+        {
+          "longText": "101",
+          "shortText": "101",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "4290",
+          "shortText": "4290",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Wilfrid-Hamel",
+          "shortText": "Bd Wilfrid-Hamel",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1P 2J8",
+          "shortText": "G1P 2J8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.80623,
+        "longitude": -71.32034
+      },
+      "rating": 4.4,
+      "googleMapsUri": "https://maps.google.com/?cid=17804507929950386856&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.accair.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 31,
+      "displayName": {
+        "text": "Accair Inc"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ79k_ibEnyUwRtb7uI7zUMJY",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 446-3300",
+      "internationalPhoneNumber": "+1 514-446-3300",
+      "formattedAddress": "261 Bd Curé-Labelle, Sainte-Rose, QC H7L 2Z9",
+      "addressComponents": [
+        {
+          "longText": "261",
+          "shortText": "261",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Curé-Labelle",
+          "shortText": "Bd Curé-Labelle",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Sainte-Rose",
+          "shortText": "Sainte-Rose",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Laval",
+          "shortText": "Laval",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Laval",
+          "shortText": "Laval",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Laval",
+          "shortText": "Laval",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H7L 2Z9",
+          "shortText": "H7L 2Z9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5993579,
+        "longitude": -73.7899972
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=10822383809093090997&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.411habitation.com/chauffage-climatisation-ventilation/laval/sainte-rose-3/chaufroi-climatisation-chauffage-entrepreneur-thermopompe.htm",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 41,
+      "displayName": {
+        "text": "Chaufroi - Climatisation, Chauffage, Entrepreneur Thermopompe"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJK4YSoyTFuEwRvrSKLxBhQAI",
+      "types": [
+        "manufacturer",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 907-5302",
+      "internationalPhoneNumber": "+1 418-907-5302",
+      "formattedAddress": "5000 Rue Hugues-Randin, Québec, QC G2C 2B4",
+      "addressComponents": [
+        {
+          "longText": "5000",
+          "shortText": "5000",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Hugues-Randin",
+          "shortText": "Rue Hugues-Randin",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2C 2B4",
+          "shortText": "G2C 2B4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8225288,
+        "longitude": -71.3151839
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=162236308730328254&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://liquid-air.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 42,
+      "displayName": {
+        "text": "Distribution Liquidair"
+      },
+      "primaryType": "manufacturer"
+    },
+    {
+      "id": "ChIJ__8_MWSXuEwRqWOjEgHC0MY",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 997-3410",
+      "internationalPhoneNumber": "+1 418-997-3410",
+      "formattedAddress": "2345 Av. Dalton #150, Québec, QC G1P 3S3",
+      "addressComponents": [
+        {
+          "longText": "150",
+          "shortText": "150",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "2345",
+          "shortText": "2345",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue Dalton",
+          "shortText": "Av. Dalton",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Sainte-Foy–Sillery–Cap-Rouge",
+          "shortText": "Sainte-Foy–Sillery–Cap-Rouge",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1P 3S3",
+          "shortText": "G1P 3S3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.7924436,
+        "longitude": -71.29112180000001
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=14326163724529001385&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://genairclim.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1,
+      "displayName": {
+        "text": "GENAIRCLIM"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ-_geEibKpy4RdJM0F6u1oTM",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 834-8484",
+      "internationalPhoneNumber": "+1 418-834-8484",
+      "formattedAddress": "route 279, 639 Rue du Rucher Ét 261, Saint Lazare de Bellechasse, QC G6Z 2B8",
+      "addressComponents": [
+        {
+          "longText": "Étage 261",
+          "shortText": "Ét 261",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "route 279",
+          "shortText": "route 279",
+          "types": [
+            "point_of_interest",
+            "establishment"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "639",
+          "shortText": "639",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue du Rucher",
+          "shortText": "Rue du Rucher",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Les Chutes-de-la-Chaudière-Est",
+          "shortText": "Les Chutes-de-la-Chaudière-Est",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Saint Lazare de Bellechasse",
+          "shortText": "Saint Lazare de Bellechasse",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Lévis",
+          "shortText": "Lévis",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Chaudière-Appalaches",
+          "shortText": "Chaudière-Appalaches",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G6Z 2B8",
+          "shortText": "G6Z 2B8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.7403334,
+        "longitude": -71.215774
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=3720454513618097012&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.climatisationdesappalaches.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 78,
+      "displayName": {
+        "text": "Climatisation des Appalaches"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ12mOQDS8uEwROL-YS_tqj7g",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 666-1253",
+      "internationalPhoneNumber": "+1 418-666-1253",
+      "formattedAddress": "325 Rue Fichet, Québec, QC G1C 6B9",
+      "addressComponents": [
+        {
+          "longText": "325",
+          "shortText": "325",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Fichet",
+          "shortText": "Rue Fichet",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Beauport",
+          "shortText": "Beauport",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1C 6B9",
+          "shortText": "G1C 6B9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.877482799999996,
+        "longitude": -71.1947965
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=13298965852186001208&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.environ-air.com/?utm_campaign=google-my-business",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 21,
+      "displayName": {
+        "text": "Groupe Environ-Air Inc (Le)"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJXexZk16WuEwRc1l6kBT3u_c",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 688-3993",
+      "internationalPhoneNumber": "+1 418-688-3993",
+      "formattedAddress": "127 Rue Lebouthillier, Québec, QC G1N 4S5",
+      "addressComponents": [
+        {
+          "longText": "127",
+          "shortText": "127",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Lebouthillier",
+          "shortText": "Rue Lebouthillier",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "La Cité-Limoilou",
+          "shortText": "La Cité-Limoilou",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1N 4S5",
+          "shortText": "G1N 4S5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.807455399999995,
+        "longitude": -71.2524122
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=17851133215708436851&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1,
+      "displayName": {
+        "text": "Ventilation Bélair Enr"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJmQpDla2QuEwRLnsDOdUz_OE",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 871-3515",
+      "internationalPhoneNumber": "+1 418-871-3515",
+      "formattedAddress": "810 Bd de la Chaudière, Québec, QC G1X 4B7",
+      "addressComponents": [
+        {
+          "longText": "810",
+          "shortText": "810",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard de la Chaudière",
+          "shortText": "Bd de la Chaudière",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Sainte-Foy–Sillery–Cap-Rouge",
+          "shortText": "Sainte-Foy–Sillery–Cap-Rouge",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1X 4B7",
+          "shortText": "G1X 4B7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.7753276,
+        "longitude": -71.3435918
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=16283947343542450990&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.tempeffnorthamerica.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1,
+      "displayName": {
+        "text": "Tempeff North America"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJfX6nWb6iuEwRaHx8xvU5Bqw",
+      "types": [
+        "electrician",
+        "plumber",
+        "general_contractor",
+        "supplier",
+        "manufacturer",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 407-4007",
+      "internationalPhoneNumber": "+1 418-407-4007",
+      "formattedAddress": "1231 Rue de Châteauneuf du Pape, Québec, QC G3E 1Y8",
+      "addressComponents": [
+        {
+          "longText": "1231",
+          "shortText": "1231",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue de Châteauneuf du Pape",
+          "shortText": "Rue de Châteauneuf du Pape",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "La Haute-Saint-Charles",
+          "shortText": "La Haute-Saint-Charles",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G3E 1Y8",
+          "shortText": "G3E 1Y8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.871462699999995,
+        "longitude": -71.3165878
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=12395658752143686760&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://jfelectrique.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 66,
+      "displayName": {
+        "text": "JF Plomberie Électricité"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJz9mnE7mXuEwRJE5C-mXIvXA",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 871-3634",
+      "internationalPhoneNumber": "+1 418-871-3634",
+      "formattedAddress": "1000 Place Dufour #105, Québec City, QC G1M 3B2",
+      "addressComponents": [
+        {
+          "longText": "105",
+          "shortText": "105",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "1000",
+          "shortText": "1000",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Place Dufour",
+          "shortText": "Place Dufour",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Québec City",
+          "shortText": "Québec City",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Quebec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1M 3B2",
+          "shortText": "G1M 3B2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8252519,
+        "longitude": -71.2835934
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=8123869643162144292&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 6,
+      "displayName": {
+        "text": "Pyrogaz Québec inc"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJbSQQUVG9uEwRHS_YzJrlyhs",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 609-6473",
+      "internationalPhoneNumber": "+1 418-609-6473",
+      "formattedAddress": "559 Rue Marius-Fortier Local 60, Québec, QC G1C 0C7",
+      "addressComponents": [
+        {
+          "longText": "Local 60",
+          "shortText": "Local 60",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "559",
+          "shortText": "559",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Marius-Fortier",
+          "shortText": "Rue Marius-Fortier",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Beauport",
+          "shortText": "Beauport",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1C 0C7",
+          "shortText": "G1C 0C7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8922771,
+        "longitude": -71.18728209999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=2002665437344050973&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.confortclim.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 2,
+      "displayName": {
+        "text": "ConfortClim Inc"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJw0YDYF6WuEwRiu7BzjmqF_4",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 687-2419",
+      "internationalPhoneNumber": "+1 418-687-2419",
+      "formattedAddress": "136 Rue Oscar Drouin, Québec, QC G1N 3P9",
+      "addressComponents": [
+        {
+          "longText": "136",
+          "shortText": "136",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Oscar Drouin",
+          "shortText": "Rue Oscar Drouin",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "La Cité-Limoilou",
+          "shortText": "La Cité-Limoilou",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1N 3P9",
+          "shortText": "G1N 3P9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.807184299999996,
+        "longitude": -71.25162329999999
+      },
+      "googleMapsUri": "https://maps.google.com/?cid=18309289975356714634&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://pgventilation.ca/",
+      "businessStatus": "OPERATIONAL",
+      "displayName": {
+        "text": "P G Ventilation Inc"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJD6iUkOeRuEwRvJXOzOAt-Lg",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(581) 995-8882",
+      "internationalPhoneNumber": "+1 581-995-8882",
+      "formattedAddress": "2828 Boul Laurier, Québec, QC G1V 0B3",
+      "addressComponents": [
+        {
+          "longText": "2828",
+          "shortText": "2828",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Laurier",
+          "shortText": "Boul Laurier",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Sainte-Foy–Sillery–Cap-Rouge",
+          "shortText": "Sainte-Foy–Sillery–Cap-Rouge",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G1V 0B3",
+          "shortText": "G1V 0B3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.767812299999996,
+        "longitude": -71.2888076
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=13328453540734997948&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://habitationsconfort.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 106,
+      "displayName": {
+        "text": "Habitations-Confort"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJrw75mTe9uEwRAQ4HY6pzGHk",
+      "types": [
+        "building_materials_store",
+        "general_contractor",
+        "supplier",
+        "store",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 687-3036",
+      "internationalPhoneNumber": "+1 418-687-3036",
+      "formattedAddress": "1990 Bd Jean Talon E, Québec, QC G2L 0A2",
+      "addressComponents": [
+        {
+          "longText": "1990",
+          "shortText": "1990",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Jean Talon Est",
+          "shortText": "Bd Jean Talon E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Charlesbourg",
+          "shortText": "Charlesbourg",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2L 0A2",
+          "shortText": "G2L 0A2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.8795826,
+        "longitude": -71.2579872
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=8725851453673377281&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.wolseleyexpress.com/fr/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1,
+      "displayName": {
+        "text": "Wolseley Group CVAC/R / Climaref / Refac"
+      },
+      "primaryType": "supplier"
+    },
+    {
+      "id": "ChIJRX2QfGaXuEwRgj6uJPM4y7U",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(418) 871-2276",
+      "internationalPhoneNumber": "+1 418-871-2276",
+      "formattedAddress": "1005 Ave Saint-Jean-Baptiste, Québec City, QC G2E 5J5",
+      "addressComponents": [
+        {
+          "longText": "1005",
+          "shortText": "1005",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue Saint-Jean-Baptiste",
+          "shortText": "Ave Saint-Jean-Baptiste",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Les Rivières",
+          "shortText": "Les Rivières",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Québec City",
+          "shortText": "Québec City",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "Québec",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Capitale-Nationale",
+          "shortText": "Capitale-Nationale",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Quebec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "G2E 5J5",
+          "shortText": "G2E 5J5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 46.800186599999996,
+        "longitude": -71.3272461
+      },
+      "rating": 3.9,
+      "googleMapsUri": "https://maps.google.com/?cid=13099626558080827010&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.carmichael-eng.ca/locations/sherbrooke",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 14,
+      "displayName": {
+        "text": "Carmichael Ltée"
+      },
+      "primaryType": "general_contractor"
+    }
+  ],
+  "fetchedAt": "2026-08-06T06:47:34.001Z"
+}

@@ -1,0 +1,5547 @@
+{
+  "query": "hvac contractor in Montreal, QC",
+  "regionCode": "ca",
+  "places": [
+    {
+      "id": "ChIJmfkfLcEbyUwRvIlkEwBYcyY",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 863-4636",
+      "internationalPhoneNumber": "+1 514-863-4636",
+      "formattedAddress": "1690 Rue Frontenac, Montréal, QC H2K 2Y9",
+      "addressComponents": [
+        {
+          "longText": "1690",
+          "shortText": "1690",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Frontenac",
+          "shortText": "Rue Frontenac",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Ville-Marie",
+          "shortText": "Ville-Marie",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H2K 2Y9",
+          "shortText": "H2K 2Y9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5314084,
+        "longitude": -73.5492823
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=2770654953111587260&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://polarbearcanada.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1241,
+      "displayName": {
+        "text": "Les Services Polarbear"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJWTTZbTAWyUwRNSizsP72_Do",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "supplier",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 316-2973",
+      "internationalPhoneNumber": "+1 514-316-2973",
+      "formattedAddress": "4951 Rue Sainte-Catherine E, Montréal, QC H1V 2A1",
+      "addressComponents": [
+        {
+          "longText": "4951",
+          "shortText": "4951",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Sainte-Catherine Est",
+          "shortText": "Rue Sainte-Catherine E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Mercier - Hochelaga-Maisonneuve",
+          "shortText": "Mercier - Hochelaga-Maisonneuve",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H1V 2A1",
+          "shortText": "H1V 2A1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5575295,
+        "longitude": -73.52988719999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=4250543722077562933&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://airgreen.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 525,
+      "displayName": {
+        "text": "AIRGREEN inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJnVOESxhJOi4RybIwz687G_E",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(438) 520-2875",
+      "internationalPhoneNumber": "+1 438-520-2875",
+      "formattedAddress": "420 19e Avenue, Lachine, QC H8S 3S2",
+      "addressComponents": [
+        {
+          "longText": "420",
+          "shortText": "420",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "19e Avenue",
+          "shortText": "19e Avenue",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Lachine",
+          "shortText": "Lachine",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H8S 3S2",
+          "shortText": "H8S 3S2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.4362029,
+        "longitude": -73.68082179999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=17373545613793211081&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://airclimatisationvs.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 413,
+      "displayName": {
+        "text": "Air Climatisation VS"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJh9Q_SfIXyUwR3O0VGcBryEI",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 344-6060",
+      "internationalPhoneNumber": "+1 514-344-6060",
+      "formattedAddress": "4400 Chem. de la Côte-de-Liesse Ste 115B, Mount Royal, QC H4N 2P7",
+      "addressComponents": [
+        {
+          "longText": "Suite 115B",
+          "shortText": "Ste 115B",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "4400",
+          "shortText": "4400",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Chemin de la Côte-de-Liesse",
+          "shortText": "Chem. de la Côte-de-Liesse",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Mount Royal",
+          "shortText": "Mount Royal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montreal",
+          "shortText": "Montreal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Quebec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4N 2P7",
+          "shortText": "H4N 2P7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5048819,
+        "longitude": -73.6637916
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=4812214674644135388&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.hotncold.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 683,
+      "displayName": {
+        "text": "Hot & Cold Inc Climatisation Montréal"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJf4_Oj80fyUwRd8b9rW1o8jE",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(515) 700-3428",
+      "internationalPhoneNumber": "+1 515-700-3428",
+      "formattedAddress": "4409 Rue Denis Papin, Montréal, QC H1R 3J8",
+      "addressComponents": [
+        {
+          "longText": "4409",
+          "shortText": "4409",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Denis Papin",
+          "shortText": "Rue Denis Papin",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Saint-Léonard",
+          "shortText": "Saint-Léonard",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H1R 3J8",
+          "shortText": "H1R 3J8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.579589999999996,
+        "longitude": -73.61211999999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=3599053872502261367&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://superiorhvacservice.ca/montreal/?utm_source=gmb&utm_medium=organic&utm_campaign=gmb",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 23,
+      "displayName": {
+        "text": "Superior HVAC Service"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJM0TjSz6JMm0RuVFtKnKNvPs",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(438) 823-8766",
+      "internationalPhoneNumber": "+1 438-823-8766",
+      "formattedAddress": "5206 Rue Dalou, Montréal, QC H3W 2G3",
+      "addressComponents": [
+        {
+          "longText": "5206",
+          "shortText": "5206",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Dalou",
+          "shortText": "Rue Dalou",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Côte-des-Neiges - Notre-Dame-de-Grâce",
+          "shortText": "Côte-des-Neiges - Notre-Dame-de-Grâce",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H3W 2G3",
+          "shortText": "H3W 2G3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.482892,
+        "longitude": -73.62494439999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=18139528920619110841&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.airspand.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 74,
+      "displayName": {
+        "text": "Airspand"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJP9CJ3v4ZyUwRPPpjnNRYjOk",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 437-1914",
+      "internationalPhoneNumber": "+1 514-437-1914",
+      "formattedAddress": "7735 Boul. Saint-Laurent, Montréal, QC H2R 1X1",
+      "addressComponents": [
+        {
+          "longText": "7735",
+          "shortText": "7735",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Saint-Laurent",
+          "shortText": "Boul. Saint-Laurent",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Villeray—Saint-Michel—Parc-Extension",
+          "shortText": "Villeray—Saint-Michel—Parc-Extension",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H2R 1X1",
+          "shortText": "H2R 1X1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.537594399999996,
+        "longitude": -73.6258248
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=16828923577756809788&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://duraclim.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 3571,
+      "displayName": {
+        "text": "DuraClim"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJJbxXC8xifIURBgQ8QR7AT-Q",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "supplier",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(438) 388-0050",
+      "internationalPhoneNumber": "+1 438-388-0050",
+      "formattedAddress": "1065 Rue Trudeau, Montréal, QC H4N 2B9",
+      "addressComponents": [
+        {
+          "longText": "1065",
+          "shortText": "1065",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Trudeau",
+          "shortText": "Rue Trudeau",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Saint-Laurent",
+          "shortText": "Saint-Laurent",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4N 2B9",
+          "shortText": "H4N 2B9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5124865,
+        "longitude": -73.66459309999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=16451579199983715334&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.chambrefroidemtl.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 16,
+      "displayName": {
+        "text": "Chambre Froide Mtl - Climatisation, Refrigeration, Chauffage, Ventilation Commerciale"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJkfe21mq_nCMR6_DXh_DZ-C4",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(438) 800-4296",
+      "internationalPhoneNumber": "+1 438-800-4296",
+      "formattedAddress": "500 Place d'Armes bureau 1800, Montreal, QC H2Y 2W2",
+      "addressComponents": [
+        {
+          "longText": "bureau 1800",
+          "shortText": "bureau 1800",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "500",
+          "shortText": "500",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Place d'Armes",
+          "shortText": "Place d'Armes",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ville-Marie",
+          "shortText": "Ville-Marie",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Montreal",
+          "shortText": "Montreal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montreal",
+          "shortText": "Montreal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Quebec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H2Y 2W2",
+          "shortText": "H2Y 2W2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.50428,
+        "longitude": -73.557474
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=3384694747063382251&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://confortmh.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 851,
+      "displayName": {
+        "text": "Confort MH Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJi7GeuGEYyUwRdf_OqYpPQn8",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 577-9966",
+      "internationalPhoneNumber": "+1 514-577-9966",
+      "formattedAddress": "24 Rue Beaubien E, Montréal, QC H2S 1P8",
+      "addressComponents": [
+        {
+          "longText": "24",
+          "shortText": "24",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Beaubien Est",
+          "shortText": "Rue Beaubien E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Rosemont - La Petite-Patrie",
+          "shortText": "Rosemont - La Petite-Patrie",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H2S 1P8",
+          "shortText": "H2S 1P8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.530473199999996,
+        "longitude": -73.6081002
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=9169979248252747637&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://celsiusrefrigeration.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 929,
+      "displayName": {
+        "text": "Celsius Refrigeration"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJHc6wq7kiyUwRcWwj49knWCk",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 418-6487",
+      "internationalPhoneNumber": "+1 514-418-6487",
+      "formattedAddress": "2955 Rue Sartelon, Saint-Laurent, QC H4R 1E6",
+      "addressComponents": [
+        {
+          "longText": "2955",
+          "shortText": "2955",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Sartelon",
+          "shortText": "Rue Sartelon",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Saint-Laurent",
+          "shortText": "Saint-Laurent",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4R 1E6",
+          "shortText": "H4R 1E6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5125057,
+        "longitude": -73.73018119999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=2979174970277719153&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://allardemond.com/fr/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 495,
+      "displayName": {
+        "text": "Allard & Emond Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ69SwFS8ZyUwRsJl2CintxXA",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(450) 517-6478",
+      "internationalPhoneNumber": "+1 450-517-6478",
+      "formattedAddress": "300 Blvd. Marcel-Laurin Ste 121A, Saint-Laurent, QC H4M 2L4",
+      "addressComponents": [
+        {
+          "longText": "Suite 121A",
+          "shortText": "Ste 121A",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "300",
+          "shortText": "300",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Marcel-Laurin",
+          "shortText": "Blvd. Marcel-Laurin",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Saint-Laurent",
+          "shortText": "Saint-Laurent",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Montreal",
+          "shortText": "Montreal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montreal",
+          "shortText": "Montreal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Quebec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4M 2L4",
+          "shortText": "H4M 2L4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5030791,
+        "longitude": -73.6760303
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=8126161863184914864&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://hkclimatisation.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 173,
+      "displayName": {
+        "text": "HK Clim"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJbYzeSXYXyUwRUMqKa9fA1t4",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(438) 877-4102",
+      "internationalPhoneNumber": "+1 438-877-4102",
+      "formattedAddress": "139 Rue Saint-Jacques, Lachine, QC H8R 1E1",
+      "addressComponents": [
+        {
+          "longText": "139",
+          "shortText": "139",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Saint-Jacques",
+          "shortText": "Rue Saint-Jacques",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Lachine",
+          "shortText": "Lachine",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H8R 1E1",
+          "shortText": "H8R 1E1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.445411799999995,
+        "longitude": -73.64563009999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=16057233552890841680&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://freshairhvac.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 36,
+      "displayName": {
+        "text": "Fresh Air Montreal Inc"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJp1-0Hn8ayUwRe44BB9Y28AQ",
+      "types": [
+        "manufacturer",
+        "store",
+        "general_contractor",
+        "supplier",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 935-7919",
+      "internationalPhoneNumber": "+1 514-935-7919",
+      "formattedAddress": "3434 Rue Saint-Antoine O, Montréal, QC H4C 1A8",
+      "addressComponents": [
+        {
+          "longText": "3434",
+          "shortText": "3434",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Saint-Antoine Ouest",
+          "shortText": "Rue Saint-Antoine O",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Le Sud-Ouest",
+          "shortText": "Le Sud-Ouest",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4C 1A8",
+          "shortText": "H4C 1A8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.483486,
+        "longitude": -73.58347429999999
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=355844663430712955&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.411habitation.com/chauffage-climatisation-ventilation/montreal/ville-emard-2/chauffage-ville-emard.htm",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 104,
+      "displayName": {
+        "text": "Nova Refrigeration"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJlXQx7awfyUwROJ9Xzu4pu4o",
+      "types": [
+        "store",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 852-3738",
+      "internationalPhoneNumber": "+1 514-852-3738",
+      "formattedAddress": "7986 Rue Alfred, Anjou, QC H1J 1J1",
+      "addressComponents": [
+        {
+          "longText": "7986",
+          "shortText": "7986",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Alfred",
+          "shortText": "Rue Alfred",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Anjou",
+          "shortText": "Anjou",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H1J 1J1",
+          "shortText": "H1J 1J1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.6113751,
+        "longitude": -73.5645888
+      },
+      "rating": 4.5,
+      "googleMapsUri": "https://maps.google.com/?cid=9996629903519751992&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.411habitation.com/chauffage-climatisation-ventilation/montreal/anjou-1/chauffage-anjou.htm",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 975,
+      "displayName": {
+        "text": "JM AIR Climatisation - Chauffage Montréal"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJrxaq-LcQyUwRcMQfA09FGbs",
+      "types": [
+        "electrician",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 768-7778",
+      "internationalPhoneNumber": "+1 514-768-7778",
+      "formattedAddress": "7864 Rue Elmslie, LaSalle, QC H8N 2W6",
+      "addressComponents": [
+        {
+          "longText": "7864",
+          "shortText": "7864",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Elmslie",
+          "shortText": "Rue Elmslie",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "LaSalle",
+          "shortText": "LaSalle",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H8N 2W6",
+          "shortText": "H8N 2W6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.441609,
+        "longitude": -73.6363562
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=13481883165167436912&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://electrika.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 2345,
+      "displayName": {
+        "text": "Electrika Inc."
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJkSMR-kYdyUwRB-wYl8cbevQ",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 582-0601",
+      "internationalPhoneNumber": "+1 514-582-0601",
+      "formattedAddress": "4150 Rue Mousseau, Montréal, QC H1K 2V5",
+      "addressComponents": [
+        {
+          "longText": "4150",
+          "shortText": "4150",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Mousseau",
+          "shortText": "Rue Mousseau",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Mercier - Hochelaga-Maisonneuve",
+          "shortText": "Mercier - Hochelaga-Maisonneuve",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H1K 2V5",
+          "shortText": "H1K 2V5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.6053893,
+        "longitude": -73.53093489999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=17616423436460551175&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.facebook.com/profile.php?id=100081870855556",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 23,
+      "displayName": {
+        "text": "Montréal Clim Service"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJFY7-AdQZyUwRjEcpUXJi6Cs",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 342-3400",
+      "internationalPhoneNumber": "+1 514-342-3400",
+      "formattedAddress": "5420 Rue Paré, Mont-Royal, QC H4P 1R3",
+      "addressComponents": [
+        {
+          "longText": "5420",
+          "shortText": "5420",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Paré",
+          "shortText": "Rue Paré",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Mont-Royal",
+          "shortText": "Mont-Royal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4P 1R3",
+          "shortText": "H4P 1R3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.494345800000005,
+        "longitude": -73.65723349999999
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=3163886981355227020&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.guaranteedindustries.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 241,
+      "displayName": {
+        "text": "Industries Garanties"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJobBPtkM9yUwRBPDowUjsPKw",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 337-7210",
+      "internationalPhoneNumber": "+1 514-337-7210",
+      "formattedAddress": "346 Rue Isabey, Saint-Laurent, QC H4T 1W1",
+      "addressComponents": [
+        {
+          "longText": "346",
+          "shortText": "346",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Isabey",
+          "shortText": "Rue Isabey",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Saint-Laurent",
+          "shortText": "Saint-Laurent",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4T 1W1",
+          "shortText": "H4T 1W1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.492826099999995,
+        "longitude": -73.6848885
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=12411054470361313284&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://ssconversions.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 877,
+      "displayName": {
+        "text": "S & S Conversions"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJZY0XO9AbyUwRiB9PseGkeEc",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 989-9810",
+      "internationalPhoneNumber": "+1 514-989-9810",
+      "formattedAddress": "4423 Rue St-Hubert, Montréal, QC H2J 2X1",
+      "addressComponents": [
+        {
+          "longText": "4423",
+          "shortText": "4423",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Saint-Hubert",
+          "shortText": "Rue St-Hubert",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Le Plateau-Mont-Royal",
+          "shortText": "Le Plateau-Mont-Royal",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H2J 2X1",
+          "shortText": "H2J 2X1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.525332999999996,
+        "longitude": -73.580006
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=5150047463147511688&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.confortech.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 109,
+      "displayName": {
+        "text": "Confortech Climatisation Chauffage"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ79k_ibEnyUwRtb7uI7zUMJY",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 446-3300",
+      "internationalPhoneNumber": "+1 514-446-3300",
+      "formattedAddress": "261 Bd Curé-Labelle, Sainte-Rose, QC H7L 2Z9",
+      "addressComponents": [
+        {
+          "longText": "261",
+          "shortText": "261",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Curé-Labelle",
+          "shortText": "Bd Curé-Labelle",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Sainte-Rose",
+          "shortText": "Sainte-Rose",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Laval",
+          "shortText": "Laval",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Laval",
+          "shortText": "Laval",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Laval",
+          "shortText": "Laval",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H7L 2Z9",
+          "shortText": "H7L 2Z9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5993579,
+        "longitude": -73.7899972
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=10822383809093090997&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.411habitation.com/chauffage-climatisation-ventilation/laval/sainte-rose-3/chaufroi-climatisation-chauffage-entrepreneur-thermopompe.htm",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 41,
+      "displayName": {
+        "text": "Chaufroi - Climatisation, Chauffage, Entrepreneur Thermopompe"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJiw0rYwXiyEwRIkKMVTMTY7A",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 640-7711",
+      "internationalPhoneNumber": "+1 514-640-7711",
+      "formattedAddress": "9771 Bd Métropolitain E, Anjou, QC H1J 0A4",
+      "addressComponents": [
+        {
+          "longText": "9771",
+          "shortText": "9771",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Métropolitain Est",
+          "shortText": "Bd Métropolitain E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Anjou",
+          "shortText": "Anjou",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H1J 0A4",
+          "shortText": "H1J 0A4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.625080999999994,
+        "longitude": -73.5495907
+      },
+      "rating": 4.3,
+      "googleMapsUri": "https://maps.google.com/?cid=12710023684569186850&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.confortexpert.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1857,
+      "displayName": {
+        "text": "Confort Expert Inc"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJC8iwRafpkmQRYJE1LIe0_Ks",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 707-4875",
+      "internationalPhoneNumber": "+1 514-707-4875",
+      "formattedAddress": "3687 Rue Clark #90, Montréal, QC H2X 2S1",
+      "addressComponents": [
+        {
+          "longText": "90",
+          "shortText": "90",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "3687",
+          "shortText": "3687",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Clark",
+          "shortText": "Rue Clark",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Le Plateau-Mont-Royal",
+          "shortText": "Le Plateau-Mont-Royal",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H2X 2S1",
+          "shortText": "H2X 2S1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5143303,
+        "longitude": -73.57484199999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=12392978767272055136&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.keepcoolpro.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 330,
+      "displayName": {
+        "text": "Rester Cool Pro"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ4_ufEX0QyUwRMCV8B1e5eXg",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 238-1166",
+      "internationalPhoneNumber": "+1 514-238-1166",
+      "formattedAddress": "4039 Rue Gertrude, Verdun, QC H4G 1R7",
+      "addressComponents": [
+        {
+          "longText": "4039",
+          "shortText": "4039",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Gertrude",
+          "shortText": "Rue Gertrude",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Verdun",
+          "shortText": "Verdun",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4G 1R7",
+          "shortText": "H4G 1R7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.463589899999995,
+        "longitude": -73.5692614
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=8681173540172211504&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.dbclimatisation.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 182,
+      "displayName": {
+        "text": "DB Climatisation"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ4eUte5sFyUwReMJGDOtziUU",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 236-4026",
+      "internationalPhoneNumber": "+1 514-236-4026",
+      "formattedAddress": "2620 Rue Asselin, Brossard, QC J4Z 2Z1",
+      "addressComponents": [
+        {
+          "longText": "2620",
+          "shortText": "2620",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Asselin",
+          "shortText": "Rue Asselin",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Brossard",
+          "shortText": "Brossard",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Longueuil",
+          "shortText": "Longueuil",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montérégie",
+          "shortText": "Montérégie",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "J4Z 2Z1",
+          "shortText": "J4Z 2Z1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.472788099999995,
+        "longitude": -73.4552155
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=5010663513786860152&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://entrepriseslavalliere.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 276,
+      "displayName": {
+        "text": "Les Entreprises Lavallière"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJoz6isaoiyUwR2gOaElBN_ik",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 333-7460",
+      "internationalPhoneNumber": "+1 514-333-7460",
+      "formattedAddress": "346 Rue Isabey, Montréal, QC H4T 1W1",
+      "addressComponents": [
+        {
+          "longText": "346",
+          "shortText": "346",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Isabey",
+          "shortText": "Rue Isabey",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Saint-Laurent",
+          "shortText": "Saint-Laurent",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4T 1W1",
+          "shortText": "H4T 1W1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.492786599999995,
+        "longitude": -73.6846336
+      },
+      "rating": 4.4,
+      "googleMapsUri": "https://maps.google.com/?cid=3025941005944357850&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://electroaide.ca/contact/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 386,
+      "displayName": {
+        "text": "Electro Aide Inc"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ8fOmocYZyUwR6UJ4kdhwRxs",
+      "types": [
+        "plumber",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 735-5583",
+      "internationalPhoneNumber": "+1 514-735-5583",
+      "formattedAddress": "3880 Av. de Courtrai, Montréal, QC H3S 1C1",
+      "addressComponents": [
+        {
+          "longText": "3880",
+          "shortText": "3880",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue de Courtrai",
+          "shortText": "Av. de Courtrai",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Côte-des-Neiges - Notre-Dame-de-Grâce",
+          "shortText": "Côte-des-Neiges - Notre-Dame-de-Grâce",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H3S 1C1",
+          "shortText": "H3S 1C1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5020441,
+        "longitude": -73.64097939999999
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=1965663837826335465&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://jwph.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 288,
+      "displayName": {
+        "text": "J W Plumbing & Heating"
+      },
+      "primaryType": "plumber"
+    },
+    {
+      "id": "ChIJ1ThNWRPbyUwRk6H0ZCMSA6w",
+      "types": [
+        "plumber",
+        "electrician",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 344-3838",
+      "internationalPhoneNumber": "+1 514-344-3838",
+      "formattedAddress": "5855 Bd Décarie, Montréal, QC H3W 3C9",
+      "addressComponents": [
+        {
+          "longText": "5855",
+          "shortText": "5855",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Décarie",
+          "shortText": "Bd Décarie",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Côte-des-Neiges - Notre-Dame-de-Grâce",
+          "shortText": "Côte-des-Neiges - Notre-Dame-de-Grâce",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H3W 3C9",
+          "shortText": "H3W 3C9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.488732899999995,
+        "longitude": -73.6395845
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=12394770542680646035&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://actif.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 123,
+      "displayName": {
+        "text": "ACTIF - Plomberie, Chauffage, Gaz Naturel, Électricité"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJXR8xgFifv0YReNfohHppqjA",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 214-7492",
+      "internationalPhoneNumber": "+1 514-214-7492",
+      "formattedAddress": "9187 Bd de l'Acadie, Montréal, QC H4N 1J8",
+      "addressComponents": [
+        {
+          "longText": "9187",
+          "shortText": "9187",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard de l'Acadie",
+          "shortText": "Bd de l'Acadie",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Ahuntsic-Cartierville",
+          "shortText": "Ahuntsic-Cartierville",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4N 1J8",
+          "shortText": "H4N 1J8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.533111899999994,
+        "longitude": -73.6551863
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=3506731234798131064&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://vortexair.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 214,
+      "displayName": {
+        "text": "Ventilation Vortex Air"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJrfPAYkkbyUwRnI2MoblbsNU",
+      "types": [
+        "plumber",
+        "general_contractor",
+        "supplier",
+        "store",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 700-4456",
+      "internationalPhoneNumber": "+1 514-700-4456",
+      "formattedAddress": "3460 Rue Peel, Montréal, QC H3A 2M1",
+      "addressComponents": [
+        {
+          "longText": "3460",
+          "shortText": "3460",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Peel",
+          "shortText": "Rue Peel",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Ville-Marie",
+          "shortText": "Ville-Marie",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H3A 2M1",
+          "shortText": "H3A 2M1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.502547,
+        "longitude": -73.578288
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=15397907978817146268&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://superiorplumbing.ca/montreal/?utm_source=gmb&utm_medium=organic&utm_campaign=gmb",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 114,
+      "displayName": {
+        "text": "Superior Plumbing & Heating of Montreal"
+      },
+      "primaryType": "plumber"
+    },
+    {
+      "id": "ChIJC_xGUA8fyUwRqGj9NUkGb0g",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 321-4144",
+      "internationalPhoneNumber": "+1 514-321-4144",
+      "formattedAddress": "8575 Rue Lafrenaie, Montréal, QC H1P 2B6",
+      "addressComponents": [
+        {
+          "longText": "8575",
+          "shortText": "8575",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Lafrenaie",
+          "shortText": "Rue Lafrenaie",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Saint-Léonard",
+          "shortText": "Saint-Léonard",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H1P 2B6",
+          "shortText": "H1P 2B6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.599888899999996,
+        "longitude": -73.5890311
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=5219397404653873320&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.411habitation.com/chauffage-climatisation-ventilation/montreal/saint-leonard-17/air-tronic-climatisation-chauffage-climatisation-commerciale-saint-leonard.htm",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 22,
+      "displayName": {
+        "text": "Air Tronic Climatisation - Chauffage, Climatisation Commerciale Saint-Léonard"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJX_-gE9gRyUwR6dghZPEiv7k",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 865-8585",
+      "internationalPhoneNumber": "+1 514-865-8585",
+      "formattedAddress": "6900 Bd Décarie Ste 3280, Côte Saint-Luc, QC H3X 2T5",
+      "addressComponents": [
+        {
+          "longText": "Suite 3280",
+          "shortText": "Ste 3280",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "6900",
+          "shortText": "6900",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Décarie",
+          "shortText": "Bd Décarie",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Côte Saint-Luc",
+          "shortText": "Côte Saint-Luc",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montreal",
+          "shortText": "Montreal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Quebec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H3X 2T5",
+          "shortText": "H3X 2T5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.4909446,
+        "longitude": -73.6507432
+      },
+      "rating": 4.2,
+      "googleMapsUri": "https://maps.google.com/?cid=13384455037730805993&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://airmagique.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 245,
+      "displayName": {
+        "text": "Air Magique"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJc3GyFokXyUwR3aiEvIiAj9Q",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 735-7147",
+      "internationalPhoneNumber": "+1 514-735-7147",
+      "formattedAddress": "5965 Chem. de la Côte-de-Liesse, Montréal, QC H4T 1C3",
+      "addressComponents": [
+        {
+          "longText": "5965",
+          "shortText": "5965",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Chemin de la Côte-de-Liesse",
+          "shortText": "Chem. de la Côte-de-Liesse",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Saint-Laurent",
+          "shortText": "Saint-Laurent",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4T 1C3",
+          "shortText": "H4T 1C3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.490960799999996,
+        "longitude": -73.68543729999999
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=15316602182477064413&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.atclimatisation.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 239,
+      "displayName": {
+        "text": "AT climatisation"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJYdooOQAXyUwRePxUruVDaL8",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(438) 367-5995",
+      "internationalPhoneNumber": "+1 438-367-5995",
+      "formattedAddress": "110 Av. Saint-Pierre, Montréal, QC H8R 1P2",
+      "addressComponents": [
+        {
+          "longText": "110",
+          "shortText": "110",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue Saint-Pierre",
+          "shortText": "Av. Saint-Pierre",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Lachine",
+          "shortText": "Lachine",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H8R 1P2",
+          "shortText": "H8R 1P2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.4443033,
+        "longitude": -73.6503177
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=13792348512573521016&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.facebook.com/profile.php?id=61557960714262",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 16,
+      "displayName": {
+        "text": "Climatisation 365"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ_wSAopQQyUwRKPZDCTVn0_E",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 743-4700",
+      "internationalPhoneNumber": "+1 514-743-4700",
+      "formattedAddress": "2392 Av. West Hill, Montréal, QC H4B 2S4",
+      "addressComponents": [
+        {
+          "longText": "2392",
+          "shortText": "2392",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue West Hill",
+          "shortText": "Av. West Hill",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Côte-des-Neiges - Notre-Dame-de-Grâce",
+          "shortText": "Côte-des-Neiges - Notre-Dame-de-Grâce",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4B 2S4",
+          "shortText": "H4B 2S4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.464376,
+        "longitude": -73.6240095
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=17425384860712957480&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.airkatex.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 54,
+      "displayName": {
+        "text": "Airkatex Group Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ0SbDP7qryUwRh3GzgurjeE0",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(438) 492-3125",
+      "internationalPhoneNumber": "+1 438-492-3125",
+      "formattedAddress": "655 Bd Jean-Paul-Vincent, Longueuil, QC J4G 1S6",
+      "addressComponents": [
+        {
+          "longText": "655",
+          "shortText": "655",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Jean-Paul-Vincent",
+          "shortText": "Bd Jean-Paul-Vincent",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Le Vieux-Longueuil",
+          "shortText": "Le Vieux-Longueuil",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Longueuil",
+          "shortText": "Longueuil",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Longueuil",
+          "shortText": "Longueuil",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montérégie",
+          "shortText": "Montérégie",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "J4G 1S6",
+          "shortText": "J4G 1S6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.563269999999996,
+        "longitude": -73.4761561
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=5582462334480380295&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://rousso.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 234,
+      "displayName": {
+        "text": "Groupe Rousso"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ6W8i_FwhyUwRDiPyxvgL4Ok",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 990-6866",
+      "internationalPhoneNumber": "+1 514-990-6866",
+      "formattedAddress": "3065 Rue Peugeot, Laval, QC H7L 5C4",
+      "addressComponents": [
+        {
+          "longText": "3065",
+          "shortText": "3065",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Peugeot",
+          "shortText": "Rue Peugeot",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Laval",
+          "shortText": "Laval",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Laval",
+          "shortText": "Laval",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Laval",
+          "shortText": "Laval",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H7L 5C4",
+          "shortText": "H7L 5C4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.588159399999995,
+        "longitude": -73.7467491
+      },
+      "rating": 4.5,
+      "googleMapsUri": "https://maps.google.com/?cid=16852482968737948430&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.climatech.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 289,
+      "displayName": {
+        "text": "Climatech"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ6bX1p6wZyUwRxjF9zLUZor4",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(438) 994-9742",
+      "internationalPhoneNumber": "+1 438-994-9742",
+      "formattedAddress": "297 Rue Varry, Saint-Laurent, QC H4N 1A4",
+      "addressComponents": [
+        {
+          "longText": "297",
+          "shortText": "297",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Varry",
+          "shortText": "Rue Varry",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Saint-Laurent",
+          "shortText": "Saint-Laurent",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4N 1A4",
+          "shortText": "H4N 1A4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.529736199999995,
+        "longitude": -73.6780976
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=13736570082043965894&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.hpmtinc.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 31,
+      "displayName": {
+        "text": "HPMT Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJu5MKY7MXyUwRULU7qRrX_jU",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 422-0444",
+      "internationalPhoneNumber": "+1 514-422-0444",
+      "formattedAddress": "1850 32e Avenue, Lachine, QC H8T 3J7",
+      "addressComponents": [
+        {
+          "longText": "1850",
+          "shortText": "1850",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "32e Avenue",
+          "shortText": "32e Avenue",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Lachine",
+          "shortText": "Lachine",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H8T 3J7",
+          "shortText": "H8T 3J7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.45957,
+        "longitude": -73.703261
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=3890783637603071312&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.baulne.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 30,
+      "displayName": {
+        "text": "BAULNE INC. | Montréal"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJicwfWE09yUwR4qqFvsnUHwQ",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 500-3248",
+      "internationalPhoneNumber": "+1 514-500-3248",
+      "formattedAddress": "5473 Av. Royalmount #214, Mont-Royal, QC H4P 1J3",
+      "addressComponents": [
+        {
+          "longText": "214",
+          "shortText": "214",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "5473",
+          "shortText": "5473",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue Royalmount",
+          "shortText": "Av. Royalmount",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Mont-Royal",
+          "shortText": "Mont-Royal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4P 1J3",
+          "shortText": "H4P 1J3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.496336799999995,
+        "longitude": -73.6641321
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=297190063379688162&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.aerosealglobal.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 87,
+      "displayName": {
+        "text": "Aeroseal Global"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJXysYSQcbyUwRhhGfC8m-dHU",
+      "types": [
+        "general_contractor",
+        "roofing_contractor",
+        "home_goods_store",
+        "store",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(877) 736-6360",
+      "internationalPhoneNumber": "+1 877-736-6360",
+      "formattedAddress": "400 Blvd. De Maisonneuve Ouest O, Montreal, QC H3A 1L4",
+      "addressComponents": [
+        {
+          "longText": "O",
+          "shortText": "O",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "400",
+          "shortText": "400",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard De Maisonneuve Ouest",
+          "shortText": "Blvd. De Maisonneuve Ouest",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ville-Marie",
+          "shortText": "Ville-Marie",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Montreal",
+          "shortText": "Montreal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montreal",
+          "shortText": "Montreal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Quebec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H3A 1L4",
+          "shortText": "H3A 1L4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5063585,
+        "longitude": -73.5692834
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=8463599370428682630&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.renoassistance.ca/fr?itm_campaign=lien-gmb&itm_medium=organic&itm_source=googlemybusiness",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 170,
+      "displayName": {
+        "text": "RénoAssistance"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJPyb3cNQAEqgRVD7lbBSNS2Y",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 812-8240",
+      "internationalPhoneNumber": "+1 514-812-8240",
+      "formattedAddress": "11302 Rue de St.-Réal, Montréal, QC H3M 2Y4",
+      "addressComponents": [
+        {
+          "longText": "11302",
+          "shortText": "11302",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue de Saint-Réal",
+          "shortText": "Rue de St.-Réal",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Ahuntsic-Cartierville",
+          "shortText": "Ahuntsic-Cartierville",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H3M 2Y4",
+          "shortText": "H3M 2Y4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5398171,
+        "longitude": -73.6833011
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=7371140333987774036&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.conduitexpert.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 4,
+      "displayName": {
+        "text": "Conduit Expert"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJfYRC0-8QyUwRTqkT3O5dXyI",
+      "types": [
+        "manufacturer",
+        "store",
+        "general_contractor",
+        "supplier",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 732-6177",
+      "internationalPhoneNumber": "+1 514-732-6177",
+      "formattedAddress": "6273 Bd Monk, Montréal, QC H4E 3H8",
+      "addressComponents": [
+        {
+          "longText": "6273",
+          "shortText": "6273",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Monk",
+          "shortText": "Bd Monk",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Le Sud-Ouest",
+          "shortText": "Le Sud-Ouest",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4E 3H8",
+          "shortText": "H4E 3H8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.4557534,
+        "longitude": -73.5952248
+      },
+      "rating": 4.3,
+      "googleMapsUri": "https://maps.google.com/?cid=2476801600552937806&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.air-max.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 77,
+      "displayName": {
+        "text": "Airmax Climatisation"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJj6RPDKwfyUwRMviM2fgyewo",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 261-2221",
+      "internationalPhoneNumber": "+1 514-261-2221",
+      "formattedAddress": "4042 Rue de Charleroi, Montréal, QC H1H 1S6",
+      "addressComponents": [
+        {
+          "longText": "4042",
+          "shortText": "4042",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue de Charleroi",
+          "shortText": "Rue de Charleroi",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal-Nord",
+          "shortText": "Montréal-Nord",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H1H 1S6",
+          "shortText": "H1H 1S6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5923254,
+        "longitude": -73.6398688
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=755253406897862706&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.kusicair.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 3,
+      "displayName": {
+        "text": "Kusicair"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJTca2YpcdyUwRi8R9WbKblYk",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 292-7595",
+      "internationalPhoneNumber": "+1 514-292-7595",
+      "formattedAddress": "1671 Pl. Beauchesne, Montréal, QC H1L 3H1",
+      "addressComponents": [
+        {
+          "longText": "1671",
+          "shortText": "1671",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Place Beauchesne",
+          "shortText": "Pl. Beauchesne",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Mercier - Hochelaga-Maisonneuve",
+          "shortText": "Mercier - Hochelaga-Maisonneuve",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H1L 3H1",
+          "shortText": "H1L 3H1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.592391299999996,
+        "longitude": -73.51267829999999
+      },
+      "rating": 4.3,
+      "googleMapsUri": "https://maps.google.com/?cid=9914001345033913483&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.climatisationsolutionair.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 49,
+      "displayName": {
+        "text": "Climatisation Solutionair"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJVXD9AV8YyUwR4hpFnu4ie4c",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 497-4950",
+      "internationalPhoneNumber": "+1 514-497-4950",
+      "formattedAddress": "160 Rue Khalil-Gibran #208, Saint-Laurent, QC H4N 0A9",
+      "addressComponents": [
+        {
+          "longText": "208",
+          "shortText": "208",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "160",
+          "shortText": "160",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Khalil-Gibran",
+          "shortText": "Rue Khalil-Gibran",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Saint-Laurent",
+          "shortText": "Saint-Laurent",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4N 0A9",
+          "shortText": "H4N 0A9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5280037,
+        "longitude": -73.66740999999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=9762435025508571874&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.technofrost.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 18,
+      "displayName": {
+        "text": "Les Entreprises Technofrost inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ84swWeQZyUwRxXAteBtkPy0",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 522-5052",
+      "internationalPhoneNumber": "+1 514-522-5052",
+      "formattedAddress": "650 Bd Crémazie O, Montréal, QC H3N 2G6",
+      "addressComponents": [
+        {
+          "longText": "650",
+          "shortText": "650",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Boulevard Crémazie Ouest",
+          "shortText": "Bd Crémazie O",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Villeray—Saint-Michel—Parc-Extension",
+          "shortText": "Villeray—Saint-Michel—Parc-Extension",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H3N 2G6",
+          "shortText": "H3N 2G6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.5338327,
+        "longitude": -73.6461748
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=3260434724382666949&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.polarbearcanada.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 8,
+      "displayName": {
+        "text": "Climatisation Polarbear"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJWQqjTAAxyUwRPjeaahkODs8",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 742-8774",
+      "internationalPhoneNumber": "+1 514-742-8774",
+      "formattedAddress": "1065 Rue Trudeau, Montréal, QC H4N 2B9",
+      "addressComponents": [
+        {
+          "longText": "1065",
+          "shortText": "1065",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Trudeau",
+          "shortText": "Rue Trudeau",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Saint-Laurent",
+          "shortText": "Saint-Laurent",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H4N 2B9",
+          "shortText": "H4N 2B9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.512481799999996,
+        "longitude": -73.6645829
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=14919878117850494782&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.411habitation.com/chauffage-climatisation-ventilation/montreal/saint-laurent-15/tourefrigeration-thermopompe-centrale-murale-fournaise.htm",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 33,
+      "displayName": {
+        "text": "Touréfrigération - Thermopompe centrale, murale, fournaise"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJVbxZ7sgyVUARgTRzKcnoVx4",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 931-3571",
+      "internationalPhoneNumber": "+1 514-931-3571",
+      "formattedAddress": "6637 Rue Jeanne-Mance, Montréal, QC H2V 4L1",
+      "addressComponents": [
+        {
+          "longText": "6637",
+          "shortText": "6637",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rue Jeanne-Mance",
+          "shortText": "Rue Jeanne-Mance",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Rosemont - La Petite-Patrie",
+          "shortText": "Rosemont - La Petite-Patrie",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H2V 4L1",
+          "shortText": "H2V 4L1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.528804799999996,
+        "longitude": -73.61420269999999
+      },
+      "rating": 4.4,
+      "googleMapsUri": "https://maps.google.com/?cid=2186472094793151617&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 34,
+      "displayName": {
+        "text": "Air conditioners Rental since 1978 in Canada"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJTZHMl9LBwAQRDNWDehWVUB0",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "formattedAddress": "16 Pl. du Commerce, Verdun, QC H3E 2A5",
+      "addressComponents": [
+        {
+          "longText": "16",
+          "shortText": "16",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Place du Commerce",
+          "shortText": "Pl. du Commerce",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Verdun",
+          "shortText": "Verdun",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H3E 2A5",
+          "shortText": "H3E 2A5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.4692935,
+        "longitude": -73.5387659
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=2112352144719074572&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.nordetclimatisation.com/?utm_source=google&utm_medium=wix_google_business_profile&utm_campaign=10498022566485919586",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 24,
+      "displayName": {
+        "text": "Nordet Climatisation"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ_Xp3K1cXyUwRcyn9VA3XEMw",
+      "types": [
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 831-5320",
+      "internationalPhoneNumber": "+1 514-831-5320",
+      "formattedAddress": "4920 Av. Earnscliffe, Montréal, QC H3X 2P3",
+      "addressComponents": [
+        {
+          "longText": "4920",
+          "shortText": "4920",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Avenue Earnscliffe",
+          "shortText": "Av. Earnscliffe",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Côte-des-Neiges - Notre-Dame-de-Grâce",
+          "shortText": "Côte-des-Neiges - Notre-Dame-de-Grâce",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montréal",
+          "shortText": "Montréal",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "H3X 2P3",
+          "shortText": "H3X 2P3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.481068799999996,
+        "longitude": -73.6289063
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=14704489235625093491&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.bissonnetteref.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 61,
+      "displayName": {
+        "text": "Bissonnette Refrigeration"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJI7BbUQ0FyUwRMscmIS15fKA",
+      "types": [
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(514) 993-3347",
+      "internationalPhoneNumber": "+1 514-993-3347",
+      "formattedAddress": "849 Terr. Chabanel, Longueuil, QC J4L 2R3",
+      "addressComponents": [
+        {
+          "longText": "849",
+          "shortText": "849",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Terrasse Chabanel",
+          "shortText": "Terr. Chabanel",
+          "types": [
+            "route"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Le Vieux-Longueuil",
+          "shortText": "Le Vieux-Longueuil",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Longueuil",
+          "shortText": "Longueuil",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Longueuil",
+          "shortText": "Longueuil",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Montérégie",
+          "shortText": "Montérégie",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Québec",
+          "shortText": "QC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "fr"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "J4L 2R3",
+          "shortText": "J4L 2R3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.512921999999996,
+        "longitude": -73.46979639999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=11564251177917269810&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://acbudget.ca/home",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 48,
+      "displayName": {
+        "text": "AC Budget"
+      },
+      "primaryType": "service"
+    }
+  ],
+  "fetchedAt": "2026-08-06T06:43:24.327Z"
+}

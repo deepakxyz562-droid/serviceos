@@ -1,0 +1,4261 @@
+{
+  "query": "electrician in Calgary, AB",
+  "regionCode": "ca",
+  "places": [
+    {
+      "id": "ChIJs0c0jYBkcVMR8RNQxW8Bjqk",
+      "types": [
+        "electrician",
+        "manufacturer",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 248-0037",
+      "internationalPhoneNumber": "+1 403-248-0037",
+      "formattedAddress": "2333 18 Ave NE #16, Calgary, AB T2E 8T6",
+      "addressComponents": [
+        {
+          "longText": "16",
+          "shortText": "16",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "2333",
+          "shortText": "2333",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "18 Avenue Northeast",
+          "shortText": "18 Ave NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northeast Calgary",
+          "shortText": "Northeast Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2E 8T6",
+          "shortText": "T2E 8T6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0686995,
+        "longitude": -114.0049097
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=12217704418666091505&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.4starelectric.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1413,
+      "displayName": {
+        "text": "4-Star Electric Ltd."
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJx3AdpFNocVMRdiRvQ0zWF68",
+      "types": [
+        "electrician",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(825) 824-9525",
+      "internationalPhoneNumber": "+1 825-824-9525",
+      "formattedAddress": "81 Rockyspring Point NW, Calgary, AB T3G 6A1",
+      "addressComponents": [
+        {
+          "longText": "81",
+          "shortText": "81",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rockyspring Point Northwest",
+          "shortText": "Rockyspring Point NW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northwest Calgary",
+          "shortText": "Northwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3G 6A1",
+          "shortText": "T3G 6A1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.150461,
+        "longitude": -114.2561992
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=12616788504138949750&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.gravityelectrical.ca/?utm_source=Google&utm_medium=GMB",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 478,
+      "displayName": {
+        "text": "Gravity Electrical Solutions"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJAQBEjBRucVMRbJAS9U-NOhM",
+      "types": [
+        "electrician",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 669-0355",
+      "internationalPhoneNumber": "+1 403-669-0355",
+      "formattedAddress": "4920 45 St SW, Calgary, AB T3E 3W4",
+      "addressComponents": [
+        {
+          "longText": "4920",
+          "shortText": "4920",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "45 Street Southwest",
+          "shortText": "45 St SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Southwest Calgary",
+          "shortText": "Southwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3E 3W4",
+          "shortText": "T3E 3W4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0109329,
+        "longitude": -114.1527405
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=1385575209923416172&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.honestelectrician.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 273,
+      "displayName": {
+        "text": "The Honest Electrician Inc."
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ_7YXa4lwcVMR497CBraMxkQ",
+      "types": [
+        "electrician",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 355-2644",
+      "internationalPhoneNumber": "+1 587-355-2644",
+      "formattedAddress": "243 Autumn Cir SE, Calgary, AB T3M 0J9",
+      "addressComponents": [
+        {
+          "longText": "243",
+          "shortText": "243",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Autumn Circle Southeast",
+          "shortText": "Autumn Cir SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Auburn Bay",
+          "shortText": "Auburn Bay",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3M 0J9",
+          "shortText": "T3M 0J9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.897975599999995,
+        "longitude": -113.9677329
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=4955803153393180387&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://247electriccalgary.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 816,
+      "displayName": {
+        "text": "24/7 Electric Inc."
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJlUdW7aNpcVMRo7hA8nhyeTI",
+      "types": [
+        "electrician",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(825) 824-9473",
+      "internationalPhoneNumber": "+1 825-824-9473",
+      "formattedAddress": "391 Magnolia Dr SE, Calgary, AB T3M 3M4",
+      "addressComponents": [
+        {
+          "longText": "391",
+          "shortText": "391",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Magnolia Drive Southeast",
+          "shortText": "Magnolia Dr SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Mahogany",
+          "shortText": "Mahogany",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3M 3M4",
+          "shortText": "T3M 3M4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.8894016,
+        "longitude": -113.9093934
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=3637064037864356003&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.gravityelectrical.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 211,
+      "displayName": {
+        "text": "Gravity Electrical Solutions"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ4RbcoR9wcVMRA52GO4FBCcQ",
+      "types": [
+        "electrician",
+        "home_goods_store",
+        "electronics_store",
+        "manufacturer",
+        "store",
+        "consultant",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 978-0046",
+      "internationalPhoneNumber": "+1 403-978-0046",
+      "formattedAddress": "903 8 Ave SW #900, Calgary, AB T2P 0P7",
+      "addressComponents": [
+        {
+          "longText": "900",
+          "shortText": "900",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "903",
+          "shortText": "903",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "8 Avenue Southwest",
+          "shortText": "8 Ave SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Downtown",
+          "shortText": "Downtown",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2P 0P7",
+          "shortText": "T2P 0P7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.045801999999995,
+        "longitude": -114.08172499999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=14125893729529535747&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://electricman.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 471,
+      "displayName": {
+        "text": "ElectricMan"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJBU99yyN3DG0R-ZUgR4dLAnY",
+      "types": [
+        "electrician",
+        "manufacturer",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 905-5161",
+      "internationalPhoneNumber": "+1 587-905-5161",
+      "formattedAddress": "12 Covepark Rd NE, Calgary, AB T3K 5X6",
+      "addressComponents": [
+        {
+          "longText": "12",
+          "shortText": "12",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Covepark Road Northeast",
+          "shortText": "Covepark Rd NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Coventry Hills",
+          "shortText": "Coventry Hills",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3K 5X6",
+          "shortText": "T3K 5X6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1670995,
+        "longitude": -114.051154
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=8503442090814903801&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.colzelectric.com/?utm_source=Google&utm_medium=GMB",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 198,
+      "displayName": {
+        "text": "Colz Electric – Electrician Calgary, NE"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJu6h4j5J3cVMRITlJbL1b_mc",
+      "types": [
+        "electrician",
+        "manufacturer",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 770-3030",
+      "internationalPhoneNumber": "+1 403-770-3030",
+      "formattedAddress": "1305 Hastings Crescent SE, Calgary, AB T2G 4C8",
+      "addressComponents": [
+        {
+          "longText": "1305",
+          "shortText": "1305",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hastings Crescent Southeast",
+          "shortText": "Hastings Crescent SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Highfield",
+          "shortText": "Highfield",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2G 4C8",
+          "shortText": "T2G 4C8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0141292,
+        "longitude": -114.0339776
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=7493527699114768673&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://colzelectric.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 294,
+      "displayName": {
+        "text": "Colz Electric – Electrician Calgary, SE"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ45ONpsBjcVMRRk4cJ64fRkY",
+      "types": [
+        "electrician",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 577-8091",
+      "internationalPhoneNumber": "+1 587-577-8091",
+      "formattedAddress": "509 Corner Meadows Way NE, Calgary, AB T3N 2C9",
+      "addressComponents": [
+        {
+          "longText": "509",
+          "shortText": "509",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Corner Meadows Way Northeast",
+          "shortText": "Corner Meadows Way NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Cornerstone",
+          "shortText": "Cornerstone",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3N 2C9",
+          "shortText": "T3N 2C9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.147286799999996,
+        "longitude": -113.92329509999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=5063769663865638470&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://wa.me/15875778091",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 256,
+      "displayName": {
+        "text": "Mohali Electricals"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ2x_sOe5xcVMRqPlgEVnj5Sw",
+      "types": [
+        "electrician",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 250-9301",
+      "internationalPhoneNumber": "+1 403-250-9301",
+      "formattedAddress": "637 26 St NW, Calgary, AB T2N 4X6",
+      "addressComponents": [
+        {
+          "longText": "637",
+          "shortText": "637",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "26 Street Northwest",
+          "shortText": "26 St NW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northwest Calgary",
+          "shortText": "Northwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2N 4X6",
+          "shortText": "T2N 4X6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0576419,
+        "longitude": -114.12311679999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=3235241879018731944&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.firstaidelectric.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 147,
+      "displayName": {
+        "text": "First Aid Electric Inc."
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ__9PTOd5cVMRz9KUyPzZbzY",
+      "types": [
+        "electrician",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 214-8888",
+      "internationalPhoneNumber": "+1 403-214-8888",
+      "formattedAddress": "10861 50 St SE #101, Calgary, AB T2C 3E5",
+      "addressComponents": [
+        {
+          "longText": "101",
+          "shortText": "101",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "10861",
+          "shortText": "10861",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "50 Street Southeast",
+          "shortText": "50 St SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East Shepard Industrial",
+          "shortText": "East Shepard Industrial",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2C 3E5",
+          "shortText": "T2C 3E5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.956432799999995,
+        "longitude": -113.962353
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=3922593480183173839&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.sunsolarelectrical.ca/?utm_source=&utm_medium=&utm_campaign=&se_campaign=",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 223,
+      "displayName": {
+        "text": "Sun Electrical Ltd."
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJIUVcVJZ7cVMR_0HcStY9StM",
+      "types": [
+        "electrician",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 891-5142",
+      "internationalPhoneNumber": "+1 587-891-5142",
+      "formattedAddress": "2447 42 Ave NE, Calgary, AB T2G 3J3",
+      "addressComponents": [
+        {
+          "longText": "2447",
+          "shortText": "2447",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "42 Avenue Northeast",
+          "shortText": "42 Ave NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Airways",
+          "shortText": "North Airways",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2G 3J3",
+          "shortText": "T2G 3J3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0908778,
+        "longitude": -114.00325199999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=15225049480867627519&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://winterelectrical.ca/?utm_source=GBPlisting&utm_medium=organic",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 81,
+      "displayName": {
+        "text": "Winter Electrical - Electrician Calgary"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJwzfkdjxmcVMRtZzXoW4fTzg",
+      "types": [
+        "electrician",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 835-9179",
+      "internationalPhoneNumber": "+1 403-835-9179",
+      "formattedAddress": "343 Forge Rd SE #8, Calgary, AB T2H 0S9",
+      "addressComponents": [
+        {
+          "longText": "8",
+          "shortText": "8",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "343",
+          "shortText": "343",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Forge Road Southeast",
+          "shortText": "Forge Rd SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Fairview Industrial",
+          "shortText": "Fairview Industrial",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2H 0S9",
+          "shortText": "T2H 0S9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.9929771,
+        "longitude": -114.056361
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=4057496349306231989&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.allredelectric.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 138,
+      "displayName": {
+        "text": "All Red Electric Ltd.~Electrician Calgary"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ2cZi6lZjcVMRpdGIpjYwIlw",
+      "types": [
+        "electrician",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 664-8705",
+      "internationalPhoneNumber": "+1 587-664-8705",
+      "formattedAddress": "63 Templebow Way NE, Calgary, AB T1Y 5B5",
+      "addressComponents": [
+        {
+          "longText": "63",
+          "shortText": "63",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Templebow Way Northeast",
+          "shortText": "Templebow Way NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northeast Calgary",
+          "shortText": "Northeast Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T1Y 5B5",
+          "shortText": "T1Y 5B5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0932342,
+        "longitude": -113.9475377
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=6638921811977884069&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.electricexpertyyc.ca/?utm_campaign=gmb",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 88,
+      "displayName": {
+        "text": "Electric Expert YYC"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJuT6TdchncVMRK69Np2w1Tmc",
+      "types": [
+        "electrician",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 619-3043",
+      "internationalPhoneNumber": "+1 587-619-3043",
+      "formattedAddress": "201 Harvest Gold Cir NE, Calgary, AB T3K 4H5",
+      "addressComponents": [
+        {
+          "longText": "201",
+          "shortText": "201",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Harvest Gold Circle Northeast",
+          "shortText": "Harvest Gold Cir NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Harvest Hills",
+          "shortText": "Harvest Hills",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3K 4H5",
+          "shortText": "T3K 4H5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1439555,
+        "longitude": -114.0644272
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=7443945974869634859&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.aomelectrical.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 30,
+      "displayName": {
+        "text": "AOM Electrical - Calgary Electrician"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJqabRqoJZXqgRxAiqJ6RKPCs",
+      "types": [
+        "electrician",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 519-2155",
+      "internationalPhoneNumber": "+1 403-519-2155",
+      "formattedAddress": "39 Hunter St NW, Calgary, AB T2K 2B8",
+      "addressComponents": [
+        {
+          "longText": "39",
+          "shortText": "39",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hunter Street Northwest",
+          "shortText": "Hunter St NW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Highwood",
+          "shortText": "Highwood",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2K 2B8",
+          "shortText": "T2K 2B8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.090407899999995,
+        "longitude": -114.08244549999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=3115447111134087364&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.sunshineelectrical.ca/contact-us",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 140,
+      "displayName": {
+        "text": "Sunshine Electric Services Inc"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJr9ujJ4N1cVMRgpgQtbgglTs",
+      "types": [
+        "electrician",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 436-8145",
+      "internationalPhoneNumber": "+1 587-436-8145",
+      "formattedAddress": "14240 Evergreen St SW, Calgary, AB T2Y 2W9",
+      "addressComponents": [
+        {
+          "longText": "14240",
+          "shortText": "14240",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Evergreen Street Southwest",
+          "shortText": "Evergreen St SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Southwest Calgary",
+          "shortText": "Southwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2Y 2W9",
+          "shortText": "T2Y 2W9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.9251256,
+        "longitude": -114.09444819999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=4293373797451470978&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://electrician-calgary.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 110,
+      "displayName": {
+        "text": "Same Day Service - Electrician"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ_dUCPXEsE1MRzXdaQzGosm8",
+      "types": [
+        "plumber",
+        "electrician",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 770-9075",
+      "internationalPhoneNumber": "+1 403-770-9075",
+      "formattedAddress": "5355 8 St NE, Calgary, AB T2K 5R9",
+      "addressComponents": [
+        {
+          "longText": "5355",
+          "shortText": "5355",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "8 Street Northeast",
+          "shortText": "8 St NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Skyline West",
+          "shortText": "Skyline West",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2K 5R9",
+          "shortText": "T2K 5R9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1013479,
+        "longitude": -114.04673050000001
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=8048680413601363917&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.thegentlemenpros.com/calgary",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 4783,
+      "displayName": {
+        "text": "The Gentlemen Pros Plumbing, Heating & Electrical"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJmae5L8lV9m4Rf9Qx0qdmxzc",
+      "types": [
+        "electrician",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 829-8069",
+      "internationalPhoneNumber": "+1 403-829-8069",
+      "formattedAddress": "6030 5 St SE, Calgary, AB T2H 1L4",
+      "addressComponents": [
+        {
+          "longText": "6030",
+          "shortText": "6030",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "5 Street Southeast",
+          "shortText": "5 St SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manchester Industrial",
+          "shortText": "Manchester Industrial",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2H 1L4",
+          "shortText": "T2H 1L4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.99942240000001,
+        "longitude": -114.0506654
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=4019294063423509631&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://premierelectrical.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 45,
+      "displayName": {
+        "text": "Premier Electrical Technician Inc."
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJWd9haA5xcVMRpXWmUB4qAaM",
+      "types": [
+        "electrician",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "formattedAddress": "480 12 Ave SW, Calgary, AB T2G 0B4",
+      "addressComponents": [
+        {
+          "longText": "480",
+          "shortText": "480",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "12 Avenue Southwest",
+          "shortText": "12 Ave SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Beltline",
+          "shortText": "Beltline",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2G 0B4",
+          "shortText": "T2G 0B4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0418854,
+        "longitude": -114.0720637
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=11745715612849436069&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 11,
+      "displayName": {
+        "text": "Sparks Electrical"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJQW9RiPh3cVMRSk4bPaMJNVI",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(825) 935-3865",
+      "internationalPhoneNumber": "+1 825-935-3865",
+      "formattedAddress": "609 Cranbrook Gardens SE, Calgary, AB T3M 3K5",
+      "addressComponents": [
+        {
+          "longText": "609",
+          "shortText": "609",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Cranbrook Gardens Southeast",
+          "shortText": "Cranbrook Gardens SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Cranston",
+          "shortText": "Cranston",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3M 3K5",
+          "shortText": "T3M 3K5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.8602109,
+        "longitude": -113.9761047
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=5923651481585274442&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://evolveelectricalservices.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 69,
+      "displayName": {
+        "text": "Evolve Electrical Services"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJR3dr6wtjcVMRW04vr95SR74",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 307-0059",
+      "internationalPhoneNumber": "+1 403-307-0059",
+      "formattedAddress": "383 Savanna Park NE, Calgary, AB T3J 0Z9",
+      "addressComponents": [
+        {
+          "longText": "383",
+          "shortText": "383",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Savanna Park Northeast",
+          "shortText": "Savanna Park NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northeast Calgary",
+          "shortText": "Northeast Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3J 0Z9",
+          "shortText": "T3J 0Z9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1380078,
+        "longitude": -113.96824900000001
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=13711018706928094811&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.backupelectrical.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 21,
+      "displayName": {
+        "text": "Backup Electrical Services Ltd"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ6wFaitMNv0oRXSzviTWQXk0",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 871-8821",
+      "internationalPhoneNumber": "+1 587-871-8821",
+      "formattedAddress": "3814 65 St NW, Calgary, AB T3B 6M9",
+      "addressComponents": [
+        {
+          "longText": "3814",
+          "shortText": "3814",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "65 Street Northwest",
+          "shortText": "65 St NW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Bowness",
+          "shortText": "Bowness",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3B 6M9",
+          "shortText": "T3B 6M9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0868201,
+        "longitude": -114.18427249999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=5575051948353072221&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://fusesmartelectric.ca/?utm_source=google&utm_medium=organic&utm_campaign=gmb",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 118,
+      "displayName": {
+        "text": "FuseSmart Electric"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJextyCvdwcVMRh7qhd8dn3bA",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 254-0661",
+      "internationalPhoneNumber": "+1 403-254-0661",
+      "formattedAddress": "6120 2 St SE, Calgary, AB T2H 2L8",
+      "addressComponents": [
+        {
+          "longText": "6120",
+          "shortText": "6120",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "2 Street Southeast",
+          "shortText": "2 St SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manchester Industrial",
+          "shortText": "Manchester Industrial",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2H 2L8",
+          "shortText": "T2H 2L8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.997198999999995,
+        "longitude": -114.05909199999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=12744456626931612295&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.enerproelectrical.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 93,
+      "displayName": {
+        "text": "Enerpro Electrical Services Inc"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ-4f3Orl6cVMR0nh6VaHxyP8",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 830-2536",
+      "internationalPhoneNumber": "+1 403-830-2536",
+      "formattedAddress": "7 Woodglen Rise SW, Calgary, AB T2W 4Z1",
+      "addressComponents": [
+        {
+          "longText": "7",
+          "shortText": "7",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Woodglen Rise Southwest",
+          "shortText": "Woodglen Rise SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Woodbine",
+          "shortText": "Woodbine",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2W 4Z1",
+          "shortText": "T2W 4Z1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.9461258,
+        "longitude": -114.1203767
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=18431247150239873234&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.astarcalgary.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 86,
+      "displayName": {
+        "text": "A-Star Electric Ltd."
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJg8wSIJZxcVMR99m8oBZZ3zg",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 971-9411",
+      "internationalPhoneNumber": "+1 587-971-9411",
+      "formattedAddress": "7701 Macleod Trl SW #2, Calgary, AB T2V 2L4",
+      "addressComponents": [
+        {
+          "longText": "2",
+          "shortText": "2",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "7701",
+          "shortText": "7701",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Macleod Trail Southwest",
+          "shortText": "Macleod Trl SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Southwest Calgary",
+          "shortText": "Southwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2V 2L4",
+          "shortText": "T2V 2L4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.9842076,
+        "longitude": -114.0727642
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=4098092139651324407&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://greenlightservices.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 26,
+      "displayName": {
+        "text": "Green Light Electrical Services"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJcYArNJ1lcVMRVM8Fe8c1oC0",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 891-3257",
+      "internationalPhoneNumber": "+1 403-891-3257",
+      "formattedAddress": "122 Valley Stream Cir NW, Calgary, AB T3B 5W2",
+      "addressComponents": [
+        {
+          "longText": "122",
+          "shortText": "122",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Valley Stream Circle Northwest",
+          "shortText": "Valley Stream Cir NW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Valley Ridge",
+          "shortText": "Valley Ridge",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3B 5W2",
+          "shortText": "T3B 5W2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0896514,
+        "longitude": -114.2655492
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=3287686858859204436&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.westproelectrical.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 72,
+      "displayName": {
+        "text": "Westpro Electrical Services"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJZ59Lp3k_cVMRJAf0Dzd8vT4",
+      "types": [
+        "electrician",
+        "manufacturer",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 909-0888",
+      "internationalPhoneNumber": "+1 403-909-0888",
+      "formattedAddress": "5126 126 Ave SE Unit 210, Calgary, AB T2Z 0H2",
+      "addressComponents": [
+        {
+          "longText": "Unit 210",
+          "shortText": "Unit 210",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "5126",
+          "shortText": "5126",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "126 Avenue Southeast",
+          "shortText": "126 Ave SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East Shepard Industrial",
+          "shortText": "East Shepard Industrial",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2Z 0H2",
+          "shortText": "T2Z 0H2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.93558470000001,
+        "longitude": -113.96221159999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=4520906176882542372&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://crewtechnicalservices.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 268,
+      "displayName": {
+        "text": "Crew Technical Services Inc"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ5euXDqRkcVMRO1Wj7iKZLW4",
+      "types": [
+        "electrician",
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 689-3312",
+      "internationalPhoneNumber": "+1 403-689-3312",
+      "formattedAddress": "264 Temple Close NE, Calgary, AB T1Y 3B6",
+      "addressComponents": [
+        {
+          "longText": "264",
+          "shortText": "264",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Temple Close Northeast",
+          "shortText": "Temple Close NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northeast Calgary",
+          "shortText": "Northeast Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T1Y 3B6",
+          "shortText": "T1Y 3B6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.083804,
+        "longitude": -113.9555363
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=7939170093435671867&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 27,
+      "displayName": {
+        "text": "ELEKTRON Electrical Services LTD."
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ6WGSNaBlcVMRgWBAg8pzbxo",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 763-3283",
+      "internationalPhoneNumber": "+1 403-763-3283",
+      "formattedAddress": "1441 Aviation Park NE #540, Calgary, AB T2E 8M7",
+      "addressComponents": [
+        {
+          "longText": "#540",
+          "shortText": "#540",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "1441",
+          "shortText": "1441",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Aviation Park Northeast",
+          "shortText": "Aviation Park NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary International Airport",
+          "shortText": "Calgary International Airport",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2E 8M7",
+          "shortText": "T2E 8M7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1004775,
+        "longitude": -114.027743
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=1904868481023631489&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.d-and-d-electric.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 17,
+      "displayName": {
+        "text": "D&D Electric"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ0Rgi3d5zcVMRfZGRrc2WtUQ",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 483-7272",
+      "internationalPhoneNumber": "+1 403-483-7272",
+      "formattedAddress": "164 Oakchurch Pl SW, Calgary, AB T2V 4B5",
+      "addressComponents": [
+        {
+          "longText": "164",
+          "shortText": "164",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Oakchurch Place Southwest",
+          "shortText": "Oakchurch Pl SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Oakridge",
+          "shortText": "Oakridge",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2V 4B5",
+          "shortText": "T2V 4B5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.9675904,
+        "longitude": -114.12935150000001
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=4951029175488188797&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.adlelectric.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 86,
+      "displayName": {
+        "text": "ADL Electric"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJvciOhr9mcVMR8G8-osA0Iwg",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 690-3994",
+      "internationalPhoneNumber": "+1 403-690-3994",
+      "formattedAddress": "44 Coverdale Pl NE, Calgary, AB T3K 4E9",
+      "addressComponents": [
+        {
+          "longText": "44",
+          "shortText": "44",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Coverdale Place Northeast",
+          "shortText": "Coverdale Pl NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Coventry Hills",
+          "shortText": "Coventry Hills",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3K 4E9",
+          "shortText": "T3K 4E9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.158556000000004,
+        "longitude": -114.045175
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=586370378448662512&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://mapleelectricalservices.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 28,
+      "displayName": {
+        "text": "Maple Electrical Services Ltd."
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ8wS4GjSC6gMRb6HItIy72ZA",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 466-8550",
+      "internationalPhoneNumber": "+1 403-466-8550",
+      "formattedAddress": "108 San Fernando Crescent NE, Calgary, AB T1Y 7E7",
+      "addressComponents": [
+        {
+          "longText": "108",
+          "shortText": "108",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "San Fernando Crescent Northeast",
+          "shortText": "San Fernando Crescent NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Monterey Park",
+          "shortText": "Monterey Park",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T1Y 7E7",
+          "shortText": "T1Y 7E7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0896871,
+        "longitude": -113.9282678
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=10437579824410698095&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://gpelectrical.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 75,
+      "displayName": {
+        "text": "Golden Point Electrical"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJg-t88i2RY0sRRBNHJSEoU4c",
+      "types": [
+        "electrician",
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 837-0071",
+      "internationalPhoneNumber": "+1 587-837-0071",
+      "formattedAddress": "50 Sherwood Mount Northwest, Calgary, AB T3R 0G4",
+      "addressComponents": [
+        {
+          "longText": "50",
+          "shortText": "50",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Sherwood Mount Northwest",
+          "shortText": "Sherwood Mount Northwest",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Symons Valley",
+          "shortText": "Symons Valley",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3R 0G4",
+          "shortText": "T3R 0G4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.159925099999995,
+        "longitude": -114.1566362
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=9751181741011702596&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.canadachinook.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 28,
+      "displayName": {
+        "text": "Canada Chinook Electric"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJbWOi2Rp3cVMRp-myUPPYgPA",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 454-0418",
+      "internationalPhoneNumber": "+1 403-454-0418",
+      "formattedAddress": "14656 Deer Run Dr SE, Calgary, AB T2J 5Z2",
+      "addressComponents": [
+        {
+          "longText": "14656",
+          "shortText": "14656",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Deer Run Drive Southeast",
+          "shortText": "Deer Run Dr SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Deer Run",
+          "shortText": "Deer Run",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2J 5Z2",
+          "shortText": "T2J 5Z2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.923313199999996,
+        "longitude": -114.0037696
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=17330089905664223655&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.itselectriccanada.com/?utm_source=Google+Business+Profile",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 118,
+      "displayName": {
+        "text": "It's Electric"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJgxo62RgPVIYR11h0TeggGH8",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 966-5520",
+      "internationalPhoneNumber": "+1 587-966-5520",
+      "formattedAddress": "75 Covehaven Terrace NE, Calgary, AB T3K 6H5",
+      "addressComponents": [
+        {
+          "longText": "75",
+          "shortText": "75",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Covehaven Terrace Northeast",
+          "shortText": "Covehaven Terrace NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Coventry Hills",
+          "shortText": "Coventry Hills",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3K 6H5",
+          "shortText": "T3K 6H5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1654935,
+        "longitude": -114.0668961
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=9158106024361875671&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://goodlifeelectric.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 32,
+      "displayName": {
+        "text": "Goodlife Electric Calgary"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJYelQ_5ABdqgR8l4lxFdk9Ns",
+      "types": [
+        "electrician",
+        "supplier",
+        "manufacturer",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 323-4123",
+      "internationalPhoneNumber": "+1 587-323-4123",
+      "formattedAddress": "999 57 Ave NE #50, Calgary, AB T2E 8X9",
+      "addressComponents": [
+        {
+          "longText": "50",
+          "shortText": "50",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "999",
+          "shortText": "999",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "57 Avenue Northeast",
+          "shortText": "57 Ave NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Deerfoot Business Centre",
+          "shortText": "Deerfoot Business Centre",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2E 8X9",
+          "shortText": "T2E 8X9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1048489,
+        "longitude": -114.0417241
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=15849403316739333874&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.suretek.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 360,
+      "displayName": {
+        "text": "SureTek Electric & Technologies Ltd."
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJm5t4YbVxcVMRDeIdwtFwo_E",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 998-4416",
+      "internationalPhoneNumber": "+1 587-998-4416",
+      "formattedAddress": "3240 66 Ave SW, Calgary, AB T3E 6M5",
+      "addressComponents": [
+        {
+          "longText": "3240",
+          "shortText": "3240",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "66 Avenue Southwest",
+          "shortText": "66 Ave SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Southwest Calgary",
+          "shortText": "Southwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3E 6M5",
+          "shortText": "T3E 6M5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.995695299999994,
+        "longitude": -114.1307665
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=17411884630551683597&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://wildroseelectric.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 52,
+      "displayName": {
+        "text": "Wild Rose Electric"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJQU6-wJedcVMRXuYHV__JZy4",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 835-0085",
+      "internationalPhoneNumber": "+1 403-835-0085",
+      "formattedAddress": "100 Walgrove Ct SE #4101, Calgary, AB T2X 4N1",
+      "addressComponents": [
+        {
+          "longText": "4101",
+          "shortText": "4101",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "100",
+          "shortText": "100",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Walgrove Court Southeast",
+          "shortText": "Walgrove Ct SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Walden",
+          "shortText": "Walden",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2X 4N1",
+          "shortText": "T2X 4N1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.8642997,
+        "longitude": -114.0238723
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=3343863346859861598&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://yycelectricalsolutions.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 38,
+      "displayName": {
+        "text": "YYC Electrical Solutions INC."
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJX0PnhsJvcVMRv7m7gcpKuVI",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 830-9264",
+      "internationalPhoneNumber": "+1 403-830-9264",
+      "formattedAddress": "2432 Cherokee Dr NW, Calgary, AB T2L 0X7",
+      "addressComponents": [
+        {
+          "longText": "2432",
+          "shortText": "2432",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Cherokee Drive Northwest",
+          "shortText": "Cherokee Dr NW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northwest Calgary",
+          "shortText": "Northwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2L 0X7",
+          "shortText": "T2L 0X7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.084638,
+        "longitude": -114.1169513
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=5960877815421974975&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://bamjelectric.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 24,
+      "displayName": {
+        "text": "BAMJ Electric and Controls"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJES2p6NN3cVMRW14JD8ujG40",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 333-6344",
+      "internationalPhoneNumber": "+1 403-333-6344",
+      "formattedAddress": "36 Cramond Cir SE, Calgary, AB T3M 1E3",
+      "addressComponents": [
+        {
+          "longText": "36",
+          "shortText": "36",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Cramond Circle Southeast",
+          "shortText": "Cramond Cir SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Cranston",
+          "shortText": "Cranston",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3M 1E3",
+          "shortText": "T3M 1E3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.8926966,
+        "longitude": -113.97684439999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=10167900676244987483&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.coderadelectrical.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 87,
+      "displayName": {
+        "text": "CodeRad Electrical Ltd"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ5amIc9dvcVMRAaOwGM1oARs",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 800-3523",
+      "internationalPhoneNumber": "+1 403-800-3523",
+      "formattedAddress": "6815 8 St NE Ste 290, Calgary, AB T2E 7H7",
+      "addressComponents": [
+        {
+          "longText": "Suite 290",
+          "shortText": "Ste 290",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "6815",
+          "shortText": "6815",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "8 Street Northeast",
+          "shortText": "8 St NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Deerfoot Business Centre",
+          "shortText": "Deerfoot Business Centre",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2E 7H7",
+          "shortText": "T2E 7H7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1140313,
+        "longitude": -114.0453493
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=1945951744092578561&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://mrelectric.com/calgary/?cid=LSTL_MRE-CA000274&utm_source=gmb&utm_campaign=local&utm_medium=organic",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 39,
+      "displayName": {
+        "text": "Mr. Electric of Calgary"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJG4sMBvZncVMR0pyDl6BRCu4",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 860-3014",
+      "internationalPhoneNumber": "+1 403-860-3014",
+      "formattedAddress": "76 Harvest Wood Pl NE, Calgary, AB T3K 3X8",
+      "addressComponents": [
+        {
+          "longText": "76",
+          "shortText": "76",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Harvest Wood Place Northeast",
+          "shortText": "Harvest Wood Pl NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Harvest Hills",
+          "shortText": "Harvest Hills",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3K 3X8",
+          "shortText": "T3K 3X8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1533757,
+        "longitude": -114.051819
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=17152611880972557522&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://baffelectrical.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 22,
+      "displayName": {
+        "text": "Baff Electrical LTD"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJ-UEP0x9ucVMR0dwet2f-Y0A",
+      "types": [
+        "electrician",
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 316-2781",
+      "internationalPhoneNumber": "+1 587-316-2781",
+      "formattedAddress": "402 21 Ave NW, Calgary, AB T2M 1J5",
+      "addressComponents": [
+        {
+          "longText": "402",
+          "shortText": "402",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "21 Avenue Northwest",
+          "shortText": "21 Ave NW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northwest Calgary",
+          "shortText": "Northwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2M 1J5",
+          "shortText": "T2M 1J5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0717212,
+        "longitude": -114.067709
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=4639831762529082577&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://thriceelectrical.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 30,
+      "displayName": {
+        "text": "Thrice Electrical"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJYwZAXo17cVMRX1458aR2Hi0",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 800-7475",
+      "internationalPhoneNumber": "+1 403-800-7475",
+      "formattedAddress": "Calgary, AB T2A",
+      "addressComponents": [
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northeast Calgary",
+          "shortText": "Northeast Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2A",
+          "shortText": "T2A",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0532507,
+        "longitude": -113.97077499999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=3251166431801859679&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://halatelectric.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 36,
+      "displayName": {
+        "text": "H&A Electric"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJW6sgPl2VcVMRs4BKcGLDblQ",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(825) 824-9253",
+      "internationalPhoneNumber": "+1 825-824-9253",
+      "formattedAddress": "1708 High Country Dr NW, High River, AB T1V 1X8",
+      "addressComponents": [
+        {
+          "longText": "1708",
+          "shortText": "1708",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "High Country Drive Northwest",
+          "shortText": "High Country Dr NW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "High River",
+          "shortText": "High River",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Foothills County",
+          "shortText": "Foothills County",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T1V 1X8",
+          "shortText": "T1V 1X8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.5920778,
+        "longitude": -113.89927329999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=6084014974182260915&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.gravityelectrical.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 19,
+      "displayName": {
+        "text": "Gravity Electrical Solutions"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJoSq7RnF2cVMR8Yj_BP8HeO4",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 975-1773",
+      "internationalPhoneNumber": "+1 403-975-1773",
+      "formattedAddress": "Sundown Rd SE, Calgary, AB T2X 3B4",
+      "addressComponents": [
+        {
+          "longText": "Sundown Road Southeast",
+          "shortText": "Sundown Rd SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Sundance",
+          "shortText": "Sundance",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2X 3B4",
+          "shortText": "T2X 3B4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.902274899999995,
+        "longitude": -114.04576
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=17183493170114038001&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.benselectricsolutionsteam.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 124,
+      "displayName": {
+        "text": "Ben's Electric Solutions Team"
+      },
+      "primaryType": "electrician"
+    },
+    {
+      "id": "ChIJMVQIbt55cVMRWdkpT7SeIMM",
+      "types": [
+        "electrician",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 454-8801",
+      "internationalPhoneNumber": "+1 403-454-8801",
+      "formattedAddress": "11055 50 St SE #115, Calgary, AB T2C 3E5",
+      "addressComponents": [
+        {
+          "longText": "115",
+          "shortText": "115",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "11055",
+          "shortText": "11055",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "50 Street Southeast",
+          "shortText": "50 St SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East Shepard Industrial",
+          "shortText": "East Shepard Industrial",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2C 3E5",
+          "shortText": "T2C 3E5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.9549988,
+        "longitude": -113.9623134
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=14060412533910133081&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.tru-electric.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 29,
+      "displayName": {
+        "text": "Tru Electric Ltd"
+      },
+      "primaryType": "electrician"
+    }
+  ],
+  "fetchedAt": "2026-08-06T06:58:23.181Z"
+}

@@ -1,0 +1,3797 @@
+{
+  "query": "landscaping contractor in Calgary, AB",
+  "regionCode": "ca",
+  "places": [
+    {
+      "id": "ChIJeQe0ul5jcVMR8xEPgxaooEo",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 229-6600",
+      "internationalPhoneNumber": "+1 587-229-6600",
+      "formattedAddress": "381 Corner Meadows Way NE, Calgary, AB T3N 1Y6",
+      "addressComponents": [
+        {
+          "longText": "381",
+          "shortText": "381",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Corner Meadows Way Northeast",
+          "shortText": "Corner Meadows Way NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Cornerstone",
+          "shortText": "Cornerstone",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3N 1Y6",
+          "shortText": "T3N 1Y6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1471728,
+        "longitude": -113.9279069
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=5377482769721922035&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://gncalgary.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 197,
+      "displayName": {
+        "text": "Great North Landscaping & Construction Ltd"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJbxvK0Rh2cVMRIfK-DmN0vTM",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 617-3225",
+      "internationalPhoneNumber": "+1 403-617-3225",
+      "formattedAddress": "100 Chaparral Valley Dr SE, Calgary, AB T2X 0L9",
+      "addressComponents": [
+        {
+          "longText": "100",
+          "shortText": "100",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Chaparral Valley Drive Southeast",
+          "shortText": "Chaparral Valley Dr SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Chaparral",
+          "shortText": "Chaparral",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2X 0L9",
+          "shortText": "T2X 0L9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.88004,
+        "longitude": -114.01333
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=3728264035330617889&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.livingearthlandscapes.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 174,
+      "displayName": {
+        "text": "Living Earth Landscapes"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJgSs4NyR4cVMR3UQmKqMwrNA",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 612-4262",
+      "internationalPhoneNumber": "+1 403-612-4262",
+      "formattedAddress": "1811 4 St SW Ste 901, Calgary, AB T2S 1W2",
+      "addressComponents": [
+        {
+          "longText": "Suite 901",
+          "shortText": "Ste 901",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "1811",
+          "shortText": "1811",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "4 Street Southwest",
+          "shortText": "4 St SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Cliff Bungalow",
+          "shortText": "Cliff Bungalow",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2S 1W2",
+          "shortText": "T2S 1W2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.036406299999996,
+        "longitude": -114.07177399999999
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=15036446733228197085&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://cloverlandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 348,
+      "displayName": {
+        "text": "Clover Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJnXM-eR5ucVMRmChiHX_W-SQ",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 807-9280",
+      "internationalPhoneNumber": "+1 403-807-9280",
+      "formattedAddress": "4532 30 Ave SW, Calgary, AB T3E 0T8",
+      "addressComponents": [
+        {
+          "longText": "4532",
+          "shortText": "4532",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "30 Avenue Southwest",
+          "shortText": "30 Ave SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Glenbrook",
+          "shortText": "Glenbrook",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3E 0T8",
+          "shortText": "T3E 0T8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.027207499999996,
+        "longitude": -114.151431
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=2664396496008521880&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://mountainsidelandscapes.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 58,
+      "displayName": {
+        "text": "Mountainside Landscapes Ltd."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJTYR-fXh2cVMRYMPxj8vBBaM",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 257-4059",
+      "internationalPhoneNumber": "+1 403-257-4059",
+      "formattedAddress": "3511 64 Ave SE, Calgary, AB T2C 1N3",
+      "addressComponents": [
+        {
+          "longText": "3511",
+          "shortText": "3511",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "64 Avenue Southeast",
+          "shortText": "64 Ave SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Southeast Calgary",
+          "shortText": "Southeast Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2C 1N3",
+          "shortText": "T2C 1N3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.9949214,
+        "longitude": -113.98383369999999
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=11747008283103314784&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.projectlandscape.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 131,
+      "displayName": {
+        "text": "Project Landscape"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJyW8EP3bQwC8RxtTki_mT6xA",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 998-9068",
+      "internationalPhoneNumber": "+1 403-998-9068",
+      "formattedAddress": "8710 Horton Rd SW, Calgary, AB T2V 0P7",
+      "addressComponents": [
+        {
+          "longText": "8710",
+          "shortText": "8710",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Horton Road Southwest",
+          "shortText": "Horton Rd SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Southwest Calgary",
+          "shortText": "Southwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2V 0P7",
+          "shortText": "T2V 0P7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.975556499999996,
+        "longitude": -114.07365619999999
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=1219230824137020614&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://lukeslandscapingcalgary.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 40,
+      "displayName": {
+        "text": "Luke's Design & Build Landscaping Calgary"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJq6rqBBZxcVMRlEiQe6UP0hY",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 578-0747",
+      "internationalPhoneNumber": "+1 587-578-0747",
+      "formattedAddress": "61 Nolanhurst Cres NW, Calgary, AB T3R 0Z3",
+      "addressComponents": [
+        {
+          "longText": "61",
+          "shortText": "61",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Nolanhurst Crescent Northwest",
+          "shortText": "Nolanhurst Cres NW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northwest Calgary",
+          "shortText": "Northwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3R 0Z3",
+          "shortText": "T3R 0Z3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1776044,
+        "longitude": -114.1728961
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=1644394017360726164&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://tazscapeslandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 107,
+      "displayName": {
+        "text": "Tazscapes Inc. Calgary Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJy7iVMY53cVMR0th-4SG4Xcc",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 903-6362",
+      "internationalPhoneNumber": "+1 403-903-6362",
+      "formattedAddress": "71 New Brighton Dr SE, Calgary, AB T2Z 4W5",
+      "addressComponents": [
+        {
+          "longText": "71",
+          "shortText": "71",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "New Brighton Drive Southeast",
+          "shortText": "New Brighton Dr SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "New Brighton",
+          "shortText": "New Brighton",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2Z 4W5",
+          "shortText": "T2Z 4W5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.9206605,
+        "longitude": -113.9555801
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=14365840842038368466&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.resultlandscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 111,
+      "displayName": {
+        "text": "Result Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJkbNPWT5wcVMRZLMY6cqSSbY",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "formattedAddress": "6040 Elbow Dr SW, Calgary, AB T2V 1J3",
+      "addressComponents": [
+        {
+          "longText": "6040",
+          "shortText": "6040",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Elbow Drive Southwest",
+          "shortText": "Elbow Dr SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Meadowlark Park",
+          "shortText": "Meadowlark Park",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2V 1J3",
+          "shortText": "T2V 1J3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.997903199999996,
+        "longitude": -114.0827305
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=13135191188394521444&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.plantalandscape.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 32,
+      "displayName": {
+        "text": "Planta Landscape — Calgary Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJfSk1wzx0cVMRCGOGYsm7njE",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "food",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 237-6300",
+      "internationalPhoneNumber": "+1 403-237-6300",
+      "formattedAddress": "259 Midpark Way SE Ste 250, Calgary, AB T2X 1M2",
+      "addressComponents": [
+        {
+          "longText": "Suite 250",
+          "shortText": "Ste 250",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "259",
+          "shortText": "259",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Midpark Way Southeast",
+          "shortText": "Midpark Way SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Midnapore",
+          "shortText": "Midnapore",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2X 1M2",
+          "shortText": "T2X 1M2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.9120717,
+        "longitude": -114.06364789999999
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=3575501627794547464&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://calgarylandscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 61,
+      "displayName": {
+        "text": "Calgary Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJS98d0sgy0WMRTcSUssfv55c",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 402-6030",
+      "internationalPhoneNumber": "+1 403-402-6030",
+      "formattedAddress": "2801b 12 Ave SE, Calgary, AB T2A 0G4",
+      "addressComponents": [
+        {
+          "longText": "2801b",
+          "shortText": "2801b",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "12 Avenue Southeast",
+          "shortText": "12 Ave SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Radisson Heights",
+          "shortText": "Radisson Heights",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2A 0G4",
+          "shortText": "T2A 0G4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0418183,
+        "longitude": -113.9953865
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=10945981060320904269&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://day1landscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 145,
+      "displayName": {
+        "text": "Day 1 Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJQWc8yYN3cVMRm3n-yzSOUmc",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 897-8357",
+      "internationalPhoneNumber": "+1 587-897-8357",
+      "formattedAddress": "8016 266 Ave W, De Winton, AB T1S 4M1",
+      "addressComponents": [
+        {
+          "longText": "8016",
+          "shortText": "8016",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "266 Avenue West",
+          "shortText": "266 Ave W",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "De Winton",
+          "shortText": "De Winton",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Foothills County",
+          "shortText": "Foothills County",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T1S 4M1",
+          "shortText": "T1S 4M1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.8130725,
+        "longitude": -114.01470769999999
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=7445169491408746907&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.calgarylandscapesolutions.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 178,
+      "displayName": {
+        "text": "Calgary Landscape Solutions"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJgcZF4J5jcVMRn6W4wnQZK0Y",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 227-8001",
+      "internationalPhoneNumber": "+1 587-227-8001",
+      "formattedAddress": "4029 Cornerstone Blvd NE, Calgary, AB T3N 2A5",
+      "addressComponents": [
+        {
+          "longText": "4029",
+          "shortText": "4029",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Cornerstone Boulevard Northeast",
+          "shortText": "Cornerstone Blvd NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Cornerstone",
+          "shortText": "Cornerstone",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3N 2A5",
+          "shortText": "T3N 2A5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1578575,
+        "longitude": -113.9364799
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=5056162995927295391&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://josancll.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 136,
+      "displayName": {
+        "text": "Josan Construction & Landscaping Ltd"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ30hBFxcgB2oRCvJmghasHz8",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 917-0671",
+      "internationalPhoneNumber": "+1 587-917-0671",
+      "formattedAddress": "251 90 Ave SE Unit 23, Calgary, AB T2J 0A4",
+      "addressComponents": [
+        {
+          "longText": "Unit 23",
+          "shortText": "Unit 23",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "251",
+          "shortText": "251",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "90 Avenue Southeast",
+          "shortText": "90 Ave SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Acadia",
+          "shortText": "Acadia",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2J 0A4",
+          "shortText": "T2J 0A4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.9715689,
+        "longitude": -114.0645778
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=4548543361344533002&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://stoneylandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 51,
+      "displayName": {
+        "text": "Stoney Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJUROdlttocVMRKtQe-GhTnfM",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 471-7588",
+      "internationalPhoneNumber": "+1 403-471-7588",
+      "formattedAddress": "88 Ranchridge Crescent NW, Calgary, AB T3G 1V2",
+      "addressComponents": [
+        {
+          "longText": "88",
+          "shortText": "88",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ranchridge Crescent Northwest",
+          "shortText": "Ranchridge Crescent NW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ranchlands",
+          "shortText": "Ranchlands",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3G 1V2",
+          "shortText": "T3G 1V2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1221786,
+        "longitude": -114.1827503
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=17554278632864535594&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.calgarydreamscapes.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 120,
+      "displayName": {
+        "text": "Calgary Dreamscapes Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ9aSIDTlpcVMRIFU91g9mGbc",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 701-7544",
+      "internationalPhoneNumber": "+1 403-701-7544",
+      "formattedAddress": "Tuscany, Calgary, AB T3L 0A1",
+      "addressComponents": [
+        {
+          "longText": "Tuscany",
+          "shortText": "Tuscany",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3L 0A1",
+          "shortText": "T3L 0A1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.130066199999995,
+        "longitude": -114.25050119999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=13193688801563464992&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://avlandscapes.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 151,
+      "displayName": {
+        "text": "Alpine Vista Landscapes Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJt8LePfhjcVMR67JlTjdWVgo",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 430-1000",
+      "internationalPhoneNumber": "+1 403-430-1000",
+      "formattedAddress": "207 Saddlecrest Grv NE, Calgary, AB T3J 2K4",
+      "addressComponents": [
+        {
+          "longText": "207",
+          "shortText": "207",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Saddlecrest Grove Northeast",
+          "shortText": "Saddlecrest Grv NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northeast Calgary",
+          "shortText": "Northeast Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3J 2K4",
+          "shortText": "T3J 2K4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1335827,
+        "longitude": -113.93579199999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=744877583914873579&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.whitestonelandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 23,
+      "displayName": {
+        "text": "White Stone Landscaping and Constructions"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJK7Flk-l_ZEoRe83jPSDAbSU",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 915-0542",
+      "internationalPhoneNumber": "+1 403-915-0542",
+      "formattedAddress": "231 Queen Charlotte Pl SE, Calgary, AB T2J 4H8",
+      "addressComponents": [
+        {
+          "longText": "231",
+          "shortText": "231",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Queen Charlotte Place Southeast",
+          "shortText": "Queen Charlotte Pl SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Queensland",
+          "shortText": "Queensland",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2J 4H8",
+          "shortText": "T2J 4H8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.936626999999994,
+        "longitude": -114.0214941
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=2697022996574621051&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://greenstones.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 83,
+      "displayName": {
+        "text": "GreenStone Landscaping Solutions"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJiUuLVcXZc1MRqQf-MXatlHA",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 707-0097",
+      "internationalPhoneNumber": "+1 587-707-0097",
+      "formattedAddress": "98 Carrington Cl NW, Calgary, AB T3P 1P8",
+      "addressComponents": [
+        {
+          "longText": "98",
+          "shortText": "98",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Carrington Close Northwest",
+          "shortText": "Carrington Cl NW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Carrington",
+          "shortText": "Carrington",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3P 1P8",
+          "shortText": "T3P 1P8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1828465,
+        "longitude": -114.0849131
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=8112299551957583785&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.greencitycalgary.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 190,
+      "displayName": {
+        "text": "GREEN CITY (Lawn Care & Landscaping Calgary)"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJYVmW2eNpcVMRUe4UxqqK5V8",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 669-9526",
+      "internationalPhoneNumber": "+1 403-669-9526",
+      "formattedAddress": "23 Bearspaw Hills Pl #23, Calgary, AB T3R 1B3",
+      "addressComponents": [
+        {
+          "longText": "23",
+          "shortText": "23",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "23",
+          "shortText": "23",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Bearspaw Hills Place",
+          "shortText": "Bearspaw Hills Pl",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rocky View County",
+          "shortText": "Rocky View County",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3R 1B3",
+          "shortText": "T3R 1B3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.169742899999996,
+        "longitude": -114.283431
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=6910081669342228049&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://blueaspen.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 49,
+      "displayName": {
+        "text": "Blue Aspen Calgary Landscaping & Design"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJi1Kx27J2cVMRpoFHamEEP2o",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 620-0769",
+      "internationalPhoneNumber": "+1 587-620-0769",
+      "formattedAddress": "11625 Elbow Dr SW, Calgary, AB T2W 1G8",
+      "addressComponents": [
+        {
+          "longText": "11625",
+          "shortText": "11625",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Elbow Drive Southwest",
+          "shortText": "Elbow Dr SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Southwest Calgary",
+          "shortText": "Southwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2W 1G8",
+          "shortText": "T2W 1G8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.949329299999995,
+        "longitude": -114.0862305
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=7655842707994542502&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.morgank.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 34,
+      "displayName": {
+        "text": "Morgan K. Landscapes"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJjVkz7phpcVMR2IOkDmlIjdY",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 629-8424",
+      "internationalPhoneNumber": "+1 403-629-8424",
+      "formattedAddress": "23 Citadel Pass Cres NW, Calgary, AB T3G 3V1",
+      "addressComponents": [
+        {
+          "longText": "23",
+          "shortText": "23",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Citadel Pass Crescent Northwest",
+          "shortText": "Citadel Pass Cres NW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northwest Calgary",
+          "shortText": "Northwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3G 3V1",
+          "shortText": "T3G 3V1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.140379700000004,
+        "longitude": -114.17820409999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=15460092711887209432&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://mrfloods.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 49,
+      "displayName": {
+        "text": "Mr.Flood's Lawn & Garden"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJk30wr-13cVMRZL6hXIUxYV8",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 830-3543",
+      "internationalPhoneNumber": "+1 403-830-3543",
+      "formattedAddress": "271060 Range Rd 285, Rocky View, AB T4A 2S7",
+      "addressComponents": [
+        {
+          "longText": "271060",
+          "shortText": "271060",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Range Road 285",
+          "shortText": "Range Rd 285",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rocky View",
+          "shortText": "Rocky View",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rocky View",
+          "shortText": "Rocky View",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rocky View County",
+          "shortText": "Rocky View County",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T4A 2S7",
+          "shortText": "T4A 2S7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.287810500000006,
+        "longitude": -113.9181447
+      },
+      "rating": 4.3,
+      "googleMapsUri": "https://maps.google.com/?cid=6872828955198602852&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://vikinglandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 101,
+      "displayName": {
+        "text": "Viking Landscaping Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJR-4Tk_RncVMRd0swxOnPWnU",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 803-2937",
+      "internationalPhoneNumber": "+1 403-803-2937",
+      "formattedAddress": "6804 Silver Ridge Way NW, Calgary, AB T3B 4R4",
+      "addressComponents": [
+        {
+          "longText": "6804",
+          "shortText": "6804",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Silver Ridge Way Northwest",
+          "shortText": "Silver Ridge Way NW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Silver Springs",
+          "shortText": "Silver Springs",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3B 4R4",
+          "shortText": "T3B 4R4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1120266,
+        "longitude": -114.19884839999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=8456299853267356535&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.cookcustomlandscapes.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 52,
+      "displayName": {
+        "text": "Cook Custom Landscapes"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJq6qqqmqfcVMR_ylFX2J5EK0",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 256-2252",
+      "internationalPhoneNumber": "+1 403-256-2252",
+      "formattedAddress": "16101 258 Ave E, Calgary, AB T1S 4E9",
+      "addressComponents": [
+        {
+          "longText": "16101",
+          "shortText": "16101",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "258 Avenue East",
+          "shortText": "258 Ave E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Foothills County",
+          "shortText": "Foothills County",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T1S 4E9",
+          "shortText": "T1S 4E9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.8182033,
+        "longitude": -113.9685883
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=12470600831601027583&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://landartist.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 76,
+      "displayName": {
+        "text": "The Landscape Artist Inc"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJu1NJF713cVMRqIKKL-5P2UE",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 888-9812",
+      "internationalPhoneNumber": "+1 403-888-9812",
+      "formattedAddress": "4415C 58 Ave SE, Calgary, AB T2C 1Y3",
+      "addressComponents": [
+        {
+          "longText": "4415C",
+          "shortText": "4415C",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "58 Avenue Southeast",
+          "shortText": "58 Ave SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Southeast Calgary",
+          "shortText": "Southeast Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2C 1Y3",
+          "shortText": "T2C 1Y3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.000493299999995,
+        "longitude": -113.9720931
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=4744911566829945512&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.alchemylandscape.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 57,
+      "displayName": {
+        "text": "Alchemy Landscape Ltd."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJpcmlB7B7cVMRU7L-92R6DbM",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 650-3326",
+      "internationalPhoneNumber": "+1 403-650-3326",
+      "formattedAddress": "3458 48 Ave SE, Calgary, AB T2B 3L6",
+      "addressComponents": [
+        {
+          "longText": "3458",
+          "shortText": "3458",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "48 Avenue Southeast",
+          "shortText": "48 Ave SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Southeast Calgary",
+          "shortText": "Southeast Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2B 3L6",
+          "shortText": "T2B 3L6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.010778699999996,
+        "longitude": -113.98457189999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=12902103081562321491&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://ozlandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 17,
+      "displayName": {
+        "text": "Oz Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJR69XRJxrVkoRnR7wfZakMag",
+      "types": [
+        "consultant",
+        "general_contractor",
+        "supplier",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 265-4769",
+      "internationalPhoneNumber": "+1 403-265-4769",
+      "formattedAddress": "246 Stewart Green SW, Calgary, AB T3H 3C8",
+      "addressComponents": [
+        {
+          "longText": "246",
+          "shortText": "246",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Stewart Green Southwest",
+          "shortText": "Stewart Green SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Signal Hill",
+          "shortText": "Signal Hill",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3H 3C8",
+          "shortText": "T3H 3C8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.014184,
+        "longitude": -114.169666
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=12119649038495653533&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://yardbusterslandscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 129,
+      "displayName": {
+        "text": "Yard busters landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJR79E0t53cVMRyNq3W-gg4QI",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 431-8500",
+      "internationalPhoneNumber": "+1 403-431-8500",
+      "formattedAddress": "235092 Range Rd 284, Calgary, AB T1X 2K2",
+      "addressComponents": [
+        {
+          "longText": "235092",
+          "shortText": "235092",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Range Road 284",
+          "shortText": "Range Rd 284",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rocky View County",
+          "shortText": "Rocky View County",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T1X 2K2",
+          "shortText": "T1X 2K2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.9991222,
+        "longitude": -113.864386
+      },
+      "rating": 4.5,
+      "googleMapsUri": "https://maps.google.com/?cid=207483240179030728&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.jenron.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 47,
+      "displayName": {
+        "text": "Jenron Creative Landscapes"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJhUYnMgxjcVMR9YjAxKCA0ZY",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 497-1947",
+      "internationalPhoneNumber": "+1 403-497-1947",
+      "formattedAddress": "3609 Cornerstone Blvd NE, Calgary, AB T3N 2E3",
+      "addressComponents": [
+        {
+          "longText": "3609",
+          "shortText": "3609",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Cornerstone Boulevard Northeast",
+          "shortText": "Cornerstone Blvd NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Cornerstone",
+          "shortText": "Cornerstone",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3N 2E3",
+          "shortText": "T3N 2E3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.1607127,
+        "longitude": -113.92432749999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=10867608803805792501&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://greenxlandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 70,
+      "displayName": {
+        "text": "GreenX Landscape & Yard Care"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJu3Jnn2B7cVMRglCf0Yrpz4c",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 435-0872",
+      "internationalPhoneNumber": "+1 587-435-0872",
+      "formattedAddress": "244 Manora Rd NE, Calgary, AB T2A 4R6",
+      "addressComponents": [
+        {
+          "longText": "244",
+          "shortText": "244",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manora Road Northeast",
+          "shortText": "Manora Rd NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Marlborough Park",
+          "shortText": "Marlborough Park",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2A 4R6",
+          "shortText": "T2A 4R6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.063556399999996,
+        "longitude": -113.9504607
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=9786297297731014786&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://antswork.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 28,
+      "displayName": {
+        "text": "A.N.T Works Construction & Landscaping – Concrete Contractor Calgary"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ__8jBudzcVMR5TpvEBY98y4",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "service",
+        "point_of_interest",
+        "food",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(825) 445-1613",
+      "internationalPhoneNumber": "+1 825-445-1613",
+      "formattedAddress": "2916 Cedar Ridge Dr SW, Calgary, AB T2W 1X6",
+      "addressComponents": [
+        {
+          "longText": "2916",
+          "shortText": "2916",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Cedar Ridge Drive Southwest",
+          "shortText": "Cedar Ridge Dr SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Southwest Calgary",
+          "shortText": "Southwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2W 1X6",
+          "shortText": "T2W 1X6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.960894599999996,
+        "longitude": -114.13075320000002
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=3383114910059674341&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://oasislandscaping.ca/?utm_source=googlebusinessprofile&utm_medium=Organic&utm_campaign=GoogleBusinessProfile",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 61,
+      "displayName": {
+        "text": "Oasis Landscape Group Ltd."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJd22AkulucVMRMQPYQkiadV4",
+      "types": [
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 534-5005",
+      "internationalPhoneNumber": "+1 587-534-5005",
+      "formattedAddress": "1601 Westmount Rd NW Unit 105, Calgary, AB T2N 3M2",
+      "addressComponents": [
+        {
+          "longText": "Unit 105",
+          "shortText": "Unit 105",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "1601",
+          "shortText": "1601",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Westmount Road Northwest",
+          "shortText": "Westmount Rd NW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northwest Calgary",
+          "shortText": "Northwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2N 3M2",
+          "shortText": "T2N 3M2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0517756,
+        "longitude": -114.09513299999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=6806516046990148401&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.mowsnowpros.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 272,
+      "displayName": {
+        "text": "MowSnowPros"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJCUdPzsOZcVMRfsLcd_8m3UI",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 938-2857",
+      "internationalPhoneNumber": "+1 403-938-2857",
+      "formattedAddress": "316034 32 St E #20, Foothills County, AB T1S 3S4",
+      "addressComponents": [
+        {
+          "longText": "20",
+          "shortText": "20",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "316034",
+          "shortText": "316034",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "32 Street East",
+          "shortText": "32 St E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Foothills County",
+          "shortText": "Foothills County",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T1S 3S4",
+          "shortText": "T1S 3S4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.764578099999994,
+        "longitude": -113.9470485
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=4818050055025771134&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://kayben.com/?utm_source=gbp&utm_medium=organic&utm_campaign=okotoks&utm_term=gbp-listing",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 71,
+      "displayName": {
+        "text": "Kayben Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJLQID70C3eiMRV5_K4NJPsSk",
+      "types": [
+        "general_contractor",
+        "home_goods_store",
+        "store",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "formattedAddress": "15 Technology Way SE, Calgary, AB T3S 0B8",
+      "addressComponents": [
+        {
+          "longText": "15",
+          "shortText": "15",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Technology Way Southeast",
+          "shortText": "Technology Way SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3S 0B8",
+          "shortText": "T3S 0B8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.968722799999995,
+        "longitude": -113.9100989
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=3004270193565933399&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://dksconstruction.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 32,
+      "displayName": {
+        "text": "DK Construction & Landscape"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJE2C5LB92cVMROXtz_G6T4N4",
+      "types": [
+        "swimming_pool",
+        "general_contractor",
+        "sports_activity_location",
+        "supplier",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 226-6435",
+      "internationalPhoneNumber": "+1 587-226-6435",
+      "formattedAddress": "5319 3 St SE Unit 737, Calgary, AB T2H 1J7",
+      "addressComponents": [
+        {
+          "longText": "Unit 737",
+          "shortText": "Unit 737",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "5319",
+          "shortText": "5319",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "3 Street Southeast",
+          "shortText": "3 St SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manchester Industrial",
+          "shortText": "Manchester Industrial",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2H 1J7",
+          "shortText": "T2H 1J7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.006689099999996,
+        "longitude": -114.0580921
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=16059998376094300985&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.urban-oasisdev.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 34,
+      "displayName": {
+        "text": "Urban Oasis Developments Inc"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJa7GJSGV3cVMRj43auoplQqg",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 257-3479",
+      "internationalPhoneNumber": "+1 403-257-3479",
+      "formattedAddress": "12110 40 St SE Suite 8, Calgary, AB T2Z 4K6",
+      "addressComponents": [
+        {
+          "longText": "Suite 8",
+          "shortText": "Suite 8",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "12110",
+          "shortText": "12110",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "40 Street Southeast",
+          "shortText": "40 St SE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East Shepard Industrial",
+          "shortText": "East Shepard Industrial",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2Z 4K6",
+          "shortText": "T2Z 4K6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.94247190000001,
+        "longitude": -113.9744734
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=12124364793349574031&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://jvrlandscape.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 19,
+      "displayName": {
+        "text": "J V R Landscape"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJlcAFh4BlcVMRuE867LfFMII",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 971-9214",
+      "internationalPhoneNumber": "+1 403-971-9214",
+      "formattedAddress": "11 Whitehill Gate NE, Calgary, AB T1Y 3E4",
+      "addressComponents": [
+        {
+          "longText": "11",
+          "shortText": "11",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Whitehill Gate Northeast",
+          "shortText": "Whitehill Gate NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northeast Calgary",
+          "shortText": "Northeast Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T1Y 3E4",
+          "shortText": "T1Y 3E4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.093013899999995,
+        "longitude": -113.9698037
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=9381215417545674680&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://skylandlandscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 89,
+      "displayName": {
+        "text": "Skyland Landscaping Calgary LTD"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJS8a-tyfjpEAReI4StRl6WGI",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 710-5704",
+      "internationalPhoneNumber": "+1 403-710-5704",
+      "formattedAddress": "62 Cougarstone Close SW, Calgary, AB T3H 5J4",
+      "addressComponents": [
+        {
+          "longText": "62",
+          "shortText": "62",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Cougarstone Close Southwest",
+          "shortText": "Cougarstone Close SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Southwest Calgary",
+          "shortText": "Southwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T3H 5J4",
+          "shortText": "T3H 5J4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0688488,
+        "longitude": -114.21988979999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=7086548264498138744&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://checkmatelandscape.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 137,
+      "displayName": {
+        "text": "Checkmate Landscape"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJGWMroPp5cVMRvVHJgPQNSP4",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 217-1182",
+      "internationalPhoneNumber": "+1 403-217-1182",
+      "formattedAddress": "9629 Horton Rd SW, Calgary, AB T2V 2X5",
+      "addressComponents": [
+        {
+          "longText": "9629",
+          "shortText": "9629",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Horton Road Southwest",
+          "shortText": "Horton Rd SW",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Southwest Calgary",
+          "shortText": "Southwest Calgary",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2V 2X5",
+          "shortText": "T2V 2X5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.968255199999994,
+        "longitude": -114.0752687
+      },
+      "rating": 4.5,
+      "googleMapsUri": "https://maps.google.com/?cid=18322910427740721597&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://fiddlersgreeninc.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 74,
+      "displayName": {
+        "text": "Fiddler's Green Landscaping Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJER5yK7VncVMRvpCk4oW-2zg",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 239-1269",
+      "internationalPhoneNumber": "+1 403-239-1269",
+      "formattedAddress": "1017 1 Ave NE, Calgary, AB T2E 0C9",
+      "addressComponents": [
+        {
+          "longText": "1017",
+          "shortText": "1017",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "1 Avenue Northeast",
+          "shortText": "1 Ave NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Bridgeland-Riverside",
+          "shortText": "Bridgeland-Riverside",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2E 0C9",
+          "shortText": "T2E 0C9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0531252,
+        "longitude": -114.0397907
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=4097077768265961662&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.propertywerks.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1138,
+      "displayName": {
+        "text": "PROPERTY WERKS"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJnYu9aS9pcVMR0I_u_th6-44",
+      "types": [
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(587) 254-2337",
+      "internationalPhoneNumber": "+1 587-254-2337",
+      "formattedAddress": "330 40 Ave NE, Calgary, AB T2E 2M7",
+      "addressComponents": [
+        {
+          "longText": "330",
+          "shortText": "330",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "40 Avenue Northeast",
+          "shortText": "40 Ave NE",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Greenview Industrial Park",
+          "shortText": "Greenview Industrial Park",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Calgary",
+          "shortText": "Calgary",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T2E 2M7",
+          "shortText": "T2E 2M7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 51.0890183,
+        "longitude": -114.0560125
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=10302963644948713424&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.yarddawgslawncare.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 2024,
+      "displayName": {
+        "text": "Yard Dawgs"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJS08kfEN3cVMRnZ02xAJxfTQ",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "food",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(403) 618-7156",
+      "internationalPhoneNumber": "+1 403-618-7156",
+      "formattedAddress": "232257 Range Rd 282, Rocky View Country, AB T1X 0H2",
+      "addressComponents": [
+        {
+          "longText": "232257",
+          "shortText": "232257",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Range Road 282",
+          "shortText": "Range Rd 282",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rocky View Country",
+          "shortText": "Rocky View Country",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rocky View County",
+          "shortText": "Rocky View County",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Alberta",
+          "shortText": "AB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "T1X 0H2",
+          "shortText": "T1X 0H2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.9644117,
+        "longitude": -113.82029139999999
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=3782303518756871581&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://rocfortescapes.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 58,
+      "displayName": {
+        "text": "Rocforte Scapes Inc."
+      },
+      "primaryType": "general_contractor"
+    }
+  ],
+  "fetchedAt": "2026-08-06T06:40:04.907Z"
+}

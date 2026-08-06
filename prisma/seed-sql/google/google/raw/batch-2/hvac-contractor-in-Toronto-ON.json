@@ -1,0 +1,5565 @@
+{
+  "query": "hvac contractor in Toronto, ON",
+  "regionCode": "ca",
+  "places": [
+    {
+      "id": "ChIJNbZsC3vL1IkRCJrD-8C08Nc",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(289) 366-1865",
+      "internationalPhoneNumber": "+1 289-366-1865",
+      "formattedAddress": "276 Carlaw Ave #127a, Toronto, ON M4M 3L1",
+      "addressComponents": [
+        {
+          "longText": "127a",
+          "shortText": "127a",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "276",
+          "shortText": "276",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Carlaw Avenue",
+          "shortText": "Carlaw Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4M 3L1",
+          "shortText": "M4M 3L1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6633066,
+        "longitude": -79.34125209999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=15560135453515684360&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://downtowntorontohvac.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 71,
+      "displayName": {
+        "text": "Downtown Toronto HVAC"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJqV2E7HTL1IkRVVYtubkckyM",
+      "types": [
+        "plumber",
+        "electrician",
+        "general_contractor",
+        "manufacturer",
+        "store",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(888) 431-3111",
+      "internationalPhoneNumber": "+1 888-431-3111",
+      "formattedAddress": "145 Front St E Ste L3, Toronto, ON M5A 1E3",
+      "addressComponents": [
+        {
+          "longText": "Suite L3",
+          "shortText": "Ste L3",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "145",
+          "shortText": "145",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Front Street East",
+          "shortText": "Front St E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M5A 1E3",
+          "shortText": "M5A 1E3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6498127,
+        "longitude": -79.36934699999999
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=2563424196905227861&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://reliancehomecomfort.com/toronto/?utm_source=google&utm_medium=organic&utm_campaign=gmb-downtown-toronto",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 2239,
+      "displayName": {
+        "text": "Reliance Heating, Air Conditioning & Plumbing"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJlybDiuXN1IkRrMmZ3ffIkms",
+      "types": [
+        "plumber",
+        "general_contractor",
+        "store",
+        "point_of_interest",
+        "car_repair",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 448-2360",
+      "internationalPhoneNumber": "+1 416-448-2360",
+      "formattedAddress": "397 Donlands Ave Unit 105, East York, ON M4J 3S3",
+      "addressComponents": [
+        {
+          "longText": "Unit 105",
+          "shortText": "Unit 105",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "397",
+          "shortText": "397",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Donlands Avenue",
+          "shortText": "Donlands Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East York",
+          "shortText": "East York",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4J 3S3",
+          "shortText": "M4J 3S3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6938233,
+        "longitude": -79.34249380000001
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=7751478875558365612&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.drhvac.ca/east-york-toronto/?utm_source=Google&utm_medium=GMB",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 529,
+      "displayName": {
+        "text": "Dr HVAC and Plumbing (Toronto)"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJu5kLHt4zK4gRpvL2BCKmp9k",
+      "types": [
+        "general_contractor",
+        "store",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 627-7724",
+      "internationalPhoneNumber": "+1 416-627-7724",
+      "formattedAddress": "1373 Bathurst St, Toronto, ON M5R 3H8",
+      "addressComponents": [
+        {
+          "longText": "1373",
+          "shortText": "1373",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Bathurst Street",
+          "shortText": "Bathurst St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M5R 3H8",
+          "shortText": "M5R 3H8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6804135,
+        "longitude": -79.4170793
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=15683686892383433382&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.greenheatingandair.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 181,
+      "displayName": {
+        "text": "Green Heating and Air Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJVQsQwSDM1IkR2i_XaWaMLyg",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 573-7212",
+      "internationalPhoneNumber": "+1 416-573-7212",
+      "formattedAddress": "30 Chester Hill Rd, Toronto, ON M4K 1X3",
+      "addressComponents": [
+        {
+          "longText": "30",
+          "shortText": "30",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Chester Hill Road",
+          "shortText": "Chester Hill Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4K 1X3",
+          "shortText": "M4K 1X3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.681439999999995,
+        "longitude": -79.3606353
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=2895687456912781274&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.sunnysidehvac.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 194,
+      "displayName": {
+        "text": "SunnySide Heating and Air Conditioning"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ5cNNGpH2om4R7HQouzsRwwQ",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 269-6672",
+      "internationalPhoneNumber": "+1 647-269-6672",
+      "formattedAddress": "2300 Yonge St, Toronto, ON M4P 1E4",
+      "addressComponents": [
+        {
+          "longText": "2300",
+          "shortText": "2300",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Yonge Street",
+          "shortText": "Yonge St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4P 1E4",
+          "shortText": "M4P 1E4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.7074247,
+        "longitude": -79.39907079999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=343136944851023084&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://easyflowhvac.site/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 66,
+      "displayName": {
+        "text": "Easy Flow Hvac Toronto"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJq-vo7gIzK4gRZ_0y9LDAzNw",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 496-2057",
+      "internationalPhoneNumber": "+1 647-496-2057",
+      "formattedAddress": "2300 Yonge St, Toronto, ON M4P 1E4",
+      "addressComponents": [
+        {
+          "longText": "2300",
+          "shortText": "2300",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Yonge Street",
+          "shortText": "Yonge St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4P 1E4",
+          "shortText": "M4P 1E4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.7074247,
+        "longitude": -79.39907079999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=15910303449836879207&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://suncoolhvactoronto.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 70,
+      "displayName": {
+        "text": "SunCool HVAC of Toronto - Midtown"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJlbb0h1bQ1IkRmqr-PBbU0nQ",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "manufacturer",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 421-2121",
+      "internationalPhoneNumber": "+1 416-421-2121",
+      "formattedAddress": "120 Dynamic Dr #22, Scarborough, ON M1V 5C8",
+      "addressComponents": [
+        {
+          "longText": "22",
+          "shortText": "22",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "120",
+          "shortText": "120",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Dynamic Drive",
+          "shortText": "Dynamic Dr",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Scarborough",
+          "shortText": "Scarborough",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M1V 5C8",
+          "shortText": "M1V 5C8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.8268409,
+        "longitude": -79.25226769999999
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=8418023845486570138&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.lairdandson.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1047,
+      "displayName": {
+        "text": "Laird & Son Heating & Air Conditioning Scarborough-Toronto"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJvzYRH_osK4gRGHmsIOXjmTg",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 736-7001",
+      "internationalPhoneNumber": "+1 416-736-7001",
+      "formattedAddress": "3983 Chesswood Dr, North York, ON M3J 2R8",
+      "addressComponents": [
+        {
+          "longText": "3983",
+          "shortText": "3983",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Chesswood Drive",
+          "shortText": "Chesswood Dr",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North York",
+          "shortText": "North York",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M3J 2R8",
+          "shortText": "M3J 2R8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.7585441,
+        "longitude": -79.4760079
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=4078541510795884824&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.hometradestandards.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 484,
+      "displayName": {
+        "text": "Home Trade Standards - Condo HVAC Specialists"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJH8lj9onhlAARaZWq7-0_q1o",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 699-9204",
+      "internationalPhoneNumber": "+1 647-699-9204",
+      "formattedAddress": "124 King St W, Toronto, ON N0B 2S0",
+      "addressComponents": [
+        {
+          "longText": "124",
+          "shortText": "124",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "King Street West",
+          "shortText": "King St W",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "N0B 2S0",
+          "shortText": "N0B 2S0",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6480524,
+        "longitude": -79.3830473
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=6533385975591769449&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 46,
+      "displayName": {
+        "text": "PRIORITY HVAC SOLUTIONS Toronto"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJF-XqoOnL1IkR3hEq7jpGujA",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "manufacturer",
+        "store",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 556-8368",
+      "internationalPhoneNumber": "+1 416-556-8368",
+      "formattedAddress": "710 Kingston Rd, Toronto, ON M4E 1R7",
+      "addressComponents": [
+        {
+          "longText": "710",
+          "shortText": "710",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Kingston Road",
+          "shortText": "Kingston Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4E 1R7",
+          "shortText": "M4E 1R7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.679496400000005,
+        "longitude": -79.2960058
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=3511196078406504926&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://cityhomecomfort.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 734,
+      "displayName": {
+        "text": "City Home Comfort"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJiWS8SpUxK4gR14M4srTKjJw",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(437) 996-4218",
+      "internationalPhoneNumber": "+1 437-996-4218",
+      "formattedAddress": "1277 Wilson Ave, North York, ON M3M 3C6",
+      "addressComponents": [
+        {
+          "longText": "1277",
+          "shortText": "1277",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Wilson Avenue",
+          "shortText": "Wilson Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North York",
+          "shortText": "North York",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M3M 3C6",
+          "shortText": "M3M 3C6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.7237369,
+        "longitude": -79.4930533
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=11280614044089222103&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.gtahvacservices.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 168,
+      "displayName": {
+        "text": "GTA HVAC Services"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJa8hExW41K4gR_JV5bPKZCfo",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 556-4662",
+      "internationalPhoneNumber": "+1 647-556-4662",
+      "formattedAddress": "25 Morrow Ave, Toronto, ON M6R 2H9",
+      "addressComponents": [
+        {
+          "longText": "25",
+          "shortText": "25",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Morrow Avenue",
+          "shortText": "Morrow Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M6R 2H9",
+          "shortText": "M6R 2H9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.652553999999995,
+        "longitude": -79.4468365
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=18017101050753422844&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://superiorhvacservice.ca/toronto/?utm_source=gmb&utm_medium=organic&utm_campaign=gmb",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 59,
+      "displayName": {
+        "text": "Superior HVAC Service, Heating & Air Conditioning"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJi4CH8jNu-ikRMF7e1wAPVTE",
+      "types": [
+        "plumber",
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 496-6104",
+      "internationalPhoneNumber": "+1 647-496-6104",
+      "formattedAddress": "105 Gordon Baker Rd #525, North York, ON M2H 3P8",
+      "addressComponents": [
+        {
+          "longText": "525",
+          "shortText": "525",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "105",
+          "shortText": "105",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Gordon Baker Road",
+          "shortText": "Gordon Baker Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North York",
+          "shortText": "North York",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M2H 3P8",
+          "shortText": "M2H 3P8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.8016848,
+        "longitude": -79.3439477
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=3554763977174965808&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.jlnhvac.com/?utm_source=google&utm_medium=gbp&utm_campaign=organic_profile",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 277,
+      "displayName": {
+        "text": "JLN HVAC Solutions Inc."
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJfbrZ2mPT1IkR6eg0cCAsMkU",
+      "types": [
+        "plumber",
+        "electrician",
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 696-7487",
+      "internationalPhoneNumber": "+1 647-696-7487",
+      "formattedAddress": "3080 Yonge St Ste 6060, Toronto, ON M4N 1S1",
+      "addressComponents": [
+        {
+          "longText": "Suite 6060",
+          "shortText": "Ste 6060",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "3080",
+          "shortText": "3080",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Yonge Street",
+          "shortText": "Yonge St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4N 1S1",
+          "shortText": "M4N 1S1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.7253708,
+        "longitude": -79.402817
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=4986096255285651689&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.empowerhomecomfort.ca/?utm_campaign=GBP-Toronto",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 600,
+      "displayName": {
+        "text": "Empower Home Comfort"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJw_GXzzx82wERNcTHOHrzUfQ",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(437) 448-0640",
+      "internationalPhoneNumber": "+1 437-448-0640",
+      "formattedAddress": "639 Queen St W Unit 401, Toronto, ON M5V 2B7",
+      "addressComponents": [
+        {
+          "longText": "Unit 401",
+          "shortText": "Unit 401",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "639",
+          "shortText": "639",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Queen Street West",
+          "shortText": "Queen St W",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M5V 2B7",
+          "shortText": "M5V 2B7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6470998,
+        "longitude": -79.4033477
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=17605120124632155189&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.hudsonhvac.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 957,
+      "displayName": {
+        "text": "Hudson Condominium Solutions Inc"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJMR9kzjkrK4gRi5x5SIlk1BM",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 763-8100",
+      "internationalPhoneNumber": "+1 905-763-8100",
+      "formattedAddress": "1015 Bloor St W Second Unit 203, Toronto, ON M6H 1M1",
+      "addressComponents": [
+        {
+          "longText": "1015 Bloor St W Second Unit 203",
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M6H 1M1",
+          "shortText": "M6H 1M1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.660671300000004,
+        "longitude": -79.4305875
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=1428877522572516491&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://econoairhc.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 78,
+      "displayName": {
+        "text": "Econoair HVAC Services Toronto"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJIblY5m40K4gRxaQL8NwoWXw",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 532-2859",
+      "internationalPhoneNumber": "+1 416-532-2859",
+      "formattedAddress": "1400 Dufferin, Toronto, ON M6H 4C8",
+      "addressComponents": [
+        {
+          "longText": "1400",
+          "shortText": "1400",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Dufferin",
+          "shortText": "Dufferin",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M6H 4C8",
+          "shortText": "M6H 4C8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6701635,
+        "longitude": -79.4400352
+      },
+      "rating": 4.4,
+      "googleMapsUri": "https://maps.google.com/?cid=8960237863015523525&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://dupontheatingltd.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 387,
+      "displayName": {
+        "text": "Dupont Heating & Air Conditioning Ltd"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJb_bj-sQ1K4gR4jvWRY1cafk",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(866) 625-4629",
+      "internationalPhoneNumber": "+1 866-625-4629",
+      "formattedAddress": "417 Bloor St W, Toronto, ON M5S 1X6",
+      "addressComponents": [
+        {
+          "longText": "417",
+          "shortText": "417",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Bloor Street West",
+          "shortText": "Bloor St W",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M5S 1X6",
+          "shortText": "M5S 1X6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6662982,
+        "longitude": -79.40468899999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=17971997549830487010&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.climaxair.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 131,
+      "displayName": {
+        "text": "Climax Heating & Air Conditioning"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJpbErGR0uK4gRd1S2k6Ak1dw",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "store",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 847-2998",
+      "internationalPhoneNumber": "+1 647-847-2998",
+      "formattedAddress": "4255 Weston Rd unit-B, North York, ON M9L 1W8",
+      "addressComponents": [
+        {
+          "longText": "unit-B",
+          "shortText": "unit-B",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "4255",
+          "shortText": "4255",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Weston Road",
+          "shortText": "Weston Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North York",
+          "shortText": "North York",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M9L 1W8",
+          "shortText": "M9L 1W8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.7682262,
+        "longitude": -79.5451526
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=15912665130475082871&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.dhontario.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 291,
+      "displayName": {
+        "text": "DeMark Home Ontario"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJH1vvkyI0K4gRiP1AkmGx84E",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 762-1291",
+      "internationalPhoneNumber": "+1 416-762-1291",
+      "formattedAddress": "2753 Dundas St W, Toronto, ON M6P 1Y1",
+      "addressComponents": [
+        {
+          "longText": "2753",
+          "shortText": "2753",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Dundas Street West",
+          "shortText": "Dundas St W",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M6P 1Y1",
+          "shortText": "M6P 1Y1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6649124,
+        "longitude": -79.46103140000001
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=9364023082857069960&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.lbheating.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 171,
+      "displayName": {
+        "text": "LB Heating & Air Conditioning Co."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJa_M_owMyK4gRgU8o-HSEmxQ",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 694-1187",
+      "internationalPhoneNumber": "+1 416-694-1187",
+      "formattedAddress": "130 Industry St, North York, ON M6M 5G3",
+      "addressComponents": [
+        {
+          "longText": "130",
+          "shortText": "130",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Industry Street",
+          "shortText": "Industry St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North York",
+          "shortText": "North York",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M6M 5G3",
+          "shortText": "M6M 5G3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6954309,
+        "longitude": -79.49408509999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=1484926140063174529&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.mckinnonheating.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 274,
+      "displayName": {
+        "text": "Mckinnon Heating Cooling"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJvRet54XN1IkR0LDVDEFftrU",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(226) 223-9960",
+      "internationalPhoneNumber": "+1 226-223-9960",
+      "formattedAddress": "35 Thorncliffe Park Dr, East York, ON M4H 1J3",
+      "addressComponents": [
+        {
+          "longText": "35",
+          "shortText": "35",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Thorncliffe Park Drive",
+          "shortText": "Thorncliffe Park Dr",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East York",
+          "shortText": "East York",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4H 1J3",
+          "shortText": "M4H 1J3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.701976699999996,
+        "longitude": -79.3451913
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=13093757699619139792&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://eastyorkhvac.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 39,
+      "displayName": {
+        "text": "East York HVAC"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJxZX2RXozK4gRwBdnMY7myE8",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "store",
+        "point_of_interest",
+        "service",
+        "supplier",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 635-1000",
+      "internationalPhoneNumber": "+1 416-635-1000",
+      "formattedAddress": "17 Tippett Rd, North York, ON M3H 2V1",
+      "addressComponents": [
+        {
+          "longText": "17",
+          "shortText": "17",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Tippett Road",
+          "shortText": "Tippett Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North York",
+          "shortText": "North York",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M3H 2V1",
+          "shortText": "M3H 2V1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.73321,
+        "longitude": -79.44628999999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=5749098422727022528&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.cozyworld.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 204,
+      "displayName": {
+        "text": "Cozy World Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ_ff6w6gtK4gRsYPVH8Lq2tA",
+      "types": [
+        "furniture_store",
+        "home_improvement_store",
+        "home_goods_store",
+        "general_contractor",
+        "restaurant",
+        "food",
+        "store",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 825-0911",
+      "internationalPhoneNumber": "+1 416-825-0911",
+      "formattedAddress": "245 Patricia Ave, North York, ON M2M 1J7",
+      "addressComponents": [
+        {
+          "longText": "245",
+          "shortText": "245",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Patricia Avenue",
+          "shortText": "Patricia Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North York",
+          "shortText": "North York",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M2M 1J7",
+          "shortText": "M2M 1J7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.787236199999995,
+        "longitude": -79.43074419999999
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=15049599224290575281&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://mphvacweb-e7nohjzc.manus.space/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 59,
+      "displayName": {
+        "text": "MP HVAC | Restaurant Hood | Commercial HVAC"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJB2GGMeTM1IkRxW4Hq_UNhfU",
+      "types": [
+        "plumber",
+        "electrician",
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(437) 888-9680",
+      "internationalPhoneNumber": "+1 437-888-9680",
+      "formattedAddress": "23 Prince Andrew Pl, North York, ON M3C 2H2",
+      "addressComponents": [
+        {
+          "longText": "23",
+          "shortText": "23",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Prince Andrew Place",
+          "shortText": "Prince Andrew Pl",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North York",
+          "shortText": "North York",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M3C 2H2",
+          "shortText": "M3C 2H2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.7256528,
+        "longitude": -79.3438262
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=17691562059982401221&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.belyeabrothers.com/?utm_source=google&utm_medium=organic&utm_campaign=gbp",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 701,
+      "displayName": {
+        "text": "Belyea Bros. Heating & Cooling"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJU9Ezft87K4gRtfI2SAK-yjA",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 559-8708",
+      "internationalPhoneNumber": "+1 647-559-8708",
+      "formattedAddress": "10 Belfield Rd 2nd floor, Etobicoke, ON M9W 1G1",
+      "addressComponents": [
+        {
+          "longText": "2nd floor",
+          "shortText": "2nd floor",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "10",
+          "shortText": "10",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Belfield Road",
+          "shortText": "Belfield Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Etobicoke",
+          "shortText": "Etobicoke",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M9W 1G1",
+          "shortText": "M9W 1G1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.7053875,
+        "longitude": -79.5647315
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=3515831376126866101&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://superiorhvacservice.ca/etobicoke/?utm_source=gmb&utm_medium=organic&utm_campaign=gmb",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 47,
+      "displayName": {
+        "text": "Superior HVAC Service, Heating & Air Conditioning"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJpX_iilUzK4gRMG3Ser4HGHE",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 760-7001",
+      "internationalPhoneNumber": "+1 647-760-7001",
+      "formattedAddress": "2300 Yonge St #1600, Toronto, ON M4P 1E4",
+      "addressComponents": [
+        {
+          "longText": "1600",
+          "shortText": "1600",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "2300",
+          "shortText": "2300",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Yonge Street",
+          "shortText": "Yonge St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4P 1E4",
+          "shortText": "M4P 1E4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.706938199999996,
+        "longitude": -79.3990298
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=8149272040412704048&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.hometradestandards.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 22,
+      "displayName": {
+        "text": "Home Trade Standards - Condo HVAC Specialists"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJP44w-E7N1IkRNTtLL6YE_7c",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 439-5777",
+      "internationalPhoneNumber": "+1 416-439-5777",
+      "formattedAddress": "209 Wicksteed Ave #56, East York, ON M4G 0B1",
+      "addressComponents": [
+        {
+          "longText": "56",
+          "shortText": "56",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "209",
+          "shortText": "209",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Wicksteed Avenue",
+          "shortText": "Wicksteed Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East York",
+          "shortText": "East York",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4G 0B1",
+          "shortText": "M4G 0B1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.712478499999996,
+        "longitude": -79.3501639
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=13258320939806571317&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.lairdandson.com/locations/leaside-east-york-toronto-ontario/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 127,
+      "displayName": {
+        "text": "Laird & Son Heating & Air Conditioning East York-Toronto"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJTciTcyE1K4gRfqMERReo6Jo",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 258-0047",
+      "internationalPhoneNumber": "+1 647-258-0047",
+      "formattedAddress": "1200 Bay St., Toronto, ON M5R 2A5",
+      "addressComponents": [
+        {
+          "longText": "1200",
+          "shortText": "1200",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Bay Street",
+          "shortText": "Bay St.",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M5R 2A5",
+          "shortText": "M5R 2A5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6699255,
+        "longitude": -79.3899301
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=11162356494333420414&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.forsaving.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 22,
+      "displayName": {
+        "text": "For Saving Home Service | HVAC Company In Greater Toronto"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJjbXw1TvT1IkR0kjNpeJytvo",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 407-0701",
+      "internationalPhoneNumber": "+1 647-407-0701",
+      "formattedAddress": "20 Chichester Pl #1510, Scarborough, ON M1T 1G6",
+      "addressComponents": [
+        {
+          "longText": "1510",
+          "shortText": "1510",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "20",
+          "shortText": "20",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Chichester Place",
+          "shortText": "Chichester Pl",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Scarborough",
+          "shortText": "Scarborough",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M1T 1G6",
+          "shortText": "M1T 1G6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.7773347,
+        "longitude": -79.3217549
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=18065753273013192914&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.harbourhvac.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 164,
+      "displayName": {
+        "text": "Harbour HVAC Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJV8UkShbN1IkRZkTWkLj5Mhc",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 262-6788",
+      "internationalPhoneNumber": "+1 647-262-6788",
+      "formattedAddress": "52 Robbins Ave, Toronto, ON M4L 1X2",
+      "addressComponents": [
+        {
+          "longText": "52",
+          "shortText": "52",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Robbins Avenue",
+          "shortText": "Robbins Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4L 1X2",
+          "shortText": "M4L 1X2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.670633599999995,
+        "longitude": -79.31653109999999
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=1671672982807135334&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.greenchoicehvac.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 59,
+      "displayName": {
+        "text": "Green Choice Heating and Cooling"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJK61xJEgzK4gRii-Y6wgi0Xo",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(437) 602-8455",
+      "internationalPhoneNumber": "+1 437-602-8455",
+      "formattedAddress": "2 St Clair Ave W, Toronto, ON M4V 1L5",
+      "addressComponents": [
+        {
+          "longText": "2",
+          "shortText": "2",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Saint Clair Avenue West",
+          "shortText": "St Clair Ave W",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4V 1L5",
+          "shortText": "M4V 1L5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.688325899999995,
+        "longitude": -79.3946485
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=8849892164467437450&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.cool-flow-hvac-toronto.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 3,
+      "displayName": {
+        "text": "Cool Flow Hvac Toronto"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJCZcbkjo5K4gR8t9Z2O66JeE",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "supplier",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 807-2752",
+      "internationalPhoneNumber": "+1 416-807-2752",
+      "formattedAddress": "1767 Branchwood Park, Mississauga, ON L4W 2E5",
+      "addressComponents": [
+        {
+          "longText": "1767",
+          "shortText": "1767",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Branchwood Park",
+          "shortText": "Branchwood Park",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Rockwood Village",
+          "shortText": "Rockwood Village",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Mississauga",
+          "shortText": "Mississauga",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Mississauga",
+          "shortText": "Mississauga",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Regional Municipality of Peel",
+          "shortText": "Regional Municipality of Peel",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L4W 2E5",
+          "shortText": "L4W 2E5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.632398599999995,
+        "longitude": -79.5961389
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=16223578767666831346&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://hvac-group.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 269,
+      "displayName": {
+        "text": "HVAC-Group"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ3YAdKC0tK4gR-C65HnnGxZg",
+      "types": [
+        "electrician",
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(800) 458-1289",
+      "internationalPhoneNumber": "+1 800-458-1289",
+      "formattedAddress": "360 Bay St. Unit 600, Toronto, ON M5H 2V6",
+      "addressComponents": [
+        {
+          "longText": "Unit 600",
+          "shortText": "Unit 600",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "360",
+          "shortText": "360",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Bay Street",
+          "shortText": "Bay St.",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M5H 2V6",
+          "shortText": "M5H 2V6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.650703299999996,
+        "longitude": -79.3813332
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=11008423087685840632&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.1clickenergy.com/?utm_campaign=gmb_to",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 358,
+      "displayName": {
+        "text": "1Click Energy Solutions (formerly 1Click Heating and Cooling)"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJFXnA3rLL1IkRbTm2BOLazMI",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 666-3070",
+      "internationalPhoneNumber": "+1 416-666-3070",
+      "formattedAddress": "124 Regina Ave, North York, ON M6A 1R7",
+      "addressComponents": [
+        {
+          "longText": "124",
+          "shortText": "124",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Regina Avenue",
+          "shortText": "Regina Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North York",
+          "shortText": "North York",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M6A 1R7",
+          "shortText": "M6A 1R7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.726111499999995,
+        "longitude": -79.4410511
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=14036834802883508589&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://gtaheatingandair.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 24,
+      "displayName": {
+        "text": "GTA Heating and Air"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJN8I5enLL1IkR6jsgCej-P0g",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(905) 954-5105",
+      "internationalPhoneNumber": "+1 905-954-5105",
+      "formattedAddress": "33 Mill St, Toronto, ON M5A 3R3",
+      "addressComponents": [
+        {
+          "longText": "33",
+          "shortText": "33",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Mill Street",
+          "shortText": "Mill St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M5A 3R3",
+          "shortText": "M5A 3R3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6502401,
+        "longitude": -79.3609196
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=5206159966802557930&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.walkerhvac.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 50,
+      "displayName": {
+        "text": "Walker HVAC Toronto"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJaTuUF0Q0K4gRkfzqDB8tGRA",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 554-9595",
+      "internationalPhoneNumber": "+1 416-554-9595",
+      "formattedAddress": "268 St Clarens Ave, Toronto, ON M6H 3W3",
+      "addressComponents": [
+        {
+          "longText": "268",
+          "shortText": "268",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Saint Clarens Avenue",
+          "shortText": "St Clarens Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M6H 3W3",
+          "shortText": "M6H 3W3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6540585,
+        "longitude": -79.44006180000001
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=1160007990408576145&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.acfurnacegta.ca/?utm_source=google&utm_medium=gbp&utm_campaign=organic",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 57,
+      "displayName": {
+        "text": "ACfurnaceGTA Corp"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJS7x9CzhGK4gRBL2-TRzDcik",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 627-7724",
+      "internationalPhoneNumber": "+1 416-627-7724",
+      "formattedAddress": "610 Lakeshore Rd E, Mississauga, ON L5G 1J4",
+      "addressComponents": [
+        {
+          "longText": "610",
+          "shortText": "610",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Lakeshore Road East",
+          "shortText": "Lakeshore Rd E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Lakeview",
+          "shortText": "Lakeview",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Mississauga",
+          "shortText": "Mississauga",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Mississauga",
+          "shortText": "Mississauga",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Regional Municipality of Peel",
+          "shortText": "Regional Municipality of Peel",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L5G 1J4",
+          "shortText": "L5G 1J4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.568550099999996,
+        "longitude": -79.56731309999999
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=2986664029230906628&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.greenheatingandair.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 155,
+      "displayName": {
+        "text": "Green Heating and Air Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJi718UtDN1IkRECQ9Mq5tGho",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 230-3689",
+      "internationalPhoneNumber": "+1 416-230-3689",
+      "formattedAddress": "4 Deerfield Place, Scarborough, ON M1K 4X4",
+      "addressComponents": [
+        {
+          "longText": "4",
+          "shortText": "4",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Deerfield Place",
+          "shortText": "Deerfield Place",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Scarborough",
+          "shortText": "Scarborough",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M1K 4X4",
+          "shortText": "M1K 4X4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.727945999999996,
+        "longitude": -79.2674363
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=1880936389315208208&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://cityairtoronto.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 88,
+      "displayName": {
+        "text": "City Air Toronto"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ1WEuhijN1IkR8k_PhOwxPOw",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 982-2767",
+      "internationalPhoneNumber": "+1 647-982-2767",
+      "formattedAddress": "47 Thorncliffe Park Dr, East York, ON M4H 1J5",
+      "addressComponents": [
+        {
+          "longText": "47",
+          "shortText": "47",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Thorncliffe Park Drive",
+          "shortText": "Thorncliffe Park Dr",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East York",
+          "shortText": "East York",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4H 1J5",
+          "shortText": "M4H 1J5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.700543599999996,
+        "longitude": -79.34294729999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=17022535583463854066&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://torontohvacsolutions.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 21,
+      "displayName": {
+        "text": "Toronto HVAC solutions"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJE9FPamMqK4gRi8zOVQyj9bo",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "supplier",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 855-3651",
+      "internationalPhoneNumber": "+1 416-855-3651",
+      "formattedAddress": "16 Sims Crescent Un. 27, Richmond Hill, ON L4B 2P1",
+      "addressComponents": [
+        {
+          "longText": "Un. 27",
+          "shortText": "Un. 27",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "16",
+          "shortText": "16",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Sims Crescent",
+          "shortText": "Sims Crescent",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Richmond Hill",
+          "shortText": "Richmond Hill",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Richmond Hill",
+          "shortText": "Richmond Hill",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Regional Municipality of York",
+          "shortText": "Regional Municipality of York",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "L4B 2P1",
+          "shortText": "L4B 2P1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.855249,
+        "longitude": -79.3837649
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=13471853133723257995&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.cozyworld.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 269,
+      "displayName": {
+        "text": "Cozy World Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJC6p53VQ1K4gRN2AR-1agiyU",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 581-2995",
+      "internationalPhoneNumber": "+1 647-581-2995",
+      "formattedAddress": "1 Sultan St, Toronto, ON M5S 2B7",
+      "addressComponents": [
+        {
+          "longText": "1",
+          "shortText": "1",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Sultan Street",
+          "shortText": "Sultan St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M5S 2B7",
+          "shortText": "M5S 2B7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.668655099999995,
+        "longitude": -79.39014449999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=2705432296605966391&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 2,
+      "displayName": {
+        "text": "MSR Hvac Toronto"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJz-dRgpYzK4gRmX321-iS_0s",
+      "types": [
+        "plumber",
+        "general_contractor",
+        "store",
+        "point_of_interest",
+        "service",
+        "supplier",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 370-6703",
+      "internationalPhoneNumber": "+1 647-370-6703",
+      "formattedAddress": "120 Eglinton Ave E #500, Toronto, ON M4P 1E2",
+      "addressComponents": [
+        {
+          "longText": "500",
+          "shortText": "500",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "120",
+          "shortText": "120",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Eglinton Avenue East",
+          "shortText": "Eglinton Ave E",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4P 1E2",
+          "shortText": "M4P 1E2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.7077016,
+        "longitude": -79.3949128
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=5476257200659135897&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://superiorplumbing.ca/toronto/?utm_source=gmb&utm_medium=organic&utm_campaign=gmb",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 72,
+      "displayName": {
+        "text": "Superior Plumbing & Heating of Toronto"
+      },
+      "primaryType": "plumber"
+    },
+    {
+      "id": "ChIJL8-XKP3L1IkR1rozSlHWVw8",
+      "types": [
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 724-2898",
+      "internationalPhoneNumber": "+1 647-724-2898",
+      "formattedAddress": "1 Yonge St, Toronto, ON M5E 1E5",
+      "addressComponents": [
+        {
+          "longText": "1",
+          "shortText": "1",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Yonge Street",
+          "shortText": "Yonge St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M5E 1E5",
+          "shortText": "M5E 1E5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6425099,
+        "longitude": -79.3745239
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=1105587878168345302&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.samedayheatcool.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 24,
+      "displayName": {
+        "text": "Sameday Heating & Cooling"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJk-3SmMwzK4gRQI_2fTH-dpQ",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 551-2008",
+      "internationalPhoneNumber": "+1 416-551-2008",
+      "formattedAddress": "1920 Yonge St #200, Toronto, ON M4S 3E2",
+      "addressComponents": [
+        {
+          "longText": "200",
+          "shortText": "200",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "1920",
+          "shortText": "1920",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Yonge Street",
+          "shortText": "Yonge St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4S 3E2",
+          "shortText": "M4S 3E2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6987823,
+        "longitude": -79.3973321
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=10698017453385355072&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://vmphome.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 24,
+      "displayName": {
+        "text": "VMP HOME"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJw5wZFLk1K4gRVwLs0LOq9pk",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 627-7724",
+      "internationalPhoneNumber": "+1 416-627-7724",
+      "formattedAddress": "901 Yonge St Unit 105, Toronto, ON M4W 2H2",
+      "addressComponents": [
+        {
+          "longText": "Unit 105",
+          "shortText": "Unit 105",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "901",
+          "shortText": "901",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Yonge Street",
+          "shortText": "Yonge St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4W 2H2",
+          "shortText": "M4W 2H2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6748118,
+        "longitude": -79.38832819999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=11094242421354791511&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.greenheatingandair.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 3,
+      "displayName": {
+        "text": "Green Heating and Air Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJlcL9LDQzK4gRzy32i19Lq6k",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(647) 723-9902",
+      "internationalPhoneNumber": "+1 647-723-9902",
+      "formattedAddress": "494 Gilbert Ave, York, ON M6E 4X5",
+      "addressComponents": [
+        {
+          "longText": "494",
+          "shortText": "494",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Gilbert Avenue",
+          "shortText": "Gilbert Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "York",
+          "shortText": "York",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M6E 4X5",
+          "shortText": "M6E 4X5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6913364,
+        "longitude": -79.4633819
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=12225948487169486287&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 6,
+      "displayName": {
+        "text": "Noble HVAC of Toronto"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJjVNnZUlPvgsRucO-gGeECjQ",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(437) 241-8262",
+      "internationalPhoneNumber": "+1 437-241-8262",
+      "formattedAddress": "133 Eglinton Ave W, Toronto, ON M4R 1A5",
+      "addressComponents": [
+        {
+          "longText": "133",
+          "shortText": "133",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Eglinton Avenue West",
+          "shortText": "Eglinton Ave W",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M4R 1A5",
+          "shortText": "M4R 1A5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.7055308,
+        "longitude": -79.4031145
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=3749955219815842745&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 3,
+      "displayName": {
+        "text": "LoyalAir HVAC Solution Corporation"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJr3YBi9E1K4gR_ilxNKLkBVQ",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 605-1556",
+      "internationalPhoneNumber": "+1 416-605-1556",
+      "formattedAddress": "190 St George St, Toronto, ON M5R 2N4",
+      "addressComponents": [
+        {
+          "longText": "190",
+          "shortText": "190",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Saint George Street",
+          "shortText": "St George St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M5R 2N4",
+          "shortText": "M5R 2N4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.669460099999995,
+        "longitude": -79.4009552
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=6054496659385166334&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://simonclimatesolutions.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 15,
+      "displayName": {
+        "text": "Simon Climate Solutions"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJh-9bWmk0K4gROiNG_9IUEkg",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "store",
+        "point_of_interest",
+        "service",
+        "supplier",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(416) 537-3800",
+      "internationalPhoneNumber": "+1 416-537-3800",
+      "formattedAddress": "1234 Dupont St, Toronto, ON M6H 2A4",
+      "addressComponents": [
+        {
+          "longText": "1234",
+          "shortText": "1234",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Dupont Street",
+          "shortText": "Dupont St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Toronto",
+          "shortText": "Old Toronto",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Toronto",
+          "shortText": "Toronto",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ontario",
+          "shortText": "ON",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "M6H 2A4",
+          "shortText": "M6H 2A4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 43.6682699,
+        "longitude": -79.4417565
+      },
+      "rating": 4.4,
+      "googleMapsUri": "https://maps.google.com/?cid=5193236216770077498&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://aireone.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 67,
+      "displayName": {
+        "text": "Aire One Heating & Cooling"
+      },
+      "primaryType": "general_contractor"
+    }
+  ],
+  "fetchedAt": "2026-08-06T06:42:57.753Z"
+}

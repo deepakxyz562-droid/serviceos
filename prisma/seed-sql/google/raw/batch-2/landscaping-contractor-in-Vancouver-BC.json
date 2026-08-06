@@ -1,0 +1,3473 @@
+{
+  "query": "landscaping contractor in Vancouver, BC",
+  "regionCode": "ca",
+  "places": [
+    {
+      "id": "ChIJRd91bKogfacRxTJtZML8MhE",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 339-9217",
+      "internationalPhoneNumber": "+1 604-339-9217",
+      "formattedAddress": "3158 W 34th Ave, Vancouver, BC V6N 2S2",
+      "addressComponents": [
+        {
+          "longText": "3158",
+          "shortText": "3158",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West 34th Avenue",
+          "shortText": "W 34th Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Dunbar-Southlands",
+          "shortText": "Dunbar-Southlands",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V6N 2S2",
+          "shortText": "V6N 2S2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.2467122,
+        "longitude": -123.1728532
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=1239330759319040709&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://blossomvancouver.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 86,
+      "displayName": {
+        "text": "Blossom Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJDeL4WcVxhlQRnDymUNPU_xo",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 907-1541",
+      "internationalPhoneNumber": "+1 778-907-1541",
+      "formattedAddress": "712 Copping St, North Vancouver, BC V7M 3G3",
+      "addressComponents": [
+        {
+          "longText": "712",
+          "shortText": "712",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Copping Street",
+          "shortText": "Copping St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7M 3G3",
+          "shortText": "V7M 3G3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.3169871,
+        "longitude": -123.0922035
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=1945507568103603356&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://beyondltd.ca/?utm_campaign=gmb",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 414,
+      "displayName": {
+        "text": "Beyond Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJD2Fh-NxzhlQRUY8dIMtGJSk",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 684-9901",
+      "internationalPhoneNumber": "+1 604-684-9901",
+      "formattedAddress": "North Vancouver, BC V7M 1N6",
+      "addressComponents": [
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7M 1N6",
+          "shortText": "V7M 1N6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.3199816,
+        "longitude": -123.07241390000002
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=2964853767924453201&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://absolutelandscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 53,
+      "displayName": {
+        "text": "Absolute Landscaping Ltd."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJP2qP5MRxhlQREdc9SH_4hfE",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(888) 451-2309",
+      "internationalPhoneNumber": "+1 888-451-2309",
+      "formattedAddress": "118 Garden Ave, North Vancouver, BC V7P 3H2",
+      "addressComponents": [
+        {
+          "longText": "118",
+          "shortText": "118",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Garden Avenue",
+          "shortText": "Garden Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7P 3H2",
+          "shortText": "V7P 3H2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.317029899999994,
+        "longitude": -123.1181331
+      },
+      "rating": 4.5,
+      "googleMapsUri": "https://maps.google.com/?cid=17403589560599697169&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://gclc.ca/?utm_source=googlemybusiness&utm_medium=Organic&utm_campaign=Google%20My%20Business",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 54,
+      "displayName": {
+        "text": "The Great Canadian Landscaping Company Ltd."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJwxZ6mN9xhlQRKupLPB0B4Zo",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 238-3436",
+      "internationalPhoneNumber": "+1 778-238-3436",
+      "formattedAddress": "711 E Braemar Rd, North Vancouver, BC V7N 4G1",
+      "addressComponents": [
+        {
+          "longText": "711",
+          "shortText": "711",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East Braemar Road",
+          "shortText": "E Braemar Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7N 4G1",
+          "shortText": "V7N 4G1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.3451935,
+        "longitude": -123.0549114
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=11160202576678087210&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.bluebearlandscape.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 30,
+      "displayName": {
+        "text": "Blue Bear Landscape Construction"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJX9LnYipxhlQREbim6evPnb8",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 907-6716",
+      "internationalPhoneNumber": "+1 778-907-6716",
+      "formattedAddress": "252 Esplanade W, North Vancouver, BC V7M 3M8",
+      "addressComponents": [
+        {
+          "longText": "252",
+          "shortText": "252",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Esplanade West",
+          "shortText": "Esplanade W",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7M 3M8",
+          "shortText": "V7M 3M8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.313455499999996,
+        "longitude": -123.0845965
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=13807420644732090385&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://terracrestlandscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 80,
+      "displayName": {
+        "text": "TerraCrest Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJtxr3u_2JuCMRRzjbpm_d1dA",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 404-0073",
+      "internationalPhoneNumber": "+1 778-404-0073",
+      "formattedAddress": "1285 W Broadway #581, Vancouver, BC V6H 3X8",
+      "addressComponents": [
+        {
+          "longText": "581",
+          "shortText": "581",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "1285",
+          "shortText": "1285",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West Broadway",
+          "shortText": "W Broadway",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Fairview",
+          "shortText": "Fairview",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V6H 3X8",
+          "shortText": "V6H 3X8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.263759699999994,
+        "longitude": -123.13331689999998
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=15048177201538873415&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://topstonelandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 57,
+      "displayName": {
+        "text": "TopStone Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJH5vj0ocElGYRu5-a6HTJ1eo",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 239-2995",
+      "internationalPhoneNumber": "+1 604-239-2995",
+      "formattedAddress": "1041 Groveland Rd, West Vancouver, Vancouver, BC V7S 1Y9",
+      "addressComponents": [
+        {
+          "longText": "1041 Groveland Rd, West Vancouver",
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West Vancouver",
+          "shortText": "West Vancouver",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7S 1Y9",
+          "shortText": "V7S 1Y9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.3518706,
+        "longitude": -123.13866069999997
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=16921652678870343611&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://landscapingvancouver.it.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 29,
+      "displayName": {
+        "text": "Vancouver Landscaping Co."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ0ZPcmCHhIGQRRU8CNBt_8Ao",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 903-4634",
+      "internationalPhoneNumber": "+1 778-903-4634",
+      "formattedAddress": "5740 Halifax St, Burnaby, BC V5B 2P3",
+      "addressComponents": [
+        {
+          "longText": "5740",
+          "shortText": "5740",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Halifax Street",
+          "shortText": "Halifax St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Parkcrest",
+          "shortText": "Parkcrest",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Burnaby",
+          "shortText": "Burnaby",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V5B 2P3",
+          "shortText": "V5B 2P3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.2678234,
+        "longitude": -122.98087389999998
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=788269689603247941&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://asterlandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 36,
+      "displayName": {
+        "text": "ASTER LANDSCAPING LTD"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJEeHmC7ZzhlQR4k6ltLrDFas",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 200-0200",
+      "internationalPhoneNumber": "+1 604-200-0200",
+      "formattedAddress": "1685 Chestnut St, Vancouver, BC V6J 4M6",
+      "addressComponents": [
+        {
+          "longText": "1685",
+          "shortText": "1685",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Chestnut Street",
+          "shortText": "Chestnut St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Kitsilano",
+          "shortText": "Kitsilano",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V6J 4M6",
+          "shortText": "V6J 4M6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.2709287,
+        "longitude": -123.1465933
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=12327974761658666722&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://vanskyline.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 29,
+      "displayName": {
+        "text": "Vanskyline Landscape Construction Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJb4iVMN9vhlQRfLgA2XZQPxs",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 651-2116",
+      "internationalPhoneNumber": "+1 778-651-2116",
+      "formattedAddress": "2489 Bellevue Ave, West Vancouver, BC V7V 1E1",
+      "addressComponents": [
+        {
+          "longText": "2489",
+          "shortText": "2489",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Bellevue Avenue",
+          "shortText": "Bellevue Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West Vancouver",
+          "shortText": "West Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West Vancouver",
+          "shortText": "West Vancouver",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7V 1E1",
+          "shortText": "V7V 1E1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.3340654,
+        "longitude": -123.1819668
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=1963376433933891708&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://terracrestlandscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 81,
+      "displayName": {
+        "text": "TerraCrest Landscaping of West Vancouver"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJn4W_oMlzhlQRmDzARtPF0mQ",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 957-7222",
+      "internationalPhoneNumber": "+1 778-957-7222",
+      "formattedAddress": "618 E Kent Avenue S #112, Vancouver, BC V5X 0B1",
+      "addressComponents": [
+        {
+          "longText": "112",
+          "shortText": "112",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "618",
+          "shortText": "618",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East Kent Avenue South",
+          "shortText": "E Kent Avenue S",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Sunset",
+          "shortText": "Sunset",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V5X 0B1",
+          "shortText": "V5X 0B1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.206363599999996,
+        "longitude": -123.0930065
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=7265086660117806232&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.hylandlandscapes.com/?utm_campaign=gmb&utm_medium=organic&utm_source=googlebusinessprofile",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 46,
+      "displayName": {
+        "text": "Hyland Landscapes"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJu1ySnPpzhlQRbIeFd3vD8LU",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 729-4901",
+      "internationalPhoneNumber": "+1 604-729-4901",
+      "formattedAddress": "95 W 20th Ave W, Vancouver, BC V5Y 3C2",
+      "addressComponents": [
+        {
+          "longText": "W",
+          "shortText": "W",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "95",
+          "shortText": "95",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West 20th Avenue",
+          "shortText": "W 20th Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Riley Park–Little Mountain",
+          "shortText": "Riley Park–Little Mountain",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V5Y 3C2",
+          "shortText": "V5Y 3C2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.253001999999995,
+        "longitude": -123.107073
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=13110193450329147244&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.good-earth.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 47,
+      "displayName": {
+        "text": "Good Earth Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJmd72ilpxhlQRUSkxo8Kre_A",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 218-7408",
+      "internationalPhoneNumber": "+1 604-218-7408",
+      "formattedAddress": "3044 Glen Dr, Vancouver, BC V5T 4C1",
+      "addressComponents": [
+        {
+          "longText": "3044",
+          "shortText": "3044",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Glen Drive",
+          "shortText": "Glen Dr",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East Vancouver",
+          "shortText": "East Vancouver",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V5T 4C1",
+          "shortText": "V5T 4C1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.2571442,
+        "longitude": -123.08110749999999
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=17328632843688028497&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://craineprojects.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 47,
+      "displayName": {
+        "text": "Craine Projects Ltd"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJV-mpkJpzhlQRd-LkPN4_qO0",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 409-5034",
+      "internationalPhoneNumber": "+1 604-409-5034",
+      "formattedAddress": "1085 W 11th Ave, Vancouver, BC V6H 2P9",
+      "addressComponents": [
+        {
+          "longText": "1085",
+          "shortText": "1085",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West 11th Avenue",
+          "shortText": "W 11th Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Fairview",
+          "shortText": "Fairview",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V6H 2P9",
+          "shortText": "V6H 2P9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.261789,
+        "longitude": -123.1286231
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=17125007806813233783&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.landscapingvancouverbc.net/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 48,
+      "displayName": {
+        "text": "Landscaping LeafExperts Vancouver"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJdZ7VqM5xhlQR3k84CNeXkG4",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 518-5661",
+      "internationalPhoneNumber": "+1 604-518-5661",
+      "formattedAddress": "219 MacKay Rd Ste 999, North Vancouver, BC V7P 3N6",
+      "addressComponents": [
+        {
+          "longText": "Suite 999",
+          "shortText": "Ste 999",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "219",
+          "shortText": "219",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Mackay Road",
+          "shortText": "MacKay Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7P 3N6",
+          "shortText": "V7P 3N6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.318903999999996,
+        "longitude": -123.1027386
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=7967034690630078430&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.katsuralandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 87,
+      "displayName": {
+        "text": "Katsura Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJC1G3iXN3hlQR8TS7eYpf5Kg",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 312-2966",
+      "internationalPhoneNumber": "+1 778-312-2966",
+      "formattedAddress": "2684 E 24th Ave, Vancouver, BC V5R 1E2",
+      "addressComponents": [
+        {
+          "longText": "2684",
+          "shortText": "2684",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East 24th Avenue",
+          "shortText": "E 24th Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Renfrew-Collingwood",
+          "shortText": "Renfrew-Collingwood",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V5R 1E2",
+          "shortText": "V5R 1E2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.248596199999994,
+        "longitude": -123.0505282
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=12169957141414360305&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.vancouvergardenbox.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 246,
+      "displayName": {
+        "text": "Vancouver GardenBox"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJFSaSLq5zhlQRo_F6Rfb-TIA",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 362-0065",
+      "internationalPhoneNumber": "+1 604-362-0065",
+      "formattedAddress": "5555 Dunbar St, Vancouver, BC V6N 1W5",
+      "addressComponents": [
+        {
+          "longText": "5555",
+          "shortText": "5555",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Dunbar Street",
+          "shortText": "Dunbar St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Dunbar-Southlands",
+          "shortText": "Dunbar-Southlands",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V6N 1W5",
+          "shortText": "V6N 1W5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.2359541,
+        "longitude": -123.1855789
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=9245044468765880739&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://basilgreenlandscaping.com/vancouverlawncare/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 46,
+      "displayName": {
+        "text": "Basil Green Landscaping"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJWXffHAl0hlQRmIo4cYZPLPE",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 834-2913",
+      "internationalPhoneNumber": "+1 778-834-2913",
+      "formattedAddress": "2323 Graveley St, Vancouver, BC V5L 3C3",
+      "addressComponents": [
+        {
+          "longText": "2323",
+          "shortText": "2323",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Graveley Street",
+          "shortText": "Graveley St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Grandview-Woodland",
+          "shortText": "Grandview-Woodland",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V5L 3C3",
+          "shortText": "V5L 3C3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.2705894,
+        "longitude": -123.0574273
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=17378352500959644312&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://lawnenforcementlandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 39,
+      "displayName": {
+        "text": "Lawn Enforcement Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ7dR7G6kLhlQRcsdNcXeX8Q8",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 960-6884",
+      "internationalPhoneNumber": "+1 778-960-6884",
+      "formattedAddress": "6200 Kalamalka Crescent #201, Richmond, BC V7C 2R5",
+      "addressComponents": [
+        {
+          "longText": "201",
+          "shortText": "201",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "6200",
+          "shortText": "6200",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Kalamalka Crescent",
+          "shortText": "Kalamalka Crescent",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Richmond",
+          "shortText": "Richmond",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7C 2R5",
+          "shortText": "V7C 2R5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.1654955,
+        "longitude": -123.15547570000001
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=1148865919214012274&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.greenbamboolandscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 115,
+      "displayName": {
+        "text": "Green Bamboo Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJT5rb3ahzhlQRUxUH3Q2kbjE",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 223-5005",
+      "internationalPhoneNumber": "+1 778-223-5005",
+      "formattedAddress": "2768 W Broadway, Vancouver, BC V6K 4P4",
+      "addressComponents": [
+        {
+          "longText": "2768",
+          "shortText": "2768",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West Broadway",
+          "shortText": "W Broadway",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Kitsilano",
+          "shortText": "Kitsilano",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V6K 4P4",
+          "shortText": "V6K 4P4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.263932499999996,
+        "longitude": -123.1675843
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=3561964734746400083&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://levelgroundlandscape.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 13,
+      "displayName": {
+        "text": "Level Ground Landscape"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJpR7_e3JxhlQRc1GdkNlrd8o",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 919-1355",
+      "internationalPhoneNumber": "+1 778-919-1355",
+      "formattedAddress": "791 Keefer St, Vancouver, BC V6A 1Y5",
+      "addressComponents": [
+        {
+          "longText": "791",
+          "shortText": "791",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Keefer Street",
+          "shortText": "Keefer St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Central Vancouver",
+          "shortText": "Central Vancouver",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V6A 1Y5",
+          "shortText": "V6A 1Y5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.2794323,
+        "longitude": -123.087656
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=14589248100068315507&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 10,
+      "displayName": {
+        "text": "RainCoast LAND ESCAPES Projects and Services"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJnWw6RoVwhlQR2yan44p389E",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 734-0907",
+      "internationalPhoneNumber": "+1 604-734-0907",
+      "formattedAddress": "260 Riverside Dr, North Vancouver, BC V7H 1V1",
+      "addressComponents": [
+        {
+          "longText": "260",
+          "shortText": "260",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Riverside Drive",
+          "shortText": "Riverside Dr",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7H 1V1",
+          "shortText": "V7H 1V1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.3068939,
+        "longitude": -123.0142247
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=15128567011676202715&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.houstonlandscapes.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 52,
+      "displayName": {
+        "text": "Houston Landscapes Ltd"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJtV6qXC-wlVQRo2Yz3ILkb4Q",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(360) 601-8023",
+      "internationalPhoneNumber": "+1 360-601-8023",
+      "formattedAddress": "7800 NE 103rd Ave, Vancouver, WA 98662, USA",
+      "addressComponents": [
+        {
+          "longText": "7800",
+          "shortText": "7800",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Northeast 103rd Avenue",
+          "shortText": "NE 103rd Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Orchards",
+          "shortText": "Orchards",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Clark County",
+          "shortText": "Clark County",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Washington",
+          "shortText": "WA",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "United States",
+          "shortText": "US",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "98662",
+          "shortText": "98662",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 45.6791327,
+        "longitude": -122.56791199999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=9543097386112607907&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://danshaplandscape.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 70,
+      "displayName": {
+        "text": "Danshap Landscaping and Excavation inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJU_5eCeZ2hlQRKG6IwHe5B9c",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 343-4215",
+      "internationalPhoneNumber": "+1 604-343-4215",
+      "formattedAddress": "838 W Hastings St w, Vancouver, BC V6C 0A6",
+      "addressComponents": [
+        {
+          "longText": "w",
+          "shortText": "w",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "838",
+          "shortText": "838",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West Hastings Street",
+          "shortText": "W Hastings St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Central Vancouver",
+          "shortText": "Central Vancouver",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V6C 0A6",
+          "shortText": "V6C 0A6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.286141199999996,
+        "longitude": -123.1157307
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=15494556966973894184&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.carletonlandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 17,
+      "displayName": {
+        "text": "Carleton Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJl3qKLQh1hlQR0nw3aeLF-vk",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 404-7337",
+      "internationalPhoneNumber": "+1 604-404-7337",
+      "formattedAddress": "735 E 39th Ave, Vancouver, BC V5W 1K5",
+      "addressComponents": [
+        {
+          "longText": "735",
+          "shortText": "735",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East 39th Avenue",
+          "shortText": "E 39th Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Knight",
+          "shortText": "Knight",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V5W 1K5",
+          "shortText": "V5W 1K5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.2350399,
+        "longitude": -123.08948219999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=18012927235840244946&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.goldenrake.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 30,
+      "displayName": {
+        "text": "Golden Rake Landscaping Projects Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJQQbPwj5vhlQRK-t6QAn4yRk",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 910-8373",
+      "internationalPhoneNumber": "+1 778-910-8373",
+      "formattedAddress": "100 Park Royal S Ste 287, West Vancouver, BC V7T 1A2",
+      "addressComponents": [
+        {
+          "longText": "Suite 287",
+          "shortText": "Ste 287",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "100",
+          "shortText": "100",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Park Royal South",
+          "shortText": "Park Royal S",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West Vancouver",
+          "shortText": "West Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7T 1A2",
+          "shortText": "V7T 1A2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.325485,
+        "longitude": -123.13364349999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=1858289039887231787&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://vancouverlandscapecontractors.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1,
+      "displayName": {
+        "text": "Vancouver Landscape Contractors: Outdoor Construction, Retaining Walls & Hardscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJcZOSQggdL2gRV7Q7hR-1dhA",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 549-8719",
+      "internationalPhoneNumber": "+1 778-549-8719",
+      "formattedAddress": "4309 Oak St, Vancouver, BC V6H 2N3",
+      "addressComponents": [
+        {
+          "longText": "4309",
+          "shortText": "4309",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Oak Street",
+          "shortText": "Oak St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Shaughnessy",
+          "shortText": "Shaughnessy",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V6H 2N3",
+          "shortText": "V6H 2N3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.2471004,
+        "longitude": -123.12808620000001
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=1186334698842600535&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.greenroutine.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 32,
+      "displayName": {
+        "text": "Green Routine Groundskeeping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJByDcEGf5hU0RjG1Sbn0kaAE",
+      "types": [
+        "general_contractor",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 818-7732",
+      "internationalPhoneNumber": "+1 604-818-7732",
+      "formattedAddress": "999 W Broadway #720, Vancouver, BC V5Z 1K5",
+      "addressComponents": [
+        {
+          "longText": "720",
+          "shortText": "720",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "999",
+          "shortText": "999",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West Broadway",
+          "shortText": "W Broadway",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Fairview",
+          "shortText": "Fairview",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V5Z 1K5",
+          "shortText": "V5Z 1K5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.2637502,
+        "longitude": -123.12610310000001
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=101371112756243852&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.oukalandscape.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 16,
+      "displayName": {
+        "text": "Ouka Landscape & Design Ltd."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ9crwrPJwhlQRU-8Bsd-5gKE",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 983-2687",
+      "internationalPhoneNumber": "+1 604-983-2687",
+      "formattedAddress": "2323 Old Dollarton Rd Unit A, North Vancouver, BC V7H 1A9",
+      "addressComponents": [
+        {
+          "longText": "Unit A",
+          "shortText": "Unit A",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "2323",
+          "shortText": "2323",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Old Dollarton Road",
+          "shortText": "Old Dollarton Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7H 1A9",
+          "shortText": "V7H 1A9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.307390899999994,
+        "longitude": -123.01009470000001
+      },
+      "rating": 4.5,
+      "googleMapsUri": "https://maps.google.com/?cid=11637505807523901267&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://bur-han.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 148,
+      "displayName": {
+        "text": "BUR-HAN Garden & Lawn Care"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ2Y4S2hZhkEERVWdDZH7049o",
+      "types": [
+        "general_contractor",
+        "manufacturer",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "formattedAddress": "6665 Royal Ave, West Vancouver, BC V7W 2B8",
+      "addressComponents": [
+        {
+          "longText": "6665",
+          "shortText": "6665",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Royal Avenue",
+          "shortText": "Royal Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Horseshoe Bay",
+          "shortText": "Horseshoe Bay",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West Vancouver",
+          "shortText": "West Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West Vancouver",
+          "shortText": "West Vancouver",
+          "types": [
+            "administrative_area_level_3",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7W 2B8",
+          "shortText": "V7W 2B8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.3740763,
+        "longitude": -123.2748056
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=15772719143666804565&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://kanecustomprojects.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 42,
+      "displayName": {
+        "text": "Kane Custom Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ_2CbhuFxhlQRJY7p7MGBtlQ",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 721-4258",
+      "internationalPhoneNumber": "+1 604-721-4258",
+      "formattedAddress": "3095 Graveley St, Vancouver, BC V5K 3K5",
+      "addressComponents": [
+        {
+          "longText": "3095",
+          "shortText": "3095",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Graveley Street",
+          "shortText": "Graveley St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East Vancouver",
+          "shortText": "East Vancouver",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V5K 3K5",
+          "shortText": "V5K 3K5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.270660400000004,
+        "longitude": -123.03917810000002
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=6104209014850686501&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.organicmatterslandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 21,
+      "displayName": {
+        "text": "Organic Matters Landscaping LTD"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJRY2FYid3hlQRHLHIeSSDyFU",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(236) 886-6888",
+      "internationalPhoneNumber": "+1 236-886-6888",
+      "formattedAddress": "3555 E 5th Ave MB332, Vancouver, BC V5M 4J9",
+      "addressComponents": [
+        {
+          "longText": "MB332",
+          "shortText": "MB332",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "3555",
+          "shortText": "3555",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East 5th Avenue",
+          "shortText": "E 5th Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East Vancouver",
+          "shortText": "East Vancouver",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V5M 4J9",
+          "shortText": "V5M 4J9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.265989399999995,
+        "longitude": -123.027469
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=6181334681251262748&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.everydaylandscape.com/?utm_source=google&utm_medium=wix_google_business_profile&utm_campaign=15164906583922644919",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 19,
+      "displayName": {
+        "text": "Everyday Landscape"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJU_AQCAh1hlQRLZPzh3N0w_I",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 812-1116",
+      "internationalPhoneNumber": "+1 604-812-1116",
+      "formattedAddress": "8700 Barnard St, Vancouver, BC V6P 0A5",
+      "addressComponents": [
+        {
+          "longText": "8700",
+          "shortText": "8700",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Barnard Street",
+          "shortText": "Barnard St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Marpole",
+          "shortText": "Marpole",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Vancouver",
+          "shortText": "Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V6P 0A5",
+          "shortText": "V6P 0A5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.206769699999995,
+        "longitude": -123.14487520000002
+      },
+      "rating": 4.5,
+      "googleMapsUri": "https://maps.google.com/?cid=17492953417188086573&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.dunbarlandscapes.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 32,
+      "displayName": {
+        "text": "Dunbar Landscape Services"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJhUys_l1whlQRhl_vunuzZX8",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(604) 990-1252",
+      "internationalPhoneNumber": "+1 604-990-1252",
+      "formattedAddress": "333 Brooksbank Ave #718, North Vancouver, BC V7J 3V8",
+      "addressComponents": [
+        {
+          "longText": "718",
+          "shortText": "718",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "333",
+          "shortText": "333",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Brooksbank Avenue",
+          "shortText": "Brooksbank Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7J 3V8",
+          "shortText": "V7J 3V8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.3087113,
+        "longitude": -123.04247289999999
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=9179940759463223174&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.seymourlawnmaint.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 113,
+      "displayName": {
+        "text": "Seymour Lawn & Garden Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJKXWnzzhwhlQRkliywFuBI4U",
+      "types": [
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(778) 859-5797",
+      "internationalPhoneNumber": "+1 778-859-5797",
+      "formattedAddress": "2133 St Georges Ave, North Vancouver, BC V7L 3K5",
+      "addressComponents": [
+        {
+          "longText": "2133",
+          "shortText": "2133",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Saint Georges Avenue",
+          "shortText": "St Georges Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "North Vancouver",
+          "shortText": "North Vancouver",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Metro Vancouver",
+          "shortText": "Metro Vancouver",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "British Columbia",
+          "shortText": "BC",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "V7L 3K5",
+          "shortText": "V7L 3K5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.328811099999996,
+        "longitude": -123.06955710000001
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=9593653862304209042&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.vg-landscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 24,
+      "displayName": {
+        "text": "VG Landscaping Ltd"
+      },
+      "primaryType": "service"
+    }
+  ],
+  "fetchedAt": "2026-08-06T06:39:42.891Z"
+}

@@ -1,0 +1,2758 @@
+{
+  "query": "landscaping contractor in Winnipeg, MB",
+  "regionCode": "ca",
+  "places": [
+    {
+      "id": "ChIJvZfIBcJx6lIRT7z7s_G8ETk",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 894-2459",
+      "internationalPhoneNumber": "+1 204-894-2459",
+      "formattedAddress": "311 Hargrave St, Winnipeg, MB R3B 0V8",
+      "addressComponents": [
+        {
+          "longText": "311",
+          "shortText": "311",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Hargrave Street",
+          "shortText": "Hargrave St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Portage - Ellice",
+          "shortText": "Portage - Ellice",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3B 0V8",
+          "shortText": "R3B 0V8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.8939713,
+        "longitude": -97.14499810000001
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=4112275681058733135&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://northcorallandscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 46,
+      "displayName": {
+        "text": "North Coral Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJSfrYTSUL6lIR4F3opsCwmW4",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 895-4422",
+      "internationalPhoneNumber": "+1 204-895-4422",
+      "formattedAddress": "3130 Wilkes Ave, Winnipeg, MB R3S 1A7",
+      "addressComponents": [
+        {
+          "longText": "3130",
+          "shortText": "3130",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Wilkes Avenue",
+          "shortText": "Wilkes Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Wilkes South",
+          "shortText": "Wilkes South",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3S 1A7",
+          "shortText": "R3S 1A7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.8426742,
+        "longitude": -97.2547269
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=7969595357089258976&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://3seasons.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 57,
+      "displayName": {
+        "text": "3 Seasons Landscaping Winnipeg"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ5yNTOfp26lIRQd98iL1M-js",
+      "types": [
+        "general_contractor",
+        "supplier",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 228-8150",
+      "internationalPhoneNumber": "+1 204-228-8150",
+      "formattedAddress": "11 Coral Reef Cove, Winnipeg, MB R3X 1G5",
+      "addressComponents": [
+        {
+          "longText": "11",
+          "shortText": "11",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Coral Reef Cove",
+          "shortText": "Coral Reef Cove",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Saint Boniface",
+          "shortText": "Saint Boniface",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3X 1G5",
+          "shortText": "R3X 1G5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.8343687,
+        "longitude": -97.05971579999999
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=4321851169337827137&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://champagnelandscapes.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 36,
+      "displayName": {
+        "text": "Champagne Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJD2neGWQN6lIRxT1d8us31yw",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 801-7669",
+      "internationalPhoneNumber": "+1 204-801-7669",
+      "formattedAddress": "876 Muriel St, Winnipeg, MB R2Y 0Y3",
+      "addressComponents": [
+        {
+          "longText": "876",
+          "shortText": "876",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Muriel Street",
+          "shortText": "Muriel St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Crestview",
+          "shortText": "Crestview",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R2Y 0Y3",
+          "shortText": "R2Y 0Y3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.8920708,
+        "longitude": -97.2968264
+      },
+      "rating": 4.9,
+      "googleMapsUri": "https://maps.google.com/?cid=3231112744184659397&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.bhlandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 16,
+      "displayName": {
+        "text": "Berryhill Landscaping and Construction"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ3XirJI8M6lIRTl14_t8vuFo",
+      "types": [
+        "consultant",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 615-2512",
+      "internationalPhoneNumber": "+1 204-615-2512",
+      "formattedAddress": "500 Caron Rd Unit 15, Headingley, MB R4H 0E4",
+      "addressComponents": [
+        {
+          "longText": "Unit 15",
+          "shortText": "Unit 15",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "500",
+          "shortText": "500",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Caron Road",
+          "shortText": "Caron Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Headingley",
+          "shortText": "Headingley",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Headingley",
+          "shortText": "Headingley",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R4H 0E4",
+          "shortText": "R4H 0E4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.8518475,
+        "longitude": -97.32440369999999
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=6537027498221788494&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.brockelandscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 135,
+      "displayName": {
+        "text": "B. Rocke Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ94YVLTMP6lIRBXDguYBZxh0",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(431) 816-1387",
+      "internationalPhoneNumber": "+1 431-816-1387",
+      "formattedAddress": "2929 Sturgeon Rd Ste A, Winnipeg, MB R2Y 2L7",
+      "addressComponents": [
+        {
+          "longText": "Suite A",
+          "shortText": "Ste A",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "2929",
+          "shortText": "2929",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Sturgeon Road",
+          "shortText": "Sturgeon Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Saskatchewan North",
+          "shortText": "Saskatchewan North",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R2Y 2L7",
+          "shortText": "R2Y 2L7",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.9147971,
+        "longitude": -97.2753669
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=2145500681897799685&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://lawnnorder.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 64,
+      "displayName": {
+        "text": "Lawn 'N' Order Custom Landscapes"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJOzmDbnB36lIRv7EVJiXJN8Y",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 292-3805",
+      "internationalPhoneNumber": "+1 204-292-3805",
+      "formattedAddress": "7 Leeward Pl, Winnipeg, MB R3X 1M6",
+      "addressComponents": [
+        {
+          "longText": "7",
+          "shortText": "7",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Leeward Place",
+          "shortText": "Leeward Pl",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Saint Boniface",
+          "shortText": "Saint Boniface",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3X 1M6",
+          "shortText": "R3X 1M6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.8359994,
+        "longitude": -97.0639319
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=14283105904618746303&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.bulgerbrotherslandscape.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 54,
+      "displayName": {
+        "text": "Bulger Brothers Landscape"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ7QvQrSI40KYRKrixLNEWoos",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(431) 338-9552",
+      "internationalPhoneNumber": "+1 431-338-9552",
+      "formattedAddress": "177 Quail Ridge Rd, Winnipeg, MB R2Y 0G6",
+      "addressComponents": [
+        {
+          "longText": "177",
+          "shortText": "177",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Quail Ridge Road",
+          "shortText": "Quail Ridge Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Heritage Park",
+          "shortText": "Heritage Park",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R2Y 0G6",
+          "shortText": "R2Y 0G6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.8994964,
+        "longitude": -97.2822671
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=10061629605152929834&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://driedgerlandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 32,
+      "displayName": {
+        "text": "Driedger Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJW2rk0JPZwVIR0jMPwJ7Irwk",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 471-3487",
+      "internationalPhoneNumber": "+1 204-471-3487",
+      "formattedAddress": "33 Courage Pl, Winnipeg, MB R3X 1W6",
+      "addressComponents": [
+        {
+          "longText": "33",
+          "shortText": "33",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Courage Place",
+          "shortText": "Courage Pl",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "St. Vital Perimeter South",
+          "shortText": "St. Vital Perimeter South",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3X 1W6",
+          "shortText": "R3X 1W6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.794930199999996,
+        "longitude": -97.046533
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=697997051418325970&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://gittinslandscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 76,
+      "displayName": {
+        "text": "Gittins Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ0ZrIvbAN6lIR02zYhozAt8k",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 292-7591",
+      "internationalPhoneNumber": "+1 204-292-7591",
+      "formattedAddress": "3336 Portage Ave #550, Winnipeg, MB R3K 2H9",
+      "addressComponents": [
+        {
+          "longText": "550",
+          "shortText": "550",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "3336",
+          "shortText": "3336",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Portage Avenue",
+          "shortText": "Portage Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Westwood",
+          "shortText": "Westwood",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3K 2H9",
+          "shortText": "R3K 2H9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.8808826,
+        "longitude": -97.29646170000001
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=14535298032151850195&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://spartanexcavation.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 42,
+      "displayName": {
+        "text": "Spartan Excavation and Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJaUdF0dBx6lIR1uttY93NjvU",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 226-8395",
+      "internationalPhoneNumber": "+1 204-226-8395",
+      "formattedAddress": "141 Leila Ave, Winnipeg, MB R2V 1L1",
+      "addressComponents": [
+        {
+          "longText": "141",
+          "shortText": "141",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Leila Avenue",
+          "shortText": "Leila Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Seven Oaks",
+          "shortText": "Seven Oaks",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R2V 1L1",
+          "shortText": "R2V 1L1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.941441,
+        "longitude": -97.10987899999999
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=17694306336724872150&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.mygreenco.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 93,
+      "displayName": {
+        "text": "GreenCo Property Maintenance"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJjQ1usSx76lIRvWyzBPmruVY",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 899-6345",
+      "internationalPhoneNumber": "+1 204-899-6345",
+      "formattedAddress": "84 Don Valley Pkwy Unit D, Winnipeg, MB R2C 2Z2",
+      "addressComponents": [
+        {
+          "longText": "Unit D",
+          "shortText": "Unit D",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "84",
+          "shortText": "84",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Don Valley Parkway",
+          "shortText": "Don Valley Pkwy",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Springfield",
+          "shortText": "Springfield",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R2C 2Z2",
+          "shortText": "R2C 2Z2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.9195934,
+        "longitude": -96.9826045
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=6249215043967347901&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://neilandnicks.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 15,
+      "displayName": {
+        "text": "Neil & Nick's Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJycRhFGdw6lIRGDCUfwm0duc",
+      "types": [
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 960-0246",
+      "internationalPhoneNumber": "+1 204-960-0246",
+      "formattedAddress": "80 Don Valley Pkwy Unit A, Sunnyside, MB R5R 0C9",
+      "addressComponents": [
+        {
+          "longText": "Unit A",
+          "shortText": "Unit A",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "80",
+          "shortText": "80",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Don Valley Parkway",
+          "shortText": "Don Valley Pkwy",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Sunnyside",
+          "shortText": "Sunnyside",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Springfield",
+          "shortText": "Springfield",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R5R 0C9",
+          "shortText": "R5R 0C9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.9191159,
+        "longitude": -96.98172609999999
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=16678716222901334040&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://gocleanr.com/winnipeg/?utm_source=google&utm_medium=organic&utm_term=gbp-listing",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 401,
+      "displayName": {
+        "text": "Cleanr Property Maintenance"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJoXnR3Td16lIRdgjLdK9SSXo",
+      "types": [
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 837-1764",
+      "internationalPhoneNumber": "+1 204-837-1764",
+      "formattedAddress": "Box 70048 Kenaston PO, Winnipeg, MB R3P 0X6",
+      "addressComponents": [
+        {
+          "longText": "Box 70048 Kenaston PO",
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Macdonald",
+          "shortText": "Macdonald",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3P 0X6",
+          "shortText": "R3P 0X6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.789871899999994,
+        "longitude": -97.2524656
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=8811665059459303542&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.greenbladewinnipeg.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 1854,
+      "displayName": {
+        "text": "Green Blade Lawn Care"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJ88lmwJCt64MR5YpajEcuVrM",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 998-0227",
+      "internationalPhoneNumber": "+1 204-998-0227",
+      "formattedAddress": "199 Shoreline Dr, Winnipeg, MB R3P 2J9",
+      "addressComponents": [
+        {
+          "longText": "199",
+          "shortText": "199",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Shoreline Drive",
+          "shortText": "Shoreline Dr",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Linden Woods",
+          "shortText": "Linden Woods",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3P 2J9",
+          "shortText": "R3P 2J9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.8347743,
+        "longitude": -97.1924099
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=12922567065618516709&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.thedetailswpg.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 17,
+      "displayName": {
+        "text": "The Details Landscaping & Renovations Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJq4PQHXQL6lIR7CHZePj1FSM",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 952-7796",
+      "internationalPhoneNumber": "+1 204-952-7796",
+      "formattedAddress": "1858 Loudoun Rd, Winnipeg, MB R3S 1A4",
+      "addressComponents": [
+        {
+          "longText": "1858",
+          "shortText": "1858",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Loudoun Road",
+          "shortText": "Loudoun Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Wilkes South",
+          "shortText": "Wilkes South",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3S 1A4",
+          "shortText": "R3S 1A4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.820249999999994,
+        "longitude": -97.25891
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=2528197213366591980&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.straightedge204.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 81,
+      "displayName": {
+        "text": "Straight Edge Outdoor Services & Lawn Care"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJVcitYsx66lIRLXyoS3OZ8H0",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 471-4706",
+      "internationalPhoneNumber": "+1 204-471-4706",
+      "formattedAddress": "4 Timberwood Pl, East Saint Paul, MB R2E 0M4",
+      "addressComponents": [
+        {
+          "longText": "4",
+          "shortText": "4",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Timberwood Place",
+          "shortText": "Timberwood Pl",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East Saint Paul",
+          "shortText": "East Saint Paul",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "East St. Paul",
+          "shortText": "East St. Paul",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R2E 0M4",
+          "shortText": "R2E 0M4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.9672084,
+        "longitude": -97.0315488
+      },
+      "rating": 4.6,
+      "googleMapsUri": "https://maps.google.com/?cid=9074921969621171245&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://silverstonelandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 20,
+      "displayName": {
+        "text": "Silver Stone Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ1dnREUDfwVIRgeXxFJx2n9E",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 990-5774",
+      "internationalPhoneNumber": "+1 204-990-5774",
+      "formattedAddress": "3596 Waverley St, Winnipeg, MB R3V 0B2",
+      "addressComponents": [
+        {
+          "longText": "3596",
+          "shortText": "3596",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Waverley Street",
+          "shortText": "Waverley St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "La Barriere",
+          "shortText": "La Barriere",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3V 0B2",
+          "shortText": "R3V 0B2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.751231999999995,
+        "longitude": -97.180921
+      },
+      "rating": 4.2,
+      "googleMapsUri": "https://maps.google.com/?cid=15104922087962305921&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.vikinglandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 71,
+      "displayName": {
+        "text": "Viking Landscaping Inc."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJiTsJ5P9w6lIRWXY57kPBPY4",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 962-1859",
+      "internationalPhoneNumber": "+1 204-962-1859",
+      "formattedAddress": "19 Watt St Unit 5, Winnipeg, MB R2L 1R5",
+      "addressComponents": [
+        {
+          "longText": "Unit 5",
+          "shortText": "Unit 5",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "19",
+          "shortText": "19",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Watt Street",
+          "shortText": "Watt St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Chalmers",
+          "shortText": "Chalmers",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R2L 1R5",
+          "shortText": "R2L 1R5",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.9032098,
+        "longitude": -97.10566829999999
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=10249560824468829785&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://salazarcontractingltd.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 87,
+      "displayName": {
+        "text": "Salazar Contracting Ltd"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJI5NNJuLPFiIR3IE7yVFKSnM",
+      "types": [
+        "manufacturer",
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 795-9490",
+      "internationalPhoneNumber": "+1 204-795-9490",
+      "formattedAddress": "63 Albert St #602, Winnipeg, MB R3B 1G3",
+      "addressComponents": [
+        {
+          "longText": "602",
+          "shortText": "602",
+          "types": [
+            "subpremise"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "63",
+          "shortText": "63",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Albert Street",
+          "shortText": "Albert St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Downtown",
+          "shortText": "Downtown",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3B 1G3",
+          "shortText": "R3B 1G3",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.8965436,
+        "longitude": -97.140006
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=8307534177767227868&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.gellerswinnipeg.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 54,
+      "displayName": {
+        "text": "Geller's Design | Build | Landscape"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJwUTdnlx16lIRgvX_qCdWQJo",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(431) 999-1903",
+      "internationalPhoneNumber": "+1 431-999-1903",
+      "formattedAddress": "102 Waterbury Dr, Winnipeg, MB R3P 1S1",
+      "addressComponents": [
+        {
+          "longText": "102",
+          "shortText": "102",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Waterbury Drive",
+          "shortText": "Waterbury Dr",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Linden Woods",
+          "shortText": "Linden Woods",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3P 1S1",
+          "shortText": "R3P 1S1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.8311024,
+        "longitude": -97.1882656
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=11114978608689444226&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.keystonewpg.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 53,
+      "displayName": {
+        "text": "Keystone Property Maintenance"
+      },
+      "primaryType": "service"
+    },
+    {
+      "id": "ChIJP6G4uTHfwVIRBEBbVKw0JkI",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 255-5560",
+      "internationalPhoneNumber": "+1 204-255-5560",
+      "formattedAddress": "392 Forbes Rd, Winnipeg, MB R2N 4B1",
+      "addressComponents": [
+        {
+          "longText": "392",
+          "shortText": "392",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Forbes Road",
+          "shortText": "Forbes Rd",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "St. Vital Perimeter South",
+          "shortText": "St. Vital Perimeter South",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R2N 4B1",
+          "shortText": "R2N 4B1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.77104,
+        "longitude": -97.12342
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=4766555170372534276&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.krobertlandscaping.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 27,
+      "displayName": {
+        "text": "Kro-bert Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJw_Ts60HewVIRRLK3hNHeqzA",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 255-7319",
+      "internationalPhoneNumber": "+1 204-255-7319",
+      "formattedAddress": "Waverley St, Winnipeg, MB R3V 1W8",
+      "addressComponents": [
+        {
+          "longText": "Waverley Street",
+          "shortText": "Waverley St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "La Barriere",
+          "shortText": "La Barriere",
+          "types": [
+            "sublocality_level_1",
+            "sublocality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3V 1W8",
+          "shortText": "R3V 1W8",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.735952999999995,
+        "longitude": -97.179481
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=3507141726294225476&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.thelawnsalon.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 17,
+      "displayName": {
+        "text": "The Lawn Salon"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJAQAUjMEL6lIRuBf0jUOyuUQ",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 813-2075",
+      "internationalPhoneNumber": "+1 204-813-2075",
+      "formattedAddress": "98 Shepton Bay, Winnipeg, MB R3R 2E9",
+      "addressComponents": [
+        {
+          "longText": "98",
+          "shortText": "98",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Shepton Bay",
+          "shortText": "Shepton Bay",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Westdale",
+          "shortText": "Westdale",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3R 2E9",
+          "shortText": "R3R 2E9",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.84782260000001,
+        "longitude": -97.3216041
+      },
+      "rating": 5,
+      "googleMapsUri": "https://maps.google.com/?cid=4952185268484708280&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.alladinslandscape.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 15,
+      "displayName": {
+        "text": "Alladins Landscape Design Ltd."
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ84P90sZ76lIRyupvi8vjLbc",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 291-7778",
+      "internationalPhoneNumber": "+1 204-291-7778",
+      "formattedAddress": "901 Redonda St, Winnipeg, MB R2C 2Z2",
+      "addressComponents": [
+        {
+          "longText": "901",
+          "shortText": "901",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Redonda Street",
+          "shortText": "Redonda St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Springfield",
+          "shortText": "Springfield",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R2C 2Z2",
+          "shortText": "R2C 2Z2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.9173353,
+        "longitude": -96.98027890000002
+      },
+      "rating": 4.3,
+      "googleMapsUri": "https://maps.google.com/?cid=13199456546250025674&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://www.johndickenterprises.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 32,
+      "displayName": {
+        "text": "John Dicks Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ8xOtAMh16lIRS8kijJtdtNU",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 453-4444",
+      "internationalPhoneNumber": "+1 204-453-4444",
+      "formattedAddress": "1150 Manahan Ave, Winnipeg, MB R3T 6E6",
+      "addressComponents": [
+        {
+          "longText": "1150",
+          "shortText": "1150",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manahan Avenue",
+          "shortText": "Manahan Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Chevrier",
+          "shortText": "Chevrier",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R3T 6E6",
+          "shortText": "R3T 6E6",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.828852,
+        "longitude": -97.15688500000002
+      },
+      "rating": 4.3,
+      "googleMapsUri": "https://maps.google.com/?cid=15399035948538972491&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://www.greenprairielandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 35,
+      "displayName": {
+        "text": "Green Prairie Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJKwnIbz506lIRel1IUMv6GyE",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 229-9789",
+      "internationalPhoneNumber": "+1 204-229-9789",
+      "formattedAddress": "2135 Logan Ave, Winnipeg, MB R2R 0J1",
+      "addressComponents": [
+        {
+          "longText": "2135",
+          "shortText": "2135",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Logan Avenue",
+          "shortText": "Logan Ave",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Omand's Creek Industrial",
+          "shortText": "Omand's Creek Industrial",
+          "types": [
+            "neighborhood",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Winnipeg",
+          "shortText": "Winnipeg",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R2R 0J1",
+          "shortText": "R2R 0J1",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.925801799999995,
+        "longitude": -97.21505119999999
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=2385776178755034490&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://sunshinelandscapingandlawnmaintenance.com/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 37,
+      "displayName": {
+        "text": "Sunshine Maintenance & Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJ6fZCtMkOXC0RTb91UggCnZI",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(431) 631-2950",
+      "internationalPhoneNumber": "+1 431-631-2950",
+      "formattedAddress": "1555 MB-210, Saint Adolphe, MB R0A 0T2",
+      "addressComponents": [
+        {
+          "longText": "1555",
+          "shortText": "1555",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba 210",
+          "shortText": "MB-210",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Saint Adolphe",
+          "shortText": "Saint Adolphe",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Ritchot",
+          "shortText": "Ritchot",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R0A 0T2",
+          "shortText": "R0A 0T2",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 49.6799051,
+        "longitude": -97.07770049999999
+      },
+      "rating": 4.8,
+      "googleMapsUri": "https://maps.google.com/?cid=10564602535647493965&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "https://stripeslawn.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 123,
+      "displayName": {
+        "text": "Stripes Lawn & Landscaping"
+      },
+      "primaryType": "general_contractor"
+    },
+    {
+      "id": "ChIJAUnSRjBl6lIRUib8PsghO8Q",
+      "types": [
+        "general_contractor",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "nationalPhoneNumber": "(204) 795-5004",
+      "internationalPhoneNumber": "+1 204-795-5004",
+      "formattedAddress": "4829 Main St, West Saint Paul, MB R4A 3A4",
+      "addressComponents": [
+        {
+          "longText": "4829",
+          "shortText": "4829",
+          "types": [
+            "street_number"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Main Street",
+          "shortText": "Main St",
+          "types": [
+            "route"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West Saint Paul",
+          "shortText": "West Saint Paul",
+          "types": [
+            "locality",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "West St. Paul",
+          "shortText": "West St. Paul",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Manitoba",
+          "shortText": "MB",
+          "types": [
+            "administrative_area_level_1",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "Canada",
+          "shortText": "CA",
+          "types": [
+            "country",
+            "political"
+          ],
+          "languageCode": "en"
+        },
+        {
+          "longText": "R4A 3A4",
+          "shortText": "R4A 3A4",
+          "types": [
+            "postal_code"
+          ],
+          "languageCode": "en"
+        }
+      ],
+      "location": {
+        "latitude": 50.021791500000006,
+        "longitude": -97.0477513
+      },
+      "rating": 4.7,
+      "googleMapsUri": "https://maps.google.com/?cid=14139932598993692242&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "websiteUri": "http://jdlandscaping.ca/",
+      "businessStatus": "OPERATIONAL",
+      "userRatingCount": 26,
+      "displayName": {
+        "text": "JD Landscaping & Excavating"
+      },
+      "primaryType": "general_contractor"
+    }
+  ],
+  "fetchedAt": "2026-08-06T06:41:10.859Z"
+}
