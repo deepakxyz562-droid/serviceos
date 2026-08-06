@@ -105,10 +105,9 @@ export function MarketplaceMobileNav() {
   return (
     <nav
       className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       aria-label="Marketplace navigation"
     >
-      <div className={`grid h-14 ${showAuthTabs ? 'grid-cols-6' : 'grid-cols-4'}`}>
+      <div className={`grid pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom,0px))] ${showAuthTabs ? 'grid-cols-6' : 'grid-cols-4'}`}>
         {visibleTabs.map((tab) => {
           const Icon = tab.icon;
           return (

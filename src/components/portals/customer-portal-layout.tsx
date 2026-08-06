@@ -2914,21 +2914,12 @@ function MobileBottomNav({
   activeView: CustomerView;
   onViewChange: (v: CustomerView) => void;
 }) {
-  const [isStandalone, setIsStandalone] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setIsStandalone(window.matchMedia('(display-mode: standalone)').matches);
-    }
-  }, []);
-
   return (
     <nav
       className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80"
-      style={{ paddingBottom: isStandalone ? 'env(safe-area-inset-bottom, 0px)' : '0px' }}
       aria-label="Primary"
     >
-      <div className="grid grid-cols-5 h-14">
+      <div className="grid grid-cols-5 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom,0px))]">
         {BOTTOM_NAV_ITEMS.map((item) => {
           const isActive = activeView === item.id;
           const Icon = item.icon;
