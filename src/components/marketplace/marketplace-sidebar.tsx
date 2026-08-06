@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Building2, ShieldCheck, Star, Zap, CheckCircle2, Wallet, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMarketplaceSearch } from './use-marketplace-search';
+import { useMarketplaceCounts } from './use-marketplace-counts';
 import type { ProviderListItem } from './types';
 import { getIndustry, VERTICALS } from '@/lib/industry-catalog';
 
@@ -47,20 +48,36 @@ interface MarketplaceSidebarProps {
    *  total (after filter changes), it publishes to the store and we prefer
    *  that over this prop. */
   total?: number;
+  /** ISO country code from GeoIP (or ?country= override). Used to fetch
+   *  real DB-level category counts for the sidebar (not just the loaded 24
+   *  items). null = no country filter (show global counts). */
+  country?: string | null;
   verticals: ReadonlyArray<{ id: string; name: string; icon: string; description: string }>;
   activeVertical: string | null;
   activeIndustry: string | null;
   /** Pre-computed vertical → industries groups (from the server page). */
   verticalGroups?: SidebarVerticalGroup[];
+  /** Optional override for the outer <aside> className. Defaults to the
+   *  desktop-only `hidden lg:flex w-[280px] ...` styling. When the sidebar
+   *  is rendered inside a mobile Sheet (see MarketplaceMobileFilters), pass
+   *  a flex-always className here so the aside is visible on mobile too.
+   *
+   *  This lets us reuse the SAME filter content (categories + trust filters
+   *  + stats) on both desktop (aside) and mobile (sheet) WITHOUT duplicating
+   *  the filter logic — the sheet just renders <MarketplaceSidebar
+   *  className="..." /> with different outer chrome. */
+  className?: string;
 }
 
 export function MarketplaceSidebar({
   providers,
   total,
+  country,
   verticals,
   activeVertical,
   activeIndustry,
   verticalGroups,
+  className,
 }: MarketplaceSidebarProps) {
   const trustFullyVerified = useMarketplaceSearch((s) => s.trustFullyVerified);
   const trustRatingHigh = useMarketplaceSearch((s) => s.trustRatingHigh);
@@ -104,7 +121,13 @@ export function MarketplaceSidebar({
   // 10,000. We read the fresh total from the store (published by the browser
   // after each API response) and fall back to the SSR `total` prop.
   const storeTotal = useMarketplaceSearch((s) => s.totalProvidersCount);
-  const totalProviders = storeTotal ?? total ?? activeProviders.length;
+  // NOTE: `realCounts` is defined later (via useMarketplaceCounts) but used
+  // here for the total. We compute `totalProviders` lazily via a function so
+  // we don't hit the temporal dead zone. The real total falls back through:
+  //   realCounts.total (if no filters active) → storeTotal → SSR prop → loaded count
+  // The actual `realCounts` reference is resolved at render time (after the
+  // hook below), so we use a getter pattern.
+  // (We'll set `realTotal` after the useMarketplaceCounts hook below.)
   // NOTE: avgRating / escrowPct / medianResponse are computed from the LOADED
   // items (activeProviders), not the total. With server-side pagination, only
   // 24 items are loaded initially — these stats are approximate (based on the
@@ -132,6 +155,13 @@ export function MarketplaceSidebar({
   // so they're not recomputed on every render. `activeProviders` is the
   // only dependency; when it changes (filter/search/sort update from the
   // browser), the counts recompute to match the visible grid.
+  //
+  // NOTE: These are FALLBACK counts computed from the loaded subset (24
+  // items max). The REAL DB-level counts come from useMarketplaceCounts
+  // below — we prefer those when available, and fall back to these when
+  // the API hasn't returned yet (first paint) or the user has active
+  // text/trust filters (the counts endpoint only groups by industry,
+  // not by arbitrary filter combinations).
   const verticalCounts = React.useMemo(() => {
     const counts = new Map<string, number>();
     for (const p of activeProviders) {
@@ -154,14 +184,49 @@ export function MarketplaceSidebar({
     return counts;
   }, [activeProviders]);
 
-  // Helper: count providers in a vertical (O(1) lookup into the memoized map)
-  const countForVertical = (verticalId: string) => verticalCounts.get(verticalId) ?? 0;
+  // ── Real DB-level counts from /api/marketplace/counts ──────────────────
+  // The loaded-subset counts above cap at 24 (cursor pagination page size),
+  // so "Plumbing (3)" would display even when 200 plumbing providers exist.
+  // This hook fetches the TRUE totals grouped by industry, so the sidebar
+  // shows "Plumbing (200)" — matching what the user would see if they
+  // scrolled through all pages.
+  //
+  // We only use the real counts when there's no active text/trust filter
+  // (the counts endpoint groups by industry only — it can't reflect an
+  // arbitrary "search=acme + trustRatingHigh" combination). When filters
+  // are active, we fall back to the loaded-subset counts so the numbers
+  // always match the visible grid.
+  const hasActiveTextFilter = !!(storeVertical || storeIndustry || trustFullyVerified || trustRatingHigh || trustEmergency);
+  const { data: realCounts } = useMarketplaceCounts(hasActiveTextFilter ? null : (country ?? null));
 
-  // Helper: count providers in an industry (O(1) lookup into the memoized map)
-  const countForIndustry = (industryId: string) => industryCounts.get(industryId) ?? 0;
+  // Now that realCounts is defined, compute the total providers count.
+  // Prefer the real DB-level total from the counts endpoint when no filters
+  // are active — it's the most accurate (the SSR/API `total` is correct too,
+  // but the counts endpoint is cached longer and avoids re-counting on every
+  // filter change).
+  const realTotal = realCounts && !hasActiveTextFilter ? realCounts.total : null;
+  const totalProviders = realTotal ?? storeTotal ?? total ?? activeProviders.length;
+
+  // Helper: count providers in a vertical — prefer real DB count, fall back
+  // to loaded-subset count.
+  const countForVertical = (verticalId: string) => {
+    if (realCounts && !hasActiveTextFilter) {
+      return realCounts.byVertical[verticalId] ?? 0;
+    }
+    return verticalCounts.get(verticalId) ?? 0;
+  };
+
+  // Helper: count providers in an industry — prefer real DB count, fall back
+  // to loaded-subset count.
+  const countForIndustry = (industryId: string) => {
+    if (realCounts && !hasActiveTextFilter) {
+      return realCounts.byIndustry[industryId.toLowerCase()] ?? 0;
+    }
+    return industryCounts.get(industryId.toLowerCase()) ?? 0;
+  };
 
   return (
-    <aside className="hidden lg:flex w-[280px] shrink-0 h-full flex-col gap-3 overflow-hidden select-none pl-3 sm:pl-3 lg:pl-3 py-4 pr-3 border-r border-border/40">
+    <aside className={className ?? "hidden lg:flex w-[280px] shrink-0 h-full flex-col gap-3 overflow-hidden select-none pl-3 sm:pl-3 lg:pl-3 py-4 pr-3 border-r border-border/40"}>
       {/* ─── Scrollable content region ──────────────────────────────────── */}
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1.5 marketplace-sidebar-scroll">
           {/* ─── Categories ─────────────────────────────────────────────── */}

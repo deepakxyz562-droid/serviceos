@@ -36,10 +36,15 @@ import {
   ShieldCheck,
   Loader2,
   Globe,
+  AlertCircle,
+  MapPin,
+  Search,
+  ChevronRight,
 } from 'lucide-react';
 import { ProviderCard } from './provider-card';
 import { useMarketplaceSearch, type MarketplaceSortKey } from './use-marketplace-search';
 import { useMarketplaceProviders } from './use-marketplace-providers';
+import { ReloadButton } from './reload-button';
 import type { ProviderListItem } from './types';
 import { getIndustry, VERTICALS } from '@/lib/industry-catalog';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
@@ -129,10 +134,11 @@ export function MarketplaceBrowser({
   }, [providers]);
 
   // ── Filter state (hydrated from URL on first render) ───────────────────
-  // searchInput / cityInput live in a shared Zustand store so the hero
-  // search bar (MarketplaceHeroSearch) and this component stay in sync
-  // across the server/client boundary. Typing in the hero instantly
-  // filters the grid below.
+  // searchInput / cityInput live in a shared Zustand store so the marketplace
+  // header (MarketplaceHeader + LocationChip) and this component stay in sync
+  // across the server/client boundary. Typing in the header search input
+  // instantly filters the grid below; picking a city in the LocationChip
+  // dropdown writes cityInput + userLocation here.
   const searchInput = useMarketplaceSearch((s) => s.searchInput);
   const setSearchInput = useMarketplaceSearch((s) => s.setSearchInput);
   const cityInput = useMarketplaceSearch((s) => s.cityInput);
@@ -160,6 +166,13 @@ export function MarketplaceBrowser({
   const setUserLocation = useMarketplaceSearch((s) => s.setUserLocation);
   const setFilteredProviders = useMarketplaceSearch((s) => s.setFilteredProviders);
   const setTotalProvidersCount = useMarketplaceSearch((s) => s.setTotalProvidersCount);
+  // Progressive empty-state fallback ladder (OLX-style). When the filtered
+  // list is empty AND the user has a location set, the empty state cycles
+  // through 'city' → '50km' → '100km' → 'nationwide', giving the user a
+  // guided path to escape the empty result set. Reset to 'city' on every
+  // filter / location change (see the effect below).
+  const expansionLevel = useMarketplaceSearch((s) => s.expansionLevel);
+  const setExpansionLevel = useMarketplaceSearch((s) => s.setExpansionLevel);
   // Trust filters (sidebar) — sent to the API as query params so the server
   // filters before pagination (otherwise the user would see fewer items per
   // page after enabling a trust filter).
@@ -188,6 +201,8 @@ export function MarketplaceBrowser({
     isFetchingNextPage,
     isFetching,
     fetchNextPage,
+    error: providersError,
+    refetch: refetchProviders,
   } = useMarketplaceProviders(
     {
       country: detectedCountry ?? null,
@@ -300,13 +315,17 @@ export function MarketplaceBrowser({
               lat: parsed.lat,
               lng: parsed.lng,
               city: parsed.city,
+              // parsed.state is populated by the useUserLocation hook (GPS
+              // reverse-geocode) — surface it as `region` so the LocationChip
+              // can render "Phoenix, Arizona" instead of just "Phoenix".
+              region: parsed.state ?? null,
               source: parsed.source,
               lowAccuracy: parsed.source === 'ip',
             });
             // NOTE: intentionally NOT calling setCityInput() here — see the
             // effect header comment. userLocation (ranking) is restored; the
             // city filter stays empty until the user types or clicks
-            // "Use my location".
+            // "Use my location" (now in the LocationChip header dropdown).
             return;
           }
         }
@@ -345,13 +364,15 @@ export function MarketplaceBrowser({
           try {
             const res = await fetch(`/api/geocode/reverse?lat=${latitude}&lng=${longitude}`);
             let city: string | null = null;
+            let state: string | null = null;
             if (res.ok) {
               const data = await res.json();
               city = data.city || null;
+              state = data.state || null;
             }
             const loc = {
               city,
-              state: null,
+              state,
               country: null,
               lat: latitude,
               lng: longitude,
@@ -364,11 +385,16 @@ export function MarketplaceBrowser({
               lat: latitude,
               lng: longitude,
               city,
+              // Surface the reverse-geocoded state as `region` so the
+              // LocationChip header pill can render "Phoenix, Arizona"
+              // instead of just "Phoenix".
+              region: state,
               source: 'gps',
               lowAccuracy: false,
             });
             // NOTE: intentionally NOT calling setCityInput() — the city
-            // filter is user-driven only. See the effect header comment.
+            // filter is user-driven only (type it, or pick via the
+            // LocationChip dropdown). See the effect header comment.
           } catch {}
         },
         () => {}, // ignore errors since we have IP fallback
@@ -396,6 +422,7 @@ export function MarketplaceBrowser({
                 lat: parsed.lat,
                 lng: parsed.lng,
                 city: parsed.city,
+                region: parsed.state ?? null,
                 source: parsed.source,
                 lowAccuracy: parsed.source === 'ip',
               });
@@ -599,6 +626,49 @@ export function MarketplaceBrowser({
     }
   }, [loadedTotal, setTotalProvidersCount]);
 
+  // ── Progressive empty-state fallback ladder reset ──────────────────────
+  // Whenever ANY filter or the user location changes, reset the expansion
+  // ladder back to 'city' (the narrowest step). This ensures the user always
+  // starts at the narrowest search context for the NEW filter set, rather
+  // than inheriting a stale '100km' / 'nationwide' state from a previous
+  // search.
+  //
+  // Uses the DEBOUNCED filter values (searchQuery / cityFilter) rather than
+  // the raw inputs (searchInput / cityInput) so the user typing in the search
+  // box doesn't reset the ladder on every keystroke — only when the debounced
+  // value actually changes.
+  React.useEffect(() => {
+    setExpansionLevel('city');
+  }, [
+    searchQuery,
+    cityFilter,
+    verticalFilter,
+    industryFilter,
+    trustFullyVerified,
+    trustRatingHigh,
+    trustEmergency,
+    userLocation,
+    setExpansionLevel,
+  ]);
+
+  // ── Auto-advance '50km' → '100km' after 1.5s ───────────────────────────
+  // When the user clicks "Expand search to 50km" and there are STILL no
+  // results, we automatically advance to '100km' after a 1.5s beat (OLX does
+  // this — it makes the ladder feel like a guided progressive search rather
+  // than a wall of buttons the user has to keep clicking). The timer is
+  // cleared if the user manually advances or if a filter changes (which
+  // resets expansionLevel back to 'city' via the effect above, which then
+  // unmounts this one because the dep changes).
+  React.useEffect(() => {
+    if (expansionLevel !== '50km') return;
+    if (filtered.length > 0) return; // results arrived — no need to advance
+    if (filtering) return; // wait for the in-flight fetch to settle
+    const handle = setTimeout(() => {
+      setExpansionLevel('100km');
+    }, 1500);
+    return () => clearTimeout(handle);
+  }, [expansionLevel, filtered.length, filtering, setExpansionLevel]);
+
   // ── Infinite scroll via IntersectionObserver ───────────────────────────
   // A sentinel <div> sits at the bottom of the grid. When it scrolls into
   // view (and there are more pages, and we're not already fetching) we call
@@ -677,6 +747,46 @@ export function MarketplaceBrowser({
     selectVertical(null);
   };
 
+  // ── Progressive empty-state fallback ladder derived values ────────────
+  // The ladder message + button set depends on (a) whether the user has a
+  // location set (GPS / IP / manual / city-dropdown pick) AND (b) the current
+  // `expansionLevel` in the Zustand store. We compute the derived values here
+  // so the JSX below stays readable.
+  //
+  // `locationLabel` is "City" or "City, Region" (OLX-style) — falls back to
+  // the raw `cityFilter` text if the user typed a city name that hasn't been
+  // geocoded yet. null when there's no location context at all (nationwide
+  // empty state path).
+  const locationLabel = React.useMemo(() => {
+    if (userLocation?.city) {
+      return userLocation.region
+        ? `${userLocation.city}, ${userLocation.region}`
+        : userLocation.city;
+    }
+    // Fall back to the typed city filter (e.g. deep-link ?city=Berlin that
+    // hasn't been geocoded yet — userLocation is still null but the text is
+    // in cityFilter).
+    if (cityFilter) return cityFilter;
+    return null;
+  }, [userLocation, cityFilter]);
+
+  // True when we should show the OLX-style progressive ladder (location set
+  // AND not yet at the 'nationwide' step). When false, the empty state falls
+  // back to the generic "No providers match your filters" path.
+  const showLadder = !!locationLabel && expansionLevel !== 'nationwide';
+
+  // Scarce-results banner: when the user has a location AND there are 1-3
+  // results AND we're still on the 'city' step (no expansion yet), show a
+  // subtle amber banner above the grid so the user knows there are only a
+  // few matches in their city and we're already including nearby ones.
+  // (Purely informational — no action needed, no expansion triggered.)
+  const showScarceBanner =
+    !!locationLabel &&
+    expansionLevel === 'city' &&
+    filtered.length >= 1 &&
+    filtered.length <= 3 &&
+    !filtering;
+
   return (
     <div className="pl-4 pr-3 sm:pr-3 lg:pr-3 py-4">
       {/* ── Country banner ──────────────────────────────────────────────── */}
@@ -698,11 +808,13 @@ export function MarketplaceBrowser({
         </div>
       ) : null}
 
-      {/* The search bar now lives in the hero (MarketplaceHeroSearch) and
-          shares its input state via the useMarketplaceSearch Zustand store.
-          Typing in the hero instantly filters the grid below — no reload,
-          no Enter required. A <noscript> GET form in the server page still
-          serves non-JS users. */}
+      {/* The search bar + LocationChip live in the marketplace header
+          (MarketplaceHeader) and share their input state via the
+          useMarketplaceSearch Zustand store. Typing in the header search
+          input instantly filters the grid below — no reload, no Enter
+          required. Picking a city in the LocationChip dropdown writes
+          cityInput + userLocation here for distance ranking. A <noscript>
+          GET form in the server page still serves non-JS users. */}
 
       {/* ── Active filter chips ──────────────────────────────────────────── */}
       {/* The "All Providers" / vertical-name <h2> heading used to live above
@@ -740,6 +852,30 @@ export function MarketplaceBrowser({
         </div>
       ) : null}
 
+      {/* ── Scarce-results banner (1-3 results + location set) ─────────────── */}
+      {/* OLX-style subtle banner above the grid: when the user has a location
+          set AND there are only 1-3 providers in their city, let them know
+          we're already including nearby results (within 50km). Purely
+          informational — no buttons, no expansion triggered. Uses amber
+          theme so it's visually distinct from the emerald empty state below
+          (which is an action-required state) and from the emerald country
+          banner above (which is a passive info state). */}
+      {showScarceBanner ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+        >
+          <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>
+            Only <strong className="font-semibold">{filtered.length}</strong>{' '}
+            {filtered.length === 1 ? 'provider' : 'providers'} in{' '}
+            <strong className="font-semibold">{locationLabel}</strong>.{' '}
+            Showing results within <strong className="font-semibold">50km</strong>.
+          </span>
+        </div>
+      ) : null}
+
       {/* ── Grid ────────────────────────────────────────────────────────────
           IMPORTANT (Fix A): We NO LONGER unmount the real card grid to show a
           6-card skeleton during the 180ms `filtering` window. The old skeleton
@@ -755,28 +891,175 @@ export function MarketplaceBrowser({
       {filtered.length === 0 && !filtering ? (
         <div
           role="status"
-          className="rounded-xl border border-border bg-card p-8 text-center"
+          aria-live="polite"
+          className="rounded-xl border border-border bg-card p-6 text-center sm:p-8"
         >
-          <p className="text-sm text-muted-foreground">
-            No providers match {activeChips.length > 0 ? 'these filters' : 'this filter'}
-            {searchQuery ? (
-              <>
-                {' '}for <span className="font-medium text-foreground">&ldquo;{searchQuery}&rdquo;</span>
-              </>
-            ) : null}.
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Try a different search term or clear all filters.
-          </p>
-          {activeChips.length > 0 ? (
-            <button
-              type="button"
-              onClick={clearAll}
-              className="mt-4 inline-flex items-center gap-1 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
-            >
-              Clear all filters
-            </button>
-          ) : null}
+          {showLadder && expansionLevel === 'city' ? (
+            /* ── Step 1: 0 results in the user's city ── */
+            /* "No providers found in {City}" + Expand to 50km + Search nationwide */
+            <>
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/40">
+                <MapPin
+                  className="h-6 w-6 text-emerald-600 dark:text-emerald-400"
+                  aria-hidden
+                />
+              </div>
+              <p className="text-sm font-medium text-foreground sm:text-base">
+                No providers found in{' '}
+                <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                  {locationLabel}
+                </span>
+                {searchQuery ? (
+                  <>
+                    {' '}for{' '}
+                    <span className="font-semibold">&ldquo;{searchQuery}&rdquo;</span>
+                  </>
+                ) : null}
+                .
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Try expanding your search radius to find nearby providers.
+              </p>
+              <div className="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => setExpansionLevel('50km')}
+                  className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+                >
+                  <Search className="h-4 w-4" aria-hidden />
+                  Expand search to 50km
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpansionLevel('nationwide')}
+                  className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                >
+                  Search nationwide
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </button>
+              </div>
+            </>
+          ) : showLadder && expansionLevel === '50km' ? (
+            /* ── Step 2: expanded to 50km, still no results ── */
+            /* "No providers within 50km of {City}. Expanding to 100km…" */
+            /* Auto-advances to '100km' after 1.5s (see the timer effect above). */
+            /* User can also click "Expand to 100km now" to skip the wait, or */
+            /* "Search nationwide" to bail out.                                */
+            <>
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/40">
+                <Loader2
+                  className="h-6 w-6 animate-spin text-emerald-600 dark:text-emerald-400"
+                  aria-hidden
+                />
+              </div>
+              <p className="text-sm font-medium text-foreground sm:text-base">
+                No providers within{' '}
+                <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                  50km
+                </span>{' '}
+                of{' '}
+                <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                  {locationLabel}
+                </span>
+                .{' '}
+                <span className="text-muted-foreground">Expanding to 100km…</span>
+              </p>
+              <div className="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => setExpansionLevel('100km')}
+                  className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                >
+                  Expand to 100km now
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpansionLevel('nationwide')}
+                  className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-md border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-accent"
+                >
+                  Search nationwide
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </button>
+              </div>
+            </>
+          ) : showLadder && expansionLevel === '100km' ? (
+            /* ── Step 3: expanded to 100km, still no results ── */
+            /* "No providers within 100km of {City}." + Search nationwide */
+            <>
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/40">
+                <MapPin
+                  className="h-6 w-6 text-emerald-600 dark:text-emerald-400"
+                  aria-hidden
+                />
+              </div>
+              <p className="text-sm font-medium text-foreground sm:text-base">
+                No providers within{' '}
+                <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                  100km
+                </span>{' '}
+                of{' '}
+                <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                  {locationLabel}
+                </span>
+                .
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                We&apos;ve expanded the search as far as we can. Try searching nationwide.
+              </p>
+              <div className="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => setExpansionLevel('nationwide')}
+                  className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+                >
+                  Search nationwide
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </button>
+              </div>
+            </>
+          ) : (
+            /* ── Step 4: nationwide (no location, or user clicked Search nationwide) ── */
+            /* "No providers match your filters" + Clear all + Browse all providers */
+            <>
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                <AlertCircle
+                  className="h-6 w-6 text-muted-foreground"
+                  aria-hidden
+                />
+              </div>
+              <p className="text-sm font-medium text-foreground sm:text-base">
+                No providers match {activeChips.length > 0 ? 'these filters' : 'this filter'}
+                {searchQuery ? (
+                  <>
+                    {' '}for <span className="font-semibold">&ldquo;{searchQuery}&rdquo;</span>
+                  </>
+                ) : null}
+                .
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Try a different search term, clear your filters, or browse all providers.
+              </p>
+              <div className="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
+                {activeChips.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={clearAll}
+                    className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+                  >
+                    Clear all filters
+                  </button>
+                ) : null}
+                <a
+                  href="/marketplace"
+                  className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-md border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-accent"
+                >
+                  Browse all providers
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </a>
+              </div>
+            </>
+          )}
         </div>
       ) : visible.length === 0 ? (
         /* Only show skeletons when there are genuinely zero visible cards
@@ -827,6 +1110,43 @@ export function MarketplaceBrowser({
           })}
         </div>
       )}
+
+      {/* ── Infinite scroll error retry banner (P1 issue #36 / #38) ────── */}
+      {/* When fetchNextPage (or a filter-change refetch) fails, the hook
+          exposes the error via `providersError`. Without this banner the
+          user just sees the loading spinner stop with no feedback — no way
+          to know something went wrong, no way to retry. The banner sits
+          ABOVE the infinite-scroll sentinel so it appears at the bottom of
+          the loaded grid (where the user is looking when the failure
+          happens). The "Try again" button calls `refetchProviders` which
+          re-runs the query for ALL loaded pages — handles both the
+          infinite-scroll failure case (retry the failed page) AND the
+          filter-change failure case (where the initial page 1 fetch
+          failed and `fetchNextPage` would be a no-op because hasMore is
+          false). */}
+      {providersError && !filtering ? (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="mt-6 flex flex-col items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-center sm:flex-row sm:justify-between sm:text-left dark:border-amber-900 dark:bg-amber-950/40"
+        >
+          <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+            <AlertCircle className="h-5 w-5 shrink-0" aria-hidden />
+            <span>
+              Couldn&apos;t load more providers.{' '}
+              <span className="text-xs text-amber-700 dark:text-amber-300">
+                Network blip or server error.
+              </span>
+            </span>
+          </div>
+          <ReloadButton
+            label="Try again"
+            onClick={refetchProviders}
+            busy={isFetching}
+            disabled={isFetching}
+          />
+        </div>
+      ) : null}
 
       {/* ── Infinite scroll sentinel ─────────────────────────────────────── */}
       {/* A zero-height sentinel observed by IntersectionObserver. When it

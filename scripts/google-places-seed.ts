@@ -185,13 +185,20 @@ function sqlNum(n: number | null | undefined): string {
 
 /** Generate a single INSERT statement for a MappedTenant. */
 function tenantToSql(t: MappedTenant): string {
+  // NOTE: `createdAt` and `updatedAt` are NOT NULL in the DB.
+  //   - `createdAt` has DEFAULT now() but we set it explicitly for parity
+  //   - `updatedAt` is `@updatedAt` (Prisma-only) — has NO DB default,
+  //     so we MUST include it in the INSERT or we get a NOT NULL violation.
+  // Both set to the seed time (now() in ISO format).
+  const nowIso = new Date().toISOString();
+
   const cols = [
     'id', 'name', 'slug', 'industry', 'phone', 'email', 'website', 'address',
     'country', 'currency', 'city', 'state', 'postalCode', 'latitude', 'longitude',
     'serviceRadiusKm', 'plan', 'marketplaceOptIn', 'publicProfileEnabled',
     'listingTier', 'claimed', 'rating', 'reviewCount', 'tagline', 'description',
     'seoTitle', 'seoDescription', 'businessCategoriesJson', 'settingsJson',
-    'employeesCount', 'googlePlaceId',
+    'employeesCount', 'googlePlaceId', 'createdAt', 'updatedAt',
   ];
 
   const vals = [
@@ -204,6 +211,7 @@ function tenantToSql(t: MappedTenant): string {
     sqlNum(t.rating), sqlNum(t.reviewCount), sqlEscape(t.tagline), sqlEscape(t.description),
     sqlEscape(t.seoTitle), sqlEscape(t.seoDescription), sqlEscape(t.businessCategoriesJson),
     sqlEscape(t.settingsJson), sqlNum(t.employeesCount), sqlEscape(t.googlePlaceId),
+    sqlEscape(nowIso), sqlEscape(nowIso),
   ];
 
   return `INSERT INTO "Tenant" (${cols.map((c) => `"${c}"`).join(', ')})\n  VALUES (${vals.join(', ')})\n  ON CONFLICT ("googlePlaceId") DO NOTHING;`;
@@ -240,6 +248,7 @@ interface SeedOptions {
   country?: string;
   limit?: number;
   outputFile?: string;
+  maxRuntimeSeconds?: number;
 }
 
 function parseArgs(): SeedOptions {
@@ -252,6 +261,7 @@ function parseArgs(): SeedOptions {
     else if (a === '--country') opts.country = args[++i]?.toUpperCase();
     else if (a === '--limit') opts.limit = parseInt(args[++i], 10);
     else if (a === '--out') opts.outputFile = args[++i];
+    else if (a === '--max-runtime') opts.maxRuntimeSeconds = parseInt(args[++i], 10);
   }
   return opts;
 }
@@ -272,6 +282,17 @@ interface SeedResult {
   };
 }
 
+interface SeedCountryOptions {
+  /** Called after each tenant is mapped — used for incremental SQL writes. */
+  onTenant?: (tenant: MappedTenant, totalSoFar: number) => Promise<void>;
+  /** Hard time limit — stops fetching new queries after this many seconds. */
+  maxRuntimeSeconds?: number;
+  /** Start fetching only after this many records already collected (resume). */
+  startCount?: number;
+  /** Directory to save raw Google API JSON responses (for future re-processing). */
+  rawOutputDir?: string;
+}
+
 /**
  * Run the seed for a given country. Iterates categories × cities until the
  * limit is reached or all queries are exhausted.
@@ -281,6 +302,7 @@ async function seedCountry(
   limit: number,
   progress: ProgressState,
   batchLabel: string,
+  options?: SeedCountryOptions,
 ): Promise<SeedResult> {
   const cities = COUNTRY_CITIES[countryCode] || [];
   const regionCode = REGION_CODE[countryCode] || countryCode.toLowerCase();
@@ -302,10 +324,19 @@ async function seedCountry(
 
   const totalRating: { sum: number; count: number } = { sum: 0, count: 0 };
   const totalReviews: { sum: number; count: number } = { sum: 0, count: 0 };
+  const startTime = Date.now();
+  const startCount = options?.startCount || 0;
+  const maxRuntimeMs = (options?.maxRuntimeSeconds || 0) * 1000;
 
   outer: for (const category of CATEGORIES) {
     for (const city of cities) {
-      if (tenants.length >= limit) break outer;
+      if (tenants.length + startCount >= limit) break outer;
+
+      // Check time limit
+      if (maxRuntimeMs > 0 && Date.now() - startTime > maxRuntimeMs) {
+        console.log(`[time] max-runtime reached, stopping after ${tenants.length + startCount} records`);
+        break outer;
+      }
 
       const queryKey = `${countryCode}|${category.query.replace('{city}', city)}`;
       if (progress.completedQueries.includes(queryKey)) {
@@ -327,6 +358,15 @@ async function seedCountry(
       apiRequests += result.requests;
       progress.completedQueries.push(queryKey);
 
+      // Save raw Google API response for this query (for future re-processing
+      // without re-calling the API). File: prisma/seed-sql/google/raw/<batch>-<sanitized-query>.json
+      if (options?.rawOutputDir) {
+        const safeName = textQuery.replace(/[^a-z0-9]+/gi, '-').slice(0, 80);
+        const rawPath = path.join(options.rawOutputDir, `${safeName}.json`);
+        await mkdir(path.dirname(rawPath), { recursive: true });
+        await writeFile(rawPath, JSON.stringify({ query: textQuery, regionCode, places: result.places, fetchedAt: new Date().toISOString() }, null, 2), 'utf-8');
+      }
+
       const newPlaces = result.places.filter((p) => {
         // Skip already-seen (dedup across queries)
         if (seenPlaceIds.has(p.id)) return false;
@@ -339,10 +379,14 @@ async function seedCountry(
 
       console.log(`  → ${result.places.length} results, ${newPlaces.length} new after dedup`);
 
-      // Scrape websites in parallel (10 at a time)
-      const BATCH_SIZE = 10;
+      // Scrape websites in parallel (20 at a time — faster, fits in 10min window)
+      const BATCH_SIZE = 20;
       for (let i = 0; i < newPlaces.length; i += BATCH_SIZE) {
-        if (tenants.length >= limit) break;
+        if (tenants.length + startCount >= limit) break;
+        if (maxRuntimeMs > 0 && Date.now() - startTime > maxRuntimeMs) {
+          console.log(`[time] max-runtime reached mid-batch, stopping`);
+          break outer;
+        }
         const slice = newPlaces.slice(i, i + BATCH_SIZE);
 
         const mapped = await Promise.all(
@@ -375,6 +419,7 @@ async function seedCountry(
               countryCode,
               scrapedEmail,
               scrapedDescription,
+              intendedIndustry: category.industry,
             });
 
             // Stats
@@ -394,18 +439,22 @@ async function seedCountry(
         );
 
         for (const t of mapped) {
-          if (t && tenants.length < limit) {
+          if (t && tenants.length + startCount < limit) {
             tenants.push(t);
             seenPlaceIds.add(t.googlePlaceId);
             progress.seenPlaceIds.push(t.googlePlaceId);
             rawPlaces.push(newPlaces.find((p) => p.id === t.googlePlaceId)!);
+            // Incremental callback — flush SQL as we go
+            if (options?.onTenant) {
+              await options.onTenant(t, tenants.length + startCount);
+            }
           }
         }
 
         // Save progress after each website-scrape batch (resumability)
         await saveProgress(progress);
 
-        console.log(`  → scraped ${slice.length} websites, total mapped: ${tenants.length}/${limit}`);
+        console.log(`  → scraped ${slice.length} websites, total mapped: ${tenants.length + startCount}/${limit}`);
       }
     }
   }
@@ -497,6 +546,7 @@ async function runTest(): Promise<void> {
       countryCode: 'US',
       scrapedEmail,
       scrapedDescription,
+      intendedIndustry: 'plumbing', // test query is "plumber in Houston, TX"
     });
 
     tenants.push(tenant);
@@ -593,8 +643,18 @@ async function runTest(): Promise<void> {
 
 /**
  * Run a numbered batch.
+ *
+ * Supports incremental SQL writing + resumability:
+ *   - Writes BEGIN + header to the SQL file on first run
+ *   - Appends each INSERT statement as records are scraped
+ *   - Appends COMMIT when batch reaches 1000 records or all queries exhausted
+ *   - On re-run (if file exists without COMMIT), continues appending INSERTs
+ *   - Uses --max-runtime to limit per-run duration (for sandboxed 10min windows)
  */
-async function runBatch(batchNum: number): Promise<void> {
+async function runBatch(
+  batchNum: number,
+  maxRuntimeSeconds?: number,
+): Promise<void> {
   const country = BATCH_TO_COUNTRY[batchNum];
   if (!country) {
     console.error(`Unknown batch ${batchNum}. Valid: 1-5`);
@@ -604,26 +664,118 @@ async function runBatch(batchNum: number): Promise<void> {
   const limit = 1000;
   const label = `Batch ${batchNum} — ${country} (${limit} records)`;
 
-  console.log('╔══════════════════════════════════════════════════════════════╗');
+  console.log('╔═══════════════════════════════════════════════════════════╗');
   console.log(`║  ${label.padEnd(60)}║`);
-  console.log('╚══════════════════════════════════════════════════════════════╝\n');
-
-  const progress = await loadProgress();
-  const result = await seedCountry(country, limit, progress, label);
-
-  if (result.tenants.length === 0) {
-    console.log('⚠️  No new records fetched (all queries exhausted or rate-limited).');
-    return;
+  if (maxRuntimeSeconds) {
+    console.log(`║  max-runtime: ${maxRuntimeSeconds}s (incremental SQL + resume)       ║`);
   }
+  console.log('╚═══════════════════════════════════════════════════════════╝\n');
 
-  // Generate SQL
   await mkdir(OUTPUT_DIR, { recursive: true });
   const paddedBatch = String(batchNum).padStart(2, '0');
-  const paddedCount = String(result.tenants.length).padStart(4, '0');
-  const filename = `${paddedBatch}-${country.toLowerCase()}-${paddedCount}.sql`;
-  const sql = buildSqlFile(result.tenants, `${label} — ${result.tenants.length} records`);
+  const filename = `${paddedBatch}-${country.toLowerCase()}-1000.sql`;
   const sqlPath = path.join(OUTPUT_DIR, filename);
-  await writeFile(sqlPath, sql, 'utf-8');
+
+  // ── Resume detection ──────────────────────────────────────────
+  // Count existing INSERT statements in the SQL file to know where
+  // we left off. If the file doesn't exist, start fresh.
+  let existingCount = 0;
+  let fileExists = false;
+  if (existsSync(sqlPath)) {
+    fileExists = true;
+    const existing = await readFile(sqlPath, 'utf-8');
+    const insertMatches = existing.match(/^INSERT INTO/gm);
+    existingCount = insertMatches ? insertMatches.length : 0;
+    const hasCommit = /^COMMIT;/m.test(existing);
+    if (hasCommit) {
+      console.log(`✅ Batch ${batchNum} already complete (${existingCount} records, COMMIT found).`);
+      console.log(`   File: ${sqlPath}`);
+      await printQuotaReport(batchNum, existingCount, 0);
+      return;
+    }
+    console.log(`[resume] found ${existingCount} existing INSERTs in ${filename}, continuing...\n`);
+  } else {
+    // Write header + BEGIN
+    const header = [
+      `-- ───────────────────────────────────────────────────────────────────────────`,
+      `-- ${label}`,
+      `-- Generated: ${new Date().toISOString()}`,
+      `-- Records: (incremental — see file size)`,
+      `-- Source: Google Places API (Text Search) + website scraping`,
+      `-- Idempotent: ON CONFLICT ("googlePlaceId") DO NOTHING`,
+      `-- Run in Supabase SQL Editor (paste entire file, click Run)`,
+      `-- ───────────────────────────────────────────────────────────────────────────`,
+      ``,
+      `BEGIN;`,
+      ``,
+    ].join('\n');
+    await writeFile(sqlPath, header, 'utf-8');
+  }
+
+  const progress = await loadProgress();
+
+  // ── Dedupe safety net ──────────────────────────────────────
+  // The progress file may be missing some IDs that were already written to
+  // the SQL file (if a previous run crashed between writing an INSERT and
+  // calling saveProgress). To prevent duplicate INSERTs on resume, we scan
+  // the SQL file for existing googlePlaceIds and add them to the progress.
+  if (fileExists) {
+    const existing = await readFile(sqlPath, 'utf-8');
+    // Extract googlePlaceId from each INSERT — it's the 3rd-to-last quoted value:
+    // ..., 'employeesCount', 'googlePlaceId', 'createdAt', 'updatedAt')
+    const idMatches = existing.matchAll(/'(ChIJ[A-Za-z0-9_-]+)',\s*'\d{4}-/g);
+    const sqlIds = new Set<string>();
+    for (const m of idMatches) {
+      sqlIds.add(m[1]);
+    }
+    const beforeCount = progress.seenPlaceIds.length;
+    for (const id of sqlIds) {
+      if (!progress.seenPlaceIds.includes(id)) {
+        progress.seenPlaceIds.push(id);
+      }
+    }
+    const addedCount = progress.seenPlaceIds.length - beforeCount;
+    if (addedCount > 0) {
+      console.log(`[dedup] added ${addedCount} IDs from SQL file to progress (prevents duplicates on resume)`);
+      await saveProgress(progress);
+    }
+    // Use the UNIQUE count as the real existingCount (not INSERT count)
+    existingCount = sqlIds.size;
+    console.log(`[dedup] ${existingCount} unique records in SQL file (INSERT count may be higher due to past dupes)\n`);
+  }
+
+  // Raw JSON output dir (for future re-processing without API calls)
+  const rawOutputDir = path.join(OUTPUT_DIR, 'raw', `batch-${batchNum}`);
+
+  // ── Incremental SQL writer ────────────────────────────────────
+  // Opens the file in append mode and writes each INSERT as it's mapped.
+  let sqlWriteCount = 0;
+  const onTenant = async (tenant: MappedTenant, totalSoFar: number): Promise<void> => {
+    const insertSql = tenantToSql(tenant) + '\n\n';
+    await writeFile(sqlPath, insertSql, { encoding: 'utf-8', flag: 'a' });
+    sqlWriteCount++;
+    if (sqlWriteCount % 50 === 0) {
+      console.log(`  [flush] ${sqlWriteCount} INSERTs written to ${filename} (total: ${totalSoFar}/${limit})`);
+    }
+  };
+
+  const result = await seedCountry(country, limit, progress, label, {
+    onTenant,
+    maxRuntimeSeconds,
+    startCount: existingCount,
+    rawOutputDir,
+  });
+
+  const totalRecords = existingCount + result.tenants.length;
+  const isComplete = totalRecords >= limit || result.tenants.length === 0;
+
+  // Append COMMIT if batch is complete
+  if (isComplete) {
+    await writeFile(sqlPath, '\nCOMMIT;\n', { encoding: 'utf-8', flag: 'a' });
+    console.log(`\n[done] appended COMMIT to ${filename}`);
+  } else {
+    console.log(`\n[partial] ${totalRecords}/${limit} records — no COMMIT yet (re-run to continue)`);
+  }
 
   // Update quota
   const quota = await loadQuota();
@@ -634,51 +786,71 @@ async function runBatch(batchNum: number): Promise<void> {
     records: prevBatchRecords + result.tenants.length,
     cost: ((prevBatchRequests + result.apiRequests) / 1000) * PRICE_PER_1000,
   };
-  // Recompute totals from all batches (in case of re-runs)
   quota.totalRequests = Object.values(quota.byBatch).reduce((s, b) => s + b.requests, 0);
   quota.totalRecords = Object.values(quota.byBatch).reduce((s, b) => s + b.records, 0);
   quota.totalCost = (quota.totalRequests / 1000) * PRICE_PER_1000;
   await saveQuota(quota);
 
   // Print summary
-  console.log('\n╔══════════════════════════════════════════════════════════════╗');
-  console.log(`║  BATCH ${batchNum} COMPLETE                                          ║`);
-  console.log('╚══════════════════════════════════════════════════════════════╝\n');
+  console.log('\n╔═══════════════════════════════════════════════════════════╗');
+  console.log(`║  BATCH ${batchNum} ${isComplete ? 'COMPLETE' : 'PARTIAL     '}                                    ║`);
+  console.log('╚═══════════════════════════════════════════════════════════╝\n');
 
-  console.log('📁 File generated:');
-  console.log(`   • ${sqlPath}\n`);
+  console.log('📁 SQL file:');
+  console.log(`   • ${sqlPath}`);
+  console.log(`   • Records this run: ${result.tenants.length}`);
+  console.log(`   • Total in file: ${totalRecords}/${limit}${isComplete ? ' (COMPLETE)' : ' (partial — re-run to continue)'}\n`);
 
+  await printQuotaReport(batchNum, result.tenants.length, result.apiRequests);
+
+  // Data stats
+  if (result.tenants.length > 0) {
+    console.log('📈 Data stats (this run):');
+    console.log(`   • With website: ${result.stats.withWebsite} (${((result.stats.withWebsite / result.tenants.length) * 100).toFixed(1)}%)`);
+    console.log(`   • With email (scraped): ${result.stats.withEmail} (${((result.stats.withEmail / result.tenants.length) * 100).toFixed(1)}%)`);
+    console.log(`   • Scraped description: ${result.stats.withScrapedDescription} (${((result.stats.withScrapedDescription / result.tenants.length) * 100).toFixed(1)}%)`);
+    console.log(`   • Generated description: ${result.stats.withGeneratedDescription} (${((result.stats.withGeneratedDescription / result.tenants.length) * 100).toFixed(1)}%)`);
+    console.log(`   • Avg rating: ${result.stats.avgRating.toFixed(2)}`);
+    console.log(`   • Avg review count: ${result.stats.avgReviewCount.toFixed(0)}\n`);
+
+    const topCities = Object.entries(result.stats.byCity)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([c, n]) => `${c} (${n})`)
+      .join(', ');
+    console.log(`   • Top cities: ${topCities}\n`);
+
+    const topIndustries = Object.entries(result.stats.byIndustry)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([c, n]) => `${c} (${n})`)
+      .join(', ');
+    console.log(`   • Top industries: ${topIndustries}\n`);
+  }
+
+  if (isComplete) {
+    console.log(`⚠️  Next: paste ${filename} into Supabase SQL Editor, then say "go" for Batch ${batchNum + 1}.`);
+  } else {
+    console.log(`⚠️  Batch ${batchNum} is partial (${totalRecords}/${limit}). Re-run the same command to continue.`);
+  }
+}
+
+/** Print the cumulative quota report. */
+async function printQuotaReport(
+  batchNum: number,
+  recordsThisRun: number,
+  requestsThisRun: number,
+): Promise<void> {
+  const quota = await loadQuota();
   console.log('📊 Quota report:');
-  console.log(`   • API requests this batch: ${result.apiRequests}`);
+  if (recordsThisRun > 0) {
+    console.log(`   • API requests this run: ${requestsThisRun}`);
+    console.log(`   • Cost this run: $${((requestsThisRun / 1000) * PRICE_PER_1000).toFixed(2)}`);
+  }
   console.log(`   • API requests cumulative: ${quota.totalRequests}`);
-  console.log(`   • Estimated cost this batch: $${((result.apiRequests / 1000) * PRICE_PER_1000).toFixed(2)}`);
+  console.log(`   • Records cumulative: ${quota.totalRecords}`);
   console.log(`   • Estimated cost cumulative: $${quota.totalCost.toFixed(2)}`);
   console.log(`   • Free credit remaining: $${(FREE_CREDIT - quota.totalCost).toFixed(2)} / $${FREE_CREDIT}\n`);
-
-  console.log('📈 Data stats:');
-  console.log(`   • Records: ${result.tenants.length}`);
-  console.log(`   • With website: ${result.stats.withWebsite} (${((result.stats.withWebsite / result.tenants.length) * 100).toFixed(1)}%)`);
-  console.log(`   • With email (scraped): ${result.stats.withEmail} (${((result.stats.withEmail / result.tenants.length) * 100).toFixed(1)}%)`);
-  console.log(`   • Scraped description: ${result.stats.withScrapedDescription} (${((result.stats.withScrapedDescription / result.tenants.length) * 100).toFixed(1)}%)`);
-  console.log(`   • Generated description: ${result.stats.withGeneratedDescription} (${((result.stats.withGeneratedDescription / result.tenants.length) * 100).toFixed(1)}%)`);
-  console.log(`   • Avg rating: ${result.stats.avgRating.toFixed(2)}`);
-  console.log(`   • Avg review count: ${result.stats.avgReviewCount.toFixed(0)}\n`);
-
-  const topCities = Object.entries(result.stats.byCity)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([c, n]) => `${c} (${n})`)
-    .join(', ');
-  console.log(`   • Top cities: ${topCities}\n`);
-
-  const topIndustries = Object.entries(result.stats.byIndustry)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([c, n]) => `${c} (${n})`)
-    .join(', ');
-  console.log(`   • Top industries: ${topIndustries}\n`);
-
-  console.log(`⚠️  Next: paste ${filename} into Supabase SQL Editor, then say "go" for Batch ${batchNum + 1}.`);
 }
 
 /**
@@ -719,7 +891,7 @@ async function main() {
   if (opts.test) {
     await runTest();
   } else if (opts.batch) {
-    await runBatch(opts.batch);
+    await runBatch(opts.batch, opts.maxRuntimeSeconds);
   } else if (opts.country) {
     await runAdhoc(opts.country, opts.limit || 100);
   } else {

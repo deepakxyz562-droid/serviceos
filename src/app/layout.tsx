@@ -174,6 +174,22 @@ export default function RootLayout({
       <body
         className={`${poppins.variable} ${geistMono.variable} antialiased bg-background text-foreground font-sans`}
       >
+        {/* Skip link (P0 a11y fix) — first focusable element on every page.
+            Visually hidden by default (`sr-only`), becomes visible when
+            focused via keyboard navigation (`focus:not-sr-only ...`). Lets
+            keyboard users jump straight to main content instead of tabbing
+            through the entire header + nav on every page. The
+            `href="#main-content"` matches the `id="main-content"` we add to
+            the <main> element on the marketplace browse page (and any other
+            page that opts in). Pages without an element bearing that id
+            simply don't scroll — the link is still focusable + announced by
+            screen readers as "Skip to main content". */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-background focus:text-foreground focus:border focus:border-border focus:rounded-md focus:shadow-lg focus:outline-2 focus:outline-emerald-600"
+        >
+          Skip to main content
+        </a>
         {/* Site-wide structured data: Organization + WebSite schema.
             Injected on every page so Google can understand the entity. */}
         <StructuredData

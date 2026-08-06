@@ -142,6 +142,21 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // ── Marketplace browse page HTML cache ──────────────────────────────
+        // The page is `force-dynamic` (fresh SSR on every request) but the
+        // underlying DB query is cached 30s via unstable_cache. Setting
+        // `max-age=30, stale-while-revalidate=60` on the HTML response means:
+        //   • Browser reuses cached HTML on back-navigation (instant).
+        //   • After 30s, browser serves stale HTML + fetches fresh in
+        //     background (stale-while-revalidate=60).
+        // This closes the "slow back-nav" UX issue where every back button
+        // press re-requested full SSR HTML + re-rendered the page.
+        source: '/marketplace',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=30, stale-while-revalidate=60' },
+        ],
+      },
+      {
         // PNG icons (192/512/maskable/apple-touch/favicon)
         source: '/:file(.*\\.png)',
         headers: [

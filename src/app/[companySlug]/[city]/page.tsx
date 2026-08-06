@@ -431,7 +431,7 @@ export default async function PluralBrowsePage({
 
       <MarketplaceHeader />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         {/* Breadcrumb bar */}
         <nav
           aria-label="Breadcrumb"

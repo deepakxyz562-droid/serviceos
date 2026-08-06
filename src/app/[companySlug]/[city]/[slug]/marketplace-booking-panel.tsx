@@ -10,6 +10,7 @@ import type { ProviderService } from '@/components/marketplace/types';
 interface MarketplaceBookingPanelProps {
   providerTenantId: string;
   providerName: string;
+  providerPhone?: string | null;
   currency: string;
   /** Services shaped as ProviderService[] (id/name/slug/basePrice/duration). */
   services: ProviderService[];
@@ -36,6 +37,7 @@ interface MarketplaceBookingPanelProps {
 export function MarketplaceBookingPanel({
   providerTenantId,
   providerName,
+  providerPhone,
   currency,
   services,
   industry,
@@ -85,12 +87,20 @@ export function MarketplaceBookingPanel({
         </div>
 
         {emergencyServiceAvailable ? (
-          <a
-            href="tel:"
-            className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
-          >
-            <Zap className="h-4 w-4" /> 24/7 Emergency Service
-          </a>
+          providerPhone ? (
+            <a
+              href={`tel:${providerPhone.replace(/[^+\d]/g, '')}`}
+              className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+            >
+              <Zap className="h-4 w-4" /> 24/7 Emergency Service
+            </a>
+          ) : (
+            <div
+              className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+            >
+              <Zap className="h-4 w-4" /> 24/7 Emergency Service
+            </div>
+          )
         ) : null}
 
         {services.length === 0 ? (

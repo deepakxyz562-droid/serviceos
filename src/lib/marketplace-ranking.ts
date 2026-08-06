@@ -1,15 +1,21 @@
 /**
  * marketplace-ranking.ts — Composite provider ranking for marketplace search.
  *
- * Ranking formula (per user spec):
- *   Overall Score = 40% Distance + 30% Rating + 20% Verified + 10% Featured
+ * Ranking formula (per user spec v2):
+ *   Overall Score = 40% Distance + 25% Rating + 15% Review Count
+ *                 + 10% Verified + 10% Featured (premium/plan tier)
  *
- * Featured providers DOMINATE: they always appear in a top group (up to 4,
- * per the existing FeaturedListing cap), sorted by composite score within
- * the group. Non-featured providers follow, also sorted by composite score.
- * This gives featured providers prominent placement (per user decision #2
- * "I want feature dominate") without completely replacing relevant local
+ * The review-count factor was added in v2 to surface popular providers
+ * (more reviews = more social proof). The featured/plan weight is fixed
+ * at 10% so paid providers get a small boost but don't dominate organic
  * results.
+ *
+ * Featured providers STILL dominate the visual layout: they always appear
+ * in a top group (up to 4, per the existing FeaturedListing cap), sorted
+ * by composite score within the group. Non-featured providers follow,
+ * also sorted by composite score. This gives featured providers prominent
+ * placement (per user decision #2 "I want feature dominate") without
+ * completely replacing relevant local results.
  *
  * Distance uses the Haversine formula (great-circle distance in km between
  * two lat/lng points). Providers with null coordinates are penalized
@@ -94,10 +100,18 @@ export function scoreProvider<T extends RankableProvider>(
   }
   const distanceWeight = lowAccuracy ? 0.2 : 0.4;
 
-  // ── Rating score (30%) ────────────────────────────────────────────────
+  // ── Rating score (25%) ────────────────────────────────────────────────
   const ratingScore = Math.max(0, Math.min(1, (provider.rating ?? 0) / 5));
 
-  // ── Verified score (20%) ──────────────────────────────────────────────
+  // ── Review-count score (15%) ──────────────────────────────────────────
+  // Log-normalized: review counts follow a power law (a few providers have
+  // thousands, most have <50). log1p flattens the curve so a provider with
+  // 5000 reviews doesn't completely dominate one with 100. We use 500 as
+  // the soft cap (log1p(500) ≈ 6.2) so popular providers score near 1.0.
+  const reviewCount = provider.reviewCount ?? 0;
+  const reviewScore = Math.min(1, Math.log1p(reviewCount) / Math.log1p(500));
+
+  // ── Verified score (10%) ──────────────────────────────────────────────
   // Count how many of the 4 verification gates are passed.
   const verifiedCount =
     (provider.identityVerified ? 1 : 0) +
@@ -106,25 +120,45 @@ export function scoreProvider<T extends RankableProvider>(
     (provider.stripeConnected ? 1 : 0);
   const verifiedScore = verifiedCount / 4;
 
-  // ── Featured score (10%) ──────────────────────────────────────────────
+  // ── Featured / premium tier score (10%) ───────────────────────────────
+  // Featured listings get the full 10%. (Future: could also boost paid plan
+  // tiers — growth/business/enterprise — but for now we keep it simple and
+  // only count featured flag.)
   const featuredScore = provider.featured ? 1 : 0;
 
   // ── Composite ─────────────────────────────────────────────────────────
+  // Weights (sum = 1.0): 0.40 distance + 0.25 rating + 0.15 reviewCount
+  //                     + 0.10 verified + 0.10 featured
+  //
   // When there's no user location (userLat/Lng null), redistribute the
-  // distance weight to rating + verified so the score is still meaningful.
+  // distance weight proportionally across the other 4 factors so the
+  // score is still meaningful. The redistribution preserves the relative
+  // weights of the remaining factors (25:15:10:10 → 0.417:0.250:0.167:0.167
+  // of the remaining 0.60).
   let score: number;
   if (userLat == null || userLng == null) {
-    // No location: 50% rating + 33% verified + 17% featured
-    score = 0.5 * ratingScore + 0.33 * verifiedScore + 0.17 * featuredScore;
+    // No location: scale the 4 non-distance weights so they sum to 1.0.
+    score =
+      0.417 * ratingScore +
+      0.250 * reviewScore +
+      0.167 * verifiedScore +
+      0.167 * featuredScore;
   } else {
     score =
       distanceWeight * distanceScore +
-      0.3 * ratingScore +
-      0.2 * verifiedScore +
-      0.1 * featuredScore;
-    // If low accuracy, redistribute the 20% we took from distance to rating
+      0.25 * ratingScore +
+      0.15 * reviewScore +
+      0.10 * verifiedScore +
+      0.10 * featuredScore;
+    // If low accuracy, redistribute the 20% we took from distance to the
+    // other 4 factors (proportional to their weights: 25:15:10:10 of 0.20
+    // = 0.083 + 0.050 + 0.033 + 0.033).
     if (lowAccuracy) {
-      score += 0.15 * ratingScore + 0.05 * verifiedScore;
+      score +=
+        0.083 * ratingScore +
+        0.050 * reviewScore +
+        0.033 * verifiedScore +
+        0.033 * featuredScore;
     }
   }
 

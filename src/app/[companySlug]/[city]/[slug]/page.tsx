@@ -18,6 +18,10 @@ import {
   ShieldCheck,
   BadgeCheck,
   Award,
+  Globe,
+  Mail,
+  MessageCircle,
+  Navigation,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -26,6 +30,7 @@ import { Breadcrumbs } from '@/components/seo/breadcrumbs'
 import { MarketplaceHeader } from '@/components/marketplace/marketplace-header'
 import { SafeImage } from '@/components/marketplace/safe-image'
 import { CornerstoneFooter } from '@/components/seo/cornerstone-footer'
+import { StickyMobileCta } from './sticky-mobile-cta'
 import {
   getLocalBusinessSchema,
   getFaqSchema,
@@ -335,7 +340,7 @@ export default async function PublicBusinessHubPage({
       <StructuredData data={allSchema} />
       <MarketplaceHeader />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         {/* Breadcrumb bar */}
         <div className="border-b bg-muted/20">
           <div className="w-full px-4 sm:px-6 lg:px-8 py-3">
@@ -632,6 +637,7 @@ export default async function PublicBusinessHubPage({
                     <MarketplaceBookingPanel
                       providerTenantId={business.id}
                       providerName={business.name}
+                      providerPhone={business.phone}
                       currency={business.currency}
                       services={services.map((s) => ({
                         id: s.id,
@@ -722,8 +728,52 @@ export default async function PublicBusinessHubPage({
                     <InfoRow icon={MapPin} label="City" value={`${business.city}${business.state ? `, ${business.state}` : ''}`} />
                   )}
                   {business.phone && (
-                    <InfoRow icon={Phone} label="Phone" value={business.phone} href={`tel:${business.phone}`} />
+                    <InfoRow icon={Phone} label="Phone" value={business.phone} href={`tel:${business.phone.replace(/[^+\d]/g, '')}`} />
                   )}
+                  {business.whatsappPhone && (
+                    <InfoRow
+                      icon={MessageCircle}
+                      label="WhatsApp"
+                      value={business.whatsappPhone}
+                      href={`https://wa.me/${business.whatsappPhone.replace(/[^\d]/g, '')}`}
+                      external
+                    />
+                  )}
+                  {business.email && (
+                    <InfoRow
+                      icon={Mail}
+                      label="Email"
+                      value={business.email}
+                      href={`mailto:${business.email}`}
+                    />
+                  )}
+                  {business.website && (
+                    <InfoRow
+                      icon={Globe}
+                      label="Website"
+                      value={(() => {
+                        try {
+                          const u = new URL(business.website)
+                          return u.hostname.replace(/^www\./, '') + (u.pathname && u.pathname !== '/' ? u.pathname : '')
+                        } catch {
+                          return business.website.replace(/^https?:\/\//, '').replace(/\/$/, '')
+                        }
+                      })()}
+                      href={business.website}
+                      external
+                    />
+                  )}
+                  {(() => {
+                    const displayAddress = formatAddressForDisplay(business.address)
+                    if (!displayAddress) return null
+                    // Google Maps directions URL — opens native maps on mobile.
+                    const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                      `${displayAddress}, ${business.city || ''}, ${business.state || ''} ${business.country || ''}`.trim(),
+                    )}`
+                    return (
+                      <InfoRow icon={Navigation} label="Directions" value="Get directions" href={mapsUrl} />
+                    )
+                  })()}
                   {openingHours.length > 0 && (
                     <div className="pt-2 border-t">
                       <div className="flex items-center gap-2 text-xs font-semibold text-foreground mb-2">
@@ -770,8 +820,24 @@ export default async function PublicBusinessHubPage({
 
       <CornerstoneFooter />
 
+      {/* Spacer for the mobile sticky CTA bar. The CTA is `fixed bottom-0`
+          with a height of ~64px (44px button + 8px top/bottom padding). On
+          mobile, this 64px would overlap the bottom of the footer when the
+          user scrolls to the very end. The spacer reserves that space so the
+          footer stays fully visible above the CTA. Hidden on lg+ where the
+          CTA itself is hidden (desktop uses the right-column booking panel
+          instead). */}
+      <div className="h-16 lg:hidden" aria-hidden />
+
       {/* Visitor-facing live chat widget */}
       <ChatWidget businessSlug={business.slug} businessName={business.name} />
+
+      {/* Sticky mobile CTA bar (P1 issue #30). Renders Call Now + Book Now
+          buttons fixed to the bottom of the viewport on mobile only. Hides
+          automatically when the booking panel (#book) scrolls into view so
+          the CTA isn't duplicated. Desktop doesn't render this (the
+          MarketplaceBookingPanel in the right column is already sticky). */}
+      <StickyMobileCta phone={business.phone} businessName={business.name} />
     </div>
   )
 }
@@ -1050,23 +1116,31 @@ function InfoRow({
   label,
   value,
   href,
+  external = false,
 }: {
   icon: React.ComponentType<{ className?: string }>
   label: string
   value: string
   href?: string
+  external?: boolean
 }) {
   const content = (
     <div className="flex items-start gap-2 text-xs">
       <Icon className="h-3.5 w-3.5 text-emerald-700 mt-0.5 shrink-0" />
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <div className="text-muted-foreground">{label}</div>
-        <div className="font-medium text-foreground">{value}</div>
+        <div className="font-medium text-foreground truncate">{value}</div>
       </div>
     </div>
   )
   return href ? (
-    <a href={href} className="block hover:opacity-80 transition-opacity">{content}</a>
+    <a
+      href={href}
+      className="block hover:opacity-80 transition-opacity"
+      {...(external ? { target: '_blank', rel: 'noopener noreferrer nofollow' } : {})}
+    >
+      {content}
+    </a>
   ) : (
     content
   )

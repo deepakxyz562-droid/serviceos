@@ -221,6 +221,20 @@ model Tenant {
   @@index([planStatus])
   @@index([city])
   @@index([latitude, longitude])
+  // ── Marketplace browse optimization indexes ───────────────────────────
+  // Added to support the public marketplace browse page's heavy filtering
+  // and sorting. Without these, the SQLite query planner scans the full
+  // Tenant table (~2000+ rows) on every /marketplace visit.
+  @@index([industry])
+  @@index([country])
+  // Composite sort index: the marketplace browse always orders by
+  // rating DESC, reviewCount DESC, id DESC — see marketplace-pagination.ts.
+  // Without this index SQLite spills the sort to disk.
+  @@index([rating, reviewCount, id])
+  // Eligibility gates: every marketplace WHERE clause filters on these
+  // three flags. A composite index lets SQLite skip non-eligible rows
+  // entirely.
+  @@index([publicProfileEnabled, marketplaceOptIn, suspendedAt])
 }
 
 model Subscription {

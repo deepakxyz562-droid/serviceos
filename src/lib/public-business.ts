@@ -40,6 +40,7 @@ const PUBLIC_TENANT_SELECT = {
   phone: true,
   whatsappPhone: true,
   email: true,
+  website: true,
   address: true,
   country: true,
   currency: true,
@@ -89,6 +90,7 @@ export interface PublicBusinessData {
   phone: string | null
   whatsappPhone: string | null
   email: string | null
+  website: string | null
   address: string | null
   country: string
   currency: string
@@ -332,6 +334,20 @@ async function buildPublicBusinessData(
     tenant.coverImage || defaultCoverImageForIndustry(tenant.industry)
   const hasImage = Boolean(effectiveCoverImage || tenant.logo || gallery.length > 0)
 
+  // ── Phone normalization ──────────────────────────────────────────────
+  // Some seed data (and a few legacy DB rows) stored phone numbers with a
+  // leading backslash ("\\+1 323-970-3113") because of an sqlEscape bug
+  // that has since been fixed in the seed script. Strip any leading
+  // backslashes here at READ time so the rendered output is always clean.
+  // This is defensive — future seed runs won't add backslashes, but we
+  // also don't want to require a data migration for existing rows.
+  const normalizePhone = (raw: string | null): string | null => {
+    if (!raw) return null
+    // Strip ALL leading backslashes (one or more) and surrounding whitespace.
+    const cleaned = raw.replace(/^[\s\\]+/, '').trim()
+    return cleaned || null
+  }
+
   // "Rich enough" rule for auto-indexing.
   // Description minimum relaxed from 100 → 40 chars. Analysis of 50 production
   // tenants showed the auto-generated onboarding descriptions follow the pattern
@@ -368,9 +384,16 @@ async function buildPublicBusinessData(
     cityUrlSlug: slugifyCity(tenant.city),
     city: tenant.city,
     state: tenant.state,
-    phone: tenant.phone,
-    whatsappPhone: tenant.whatsappPhone,
+    phone: normalizePhone(tenant.phone),
+    whatsappPhone: normalizePhone(tenant.whatsappPhone),
     email: tenant.email,
+    // Normalize website URL: ensure it has a protocol so the <a href> is
+    // clickable (not treated as a relative path). Trim surrounding whitespace.
+    website: tenant.website
+      ? (/^https?:\/\//i.test(tenant.website)
+          ? tenant.website.trim()
+          : `https://${tenant.website.trim()}`)
+      : null,
     address: tenant.address,
     country: tenant.country,
     currency: tenant.currency,

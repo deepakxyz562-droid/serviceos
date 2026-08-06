@@ -1,6 +1,17 @@
 {
-  "totalRequests": 1,
-  "totalRecords": 5,
-  "totalCost": 0.032,
-  "byBatch": {}
+  "totalRequests": 195,
+  "totalRecords": 2511,
+  "totalCost": 6.24,
+  "byBatch": {
+    "1": {
+      "requests": 123,
+      "records": 1511,
+      "cost": 3.936
+    },
+    "2": {
+      "requests": 72,
+      "records": 1000,
+      "cost": 2.304
+    }
+  }
 }

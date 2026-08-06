@@ -184,6 +184,9 @@ export interface ProviderFilterOptions {
   search?: string | null;
   city?: string | null;
   industry?: string | null;
+  /** Vertical (parent of industry). Converted to an `industry IN [...]`
+   *  clause at SQL level so it doesn't need post-fetch filtering. */
+  vertical?: string | null;
   trustFullyVerified?: boolean;
   trustRatingHigh?: boolean;
   trustEmergency?: boolean;
@@ -230,6 +233,22 @@ export function buildProviderWhereClause(opts: ProviderFilterOptions): Record<st
       delete where.OR;
     } else {
       where.OR = searchClauses;
+    }
+  }
+
+  // Vertical filter — convert to an `industry IN [list]` clause at SQL level.
+  // Previously this was applied post-fetch in JS, which broke cursor pagination
+  // (the API would fetch 24 rows by rating DESC, then filter to ~3 matching
+  // rows, leaving a short page + a stale `nextCursor`). Now we resolve the
+  // vertical → list of industry IDs once and pass it as a Prisma `in` filter,
+  // so the DB returns exactly the matching rows.
+  if (opts.vertical) {
+    const { VERTICAL_MAP } = require('@/lib/industry-catalog') as typeof import('@/lib/industry-catalog');
+    const industriesInVertical = Object.entries(VERTICAL_MAP)
+      .filter(([, v]) => v === opts.vertical)
+      .map(([k]) => k);
+    if (industriesInVertical.length > 0) {
+      where.industry = { in: industriesInVertical, ...CI };
     }
   }
 

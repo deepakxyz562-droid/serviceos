@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { CI } from '@/lib/db-utils';
 import { withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
 import {
@@ -147,6 +146,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
             search,
             city,
             industry,
+            vertical,
             trustFullyVerified,
             trustRatingHigh,
             trustEmergency,
@@ -158,7 +158,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
           });
           const filteredIds = new Set(featuredTenants.map((t) => t.id));
           const page = await fetchProviderPage({
-            filters: { country, search, city, industry, trustFullyVerified, trustRatingHigh, trustEmergency },
+            filters: { country, search, city, industry, vertical, trustFullyVerified, trustRatingHigh, trustEmergency },
             cursor,
             pageSize,
             featuredTenantIds: filteredIds,
@@ -181,7 +181,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
           : await fetchFeaturedListingsMap(Array.from(featuredIds));
 
         return fetchProviderPage({
-          filters: { country, search, city, industry, trustFullyVerified, trustRatingHigh, trustEmergency },
+          filters: { country, search, city, industry, vertical, trustFullyVerified, trustRatingHigh, trustEmergency },
           cursor,
           pageSize,
           featuredTenantIds: featuredIds,
@@ -189,18 +189,12 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
         });
       });
 
-      // Apply vertical filter post-fetch (vertical is derived from industry
-      // via the catalog, not stored on the tenant directly). This is a
-      // client-side concern but we do it here so the API response is already
-      // filtered — saves bandwidth.
+      // Vertical filter is now applied at SQL level (buildProviderWhereClause
+      // converts it to an `industry IN [...]` clause), so no post-fetch filter
+      // is needed. This fixes the "short page" bug where the cursor path
+      // fetched 24 rows by rating DESC then stripped non-matching ones down
+      // to ~3 visible items.
       let items = result.items;
-      if (vertical) {
-        const { getIndustry } = await import('@/lib/industry-catalog');
-        items = items.filter((p) => {
-          const meta = p.industry ? getIndustry(p.industry) : undefined;
-          return meta?.vertical === vertical;
-        });
-      }
 
       // Apply service filter post-fetch (would need a join to filter in SQL).
       if (serviceId) {
@@ -220,6 +214,13 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
         items,
         nextCursor: result.nextCursor,
         total: result.total,
+      }, {
+        headers: {
+          // Browser caches for 30s; CDN serves stale while revalidating for 60s.
+          // This means back-navigation reuses the cached JSON instead of
+          // re-requesting, fixing the "slow back-nav" UX issue.
+          'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
+        },
       });
     } catch (err) {
       log.error({ err }, 'marketplace/providers: cursor list failed');
@@ -252,49 +253,19 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
       : 50;
 
   // ── Base where: 3-gate eligibility ─────────────────────────────────────
-  const where: Record<string, unknown> = {
-    publicProfileEnabled: true,
-    marketplaceOptIn: true,
-    suspendedAt: null,
-  };
-
-  if (country) {
-    where.country = country;
-  }
-
-  if (city) {
-    where.OR = [
-      { city: { contains: city, ...CI } },
-      { state: { contains: city, ...CI } },
-    ];
-  }
-
-  if (search) {
-    const searchOR = [
-      { name: { contains: search, ...CI } },
-      { description: { contains: search, ...CI } },
-      { tagline: { contains: search, ...CI } },
-    ];
-    if (where.OR) {
-      where.AND = [{ OR: where.OR }, { OR: searchOR }];
-      delete where.OR;
-    } else {
-      where.OR = searchOR;
-    }
-  }
-
-  if (trustFullyVerified) {
-    where.identityVerified = true;
-    where.businessVerified = true;
-    where.insuranceVerified = true;
-    where.stripeConnected = true;
-  }
-  if (trustRatingHigh) {
-    where.rating = { gte: 4.8 };
-  }
-  if (trustEmergency) {
-    where.emergencyServiceAvailable = true;
-  }
+  // Use the shared builder so vertical + industry + trust all go into SQL
+  // (no post-fetch filtering). This keeps the offset path consistent with
+  // the cursor path and avoids the "fetch 200, filter to 5" pattern.
+  const where: Record<string, unknown> = buildProviderWhereClause({
+    country,
+    search,
+    city,
+    industry,
+    vertical,
+    trustFullyVerified,
+    trustRatingHigh,
+    trustEmergency,
+  });
 
   if (hasLocation) {
     const box = boundingBox(userLat!, userLng!, radiusKm);
@@ -324,8 +295,8 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
         },
       },
       orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }],
-      take: industry || serviceId || featuredOnly || hasLocation ? 200 : limit,
-      skip: industry || serviceId || featuredOnly || hasLocation ? 0 : offset,
+      take: industry || vertical || serviceId || featuredOnly || hasLocation ? 200 : limit,
+      skip: industry || vertical || serviceId || featuredOnly || hasLocation ? 0 : offset,
     });
 
     // ── In-app industry filter ──
@@ -345,14 +316,9 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
       });
     }
 
-    // ── In-app vertical filter ──
-    if (vertical) {
-      const { getIndustry } = await import('@/lib/industry-catalog');
-      filtered = filtered.filter((t) => {
-        const meta = t.industry ? getIndustry(t.industry) : undefined;
-        return meta?.vertical === vertical;
-      });
-    }
+    // Vertical filter is now applied at SQL level (buildProviderWhereClause
+    // converts it to an `industry IN [...]` clause), so no post-fetch filter
+    // is needed here.
 
     // ── In-app service filter ──
     if (serviceId) {
@@ -498,7 +464,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
     });
 
     log.info(
-      { returned: items.length, total: filtered.length, industry, city, serviceId, search, featuredOnly, hasLocation, radiusKm },
+      { returned: items.length, total: filtered.length, industry, vertical, city, serviceId, search, featuredOnly, hasLocation, radiusKm },
       'marketplace/providers: offset list',
     );
 
@@ -507,6 +473,10 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
       total: filtered.length,
       limit,
       offset,
+    }, {
+      headers: {
+        'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
+      },
     });
   } catch (err) {
     log.error({ err }, 'marketplace/providers: list failed');

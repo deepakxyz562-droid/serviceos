@@ -65,7 +65,7 @@
  *     any client-side fetch completes.
  */
 
-import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
+import { useInfiniteQuery, keepPreviousData, type InfiniteData } from '@tanstack/react-query';
 import * as React from 'react';
 import type { ProviderListItem } from './types';
 
@@ -118,6 +118,13 @@ export interface UseMarketplaceProvidersResult {
   fetchNextPage: () => void;
   /** Error from the last failed fetch, if any. */
   error: Error | null;
+  /** Re-run the query for ALL loaded pages. Used by the retry banner in
+   *  MarketplaceBrowser when `error` is set — handles both the infinite-
+   *  scroll failure case (a `fetchNextPage` retry would only re-fetch the
+   *  failed page) AND the filter-change failure case (where the initial
+   *  page 1 fetch failed and `fetchNextPage` would be a no-op because
+   *  `hasNextPage` is false). */
+  refetch: () => void;
 }
 
 /**
@@ -235,7 +242,16 @@ export function useMarketplaceProviders(
     refetchOnWindowFocus: false,
     staleTime: 30_000, // 30s — matches the API's TTL cache
     gcTime: 5 * 60 * 1000, // 5 min — keep pages in memory for back navigation
-    retry: 1,
+    // Retry once on 5xx (network blips), but don't retry 4xx (client error —
+    // retrying wastes time and blocks further pagination).
+    retry: (failureCount, error: Error & { status?: number }) => {
+      const status = (error as Error & { status?: number }).status ?? 0;
+      if (status >= 400 && status < 500) return false;
+      return failureCount < 2;
+    },
+    // Keep previous data visible while a new filter fetch is in flight —
+    // prevents the grid from blanking out on every filter change.
+    placeholderData: keepPreviousData,
   });
 
   // Flatten all pages into a single provider array.
@@ -267,6 +283,13 @@ export function useMarketplaceProviders(
     void query.fetchNextPage();
   };
 
+  // refetch: re-runs the query for ALL loaded pages. Used by the retry
+  // banner in MarketplaceBrowser. Wrapped in `void` so callers can fire-
+  // and-forget without an unhandled promise rejection warning.
+  const refetch = () => {
+    void query.refetch();
+  };
+
   return {
     providers,
     total,
@@ -276,5 +299,6 @@ export function useMarketplaceProviders(
     isFetching: query.isFetching,
     fetchNextPage,
     error: query.error,
+    refetch,
   };
 }

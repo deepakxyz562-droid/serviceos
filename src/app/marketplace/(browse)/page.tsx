@@ -7,6 +7,8 @@ import { MarketplaceHeader } from '@/components/marketplace/marketplace-header';
 import { MarketplaceSidebar } from '@/components/marketplace/marketplace-sidebar';
 import { MarketplaceSortControl } from '@/components/marketplace/marketplace-sort-control';
 import { MarketplaceMobileNav } from '@/components/marketplace/marketplace-mobile-nav';
+import { MarketplaceMobileFilters } from '@/components/marketplace/marketplace-mobile-filters';
+import { ReloadButton } from '@/components/marketplace/reload-button';
 import type { ProviderListItem } from '@/components/marketplace/types';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import {
@@ -405,6 +407,7 @@ export default async function MarketplaceBrowsePage({
           <MarketplaceSidebar
             providers={providers}
             total={totalProviders}
+            country={detectedCountry}
             verticals={VERTICALS}
             activeVertical={verticalFilter}
             activeIndustry={industryFilter}
@@ -412,7 +415,7 @@ export default async function MarketplaceBrowsePage({
           />
 
           {/* Main column — ONLY THIS PROVIDER LIST AREA SCROLLS */}
-          <main className="flex-1 h-full overflow-y-auto pb-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.25rem)] lg:pb-12 scroll-smooth">
+          <main id="main-content" className="flex-1 h-full overflow-y-auto pb-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.25rem)] lg:pb-12 scroll-smooth">
             {/* FIXED/STICKY BREADCRUMB & SORT FILTER BAR — INSIDE LISTING AREA */}
             <nav
               aria-label="Breadcrumb"
@@ -460,7 +463,25 @@ export default async function MarketplaceBrowsePage({
                     </li>
                   ) : null}
                 </ol>
-                <MarketplaceSortControl />
+                {/* Right-side controls — Filters (mobile only) + Sort (sm+).
+                    The Filters button opens MarketplaceMobileFilters' Sheet
+                    which reuses the existing MarketplaceSidebar content
+                    (categories + trust filters + stats). Sort is hidden on
+                    <640px (separate issue). Both are right-aligned in the
+                    sticky breadcrumb bar so they stay reachable as the user
+                    scrolls. */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <MarketplaceMobileFilters
+                    providers={providers}
+                    total={totalProviders}
+                    country={detectedCountry}
+                    verticals={VERTICALS}
+                    activeVertical={verticalFilter}
+                    activeIndustry={industryFilter}
+                    verticalGroups={verticalGroups}
+                  />
+                  <MarketplaceSortControl />
+                </div>
               </div>
             </nav>
 
@@ -505,11 +526,24 @@ export default async function MarketplaceBrowsePage({
             </noscript>
 
             {dbError ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+              <div
+                role="alert"
+                className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+              >
                 <p className="font-semibold">Couldn&apos;t reach the database</p>
                 <p className="mt-1 text-xs">
                   The marketplace is temporarily unavailable. Please try again in a moment.
                 </p>
+                {/* P1 issue #37 — retry button. Reloads the page so the SSR
+                    DB fetch re-runs (wrapped in unstable_cache, 30s TTL).
+                    If the DB blip was transient, the retry succeeds; if
+                    still down, the same error renders again (no infinite
+                    loop). Uses the client-side ReloadButton component since
+                    this page is a server component and can't attach
+                    onClick directly. */}
+                <div className="mt-4 flex justify-center">
+                  <ReloadButton label="Try again" />
+                </div>
               </div>
             ) : (
               <MarketplaceBrowser

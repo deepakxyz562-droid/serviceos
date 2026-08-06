@@ -120,7 +120,34 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
+  }
+  /*
+   * Visible focus indicator (P1 a11y fix).
+   *
+   * The previous `outline-ring/50` only set the outline COLOR — Tailwind v4
+   * doesn't add `outline-style: solid` by default, so the outline was
+   * invisible on virtually every interactive element (sidebar links, trust
+   * filter buttons, "List" button, account menu, call/details buttons, mobile
+   * nav tabs, Near Me button, LocationChip, etc.).
+   *
+   * This global `:focus-visible` rule provides a visible 2px ring on every
+   * focusable element when the user navigates by keyboard. Mouse/touch users
+   * never see `:focus-visible` (it only triggers for keyboard navigation),
+   * so this doesn't add visual noise for pointer users.
+   *
+   * `var(--ring)` is the theme's emerald accent (oklch(0.696 0.17 162.48)) in
+   * light mode and a neutral gray in dark mode — both meet WCAG 1.4.11
+   * non-text contrast (3:1) against their backgrounds.
+   *
+   * Elements that already have explicit `focus-visible:ring-2` classes will
+   * show BOTH the outline and the ring — this is intentional: the global rule
+   * is a defensive default for elements that don't have explicit focus styles,
+   * and the combo is acceptable on the handful that do.
+   */
+  *:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
   body {
     @apply bg-background text-foreground;

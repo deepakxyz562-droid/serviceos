@@ -84,7 +84,7 @@ export function parseAddress(
   }
 
   const find = (type: string): GooglePlaceAddressComponent | undefined =>
-    components.find((c) => c.types.includes(type));
+    components.find((c) => (c.types || []).includes(type));
 
   const streetNumber = find('street_number');
   const route = find('route');
@@ -149,11 +149,18 @@ function generateId(): string {
 /**
  * Generate a SEO-friendly description when scraping fails.
  *
- * Template: "Looking for reliable {industry} services in {city}? {name} is a
- * trusted {industry} business based in {city}, {state}. Rated {rating}★ from
- * {reviewCount} Google reviews, {name} provides professional {industry}
- * services to the {city} area. Contact {name} today for quality workmanship
- * and competitive pricing."
+ * Output is HTML with <p> tags — matches the format of scraped descriptions
+ * so the detail page renders consistently whether the description was
+ * scraped from the business website or generated as a fallback.
+ *
+ * The detail page renders `description` via `dangerouslySetInnerHTML` with
+ * Tailwind `prose` classes, so <p> tags produce proper paragraph breaks.
+ *
+ * Template (2 paragraphs):
+ *   <p>Looking for reliable {industry} services in {city}? {name} is a
+ *   trusted {industry} business based in {city}, {state}.</p>
+ *   <p>{rating line}. Contact {name} today for quality workmanship and
+ *   competitive pricing.</p>
  */
 export function generateDescription(
   name: string,
@@ -168,7 +175,11 @@ export function generateDescription(
   const ratingPart = rating > 0
     ? `Rated ${rating.toFixed(1)}★ from ${reviewCount} Google reviews, ${name} provides professional ${industry} services to the ${cityPart} area.`
     : `${name} provides professional ${industry} services to the ${cityPart} area.`;
-  return `Looking for reliable ${industry} services in ${cityPart}? ${name} is a trusted ${industry} business based in ${cityPart}${statePart}. ${ratingPart} Contact ${name} today for quality workmanship and competitive pricing.`;
+
+  const p1 = `Looking for reliable ${industry} services in ${cityPart}? ${name} is a trusted ${industry} business based in ${cityPart}${statePart}.`;
+  const p2 = `${ratingPart} Contact ${name} today for quality workmanship and competitive pricing.`;
+
+  return `<p>${p1}</p>\n<p>${p2}</p>`;
 }
 
 /** Generate a short tagline. */
@@ -227,6 +238,18 @@ export interface MapOptions {
   descriptionSource?: 'website_scrape' | 'generated';
   /** Where the email came from — recorded in settingsJson for audit. */
   emailSource?: 'website_scrape' | 'none';
+  /**
+   * The industry the SEARCH QUERY was for (e.g. 'landscaping', 'plumbing').
+   * This is used as the PRIMARY industry for the Tenant, because Google's
+   * `primaryType` often returns 'general_contractor' for trades like
+   * landscaping, garage door repair, handyman — which would mis-categorize
+   * them as 'construction'.
+   *
+   * Google's types[] are still scanned for SECONDARY categories
+   * (businessCategoriesJson), but the canonical `industry` field always
+   * reflects what the user searched for.
+   */
+  intendedIndustry?: string;
 }
 
 /**
@@ -236,25 +259,57 @@ export interface MapOptions {
  * @param opts    Mapping options (country code + scraped data)
  */
 export function mapPlaceToTenant(place: GooglePlace, opts: MapOptions): MappedTenant {
-  const { countryCode } = opts;
+  const { countryCode, intendedIndustry } = opts;
   const name = place.displayName?.text || 'Unknown Business';
   const addr = parseAddress(place.addressComponents, place.formattedAddress, countryCode);
   const city = addr.city || null;
   const state = addr.state || null;
 
-  const industry = primaryIndustry(place.primaryType, place.types);
-  const categories = allIndustries(place.primaryType, place.types);
+  // ── Industry assignment ─────────────────────────────────────
+  // The `intendedIndustry` (from the search query) takes precedence over
+  // Google's primaryType. Google often returns 'general_contractor' for
+  // landscaping, handyman, garage door repair — which would wrongly tag
+  // them as 'construction'. The query's intended industry is the source
+  // of truth for the canonical `industry` field.
+  //
+  // Google's types[] are still used for secondary categories, but we:
+  //   - exclude the intended industry (no dup)
+  //   - exclude 'others' (not useful as a secondary)
+  //   - exclude 'construction' if the intended industry IS landscaping/handyman
+  //     (because Google tags them as general_contractor → construction, which
+  //     is noise, not a genuine secondary trade)
+  const googleIndustries = allIndustries(place.primaryType, place.types);
+  const industry = intendedIndustry || googleIndustries[0] || 'others';
+
+  // Build secondary categories from Google's types, excluding:
+  //   - the intended industry (no dup with primary)
+  //   - 'others' (not useful)
+  //   - 'construction' if intended industry is a trade that Google
+  //     systematically tags as general_contractor
+  const NOISY_CONSTRUCTION_TRADES = new Set([
+    'landscaping', 'handyman', 'construction', 'roofing', 'flooring',
+  ]);
+  const suppressConstruction = NOISY_CONSTRUCTION_TRADES.has(industry);
+  const categories = [industry, ...googleIndustries.filter((i) => {
+    if (i === industry) return false;
+    if (i === 'others') return false;
+    if (suppressConstruction && i === 'construction') return false;
+    return true;
+  })].slice(0, 3);
 
   const rating = typeof place.rating === 'number' ? place.rating : 0;
   const reviewCount = typeof place.userRatingCount === 'number' ? place.userRatingCount : 0;
 
-  const description = opts.scrapedDescription && opts.scrapedDescription.length >= 30
-    ? opts.scrapedDescription
+  // Use the scraped description only if it's rich enough (≥200 chars of HTML,
+  // which corresponds to roughly 1 substantive paragraph). Otherwise fall
+  // back to the generated template so the detail page always has decent copy.
+  const hasUsableScrape = opts.scrapedDescription && opts.scrapedDescription.length >= 200;
+
+  const description = hasUsableScrape
+    ? opts.scrapedDescription!
     : generateDescription(name, industry, city, state, rating, reviewCount);
 
-  const descriptionSource = opts.scrapedDescription && opts.scrapedDescription.length >= 30
-    ? 'website_scrape'
-    : 'generated';
+  const descriptionSource = hasUsableScrape ? 'website_scrape' : 'generated';
 
   const emailSource = opts.scrapedEmail ? 'website_scrape' : 'none';
 

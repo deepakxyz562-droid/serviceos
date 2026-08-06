@@ -89,6 +89,9 @@ export async function GET(
         seoDescription: true,
         email: true,
         phone: true,
+        whatsappPhone: true,
+        website: true,
+        address: true,
         // Eligibility flags — surface to the public so the UI can show
         // verified badges.
         identityVerified: true,
@@ -105,6 +108,27 @@ export async function GET(
         { status: 404 },
       );
     }
+
+    // ── Phone + website normalization ────────────────────────────────────
+    // Strip any leading backslash (defensive — some seed data carried "\+1")
+    // and ensure the website has a protocol so the rendered <a> is clickable.
+    const normalizePhone = (raw: string | null): string | null => {
+      if (!raw) return null;
+      const cleaned = raw.replace(/^[\s\\]+/, '').trim();
+      return cleaned || null;
+    };
+    const normalizeWebsite = (raw: string | null): string | null => {
+      if (!raw) return null;
+      const trimmed = raw.trim();
+      if (!trimmed) return null;
+      return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    };
+    const tenantNormalized = {
+      ...tenant,
+      phone: normalizePhone(tenant.phone),
+      whatsappPhone: normalizePhone(tenant.whatsappPhone),
+      website: normalizeWebsite(tenant.website),
+    };
 
     // ── Parallel: services, portfolio, certifications, reviews, featured ──
     const [services, portfolio, certifications, reviews, featured] = await Promise.all([
@@ -189,8 +213,8 @@ export async function GET(
 
     return NextResponse.json({
       tenant: {
-        ...tenant,
-        gallery: safeParse(tenant.galleryJson, []),
+        ...tenantNormalized,
+        gallery: safeParse(tenantNormalized.galleryJson, []),
         businessHours: safeParse(tenant.businessHoursJson, {}),
         serviceAreas: safeParse(tenant.serviceAreasJson, []),
         socialLinks: safeParse(tenant.socialLinksJson, {}),

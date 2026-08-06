@@ -26,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { LocationChip } from './location-chip';
 
 // ─── Bot detection ─────────────────────────────────────────────────────
 // Crawlers (Googlebot, Bingbot, etc.) should NOT fire the /api/auth/me XHR
@@ -47,11 +48,20 @@ function isBot(): boolean {
  * ------------------
  * Sticky top header for the marketplace (browse page + provider detail page).
  *
- * Layout (single row):
- *   • Logo (links to /marketplace) — "Fieseros Marketplace" + tagline
- *   • Centered search bar — LIVE filtering (writes to Zustand store, debounced
- *     250ms by MarketplaceBrowser). No submit button needed — typing filters
- *     the grid instantly. Includes a city input on the right side.
+ * Layout:
+ *   • Mobile (<md):  Two stacked rows. Row 1 = Logo + SearchBox + Action.
+ *                    Row 2 = full-width LocationChip (OLX-style location pill
+ *                    with GPS detect + country/city dropdown picker).
+ *   • Desktop (≥md): Single row. Logo → LocationChip → SearchBox → Action.
+ *                    The chip sits to the LEFT of the search input (OLX-style).
+ *
+ *   • Search bar — LIVE keyword filtering (writes to Zustand store, debounced
+ *     250ms by MarketplaceBrowser). No submit button — typing filters the
+ *     grid instantly.
+ *   • LocationChip — opens a Popover with "Use my current location" (GPS) +
+ *     country/city dropdown picker + Clear. Writes the picked location to the
+ *     shared store so MarketplaceBrowser's distance ranking + the ProviderCard
+ *     "X km away" badge update instantly.
  *   • "List your business" CTA (emerald button → /auth/register)
  *
  * On the browse page, the search inputs are pre-filled from URL search params
@@ -94,13 +104,18 @@ export function MarketplaceHeader({
     if (initialCity && !cityInput) setCityInput(initialCity);
   }, []);
 
-  // On the provider detail page, navigate to /marketplace when the user types
+  // On the provider detail page, navigate to /marketplace when the user types.
+  // The LocationChip is also rendered here so users can set their location
+  // before navigating back to the browse grid.
   if (navigateOnSearch) {
     return (
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pt-[env(safe-area-inset-top,0px)]">
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center gap-3 sm:gap-6">
             <Logo />
+            <div className="hidden md:block">
+              <LocationChip />
+            </div>
             <form
               action="/marketplace"
               method="get"
@@ -118,17 +133,28 @@ export function MarketplaceHeader({
             </form>
             <HeaderAction />
           </div>
+          {/* Mobile: chip below the search input, full-width */}
+          <div className="md:hidden pb-2.5">
+            <LocationChip />
+          </div>
         </div>
       </header>
     );
   }
 
-  // Browse page — live filter (Zustand store drives MarketplaceBrowser)
+  // Browse page — live filter (Zustand store drives MarketplaceBrowser).
+  // Layout: mobile = two rows (search row + chip row); desktop = single row
+  // with the chip to the LEFT of the search input (OLX-style).
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pt-[env(safe-area-inset-top,0px)]">
       <div className="w-full px-4 sm:px-6 lg:px-8">
+        {/* Row 1: Logo + (chip on desktop) + Search + Action */}
         <div className="flex h-16 items-center gap-3 sm:gap-6">
           <Logo />
+          {/* Desktop: chip sits left of the search input (OLX-style) */}
+          <div className="hidden md:block">
+            <LocationChip />
+          </div>
           <SearchBox
             searchValue={searchInput}
             onSearchChange={setSearchInput}
@@ -136,6 +162,10 @@ export function MarketplaceHeader({
             onCityChange={setCityInput}
           />
           <HeaderAction />
+        </div>
+        {/* Mobile: chip below the search input, full-width */}
+        <div className="md:hidden pb-2.5">
+          <LocationChip />
         </div>
       </div>
     </header>
