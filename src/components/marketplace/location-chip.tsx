@@ -86,11 +86,17 @@ export function LocationChip() {
   // ── Store reads ──────────────────────────────────────────────────────
   // userLocation holds the structured lat/lng/city/region used for distance
   // ranking + the chip label. cityInput is the raw text filter the API uses
-  // to WHERE-match providers by city.
+  // to WHERE-match providers by city. countryFilter is the ISO code that
+  // gets sent to the providers + counts endpoints — writing it here is what
+  // makes picking a different country in the dropdown actually re-query the
+  // API (previously it was a frozen server prop and the query stayed on the
+  // GeoIP country, returning 0 results for e.g. country=US&city=Sydney).
   const userLocation = useMarketplaceSearch((s) => s.userLocation);
   const cityInput = useMarketplaceSearch((s) => s.cityInput);
   const setUserLocation = useMarketplaceSearch((s) => s.setUserLocation);
   const setCityInput = useMarketplaceSearch((s) => s.setCityInput);
+  const countryFilter = useMarketplaceSearch((s) => s.countryFilter);
+  const setCountryFilter = useMarketplaceSearch((s) => s.setCountryFilter);
 
   // ── GPS detect ───────────────────────────────────────────────────────
   const { requestLocation, clearLocation: clearGpsLocation, loading } =
@@ -101,10 +107,17 @@ export function LocationChip() {
   const [open, setOpen] = React.useState(false);
 
   // ── Country/city picker state ────────────────────────────────────────
-  // Default to the US catalogue — most marketplace traffic is US. The user
-  // can switch countries via the <select>. The selected city writes to the
-  // store on pick.
-  const [countryCode, setCountryCode] = React.useState<string>('US');
+  // Initialize from the store's countryFilter (seeded from GeoIP by
+  // MarketplaceBrowser). Falls back to 'US' only if neither the store nor
+  // a subsequent pick has set a country — the dropdown always shows a
+  // sensible default. When the store's countryFilter changes externally
+  // (e.g. the "Browse all countries" button in MarketplaceBrowser clears
+  // it), we DON'T auto-sync the picker — the picker represents the user's
+  // in-progress selection, not the committed filter. The committed filter
+  // is what drives the grid.
+  const [countryCode, setCountryCode] = React.useState<string>(
+    countryFilter ?? 'US'
+  );
   const cities = React.useMemo<MarketplaceCity[]>(
     () => getCitiesForCountry(countryCode),
     [countryCode]
@@ -149,14 +162,29 @@ export function LocationChip() {
     if (loc.city) {
       setCityInput(loc.city);
     }
+    // If the GPS/reverse-geocode returned a country code, push it into the
+    // store so the providers + counts endpoints filter by the detected
+    // country (not the stale GeoIP value). The useUserLocation hook's
+    // LocatedResult carries `country` when the reverse-geocoder resolved it.
+    if (loc.country) {
+      const code = loc.country.trim().toUpperCase().substring(0, 2);
+      setCountryFilter(code);
+      setCountryCode(code);
+    }
     // Close the popover so the user sees the chip update immediately.
     setOpen(false);
-  }, [requestLocation, setCityInput, setUserLocation]);
+  }, [requestLocation, setCityInput, setUserLocation, setCountryFilter]);
 
   const handlePickCity = React.useCallback(
     (cityName: string) => {
       const city = cities.find((c) => c.city === cityName);
       if (!city) return;
+      // Write the country code to the store so the API actually filters by
+      // the picked country (this was the core bug — previously the country
+      // stayed as the GeoIP value, so picking "Sydney, Australia" while
+      // GeoIP=US returned 0 results). Also keep the picker's countryCode
+      // in sync so the city <select> stays populated for the right country.
+      setCountryFilter(countryCode);
       // Write both the structured location (for ranking + chip label) and
       // the raw city filter (for the API WHERE-clause). lowAccuracy=false
       // because the catalogue lat/lng is city-centre-precise.
@@ -171,17 +199,25 @@ export function LocationChip() {
       setCityInput(city.city);
       setOpen(false);
     },
-    [cities, setCityInput, setUserLocation]
+    [cities, setCityInput, setUserLocation, setCountryFilter, countryCode]
   );
 
   const handleClear = React.useCallback(() => {
-    // Reset everything: store fields, GPS hook state, picker state.
+    // Reset EVERYTHING: store fields (country included), GPS hook state,
+    // picker state. Previously the country was a frozen server prop and
+    // couldn't be cleared — now it lives in the store so setCountryFilter
+    // (null) actually removes the country filter, falling back to global
+    // results.
     setUserLocation(null);
     setCityInput('');
+    setCountryFilter(null);
     clearGpsLocation();
     setGeoError(null);
+    // Reset the picker to the store's now-cleared value (default 'US') so
+    // the next open of the popover starts from a clean slate.
+    setCountryCode('US');
     setOpen(false);
-  }, [clearGpsLocation, setCityInput, setUserLocation]);
+  }, [clearGpsLocation, setCityInput, setUserLocation, setCountryFilter]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

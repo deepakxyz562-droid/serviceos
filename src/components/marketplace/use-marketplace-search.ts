@@ -108,6 +108,23 @@ interface MarketplaceSearchState {
   /** Trust filter: only show providers offering 24/7 emergency dispatch. */
   trustEmergency: boolean;
   /**
+   * ISO country code (e.g. 'US', 'AU', 'CA') used to filter providers by
+   * country on the API + counts endpoint. null = no country filter (show
+   * global results).
+   *
+   * Initialized from the server's GeoIP-detected country on mount (see
+   * MarketplaceBrowser), then updated when the user picks a different
+   * country in the LocationChip popover. Cleared by the LocationChip's
+   * "Clear location" button.
+   *
+   * Living in the store (vs. a static server prop) is what lets the
+   * LocationChip drive a country CHANGE at runtime — previously the country
+   * was a frozen prop passed down from the SSR page, so picking "Australia"
+   * in the chip updated the chip's local state but the API was still hit
+   * with country=US (the GeoIP value), returning 0 results.
+   */
+  countryFilter: string | null;
+  /**
    * User location for distance-based sorts ('recommended' composite ranking
    * and 'distance' pure Haversine). null = no location context (falls back
    * to the no-location 50/33/17 ranking split).
@@ -171,6 +188,8 @@ interface MarketplaceSearchState {
   toggleTrustFullyVerified: () => void;
   toggleTrustRatingHigh: () => void;
   toggleTrustEmergency: () => void;
+  /** Set or clear the country filter. null = no country filter (global). */
+  setCountryFilter: (code: string | null) => void;
   /** Set or clear the user location used by the 'recommended' and 'distance' sorts. */
   setUserLocation: (loc: MarketplaceUserLocation | null) => void;
   /** Publish the filtered + sorted list so the sidebar counts stay in sync with the grid. */
@@ -199,6 +218,11 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
   trustFullyVerified: false,
   trustRatingHigh: false,
   trustEmergency: false,
+  // No country filter until MarketplaceBrowser seeds it from the server's
+  // GeoIP-detected country on mount. null = global results on first paint
+  // (briefly — the seed happens in a layout effect before paint whenever
+  // possible, so the user usually never sees the unfiltered state).
+  countryFilter: null,
   // No user location until the user clicks "Use my location" or selects
   // the "Near Me" mobile tab. When null, 'recommended' falls back to the
   // no-location ranking split and 'distance' is disabled in the dropdown.
@@ -237,6 +261,7 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
   toggleTrustFullyVerified: () => set((s) => ({ trustFullyVerified: !s.trustFullyVerified })),
   toggleTrustRatingHigh: () => set((s) => ({ trustRatingHigh: !s.trustRatingHigh })),
   toggleTrustEmergency: () => set((s) => ({ trustEmergency: !s.trustEmergency })),
+  setCountryFilter: (code) => set({ countryFilter: code }),
   setUserLocation: (loc) => set({ userLocation: loc }),
   setFilteredProviders: (list) => set({ filteredProviders: list }),
   setTotalProvidersCount: (n) => set({ totalProvidersCount: n }),

@@ -180,6 +180,30 @@ export function MarketplaceBrowser({
   const trustRatingHigh = useMarketplaceSearch((s) => s.trustRatingHigh);
   const trustEmergency = useMarketplaceSearch((s) => s.trustEmergency);
 
+  // ── Country filter (store-driven, not a frozen server prop) ──────────
+  // The server's GeoIP-detected country is passed as `detectedCountry` and
+  // used to SEED the store on mount. From then on, the store is the single
+  // source of truth — the LocationChip's country dropdown writes here, so
+  // picking "Australia" actually re-queries the API with country=AU instead
+  // of being stuck on the GeoIP value. Cleared by "Clear location".
+  const countryFilter = useMarketplaceSearch((s) => s.countryFilter);
+  const setCountryFilter = useMarketplaceSearch((s) => s.setCountryFilter);
+
+  // Seed the store's countryFilter from the server's detectedCountry EXACTLY
+  // ONCE on mount (guarded by a ref so React StrictMode's double-invoke in
+  // dev doesn't overwrite a user's in-progress country change on re-mount).
+  // We only seed when the store value is still null (its initial state) —
+  // if the store already has a value (e.g. a hot-route from another page
+  // that already set it), we keep it.
+  const didSeedCountryRef = React.useRef(false);
+  React.useEffect(() => {
+    if (didSeedCountryRef.current) return;
+    didSeedCountryRef.current = true;
+    if (detectedCountry && !countryFilter) {
+      setCountryFilter(detectedCountry);
+    }
+  }, [detectedCountry, countryFilter, setCountryFilter]);
+
   // ── Server-side cursor pagination via useInfiniteQuery ─────────────────
   // The SSR page fetched page 1 (24 items) + computed nextCursor + total.
   // We seed the hook's React Query cache with that data so page 1 is never
@@ -205,7 +229,13 @@ export function MarketplaceBrowser({
     refetch: refetchProviders,
   } = useMarketplaceProviders(
     {
-      country: detectedCountry ?? null,
+      // Use the store-driven countryFilter (seeded from detectedCountry on
+      // mount, then user-mutable via LocationChip). Falls back to
+      // detectedCountry only on the very first render before the seed
+      // effect runs, so the SSR-seeded cache matches the query key on the
+      // initial paint and only refetches when the user actually changes
+      // the country.
+      country: countryFilter ?? detectedCountry ?? null,
       search: searchQuery,
       city: cityFilter,
       vertical: verticalFilter,
@@ -482,6 +512,10 @@ export function MarketplaceBrowser({
   // pagination is handled by `fetchNextPage()` (no `visibleCount` to reset).
 
   // ── Mirror filter state into the URL (replaceState, no reload) ─────────
+  // Includes `country` so a country change in the LocationChip is reflected
+  // in the shareable URL (and survives back/forward navigation). The server
+  // page reads ?country= on initial load (it takes precedence over GeoIP),
+  // so shared links to e.g. ?country=AU&city=Sydney land on the right view.
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
@@ -493,8 +527,9 @@ export function MarketplaceBrowser({
     set('city', cityFilter || null);
     set('vertical', verticalFilter);
     set('industry', industryFilter);
+    set('country', countryFilter);
     window.history.replaceState({}, '', url.toString());
-  }, [searchQuery, cityFilter, verticalFilter, industryFilter]);
+  }, [searchQuery, cityFilter, verticalFilter, industryFilter, countryFilter]);
 
   // NOTE: sidebar vertical/industry links are NOW intercepted client-side.
   // The sidebar uses onClick handlers that call selectVertical() /
@@ -676,6 +711,15 @@ export function MarketplaceBrowser({
   // server-side pagination — the old approach just sliced an already-loaded
   // 1000-item array (no actual network request on scroll).
   //
+  // ROOT = #main-content (the scrollable <main> on the browse page).
+  // The browse page's outer layout is `fixed inset-0 ... overflow-hidden`,
+  // so the browser viewport itself NEVER scrolls — only #main-content does.
+  // If we left `root: null` (default = viewport), the sentinel would never
+  // be considered "intersecting" (it's clipped by #main-content's overflow
+  // bounds, so it's never in the viewport's intersection rect), and infinite
+  // scroll would silently never fire. Pointing root at #main-content makes
+  // the observer measure intersection against the actual scroll container.
+  //
   // 200px rootMargin: fires the fetch when the user is ~200px from the
   // bottom, so the next page loads before they actually reach it (smooth UX,
   // no visible spinner in the common case).
@@ -686,6 +730,14 @@ export function MarketplaceBrowser({
     const node = sentinelRef.current;
     if (!node || !hasMore || filtering) return;
 
+    // Resolve the scroll container. On the marketplace browse page this is
+    // <main id="main-content">. Fall back to null (= viewport) if not found
+    // (e.g. if this component is ever rendered outside the browse layout).
+    const root =
+      typeof document !== 'undefined'
+        ? document.getElementById('main-content')
+        : null;
+
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
@@ -695,7 +747,7 @@ export function MarketplaceBrowser({
           fetchNextPage();
         }
       },
-      { rootMargin: '200px 0px' },
+      { root, rootMargin: '200px 0px' },
     );
     observer.observe(node);
     return () => observer.disconnect();
@@ -790,21 +842,24 @@ export function MarketplaceBrowser({
   return (
     <div className="pl-4 pr-3 sm:pr-3 lg:pr-3 py-4">
       {/* ── Country banner ──────────────────────────────────────────────── */}
-      {/* When GeoIP detects the visitor's country (or ?country= is set),
-          show a banner so the user knows the results are country-filtered.
-          Includes a "Browse all countries" link to clear the filter. */}
-      {detectedCountry ? (
+      {/* When a country filter is active (GeoIP-seeded or user-selected via
+          the LocationChip), show a banner so the user knows the results are
+          country-filtered. The "Browse all countries" link clears the store's
+          countryFilter so the grid immediately refetches global results —
+          this is the same path the LocationChip's "Clear location" takes. */}
+      {countryFilter ? (
         <div className="mb-4 flex items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-2 text-xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
           <span className="flex items-center gap-1.5">
             <Globe className="h-3.5 w-3.5" />
-            Showing providers in <strong className="font-semibold">{detectedCountry}</strong>
+            Showing providers in <strong className="font-semibold">{countryFilter}</strong>
           </span>
-          <a
-            href="/marketplace?country="
+          <button
+            type="button"
+            onClick={() => setCountryFilter(null)}
             className="underline hover:no-underline"
           >
             Browse all countries
-          </a>
+          </button>
         </div>
       ) : null}
 
