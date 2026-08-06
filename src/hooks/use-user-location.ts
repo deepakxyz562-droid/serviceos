@@ -99,7 +99,7 @@ export function useUserLocation() {
               const data = await res.json();
               city = data.city || null;
               state = data.state || null;
-              country = data.country || null;
+              country = data.countryCode || null;
             }
             const loc: UserLocation = {
               city,

@@ -50,6 +50,7 @@ import { getIndustry, VERTICALS } from '@/lib/industry-catalog';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import { rankProviders, haversineKm } from '@/lib/marketplace-ranking';
 import { cn } from '@/lib/utils';
+import { useSearchParams } from 'next/navigation';
 
 interface MarketplaceBrowserProps {
   /** SSR-fetched first page (24 items) for SEO + instant paint. The client
@@ -68,6 +69,7 @@ interface MarketplaceBrowserProps {
     industry: string | null;
     city: string | null;
     search: string | null;
+    country: string | null;
   };
   /** ISO country code detected from GeoIP (or ?country= override).
    *  Null = no country filter (show all). Used to show a "Showing
@@ -88,6 +90,8 @@ export function MarketplaceBrowser({
   initialFilters,
   detectedCountry,
 }: MarketplaceBrowserProps) {
+  const searchParams = useSearchParams();
+
   // Concern #4: Cache the provider list to IndexedDB for offline browsing.
   // We use a dynamic import inside useEffect so Dexie (IndexedDB) is only
   // loaded in the browser — a static import would bundle Dexie into the
@@ -189,20 +193,6 @@ export function MarketplaceBrowser({
   const countryFilter = useMarketplaceSearch((s) => s.countryFilter);
   const setCountryFilter = useMarketplaceSearch((s) => s.setCountryFilter);
 
-  // Seed the store's countryFilter from the server's detectedCountry EXACTLY
-  // ONCE on mount (guarded by a ref so React StrictMode's double-invoke in
-  // dev doesn't overwrite a user's in-progress country change on re-mount).
-  // We only seed when the store value is still null (its initial state) —
-  // if the store already has a value (e.g. a hot-route from another page
-  // that already set it), we keep it.
-  const didSeedCountryRef = React.useRef(false);
-  React.useEffect(() => {
-    if (didSeedCountryRef.current) return;
-    didSeedCountryRef.current = true;
-    if (detectedCountry && !countryFilter) {
-      setCountryFilter(detectedCountry);
-    }
-  }, [detectedCountry, countryFilter, setCountryFilter]);
 
   // ── Server-side cursor pagination via useInfiniteQuery ─────────────────
   // The SSR page fetched page 1 (24 items) + computed nextCursor + total.
@@ -216,6 +206,32 @@ export function MarketplaceBrowser({
   // (fetched without filters) wouldn't match the hook's queryKey, so we
   // let the hook fetch fresh. This gives a brief loading state on deep-
   // linked filter URLs, but the data is correct.
+  // Only use SSR initial data if the current active filters match the initial filters exactly.
+  // This prevents React Query from seeding filtered queries with the wrong SSR initial data.
+  const matchesInitial = React.useMemo(() => {
+    return (
+      searchQuery === (initialFilters.search ?? '') &&
+      cityFilter === (initialFilters.city ?? '') &&
+      verticalFilter === initialFilters.vertical &&
+      industryFilter === initialFilters.industry &&
+      (countryFilter ?? detectedCountry ?? null) === initialFilters.country &&
+      !trustFullyVerified &&
+      !trustRatingHigh &&
+      !trustEmergency
+    );
+  }, [
+    searchQuery,
+    cityFilter,
+    verticalFilter,
+    industryFilter,
+    countryFilter,
+    detectedCountry,
+    initialFilters,
+    trustFullyVerified,
+    trustRatingHigh,
+    trustEmergency,
+  ]);
+
   const {
     providers: loadedProviders,
     total: loadedTotal,
@@ -227,12 +243,6 @@ export function MarketplaceBrowser({
     refetch: refetchProviders,
   } = useMarketplaceProviders(
     {
-      // Use the store-driven countryFilter (seeded from detectedCountry on
-      // mount, then user-mutable via LocationChip). Falls back to
-      // detectedCountry only on the very first render before the seed
-      // effect runs, so the SSR-seeded cache matches the query key on the
-      // initial paint and only refetches when the user actually changes
-      // the country.
       country: countryFilter ?? detectedCountry ?? null,
       search: searchQuery,
       city: cityFilter,
@@ -242,9 +252,9 @@ export function MarketplaceBrowser({
       trustRatingHigh,
       trustEmergency,
     },
-    providers,
-    initialNextCursor,
-    initialTotal,
+    matchesInitial ? providers : undefined,
+    matchesInitial ? initialNextCursor : undefined,
+    matchesInitial ? initialTotal : undefined,
   );
 
   // `filtering` = true while the API is fetching (filter change or initial
@@ -277,41 +287,57 @@ export function MarketplaceBrowser({
     return () => clearTimeout(handle);
   }, [cityInput]);
 
-  // Seed the shared store from URL params on first mount so a deep-link
-  // like /marketplace?search=plumbing pre-fills the hero search box. Also
-  // seeds vertical/industry filters from the URL so deep-links like
-  // /marketplace?vertical=home-property&industry=hvac work. Runs after
-  // hydration to avoid a server/client value mismatch.
+  // ── Sync store with server-passed initialFilters & detected country ──
+  // Next.js Server Components re-run and pass new props on history back/forward
+  // navigation or external link clicks. We sync these props to the store
+  // using strict inequality checks and ref tracking to prevent loop feedback.
+  const prevFiltersRef = React.useRef(initialFilters);
   React.useEffect(() => {
-    if (initialFilters.search && !searchInput) {
-      setSearchInput(initialFilters.search);
+    const prev = prevFiltersRef.current;
+
+    if (initialFilters.search !== prev.search) {
+      setSearchInput(initialFilters.search ?? '');
     }
-    if (initialFilters.city && !cityInput) {
-      setCityInput(initialFilters.city);
+    if (initialFilters.city !== prev.city) {
+      setCityInput(initialFilters.city ?? '');
     }
-    // Seed vertical/industry from URL only if the store doesn't already
-    // have a value (avoids overwriting a user's in-progress filter on a
-    // React re-mount).
-    if (initialFilters.vertical && !verticalFilter) {
-      selectVertical(initialFilters.vertical);
-    }
-    if (initialFilters.industry && !industryFilter) {
-      // We need the parent vertical for the industry. If the URL has both,
-      // use the vertical from the URL. Otherwise, derive it from the
-      // industry catalog.
-      const parentVertical = initialFilters.vertical
-        ? initialFilters.vertical
-        : (() => {
-            const meta = getIndustry(initialFilters.industry);
-            return meta?.vertical ?? null;
-          })();
-      if (parentVertical) {
-        selectIndustry(initialFilters.industry, parentVertical);
+    if (initialFilters.vertical !== prev.vertical || initialFilters.industry !== prev.industry) {
+      if (initialFilters.industry) {
+        const parentVertical = initialFilters.vertical || getIndustry(initialFilters.industry)?.vertical || null;
+        if (parentVertical) {
+          selectIndustry(initialFilters.industry, parentVertical);
+        }
+      } else {
+        selectVertical(initialFilters.vertical);
       }
     }
-    // Intentionally run once on mount — we only want to seed from the URL
-    // the first time this component mounts, not on every store change.
-  }, []);
+    if (initialFilters.country !== prev.country) {
+      setCountryFilter(initialFilters.country);
+    }
+
+    prevFiltersRef.current = initialFilters;
+  }, [
+    initialFilters,
+    setSearchInput,
+    setCityInput,
+    selectVertical,
+    selectIndustry,
+    setCountryFilter,
+  ]);
+
+  // Sync countryFilter when the server detected (proxy or URL) country changes.
+  // If the new country is different, we align the store and clear any active
+  // city/userLocation filters to prevent mismatch (e.g. Phoenix city filter with country CA/UK).
+  React.useEffect(() => {
+    if (detectedCountry && detectedCountry !== countryFilter) {
+      setCountryFilter(detectedCountry);
+      setCityInput('');
+      setUserLocation(null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('fieseros_user_location');
+      }
+    }
+  }, [detectedCountry, countryFilter, setCountryFilter, setCityInput, setUserLocation]);
 
   // ── Auto-detect user location on mount (localStorage -> IP -> GPS) ──
   // Runs EXACTLY ONCE (didDetectRef guards against StrictMode double-invoke).
@@ -337,24 +363,23 @@ export function MarketplaceBrowser({
         const raw = localStorage.getItem('fieseros_user_location');
         if (raw) {
           const parsed = JSON.parse(raw);
-          const age = Date.now() - parsed.timestamp;
-          if (age < 7 * 24 * 60 * 60 * 1000) {
-            setUserLocation({
-              lat: parsed.lat,
-              lng: parsed.lng,
-              city: parsed.city,
-              // parsed.state is populated by the useUserLocation hook (GPS
-              // reverse-geocode) — surface it as `region` so the LocationChip
-              // can render "Phoenix, Arizona" instead of just "Phoenix".
-              region: parsed.state ?? null,
-              source: parsed.source,
-              lowAccuracy: parsed.source === 'ip',
-            });
-            // NOTE: intentionally NOT calling setCityInput() here — see the
-            // effect header comment. userLocation (ranking) is restored; the
-            // city filter stays empty until the user types or clicks
-            // "Use my location" (now in the LocationChip header dropdown).
-            return;
+          // If the cached location does not have a country OR it mismatches the server-detected country,
+          // invalidate it immediately so we respect proxy changes instantly.
+          if (detectedCountry && (!parsed.country || parsed.country !== detectedCountry)) {
+            localStorage.removeItem('fieseros_user_location');
+          } else {
+            const age = Date.now() - parsed.timestamp;
+            if (age < 7 * 24 * 60 * 60 * 1000) {
+              setUserLocation({
+                lat: parsed.lat,
+                lng: parsed.lng,
+                city: parsed.city,
+                region: parsed.state ?? null,
+                source: parsed.source,
+                lowAccuracy: parsed.source === 'ip',
+              });
+              return;
+            }
           }
         }
       } catch {}
@@ -393,36 +418,24 @@ export function MarketplaceBrowser({
             const res = await fetch(`/api/geocode/reverse?lat=${latitude}&lng=${longitude}`);
             let city: string | null = null;
             let state: string | null = null;
+            let country: string | null = null;
             if (res.ok) {
               const data = await res.json();
               city = data.city || null;
               state = data.state || null;
+              country = data.countryCode || null;
             }
-            const loc = {
-              city,
-              state,
-              country: null,
-              lat: latitude,
-              lng: longitude,
-              source: 'gps' as const,
-              accuracy: 'gps' as const,
-              timestamp: Date.now(),
-            };
-            localStorage.setItem('fieseros_user_location', JSON.stringify(loc));
+            if (country) {
+              setCountryFilter(country);
+            }
             setUserLocation({
               lat: latitude,
               lng: longitude,
               city,
-              // Surface the reverse-geocoded state as `region` so the
-              // LocationChip header pill can render "Phoenix, Arizona"
-              // instead of just "Phoenix".
               region: state,
               source: 'gps',
               lowAccuracy: false,
             });
-            // NOTE: intentionally NOT calling setCityInput() — the city
-            // filter is user-driven only (type it, or pick via the
-            // LocationChip dropdown). See the effect header comment.
           } catch {}
         },
         () => {}, // ignore errors since we have IP fallback
@@ -502,6 +515,26 @@ export function MarketplaceBrowser({
       active = false;
     };
   }, [cityFilter, setUserLocation]);
+
+  // Synchronize userLocation changes to localStorage so they persist across reloads
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (userLocation) {
+      const loc = {
+        city: userLocation.city,
+        state: userLocation.region || null,
+        country: countryFilter || null,
+        lat: userLocation.lat,
+        lng: userLocation.lng,
+        source: userLocation.source,
+        accuracy: userLocation.source,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem('fieseros_user_location', JSON.stringify(loc));
+    } else {
+      localStorage.removeItem('fieseros_user_location');
+    }
+  }, [userLocation, countryFilter]);
 
   // NOTE: The old "flash skeleton on filter change" effect (which set
   // `filtering` for 180ms + reset `visibleCount`) has been removed. With
@@ -847,27 +880,7 @@ export function MarketplaceBrowser({
 
   return (
     <div className="pl-4 pr-3 sm:pr-3 lg:pr-3 py-4">
-      {/* ── Country banner ──────────────────────────────────────────────── */}
-      {/* When a country filter is active (GeoIP-seeded or user-selected via
-          the LocationChip), show a banner so the user knows the results are
-          country-filtered. The "Browse all countries" link clears the store's
-          countryFilter so the grid immediately refetches global results —
-          this is the same path the LocationChip's "Clear location" takes. */}
-      {countryFilter ? (
-        <div className="mb-4 flex items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-2 text-xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-          <span className="flex items-center gap-1.5">
-            <Globe className="h-3.5 w-3.5" />
-            Showing providers in <strong className="font-semibold">{countryFilter}</strong>
-          </span>
-          <button
-            type="button"
-            onClick={() => setCountryFilter(null)}
-            className="underline hover:no-underline"
-          >
-            Browse all countries
-          </button>
-        </div>
-      ) : null}
+      {/* Country banner removed per user request */}
 
       {/* The search bar + LocationChip live in the marketplace header
           (MarketplaceHeader) and share their input state via the

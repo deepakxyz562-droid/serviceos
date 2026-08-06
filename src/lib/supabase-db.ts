@@ -521,6 +521,7 @@ function buildOrConditionPart(cond: WhereInput): string | null {
   const parts: string[] = [];
   for (const [orField, orValue] of Object.entries(cond)) {
     if (orValue === undefined) continue;
+    if (orField.endsWith('Json')) continue;
 
     // Nested AND → each sub-condition becomes a part (AND-ed via parens)
     if (orField === 'AND' && Array.isArray(orValue)) {
@@ -543,11 +544,14 @@ function buildOrConditionPart(cond: WhereInput): string | null {
     if (orValue !== null && typeof orValue === 'object' && !Array.isArray(orValue) && !(orValue instanceof Date)) {
       const op = orValue as WhereOperator;
       if (op.contains !== undefined) {
-        parts.push(`${orField}.ilike.%${op.contains}%`);
+        const fieldName = orField.endsWith('Json') ? `${orField}::text` : orField;
+        parts.push(`${fieldName}.ilike.%${op.contains}%`);
       } else if (op.startsWith !== undefined) {
-        parts.push(`${orField}.ilike.${op.startsWith}%`);
+        const fieldName = orField.endsWith('Json') ? `${orField}::text` : orField;
+        parts.push(`${fieldName}.ilike.${op.startsWith}%`);
       } else if (op.endsWith !== undefined) {
-        parts.push(`${orField}.ilike.%${op.endsWith}`);
+        const fieldName = orField.endsWith('Json') ? `${orField}::text` : orField;
+        parts.push(`${fieldName}.ilike.%${op.endsWith}`);
       } else if (op.equals !== undefined) {
         if (op.equals === null) parts.push(`${orField}.is.null`);
         else parts.push(`${orField}.eq.${toOrLiteral(op.equals)}`);
@@ -587,6 +591,7 @@ function applyWhereFilters(
 ): void {
   for (const [field, value] of Object.entries(where)) {
     if (value === undefined) continue;
+    if (field.endsWith('Json')) continue;
 
     if (field === 'AND' && Array.isArray(value)) {
       for (const cond of value as WhereInput[]) {
@@ -667,13 +672,16 @@ function applyWhereFilters(
         query.in(field, op.in as (string | number | boolean)[]);
       }
       if (op.contains !== undefined) {
-        query.ilike(field, `%${op.contains}%`);
+        const fieldName = field.endsWith('Json') ? `${field}::text` : field;
+        query.ilike(fieldName, `%${op.contains}%`);
       }
       if (op.startsWith !== undefined) {
-        query.ilike(field, `${op.startsWith}%`);
+        const fieldName = field.endsWith('Json') ? `${field}::text` : field;
+        query.ilike(fieldName, `${op.startsWith}%`);
       }
       if (op.endsWith !== undefined) {
-        query.ilike(field, `%${op.endsWith}`);
+        const fieldName = field.endsWith('Json') ? `${field}::text` : field;
+        query.ilike(fieldName, `%${op.endsWith}`);
       }
       if (op.gt !== undefined) {
         const val = op.gt instanceof Date ? op.gt.toISOString() : op.gt;

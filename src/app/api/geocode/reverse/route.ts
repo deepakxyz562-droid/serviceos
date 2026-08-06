@@ -54,6 +54,9 @@ interface NominatimReverseResponse {
     village?: string
     municipality?: string
     county?: string
+    borough?: string
+    suburb?: string
+    city_district?: string
     state?: string
     country?: string
     country_code?: string
@@ -132,6 +135,9 @@ export async function GET(req: NextRequest) {
       addr.town ||
       addr.village ||
       addr.municipality ||
+      addr.borough ||
+      addr.suburb ||
+      addr.city_district ||
       addr.county ||
       null
 

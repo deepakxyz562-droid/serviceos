@@ -287,6 +287,7 @@ export function MarketplaceSidebar({
             </li>
             {verticals.map((vertical) => {
               const count = countForVertical(vertical.id);
+              if (count === 0) return null;
               const isActive = currentVertical === vertical.id && !currentIndustry;
               const isActiveWithIndustry = currentVertical === vertical.id && !!currentIndustry;
               // A vertical is expanded if the user explicitly toggled it OR if
@@ -350,6 +351,7 @@ export function MarketplaceSidebar({
                     <ul className="mt-0.5 mb-1 ml-4 space-y-0.5 border-l border-border/60 pl-2">
                       {industries.map((ind) => {
                         const indCount = countForIndustry(ind.id);
+                        if (indCount === 0) return null;
                         const indActive = currentIndustry === ind.id;
                         return (
                           <li key={ind.id}>

@@ -88,8 +88,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result, {
       headers: {
-        // Counts change rarely — cache aggressively.
-        'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+        // Prevent browser caching to ensure fresh counts on proxy changes,
+        // while the server's ttlCacheWrap still protects the database.
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
       },
     });
   } catch (err) {

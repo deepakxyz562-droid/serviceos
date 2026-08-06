@@ -46,7 +46,6 @@ import { MapPin, Crosshair, ChevronDown, X, Loader2, Locate } from 'lucide-react
 import { useUserLocation } from '@/hooks/use-user-location';
 import { useMarketplaceSearch } from './use-marketplace-search';
 import {
-  MARKETPLACE_COUNTRIES,
   getCitiesForCountry,
   type MarketplaceCity,
 } from '@/lib/marketplace-cities';
@@ -69,16 +68,11 @@ function buildChipLabel(
   userLocation: { city: string | null; region?: string | null } | null,
   cityInput: string
 ): string {
-  // Prefer the structured userLocation (it carries both city + region + lat/lng).
+  // Return only the city name for a cleaner appearance in the header.
   if (userLocation?.city) {
-    return userLocation.region
-      ? `${userLocation.city}, ${userLocation.region}`
-      : userLocation.city;
+    return userLocation.city;
   }
-  // Fall back to whatever the user typed in the city input (e.g. deep-link
-  // ?city=Berlin that hasn't been geocoded yet).
   if (cityInput.trim()) return cityInput.trim();
-  // No location context at all.
   return 'Location';
 }
 
@@ -144,12 +138,17 @@ export function LocationChip() {
   React.useEffect(() => {
     if (countryFilter && countryFilter !== countryCode) {
       setCountryCode(countryFilter);
+
+      // If the country changed, check if the current city filter belongs to the new country.
+      // If not, clear it to avoid mismatch (e.g. Phoenix city filter with country CA).
+      const newCountryCities = getCitiesForCountry(countryFilter);
+      const isCityInNewCountry = userLocation?.city && newCountryCities.some(c => c.city === userLocation.city);
+      if (!isCityInNewCountry) {
+        setUserLocation(null);
+        setCityInput('');
+      }
     }
-    // Intentionally exclude `countryCode` from deps — including it would
-    // make the effect re-run after WE update countryCode, creating a
-    // potential loop. We only want to react to EXTERNAL countryFilter
-    // changes, not our own picker selections.
-  }, [countryFilter]);
+  }, [countryFilter, countryCode, userLocation, setUserLocation, setCityInput]);
 
   // Reset geo error whenever the popover opens (so a stale error from a
   // previous attempt doesn't persist).
@@ -190,18 +189,15 @@ export function LocationChip() {
     if (loc.city) {
       setCityInput(loc.city);
     }
-    // If the GPS/reverse-geocode returned a country code, push it into the
-    // store so the providers + counts endpoints filter by the detected
-    // country (not the stale GeoIP value). The useUserLocation hook's
-    // LocatedResult carries `country` when the reverse-geocoder resolved it.
-    if (loc.country) {
-      const code = loc.country.trim().toUpperCase().substring(0, 2);
-      setCountryFilter(code);
-      setCountryCode(code);
-    }
+    // Sync the country filter. If the GPS/reverse-geocode did not return a
+    // country (due to geocoding error or timeout), fall back to the currently
+    // active countryCode to keep it populated.
+    const code = (loc.country || countryCode || 'US').trim().toUpperCase();
+    setCountryFilter(code);
+    setCountryCode(code);
     // Close the popover so the user sees the chip update immediately.
     setOpen(false);
-  }, [requestLocation, setCityInput, setUserLocation, setCountryFilter]);
+  }, [requestLocation, setCityInput, setUserLocation, setCountryFilter, countryCode]);
 
   const handlePickCity = React.useCallback(
     (cityName: string) => {
@@ -231,21 +227,14 @@ export function LocationChip() {
   );
 
   const handleClear = React.useCallback(() => {
-    // Reset EVERYTHING: store fields (country included), GPS hook state,
-    // picker state. Previously the country was a frozen server prop and
-    // couldn't be cleared — now it lives in the store so setCountryFilter
-    // (null) actually removes the country filter, falling back to global
-    // results.
+    // Reset only the user-changeable city-level location filters.
+    // The country filter is auto-detected and remains locked.
     setUserLocation(null);
     setCityInput('');
-    setCountryFilter(null);
     clearGpsLocation();
     setGeoError(null);
-    // Reset the picker to the store's now-cleared value (default 'US') so
-    // the next open of the popover starts from a clean slate.
-    setCountryCode('US');
     setOpen(false);
-  }, [clearGpsLocation, setCityInput, setUserLocation, setCountryFilter]);
+  }, [clearGpsLocation, setCityInput, setUserLocation]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -349,33 +338,8 @@ export function LocationChip() {
             </span>
           </div>
 
-          {/* Country + City dropdowns */}
+          {/* City dropdown */}
           <div className="space-y-3 px-3 pb-3">
-            <div className="space-y-1.5">
-              <label
-                htmlFor="location-chip-country"
-                className="text-xs font-medium text-muted-foreground"
-              >
-                Country
-              </label>
-              <Select value={countryCode} onValueChange={setCountryCode}>
-                <SelectTrigger
-                  id="location-chip-country"
-                  className="h-11 w-full"
-                  aria-label="Select country"
-                >
-                  <SelectValue placeholder="Select country" />
-                </SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {MARKETPLACE_COUNTRIES.map((c) => (
-                    <SelectItem key={c.code} value={c.code}>
-                      {c.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-1.5">
               <label
                 htmlFor="location-chip-city"
@@ -405,7 +369,7 @@ export function LocationChip() {
                 <SelectContent className="max-h-72">
                   {cities.length === 0 ? (
                     <div className="px-2 py-3 text-center text-xs text-muted-foreground">
-                      Pick a country first
+                      No cities available
                     </div>
                   ) : (
                     cities.map((c) => (

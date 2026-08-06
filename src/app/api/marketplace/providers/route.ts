@@ -216,10 +216,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
         total: result.total,
       }, {
         headers: {
-          // Browser caches for 30s; CDN serves stale while revalidating for 60s.
-          // This means back-navigation reuses the cached JSON instead of
-          // re-requesting, fixing the "slow back-nav" UX issue.
-          'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
         },
       });
     } catch (err) {
@@ -475,7 +472,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
       offset,
     }, {
       headers: {
-        'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
       },
     });
   } catch (err) {

@@ -203,45 +203,27 @@ export function buildProviderWhereClause(opts: ProviderFilterOptions): Record<st
     where.country = opts.country;
   }
 
-  // City filter — case-insensitive substring on city OR state. We also match
-  // against serviceAreasJson via a contains (the JSON is stored as text), which
-  // is a cheap substring scan on a small text field.
+  const orGroups: any[] = [];
+
+  // City filter — case-insensitive substring on city OR state.
   if (opts.city) {
-    const cityClauses = [
+    orGroups.push([
       { city: { contains: opts.city, ...CI } },
       { state: { contains: opts.city, ...CI } },
       { serviceAreasJson: { contains: opts.city, ...CI } },
-    ];
-    // If search is also set, both must be true (AND of two OR groups).
-    if (where.OR) {
-      where.AND = [...((where.AND as unknown[]) || []), { OR: cityClauses }];
-      delete where.OR;
-    } else {
-      where.OR = cityClauses;
-    }
+    ]);
   }
 
   // Free-text search — case-insensitive substring on name / tagline / description.
   if (opts.search) {
-    const searchClauses = [
+    orGroups.push([
       { name: { contains: opts.search, ...CI } },
       { tagline: { contains: opts.search, ...CI } },
       { description: { contains: opts.search, ...CI } },
-    ];
-    if (where.OR) {
-      where.AND = [...((where.AND as unknown[]) || []), { OR: searchClauses }];
-      delete where.OR;
-    } else {
-      where.OR = searchClauses;
-    }
+    ]);
   }
 
   // Vertical filter — convert to an `industry IN [list]` clause at SQL level.
-  // Previously this was applied post-fetch in JS, which broke cursor pagination
-  // (the API would fetch 24 rows by rating DESC, then filter to ~3 matching
-  // rows, leaving a short page + a stale `nextCursor`). Now we resolve the
-  // vertical → list of industry IDs once and pass it as a Prisma `in` filter,
-  // so the DB returns exactly the matching rows.
   if (opts.vertical) {
     const { VERTICAL_MAP } = require('@/lib/industry-catalog') as typeof import('@/lib/industry-catalog');
     const industriesInVertical = Object.entries(VERTICAL_MAP)
@@ -252,22 +234,22 @@ export function buildProviderWhereClause(opts: ProviderFilterOptions): Record<st
     }
   }
 
-  // Industry filter — exact match on the industry column. The vertical filter
-  // is applied post-fetch (vertical is derived from industry via the catalog,
-  // not stored directly). businessCategoriesJson membership is also checked
-  // for tenants that list multiple industries.
+  // Industry filter — exact match on the industry column or businessCategoriesJson membership.
   if (opts.industry) {
     const ind = opts.industry.toLowerCase().trim();
-    const industryClauses = [
+    orGroups.push([
       { industry: { equals: ind, ...CI } },
       { businessCategoriesJson: { contains: `"${ind}"`, ...CI } },
-    ];
-    if (where.OR) {
-      where.AND = [...((where.AND as unknown[]) || []), { OR: industryClauses }];
-      delete where.OR;
-    } else {
-      where.OR = industryClauses;
-    }
+    ]);
+  }
+
+  // Combine OR groups into Prisma where clause logic.
+  // If there's 1 group, use top-level where.OR. If there are multiple,
+  // combine them into where.AND as nested OR conditions to keep filters separate.
+  if (orGroups.length === 1) {
+    where.OR = orGroups[0];
+  } else if (orGroups.length > 1) {
+    where.AND = orGroups.map((group) => ({ OR: group }));
   }
 
   // Trust filters — direct boolean / numeric comparisons.

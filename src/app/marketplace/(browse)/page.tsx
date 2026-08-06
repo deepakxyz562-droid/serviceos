@@ -556,6 +556,7 @@ export default async function MarketplaceBrowsePage({
                   industry: industryFilter,
                   city: params.city ?? null,
                   search: params.search ?? null,
+                  country: params.country ?? null,
                 }}
               />
             )}
