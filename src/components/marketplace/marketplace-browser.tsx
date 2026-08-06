@@ -730,13 +730,21 @@ export function MarketplaceBrowser({
     const node = sentinelRef.current;
     if (!node || !hasMore || filtering) return;
 
-    // Resolve the scroll container. On the marketplace browse page this is
-    // <main id="main-content">. Fall back to null (= viewport) if not found
-    // (e.g. if this component is ever rendered outside the browse layout).
-    const root =
-      typeof document !== 'undefined'
-        ? document.getElementById('main-content')
-        : null;
+    // Resolve the scroll container FROM THE SENTINEL ITSELF, not via a global
+    // getElementById lookup. The browse page's outer layout is
+    // `fixed inset-0 overflow-hidden`, so the browser viewport NEVER scrolls
+    // — only <main id="main-content"> does. If we left root=null (viewport),
+    // the sentinel would never be considered "intersecting" (it's clipped by
+    // #main-content's overflow bounds) and infinite scroll would never fire.
+    //
+    // `node.closest('#main-content')` walks up the DOM tree starting from the
+    // sentinel (which we just verified exists), so it ALWAYS finds the correct
+    // ancestor — even if this effect fires before <main> is fully committed
+    // during hydration. This eliminates the race condition where
+    // document.getElementById('main-content') could return null and silently
+    // fall back to the viewport root. Falls back to <main> then to null
+    // (= viewport) for non-marketplace contexts where there's no #main-content.
+    const root = node.closest('#main-content') || node.closest('main');
 
     const observer = new IntersectionObserver(
       (entries) => {

@@ -110,11 +110,9 @@ export function LocationChip() {
   // Initialize from the store's countryFilter (seeded from GeoIP by
   // MarketplaceBrowser). Falls back to 'US' only if neither the store nor
   // a subsequent pick has set a country — the dropdown always shows a
-  // sensible default. When the store's countryFilter changes externally
-  // (e.g. the "Browse all countries" button in MarketplaceBrowser clears
-  // it), we DON'T auto-sync the picker — the picker represents the user's
-  // in-progress selection, not the committed filter. The committed filter
-  // is what drives the grid.
+  // sensible default. A useEffect below syncs this local state whenever
+  // the store's countryFilter changes externally (GPS, "Browse all
+  // countries", deep-link), so the picker never goes stale.
   const [countryCode, setCountryCode] = React.useState<string>(
     countryFilter ?? 'US'
   );
@@ -122,6 +120,36 @@ export function LocationChip() {
     () => getCitiesForCountry(countryCode),
     [countryCode]
   );
+
+  // ── Sync picker's countryCode with the store's countryFilter ─────────
+  // The store's countryFilter is the source of truth — it can change
+  // externally via:
+  //   • MarketplaceBrowser's mount-time seed from GeoIP (detectedCountry)
+  //   • "Browse all countries" button (clears countryFilter to null)
+  //   • GPS detect writing loc.country into the store
+  //   • Deep-link ?country=AU seeding the store on a fresh page load
+  //
+  // Without this sync, the picker dropdown + city <select> would show a
+  // STALE country after any external change — e.g. after GPS detects
+  // Canada, reopening the chip would still show "United States" + US
+  // cities, and picking a city would write the wrong country back to the
+  // store.
+  //
+  // We only sync when countryFilter is NON-NULL — when it's cleared to
+  // null (e.g. "Browse all countries"), we leave the picker on its last
+  // value. handleClear explicitly resets to 'US', and forcing the picker
+  // to a placeholder on null would lose the user's context for no
+  // benefit (the popover is usually closed when the filter is cleared
+  // externally).
+  React.useEffect(() => {
+    if (countryFilter && countryFilter !== countryCode) {
+      setCountryCode(countryFilter);
+    }
+    // Intentionally exclude `countryCode` from deps — including it would
+    // make the effect re-run after WE update countryCode, creating a
+    // potential loop. We only want to react to EXTERNAL countryFilter
+    // changes, not our own picker selections.
+  }, [countryFilter]);
 
   // Reset geo error whenever the popover opens (so a stale error from a
   // previous attempt doesn't persist).
