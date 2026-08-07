@@ -9,8 +9,9 @@
  * total — not the count of currently-loaded items (which caps at 24
  * due to cursor pagination).
  *
- * The hook is country-aware: when the user's country changes (e.g. via
- * GeoIP or manual selection), the counts are refetched for that country.
+ * The hook is location-aware: when the user's country or city filter
+ * changes, the counts are refetched for that location so the sidebar
+ * counts stay consistent with the providers list.
  *
  * Caching: React Query keeps the result fresh for 60s (staleTime) and
  * in memory for 5 min (gcTime) — matches the API's TTL.
@@ -24,9 +25,13 @@ export interface MarketplaceCounts {
   total: number;
 }
 
-async function fetchCounts(country: string | null): Promise<MarketplaceCounts> {
+async function fetchCounts(
+  country: string | null,
+  city: string | null,
+): Promise<MarketplaceCounts> {
   const url = new URL('/api/marketplace/counts', window.location.origin);
   if (country) url.searchParams.set('country', country);
+  if (city) url.searchParams.set('city', city);
 
   const res = await fetch(url.toString(), {
     headers: { Accept: 'application/json' },
@@ -42,12 +47,32 @@ async function fetchCounts(country: string | null): Promise<MarketplaceCounts> {
   };
 }
 
-export function useMarketplaceCounts(country: string | null) {
+/**
+ * Fetch real DB-level counts grouped by vertical + industry.
+ *
+ * @param country  ISO country code (e.g. 'US'), or null for global.
+ * @param city     Optional city filter (case-insensitive substring on
+ *                 city / state / serviceAreasJson). Pass null or empty
+ *                 string to disable. Should already be debounced by the
+ *                 caller to avoid refetching on every keystroke.
+ */
+export function useMarketplaceCounts(
+  country: string | null,
+  city: string | null = null,
+) {
+  // Normalize: treat empty string as null so the queryKey is stable
+  // and the URL doesn't get an empty `city=` param.
+  const normalizedCity = city && city.trim() ? city.trim() : null;
+
   return useQuery<MarketplaceCounts>({
-    queryKey: ['marketplace', 'counts', { country: country ?? 'all' }],
-    queryFn: () => fetchCounts(country),
+    queryKey: [
+      'marketplace',
+      'counts',
+      { country: country ?? 'all', city: normalizedCity ?? 'all' },
+    ],
+    queryFn: () => fetchCounts(country, normalizedCity),
     staleTime: 60_000, // 60s — counts change rarely
-    gcTime: 5 * 60 * 1000, // 5 min — keep in memory for back navigation
+    gcTime: 5 * 60_000, // 5 min — keep in memory for back navigation
     refetchOnWindowFocus: false,
     retry: 1,
   });

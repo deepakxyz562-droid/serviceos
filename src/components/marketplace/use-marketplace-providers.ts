@@ -241,7 +241,11 @@ export function useMarketplaceProviders(
     // loaded pages.
     refetchOnWindowFocus: false,
     staleTime: 30_000, // 30s — matches the API's TTL cache
-    gcTime: 5 * 60 * 1000, // 5 min — keep pages in memory for back navigation
+    // Keep pages in memory for 30 min so back navigation from a provider
+    // detail page is instant (the loaded pages + scroll position survive).
+    // Previously this was 5 min, which meant a user who spent >5 min on a
+    // detail page would come back to a full re-fetch + lost scroll position.
+    gcTime: 30 * 60 * 1000, // 30 min
     // Retry once on 5xx (network blips), but don't retry 4xx (client error —
     // retrying wastes time and blocks further pagination).
     retry: (failureCount, error: Error & { status?: number }) => {

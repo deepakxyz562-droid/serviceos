@@ -501,8 +501,22 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
  *
  * This is a thin wrapper around fetchFeaturedListingsMap that returns just
  * the IDs as a Set (the map carries extra metadata we don't need here).
+ *
+ * PERFORMANCE: The result is cached at the module level for 60 seconds.
+ * Previously this query ran on EVERY cursor-pagination request (page 1,
+ * page 2, page 3, …), adding a DB roundtrip to each. Since featured
+ * listings change rarely (only when a SuperAdmin toggles them), a 60s
+ * TTL is safe and eliminates the per-page query.
  */
+const FEATURED_IDS_CACHE_TTL_MS = 60_000;
+let _featuredIdsCache: { value: Set<string>; expiresAt: number } | null = null;
+
 export async function fetchFeaturedTenantIds(): Promise<Set<string>> {
+  // Return cached value if still fresh.
+  if (_featuredIdsCache && Date.now() < _featuredIdsCache.expiresAt) {
+    return _featuredIdsCache.value;
+  }
+
   // Fetch all active featured listings (no tenant filter — we want the global
   // set). Capped at 100 for safety (the SuperAdmin UI enforces a tighter cap,
   // but this is a defensive bound).
@@ -514,7 +528,12 @@ export async function fetchFeaturedTenantIds(): Promise<Set<string>> {
     select: { tenantId: true },
     take: 100,
   });
-  return new Set(rows.map((r) => r.tenantId).filter((id): id is string => !!id));
+  const value = new Set(rows.map((r) => r.tenantId).filter((id): id is string => !!id));
+
+  // Cache for 60s. Even if two requests race past the cache check, both
+  // will just run the query and the last writer wins — no corruption.
+  _featuredIdsCache = { value, expiresAt: Date.now() + FEATURED_IDS_CACHE_TTL_MS };
+  return value;
 }
 
 /**

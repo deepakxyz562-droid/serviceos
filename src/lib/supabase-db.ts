@@ -1668,7 +1668,24 @@ class SupabaseModel {
       return emptyResult;
     }
 
-    let query = this.client.from(this.tableName).select('*');
+    // Build a PostgREST aggregate select string so the computation happens
+    // server-side in PostgreSQL and is NOT subject to the default 1000-row
+    // response cap. Previously this method fetched all rows and aggregated
+    // in JS, which silently truncated at 1000 rows.
+    //
+    // PostgREST aggregate syntax:
+    //   .select('count(),sum(rating),avg(rating),min(rating),max(rating)')
+    const aggParts: string[] = [];
+    if (_count) aggParts.push('count()');
+    if (_sum) for (const f of Object.keys(_sum)) aggParts.push(`sum(${f})`);
+    if (_avg) for (const f of Object.keys(_avg)) aggParts.push(`avg(${f})`);
+    if (_min) for (const f of Object.keys(_min)) aggParts.push(`min(${f})`);
+    if (_max) for (const f of Object.keys(_max)) aggParts.push(`max(${f})`);
+
+    // If no aggregates requested, fall back to a count-only query.
+    const selectStr = aggParts.length > 0 ? aggParts.join(',') : 'count()';
+
+    let query = this.client.from(this.tableName).select(selectStr);
     if (where) applyWhereFilters(query, where);
 
     const { data, error } = await query;
@@ -1677,49 +1694,44 @@ class SupabaseModel {
       return { _count: 0, _sum: {} };
     }
 
-    const records = data || [];
+    // PostgREST returns a single row with the aggregate values.
+    const row = (data && data[0]) || {};
     const result: Record<string, unknown> = {};
 
-    // _count
     if (_count === true) {
-      result._count = records.length;
+      result._count = Number(row.count) || 0;
     } else if (typeof _count === 'object') {
-      result._count = records.length;
+      result._count = Number(row.count) || 0;
     }
 
-    // _sum - compute sums client-side
     if (_sum) {
       const sumResult: Record<string, number> = {};
       for (const field of Object.keys(_sum)) {
-        sumResult[field] = records.reduce((acc, r) => acc + (Number(r[field]) || 0), 0);
+        sumResult[field] = Number(row[`sum_${field}`] ?? row[field]) || 0;
       }
       result._sum = sumResult;
     }
 
-    // _avg - compute averages client-side
     if (_avg) {
       const avgResult: Record<string, number> = {};
       for (const field of Object.keys(_avg)) {
-        const values = records.map(r => Number(r[field])).filter(v => !isNaN(v));
-        avgResult[field] = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+        avgResult[field] = Number(row[`avg_${field}`] ?? row[field]) || 0;
       }
       result._avg = avgResult;
     }
 
-    // _min / _max
     if (_min) {
       const minResult: Record<string, unknown> = {};
       for (const field of Object.keys(_min)) {
-        const values = records.map(r => r[field]).filter(v => v !== null && v !== undefined);
-        minResult[field] = values.length > 0 ? values.reduce((a, b) => a < b ? a : b) : null;
+        minResult[field] = row[`min_${field}`] ?? row[field] ?? null;
       }
       result._min = minResult;
     }
+
     if (_max) {
       const maxResult: Record<string, unknown> = {};
       for (const field of Object.keys(_max)) {
-        const values = records.map(r => r[field]).filter(v => v !== null && v !== undefined);
-        maxResult[field] = values.length > 0 ? values.reduce((a, b) => a > b ? a : b) : null;
+        maxResult[field] = row[`max_${field}`] ?? row[field] ?? null;
       }
       result._max = maxResult;
     }
@@ -1735,9 +1747,21 @@ class SupabaseModel {
 
     if (!by || by.length === 0) return [];
 
-    // Select ONLY the group-by columns to minimize wire payload size.
-    const selectCols = by.join(',');
-    let query = this.client.from(this.tableName).select(selectCols);
+    // Use PostgREST's NATIVE aggregate so the counting happens server-side
+    // in PostgreSQL and is NOT subject to the default 1000-row response
+    // cap. Previously this method fetched all matching rows over the wire
+    // and counted them in JS — which silently truncated at 1000 rows and
+    // produced wrong "1000" totals in the marketplace sidebar.
+    //
+    // PostgREST aggregate syntax:
+    //   .select('industry,count()')   →  returns [{industry: 'plumbing', count: 423}, ...]
+    //
+    // The `count()` aggregate (no `head:true`) returns aggregated rows,
+    // NOT raw data rows, so the 1000-row cap does not apply.
+    const selectCols = by.map((c) => c).join(',');
+    let query = this.client
+      .from(this.tableName)
+      .select(`${selectCols},count()`);
 
     if (where) applyWhereFilters(query, where);
 
@@ -1750,23 +1774,21 @@ class SupabaseModel {
     const rows = (data || []) as Record<string, unknown>[];
 
     const countField = by[0]; // e.g. 'industry'
-    const countsMap = new Map<string | null, number>();
-    for (const r of rows) {
-      const val = r[countField] as string | null;
-      countsMap.set(val, (countsMap.get(val) || 0) + 1);
-    }
-
     const countObj = options._count as Record<string, unknown> | undefined;
     const countKeys = countObj ? Object.keys(countObj) : ['id'];
 
-    const result = Array.from(countsMap.entries()).map(([val, count]) => {
+    // Each row from PostgREST looks like { industry: 'plumbing', count: 423 }.
+    // Map it to the Prisma groupBy shape: { industry: 'plumbing', _count: { id: 423 } }.
+    const result = rows.map((r) => {
+      const val = r[countField];
+      const count = Number(r.count) || 0;
       const _count: Record<string, number> = {};
       for (const k of countKeys) {
         _count[k] = count;
       }
       return {
         [countField]: val,
-        _count
+        _count,
       };
     });
 

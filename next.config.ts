@@ -34,6 +34,12 @@ const nextConfig: NextConfig = {
     // uploads (up to 10MB raw → ~13.3MB as base64 JSON) don't get silently
     // truncated mid-string, which causes "Unterminated string in JSON" errors.
     proxyClientMaxBodySize: 15 * 1024 * 1024,
+    // Enable scroll restoration so back/forward navigation preserves the
+    // user's scroll position on the marketplace page. Without this, clicking
+    // a provider detail and coming back lands the user at the top of the
+    // page — they then have to scroll back down to find their place, which
+    // feels slow even if the page rendered instantly.
+    scrollRestoration: true,
   },
   allowedDevOrigins: [
     "21.0.11.123",

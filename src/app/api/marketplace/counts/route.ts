@@ -4,6 +4,7 @@ import { withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
 import { VERTICAL_MAP, getIndustry } from '@/lib/industry-catalog';
 import { ttlCacheWrap, buildCacheKey } from '@/lib/ttl-cache';
+import { buildProviderWhereClause } from '@/lib/marketplace-pagination';
 
 /**
  * Provider Counts — by vertical + industry
@@ -18,6 +19,10 @@ import { ttlCacheWrap, buildCacheKey } from '@/lib/ttl-cache';
  *
  * Query params:
  *   country   string  ISO country code (optional, exact match on Tenant.country)
+ *   city      string  City name (optional, case-insensitive substring on
+ *                     city / state / serviceAreasJson — same logic as the
+ *                     providers list endpoint so sidebar counts stay
+ *                     consistent with the list when a city filter is active)
  *
  * Response:
  *   {
@@ -28,6 +33,14 @@ import { ttlCacheWrap, buildCacheKey } from '@/lib/ttl-cache';
  *
  * Caching: 60s in-memory TTL (counts change rarely; longer than the
  * 30s list cache because aggregations are more expensive).
+ *
+ * NOTE on the "1000 cap" bug: previously the Supabase adapter's groupBy()
+ * fetched ALL matching rows over the wire and counted them in JS, which
+ * hit PostgREST's default 1000-row response cap. This produced a wrong
+ * "1000" total in production. The adapter has been fixed to use
+ * PostgREST's native `count()` aggregate, and this endpoint now also
+ * supports the `city` filter so counts stay accurate when a city is
+ * selected.
  */
 export async function GET(request: NextRequest) {
   const log = withRequestId(request);
@@ -39,21 +52,29 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const country = searchParams.get('country')?.trim().toUpperCase() || null;
+  const city = searchParams.get('city')?.trim() || null;
 
-  const cacheKey = buildCacheKey('mp:counts', { country });
+  const cacheKey = buildCacheKey('mp:counts', { country, city });
 
   try {
     const result = await ttlCacheWrap(cacheKey, 60_000, async () => {
+      // Build the SAME where clause used by the providers list endpoint
+      // so the sidebar counts always match the list when filters are
+      // applied. This includes the 3-gate eligibility + country + city.
+      const where = buildProviderWhereClause({
+        country,
+        city,
+      });
+
       // Single groupBy query on industry — much cheaper than N+1 per
       // vertical/industry. We aggregate by industry in SQL, then roll
       // up to verticals in JS (cheap; only ~29 industries total).
-      const where: Record<string, unknown> = {
-        publicProfileEnabled: true,
-        marketplaceOptIn: true,
-        suspendedAt: null,
-      };
-      if (country) where.country = country;
-
+      //
+      // IMPORTANT: When using the Supabase adapter, groupBy() uses
+      // PostgREST's native `count()` aggregate (head:false + select
+      // with `,count()`) so it is NOT subject to the 1000-row response
+      // cap. Previously it fetched raw rows and counted in JS, which
+      // silently truncated at 1000 rows and produced wrong totals.
       const rows = await db.tenant.groupBy({
         by: ['industry'],
         _count: { _all: true },
@@ -82,7 +103,7 @@ export async function GET(request: NextRequest) {
     });
 
     log.info(
-      { total: result.total, verticalCount: Object.keys(result.byVertical).length, country },
+      { total: result.total, verticalCount: Object.keys(result.byVertical).length, country, city },
       'marketplace/counts: served',
     );
 

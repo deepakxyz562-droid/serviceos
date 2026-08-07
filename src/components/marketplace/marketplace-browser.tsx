@@ -451,6 +451,56 @@ export function MarketplaceBrowser({
     };
   }, []);
 
+  // ── Scroll position restoration for back navigation ────────────────────
+  // The marketplace uses a CUSTOM scroll container (#main-content), not the
+  // window. Next.js's `experimental.scrollRestoration` only handles window
+  // scrolling, so we manually save/restore the scroll position of
+  // #main-content to sessionStorage on unmount/mount.
+  //
+  // This is the single biggest perceived-speed win for back navigation:
+  // without it, the user lands at the top of the page after back-nav and
+  // has to scroll back down to find their previous position — which feels
+  // slow even if the page rendered instantly.
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const STORAGE_KEY = 'mp_scroll_pos';
+    const container = document.getElementById('main-content');
+
+    // RESTORE on mount (after a brief delay to let the first page render).
+    // We use requestAnimationFrame to wait for the DOM to settle.
+    if (container) {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const scrollY = parseInt(saved, 10);
+        if (!isNaN(scrollY) && scrollY > 0) {
+          // Restore after the first paint so the content has height.
+          const raf = requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              container.scrollTop = scrollY;
+            });
+          });
+          // Clear the saved position so a fresh navigation (not back-nav)
+          // doesn't restore to a stale position.
+          sessionStorage.removeItem(STORAGE_KEY);
+          // Cancel the raf if the component unmounts before it fires.
+          return () => cancelAnimationFrame(raf);
+        }
+      }
+    }
+
+    // SAVE on unmount: capture the scroll position so the next mount
+    // (back-navigation) can restore it.
+    return () => {
+      const c = document.getElementById('main-content');
+      if (c && c.scrollTop > 0) {
+        try {
+          sessionStorage.setItem(STORAGE_KEY, String(c.scrollTop));
+        } catch {}
+      }
+    };
+  }, []);
+
   // Geocode the city filter text automatically to get its lat/lng coordinates
   React.useEffect(() => {
     if (!cityFilter) {
@@ -776,10 +826,20 @@ export function MarketplaceBrowser({
   // scroll would silently never fire. Pointing root at #main-content makes
   // the observer measure intersection against the actual scroll container.
   //
-  // 200px rootMargin: fires the fetch when the user is ~200px from the
-  // bottom, so the next page loads before they actually reach it (smooth UX,
-  // no visible spinner in the common case).
+  // 400px rootMargin: fires the fetch when the user is ~400px from the
+  // bottom, so the next page loads BEFORE they actually reach it (smooth UX,
+  // no visible spinner in the common case). Increased from 200px to reduce
+  // the chance of the user seeing the "Loading more providers…" spinner.
+  //
+  // STABILITY: The observer is created ONCE per (hasMore, filtering) change
+  // — NOT on every loadedProviders.length change. This prevents the observer
+  // from being torn down + recreated on every page arrival, which caused a
+  // brief window where no observer was active and contributed to flicker.
+  // The latest `fetchNextPage` is accessed via a ref so the callback never
+  // goes stale without re-creating the observer.
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+  const fetchNextPageRef = React.useRef(fetchNextPage);
+  fetchNextPageRef.current = fetchNextPage;
   const loadingMore = isFetchingNextPage;
 
   React.useEffect(() => {
@@ -806,16 +866,21 @@ export function MarketplaceBrowser({
       (entries) => {
         const entry = entries[0];
         if (entry.isIntersecting) {
-          // Fetch the next page from the API. The hook handles dedup (no-op
-          // if a fetch is already in flight) + race conditions.
-          fetchNextPage();
+          // Fetch the next page from the API via the ref (always current,
+          // no stale-closure risk). The hook handles dedup (no-op if a
+          // fetch is already in flight) + race conditions.
+          fetchNextPageRef.current();
         }
       },
-      { root, rootMargin: '200px 0px' },
+      { root, rootMargin: '400px 0px' },
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [hasMore, filtering, fetchNextPage, loadedProviders.length]);
+    // NOTE: intentionally NOT depending on loadedProviders.length — that
+    // would tear down + recreate the observer on every page arrival and
+    // cause flicker. The ref pattern keeps the callback fresh without
+    // re-creating the observer.
+  }, [hasMore, filtering]);
 
   // ── Active filter chips ────────────────────────────────────────────────
   const activeChips: Array<{ label: string; onClear: () => void }> = [];
@@ -1189,8 +1254,13 @@ export function MarketplaceBrowser({
       ) : (
         <div
           className={cn(
-            'grid min-h-[420px] gap-4 grid-cols-1 transition-opacity duration-150',
-            filtering && 'opacity-50 pointer-events-none',
+            'grid min-h-[420px] gap-4 grid-cols-1',
+            // NOTE: previously had `transition-opacity duration-150` + an
+            // `opacity-50 pointer-events-none` dim during filtering. That
+            // 150ms fade fired on EVERY filter/scroll event and was a major
+            // source of perceived flicker. Removed in favor of a subtle
+            // non-blocking top-of-grid spinner overlay (see filteringBanner
+            // below) which doesn't dim the existing cards.
           )}
         >
           {visible.map((p) => {
@@ -1251,24 +1321,32 @@ export function MarketplaceBrowser({
       {/* A zero-height sentinel observed by IntersectionObserver. When it
           enters the viewport we call fetchNextPage() to load the next 24
           providers from the API. The spinner shows while the request is in
-          flight. Once all pages are loaded (hasMore === false) the sentinel
-          is unmounted entirely. */}
-      {hasMore && !filtering ? (
-        <div
-          ref={sentinelRef}
-          className="mt-8 flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground"
-          aria-live="polite"
-        >
-          {loadingMore ? (
+          flight.
+          
+          STABILITY: The sentinel is ALWAYS rendered (not conditionally
+          mounted/unmounted based on hasMore/filtering). Previously, the
+          sentinel unmounted during filter changes and remounted after,
+          causing an ~80px height jump + scroll shift + IntersectionObserver
+          teardown/recreate. Now we keep it in the DOM at all times and
+          just toggle its visibility/content. When there are no more pages
+          OR we're filtering, we render a minimal zero-height placeholder
+          that keeps the ref stable. */}
+      <div
+        ref={sentinelRef}
+        className="mt-8 flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground"
+        aria-live="polite"
+      >
+        {hasMore && !filtering ? (
+          loadingMore ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
               Loading more providers…
             </>
           ) : (
             <span className="sr-only">Scroll to load more providers</span>
-          )}
-        </div>
-      ) : null}
+          )
+        ) : null}
+      </div>
 
       {/* ── Helpful hint when there are results but no city filter ──────── */}
       {filtered.length > 0 && !cityFilter ? (

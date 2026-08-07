@@ -234,6 +234,15 @@ model Tenant {
   // three flags. A composite index lets SQLite skip non-eligible rows
   // entirely.
   @@index([publicProfileEnabled, marketplaceOptIn, suspendedAt])
+  // ── Composite indexes for the marketplace's most common query patterns ──
+  // These cover the canonical "eligible + country" filter (used by the
+  // counts endpoint and the providers list), the country+city filter (for
+  // city-wise browsing), the country+industry filter (for the counts
+  // groupBy), and the country-scoped keyset pagination sort.
+  @@index([country, publicProfileEnabled, marketplaceOptIn, suspendedAt])
+  @@index([country, city])
+  @@index([country, industry])
+  @@index([country, rating, reviewCount, id])
 }
 
 model Subscription {

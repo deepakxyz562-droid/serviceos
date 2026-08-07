@@ -111,11 +111,16 @@ export function MarketplaceSidebar({
   const activeCountry = storeCountryFilter ?? country ?? null;
 
   // searchInput / cityInput from the store — needed to detect when a
-  // GLOBAL text/location filter is active (which DOES disable the real DB
+  // GLOBAL text/location filter is active (which disables the real DB
   // counts, since the counts endpoint can't reflect arbitrary
   // search+city combinations).
   const searchInput = useMarketplaceSearch((s) => s.searchInput);
   const cityInput = useMarketplaceSearch((s) => s.cityInput);
+  // cityFilter is the DEBOUNCED city value (250ms after the user stops
+  // typing). We pass this to the counts hook (NOT the raw cityInput) so
+  // the counts API isn't called on every keystroke — it refetches once
+  // 250ms after the user stops typing, matching the providers list hook.
+  const cityFilterDebounced = useMarketplaceSearch((s) => s.cityFilter);
 
   // The store is the source of truth for the active filter. On the very first
   // render (before the browser component seeds the store from URL params), we
@@ -215,38 +220,39 @@ export function MarketplaceSidebar({
   // scrolled through all pages.
   //
   // We keep the real DB-level counts ACTIVE even when a vertical/industry
-  // category is selected — the counts endpoint groups by industry
-  // (independent of the selected category), so the user always sees the
-  // true count for EVERY category, not just the loaded 24 items of the
-  // currently-selected one. This was the bug where clicking "Plumbing"
-  // made every other category show "(0)".
+  // category OR a city filter is selected — the counts endpoint now
+  // supports `country` + `city` params (same where-clause as the providers
+  // list), so it always returns accurate grouped totals for the visible
+  // location context.
   //
   // We only DISABLE the real counts (fall back to loaded-subset) when a
-  // GLOBAL text/location/trust filter is active — the counts endpoint
+  // free-text search OR trust filter is active — the counts endpoint
   // can't reflect an arbitrary "search=acme + trustRatingHigh"
-  // combination (it only groups by industry + country), so the loaded
-  // subset is the only accurate source in that case.
-  const hasActiveGlobalFilters = !!(
+  // combination (it only groups by industry + country + city), so the
+  // loaded subset is the only accurate source in that case.
+  const hasActiveTextOrTrustFilters = !!(
     searchInput.trim() ||
-    cityInput.trim() ||
     trustFullyVerified ||
     trustRatingHigh ||
     trustEmergency
   );
-  const { data: realCounts } = useMarketplaceCounts(hasActiveGlobalFilters ? null : activeCountry);
+  const { data: realCounts } = useMarketplaceCounts(
+    hasActiveTextOrTrustFilters ? null : activeCountry,
+    hasActiveTextOrTrustFilters ? null : cityFilterDebounced || null,
+  );
 
   // Now that realCounts is defined, compute the total providers count.
-  // Prefer the real DB-level total from the counts endpoint when no global
-  // filters are active — it's the most accurate (the SSR/API `total` is
-  // correct too, but the counts endpoint is cached longer and avoids
-  // re-counting on every filter change).
-  const realTotal = realCounts && !hasActiveGlobalFilters ? realCounts.total : null;
+  // Prefer the real DB-level total from the counts endpoint when no
+  // text/trust filters are active — it's the most accurate (the SSR/API
+  // `total` is correct too, but the counts endpoint is cached longer and
+  // avoids re-counting on every filter change).
+  const realTotal = realCounts && !hasActiveTextOrTrustFilters ? realCounts.total : null;
   const totalProviders = realTotal ?? storeTotal ?? total ?? activeProviders.length;
 
   // Helper: count providers in a vertical — prefer real DB count, fall back
   // to loaded-subset count.
   const countForVertical = (verticalId: string) => {
-    if (realCounts && !hasActiveGlobalFilters) {
+    if (realCounts && !hasActiveTextOrTrustFilters) {
       return realCounts.byVertical[verticalId] ?? 0;
     }
     return verticalCounts.get(verticalId) ?? 0;
@@ -255,7 +261,7 @@ export function MarketplaceSidebar({
   // Helper: count providers in an industry — prefer real DB count, fall back
   // to loaded-subset count.
   const countForIndustry = (industryId: string) => {
-    if (realCounts && !hasActiveGlobalFilters) {
+    if (realCounts && !hasActiveTextOrTrustFilters) {
       return realCounts.byIndustry[industryId.toLowerCase()] ?? 0;
     }
     return industryCounts.get(industryId.toLowerCase()) ?? 0;

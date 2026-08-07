@@ -383,7 +383,7 @@ function ProviderCardImpl({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap min-w-0">
                 {href ? (
-                  <Link href={profileHref} aria-label={`View ${provider.name} profile`} className="min-w-0">
+                  <Link href={profileHref} prefetch aria-label={`View ${provider.name} profile`} className="min-w-0">
                     <h3 className="truncate text-base font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-700 dark:group-hover:text-emerald-400">
                       {provider.name}
                     </h3>
@@ -525,6 +525,7 @@ function ProviderCardImpl({
           {href ? (
             <Link
               href={profileHref}
+              prefetch
               className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-background text-sm font-semibold text-foreground transition-colors hover:bg-muted"
             >
               View profile <ArrowRight className="h-4 w-4" />
@@ -614,7 +615,7 @@ function MinimalCard({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap min-w-0">
                 {href ? (
-                  <Link href={profileHref} aria-label={`View ${provider.name} profile`} className="min-w-0">
+                  <Link href={profileHref} prefetch aria-label={`View ${provider.name} profile`} className="min-w-0">
                     <h3 className="truncate text-base font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-700 dark:group-hover:text-emerald-400">
                       {provider.name}
                     </h3>
@@ -746,6 +747,7 @@ function MinimalCard({
           {href ? (
             <Link
               href={profileHref}
+              prefetch
               className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-background text-sm font-semibold text-foreground transition-colors hover:bg-muted"
             >
               View profile <ArrowRight className="h-4 w-4" />
