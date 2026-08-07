@@ -138,6 +138,25 @@ function randomSuffix(): string {
   return Math.random().toString(16).slice(2, 8).padEnd(6, '0');
 }
 
+/**
+ * Slice a string to at most `maxLen` UTF-16 code units WITHOUT splitting a
+ * surrogate pair. Some business names use Unicode characters outside the
+ * Basic Multilingual Plane (e.g. "𝐂𝐔𝐋𝐓𝐔𝐑𝐀𝐋 𝐋𝐀𝐖𝐍𝐒" — mathematical bold
+ * letters, U+1D400-U+1D7FF), which are encoded as surrogate pairs in JS.
+ * A naive `.slice(0, 70)` can split a pair, producing a lone surrogate
+ * that breaks JSON serialization when the row is later sent to PostgREST
+ * (Supabase rejects it as "Empty or invalid json" with PGRST102).
+ */
+function safeSlice(str: string, maxLen: number): string {
+  if (str.length <= maxLen) return str;
+  let sliced = str.slice(0, maxLen);
+  const lastCode = sliced.charCodeAt(sliced.length - 1);
+  if (lastCode >= 0xD800 && lastCode <= 0xDBFF) {
+    sliced = sliced.slice(0, -1);
+  }
+  return sliced;
+}
+
 /** Generate a cuid-like ID (timestamp + random) — Prisma will accept any string ID. */
 function generateId(): string {
   const ts = Date.now().toString(36);
@@ -156,57 +175,119 @@ function generateId(): string {
  * The detail page renders `description` via `dangerouslySetInnerHTML` with
  * Tailwind `prose` classes, so <p> tags produce proper paragraph breaks.
  *
- * Template (2 paragraphs):
- *   <p>Looking for reliable {industry} services in {city}? {name} is a
- *   trusted {industry} business based in {city}, {state}.</p>
- *   <p>{rating line}. Contact {name} today for quality workmanship and
- *   competitive pricing.</p>
+ * IMPORTANT — Google Maps Platform ToS compliance:
+ *   We do NOT include Google ratings/review counts in the description.
+ *   Google Places API content (other than the Place ID) is subject to a
+ *   30-day caching limit and cannot be stored indefinitely. The `rating`
+ *   and `reviewCount` fields are still stored on the Tenant row for
+ *   internal ranking, but they are NOT surfaced in user-visible copy.
+ *
+ * Template (2 paragraphs, platform-focused, no Google ratings):
+ *   <p>Looking for reliable {Industry} services in {City}? {Name} is a
+ *   trusted {Industry} business based in {City}, {State}.</p>
+ *   <p>Contact {Name} today for quality workmanship, transparent pricing,
+ *   and professional service.</p>
  */
 export function generateDescription(
   name: string,
   industry: string,
   city: string | null,
   state: string | null,
-  rating: number,
-  reviewCount: number,
 ): string {
+  const industryLabel = prettifyIndustry(industry);
   const cityPart = city || 'your area';
   const statePart = state ? `, ${state}` : '';
-  const ratingPart = rating > 0
-    ? `Rated ${rating.toFixed(1)}★ from ${reviewCount} Google reviews, ${name} provides professional ${industry} services to the ${cityPart} area.`
-    : `${name} provides professional ${industry} services to the ${cityPart} area.`;
 
-  const p1 = `Looking for reliable ${industry} services in ${cityPart}? ${name} is a trusted ${industry} business based in ${cityPart}${statePart}.`;
-  const p2 = `${ratingPart} Contact ${name} today for quality workmanship and competitive pricing.`;
+  const p1 = `Looking for reliable ${industryLabel} services in ${cityPart}? ${name} is a trusted ${industryLabel} business based in ${cityPart}${statePart}.`;
+  const p2 = `Contact ${name} today for quality workmanship, transparent pricing, and professional service.`;
 
   return `<p>${p1}</p>\n<p>${p2}</p>`;
 }
 
+/**
+ * Convert an industry ID (e.g. 'plumbing', 'hvac', 'pest-control') into a
+ * human-readable label (e.g. 'Plumbing', 'HVAC', 'Pest Control').
+ *
+ * Used in SEO title/description generators so the copy reads naturally
+ * instead of showing the raw kebab-case ID.
+ */
+function prettifyIndustry(industry: string): string {
+  if (!industry) return 'Service';
+  // Special-case common acronyms so they render as 'HVAC' not 'Hvac'.
+  const ACRONYMS = new Set(['hvac']);
+  const lower = industry.toLowerCase().trim();
+  if (ACRONYMS.has(lower)) return 'HVAC';
+  // Title-case each kebab-word, preserving hyphens as spaces.
+  return lower
+    .split('-')
+    .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(' ');
+}
+
 /** Generate a short tagline. */
 function generateTagline(name: string, industry: string, city: string | null): string {
+  const industryLabel = prettifyIndustry(industry);
   const cityPart = city ? ` in ${city}` : '';
-  return `${name} — ${industry}${cityPart}`.slice(0, 120);
+  return safeSlice(`${name} — ${industryLabel}${cityPart}`, 120);
 }
 
-/** Generate SEO title (≤60 chars ideal). */
-function generateSeoTitle(name: string, industry: string, city: string | null): string {
-  const cityPart = city ? ` in ${city}` : '';
-  const base = `${name} — ${industry}${cityPart} | Fieseros`;
-  return base.slice(0, 70);
+/**
+ * Generate SEO title in the format:
+ *   {Name} | {Industry} Company in {City}, {ST} | Fieseros
+ *
+ * Falls back gracefully when city/state are missing:
+ *   {Name} | {Industry} Company | Fieseros
+ *
+ * Truncated to 70 chars (Google's typical SERP truncation point).
+ *
+ * NOTE: No Google ratings — Google Maps Platform ToS §3.2.4 restricts
+ * indefinite storage of Places API content (only the Place ID can be
+ * stored indefinitely).
+ */
+function generateSeoTitle(
+  name: string,
+  industry: string,
+  city: string | null,
+  state: string | null,
+): string {
+  const industryLabel = prettifyIndustry(industry);
+  // Build the location segment: "in City, ST" or "in City" or empty.
+  let locationSegment = '';
+  if (city && state) {
+    locationSegment = ` in ${city}, ${state}`;
+  } else if (city) {
+    locationSegment = ` in ${city}`;
+  }
+  const base = `${name} | ${industryLabel} Company${locationSegment} | Fieseros`;
+  return safeSlice(base, 70);
 }
 
-/** Generate SEO meta description (≤155 chars). */
+/**
+ * Generate SEO meta description (≤155 chars).
+ *
+ * Template:
+ *   "{Name} is a {Industry} company in {City}, {ST}. Book trusted local
+ *    professionals for quality workmanship and transparent pricing."
+ *
+ * NOTE: No Google ratings/review counts — Google Maps Platform ToS §3.2.4
+ * restricts indefinite storage of Places API content.
+ */
 function generateSeoDescription(
   name: string,
   industry: string,
   city: string | null,
-  rating: number,
-  reviewCount: number,
+  state: string | null,
 ): string {
-  const cityPart = city || 'your area';
-  const ratingPart = rating > 0 ? ` Rated ${rating.toFixed(1)}★ (${reviewCount} reviews).` : '';
-  const base = `Book ${name} for ${industry} services in ${cityPart}. Professional, reliable, and trusted by local customers.${ratingPart}`;
-  return base.slice(0, 155);
+  const industryLabel = prettifyIndustry(industry);
+  // Build the location label: "City, ST" or "City" or "your area".
+  let locationLabel = 'your area';
+  if (city && state) {
+    locationLabel = `${city}, ${state}`;
+  } else if (city) {
+    locationLabel = city;
+  }
+  const base = `${name} is a ${industryLabel} company in ${locationLabel}. Book trusted local professionals for quality workmanship and transparent pricing.`;
+  return safeSlice(base, 155);
 }
 
 /**
@@ -307,7 +388,7 @@ export function mapPlaceToTenant(place: GooglePlace, opts: MapOptions): MappedTe
 
   const description = hasUsableScrape
     ? opts.scrapedDescription!
-    : generateDescription(name, industry, city, state, rating, reviewCount);
+    : generateDescription(name, industry, city, state);
 
   const descriptionSource = hasUsableScrape ? 'website_scrape' : 'generated';
 
@@ -343,8 +424,8 @@ export function mapPlaceToTenant(place: GooglePlace, opts: MapOptions): MappedTe
     businessCategoriesJson: JSON.stringify(categories),
     tagline: generateTagline(name, industry, city),
     description,
-    seoTitle: generateSeoTitle(name, industry, city),
-    seoDescription: generateSeoDescription(name, industry, city, rating, reviewCount),
+    seoTitle: generateSeoTitle(name, industry, city, state),
+    seoDescription: generateSeoDescription(name, industry, city, state),
     marketplaceOptIn: true,
     publicProfileEnabled: true,
     listingTier: 'free',

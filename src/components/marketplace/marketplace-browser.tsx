@@ -147,10 +147,16 @@ export function MarketplaceBrowser({
   const setSearchInput = useMarketplaceSearch((s) => s.setSearchInput);
   const cityInput = useMarketplaceSearch((s) => s.cityInput);
   const setCityInput = useMarketplaceSearch((s) => s.setCityInput);
+  // `cityFilter` (debounced) lives in the SHARED store so the sidebar can
+  // read it for the counts hook. Previously this was local state, which meant
+  // the sidebar's `useMarketplaceSearch((s) => s.cityFilter)` always returned
+  // undefined → the counts endpoint was called WITHOUT the city filter →
+  // sidebar showed country-wide counts (or 0) instead of city-scoped counts.
+  const cityFilter = useMarketplaceSearch((s) => s.cityFilter);
+  const setCityFilter = useMarketplaceSearch((s) => s.setCityFilter);
 
   // Debounced filter values (local) — derived from the shared store inputs.
   const [searchQuery, setSearchQuery] = React.useState(initialFilters.search ?? '');
-  const [cityFilter, setCityFilter] = React.useState(initialFilters.city ?? '');
   // verticalFilter / industryFilter now live in the shared Zustand store so
   // the sidebar can update them instantly (client-side, no page reload).
   // We seed them from URL params on first mount below.
@@ -303,6 +309,10 @@ export function MarketplaceBrowser({
     }
     if (initialFilters.city !== prev.city) {
       setCityInput(initialFilters.city ?? '');
+      // Also set the debounced cityFilter directly so the sidebar's counts
+      // hook gets the right value on the FIRST render after a server-driven
+      // navigation (instead of waiting 250ms for the debounce effect).
+      setCityFilter(initialFilters.city ?? '');
     }
     if (initialFilters.vertical !== prev.vertical || initialFilters.industry !== prev.industry) {
       if (initialFilters.industry) {
@@ -323,6 +333,7 @@ export function MarketplaceBrowser({
     initialFilters,
     setSearchInput,
     setCityInput,
+    setCityFilter,
     selectVertical,
     selectIndustry,
     setCountryFilter,
@@ -335,12 +346,13 @@ export function MarketplaceBrowser({
     if (detectedCountry && detectedCountry !== countryFilter) {
       setCountryFilter(detectedCountry);
       setCityInput('');
+      setCityFilter('');
       setUserLocation(null);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('fieseros_user_location');
       }
     }
-  }, [detectedCountry, countryFilter, setCountryFilter, setCityInput, setUserLocation]);
+  }, [detectedCountry, countryFilter, setCountryFilter, setCityInput, setCityFilter, setUserLocation]);
 
   // ── Auto-detect user location on mount (localStorage -> IP -> GPS) ──
   // Runs EXACTLY ONCE (didDetectRef guards against StrictMode double-invoke).

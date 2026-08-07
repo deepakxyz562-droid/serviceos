@@ -89,6 +89,7 @@ export function LocationChip() {
   const cityInput = useMarketplaceSearch((s) => s.cityInput);
   const setUserLocation = useMarketplaceSearch((s) => s.setUserLocation);
   const setCityInput = useMarketplaceSearch((s) => s.setCityInput);
+  const setCityFilter = useMarketplaceSearch((s) => s.setCityFilter);
   const countryFilter = useMarketplaceSearch((s) => s.countryFilter);
   const setCountryFilter = useMarketplaceSearch((s) => s.setCountryFilter);
 
@@ -257,10 +258,16 @@ export function LocationChip() {
     // The country filter is auto-detected and remains locked.
     setUserLocation(null);
     setCityInput('');
+    // Also clear the debounced cityFilter DIRECTLY so the sidebar's counts
+    // hook + the providers list refetch with NO city filter immediately
+    // (instead of waiting 250ms for the debounce effect to fire). This is
+    // what makes the chip + grid + sidebar all snap to "all data in this
+    // country" the instant the user clicks "Clear location".
+    setCityFilter('');
     clearGpsLocation();
     setGeoError(null);
     setOpen(false);
-  }, [clearGpsLocation, setCityInput, setUserLocation]);
+  }, [clearGpsLocation, setCityInput, setCityFilter, setUserLocation]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

@@ -241,19 +241,35 @@ export function MarketplaceSidebar({
     hasActiveTextOrTrustFilters ? null : cityFilterDebounced || null,
   );
 
+  // ── Defensive fallback ──────────────────────────────────────────────────
+  // If the counts endpoint returned total=0 BUT the loaded providers list
+  // has items, the counts query silently failed (e.g. Supabase adapter
+  // returned [] on a column mismatch / RLS error, or the city filter
+  // narrowed to a city with 0 matches but the providers list hasn't
+  // re-fetched yet). In that case we fall back to the loaded-subset counts
+  // so the sidebar shows SOMETHING useful instead of "All providers 0"
+  // with no categories.
+  //
+  // Also falls back when realCounts is still loading (undefined) — the
+  // loaded-subset counts are a reasonable interim display.
+  const realCountsUsable =
+    realCounts &&
+    !hasActiveTextOrTrustFilters &&
+    realCounts.total > 0;
+
   // Now that realCounts is defined, compute the total providers count.
   // Prefer the real DB-level total from the counts endpoint when no
   // text/trust filters are active — it's the most accurate (the SSR/API
   // `total` is correct too, but the counts endpoint is cached longer and
   // avoids re-counting on every filter change).
-  const realTotal = realCounts && !hasActiveTextOrTrustFilters ? realCounts.total : null;
+  const realTotal = realCountsUsable ? realCounts!.total : null;
   const totalProviders = realTotal ?? storeTotal ?? total ?? activeProviders.length;
 
   // Helper: count providers in a vertical — prefer real DB count, fall back
   // to loaded-subset count.
   const countForVertical = (verticalId: string) => {
-    if (realCounts && !hasActiveTextOrTrustFilters) {
-      return realCounts.byVertical[verticalId] ?? 0;
+    if (realCountsUsable) {
+      return realCounts!.byVertical[verticalId] ?? 0;
     }
     return verticalCounts.get(verticalId) ?? 0;
   };
@@ -261,8 +277,8 @@ export function MarketplaceSidebar({
   // Helper: count providers in an industry — prefer real DB count, fall back
   // to loaded-subset count.
   const countForIndustry = (industryId: string) => {
-    if (realCounts && !hasActiveTextOrTrustFilters) {
-      return realCounts.byIndustry[industryId.toLowerCase()] ?? 0;
+    if (realCountsUsable) {
+      return realCounts!.byIndustry[industryId.toLowerCase()] ?? 0;
     }
     return industryCounts.get(industryId.toLowerCase()) ?? 0;
   };

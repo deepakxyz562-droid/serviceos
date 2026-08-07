@@ -93,6 +93,18 @@ interface MarketplaceSearchState {
   searchInput: string;
   /** Raw text inside the city <input> (instant, not debounced). */
   cityInput: string;
+  /**
+   * Debounced city filter (250ms after `cityInput` stops changing). This is
+   * the value the API actually receives — kept in the store (vs. local state
+   * in MarketplaceBrowser) so the SIDEBAR can read it for the counts hook.
+   *
+   * Previously the sidebar tried to read `s.cityFilter` but the field did not
+   * exist in the store, so the counts endpoint was always called WITHOUT the
+   * city filter — causing the sidebar to show counts for the WHOLE COUNTRY
+   * (or 0 if the counts query silently failed) instead of the city-scoped
+   * counts that match the providers list.
+   */
+  cityFilter: string;
   /** Sort key shared between the breadcrumb dropdown and the grid. */
   sort: MarketplaceSortKey;
   /** Active vertical filter (e.g. 'home-property'). null = no vertical filter. */
@@ -183,6 +195,8 @@ interface MarketplaceSearchState {
   claimedFilter: 'all' | 'claimed' | 'unclaimed';
   setSearchInput: (v: string) => void;
   setCityInput: (v: string) => void;
+  /** Set the debounced city filter (called by MarketplaceBrowser's debounce effect). */
+  setCityFilter: (v: string) => void;
   setSort: (v: MarketplaceSortKey) => void;
   setVerticalFilter: (v: string | null) => void;
   setIndustryFilter: (v: string | null) => void;
@@ -206,6 +220,7 @@ interface MarketplaceSearchState {
 export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
   searchInput: '',
   cityInput: '',
+  cityFilter: '',
   // Default sort = 'recommended' (composite 40/30/20/10 ranking from
   // src/lib/marketplace-ranking.ts — featured-first, then by distance /
   // rating / verified / featured). When no user location is available the
@@ -246,6 +261,7 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
   claimedFilter: 'all',
   setSearchInput: (v) => set({ searchInput: v }),
   setCityInput: (v) => set({ cityInput: v }),
+  setCityFilter: (v) => set({ cityFilter: v }),
   setSort: (v) => set({ sort: v }),
   setVerticalFilter: (v) => set({ verticalFilter: v }),
   setIndustryFilter: (v) => set({ industryFilter: v }),
