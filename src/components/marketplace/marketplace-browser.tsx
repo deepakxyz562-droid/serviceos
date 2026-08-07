@@ -1140,7 +1140,7 @@ export function MarketplaceBrowser({
            (e.g. the very first paint before providers hydrate). This reserves
            a stable ~3-row height so the footer doesn't jump on initial load. */
         <div
-          className="grid min-h-[420px] gap-5 sm:grid-cols-2 xl:grid-cols-3"
+          className="grid min-h-[420px] gap-4 grid-cols-1"
           aria-hidden="true"
         >
           {Array.from({ length: 6 }).map((_, i) => (
@@ -1164,7 +1164,7 @@ export function MarketplaceBrowser({
       ) : (
         <div
           className={cn(
-            'grid min-h-[420px] gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 transition-opacity duration-150',
+            'grid min-h-[420px] gap-4 grid-cols-1 transition-opacity duration-150',
             filtering && 'opacity-50 pointer-events-none',
           )}
         >

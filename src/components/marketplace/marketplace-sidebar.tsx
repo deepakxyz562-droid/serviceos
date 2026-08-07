@@ -84,7 +84,13 @@ export function MarketplaceSidebar({
   const trustEmergency = useMarketplaceSearch((s) => s.trustEmergency);
   const toggleTrustFullyVerified = useMarketplaceSearch((s) => s.toggleTrustFullyVerified);
   const toggleTrustRatingHigh = useMarketplaceSearch((s) => s.toggleTrustRatingHigh);
-  const toggleTrustEmergency = useMarketplaceSearch((s) => s.toggleTrustEmergency);
+
+  const radiusKm = useMarketplaceSearch((s) => s.radiusKm);
+  const setRadiusKm = useMarketplaceSearch((s) => s.setRadiusKm);
+  const minRating = useMarketplaceSearch((s) => s.minRating);
+  const setMinRating = useMarketplaceSearch((s) => s.setMinRating);
+  const claimedFilter = useMarketplaceSearch((s) => s.claimedFilter);
+  const setClaimedFilter = useMarketplaceSearch((s) => s.setClaimedFilter);
 
   // Vertical/industry filter state from the shared store (instant filtering).
   const storeVertical = useMarketplaceSearch((s) => s.verticalFilter);
@@ -290,10 +296,7 @@ export function MarketplaceSidebar({
               if (count === 0) return null;
               const isActive = currentVertical === vertical.id && !currentIndustry;
               const isActiveWithIndustry = currentVertical === vertical.id && !!currentIndustry;
-              // A vertical is expanded if the user explicitly toggled it OR if
-              // it's the active vertical (auto-expand so the user sees their
-              // current subcategory context).
-              const isExpanded = expandedVerticals[vertical.id] ?? isActiveWithIndustry ?? false;
+              const isExpanded = true;
               // Find the industries for this vertical from the pre-computed groups.
               const group = verticalGroups?.find((g) => g.vertical.id === vertical.id);
               const industries = group?.industries ?? [];
@@ -323,27 +326,6 @@ export function MarketplaceSidebar({
                       </span>
                       <span className="shrink-0 text-xs ml-2">{count}</span>
                     </Link>
-                    {/* Expand/collapse chevron — only show if this vertical has industries */}
-                    {industries.length > 0 ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          toggleVerticalExpanded(vertical.id);
-                        }}
-                        aria-label={isExpanded ? `Collapse ${vertical.name} subcategories` : `Expand ${vertical.name} subcategories`}
-                        aria-expanded={isExpanded}
-                        className="flex items-center justify-center w-7 shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                      >
-                        <ChevronRight
-                          className={cn(
-                            'h-4 w-4 transition-transform duration-150',
-                            isExpanded && 'rotate-90',
-                          )}
-                        />
-                      </button>
-                    ) : null}
                   </div>
 
                   {/* Subcategory (industry) list — shown when expanded */}
@@ -385,6 +367,89 @@ export function MarketplaceSidebar({
           </ul>
         </div>
 
+        {/* ─── Service Radius Filter ────────────────────────────────────────── */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Service Radius
+            </h2>
+            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              {radiusKm >= 50 ? '50+ km' : `${radiusKm} km`}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={5}
+            max={50}
+            step={5}
+            value={radiusKm}
+            onChange={(e) => setRadiusKm(Number(e.target.value))}
+            className="w-full accent-emerald-600 cursor-pointer h-1.5 bg-muted rounded-lg"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+            <span>5 km</span>
+            <span>50+ km</span>
+          </div>
+        </div>
+
+        {/* ─── Rating Filter ───────────────────────────────────────────────── */}
+        <div>
+          <h2 className="mb-2 border-b border-border pb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Rating
+          </h2>
+          <div className="grid grid-cols-4 gap-1">
+            {[
+              { label: 'All', value: 0 },
+              { label: '4.5+', value: 4.5 },
+              { label: '4.0+', value: 4.0 },
+              { label: '3.5+', value: 3.5 },
+            ].map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => setMinRating(item.value)}
+                className={cn(
+                  'rounded-lg border px-2 py-1.5 text-center text-xs font-medium transition-colors',
+                  minRating === item.value
+                    ? 'border-emerald-600 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold'
+                    : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
+                )}
+              >
+                {item.value > 0 ? `★ ${item.label}` : item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ─── Business Status Filter ───────────────────────────────────────── */}
+        <div>
+          <h2 className="mb-2 border-b border-border pb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Business Status
+          </h2>
+          <ul className="space-y-1">
+            <li>
+              <button
+                type="button"
+                onClick={() => setClaimedFilter(claimedFilter === 'claimed' ? 'all' : 'claimed')}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+              >
+                <Checkbox checked={claimedFilter === 'claimed'} />
+                <span className="text-foreground text-xs font-medium">Claimed businesses</span>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => setClaimedFilter(claimedFilter === 'unclaimed' ? 'all' : 'unclaimed')}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+              >
+                <Checkbox checked={claimedFilter === 'unclaimed'} />
+                <span className="text-foreground text-xs font-medium">Unclaimed businesses</span>
+              </button>
+            </li>
+          </ul>
+        </div>
+
         {/* ─── Trust filters ──────────────────────────────────────────────── */}
         <div>
           <h2 className="mb-2 border-b border-border pb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -399,7 +464,7 @@ export function MarketplaceSidebar({
               >
                 <Checkbox checked={trustFullyVerified} />
                 <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-                <span className="text-foreground">Fully verified only</span>
+                <span className="text-foreground text-xs font-medium">Fully verified only</span>
               </button>
             </li>
             <li>
@@ -410,68 +475,31 @@ export function MarketplaceSidebar({
               >
                 <Checkbox checked={trustRatingHigh} />
                 <Star className="h-4 w-4 text-muted-foreground" />
-                <span className="text-foreground">Rating 4.8 and above</span>
-              </button>
-            </li>
-            <li>
-              <button
-                type="button"
-                onClick={toggleTrustEmergency}
-                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
-              >
-                <Checkbox checked={trustEmergency} />
-                <Zap className="h-4 w-4 text-muted-foreground" />
-                <span className="text-foreground">24/7 emergency dispatch</span>
+                <span className="text-foreground text-xs font-medium">Rating 4.8 and above</span>
               </button>
             </li>
           </ul>
         </div>
 
-        {/* ─── Stats card (Four-gate verification explainer) ──────────────── */}
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
-          <div className="flex items-start gap-2">
-            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-foreground">Four-gate verification</h3>
+        {/* ─── Own this business? Promo card ───────────────────────────────── */}
+        <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/30">
+          <div className="flex items-start gap-2.5">
+            <Building2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+            <div>
+              <h3 className="text-xs font-bold text-foreground">Own this business?</h3>
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                Identity, business, insurance and payments are checked independently. Providers clearing all four carry the gold Verified mark.
+                Claim your profile to manage your information, reply to quotes, and grow your customer reach.
               </p>
+              <Link
+                href="/claim"
+                className="mt-2.5 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 transition-colors"
+              >
+                Claim your business <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
             </div>
           </div>
-          <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-emerald-200 pt-3 dark:border-emerald-900">
-            <Stat label="Active providers" value={totalProviders.toLocaleString()} />
-            <Stat label="Avg rating" value={avgRating} />
-            <Stat label="Escrow-protected" value={`${escrowPct}%`} />
-            <Stat label="Median response" value={medianResponseLabel} />
-          </dl>
         </div>
-        </div>
-
-        {/* ─── Trust badges footer (pinned, always visible) ────────────────
-            Moved here from the full-width trust bar that sat above the
-            breadcrumb nav. Compact vertical list so it fits a 260px sidebar
-            without truncation, and stays visible while the categories /
-            filters / stats above scroll independently. */}
-        <div className="flex-shrink-0 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
-          <ul className="space-y-1.5">
-            <li className="flex items-center gap-2 text-[11px]">
-              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-              <span className="font-medium text-foreground">Verified professionals</span>
-            </li>
-            <li className="flex items-center gap-2 text-[11px]">
-              <Wallet className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-              <span className="font-medium text-foreground">Escrow-protected payments</span>
-            </li>
-            <li className="flex items-center gap-2 text-[11px]">
-              <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />
-              <span className="font-medium text-foreground">Real customer reviews</span>
-            </li>
-            <li className="flex items-center gap-2 text-[11px]">
-              <Zap className="h-3.5 w-3.5 shrink-0 text-rose-500" />
-              <span className="font-medium text-foreground">24/7 emergency dispatch</span>
-            </li>
-          </ul>
-        </div>
+      </div>
     </aside>
   );
 }

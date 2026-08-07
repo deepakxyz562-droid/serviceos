@@ -110,10 +110,36 @@ export function LocationChip() {
   const [countryCode, setCountryCode] = React.useState<string>(
     countryFilter ?? 'US'
   );
-  const cities = React.useMemo<MarketplaceCity[]>(
-    () => getCitiesForCountry(countryCode),
-    [countryCode]
-  );
+  const [activeCities, setActiveCities] = React.useState<MarketplaceCity[]>([]);
+  const [loadingCities, setLoadingCities] = React.useState(false);
+
+  React.useEffect(() => {
+    let active = true;
+    async function fetchActiveCities() {
+      setLoadingCities(true);
+      try {
+        const res = await fetch(`/api/marketplace/cities?country=${encodeURIComponent(countryCode)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (active) {
+            setActiveCities(data);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch active cities:', err);
+      } finally {
+        if (active) {
+          setLoadingCities(false);
+        }
+      }
+    }
+    fetchActiveCities();
+    return () => {
+      active = false;
+    };
+  }, [countryCode]);
+
+  const cities = activeCities;
 
   // ── Sync picker's countryCode with the store's countryFilter ─────────
   // The store's countryFilter is the source of truth — it can change
@@ -364,10 +390,15 @@ export function LocationChip() {
                   className="h-11 w-full"
                   aria-label="Select city"
                 >
-                  <SelectValue placeholder="Select city" />
+                  <SelectValue placeholder={loadingCities ? "Loading cities..." : "Select city"} />
                 </SelectTrigger>
                 <SelectContent className="max-h-72">
-                  {cities.length === 0 ? (
+                  {loadingCities ? (
+                    <div className="px-2 py-3 text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
+                      Loading cities...
+                    </div>
+                  ) : cities.length === 0 ? (
                     <div className="px-2 py-3 text-center text-xs text-muted-foreground">
                       No cities available
                     </div>

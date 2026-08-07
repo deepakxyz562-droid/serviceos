@@ -331,12 +331,16 @@ function ProviderCardImpl({
   const industryLabel = industryCatalog?.name ?? industry ?? 'Service Provider';
   const location = [provider.city, provider.state].filter(Boolean).join(', ');
   const phone = listItem.phone ?? null;
+  const website = (provider as ProviderListItem).website ?? null;
   const isFeat = featured ?? !!listItem.featured;
   const isEmergency = provider.emergencyServiceAvailable ?? listItem.emergencyServiceAvailable ?? false;
   const claimed = listItem.claimed ?? false;
   const listingTier = listItem.listingTier ?? 'none';
   const isClaimedFree = listingTier === 'claimed_free';
   const distanceKm = listItem.distanceKm ?? null;
+  // serviceRadiusKm = how far provider will travel (their coverage area).
+  // distanceKm = distance from user to provider (not the same thing).
+  const serviceRadiusKm = listItem.serviceRadiusKm ?? null;
 
   const gates = buildVerificationGates(provider);
   const allGatesPassed = gates.every((g) => g.passed);
@@ -356,159 +360,202 @@ function ProviderCardImpl({
   return (
     <article
       className={cn(
-        'group flex flex-col rounded-xl border border-border bg-card shadow-sm transition-all duration-350 hover:-translate-y-1 hover:border-primary/40 hover:shadow-md min-w-0 overflow-hidden',
+        'group flex flex-col lg:flex-row rounded-2xl border border-border/80 bg-card shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-md min-w-0 overflow-hidden',
         isFeat && 'ring-2 ring-amber-300/70 border-amber-300/40',
         className,
       )}
     >
-      {/* ─── Identity row ──────────────────────────────────────────────────── */}
-      <div className="flex items-start gap-3 p-4 pb-2.5">
-        <span
-          className={cn(
-            'grid h-11 w-11 shrink-0 place-items-center rounded-xl border text-sm font-bold shadow-sm transition-transform duration-350 group-hover:scale-105',
-            industryMeta.bg,
-            industryMeta.text,
-          )}
-          aria-hidden
-        >
-          <industryMeta.icon className="h-5 w-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center justify-between gap-1.5">
-            <div className="flex items-center gap-1.5 min-w-0">
-              {href ? (
-                <Link href={profileHref} aria-label={`View ${provider.name} profile`} className="min-w-0">
-                  <h3 className="truncate text-[15px] font-semibold tracking-tight text-foreground transition-colors group-hover:text-emerald-700">
-                    {provider.name}
-                  </h3>
-                </Link>
-              ) : (
-                <button type="button" onClick={handleView} className="min-w-0 text-left" aria-label={`View ${provider.name} profile`}>
-                  <h3 className="truncate text-[15px] font-semibold tracking-tight text-foreground transition-colors group-hover:text-emerald-700">
-                    {provider.name}
-                  </h3>
-                </button>
+      {/* ─── Column 1: Core Info & Identity (Left) ──────────────────────── */}
+      <div className="flex-1 flex flex-col justify-between p-4 sm:p-5 min-w-0">
+        <div>
+          {/* Header row: Squircle icon + Title & badges */}
+          <div className="flex items-start gap-3">
+            <span
+              className={cn(
+                'grid h-12 w-12 shrink-0 place-items-center rounded-2xl border text-sm font-bold shadow-sm transition-transform duration-300 group-hover:scale-105',
+                industryMeta.bg,
+                industryMeta.text,
               )}
-              {allGatesPassed ? (
-                <BadgeCheck
-                  className="h-4 w-4 shrink-0 fill-amber-400 text-amber-500"
-                  aria-label="Fully verified"
-                />
-              ) : null}
+              aria-hidden
+            >
+              <industryMeta.icon className="h-6 w-6" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                {href ? (
+                  <Link href={profileHref} aria-label={`View ${provider.name} profile`} className="min-w-0">
+                    <h3 className="truncate text-base font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-700 dark:group-hover:text-emerald-400">
+                      {provider.name}
+                    </h3>
+                  </Link>
+                ) : (
+                  <button type="button" onClick={handleView} className="min-w-0 text-left" aria-label={`View ${provider.name} profile`}>
+                    <h3 className="truncate text-base font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-700 dark:group-hover:text-emerald-400">
+                      {provider.name}
+                    </h3>
+                  </button>
+                )}
+
+                {/* Badge status */}
+                {showVerifiedBadge ? (
+                  <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/50">
+                    <BadgeCheck className="h-3 w-3" />
+                    Verified
+                  </span>
+                ) : showUnclaimedBadge ? (
+                  <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground border border-border/40">
+                    Unclaimed
+                  </span>
+                ) : null}
+              </div>
+
+              {/* Industry label */}
+              <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mt-0.5">
+                {industryLabel}
+              </p>
+
+              {/* Location and Distance Row */}
+              <p className="mt-1 flex flex-nowrap items-center gap-1 text-xs text-muted-foreground w-full overflow-hidden">
+                {location ? (
+                  <>
+                    <MapPin className="h-3.5 w-3.5 text-muted-foreground/75 shrink-0" />
+                    <span className="truncate">{location}</span>
+                  </>
+                ) : null}
+                {distanceKm != null ? (
+                  <>
+                    <span className="text-muted-foreground/45 shrink-0" aria-hidden>·</span>
+                    <span className="shrink-0 text-emerald-600 dark:text-emerald-400 font-medium">
+                      {distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m away` : `${distanceKm.toFixed(1)} km away`}
+                    </span>
+                  </>
+                ) : null}
+              </p>
             </div>
           </div>
-          {/* Location and Distance Row — clean, horizontal flex-nowrap to prevent vertical stacking */}
-          <p className="mt-1 flex flex-nowrap items-center gap-1 text-[11px] text-muted-foreground w-full overflow-hidden">
-            {location ? (
-              <>
-                <MapPin className="h-3 w-3 text-muted-foreground/75 shrink-0" />
-                <span className="truncate">{location}</span>
-              </>
-            ) : null}
-            {distanceKm != null ? (
-              <>
-                <span className="text-muted-foreground/45 shrink-0" aria-hidden>•</span>
-                <span className="shrink-0 text-emerald-600 dark:text-emerald-400 font-medium">
-                  {distanceKm < 1
-                    ? `${Math.round(distanceKm * 1000)} m`
-                    : `${distanceKm.toFixed(1)} km`}{' '}
-                  away
-                </span>
-              </>
-            ) : null}
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-1.5 shrink-0 ml-2">
-          {showVerifiedBadge ? (
-            <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/50">
-              <BadgeCheck className="h-3 w-3" />
-              Verified
-            </span>
-          ) : showUnclaimedBadge ? (
-            <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground border border-border/40">
-              Unclaimed
-            </span>
+
+          {/* Social Proof Rating Stars Row */}
+          <div className="mt-3 flex items-center gap-2">
+            <RatingStars rating={rating} />
+            <span className="text-xs font-bold text-foreground">{rating.toFixed(1)}</span>
+            <span className="text-xs text-muted-foreground">({reviewCount})</span>
+            <span className="text-xs text-muted-foreground/50">· Google rating</span>
+          </div>
+
+          {/* Contact links: website + phone at the bottom of the info column */}
+          {(website || phone) ? (
+            <div className="mt-3.5 flex flex-wrap items-center gap-3 text-xs border-t border-border/40 pt-2.5">
+              {website ? (
+                <a
+                  href={website.startsWith('http') ? website : `https://${website}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 font-semibold transition-colors"
+                >
+                  🌐 Website
+                </a>
+              ) : null}
+              {phone ? (
+                <a
+                  href={`tel:${phone.replace(/[^+\d]/g, '')}`}
+                  className="inline-flex items-center gap-1.5 text-foreground hover:text-emerald-700 font-semibold transition-colors"
+                >
+                  <Phone className="h-3.5 w-3.5 text-emerald-600" />
+                  {phone.replace(/\\/g, '')}
+                </a>
+              ) : null}
+            </div>
           ) : null}
-          <span className={cn('text-[9px] font-semibold border px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0', industryMeta.labelBg)}>
-            {industryLabel}
-          </span>
         </div>
       </div>
 
-      {/* ─── Stats bar (3 columns: rating | jobs | response) ───────────────── */}
-      {!compact ? (
-        <StatsBar
-          rating={rating}
-          reviewCount={reviewCount}
-          jobsCount={jobsCount}
-          responseTimeMins={responseTimeMins}
-        />
-      ) : null}
-
-      {/* ─── Description (2-line clamp) ────────────────────────────────────── */}
-      {description && !compact ? (
-        <p className="mx-4 mt-3 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
-          {stripHtml(description)}
-        </p>
-      ) : null}
-
-      {/* ─── 4-gate verification badges ────────────────────────────────────── */}
-      {!compact ? (
-        <div className="mx-4 mt-3 flex flex-wrap gap-1.5">
-          {gates.map((g) => (
-            <GateBadge key={g.label} gate={g} />
-          ))}
+      {/* ─── Column 2: Business Highlights Box (Middle - Desktop) ────────── */}
+      <div className="lg:w-56 border-t lg:border-t-0 lg:border-l border-border/60 bg-emerald-50/40 dark:bg-emerald-950/20 p-4 flex flex-col justify-center space-y-2.5 text-xs">
+        <div className="flex items-center gap-2 text-foreground font-medium">
+          <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>Public profile</span>
         </div>
-      ) : null}
+        <div className="flex items-center gap-2 text-foreground font-medium">
+          <BadgeCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>Free listing</span>
+        </div>
+        <div className="flex items-center gap-2 text-foreground font-medium">
+          <Building2 className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>
+            {listItem.employeesCount ? `${listItem.employeesCount} employees` : 'Founded team'}
+          </span>
+        </div>
+        {serviceRadiusKm ? (
+          <div className="flex items-center gap-2 text-foreground font-medium">
+            <MapPin className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span>Service radius {serviceRadiusKm} km</span>
+          </div>
+        ) : null}
+      </div>
 
-      {/* ─── Action row: 24/7 pill + Call now + Details ─────────────────────── */}
-      <div className="mt-auto flex items-center justify-between gap-2 p-4 pt-3">
-        <div className="flex min-w-0 items-center gap-2">
-          {isEmergency ? (
-            <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-              <Zap className="h-3 w-3" />
-              24/7
-            </span>
-          ) : null}
+      {/* ─── Column 3: CTAs & Claim Block (Right - Desktop) ──────────────── */}
+      <div className="lg:w-56 border-t lg:border-t-0 lg:border-l border-border/60 p-4 flex flex-col justify-between bg-card shrink-0 gap-3">
+        <div className="space-y-2">
           {phone ? (
             <a
               href={`tel:${phone.replace(/[^+\d]/g, '')}`}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+              className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
               aria-label={`Call ${provider.name}`}
             >
-              <Phone className="h-3.5 w-3.5" />
+              <Phone className="h-4 w-4" />
               Call now
             </a>
           ) : (
-            <span className="text-xs italic text-muted-foreground">No phone on file</span>
+            <span className="flex h-10 w-full items-center justify-center rounded-xl bg-muted text-xs text-muted-foreground font-medium">
+              No phone on file
+            </span>
+          )}
+
+          {website ? (
+            <a
+              href={website.startsWith('http') ? website : `https://${website}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400"
+            >
+              🌐 Visit Website
+            </a>
+          ) : null}
+
+          {href ? (
+            <Link
+              href={profileHref}
+              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-background text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+            >
+              View profile <ArrowRight className="h-4 w-4" />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={handleView}
+              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-background text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+            >
+              View profile <ArrowRight className="h-4 w-4" />
+            </button>
           )}
         </div>
-        {href ? (
-          <Link
-            href={profileHref}
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-border bg-background px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-muted"
-            aria-label={`View ${provider.name} details`}
-          >
-            Details <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        ) : (
-          <button
-            type="button"
-            onClick={handleView}
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-border bg-background px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-muted"
-            aria-label={`View ${provider.name} details`}
-          >
-            Details <ArrowRight className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
 
-      {/* ─── Claimed-free upgrade hint (subtle banner) ──────────── */}
-      {isClaimedFree ? (
-        <div className="border-t border-dashed border-border bg-muted/20 px-4 py-2 text-center text-[11px] text-muted-foreground">
-          Claimed listing · Upgrade to receive online bookings
-        </div>
-      ) : null}
+        {/* Claim business block */}
+        {!claimed ? (
+          <div className="border-t border-border/50 pt-2.5">
+            <p className="text-[11px] font-bold text-foreground">Own this business?</p>
+            <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+              Claim your profile to update info, respond to leads and grow your business.
+            </p>
+            <Link
+              href="/claim"
+              className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400"
+            >
+              Claim business <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+        ) : null}
+      </div>
     </article>
   );
 }
@@ -533,9 +580,11 @@ function MinimalCard({
   const industryLabel = industryCatalog?.name ?? industry ?? 'Service Provider';
   const location = [provider.city, provider.state].filter(Boolean).join(', ');
   const phone = provider.phone ?? null;
+  const website = provider.website ?? null;
   const isEmergency = provider.emergencyServiceAvailable ?? false;
   const profileHref = href ?? '#';
   const distanceKm = provider.distanceKm ?? null;
+  const serviceRadiusKm = provider.serviceRadiusKm ?? null;
   const handleView = () => {
     if (onViewProfile) onViewProfile(provider);
   };
@@ -544,152 +593,186 @@ function MinimalCard({
   return (
     <article
       className={cn(
-        'group flex flex-col rounded-xl border border-border/80 bg-card shadow-sm transition-all duration-350 hover:-translate-y-1 hover:border-emerald-500/30 hover:shadow-md min-w-0 overflow-hidden',
+        'group flex flex-col lg:flex-row rounded-2xl border border-border/80 bg-card shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-md min-w-0 overflow-hidden',
         className,
       )}
     >
-      {/* Identity row */}
-      <div className="flex items-start gap-3 p-4 pb-2.5">
-        <span
-          className={cn(
-            'grid h-11 w-11 shrink-0 place-items-center rounded-xl border text-sm font-bold shadow-sm transition-transform duration-350 group-hover:scale-105',
-            industryMeta.bg,
-            industryMeta.text
-          )}
-          aria-hidden
-        >
-          <industryMeta.icon className="h-5 w-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center justify-between gap-1.5">
-            {href ? (
-              <Link href={profileHref} aria-label={`View ${provider.name} profile`} className="min-w-0">
-                <h3 className="truncate text-[15px] font-semibold tracking-tight text-foreground transition-colors group-hover:text-emerald-700">
-                  {provider.name}
-                </h3>
-              </Link>
-            ) : (
-              <button type="button" onClick={handleView} className="min-w-0 text-left" aria-label={`View ${provider.name} profile`}>
-                <h3 className="truncate text-[15px] font-semibold tracking-tight text-foreground transition-colors group-hover:text-emerald-700">
-                  {provider.name}
-                </h3>
-              </button>
-            )}
-          </div>
-          {/* Location and Distance Row — clean, horizontal flex-nowrap to prevent vertical stacking */}
-          <p className="mt-1 flex flex-nowrap items-center gap-1 text-[11px] text-muted-foreground w-full overflow-hidden">
-            {location ? (
-              <>
-                <MapPin className="h-3 w-3 text-muted-foreground/75 shrink-0" />
-                <span className="truncate">{location}</span>
-              </>
-            ) : null}
-            {distanceKm != null ? (
-              <>
-                <span className="text-muted-foreground/45 shrink-0" aria-hidden>•</span>
-                <span className="shrink-0 text-emerald-600 dark:text-emerald-400 font-medium">
-                  {distanceKm < 1
-                    ? `${Math.round(distanceKm * 1000)} m`
-                    : `${distanceKm.toFixed(1)} km`}{' '}
-                  away
-                </span>
-              </>
-            ) : null}
-          </p>
-        </div>
-        {/* Claim status — same 3-state logic as the full card. MinimalCard
-            is only used for unclaimed seed data, so this renders "Unclaimed",
-            but the conditional keeps it consistent if data ever changes. */}
-        {(() => {
-          const gates = buildVerificationGates(provider);
-          const allPassed = gates.every((g) => g.passed);
-          const cl = provider.claimed ?? false;
-          if (cl && allPassed) {
-            return (
-              <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                <BadgeCheck className="h-3 w-3" />
-                Verified
-              </span>
-            );
-          }
-          if (!cl) {
-            return (
-              <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground border border-border/40">
-                Unclaimed
-              </span>
-            );
-          }
-          return null;
-        })()}
-      </div>
-
-      {/* Social proof and category badge row */}
-      <div className="mx-4 mb-2.5 flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-1.5 text-xs border border-border/30">
-        <div className="flex items-center gap-1.5 min-w-0">
-          {reviewCount > 0 ? (
-            <>
-              <RatingStars rating={rating} />
-              <span className="font-bold text-foreground ml-0.5">{rating.toFixed(1)}</span>
-              <span className="text-muted-foreground text-[10px] truncate">({reviewCount})</span>
-            </>
-          ) : (
-            <span className="italic text-muted-foreground text-[11px]">No reviews yet</span>
-          )}
-        </div>
-        <span className={cn('text-[9px] font-semibold border px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0', industryMeta.labelBg)}>
-          {industryLabel}
-        </span>
-      </div>
-
-      {/* Description snippet (2-line clamp) */}
-      {description ? (
-        <p className="mx-4 mb-3 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground/90">
-          {stripHtml(description)}
-        </p>
-      ) : null}
-
-
-
-      {/* Action row */}
-      <div className="mt-auto flex items-center justify-between gap-2 p-4 pt-0">
-        <div className="flex min-w-0 items-center gap-2">
-          {isEmergency ? (
-            <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-              <Zap className="h-3 w-3" />
-              24/7
+      {/* ─── Column 1: Core Info & Identity (Left) ──────────────────────── */}
+      <div className="flex-1 flex flex-col justify-between p-4 sm:p-5 min-w-0">
+        <div>
+          <div className="flex items-start gap-3">
+            <span
+              className={cn(
+                'grid h-12 w-12 shrink-0 place-items-center rounded-2xl border text-sm font-bold shadow-sm transition-transform duration-300 group-hover:scale-105',
+                industryMeta.bg,
+                industryMeta.text,
+              )}
+              aria-hidden
+            >
+              <industryMeta.icon className="h-6 w-6" />
             </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                {href ? (
+                  <Link href={profileHref} aria-label={`View ${provider.name} profile`} className="min-w-0">
+                    <h3 className="truncate text-base font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-700 dark:group-hover:text-emerald-400">
+                      {provider.name}
+                    </h3>
+                  </Link>
+                ) : (
+                  <button type="button" onClick={handleView} className="min-w-0 text-left" aria-label={`View ${provider.name} profile`}>
+                    <h3 className="truncate text-base font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-700 dark:group-hover:text-emerald-400">
+                      {provider.name}
+                    </h3>
+                  </button>
+                )}
+
+                <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground border border-border/40">
+                  Unclaimed
+                </span>
+              </div>
+
+              <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mt-0.5">
+                {industryLabel}
+              </p>
+
+              <p className="mt-1 flex flex-nowrap items-center gap-1 text-xs text-muted-foreground w-full overflow-hidden">
+                {location ? (
+                  <>
+                    <MapPin className="h-3.5 w-3.5 text-muted-foreground/75 shrink-0" />
+                    <span className="truncate">{location}</span>
+                  </>
+                ) : null}
+                {distanceKm != null ? (
+                  <>
+                    <span className="text-muted-foreground/45 shrink-0" aria-hidden>·</span>
+                    <span className="shrink-0 text-emerald-600 dark:text-emerald-400 font-medium">
+                      {distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m away` : `${distanceKm.toFixed(1)} km away`}
+                    </span>
+                  </>
+                ) : null}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-center gap-2">
+            <RatingStars rating={rating} />
+            <span className="text-xs font-bold text-foreground">{rating.toFixed(1)}</span>
+            <span className="text-xs text-muted-foreground">({reviewCount})</span>
+            <span className="text-xs text-muted-foreground/50">· Google rating</span>
+          </div>
+
+          {/* Website link at bottom of info column (phone is in Column 3 'Call now' button) */}
+          {/* Contact links: website + phone at the bottom of the info column */}
+          {(website || phone) ? (
+            <div className="mt-3.5 flex flex-wrap items-center gap-3 text-xs border-t border-border/40 pt-2.5">
+              {website ? (
+                <a
+                  href={website.startsWith('http') ? website : `https://${website}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 font-semibold transition-colors"
+                >
+                  🌐 Website
+                </a>
+              ) : null}
+              {phone ? (
+                <a
+                  href={`tel:${phone.replace(/[^+\d]/g, '')}`}
+                  className="inline-flex items-center gap-1.5 text-foreground hover:text-emerald-700 font-semibold transition-colors"
+                >
+                  <Phone className="h-3.5 w-3.5 text-emerald-600" />
+                  {phone.replace(/\\/g, '')}
+                </a>
+              ) : null}
+            </div>
           ) : null}
+        </div>
+      </div>
+
+      {/* ─── Column 2: Business Highlights Box ────────────────────────────── */}
+      <div className="lg:w-56 border-t lg:border-t-0 lg:border-l border-border/60 bg-emerald-50/40 dark:bg-emerald-950/20 p-4 flex flex-col justify-center space-y-2.5 text-xs">
+        <div className="flex items-center gap-2 text-foreground font-medium">
+          <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>Public profile</span>
+        </div>
+        <div className="flex items-center gap-2 text-foreground font-medium">
+          <BadgeCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>Free listing</span>
+        </div>
+        <div className="flex items-center gap-2 text-foreground font-medium">
+          <Building2 className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>
+            {provider.employeesCount ? `${provider.employeesCount} employees` : 'Founded team'}
+          </span>
+        </div>
+        {serviceRadiusKm ? (
+          <div className="flex items-center gap-2 text-foreground font-medium">
+            <MapPin className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span>Service radius {serviceRadiusKm} km</span>
+          </div>
+        ) : null}
+      </div>
+
+      {/* ─── Column 3: CTAs & Claim Block ─────────────────────────────────── */}
+      <div className="lg:w-56 border-t lg:border-t-0 lg:border-l border-border/60 p-4 flex flex-col justify-between bg-card shrink-0 gap-3">
+        <div className="space-y-2">
           {phone ? (
             <a
               href={`tel:${phone.replace(/[^+\d]/g, '')}`}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+              className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
               aria-label={`Call ${provider.name}`}
             >
-              <Phone className="h-3.5 w-3.5" />
+              <Phone className="h-4 w-4" />
               Call now
             </a>
           ) : (
-            <span className="text-xs italic text-muted-foreground">No phone on file</span>
+            <span className="flex h-10 w-full items-center justify-center rounded-xl bg-muted text-xs text-muted-foreground font-medium">
+              No phone on file
+            </span>
+          )}
+
+          {website ? (
+            <a
+              href={website.startsWith('http') ? website : `https://${website}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400"
+            >
+              🌐 Visit Website
+            </a>
+          ) : null}
+
+          {href ? (
+            <Link
+              href={profileHref}
+              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-background text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+            >
+              View profile <ArrowRight className="h-4 w-4" />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={handleView}
+              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-background text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+            >
+              View profile <ArrowRight className="h-4 w-4" />
+            </button>
           )}
         </div>
-        {href ? (
+
+        <div className="border-t border-border/50 pt-2.5">
+          <p className="text-[11px] font-bold text-foreground">Own this business?</p>
+          <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+            Claim your profile to update info, respond to leads and grow your business.
+          </p>
           <Link
-            href={profileHref}
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-border bg-background px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-muted"
-            aria-label={`View ${provider.name} details`}
+            href="/claim"
+            className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400"
           >
-            Details <ArrowRight className="h-3.5 w-3.5" />
+            Claim business <ArrowRight className="h-3 w-3" />
           </Link>
-        ) : (
-          <button
-            type="button"
-            onClick={handleView}
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-border bg-background px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-muted"
-            aria-label={`View ${provider.name} details`}
-          >
-            Details <ArrowRight className="h-3.5 w-3.5" />
-          </button>
-        )}
+        </div>
       </div>
     </article>
   );

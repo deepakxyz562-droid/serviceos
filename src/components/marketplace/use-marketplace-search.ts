@@ -175,26 +175,29 @@ interface MarketplaceSearchState {
    * user a guided escape path.
    */
   expansionLevel: 'city' | '50km' | '100km' | 'nationwide';
+  /** Service radius filter in kilometers (default 25km). */
+  radiusKm: number;
+  /** Minimum rating filter (0 = All, 4.5, 4.0, 3.5). */
+  minRating: number;
+  /** Claimed status filter ('all' | 'claimed' | 'unclaimed'). */
+  claimedFilter: 'all' | 'claimed' | 'unclaimed';
   setSearchInput: (v: string) => void;
   setCityInput: (v: string) => void;
   setSort: (v: MarketplaceSortKey) => void;
   setVerticalFilter: (v: string | null) => void;
   setIndustryFilter: (v: string | null) => void;
-  /** Sets the vertical filter AND clears the industry filter (clicking a top-level category). */
   selectVertical: (v: string | null) => void;
-  /** Sets the industry filter AND sets the vertical filter to the industry's parent vertical. */
   selectIndustry: (industryId: string, parentVertical: string) => void;
   toggleVerticalExpanded: (verticalId: string) => void;
   toggleTrustFullyVerified: () => void;
   toggleTrustRatingHigh: () => void;
   toggleTrustEmergency: () => void;
-  /** Set or clear the country filter. null = no country filter (global). */
+  setRadiusKm: (v: number) => void;
+  setMinRating: (v: number) => void;
+  setClaimedFilter: (v: 'all' | 'claimed' | 'unclaimed') => void;
   setCountryFilter: (code: string | null) => void;
-  /** Set or clear the user location used by the 'recommended' and 'distance' sorts. */
   setUserLocation: (loc: MarketplaceUserLocation | null) => void;
-  /** Publish the filtered + sorted list so the sidebar counts stay in sync with the grid. */
   setFilteredProviders: (list: ProviderListItem[] | null) => void;
-  /** Publish the total count so the sidebar's "Active providers" stat is accurate. */
   setTotalProvidersCount: (n: number | null) => void;
   /** Advance / reset the progressive empty-state fallback ladder. See `expansionLevel` docs above. */
   setExpansionLevel: (level: 'city' | '50km' | '100km' | 'nationwide') => void;
@@ -238,17 +241,15 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
   // resets this to 'city' whenever any filter or the user location changes,
   // so the ladder always starts at the narrowest step for the new context.
   expansionLevel: 'city',
+  radiusKm: 25,
+  minRating: 0,
+  claimedFilter: 'all',
   setSearchInput: (v) => set({ searchInput: v }),
   setCityInput: (v) => set({ cityInput: v }),
   setSort: (v) => set({ sort: v }),
   setVerticalFilter: (v) => set({ verticalFilter: v }),
   setIndustryFilter: (v) => set({ industryFilter: v }),
-  // Clicking a top-level vertical: set it as the active vertical filter and
-  // clear any sub-industry selection (the user is now browsing the whole
-  // vertical, not a specific industry within it).
   selectVertical: (v) => set({ verticalFilter: v, industryFilter: null }),
-  // Clicking a sub-industry: set the industry filter AND the parent vertical
-  // (so the sidebar highlights the correct vertical + industry pair).
   selectIndustry: (industryId, parentVertical) =>
     set({ industryFilter: industryId, verticalFilter: parentVertical }),
   toggleVerticalExpanded: (verticalId) =>
@@ -261,6 +262,9 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
   toggleTrustFullyVerified: () => set((s) => ({ trustFullyVerified: !s.trustFullyVerified })),
   toggleTrustRatingHigh: () => set((s) => ({ trustRatingHigh: !s.trustRatingHigh })),
   toggleTrustEmergency: () => set((s) => ({ trustEmergency: !s.trustEmergency })),
+  setRadiusKm: (v) => set({ radiusKm: v }),
+  setMinRating: (v) => set({ minRating: v }),
+  setClaimedFilter: (v) => set({ claimedFilter: v }),
   setCountryFilter: (code) => set({ countryFilter: code }),
   setUserLocation: (loc) => set({ userLocation: loc }),
   setFilteredProviders: (list) => set({ filteredProviders: list }),
