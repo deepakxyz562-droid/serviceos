@@ -24,6 +24,7 @@ export interface ProviderListItem {
   name: string;
   slug: string | null;
   publicSlug: string | null;
+  website?: string | null;
   tagline: string | null;
   industry: string | null;
   city: string | null;

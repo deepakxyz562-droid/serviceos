@@ -183,6 +183,9 @@ export function MarketplaceBrowser({
   const trustFullyVerified = useMarketplaceSearch((s) => s.trustFullyVerified);
   const trustRatingHigh = useMarketplaceSearch((s) => s.trustRatingHigh);
   const trustEmergency = useMarketplaceSearch((s) => s.trustEmergency);
+  const radiusKm = useMarketplaceSearch((s) => s.radiusKm);
+  const minRating = useMarketplaceSearch((s) => s.minRating);
+  const claimedFilter = useMarketplaceSearch((s) => s.claimedFilter);
 
   // ── Country filter (store-driven, not a frozen server prop) ──────────
   // The server's GeoIP-detected country is passed as `detectedCountry` and
@@ -586,6 +589,28 @@ export function MarketplaceBrowser({
   const filtered = React.useMemo(() => {
     let list = loadedProviders;
 
+    // Apply client-side filters first:
+    // 1. Rating
+    if (minRating > 0) {
+      list = list.filter((p) => (p.rating ?? 0) >= minRating);
+    }
+
+    // 2. Claimed Status
+    if (claimedFilter === 'claimed') {
+      list = list.filter((p) => p.claimed === true);
+    } else if (claimedFilter === 'unclaimed') {
+      list = list.filter((p) => !p.claimed);
+    }
+
+    // 3. Service Radius (only when userLocation is set, and radius is less than 50km)
+    if (userLocation && radiusKm < 50) {
+      list = list.filter((p) => {
+        const dist = haversineKm(userLocation.lat, userLocation.lng, p.latitude, p.longitude);
+        if (dist === null) return true;
+        return dist <= radiusKm;
+      });
+    }
+
     if ((sort === 'recommended' || sort === 'distance') && userLocation) {
       if (sort === 'distance') {
         // Pure Haversine ascending — FEATURED cards still dominate the top
@@ -666,7 +691,7 @@ export function MarketplaceBrowser({
     }
 
     return list;
-  }, [loadedProviders, sort, userLocation]);
+  }, [loadedProviders, sort, userLocation, radiusKm, minRating, claimedFilter]);
 
   // All loaded items are visible (no client-side slicing — the hook's
   // fetchNextPage() grows the list as the user scrolls).
