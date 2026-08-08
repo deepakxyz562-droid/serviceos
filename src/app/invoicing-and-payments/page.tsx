@@ -85,7 +85,7 @@ const faqs = [
   {
     question: "Can I accept online payments?",
     answer:
-      "Yes. Every invoice generated in Fieseros includes a secure online payment link. Customers can pay by credit card, debit card, UPI (for India), or bank transfer — directly from their phone, no app required. We integrate with leading payment processors including Stripe, Razorpay, and PayPal, so you can choose the provider that works in your market. You see payment status in real time inside Fieseros, and the funds settle to your bank account on the standard processor timeline (usually 1–3 business days). Most service businesses using Fieseros get paid 2–3x faster than with paper invoices or PDFs sent over email.",
+      "Yes. Every invoice generated in Fieseros includes a secure online payment link. Customers can pay by credit card, debit card, UPI (for India), or bank transfer — directly from their phone, no app required. We integrate with leading payment processors including Stripe and PayPal, so you can choose the provider that works in your market. You see payment status in real time inside Fieseros, and the funds settle to your bank account on the standard processor timeline (usually 1–3 business days). Most service businesses using Fieseros get paid substantially faster than with paper invoices or PDFs sent over email.",
   },
   {
     question: "Does it support multiple currencies?",
@@ -95,12 +95,12 @@ const faqs = [
   {
     question: "Can I send invoices by Email and SMS?",
     answer:
-      "Yes — and this is one of the biggest reasons service businesses switch to Fieseros. Every invoice is delivered to the customer by Email and SMS as a clean PDF attachment, along with a one-tap payment link. Customers get the invoice instantly on the device they already use all day, and they can pay without leaving their inbox or messages. Delivery and read receipts are tracked inside Fieseros, so you know exactly when the customer received the invoice — no more 'I never got it' excuses. In markets where SMS and email are the primary communication channels (India, Latin America, Southeast Asia, Africa, the Middle East), Email & SMS invoicing cuts average time-to-payment by 50% or more compared to manual follow-up.",
+      "Yes — and this is one of the biggest reasons service businesses switch to Fieseros. Every invoice is delivered to the customer by Email and SMS as a clean PDF attachment, along with a one-tap payment link. Customers get the invoice instantly on the device they already use all day, and they can pay without leaving their inbox or messages. Delivery and read receipts are tracked inside Fieseros, so you know exactly when the customer received the invoice — no more 'I never got it' excuses. In markets where SMS and email are the primary communication channels (India, Latin America, Southeast Asia, Africa, the Middle East), Email & SMS invoicing significantly cuts average time-to-payment compared to manual follow-up.",
   },
   {
     question: "Are there automatic payment reminders?",
     answer:
-      "Yes. You can configure a reminder schedule per invoice or as a business-wide default — for example, send a gentle reminder 3 days after the invoice is sent, a firmer follow-up at 7 days, and a final notice at 14 days. Fieseros sends each reminder automatically via Email and SMS, with the invoice and payment link attached. You can customize the message templates to match your brand voice — friendly for the first reminder, more direct for the last one. You can also pause reminders for a specific customer (for example, a long-term client who always pays on net-30 terms). Most businesses recover 15–25% more overdue invoices within the first month of enabling automatic reminders.",
+      "Yes. You can configure a reminder schedule per invoice or as a business-wide default — for example, send a gentle reminder 3 days after the invoice is sent, a firmer follow-up at 7 days, and a final notice at 14 days. Fieseros sends each reminder automatically via Email and SMS, with the invoice and payment link attached. You can customize the message templates to match your brand voice — friendly for the first reminder, more direct for the last one. You can also pause reminders for a specific customer (for example, a long-term client who always pays on net-30 terms). Most businesses recover meaningfully more overdue invoices within the first month of enabling automatic reminders.",
   },
   {
     question: "Can I do recurring invoices?",
@@ -229,8 +229,9 @@ export default function InvoicingAndPaymentsPage() {
           includes the invoice and payment link, so the customer can pay
           with one tap. You can also see a live outstanding-balance report
           showing exactly how much money is owed to you, by whom, and for
-          how long. Most service businesses using Fieseros cut their
-          average days-to-payment from 30+ days down to under 10.
+          how long. Most service businesses using Fieseros significantly cut their
+          average days-to-payment after switching on automated invoicing
+          and reminders.
         </p>
         <p>
           For service businesses that run on contracts — monthly

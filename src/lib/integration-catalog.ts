@@ -61,7 +61,7 @@ export const DEFAULT_INTEGRATIONS: IntegrationDef[] = [
   { key: 'sendgrid', name: 'SendGrid', description: 'Transactional & marketing email via SendGrid', category: 'communication', icon: 'Mail', color: 'sky', provider: 'sendgrid', enabled: true, featured: false, sortOrder: 2, detailType: 'generic' },
   { key: 'whatsapp-cloud', name: 'WhatsApp Cloud API', description: 'Official WhatsApp Business Cloud API messaging', category: 'communication', icon: 'MessageCircle', color: 'sky', provider: 'whatsapp', enabled: true, featured: true, sortOrder: 3, detailType: 'generic' },
   // ── Accounting ─────────────────────────────────────────
-  { key: 'quickbooks', name: 'QuickBooks', description: 'Sync invoices & payments with QuickBooks Online', category: 'accounting', icon: 'BookOpen', color: 'teal', provider: 'quickbooks', enabled: true, featured: false, sortOrder: 0, detailType: 'generic' },
+  { key: 'quickbooks', name: 'QuickBooks', description: 'Sync invoices & payments with QuickBooks Online', category: 'accounting', icon: 'BookOpen', color: 'teal', provider: 'quickbooks', enabled: false, featured: false, sortOrder: 0, detailType: 'generic' },
   { key: 'xero', name: 'Xero', description: 'Sync invoices & contacts with Xero', category: 'accounting', icon: 'FileSpreadsheet', color: 'teal', provider: 'xero', enabled: false, featured: false, sortOrder: 1, detailType: 'generic' },
   { key: 'zoho-books', name: 'Zoho Books', description: 'Connect Zoho Books for invoicing sync', category: 'accounting', icon: 'BookMarked', color: 'teal', provider: 'zoho', enabled: false, featured: false, sortOrder: 2, detailType: 'generic' },
   // ── Payments ───────────────────────────────────────────

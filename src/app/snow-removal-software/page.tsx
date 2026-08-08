@@ -87,7 +87,7 @@ const faqs = [
   {
     question: "How does weather-triggered auto-dispatch work for snow removal?",
     answer:
-      "You connect a weather feed to Fieseros and define trigger rules — for example, auto-dispatch all commercial routes when 2 inches of accumulation is forecast, or trigger residential routes on a winter storm warning. When the threshold is crossed, Fieseros automatically dispatches the right crews to the right routes, sends drivers their ordered stops on their phones, and notifies customers that service is in motion. You're not making phone calls at 3 a.m. — you're watching it happen on a dashboard, with the ability to intervene if needed. Most snow operators using Fieseros cut their storm-time admin work by 80% or more.",
+      "You connect a weather feed to Fieseros and define trigger rules — for example, auto-dispatch all commercial routes when 2 inches of accumulation is forecast, or trigger residential routes on a winter storm warning. When the threshold is crossed, Fieseros automatically dispatches the right crews to the right routes, sends drivers their ordered stops on their phones, and notifies customers that service is in motion. You're not making phone calls at 3 a.m. — you're watching it happen on a dashboard, with the ability to intervene if needed. Most snow operators using Fieseros significantly cut storm-time admin work.",
   },
   {
     question: "Can Fieseros handle both per-inch and seasonal snow contracts?",
@@ -97,7 +97,7 @@ const faqs = [
   {
     question: "How does salt and de-icer inventory tracking work?",
     answer:
-      "Salt is one of the biggest variable costs in snow removal, and it's notoriously hard to track — spreaders don't measure precisely, drivers over-apply, and inventory shrinks. Fieseros lets drivers log salt load-outs and application amounts per property, tracks inventory across your yard and each truck, and flags when stock is running low before the next storm. Salt usage flows onto per-inch and per-service invoices where applicable, so you're not eating material costs on seasonal contracts that didn't budget for them. Most snow operators recover 10–20% in salt cost in the first season of accurate tracking.",
+      "Salt is one of the biggest variable costs in snow removal, and it's notoriously hard to track — spreaders don't measure precisely, drivers over-apply, and inventory shrinks. Fieseros lets drivers log salt load-outs and application amounts per property, tracks inventory across your yard and each truck, and flags when stock is running low before the next storm. Salt usage flows onto per-inch and per-service invoices where applicable, so you're not eating material costs on seasonal contracts that didn't budget for them. Most snow operators recover meaningful salt cost in the first season of accurate tracking.",
   },
   {
     question: "How does plow smart auto-dispatch work?",

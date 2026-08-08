@@ -87,7 +87,7 @@ const faqs = [
   {
     question: "How does Fieseros handle recurring lawn treatment schedules?",
     answer:
-      "Lawn care is a recurring business — weekly mows, biweekly visits, six-week fertilization cycles. You define each customer's program (services, frequency, price) once in Fieseros, and it auto-generates every visit on the right day, assigns it to the right technician and route, sends the customer an Email & SMS reminder the day before, and queues the invoice after the visit is marked complete. When a customer's annual program renews, Fieseros reschedules the next season's visits automatically and alerts you to any cancellations. Most lawn care businesses cut their office admin time by 60% or more after switching.",
+      "Lawn care is a recurring business — weekly mows, biweekly visits, six-week fertilization cycles. You define each customer's program (services, frequency, price) once in Fieseros, and it auto-generates every visit on the right day, assigns it to the right technician and route, sends the customer an Email & SMS reminder the day before, and queues the invoice after the visit is marked complete. When a customer's annual program renews, Fieseros reschedules the next season's visits automatically and alerts you to any cancellations. Most lawn care businesses significantly cut office admin time after switching.",
   },
   {
     question: "Can I track chemical and fertilizer applications per customer?",
@@ -97,7 +97,7 @@ const faqs = [
   {
     question: "How does route optimization work for lawn care businesses?",
     answer:
-      "Fieseros clusters your recurring customers by neighborhood and service day, then optimizes the driving order within each cluster to minimize drive time. Each technician sees their ordered route on their phone in the morning, with turn-by-turn directions between stops. When you add a new customer, Fieseros tells you which existing route and day they fit into — or warns you if they're outside your current service area. Most lawn care businesses cut drive time by 20–30% after switching to Fieseros routing, which directly improves both margin and the number of lawns a crew can service in a day.",
+      "Fieseros clusters your recurring customers by neighborhood and service day, then optimizes the driving order within each cluster to minimize drive time. Each technician sees their ordered route on their phone in the morning, with turn-by-turn directions between stops. When you add a new customer, Fieseros tells you which existing route and day they fit into — or warns you if they're outside your current service area. Most lawn care businesses meaningfully cut drive time after switching to Fieseros routing, which directly improves both margin and the number of lawns a crew can service in a day.",
   },
   {
     question: "How does weather rescheduling work?",
@@ -107,7 +107,7 @@ const faqs = [
   {
     question: "Can customers pay automatically for recurring lawn care?",
     answer:
-      "You can store customer payment methods securely, and recurring programs can be set up as recurring invoices that go out automatically after each visit — so a customer on a six-treatment fertilization program receives a branded invoice via Email & SMS as a receipt after each application, with a secure payment link. Fieseros follows up with automated reminders for unpaid balances, so customers who prefer to pay manually still get nudged without you having to chase them. Most lawn care businesses using Fieseros get paid 2x faster and recover 5–10% in missed-billing revenue that previously slipped through the cracks.",
+      "You can store customer payment methods securely, and recurring programs can be set up as recurring invoices that go out automatically after each visit — so a customer on a six-treatment fertilization program receives a branded invoice via Email & SMS as a receipt after each application, with a secure payment link. Fieseros follows up with automated reminders for unpaid balances, so customers who prefer to pay manually still get nudged without you having to chase them. Most lawn care businesses using Fieseros get paid substantially faster and recover meaningful missed-billing revenue that previously slipped through the cracks.",
   },
   {
     question: "Does Fieseros work for both mowing and chemical application businesses?",
@@ -208,7 +208,7 @@ export default function LawnCareSoftwarePage() {
                 {[
                   "Every treatment auto-scheduled — no missed applications, no lapses in the program",
                   "Per-customer chemical records — every product, rate, and date, ready for inspection",
-                  "Routes optimized by neighborhood and day — 20–30% less drive time",
+                  "Routes optimized by neighborhood and day — less drive time",
                   "Weather reschedules handled automatically — customers notified, make-ups queued",
                   "Invoices sent via Email & SMS the moment the technician marks the visit done",
                   "Route density map shows you exactly where to add customers and where to stop serving",

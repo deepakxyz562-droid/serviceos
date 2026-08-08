@@ -135,7 +135,7 @@ const tools: {
       "Payroll and inventory",
       "Deep reporting suite",
     ],
-    pricing: "Custom ($300+/mo typical)",
+    pricing: "Custom pricing (contact for quote)",
     pros: [
       "Unmatched depth for large operations",
       "Strong integrations with accounting & payroll",
@@ -143,7 +143,7 @@ const tools: {
     ],
     cons: [
       "Expensive and complex",
-      "Long implementation (4–12 weeks)",
+      "Longer implementation (typically requires dedicated onboarding)",
       "Overkill for small teams",
     ],
     url: "https://servicetitan.com",
@@ -299,7 +299,7 @@ const matrixRows: { label: string; cells: Cell[] }[] = [
   },
   {
     label: "Pricing starts at",
-    cells: ["Free", "$49/mo", "$49/mo", "$300+/mo", "Custom", "$39/mo", "$25/user/mo", "$29/mo", "$49/mo", "Custom"],
+    cells: ["Free", "$49/mo", "$49/mo", "Custom", "Custom", "$39/mo", "$25/user/mo", "$29/mo", "$49/mo", "Custom"],
   },
   {
     label: "Best for size",
@@ -324,7 +324,7 @@ const evaluationCriteria = [
     icon: Clock,
     title: "Ease of setup",
     description:
-      "Time-to-first-job matters. We rewarded platforms that any service business could configure in under an hour without consultants.",
+      "Time-to-first-job matters. We rewarded platforms that any service business could configure in under 30 minutes without consultants.",
   },
   {
     icon: Smartphone,
@@ -452,7 +452,7 @@ export default function BestFieldServiceSoftwarePage() {
         </p>
         <p>
           <strong>Ease of setup</strong> measured time-to-first-job — could a non-technical
-          service business owner configure the tool and dispatch a real job within an hour?
+          service business owner configure the tool and dispatch a real job in under 30 minutes?
           Platforms that required implementation consultants or multi-week onboarding lost
           points. <strong>Mobile experience</strong> evaluated offline capability, install
           friction, and real-world usability on a job site — not just app store ratings. We gave
@@ -766,6 +766,9 @@ export default function BestFieldServiceSoftwarePage() {
         primaryCta={{ label: "Start Free Trial", href: "/#signup" }}
         secondaryCta={{ label: "Talk to Sales", href: "/contact-us" }}
       />
+      <p className="text-xs text-muted-foreground text-center py-6 max-w-2xl mx-auto">
+        Competitor features and pricing verified as of August 2025. Check vendor websites for the most current information.
+      </p>
     </CornerstoneLayout>
   );
 }

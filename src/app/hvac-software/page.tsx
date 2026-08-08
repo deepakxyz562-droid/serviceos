@@ -66,7 +66,7 @@ const features: Feature[] = [
     icon: MessageSquare,
     title: "Automated SMS Reminders",
     description:
-      "Filter changes, seasonal start-ups, and tune-up reminders sent automatically via Email & SMS — the channels customers actually read. Customers tap to confirm, you tap to schedule. Renewal rates double overnight.",
+      "Filter changes, seasonal start-ups, and tune-up reminders sent automatically via Email & SMS — the channels customers actually read. Customers tap to confirm, you tap to schedule. Renewal rates climb substantially.",
   },
   {
     icon: Camera,
@@ -86,12 +86,12 @@ const faqs = [
   {
     question: "How does Fieseros handle the summer and winter HVAC rush?",
     answer:
-      "Seasonal demand is the defining challenge of an HVAC business. When the first heatwave or cold snap hits, call volume can jump 5x overnight. Fieseros handles the surge in three ways: first, an emergency triage queue that prioritizes calls by urgency (no AC in 100°F with elderly residents gets priority). Second, dynamic dispatch that shows every available technician, their certifications, and live location so you can route the right tech to the right job fast. Third, automated Email, SMS, and Push notifications that keep customers informed — ETA, technician name, status updates — so they stop calling you for updates. Most HVAC businesses using Fieseros report handling 40% more rush-period calls without adding staff.",
+      "Seasonal demand is the defining challenge of an HVAC business. When the first heatwave or cold snap hits, call volume can spike dramatically overnight. Fieseros handles the surge in three ways: first, an emergency triage queue that prioritizes calls by urgency (no AC in 100°F with elderly residents gets priority). Second, dynamic dispatch that shows every available technician, their certifications, and live location so you can route the right tech to the right job fast. Third, automated Email, SMS, and Push notifications that keep customers informed — ETA, technician name, status updates — so they stop calling you for updates. Most HVAC businesses using Fieseros report handling meaningfully more rush-period calls without adding staff.",
   },
   {
     question: "Can I track preventive maintenance contracts in Fieseros?",
     answer:
-      "Yes — preventive maintenance contracts are a core workflow in Fieseros. You define each contract once: customer, equipment, service frequency (spring tune-up, fall furnace check, bi-annual, quarterly), price, and renewal date. Fieseros then automatically schedules each visit, sends the customer an SMS reminder before the appointment, dispatches the technician, generates the invoice, and tracks the contract renewal date. When renewal time approaches, Fieseros alerts you to reach out and lock in another year. HVAC businesses that switch to Fieseros typically grow their maintenance contract revenue by 30–50% in the first year.",
+      "Yes — preventive maintenance contracts are a core workflow in Fieseros. You define each contract once: customer, equipment, service frequency (spring tune-up, fall furnace check, bi-annual, quarterly), price, and renewal date. Fieseros then automatically schedules each visit, sends the customer an SMS reminder before the appointment, dispatches the technician, generates the invoice, and tracks the contract renewal date. When renewal time approaches, Fieseros alerts you to reach out and lock in another year. HVAC businesses that switch to Fieseros typically see meaningful growth in maintenance contract revenue in the first year.",
   },
   {
     question: "How does equipment service history work in HVAC software?",
@@ -111,7 +111,7 @@ const faqs = [
   {
     question: "Can I automate filter change and tune-up reminders to customers?",
     answer:
-      "Absolutely. Filter changes are the highest-leverage reminder an HVAC business can send — they keep equipment running efficiently, prevent expensive breakdowns, and generate goodwill (and often a tune-up visit). Fieseros sends automated SMS reminders at the interval you define for each piece of equipment — monthly for 1-inch filters, quarterly for 4-inch, annually for media filters. Customers tap to confirm they changed it themselves, or tap to schedule a service visit. This simple automation typically drives a 20–30% increase in tune-up visits and a meaningful drop in emergency breakdown calls.",
+      "Absolutely. Filter changes are the highest-leverage reminder an HVAC business can send — they keep equipment running efficiently, prevent expensive breakdowns, and generate goodwill (and often a tune-up visit). Fieseros sends automated SMS reminders at the interval you define for each piece of equipment — monthly for 1-inch filters, quarterly for 4-inch, annually for media filters. Customers tap to confirm they changed it themselves, or tap to schedule a service visit. This simple automation typically drives a meaningful increase in tune-up visits and a meaningful drop in emergency breakdown calls.",
   },
 ];
 

@@ -48,7 +48,7 @@ const features: Feature[] = [
     icon: Home,
     title: "Aerial Measurement & Estimate Import",
     description:
-      "Pull EagleView or Roofr measurements straight into Fieseros and generate a branded estimate in minutes. Material quantities, waste factor, and labor hours auto-calculate from the roof geometry, so your sales team can quote three times as many roofs in a week.",
+      "Pull EagleView or Roofr measurements straight into Fieseros and generate a branded estimate in minutes. Material quantities, waste factor, and labor hours auto-calculate from the roof geometry, so your sales team can quote substantially more roofs in a week.",
   },
   {
     icon: CloudRain,
@@ -86,7 +86,7 @@ const faqs = [
   {
     question: "Can Fieseros import aerial roof measurements from EagleView or Roofr?",
     answer:
-      "Yes. Fieseros accepts measurement reports from EagleView, Roofr, Hover, and most major aerial measurement providers. You upload the report or paste the measurement URL, and Fieseros pulls in roof area, pitch, facet count, and edge lengths. From there, the system calculates shingle squares, underlayment rolls, ice and water shield, drip edge, and flashing using your own waste factors and labor hours. What used to take 45 minutes of spreadsheet math now takes under five minutes, and every estimate your sales team sends looks identical to the last one.",
+      "Yes. Fieseros accepts measurement reports from EagleView, Roofr, Hover, and most major aerial measurement providers. You upload the report or paste the measurement URL, and Fieseros pulls in roof area, pitch, facet count, and edge lengths. From there, the system calculates shingle squares, underlayment rolls, ice and water shield, drip edge, and flashing using your own waste factors and labor hours. What used to take time-consuming spreadsheet math is now substantially faster, and every estimate your sales team sends looks identical to the last one.",
   },
   {
     question: "How does Fieseros handle multi-day re-roof projects?",
@@ -224,13 +224,13 @@ export default function RoofingSoftwarePage() {
           Roofing is one of the most operationally complex trades in residential contracting. A single re-roof involves an estimate from aerial measurements, a multi-day project schedule with weather contingencies, coordination with multiple material suppliers, a crew of four to eight people, milestone-based billing, and — increasingly — insurance claim documentation for storm work. Roofing contractor software that only handles one of these pieces just shifts the chaos elsewhere. Fieseros is built to run the entire workflow, from the first measurement report to the final inspection sign-off, in a single platform your team actually uses.
         </p>
         <p>
-          The estimating side of roofing is where most shops bleed time. A typical residential roof takes 30 to 45 minutes to measure by hand from an aerial report — counting squares, factoring waste, calculating underlayment rolls, drip edge, ice and water shield, vents, and flashing. Then the estimate has to be turned into a clean, branded document the homeowner will actually sign. With Fieseros, the aerial measurement report imports directly, the material quantities calculate automatically using your waste factors, and the estimate generates in under five minutes. Your sales team quotes three times as many roofs in a week, and every estimate looks consistent.
+          The estimating side of roofing is where most shops bleed time. A typical residential roof takes 30 to 45 minutes to measure by hand from an aerial report — counting squares, factoring waste, calculating underlayment rolls, drip edge, ice and water shield, vents, and flashing. Then the estimate has to be turned into a clean, branded document the homeowner will actually sign. With Fieseros, the aerial measurement report imports directly, the material quantities calculate automatically using your waste factors, and the estimate generates substantially faster. Your sales team quotes substantially more roofs in a week, and every estimate looks consistent.
         </p>
         <p>
           Storm season is where roofing CRM software earns its keep. After a hailstorm, a roofing contractor might inspect 40 homes in a week, each one requiring photos, annotated damage marks, a scope of work, and a claim package sent to the insurance adjuster. Without a proper system, that documentation lives across inspector phones, gets lost, and ends up delaying claim approvals by weeks. Fieseros captures every photo in-app with timestamps and geotags, lets you annotate damage with arrows and category labels, and bundles the whole package into a clean PDF the adjuster can act on. Claims move faster, you close more storm work, and your inspectors stop being document handlers.
         </p>
         <p>
-          Finally, there is the cash flow problem unique to roofing. A residential re-roof can run 8,000 to 25,000 dollars in materials and labor — money the contractor typically front-ends before seeing a dime. Invoicing the entire balance at the end means carrying the homeowner&apos;s project on your supplier credit line for weeks. Fieseros milestone invoicing fixes this: deposit on signature, second payment when tear-off completes, balance on final inspection. Each milestone triggers automatically when the crew marks the phase complete, the customer pays through a secure online payment link, and you see real-time status on every outstanding dollar. Most roofing contractors using Fieseros cut their days-sales-outstanding in half within the first 60 days.
+          Finally, there is the cash flow problem unique to roofing. A residential re-roof can run 8,000 to 25,000 dollars in materials and labor — money the contractor typically front-ends before seeing a dime. Invoicing the entire balance at the end means carrying the homeowner&apos;s project on your supplier credit line for weeks. Fieseros milestone invoicing fixes this: deposit on signature, second payment when tear-off completes, balance on final inspection. Each milestone triggers automatically when the crew marks the phase complete, the customer pays through a secure online payment link, and you see real-time status on every outstanding dollar. Most roofing contractors using Fieseros meaningfully cut their days-sales-outstanding within the first 60 days.
         </p>
       </ContentSection>
 

@@ -51,7 +51,7 @@ const features: Feature[] = [
     icon: MessageSquare,
     title: "Email & SMS appointment reminders",
     description:
-      "Automatically send customers an Email or SMS reminder 24 hours before each appointment — with date, time, technician name, and a 'confirm or reschedule' button. No-shows drop by 60%+ overnight.",
+      "Automatically send customers an Email or SMS reminder 24 hours before each appointment — with date, time, technician name, and a 'confirm or reschedule' button. No-shows drop meaningfully overnight.",
   },
   {
     icon: BellRing,
@@ -149,7 +149,7 @@ const faqs = [
   {
     question: "Can I automate recurring invoices?",
     answer:
-      "Yes. Recurring invoicing automation is built for service businesses that run on monthly maintenance contracts, quarterly service agreements, retainers, or subscription-style offerings. You define the contract once — customer, service, price, billing frequency, start and end dates — and Fieseros automatically generates and sends each invoice on schedule via Email & SMS with a one-tap payment link. If the contract is linked to a recurring job, the invoice is generated after each visit is marked complete by the technician. You can configure the invoice to go out a fixed number of days before or after the service visit, set up automatic payment reminders for any unpaid recurring invoice, and pause or cancel the recurring series at any time. Most service businesses that switch to Fieseros for recurring invoicing recover 10–20% in previously-missed contract revenue within the first quarter.",
+      "Yes. Recurring invoicing automation is built for service businesses that run on monthly maintenance contracts, quarterly service agreements, retainers, or subscription-style offerings. You define the contract once — customer, service, price, billing frequency, start and end dates — and Fieseros automatically generates and sends each invoice on schedule via Email & SMS with a one-tap payment link. If the contract is linked to a recurring job, the invoice is generated after each visit is marked complete by the technician. You can configure the invoice to go out a fixed number of days before or after the service visit, set up automatic payment reminders for any unpaid recurring invoice, and pause or cancel the recurring series at any time. Most service businesses that switch to Fieseros for recurring invoicing recover meaningful previously-missed contract revenue within the first quarter.",
   },
   {
     question: "Are there pre-built automation templates?",
@@ -285,8 +285,8 @@ export default function AutomationsPage() {
           automation, that means 200 manual Email & SMS confirmations, 200
           manual invoice creations, 200 manual review requests, dozens of
           manual payment reminders, and dozens of manual contract
-          renewals — easily 30–40 hours of admin work per month, the
-          equivalent of a part-time employee. With Fieseros automations,
+          renewals — easily a part-time employee's worth of admin work
+          per month. With Fieseros automations,
           all of that runs in the background. The office team shifts from
           busywork to high-value work: handling escalations, quoting new
           business, training technicians, growing the customer base. One

@@ -87,7 +87,7 @@ const faqs = [
   {
     question: "How does Fieseros help with painting estimates and quotes?",
     answer:
-      "Fieseros turns a site visit into a professional quote fast. You measure the walls and ceilings, enter the paint system (primer, finish coats, product line), and Fieseros calculates the gallon quantities, labor hours based on your production rates, materials, and your price. The quote goes to the customer via Email & SMS, where they approve with a tap in the customer portal. On approval, the quote converts into a scheduled job, material reservations, and a deposit invoice — no re-keying, no spreadsheets, no handwritten estimates that take an hour to write up. Most painting contractors cut their quoting time by 70% or more after switching.",
+      "Fieseros turns a site visit into a professional quote fast. You measure the walls and ceilings, enter the paint system (primer, finish coats, product line), and Fieseros calculates the gallon quantities, labor hours based on your production rates, materials, and your price. The quote goes to the customer via Email & SMS, where they approve with a tap in the customer portal. On approval, the quote converts into a scheduled job, material reservations, and a deposit invoice — no re-keying, no spreadsheets, no handwritten estimates that take an hour to write up. Most painting contractors significantly cut quoting time after switching.",
   },
   {
     question: "Can I manage multi-room and multi-phase painting projects?",
@@ -112,7 +112,7 @@ const faqs = [
   {
     question: "How does crew time tracking work for painting contractors?",
     answer:
-      "Crew members clock in and out of each job and each phase from their phone, with optional GPS verification. Fieseros compares actual hours against your estimated hours in real time — so if a crew is taking 30% longer than estimated on a bedroom repaint, you see it on day one and can adjust the estimate, the crew, or the scope before the margin is gone. At the end of each week, you get clean timesheet exports for payroll, plus reports on production rates per crew and per task type that feed straight back into more accurate estimates on the next job.",
+      "Crew members clock in and out of each job and each phase from their phone, with optional GPS verification. Fieseros compares actual hours against your estimated hours in real time — so if a crew is taking substantially longer than estimated on a bedroom repaint, you see it on day one and can adjust the estimate, the crew, or the scope before the margin is gone. At the end of each week, you get clean timesheet exports for payroll, plus reports on production rates per crew and per task type that feed straight back into more accurate estimates on the next job.",
   },
 ];
 
@@ -231,7 +231,7 @@ export default function PaintingSoftwarePage() {
           where every gallon of paint, every hour of labor, and every coat
           of prep has to be tracked and billed accurately. A residential
           repaint estimated at 12 gallons that actually takes 18, a
-          commercial job where the crew runs 30% over the estimated hours, a
+          commercial job where the crew runs substantially over the estimated hours, a
           customer who swears you skipped the second coat — these are the
           things that quietly eat a painting contractor&apos;s margin.
           Painting software built for the way painters actually work fixes

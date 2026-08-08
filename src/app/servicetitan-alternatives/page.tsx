@@ -48,8 +48,8 @@ export const metadata: Metadata = {
 };
 
 const comparisonRows: { feature: string; fieseros: string; competitor: string }[] = [
-  { feature: "Starting price", fieseros: "Free trial, from $29/mo", competitor: "$300+/mo (custom)" },
-  { feature: "Setup time", fieseros: "Under 30 minutes", competitor: "Weeks to months" },
+  { feature: "Starting price", fieseros: "Free trial, from $29/mo", competitor: "Custom pricing (contact for quote)" },
+  { feature: "Setup time", fieseros: "Under 30 minutes", competitor: "Typically longer implementation" },
   { feature: "Best for business size", fieseros: "Solo → 50 techs", competitor: "20+ techs, large ops" },
   { feature: "Email & SMS messaging", fieseros: "Native, first-class", competitor: "Not native" },
   { feature: "Mobile app", fieseros: "PWA (offline)", competitor: "Native iOS/Android" },
@@ -149,7 +149,7 @@ const switchReasons = [
     icon: BadgeDollarSign,
     title: "Pricing that fits small budgets",
     description:
-      "ServiceTitan typically costs $300+ per month and often requires annual contracts and implementation fees. Fieseros has a free tier and paid plans that scale with usage, not headcount.",
+      "ServiceTitan uses custom pricing (contact for quote) and often requires annual contracts and implementation fees. Fieseros has a free tier and paid plans that scale with usage, not headcount.",
   },
   {
     icon: Clock,
@@ -161,7 +161,7 @@ const switchReasons = [
     icon: Layers,
     title: "Right-sized feature set",
     description:
-      "ServiceTitan's depth is impressive but includes dispatch boards, inventory, payroll, and call tracking most small teams will never use. Fieseros ships the 20% of features that drive 80% of value.",
+      "ServiceTitan's depth is impressive but includes dispatch boards, inventory, payroll, and call tracking most small teams will never use. Fieseros ships the core features that drive most of the value.",
   },
   {
     icon: MessageSquare,
@@ -175,7 +175,7 @@ const faqs = [
   {
     question: "How much does ServiceTitan cost?",
     answer:
-      "ServiceTitan does not publish public pricing. Based on customer reports and industry data, plans typically start around $300 per month for the smallest tier and scale well into the thousands for larger contractors. Most contracts are annual and include per-technician fees, onboarding costs, and add-on modules. For small or mid-size businesses, that math often does not work — which is why many teams look for ServiceTitan alternatives.",
+      "ServiceTitan does not publish public pricing. Plans are negotiated per contract and typically scale with team size, add-on modules, and onboarding scope. For small or mid-size businesses, that math often does not work — which is why many teams look for ServiceTitan alternatives.",
   },
   {
     question: "Is ServiceTitan too complex for a small business?",
@@ -190,7 +190,7 @@ const faqs = [
   {
     question: "How long does ServiceTitan implementation take?",
     answer:
-      "ServiceTitan implementations typically take 4–12 weeks depending on team size and data complexity, and they often involve a dedicated implementation manager and training sessions. By contrast, Fieseros is designed to be live in under 30 minutes with a self-serve onboarding wizard. If you need to be operational this week, ServiceTitan is the wrong fit.",
+      "ServiceTitan implementations typically require longer onboarding with dedicated project managers and training sessions. By contrast, Fieseros is designed to be live in under 30 minutes with a self-serve onboarding wizard. If you need to be operational this week, ServiceTitan is the wrong fit.",
   },
   {
     question: "Can I migrate from ServiceTitan to a smaller platform?",
@@ -306,27 +306,26 @@ export default function ServiceTitanAlternativesPage() {
         </p>
         <p>
           The first reason teams look for ServiceTitan alternatives is <strong>price</strong>.
-          ServiceTitan does not publish pricing, but customer reports and industry data put the
-          smallest plans at roughly $300 per month, with most contracts scaling into the
-          thousands once you factor in per-technician fees, onboarding costs, and add-on modules
-          like inventory or marketing. For a 5-technician team doing $500K in annual revenue,
+          ServiceTitan does not publish pricing, but plans are negotiated per contract and
+          typically scale with team size, onboarding scope, and add-on modules like inventory
+          or marketing. For a 5-technician team doing $500K in annual revenue,
           that is a meaningful line item. Most of ServiceTitan&apos;s depth goes unused.
         </p>
         <p>
           The second reason is <strong>complexity and implementation time</strong>. ServiceTitan
-          implementations typically take 4–12 weeks with dedicated project managers and training
-          sessions. The platform assumes you have a dispatcher, a call center, and inventory
-          management as defined processes. A solo operator or a 3-technician team will spend more
-          time configuring the tool than running jobs. If you need to be operational this week,
-          ServiceTitan is the wrong fit.
+          implementations typically require longer onboarding with dedicated project managers
+          and training sessions. The platform assumes you have a dispatcher, a call center, and
+          inventory management as defined processes. A solo operator or a 3-technician team will
+          spend more time configuring the tool than running jobs. If you need to be operational
+          this week, ServiceTitan is the wrong fit.
         </p>
         <p>
           The third reason is <strong>overkill for small teams</strong>. ServiceTitan ships
           dispatch boards, payroll, call tracking, inventory, marketing automation, and a deep
           reporting suite — all genuinely valuable for large operations, all dead weight for a
           team that just needs to schedule jobs, dispatch technicians, send quotes, and collect
-          payments. The alternatives on this page ship the 20% of features that drive 80% of
-          value, at a fraction of the cost and complexity.
+          payments. The alternatives on this page ship the core features that drive most of
+          the value, at a fraction of the cost and complexity.
         </p>
       </ContentSection>
 
@@ -536,6 +535,9 @@ export default function ServiceTitanAlternativesPage() {
         primaryCta={{ label: "Start Free Trial", href: "/#signup" }}
         secondaryCta={{ label: "Talk to Sales", href: "/contact-us" }}
       />
+      <p className="text-xs text-muted-foreground text-center py-6 max-w-2xl mx-auto">
+        Competitor features and pricing verified as of August 2025. Check vendor websites for the most current information.
+      </p>
     </CornerstoneLayout>
   );
 }

@@ -279,7 +279,7 @@ const featurePillars = [
       'Quotes & estimates',
       'Invoices + online payments',
       'Expenses & cost tracking',
-      'n8n workflow builder',
+      'No-code workflow builder',
       'AI Assistant + automations',
       'Custom workflow triggers',
     ],

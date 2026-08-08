@@ -215,7 +215,7 @@ const featurePillars = [
     title: 'Finance & Automation',
     tagline: 'Get paid faster, work less',
     image: '/images/landing/pillar-finance.png',
-    features: ['Quotes & estimates', 'Invoices & payments', 'Expenses tracking', 'n8n workflow builder', 'AI Assistant & automations', 'Custom workflow triggers'],
+    features: ['Quotes & estimates', 'Invoices & payments', 'Expenses tracking', 'No-code workflow builder', 'AI Assistant & automations', 'Custom workflow triggers'],
   },
 ];
 
@@ -396,7 +396,7 @@ const pricingPlans: PricingPlan[] = [
     yearlyPrice: 300,
     description: 'For scaling businesses',
     icon: Shield,
-    features: ['Unlimited users', 'Unlimited jobs', 'Email + SMS included', 'Push notifications', 'n8n automation builder', 'Custom workflows', 'AI Receptionist (BYOK)', 'API access', 'Dedicated support'],
+    features: ['Unlimited users', 'Unlimited jobs', 'Email + SMS included', 'Push notifications', 'No-code automation builder', 'Custom workflows', 'AI Receptionist (BYOK)', 'API access', 'Dedicated support'],
     cta: 'Start Free Trial',
   },
   {
@@ -429,11 +429,11 @@ const faqs = [
   },
   {
     question: 'Can I import my existing customers?',
-    answer: 'Absolutely. Use our CSV import tool to bring in customers, contacts, and job history from spreadsheets, your old CRM, or accounting software. We also support direct integrations with popular tools via our n8n automation builder.',
+    answer: 'Absolutely. Use our CSV import tool to bring in customers, contacts, and job history from spreadsheets, your old CRM, or accounting software. You can also export invoices and reports as CSV for any accounting tool, and use webhooks to connect Fieseros to external tools like Zapier or your own n8n instance.',
   },
   {
-    question: 'What can I automate with the n8n builder?',
-    answer: 'Our built-in n8n automation builder connects Fieseros to 400+ apps and services. Automate tasks like syncing invoices to your accounting software, sending SMS reminders before appointments, updating spreadsheets when jobs complete, and triggering follow-up campaigns after payments — all without writing code. Pro and Enterprise plans include full n8n access with custom workflow triggers.',
+    question: 'What can I automate with the automation builder?',
+    answer: 'Our built-in no-code automation builder lets you automate tasks like sending SMS reminders before appointments, updating customer records when jobs complete, generating recurring invoices on schedule, and triggering follow-up campaigns after payments — all without writing code. Pro and Enterprise plans include custom workflow triggers and webhook integrations so you can connect Fieseros to external tools like Zapier or your own n8n instance.',
   },
   {
     question: 'Do you charge per message or per call?',

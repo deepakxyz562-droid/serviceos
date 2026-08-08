@@ -179,7 +179,7 @@ const PLACEHOLDER_CONFIGS: Record<string, {
       { label: 'Receipt Upload Rules', hint: 'Auto-categorize expenses from receipts' },
       { label: 'Mileage Tracking', hint: 'Track mileage for jobs and reimbursements' },
       { label: 'Vendor Management', hint: 'Track recurring vendor expenses' },
-      { label: 'Export', hint: 'Export to CSV/QuickBooks for tax filing' },
+      { label: 'Export', hint: 'Export to CSV for tax filing & accounting' },
     ],
   },
   'workflows': {
@@ -325,15 +325,13 @@ const PLACEHOLDER_CONFIGS: Record<string, {
   },
   'payment-integrations': {
     title: 'Payment Integrations',
-    description: 'Stripe, PayPal, Square, QuickBooks, bank feeds, payment gateway config',
+    description: 'Stripe, PayPal, Square, payment gateway config',
     icon: CreditCard,
     accent: 'emerald',
     items: [
       { label: 'Stripe', hint: 'Credit card processing' },
       { label: 'PayPal', hint: 'PayPal payment integration' },
       { label: 'Square', hint: 'Point-of-sale payments' },
-      { label: 'QuickBooks', hint: 'Accounting sync' },
-      { label: 'Bank Feeds', hint: 'Automatic bank transaction import' },
     ],
   },
   'account-connections': {

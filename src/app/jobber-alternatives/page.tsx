@@ -59,7 +59,7 @@ const comparisonRows: { feature: string; fieseros: boolean; competitor: boolean 
   { feature: "Multi-currency & multi-language", fieseros: true, competitor: true },
   { feature: "Mobile-first PWA (no app store install)", fieseros: true, competitor: false },
   { feature: "Free plan for solo operators", fieseros: true, competitor: false },
-  { feature: "No-code automation builder (n8n)", fieseros: true, competitor: false },
+  { feature: "No-code automation builder", fieseros: true, competitor: false },
 ];
 
 // ─── Top 10 Jobber alternatives ─────────────────────────────────────────────
@@ -95,7 +95,7 @@ const alternatives: {
     position: 3,
     name: "ServiceTitan",
     bestFor: "Large HVAC/plumbing contractors (10+ techs)",
-    pricing: "Custom (typically $300+/mo)",
+    pricing: "Custom pricing (contact for quote)",
     url: "https://servicetitan.com",
     description:
       "Enterprise-grade FSM built for large trades contractors. Powerful but expensive and complex — overkill for solo or small teams.",
@@ -207,7 +207,7 @@ const faqs = [
   {
     question: "Can I migrate from Jobber to Fieseros?",
     answer:
-      "Yes. You can export your customers, jobs, and invoices from Jobber as CSV files and import them into Fieseros. Most small businesses complete the migration in under an hour. For larger teams, our support team will help you map fields and clean up data at no extra cost during onboarding.",
+      "Yes. You can export your customers, jobs, and invoices from Jobber as CSV files and import them into Fieseros. Most small businesses complete the migration in under 30 minutes. For larger teams, our support team will help you map fields and clean up data at no extra cost during onboarding.",
   },
   {
     question: "Is there a free Jobber alternative?",
@@ -222,7 +222,7 @@ const faqs = [
   {
     question: "What's the best Jobber alternative for India?",
     answer:
-      "Fieseros is purpose-built for the Indian market. It supports UPI and rupee invoicing, Email & SMS business messaging (which is how most Indian customers communicate), multi-language workflows, and Indian GST tax handling. Jobber does not natively support Indian payment rails or SMS workflows out of the box, which is why most Indian service businesses find Fieseros a better operational fit.",
+      "Fieseros is purpose-built for the Indian market. It supports UPI and rupee invoicing, Email & SMS business messaging (which is how most Indian customers communicate), multi-language workflows, and Indian GST tax handling. Jobber may require third-party integrations for Indian payment rails or SMS workflows — check Jobber's current plan for India-specific options — which is why most Indian service businesses find Fieseros a better operational fit.",
   },
 ];
 
@@ -344,12 +344,12 @@ export default function JobberAlternativesPage() {
         </p>
         <p>
           The second reason is <strong>multi-channel messaging</strong>. In most of the world,
-          SMS and email are how customers communicate with businesses. Jobber does not include
-          native SMS and Email messaging out of the box — you need third-party integrations
-          like Zapier, which are brittle and add cost. If 80% of your customers prefer SMS
-          or email over phone calls, that gap becomes a deal-breaker. Fieseros was built
-          Email & SMS-first, so quotes, job updates, invoices, and payment links all flow
-          through Email and SMS natively.
+          SMS and email are how customers communicate with businesses. Jobber may require
+          third-party integrations for native SMS and Email messaging — for example,
+          connecting through Zapier — which can add cost and brittleness. If most of your
+          customers prefer SMS or email over phone calls, that gap becomes a deal-breaker.
+          Fieseros was built Email & SMS-first, so quotes, job updates, invoices, and
+          payment links all flow through Email and SMS natively.
         </p>
         <p>
           The third reason is <strong>complexity and market fit</strong>. Jobber is feature-rich,
@@ -559,10 +559,13 @@ export default function JobberAlternativesPage() {
 
       <CtaSection
         title="Switch from Jobber to Fieseros this week"
-        subtitle="Migrate your customers and jobs in under an hour. Free trial, no credit card, cancel anytime."
+        subtitle="Migrate your customers and jobs in under 30 minutes. Free trial, no credit card, cancel anytime."
         primaryCta={{ label: "Start Free Trial", href: "/#signup" }}
         secondaryCta={{ label: "Talk to Sales", href: "/contact-us" }}
       />
+      <p className="text-xs text-muted-foreground text-center py-6 max-w-2xl mx-auto">
+        Competitor features and pricing verified as of August 2025. Check vendor websites for the most current information.
+      </p>
     </CornerstoneLayout>
   );
 }

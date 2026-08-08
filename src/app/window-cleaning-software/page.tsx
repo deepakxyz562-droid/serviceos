@@ -47,7 +47,7 @@ const features: Feature[] = [
     icon: Route,
     title: "Route Density Optimization",
     description:
-      "Fieseros clusters recurring residential customers by neighborhood and orders stops to minimize drive time between them. A Tuesday route that used to zigzag across town now stays inside two zip codes, and the tech gets home an hour earlier.",
+      "Fieseros clusters recurring residential customers by neighborhood and orders stops to minimize drive time between them. A Tuesday route that used to zigzag across town now stays inside two zip codes, and the tech gets home meaningfully earlier.",
   },
   {
     icon: HardHat,
@@ -85,7 +85,7 @@ const faqs = [
   {
     question: "How does Fieseros optimize recurring window cleaning routes?",
     answer:
-      "Recurring residential window cleaning lives or dies on route density. A tech who drives 20 minutes between stops will struggle to do more than 10 jobs a day, while a tech with tightly clustered stops can do 16 or more. Fieseros looks at every recurring customer on your books, groups them by neighborhood and visit frequency, and produces an optimized weekly schedule that keeps each tech inside a tight geographic area. When a new customer books, Fieseros tells you which tech's route they fit into and which day of the week they should be scheduled for. Most window cleaning companies cut their average drive time per stop by 40 percent within the first month.",
+      "Recurring residential window cleaning lives or dies on route density. A tech who drives 20 minutes between stops will struggle to do more than 10 jobs a day, while a tech with tightly clustered stops can do 16 or more. Fieseros looks at every recurring customer on your books, groups them by neighborhood and visit frequency, and produces an optimized weekly schedule that keeps each tech inside a tight geographic area. When a new customer books, Fieseros tells you which tech's route they fit into and which day of the week they should be scheduled for. Most window cleaning companies meaningfully cut their average drive time per stop within the first month.",
   },
   {
     question: "How do before-and-after photos protect my window cleaning business?",
@@ -179,7 +179,7 @@ export default function WindowCleaningSoftwarePage() {
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
-                  "Routes zigzag across town — 10 jobs take all day instead of 7 hours",
+                  "Routes zigzag across town — routes drag on longer than they need to",
                   "No photo proof when a storefront manager says the second-floor panes weren't done",
                   "Ladder safety done by memory, no checklist to prove compliance if OSHA asks",
                   "Squeegee tech sent to a job that needed a 40-foot water-fed pole — wasted trip",
@@ -200,7 +200,7 @@ export default function WindowCleaningSoftwarePage() {
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
-                  "Routes clustered by neighborhood — same 10 jobs done in 7 hours flat",
+                  "Routes clustered by neighborhood — same jobs done meaningfully faster",
                   "Before and after photos on every pane — disputes resolved in seconds",
                   "Height-access checklist completed and timestamped on every work order",
                   "Job method tagged per stop — the right tech with the right gear shows up",
@@ -223,7 +223,7 @@ export default function WindowCleaningSoftwarePage() {
           Window cleaning is a route business where time is everything. A tech who finishes their route at 3 p.m. can take on more customers; a tech who finishes at 7 p.m. is burning out and looking for another job. The difference is almost never how fast they squeegee a pane — it is how efficiently they drive between stops, how much time they lose on jobs that needed different equipment, and how much of their day gets eaten by disputes, follow-ups, and end-of-month invoice chasing. Window cleaning software from Fieseros is built to attack each of those time sinks directly, so your crews do more jobs per day without working longer hours.
         </p>
         <p>
-          The route-density problem is where most residential window cleaning companies leave the most money on the table. A typical customer wants their windows cleaned twice a year — once in spring, once in fall. That means a 200-customer book generates 400 jobs a year, and the order in which those jobs get done is the single biggest driver of how many trucks you need and how many hours your techs drive. Fieseros clusters recurring customers by neighborhood and visit frequency, produces an optimized weekly schedule, and tells you which new bookings fit which tech's route. Most window cleaning companies cut drive time per stop by 30 to 40 percent in the first month, which means each tech can take on 4 to 6 more customers without working longer hours.
+          The route-density problem is where most residential window cleaning companies leave the most money on the table. A typical customer wants their windows cleaned twice a year — once in spring, once in fall. That means a 200-customer book generates 400 jobs a year, and the order in which those jobs get done is the single biggest driver of how many trucks you need and how many hours your techs drive. Fieseros clusters recurring customers by neighborhood and visit frequency, produces an optimized weekly schedule, and tells you which new bookings fit which tech's route. Most window cleaning companies meaningfully cut drive time per stop in the first month, which means each tech can take on meaningfully more customers without working longer hours.
         </p>
         <p>
           The dispute problem is the second silent margin killer. A storefront manager calls and says the second-floor panes weren't done, or a homeowner claims the skylight still has streaks. Without photo proof, you end up sending a tech back out — unpaid — and the customer walks away thinking your work was sloppy. Fieseros makes before-and-after photos on every pane a non-negotiable part of the workflow. Every photo is timestamped and attached to the work order, and when the dispute call comes in, you have the proof in front of you in 10 seconds. The disputes that used to cost you a free return trip now get resolved in your favor in a single phone call.

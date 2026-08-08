@@ -85,7 +85,7 @@ const faqs = [
   {
     question: "How does Fieseros handle recurring weekly mowing routes?",
     answer:
-      "Fieseros treats weekly and biweekly mow contracts as recurring schedules. You define the customer, the service (mow, trim, blow), the frequency, and the price — and Fieseros auto-generates each visit on the right day, assigns it to the crew that owns that neighborhood, and queues the invoice after the crew marks the job done. Customers get an Email & SMS reminder the day before, and you get route-density reports that show which neighborhoods are profitable and which crews are running behind. Most landscape businesses cut drive time by 20–30% within the first month of using Fieseros routing.",
+      "Fieseros treats weekly and biweekly mow contracts as recurring schedules. You define the customer, the service (mow, trim, blow), the frequency, and the price — and Fieseros auto-generates each visit on the right day, assigns it to the crew that owns that neighborhood, and queues the invoice after the crew marks the job done. Customers get an Email & SMS reminder the day before, and you get route-density reports that show which neighborhoods are profitable and which crews are running behind. Most landscape businesses meaningfully cut drive time within the first month of using Fieseros routing.",
   },
   {
     question: "Can I quote and sell design-build landscaping projects through Fieseros?",
@@ -95,7 +95,7 @@ const faqs = [
   {
     question: "How does material and plant inventory work for landscapers?",
     answer:
-      "Landscapers carry a lot of material — mulch by the yard, stone by the ton, nursery stock, pavers, edging, irrigation parts. Fieseros tracks all of it across your yard and each truck. When a crew loads material for a job, they log it on their phone; it deducts from inventory and adds to the customer invoice at your markup. Reorder alerts fire when stock runs low, so you're never turning away a job because you're out of edging or under-ordering mulch. Most landscape businesses recover 5–10% in lost material revenue within the first month of switching.",
+      "Landscapers carry a lot of material — mulch by the yard, stone by the ton, nursery stock, pavers, edging, irrigation parts. Fieseros tracks all of it across your yard and each truck. When a crew loads material for a job, they log it on their phone; it deducts from inventory and adds to the customer invoice at your markup. Reorder alerts fire when stock runs low, so you're never turning away a job because you're out of edging or under-ordering mulch. Most landscape businesses recover meaningful lost material revenue within the first month of switching.",
   },
   {
     question: "Can crews use Fieseros on their phones in the field?",
@@ -105,7 +105,7 @@ const faqs = [
   {
     question: "How does invoicing work for landscaping businesses?",
     answer:
-      "As soon as a crew marks a job complete, Fieseros generates a professional invoice with labor, materials, and photos attached, then sends it to the customer via Email & SMS with a secure payment link. For design-build projects, you can set up milestone invoicing — deposit on approval, progress billing at phase completions, final on walk-through. Customers pay by card or bank transfer from their phone, and you see payment status in real time with automated reminders for unpaid balances. Most landscape businesses using Fieseros get paid 2x faster than with paper invoices.",
+      "As soon as a crew marks a job complete, Fieseros generates a professional invoice with labor, materials, and photos attached, then sends it to the customer via Email & SMS with a secure payment link. For design-build projects, you can set up milestone invoicing — deposit on approval, progress billing at phase completions, final on walk-through. Customers pay by card or bank transfer from their phone, and you see payment status in real time with automated reminders for unpaid balances. Most landscape businesses using Fieseros get paid substantially faster than with paper invoices.",
   },
   {
     question: "Can I manage both residential and commercial landscaping contracts?",
@@ -250,8 +250,8 @@ export default function LandscapingSoftwarePage() {
           Then there&apos;s the design-build side, where margin is made or
           lost on accurate quoting and clean execution. A landscape design
           proposal that lives in an email thread can sit unanswered for weeks.
-          A material list that lives in your head can blow a budget by 20%.
-          Fieseros turns site visits into visual proposals with before
+          A material list that lives in your head can blow a budget
+          significantly. Fieseros turns site visits into visual proposals with before
           photos, line-item scopes, and your price — sent to the customer
           via Email & SMS, approved with a tap, and converted straight into a
           scheduled job with materials reserved and a deposit invoice

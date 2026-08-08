@@ -116,12 +116,12 @@ const faqs = [
   {
     question: "Can I schedule recurring jobs?",
     answer:
-      "Yes — recurring jobs are a first-class feature in Fieseros. You define a job once (a weekly cleaning, a monthly pest-control visit, an annual AC service contract) and Fieseros automatically creates every future occurrence, assigns the right technician based on your rules, sends the customer an SMS reminder before each visit, and queues the invoice for after the job is marked complete. You can pause, skip, or reschedule any single occurrence without affecting the rest of the schedule. Most service businesses that run maintenance contracts cut their scheduling admin time by 80%+ after switching to Fieseros.",
+      "Yes — recurring jobs are a first-class feature in Fieseros. You define a job once (a weekly cleaning, a monthly pest-control visit, an annual AC service contract) and Fieseros automatically creates every future occurrence, assigns the right technician based on your rules, sends the customer an SMS reminder before each visit, and queues the invoice for after the job is marked complete. You can pause, skip, or reschedule any single occurrence without affecting the rest of the schedule. Most service businesses that run maintenance contracts significantly cut their scheduling admin time after switching to Fieseros.",
   },
   {
     question: "How does smart dispatch work?",
     answer:
-      "When a new job is created — whether it's an emergency call or a routine appointment — Fieseros looks at every technician and scores them against the job. The score combines four factors: (1) skill match — does the technician have the certifications and trade skills the job requires; (2) geographic proximity — how far is the technician from the customer's location, factoring in current traffic; (3) capacity — how many jobs are already on their plate today and how much time they have left; (4) existing context — have they worked with this customer or asset before. The top three recommended technicians are surfaced to the dispatcher, who assigns with a single click. Smart dispatch reduces travel time by an average of 25% and virtually eliminates 'wrong tech dispatched' callbacks.",
+      "When a new job is created — whether it's an emergency call or a routine appointment — Fieseros looks at every technician and scores them against the job. The score combines four factors: (1) skill match — does the technician have the certifications and trade skills the job requires; (2) geographic proximity — how far is the technician from the customer's location, factoring in current traffic; (3) capacity — how many jobs are already on their plate today and how much time they have left; (4) existing context — have they worked with this customer or asset before. The top three recommended technicians are surfaced to the dispatcher, who assigns with a single click. Smart dispatch meaningfully reduces travel time and virtually eliminates 'wrong tech dispatched' callbacks.",
   },
   {
     question: "Can technicians see their schedule on mobile?",
@@ -131,7 +131,7 @@ const faqs = [
   {
     question: "Does it handle emergency or urgent jobs?",
     answer:
-      "Absolutely — emergency dispatch is where Fieseros shines. When a burst-pipe or no-heat call comes in, you open the live map, see every technician's current location and job status, and dispatch the closest qualified tech in seconds. The customer automatically receives an SMS message with the technician's name, photo, and ETA. The technician receives full job details on their phone — including the customer's history, any prior repairs, and notes about the property. Fieseros can also reroute the technician's remaining jobs automatically or surface them for manual reassignment. Most emergency-driven service businesses cut their average response time by 30–50% after switching to Fieseros.",
+      "Absolutely — emergency dispatch is where Fieseros shines. When a burst-pipe or no-heat call comes in, you open the live map, see every technician's current location and job status, and dispatch the closest qualified tech in seconds. The customer automatically receives an SMS message with the technician's name, photo, and ETA. The technician receives full job details on their phone — including the customer's history, any prior repairs, and notes about the property. Fieseros can also reroute the technician's remaining jobs automatically or surface them for manual reassignment. Most emergency-driven service businesses significantly cut their average response time after switching to Fieseros.",
   },
   {
     question: "Can I track technicians in real-time?",

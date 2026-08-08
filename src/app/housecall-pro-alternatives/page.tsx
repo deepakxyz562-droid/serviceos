@@ -58,7 +58,7 @@ const comparisonRows: { feature: string; fieseros: boolean; competitor: boolean 
   { feature: "Multi-currency invoicing", fieseros: true, competitor: true },
   { feature: "Customizable workflows & forms", fieseros: true, competitor: true },
   { feature: "Setup in under 30 minutes", fieseros: true, competitor: false },
-  { feature: "No-code automation builder (n8n)", fieseros: true, competitor: false },
+  { feature: "No-code automation builder", fieseros: true, competitor: false },
   { feature: "Pay-as-you-go messaging credits", fieseros: true, competitor: false },
 ];
 
@@ -88,13 +88,13 @@ const alternatives: {
     pricing: "$49–$199/mo",
     url: "https://getjobber.com",
     description:
-      "The closest direct competitor to Housecall Pro. Strong scheduling, polished mobile app, and a large ecosystem. Like Housecall Pro, it is US-centric and lacks native Email & SMS messaging out of the box.",
+      "The closest direct competitor to Housecall Pro. Strong scheduling, polished mobile app, and a large ecosystem. Like Housecall Pro, it is US-centric and may require third-party integrations for native Email & SMS messaging.",
   },
   {
     position: 3,
     name: "ServiceTitan",
     bestFor: "Large HVAC & plumbing contractors (10+ techs)",
-    pricing: "Custom (typically $300+/mo)",
+    pricing: "Custom pricing (contact for quote)",
     url: "https://servicetitan.com",
     description:
       "Enterprise-grade FSM with deep feature set for large trades contractors. Powerful, but expensive and complex — usually overkill for small teams leaving Housecall Pro.",
@@ -157,7 +157,7 @@ const switchReasons = [
     icon: MessageSquare,
     title: "Email & SMS included out-of-the-box",
     description:
-      "If your customers prefer SMS or email over phone calls — which is most of the world — Fieseros ships with Email and SMS messaging included, no third-party integrations or approvals needed. Housecall Pro does not include native SMS out of the box.",
+      "If your customers prefer SMS or email over phone calls — which is most of the world — Fieseros ships with Email and SMS messaging included, no third-party integrations or approvals needed. Check Housecall Pro's current plan for SMS messaging options.",
   },
   {
     icon: Globe,
@@ -182,12 +182,12 @@ const faqs = [
   {
     question: "Can I migrate my customers from Housecall Pro to Fieseros?",
     answer:
-      "Yes. Export your customer list, job history, and invoices from Housecall Pro as CSV files, then import them into Fieseros. Most small businesses finish the migration in under an hour. Our onboarding team will help map custom fields and clean up data free of charge for paid plans.",
+      "Yes. Export your customer list, job history, and invoices from Housecall Pro as CSV files, then import them into Fieseros. Most small businesses finish the migration in under 30 minutes. Our onboarding team will help map custom fields and clean up data free of charge for paid plans.",
   },
   {
     question: "Why is multi-channel messaging a big deal?",
     answer:
-      "In most of the world — India, Latin America, Southeast Asia, Africa, the Middle East — SMS and email are how customers communicate with businesses. If 80% of your customers prefer SMS or email over phone calls, a tool that doesn't include native messaging forces you to juggle two systems. Fieseros ships with Email and SMS included for quotes, updates, invoices, and payment links.",
+      "In most of the world — India, Latin America, Southeast Asia, Africa, the Middle East — SMS and email are how customers communicate with businesses. If most of your customers prefer SMS or email over phone calls, a tool that doesn't include native messaging forces you to juggle two systems. Fieseros ships with Email and SMS included for quotes, updates, invoices, and payment links.",
   },
   {
     question: "What's the best Housecall Pro alternative for small US businesses?",
@@ -325,12 +325,13 @@ export default function HousecallProAlternativesPage() {
           always know what you will pay next year.
         </p>
         <p>
-          The second is <strong>multi-channel messaging</strong>. Housecall Pro does not include
-          native SMS and Email messaging out of the box. If your customers are in India, Brazil,
-          Mexico, Indonesia, or any of the dozens of countries where SMS and email are the
-          dominant messaging channels, you end up running Housecall Pro for operations and a
-          separate text-message workflow for customer communication — which means data in two
-          places and constant copy-paste. Fieseros ships with Email and SMS included.
+          The second is <strong>multi-channel messaging</strong>. Housecall Pro may require
+          third-party integrations for native SMS and Email messaging. If your customers are in
+          India, Brazil, Mexico, Indonesia, or any of the dozens of countries where SMS and
+          email are the dominant messaging channels, you can end up running Housecall Pro for
+          operations and a separate text-message workflow for customer communication — which
+          means data in two places and constant copy-paste. Fieseros ships with Email and SMS
+          included.
         </p>
         <p>
           The third is <strong>market fit and customization</strong>. Housecall Pro is
@@ -537,10 +538,13 @@ export default function HousecallProAlternativesPage() {
 
       <CtaSection
         title="Switch from Housecall Pro to Fieseros"
-        subtitle="Free trial, no credit card. Bring your customers and jobs over in under an hour."
+        subtitle="Free trial, no credit card. Bring your customers and jobs over in under 30 minutes."
         primaryCta={{ label: "Start Free Trial", href: "/#signup" }}
         secondaryCta={{ label: "Talk to Sales", href: "/contact-us" }}
       />
+      <p className="text-xs text-muted-foreground text-center py-6 max-w-2xl mx-auto">
+        Competitor features and pricing verified as of August 2025. Check vendor websites for the most current information.
+      </p>
     </CornerstoneLayout>
   );
 }

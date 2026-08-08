@@ -86,7 +86,7 @@ const faqs = [
   {
     question: "How does Fieseros help a solo handyman run their business?",
     answer:
-      "Fieseros is built for solo and small-team handyman businesses — the kind of operation where you're the owner, the estimator, the technician, and the biller all at once. Customers call or message with a job, you slot them into your calendar from your phone, Fieseros sends them an Email & SMS confirmation with ETA, and when the job is done you tap to send a payment link and get paid before you leave. No spreadsheets, no paper invoices, no chasing payment. Most solo handymen using Fieseros recover 3–5 hours of admin time every week and get paid on the spot on over 90% of jobs.",
+      "Fieseros is built for solo and small-team handyman businesses — the kind of operation where you're the owner, the estimator, the technician, and the biller all at once. Customers call or message with a job, you slot them into your calendar from your phone, Fieseros sends them an Email & SMS confirmation with ETA, and when the job is done you tap to send a payment link and get paid before you leave. No spreadsheets, no paper invoices, no chasing payment. Most solo handymen using Fieseros recover meaningful admin time every week and get paid on the spot on most jobs.",
   },
   {
     question: "Can I quote both flat-rate and time-and-materials jobs?",
@@ -96,7 +96,7 @@ const faqs = [
   {
     question: "How does on-site payment work for handymen?",
     answer:
-      "When you mark a job complete, Fieseros generates the invoice and sends it to the customer's phone via Email & SMS with a secure payment link — while you're still standing in their kitchen. The customer taps the link, pays by card or bank transfer, and you see payment confirmation in real time before you walk out the door. No more I'll mail you a check, no more 30-day chases, no more writing off small unpaid invoices. Most handymen using Fieseros collect payment on over 90% of jobs before they leave the site, which dramatically improves cash flow and eliminates the awkward follow-up call.",
+      "When you mark a job complete, Fieseros generates the invoice and sends it to the customer's phone via Email & SMS with a secure payment link — while you're still standing in their kitchen. The customer taps the link, pays by card or bank transfer, and you see payment confirmation in real time before you walk out the door. No more I'll mail you a check, no more 30-day chases, no more writing off small unpaid invoices. Most handymen using Fieseros collect payment on most jobs before they leave the site, which dramatically improves cash flow and eliminates the awkward follow-up call.",
   },
   {
     question: "Can I offer recurring maintenance subscriptions to my handyman customers?",
@@ -257,7 +257,7 @@ export default function HandymanSoftwarePage() {
           with a secure payment link. They pay by card or bank transfer while
           you&apos;re still packing up your tools. No chasing, no 30-day
           waits, no writing off small unpaid invoices. Most handymen using
-          Fieseros collect payment on over 90% of jobs before they leave
+          Fieseros collect payment on most jobs before they leave
           the site.
         </p>
         <p>

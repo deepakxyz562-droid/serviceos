@@ -87,7 +87,7 @@ const faqs = [
   {
     question: "How does Fieseros handle emergency plumbing dispatch?",
     answer:
-      "When an emergency call comes in, Fieseros shows you a live map of every technician's current location and job status. You can see who is closest, who is finishing up a job, and who has the right skills for the repair. With one click, the job is dispatched, the customer gets an ETA via SMS, and the technician receives full job details — address, customer history, asset information, and any prior repairs — on their phone. Most plumbing businesses cut their average emergency response time by 30–50% after switching to Fieseros.",
+      "When an emergency call comes in, Fieseros shows you a live map of every technician's current location and job status. You can see who is closest, who is finishing up a job, and who has the right skills for the repair. With one click, the job is dispatched, the customer gets an ETA via SMS, and the technician receives full job details — address, customer history, asset information, and any prior repairs — on their phone. Most plumbing businesses significantly cut emergency response time after switching to Fieseros.",
   },
   {
     question: "Can I manage recurring service contracts for plumbing maintenance?",
@@ -102,7 +102,7 @@ const faqs = [
   {
     question: "Can customers pay on-site after a plumbing job is done?",
     answer:
-      "Yes. As soon as a technician marks the job complete, Fieseros generates a professional invoice and sends it to the customer via Email & SMS with a secure payment link. Customers can pay by card, UPI, or bank transfer right from their phone — while the plumber is still on-site if needed. You see payment status in real time and can set up automatic reminders for unpaid invoices. Most plumbing businesses using Fieseros get paid 2x faster than with paper invoices.",
+      "Yes. As soon as a technician marks the job complete, Fieseros generates a professional invoice and sends it to the customer via Email & SMS with a secure payment link. Customers can pay by card, UPI, or bank transfer right from their phone — while the plumber is still on-site if needed. You see payment status in real time and can set up automatic reminders for unpaid invoices. Most plumbing businesses using Fieseros get paid substantially faster than with paper invoices.",
   },
   {
     question: "How does Fieseros help with managing multiple plumbers?",
@@ -256,7 +256,7 @@ export default function PlumbingSoftwarePage() {
           this by tracking every part in real time. When the technician taps a
           part into the work order, it deducts from van inventory and adds to
           the customer&apos;s invoice at your marked-up price — automatically.
-          Most plumbing businesses recover 5–10% in lost parts revenue within
+          Most plumbing businesses recover meaningful lost parts revenue within
           the first month of using Fieseros.
         </p>
         <p>

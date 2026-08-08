@@ -3,7 +3,7 @@
 /**
  * Payment Integrations settings section.
  *
- * Five cards:
+ * Three cards:
  *   1. Stripe     — Connect via Stripe OAuth (placeholder), status from the
  *                   canonical `Tenant.stripeConnected` / `stripeAccountId` /
  *                   `stripePayoutsEnabled` columns. Disconnect clears them.
@@ -11,8 +11,6 @@
  *                   Test Connection. Secrets masked in API response.
  *   3. Square     — Application ID + Access Token + Location ID. Save &
  *                   Test Connection.
- *   4. QuickBooks — OAuth placeholder, Company ID (read-only), Disconnect.
- *   5. Bank Feeds — Placeholder "Connect Bank Account" → "coming soon" dialog.
  *
  * Backed by `/api/settings/payment-integrations` (GET + PUT). All secrets
  * are stored under `Tenant.settingsJson.paymentIntegrations` (no new Prisma
@@ -24,9 +22,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   CreditCard,
   Banknote,
-  Building2,
   Wallet,
-  Landmark,
   Loader2,
   Save,
   Plug,
@@ -119,14 +115,11 @@ export function PaymentIntegrationsSettings() {
   const [loading, setLoading] = useState(true);
   const [savingProvider, setSavingProvider] = useState<null | 'paypal' | 'square'>(null);
   const [testingProvider, setTestingProvider] = useState<null | 'paypal' | 'square'>(null);
-  const [disconnectingProvider, setDisconnectingProvider] = useState<null | 'stripe' | 'quickbooks'>(null);
+  const [disconnectingProvider, setDisconnectingProvider] = useState<null | 'stripe'>(null);
 
   // Show/hide secret toggles
   const [showPayPalSecret, setShowPayPalSecret] = useState(false);
   const [showSquareToken, setShowSquareToken] = useState(false);
-
-  // "Coming soon" dialog for Bank Feeds
-  const [bankDialogOpen, setBankDialogOpen] = useState(false);
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
@@ -295,13 +288,6 @@ export function PaymentIntegrationsSettings() {
     }
     toast.info('Stripe Connect onboarding is coming soon.', {
       description: 'The OAuth callback handler is not yet wired up.',
-    });
-  };
-
-  // ─── QuickBooks Connect (placeholder) ─────────────────────────────────────
-  const handleQuickBooksConnect = () => {
-    toast.info('QuickBooks Online OAuth is coming soon.', {
-      description: 'The Intuit OAuth flow is not yet wired up.',
     });
   };
 
@@ -635,147 +621,6 @@ export function PaymentIntegrationsSettings() {
         </CardContent>
       </Card>
 
-      {/* ─── QuickBooks ─────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                <Building2 className="size-4 text-emerald-600" />
-              </div>
-              <div>
-                <CardTitle className="text-base flex items-center gap-2">
-                  QuickBooks
-                  <StatusBadge connected={settings.quickbooks.connected} />
-                </CardTitle>
-                <CardDescription>
-                  Sync invoices, payments, and customers with QuickBooks Online.
-                </CardDescription>
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {settings.quickbooks.connected ? (
-            <>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Company ID</Label>
-                <Input
-                  readOnly
-                  value={settings.quickbooks.companyId || '—'}
-                  className="font-mono text-sm bg-muted/50"
-                />
-                <p className="text-xs text-muted-foreground">
-                  QuickBooks Online realm ID (set automatically by the OAuth callback).
-                </p>
-              </div>
-              <Separator />
-              <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  className="gap-1.5 text-destructive hover:text-destructive"
-                  onClick={() => handleDisconnect('quickbooks')}
-                  disabled={disconnectingProvider === 'quickbooks'}
-                >
-                  {disconnectingProvider === 'quickbooks' ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Unplug className="size-4" />
-                  )}
-                  Disconnect
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-start gap-3">
-              <div className="flex items-start gap-2 rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
-                <Info className="size-4 mt-0.5 shrink-0" />
-                <span>
-                  Connect QuickBooks Online to automatically sync invoices, payments, and customer
-                  records. Requires an Intuit developer app with the <code>com.intuit.quickbooks.accounting</code> scope.
-                </span>
-              </div>
-              <Button
-                className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-                onClick={handleQuickBooksConnect}
-              >
-                <Plug className="size-4" />
-                Connect with QuickBooks
-                <ExternalLink className="size-3.5 opacity-80" />
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ─── Bank Feeds ─────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center size-9 rounded-lg bg-amber-100 dark:bg-amber-900/30">
-                <Landmark className="size-4 text-amber-600" />
-              </div>
-              <div>
-                <CardTitle className="text-base flex items-center gap-2">
-                  Bank Feeds
-                  <StatusBadge connected={settings.bankFeeds.enabled} />
-                </CardTitle>
-                <CardDescription>
-                  Automatically import bank transactions for reconciliation.
-                </CardDescription>
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-start gap-2 rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
-            <Info className="size-4 mt-0.5 shrink-0" />
-            <span>
-              Bank feeds let you automatically import transactions from your business bank account
-              for reconciliation against invoices and expenses.
-            </span>
-          </div>
-          <div className="flex justify-end">
-            <Button
-              variant="outline"
-              className="gap-1.5"
-              onClick={() => setBankDialogOpen(true)}
-            >
-              <Plug className="size-4" />
-              Connect Bank Account
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ─── "Coming soon" dialog (Bank Feeds) ───────────────────────────────── */}
-      <Dialog open={bankDialogOpen} onOpenChange={setBankDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Landmark className="size-5 text-amber-600" />
-              Bank Feeds — Coming Soon
-            </DialogTitle>
-            <DialogDescription>
-              Direct bank-account connectivity is on our roadmap. Once available you&apos;ll be able
-              to securely link a business checking or savings account and have transactions imported
-              automatically for reconciliation.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground mb-1">Planned providers:</p>
-            <ul className="list-disc list-inside space-y-0.5">
-              <li>Plaid (US / Canada)</li>
-              <li>Yodlee (global)</li>
-              <li>Salt Edge (EU / UK)</li>
-            </ul>
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setBankDialogOpen(false)}>Got it</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

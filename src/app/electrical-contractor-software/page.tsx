@@ -95,7 +95,7 @@ const faqs = [
   {
     question: "How does materials billing work for electrical jobs?",
     answer:
-      "Electrical jobs use a lot of materials — wire by the foot, breakers, conduit, fittings, junction boxes, fixtures, plates — and every one of those materials needs to be billed to the customer at the right marked-up price. Fieseros tracks all of it. Your van and warehouse inventory is loaded into the system with cost and retail price. When an electrician uses materials on a job, they tap them into the work order from their phone (or scan a barcode if you've labeled them). The materials automatically deduct from inventory and add to the customer's invoice at your marked-up price. When stock hits a reorder threshold, Fieseros alerts you. Most electrical contractors recover 5–10% in lost materials revenue within the first month of using Fieseros.",
+      "Electrical jobs use a lot of materials — wire by the foot, breakers, conduit, fittings, junction boxes, fixtures, plates — and every one of those materials needs to be billed to the customer at the right marked-up price. Fieseros tracks all of it. Your van and warehouse inventory is loaded into the system with cost and retail price. When an electrician uses materials on a job, they tap them into the work order from their phone (or scan a barcode if you've labeled them). The materials automatically deduct from inventory and add to the customer's invoice at your marked-up price. When stock hits a reorder threshold, Fieseros alerts you. Most electrical contractors recover meaningful lost materials revenue within the first month of using Fieseros.",
   },
   {
     question: "Can I use Fieseros to quote commercial electrical jobs?",
@@ -266,7 +266,7 @@ export default function ElectricalContractorSoftwarePage() {
           whether your electrical business is profitable. Materials billing
           ensures every reel of wire, every breaker, every fitting makes it
           onto the invoice at the right marked-up price — typically recovering
-          5–10% in lost revenue within the first month. Quoting tools turn
+          meaningful lost revenue within the first month. Quoting tools turn
           hours of bid preparation into minutes using saved templates, so you
           can respond to commercial bid opportunities faster than competitors.
           And multi-site project management gives you a single dashboard for

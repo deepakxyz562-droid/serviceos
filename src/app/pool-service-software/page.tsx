@@ -49,7 +49,7 @@ const features: Feature[] = [
     icon: Waves,
     title: "Weekly Smart Auto-Dispatch",
     description:
-      "Fieseros orders your pool techs' stops by drive time and zip code density, not by memory. A 22-pool Tuesday route that used to take 9 hours gets done in 7, and the tech sees turn-by-turn navigation to every stop on their phone.",
+      "Fieseros orders your pool techs' stops by drive time and zip code density, not by memory. A 22-pool Tuesday route gets done substantially faster, and the tech sees turn-by-turn navigation to every stop on their phone.",
   },
   {
     icon: FlaskConical,
@@ -87,7 +87,7 @@ const faqs = [
   {
     question: "How does Fieseros optimize weekly pool service routes?",
     answer:
-      "When a pool tech has 18 to 25 stops in a day, the order in which they visit those pools is the single biggest driver of how early they get home. Fieseros sorts each tech's daily route by drive time and zip code density, factoring in customer time windows and pool type. The tech sees turn-by-turn navigation to every stop on their phone, and the dispatch board shows real-time progress against the planned route. Most pool service companies cut 90 to 120 minutes off a typical route day in the first month, which means each tech can take on 3 to 5 more weekly pools without working longer hours.",
+      "When a pool tech has 18 to 25 stops in a day, the order in which they visit those pools is the single biggest driver of how early they get home. Fieseros sorts each tech's daily route by drive time and zip code density, factoring in customer time windows and pool type. The tech sees turn-by-turn navigation to every stop on their phone, and the dispatch board shows real-time progress against the planned route. Most pool service companies meaningfully cut time off a typical route day in the first month, which means each tech can take on meaningfully more weekly pools without working longer hours.",
   },
   {
     question: "Can techs log chemical readings from the field?",
@@ -181,7 +181,7 @@ export default function PoolServiceSoftwarePage() {
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
-                  "Routes planned in the tech's head — 22 stops take 9 hours instead of 7",
+                  "Routes planned in the tech's head — routes drag on longer than they need to",
                   "No record of chemical levels when a customer complains about a green pool",
                   "Pump repairs diagnosed in the field but never billed because they're forgotten",
                   "End-of-month invoice run eats two full days of office time",
@@ -202,7 +202,7 @@ export default function PoolServiceSoftwarePage() {
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
-                  "Routes auto-ordered by drive time — same 22 stops done in 7 hours flat",
+                  "Routes auto-ordered by drive time — same stops done meaningfully faster",
                   "Every chemical reading logged, timestamped, and visible in the customer portal",
                   "Equipment inspections turn into repair quotes with one tap from the field",
                   "Recurring contracts auto-send invoices with reminders after every visit — no end-of-month invoice run",
@@ -225,7 +225,7 @@ export default function PoolServiceSoftwarePage() {
           Pool service is a recurring-revenue business with a daily operational grind. A typical tech visits 18 to 25 pools a day, logs chemical readings at every stop, inspects equipment, makes small adjustments, and tries to finish before dark. Multiply that across a team of three or four techs and you have hundreds of customer interactions every week, each one generating data — chemical levels, equipment condition, repair recommendations, time on site — that almost never gets captured without dedicated pool service software. Fieseros is built to capture all of it, in seconds, from the technician's phone, and turn it into better routes, faster billing, and fewer customer disputes.
         </p>
         <p>
-          The recurring billing side of pool service is where most shops lose money quietly. Pool companies typically bill weekly or monthly in arrears, which means a customer who stops paying in May can still be on the route in July before anyone notices. Fieseros fixes this by generating a branded invoice after every completed visit (or on a fixed monthly cycle), sending it via Email & SMS with a secure payment link, and immediately flagging overdue balances on the dispatch board so you can follow up before the situation escalates. You see exactly who owes what, and you can pause service on a non-paying customer before they rack up eight weeks of unpaid cleanings. Most pool service companies recover 5 to 8 percent of revenue they were previously writing off within the first quarter of switching to Fieseros.
+          The recurring billing side of pool service is where most shops lose money quietly. Pool companies typically bill weekly or monthly in arrears, which means a customer who stops paying in May can still be on the route in July before anyone notices. Fieseros fixes this by generating a branded invoice after every completed visit (or on a fixed monthly cycle), sending it via Email & SMS with a secure payment link, and immediately flagging overdue balances on the dispatch board so you can follow up before the situation escalates. You see exactly who owes what, and you can pause service on a non-paying customer before they rack up eight weeks of unpaid cleanings. Most pool service companies recover meaningful revenue they were previously writing off within the first quarter of switching to Fieseros.
         </p>
         <p>
           Then there is the chemical-logging problem, which becomes critical the moment a customer calls to complain about a green pool. Without a record of what was tested and adjusted on each visit, the customer's word stands against yours, and you end up crediting service calls you shouldn't have to. Fieseros solves this by capturing pH, free chlorine, total alkalinity, and calcium hardness on every visit, timestamped and attached to the customer's account. When the complaint call comes in, you pull the chemical timeline, walk the customer through every reading, and the dispute usually ends in your favor. The same data also helps you spot pools that need more frequent service before they turn green in the first place.

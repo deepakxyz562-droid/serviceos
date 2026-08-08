@@ -87,7 +87,7 @@ const faqs = [
   {
     question: "How does Fieseros handle recurring quarterly pest control treatments?",
     answer:
-      "Quarterly treatment programs are the backbone of a profitable pest control business. You set up the customer's program once in Fieseros — services included, frequency (quarterly, bi-monthly, monthly), price, and payment method — and it auto-schedules each visit, sends the customer an Email & SMS reminder the day before, dispatches the technician, generates the application record, and charges the customer's stored card after the visit. When the annual program is up for renewal, Fieseros auto-renews it (with customer consent) and alerts you to any cancellations — so recurring revenue never silently lapses. Most pest control businesses cut their office admin time by 60% or more after switching.",
+      "Quarterly treatment programs are the backbone of a profitable pest control business. You set up the customer's program once in Fieseros — services included, frequency (quarterly, bi-monthly, monthly), price, and payment method — and it auto-schedules each visit, sends the customer an Email & SMS reminder the day before, dispatches the technician, generates the application record, and charges the customer's stored card after the visit. When the annual program is up for renewal, Fieseros auto-renews it (with customer consent) and alerts you to any cancellations — so recurring revenue never silently lapses. Most pest control businesses significantly cut their office admin time after switching.",
   },
   {
     question: "How does Fieseros handle chemical application records for state compliance?",
@@ -241,7 +241,7 @@ export default function PestControlSoftwarePage() {
         <p>
           The recurring revenue side is where pest control businesses build
           real value — and where they leak the most money. A typical pest
-          control company loses 5–15% of its quarterly customers every year
+          control company loses a meaningful share of its quarterly customers every year
           to silent attrition: a customer&apos;s annual program expires,
           nobody notices, and the customer drifts to a competitor. Without
           a proper pest control CRM, there&apos;s no system tracking renewal
