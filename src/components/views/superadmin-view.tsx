@@ -31,7 +31,7 @@ import {
   // New icons for the expanded enterprise nav
   LayoutGrid, Palette, Mail, MessageCircle, Bell, Lock,
   ListTodo, Terminal, LifeBuoy, ClipboardList, Languages,
-  ChevronLeft, X, LayoutList, MapPin,
+  ChevronLeft, X, LayoutList, MapPin, Download,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -92,6 +92,7 @@ const InfrastructureSection = lazy(() => import('@/components/views/superadmin/s
 const SystemHealthSection = lazy(() => import('@/components/views/superadmin/sections/system-health').then(m => ({ default: m.SystemHealthSection })));
 const MenuManagementSection = lazy(() => import('@/components/views/superadmin/sections/menu-management').then(m => ({ default: m.MenuManagementSection })));
 const DirectoryListingsSection = lazy(() => import('@/components/views/superadmin/sections/directory-listings').then(m => ({ default: m.DirectoryListingsSection })));
+const BackupSection = lazy(() => import('@/components/views/superadmin/sections/backup').then(m => ({ default: m.BackupSection })));
 
 // Lightweight Suspense fallback for lazy-loaded sections.
 function SectionLoader() {
@@ -132,11 +133,20 @@ interface Tenant {
   slug: string;
   email: string;
   phone: string;
+  website: string;
   plan: string;
   planStatus: string;
   industry: string;
   country: string;
   currency: string;
+  city: string | null;
+  state: string | null;
+  claimed: boolean;
+  listingTier: string;
+  marketplaceOptIn: boolean;
+  publicProfileEnabled: boolean;
+  rating: number;
+  reviewCount: number;
   onboardingCompleted: boolean;
   suspendedAt: string | null;
   suspensionReason: string | null;
@@ -356,7 +366,8 @@ type TabKey =
   // SUPPORT
   | 'support-center' | 'knowledge-base' | 'announcements'
   // SYSTEM
-  | 'feature-flags' | 'localization' | 'storage' | 'infrastructure' | 'system-health';
+  | 'feature-flags' | 'localization' | 'storage' | 'infrastructure' | 'system-health'
+  | 'backup';
 
 interface NavGroup {
   label: string;
@@ -435,6 +446,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'storage', label: 'Storage', icon: HardDrive },
       { key: 'infrastructure', label: 'Infrastructure', icon: Server },
       { key: 'system-health', label: 'System Health', icon: Activity },
+      { key: 'backup', label: 'Backup & Export', icon: Database },
     ],
   },
 ];
@@ -1219,15 +1231,56 @@ export function SuperAdminView() {
       ownEmailProviderConnected: false,
     });
     const [creditSaving, setCreditSaving] = useState(false);
+    // ── Export + data-quality filters ──
+    const [noEmailFilter, setNoEmailFilter] = useState(false);
+    const [noWebsiteFilter, setNoWebsiteFilter] = useState(false);
+    const [noPhoneFilter, setNoPhoneFilter] = useState(false);
+    const [claimedFilter, setClaimedFilter] = useState<'all' | 'claimed' | 'unclaimed'>('all');
+    const [exportDialog, setExportDialog] = useState(false);
+    const [exportFormat, setExportFormat] = useState<'csv' | 'xls' | 'json'>('csv');
+    const [exporting, setExporting] = useState(false);
 
     const filteredTenants = useMemo(() => {
       return tenants.filter((t) => {
         const matchesSearch = !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.email.toLowerCase().includes(search.toLowerCase());
         const matchesPlan = planFilter === 'all' || t.plan === planFilter;
         const matchesStatus = statusFilter === 'all' || t.planStatus === statusFilter || (statusFilter === 'suspended' && t.suspendedAt);
-        return matchesSearch && matchesPlan && matchesStatus;
+        const matchesNoEmail = !noEmailFilter || !t.email;
+        const matchesNoWebsite = !noWebsiteFilter || !t.website;
+        const matchesNoPhone = !noPhoneFilter || !t.phone;
+        const matchesClaimed = claimedFilter === 'all' || (claimedFilter === 'claimed' && t.claimed) || (claimedFilter === 'unclaimed' && !t.claimed);
+        return matchesSearch && matchesPlan && matchesStatus && matchesNoEmail && matchesNoWebsite && matchesNoPhone && matchesClaimed;
       });
-    }, [tenants, search, planFilter, statusFilter]);
+    }, [tenants, search, planFilter, statusFilter, noEmailFilter, noWebsiteFilter, noPhoneFilter, claimedFilter]);
+
+    // ── Build export URL with current filters ──
+    const buildExportUrl = () => {
+      const params = new URLSearchParams();
+      params.set('format', exportFormat);
+      if (search) params.set('search', search);
+      if (planFilter !== 'all') params.set('plan', planFilter);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      if (noEmailFilter) params.set('noEmail', 'true');
+      if (noWebsiteFilter) params.set('noWebsite', 'true');
+      if (noPhoneFilter) params.set('noPhone', 'true');
+      if (claimedFilter === 'claimed') params.set('claimed', 'true');
+      else if (claimedFilter === 'unclaimed') params.set('claimed', 'false');
+      return `/api/superadmin/tenants/export?${params.toString()}`;
+    };
+
+    const handleExport = async () => {
+      setExporting(true);
+      try {
+        // Use window.location for file download (browser handles the response)
+        window.location.href = buildExportUrl();
+        toast.success(`Export started — downloading as ${exportFormat.toUpperCase()}`);
+        setExportDialog(false);
+      } catch {
+        toast.error('Export failed');
+      } finally {
+        setExporting(false);
+      }
+    };
 
     const handleAction = async () => {
       if (!suspendDialog) return;
@@ -1393,6 +1446,72 @@ export function SuperAdminView() {
           <Button onClick={() => setCreateDialog(true)} className="shrink-0">
             <Plus className="size-4 mr-1.5" /> New Tenant
           </Button>
+          <Button variant="outline" onClick={() => setExportDialog(true)} className="shrink-0">
+            <Download className="size-4 mr-1.5" /> Export
+          </Button>
+        </div>
+
+        {/* Data-quality filter toggles */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground mr-1">Quick filters:</span>
+          <Button
+            variant={noEmailFilter ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setNoEmailFilter(!noEmailFilter)}
+            className="h-7 text-xs"
+          >
+            No Email
+          </Button>
+          <Button
+            variant={noWebsiteFilter ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setNoWebsiteFilter(!noWebsiteFilter)}
+            className="h-7 text-xs"
+          >
+            No Website
+          </Button>
+          <Button
+            variant={noPhoneFilter ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setNoPhoneFilter(!noPhoneFilter)}
+            className="h-7 text-xs"
+          >
+            No Phone
+          </Button>
+          <Button
+            variant={claimedFilter === 'claimed' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setClaimedFilter(claimedFilter === 'claimed' ? 'all' : 'claimed')}
+            className="h-7 text-xs"
+          >
+            Claimed
+          </Button>
+          <Button
+            variant={claimedFilter === 'unclaimed' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setClaimedFilter(claimedFilter === 'unclaimed' ? 'all' : 'unclaimed')}
+            className="h-7 text-xs"
+          >
+            Unclaimed
+          </Button>
+          {(noEmailFilter || noWebsiteFilter || noPhoneFilter || claimedFilter !== 'all') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setNoEmailFilter(false);
+                setNoWebsiteFilter(false);
+                setNoPhoneFilter(false);
+                setClaimedFilter('all');
+              }}
+              className="h-7 text-xs text-muted-foreground"
+            >
+              Clear filters
+            </Button>
+          )}
+          <span className="ml-auto text-xs text-muted-foreground">
+            {filteredTenants.length} of {tenants.length} tenants
+          </span>
         </div>
 
         {/* Table */}
@@ -1678,6 +1797,54 @@ export function SuperAdminView() {
               <Button variant="outline" onClick={() => setCreditEditTenant(null)}>Cancel</Button>
               <Button onClick={handleCreditSave} disabled={creditSaving}>
                 {creditSaving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="size-4 mr-1.5" />} Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Export Dialog */}
+        <Dialog open={exportDialog} onOpenChange={setExportDialog}>
+          <DialogContent className="sm:max-w-[440px]">
+            <DialogHeader>
+              <DialogTitle>Export Tenant Data</DialogTitle>
+              <DialogDescription>
+                Download all tenants matching the current filters as a spreadsheet file.
+                Includes name, email, phone, website, industry, location, plan, and marketplace fields.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Format</label>
+                <Select value={exportFormat} onValueChange={(v) => setExportFormat(v as 'csv' | 'xls' | 'json')}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="csv">CSV (recommended for Excel)</SelectItem>
+                    <SelectItem value="xls">Excel (.xls)</SelectItem>
+                    <SelectItem value="json">JSON (raw data)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground">Active filters will be applied:</p>
+                {search && <p>&bull; Search: &quot;{search}&quot;</p>}
+                {planFilter !== 'all' && <p>&bull; Plan: {planFilter}</p>}
+                {statusFilter !== 'all' && <p>&bull; Status: {statusFilter}</p>}
+                {noEmailFilter && <p>&bull; No email</p>}
+                {noWebsiteFilter && <p>&bull; No website</p>}
+                {noPhoneFilter && <p>&bull; No phone</p>}
+                {claimedFilter !== 'all' && <p>&bull; {claimedFilter === 'claimed' ? 'Claimed only' : 'Unclaimed only'}</p>}
+                {!search && planFilter === 'all' && statusFilter === 'all' && !noEmailFilter && !noWebsiteFilter && !noPhoneFilter && claimedFilter === 'all' && (
+                  <p>&bull; No filters active &mdash; exports ALL tenants</p>
+                )}
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setExportDialog(false)}>Cancel</Button>
+              <Button onClick={handleExport} disabled={exporting}>
+                {exporting ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Download className="size-4 mr-1.5" />}
+                Download {exportFormat.toUpperCase()}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -2668,6 +2835,7 @@ export function SuperAdminView() {
         {activeTab === 'storage' && <StorageSection />}
         {activeTab === 'infrastructure' && <InfrastructureSection />}
         {activeTab === 'system-health' && <SystemHealthSection />}
+        {activeTab === 'backup' && <BackupSection />}
       </Suspense>
     );
   };

@@ -5,6 +5,7 @@ import { logger, withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
 import { getIndustry } from '@/lib/industry-catalog';
 import { sendEmail } from '@/lib/email-send';
+import { renderProviderQuoteEmail, renderProviderQuoteEmailText } from '@/lib/email-templates/provider-quote-request';
 
 /**
  * Flow 2: Quote Request — create (Fieseros V1.5 — P10-flows)
@@ -358,7 +359,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send notification email to the provider (best-effort, non-blocking)
-    const emailHtml = buildProviderQuoteEmail({
+    const emailData = {
       providerName: target.name,
       customerName,
       customerPhone,
@@ -369,12 +370,16 @@ export async function POST(request: NextRequest) {
       city: city || target.city,
       budgetLow,
       budgetHigh,
-    });
+      requestId: jobRequest.id,
+    };
+    const emailHtml = renderProviderQuoteEmail(emailData);
+    const emailText = renderProviderQuoteEmailText(emailData);
 
     sendEmail({
       to: target.email,
       subject: `New quote request from ${customerName} — ${title.slice(0, 60)}`,
       html: emailHtml,
+      text: emailText,
       usageType: 'transactional',
       tenantId: target.id,
     }).catch((err) => {

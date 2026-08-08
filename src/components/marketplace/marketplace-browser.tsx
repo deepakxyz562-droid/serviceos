@@ -357,14 +357,20 @@ export function MarketplaceBrowser({
   // ── Auto-detect user location on mount (localStorage -> IP -> GPS) ──
   // Runs EXACTLY ONCE (didDetectRef guards against StrictMode double-invoke).
   //
-  // IMPORTANT — auto-detect sets `userLocation` ONLY (for distance ranking +
-  // the 'recommended' composite sort). It does NOT write into `cityInput`.
-  // This is a deliberate design decision: coupling auto-detect to the city
-  // filter meant that a detected city with zero providers would empty the
-  // grid ("blank page"), and re-filling cityInput from async callbacks was
-  // the root cause of the feedback loop that hung the marketplace. The city
-  // input is now purely user-driven (type it, or click "Use my location").
-  // Auto-detect silently re-ranks the grid so nearby providers float up.
+  // IMPORTANT — auto-detect sets `userLocation` for distance ranking + the
+  // 'recommended' composite sort. GPS (high-accuracy) auto-detect ALSO syncs
+  // `cityFilter` so the API does a proper DB-level city-substring filter —
+  // without this, the API returns top-24-by-rating for the whole country and
+  // the client-side 25km radius filter hides most of them (the "Only 1
+  // provider in Santa Clara" bug). IP-derived cities (lowAccuracy) are too
+  // unreliable for filtering, so they set `userLocation` only (ranking).
+  //
+  // Auto-detect never writes into `cityInput` (the search box text) — that
+  // was the root cause of the old feedback loop. It writes `cityFilter`
+  // directly, which is safe because: (1) didDetectRef prevents re-detection,
+  // (2) cityInput is not touched so the debounce effect can't loop, and
+  // (3) we only set it if the user hasn't already typed a city (URL param
+  // or manual input takes priority).
   const didDetectRef = React.useRef(false);
   React.useEffect(() => {
     if (didDetectRef.current) return;
@@ -393,6 +399,12 @@ export function MarketplaceBrowser({
                 source: parsed.source,
                 lowAccuracy: parsed.source === 'ip',
               });
+              // GPS (high accuracy) — sync cityFilter so the API does a
+              // DB-level city-substring filter. IP cities are too unreliable.
+              if (parsed.source === 'gps' && parsed.city) {
+                const current = useMarketplaceSearch.getState().cityFilter;
+                if (!current) setCityFilter(parsed.city);
+              }
               return;
             }
           }
@@ -414,8 +426,8 @@ export function MarketplaceBrowser({
             source: 'ip',
             lowAccuracy: true,
           });
-          // NOTE: intentionally NOT calling setCityInput() — auto-detect
-          // only powers ranking, never the hard city filter.
+          // NOTE: IP-derived locations are lowAccuracy — we set userLocation
+          // for ranking only, NOT cityFilter (IP cities are too unreliable).
         }
       } catch (err) {
         console.error('Failed to get IP location on mount:', err);
@@ -451,6 +463,13 @@ export function MarketplaceBrowser({
               source: 'gps',
               lowAccuracy: false,
             });
+            // GPS is high-accuracy — sync the city filter so the API does
+            // a proper DB-level city-substring filter (not just client-side
+            // ranking). Only set if user hasn't already typed a city.
+            if (city) {
+              const current = useMarketplaceSearch.getState().cityFilter;
+              if (!current) setCityFilter(city);
+            }
           } catch {}
         },
         () => {}, // ignore errors since we have IP fallback
@@ -664,8 +683,10 @@ export function MarketplaceBrowser({
       list = list.filter((p) => !p.claimed);
     }
 
-    // 3. Service Radius (only when userLocation is set, and radius is less than 50km)
-    if (userLocation && radiusKm < 50) {
+    // 3. Service Radius (only when GPS userLocation is set — NOT IP-derived
+    // lowAccuracy locations, which are too imprecise for a 25km Haversine
+    // filter. IP locations power ranking only, never filtering.)
+    if (userLocation && !userLocation.lowAccuracy && radiusKm < 50) {
       list = list.filter((p) => {
         const dist = haversineKm(userLocation.lat, userLocation.lng, p.latitude, p.longitude);
         if (dist === null) return true;
@@ -1056,7 +1077,7 @@ export function MarketplaceBrowser({
             Only <strong className="font-semibold">{filtered.length}</strong>{' '}
             {filtered.length === 1 ? 'provider' : 'providers'} in{' '}
             <strong className="font-semibold">{locationLabel}</strong>.{' '}
-            Showing results within <strong className="font-semibold">50km</strong>.
+            Showing results within <strong className="font-semibold">{radiusKm}km</strong>.
           </span>
         </div>
       ) : null}
