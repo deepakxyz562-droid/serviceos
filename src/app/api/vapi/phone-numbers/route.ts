@@ -147,6 +147,16 @@ export async function PATCH(request: NextRequest) {
   try {
     const auth = await getAuthUser();
     if (!auth?.tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // ── Plan gate: require business+ to manage AI phone numbers ──
+    // Same rationale as agents/route.ts PATCH — downgraded users cannot
+    // reassign or modify existing AI phone numbers without upgrading.
+    const gate = await requirePlanFeature('ai_receptionist');
+    if (!gate.allowed) {
+      return NextResponse.json(
+        { error: gate.reason || 'AI Receptionist requires a Business plan or higher.' },
+        { status: 403 },
+      );
+    }
     const body = await request.json();
     const { id, assistantId } = body as { id: string; assistantId: string | null };
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { EventBus } from '@/lib/event-bus';
 import { sendSmsMessage } from '@/lib/sms-send';
+import { getTenantVapiKeyByTenantId, updatePhoneNumber } from '@/lib/vapi-client';
 
 /**
  * Vapi Webhook Handler
@@ -22,9 +23,33 @@ import { sendSmsMessage } from '@/lib/sms-send';
  */
 
 const VAPI_WEBHOOK_SECRET = process.env.VAPI_WEBHOOK_SECRET;
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+let secretWarned = false;
 
 function verifySecret(request: NextRequest): boolean {
-  if (!VAPI_WEBHOOK_SECRET) return true; // not configured → skip verification
+  if (!VAPI_WEBHOOK_SECRET) {
+    // In production, refuse to process webhooks without a secret — an
+    // unauthenticated webhook URL allows anyone to POST fake call events
+    // (corrupting AiCall rows, inflating billing counters, injecting fake
+    // leads). In dev/test, allow but warn once so the developer knows to
+    // set the secret before deploying.
+    if (IS_PRODUCTION) {
+      console.error(
+        '[Vapi Webhook] REJECTED: VAPI_WEBHOOK_SECRET is not set. ' +
+        'Set it in your production environment to authenticate webhook requests.',
+      );
+      return false;
+    }
+    if (!secretWarned) {
+      console.warn(
+        '[Vapi Webhook] WARNING: VAPI_WEBHOOK_SECRET is not set — webhook ' +
+        'requests are unauthenticated. Set VAPI_WEBHOOK_SECRET before deploying ' +
+        'to production. (This warning appears once per process.)',
+      );
+      secretWarned = true;
+    }
+    return true;
+  }
   const headerSecret = request.headers.get('x-vapi-secret') || request.headers.get('x-vapi-webhook-secret');
   return headerSecret === VAPI_WEBHOOK_SECRET;
 }
@@ -289,7 +314,122 @@ async function incrementBillingCounter(tenantId: string): Promise<void> {
       },
       { tenantId },
     ).catch(err => console.error('[billing] 100% alert emit failed:', err));
+
+    // ── Enforce billing pause: deactivate Vapi phone numbers ──────────
+    // Set pausedAtLimit=true and remove the assistantId mapping from all
+    // the tenant's Vapi phone numbers so new calls go to default voicemail
+    // instead of the AI. The DB's AiPhoneNumber.assistantId is preserved
+    // so we know what to restore when the month resets (see resumeIfPaused).
+    try {
+      await db.aiBillingCounter.update({
+        where: { id: rowId },
+        data: { pausedAtLimit: true },
+      });
+    } catch (err) {
+      console.error('[billing] Failed to set pausedAtLimit:', err);
+    }
+    enforceBillingPause(tenantId).catch(err =>
+      console.error('[billing] enforceBillingPause failed:', err),
+    );
+  } else if (existing?.pausedAtLimit && callsUsed < callsLimit) {
+    // Month reset or limit was bumped — clear the pause flag and resume.
+    try {
+      await db.aiBillingCounter.update({
+        where: { id: rowId },
+        data: { pausedAtLimit: false },
+      });
+    } catch (err) {
+      console.error('[billing] Failed to clear pausedAtLimit:', err);
+    }
+    resumeBillingPause(tenantId).catch(err =>
+      console.error('[billing] resumeBillingPause failed:', err),
+    );
   }
+}
+
+/**
+ * Enforce billing pause: remove the assistantId mapping from all the
+ * tenant's Vapi phone numbers so new inbound calls go to default voicemail
+ * instead of the AI assistant. The DB's AiPhoneNumber.assistantId field
+ * is preserved so we know what to restore on resume.
+ *
+ * Fire-and-forget — caller wraps in .catch(). A Vapi API failure here
+ * logs an error but does not break the webhook response. The
+ * pausedAtLimit flag is already set in the DB, so the dashboard shows
+ * the pause state regardless.
+ */
+async function enforceBillingPause(tenantId: string): Promise<void> {
+  const vapiKey = await getTenantVapiKeyByTenantId(tenantId);
+  if (!vapiKey) {
+    console.warn('[billing] Cannot pause — no Vapi key configured for tenant', tenantId);
+    return;
+  }
+
+  const numbers = await db.aiPhoneNumber.findMany({
+    where: { tenantId, vapiNumberId: { not: null } },
+    select: { id: true, vapiNumberId: true, assistantId: true },
+  });
+
+  for (const num of numbers) {
+    if (!num.vapiNumberId) continue;
+    try {
+      // Remove the assistantId mapping on Vapi so calls go to voicemail.
+      // We pass the tenant's Vapi key explicitly (no auth context in webhook).
+      await updatePhoneNumber(num.vapiNumberId, { assistantId: undefined } as any, vapiKey);
+    } catch (err) {
+      console.error(
+        `[billing] Failed to pause phone number ${num.vapiNumberId}:`,
+        err,
+      );
+    }
+  }
+  console.log(
+    `[billing] Paused ${numbers.length} Vapi phone number(s) for tenant ${tenantId} (limit reached)`,
+  );
+}
+
+/**
+ * Resume billing pause: re-assign the assistantId mapping on all the
+ * tenant's Vapi phone numbers from the DB's AiPhoneNumber.assistantId
+ * field (which was preserved during the pause).
+ *
+ * Called when the billing counter resets (month rollover) or when the
+ * limit is bumped up and callsUsed < callsLimit.
+ */
+async function resumeBillingPause(tenantId: string): Promise<void> {
+  const vapiKey = await getTenantVapiKeyByTenantId(tenantId);
+  if (!vapiKey) return;
+
+  const numbers = await db.aiPhoneNumber.findMany({
+    where: { tenantId, vapiNumberId: { not: null }, assistantId: { not: null } },
+    select: { id: true, vapiNumberId: true, assistantId: true },
+  });
+
+  // Resolve the Vapi assistantId for each number's local agent
+  for (const num of numbers) {
+    if (!num.vapiNumberId || !num.assistantId) continue;
+    try {
+      const agent = await db.aiAgent.findUnique({
+        where: { id: num.assistantId },
+        select: { vapiAssistantId: true },
+      });
+      if (agent?.vapiAssistantId) {
+        await updatePhoneNumber(
+          num.vapiNumberId,
+          { assistantId: agent.vapiAssistantId } as any,
+          vapiKey,
+        );
+      }
+    } catch (err) {
+      console.error(
+        `[billing] Failed to resume phone number ${num.vapiNumberId}:`,
+        err,
+      );
+    }
+  }
+  console.log(
+    `[billing] Resumed ${numbers.length} Vapi phone number(s) for tenant ${tenantId} (limit reset)`,
+  );
 }
 
 /**
@@ -304,9 +444,11 @@ async function incrementBillingCounter(tenantId: string): Promise<void> {
  *   - pausedAtLimit === true AND callsUsed >= callsLimit.
  *
  * Used by handleStatusUpdate to log a billing-pause warning. The actual
- * assistant deactivation (Vapi API call to set the assistant inactive) is a
- * manual admin action for now — see the billing card on the AI Receptionist
- * dashboard.
+ * assistant deactivation (removing the assistantId mapping from Vapi phone
+ * numbers so new calls go to voicemail) is performed automatically by
+ * enforceBillingPause() when the limit is first hit — see
+ * incrementBillingCounter. The dashboard billing card surfaces the
+ * pausedAtLimit flag so the operator knows the AI is paused.
  */
 async function isTenantPaused(tenantId: string | null | undefined): Promise<boolean> {
   if (!tenantId) return false;
@@ -369,12 +511,13 @@ async function handleStatusUpdate(call: any) {
 
   // ── Phase R7: Billing pause check ──────────────────────────────────
   // If the tenant is paused-at-limit, log a warning so the operator (via
-  // dev.log / monitoring) is aware that the AI should not be answering.
-  // The call is still recorded (the AiCall row is created below) so the
-  // operator has full audit history. True assistant deactivation (calling
-  // Vapi's API to flip the assistant to inactive) is a manual admin action
-  // for now — surfaced via the billing card on the AI Receptionist
-  // dashboard.
+  // dev.log / monitoring) is aware that calls arriving here should have
+  // gone to voicemail. The call is still recorded (the AiCall row is
+  // created below) so the operator has full audit history. The actual
+  // Vapi phone number deactivation is performed automatically by
+  // enforceBillingPause() when the limit is first hit — but a race is
+  // possible (call in-flight when the limit was hit), so this log line
+  // catches those edge cases.
   try {
     const paused = await isTenantPaused(tenantId);
     if (paused) {
@@ -716,6 +859,18 @@ async function handleEndOfCall(call: any) {
         console.error('[webhook] SMS send-back setup failed:', err);
       }
     }
+
+    // ── Auto-create a Lead from missed AI calls ──────────────────────
+    // When a caller hangs up before the AI can qualify them (outcomeType
+    // === 'missed'), we still have their phone number. Create a Lead so
+    // the tenant sees every missed caller in their CRM and can follow up
+    // manually. Only creates a Lead if one doesn't already exist for this
+    // phone number (avoids duplicates). Non-blocking.
+    const missedCallerPhone = existing?.customerPhone || call.customer?.number || null;
+    if (missedCallerPhone && tenantId) {
+      createLeadFromMissedCall(missedCallerPhone, tenantId, resolvedAssistantIdForSms)
+        .catch(err => console.error('[webhook] Failed to create Lead from missed call:', err));
+    }
   }
 
   // ── Step 7: Increment tenant's monthly AiBillingCounter (prep for Phase R7) ──
@@ -725,6 +880,54 @@ async function handleEndOfCall(call: any) {
   );
 
   return NextResponse.json({ received: true });
+}
+
+/**
+ * Auto-create a Lead from a missed AI call.
+ *
+ * Only creates a Lead if one doesn't already exist for this phone number
+ * on this tenant (avoids duplicates). The Lead is created with:
+ *   - source: 'ai_receptionist_missed'
+ *   - status: 'new'
+ *   - priority: 'medium'
+ *   - name: 'Missed Call — <phone>' (tenant can update later)
+ *   - description: auto-generated note explaining the origin
+ *
+ * Also links the Lead to the AiCall record if both exist.
+ */
+async function createLeadFromMissedCall(
+  callerPhone: string,
+  tenantId: string,
+  agentId: string | null,
+): Promise<void> {
+  // Check if a Lead already exists for this phone on this tenant
+  const existingLead = await db.lead.findFirst({
+    where: { phone: callerPhone, tenantId },
+    select: { id: true },
+  });
+  if (existingLead) return; // already have this caller as a lead
+
+  // Derive a display name from the phone number (best-effort)
+  const displayName = `Missed Call — ${callerPhone}`;
+
+  await db.lead.create({
+    data: {
+      name: displayName,
+      phone: callerPhone,
+      source: 'ai_receptionist_missed',
+      status: 'new',
+      priority: 'medium',
+      description: `Missed AI receptionist call. Caller hung up before the AI could qualify them. Follow up to see what they needed.`,
+      tenantId,
+      tagsJson: JSON.stringify([
+        { label: 'missed-call', color: 'amber' },
+        { label: 'ai-receptionist', color: 'blue' },
+      ]),
+    },
+  });
+  console.log(
+    `[webhook] Auto-created Lead from missed AI call (phone=${callerPhone}, tenant=${tenantId})`,
+  );
 }
 
 async function handleTranscript(call: any, message: any) {

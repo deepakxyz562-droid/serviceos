@@ -13,14 +13,33 @@
 
 // Server URL that Vapi will call. Must be publicly reachable.
 // In production this is the Vercel URL. In dev it's a tunnel (ngrok/cloudflare).
+//
+// Resolution order:
+//   1. VERCEL_URL         (auto-set by Vercel runtime)
+//   2. VAPI_SERVER_URL    (explicit override — e.g. ngrok/cloudflare tunnel)
+//   3. NEXT_PUBLIC_APP_URL (production app URL — works for non-Vercel deploys)
+//
+// If none of the above are set, we throw a clear error instead of returning
+// a placeholder URL. A placeholder URL would get baked into the Vapi
+// assistant's `serverUrl` field and silently break function calling (the AI
+// could still converse but create_lead / book_appointment / transfer_call
+// would never fire). Throwing forces the operator to set one of the env
+// vars before creating assistants — fail-fast is better than silent failure.
 export function getFunctionCallServerUrl(): string {
   const vercelUrl = process.env.VERCEL_URL;
   if (vercelUrl) return `https://${vercelUrl}/api/vapi/function-call`;
-  // Allow override via env (e.g. ngrok tunnel for local dev)
   if (process.env.VAPI_SERVER_URL) return process.env.VAPI_SERVER_URL;
-  // Fallback: relative path — Vapi will reject, but assistant still works
-  // for non-function-call conversations.
-  return 'https://your-fieseros-instance.com/api/vapi/function-call';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (appUrl) {
+    // Strip trailing slash, then append the function-call path.
+    return `${appUrl.replace(/\/+$/, '')}/api/vapi/function-call`;
+  }
+  throw new Error(
+    'Cannot determine Vapi function-call server URL. Set one of: VERCEL_URL, ' +
+    'VAPI_SERVER_URL, or NEXT_PUBLIC_APP_URL in your environment. Without a ' +
+    'publicly reachable URL, Vapi cannot invoke tools (create_lead, ' +
+    'book_appointment, transfer_call, etc.) during calls.',
+  );
 }
 
 // ─── Tool definitions exposed to Vapi assistants ────────────────────────────

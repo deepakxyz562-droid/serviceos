@@ -5,15 +5,42 @@
  * the Vapi REST API (https://api.vapi.ai) and never stores the key in
  * localStorage or sends it to the browser.
  *
- * Key is read from tenant.settingsJson.vapiApiKey (encrypted at rest by
- * existing tenant settings patterns). If no key is set, methods throw a
- * clear "not configured" error that the UI surfaces to the user.
+ * Key is read from tenant.settingsJson.vapiApiKey, encrypted at rest
+ * with AES-256-GCM via the shared ai-key-crypto module (same encryption
+ * used for AiProviderKey). Legacy plaintext keys are auto-migrated: they
+ * are decrypted-best-effort on read and re-encrypted on the next save.
+ *
+ * If no key is set, methods throw a clear "not configured" error that
+ * the UI surfaces to the user.
  */
 
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { encryptKey, decryptKey } from '@/lib/ai-key-crypto';
 
 const VAPI_BASE = 'https://api.vapi.ai';
+
+/**
+ * Decrypt a stored Vapi key with plaintext fallback for legacy keys.
+ *
+ * Keys saved before the encryption migration are stored as raw plaintext
+ * in settingsJson.vapiApiKey. Keys saved after are stored as
+ * base64(IV || ciphertext || tag) via encryptKey().
+ *
+ * This helper tries decryptKey() first; if it throws (because the value
+ * is plaintext), it returns the raw value unchanged. This means legacy
+ * keys keep working until the next save, at which point they get
+ * encrypted.
+ */
+function decryptVapiKey(stored: string): string {
+  if (!stored) return '';
+  try {
+    return decryptKey(stored);
+  } catch {
+    // Not a valid encrypted blob — treat as legacy plaintext.
+    return stored;
+  }
+}
 
 export interface VapiAssistant {
   id?: string;
@@ -59,22 +86,39 @@ export interface VapiCall {
 
 // ─── Key management ─────────────────────────────────────────────────────────
 
+/**
+ * Read a tenant's Vapi API key by tenantId (no auth context required).
+ *
+ * Used by server-side webhook / function-call bridge handlers that
+ * receive requests from Vapi (not from an authenticated CRM user) and
+ * need to verify the bearer token or make Vapi API calls on the
+ * tenant's behalf.
+ *
+ * Decrypts the key if it was stored encrypted; falls back to plaintext
+ * for legacy keys.
+ */
+export async function getTenantVapiKeyByTenantId(tenantId: string): Promise<string | null> {
+  try {
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { settingsJson: true },
+    });
+    if (!tenant) return null;
+    const settings = JSON.parse(tenant.settingsJson || '{}');
+    const raw = settings.vapiApiKey;
+    if (!raw || typeof raw !== 'string') return null;
+    return decryptVapiKey(raw);
+  } catch {
+    return null;
+  }
+}
+
 export async function getTenantVapiKey(tenantId?: string): Promise<string | null> {
   const auth = await getAuthUser();
   if (!auth) throw new Error('Unauthorized');
   const tid = tenantId || auth.tenantId;
   if (!tid) return null;
-  const tenant = await db.tenant.findUnique({
-    where: { id: tid },
-    select: { settingsJson: true },
-  });
-  if (!tenant) return null;
-  try {
-    const settings = JSON.parse(tenant.settingsJson || '{}');
-    return settings.vapiApiKey || null;
-  } catch {
-    return null;
-  }
+  return getTenantVapiKeyByTenantId(tid);
 }
 
 export async function setTenantVapiKey(apiKey: string): Promise<void> {
@@ -87,7 +131,8 @@ export async function setTenantVapiKey(apiKey: string): Promise<void> {
   const settings = (() => {
     try { return JSON.parse(tenant?.settingsJson || '{}'); } catch { return {}; }
   })();
-  settings.vapiApiKey = apiKey.trim() || undefined;
+  // Encrypt the key before storing (AES-256-GCM). Empty string = clear.
+  settings.vapiApiKey = apiKey.trim() ? encryptKey(apiKey.trim()) : undefined;
   settings.vapiConfiguredAt = apiKey ? new Date().toISOString() : undefined;
   await db.tenant.update({
     where: { id: auth.tenantId },

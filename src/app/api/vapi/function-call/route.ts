@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { executeTool } from '@/lib/vapi-functions';
 import { EventBus } from '@/lib/event-bus';
+import { getTenantVapiKeyByTenantId } from '@/lib/vapi-client';
 
 /**
  * Vapi Function-Call Bridge
@@ -13,9 +14,73 @@ import { EventBus } from '@/lib/event-bus';
  * Vapi sends:  { message: { toolCall: { name, parameters } }, call: {...} }
  * We return:   { result: <any> }
  *
- * Auth: Vapi signs requests with a bearer token equal to the tenant's API key.
- * We look up the tenant by the assistantId on the call and verify the key.
+ * Auth: Vapi signs requests with a bearer token equal to the tenant's Vapi
+ * API key. We look up the tenant by the assistantId on the call and verify
+ * the key. This prevents an attacker who learns a vapiAssistantId from
+ * invoking tools (create_lead, book_appointment, transfer_call, etc.) on
+ * behalf of an arbitrary tenant.
  */
+
+/**
+ * Verify the bearer token on a Vapi function-call request.
+ *
+ * Vapi sends `Authorization: Bearer <tenant-vapi-api-key>` on every
+ * function-call POST. We compare it against the tenant's stored key
+ * (decrypted from settingsJson). Returns the resolved tenantId on success,
+ * or null if auth fails.
+ *
+ * NOTE: constant-time comparison is used to prevent timing attacks.
+ */
+async function authenticateRequest(
+  assistantId: string | undefined,
+  phoneNumberId: string | undefined,
+  authHeader: string | null,
+): Promise<{ tenantId: string; agentId: string | null } | null> {
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const bearerToken = authHeader.slice(7).trim();
+  if (!bearerToken) return null;
+
+  // Resolve tenant from assistantId (preferred) or phoneNumberId (fallback)
+  let tenantId: string | null = null;
+  let agentId: string | null = null;
+
+  if (assistantId) {
+    const agent = await db.aiAgent.findFirst({
+      where: { vapiAssistantId: assistantId },
+      select: { tenantId: true, id: true },
+    });
+    if (agent) {
+      tenantId = agent.tenantId;
+      agentId = agent.id;
+    }
+  }
+  if (!tenantId && phoneNumberId) {
+    const num = await db.aiPhoneNumber.findFirst({
+      where: { vapiNumberId: phoneNumberId },
+      select: { tenantId: true },
+    });
+    tenantId = num?.tenantId || null;
+  }
+
+  if (!tenantId) return null;
+
+  // Fetch the tenant's stored Vapi key and compare
+  const storedKey = await getTenantVapiKeyByTenantId(tenantId);
+  if (!storedKey) return null; // no key configured → reject
+
+  // Constant-time comparison to prevent timing attacks
+  if (bearerToken.length !== storedKey.length) return null;
+  const encoder = new TextEncoder();
+  const a = encoder.encode(bearerToken);
+  const b = encoder.encode(storedKey);
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a[i] ^ b[i];
+  }
+  if (diff !== 0) return null;
+
+  return { tenantId, agentId };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,34 +106,33 @@ export async function POST(request: NextRequest) {
     const { name: toolName, parameters } = message.toolCall;
     console.log('[Vapi Function-Call]', toolName, parameters);
 
-    // Resolve tenant from assistantId
+    // ── Auth: verify the bearer token against the tenant's stored Vapi key ──
+    // Vapi sends `Authorization: Bearer <tenant-vapi-api-key>` on every
+    // function-call POST. We resolve the tenant from the assistantId (or
+    // phoneNumberId) on the call, fetch the tenant's stored key, and verify
+    // the bearer token matches. This prevents an attacker who learns a
+    // vapiAssistantId from invoking tools on behalf of an arbitrary tenant.
     const assistantId = call?.assistantId;
-    let tenantId: string | null = null;
-    let agentId: string | null = null;
+    const phoneNumberId = call?.phoneNumberId;
+    const authResult = await authenticateRequest(
+      assistantId,
+      phoneNumberId,
+      request.headers.get('authorization'),
+    );
 
-    if (assistantId) {
-      const agent = await db.aiAgent.findFirst({
-        where: { vapiAssistantId: assistantId },
-        select: { tenantId: true, id: true },
-      });
-      tenantId = agent?.tenantId || null;
-      agentId = agent?.id || null;
+    if (!authResult) {
+      console.warn(
+        '[Vapi Function-Call] Auth failed — rejecting tool call.',
+        { toolName, assistantId, phoneNumberId },
+      );
+      return NextResponse.json(
+        { result: { error: 'Authentication failed' } },
+        { status: 401 },
+      );
     }
 
-    // Fallback: resolve via phone number
-    if (!tenantId && call?.phoneNumberId) {
-      const num = await db.aiPhoneNumber.findFirst({
-        where: { vapiNumberId: call.phoneNumberId },
-        select: { tenantId: true },
-      });
-      tenantId = num?.tenantId || null;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json({
-        result: { error: 'Could not resolve tenant for this call' },
-      });
-    }
+    const tenantId = authResult.tenantId;
+    const agentId = authResult.agentId;
 
     // Resolve local AiCall record (if exists)
     let localCallId: string | undefined;

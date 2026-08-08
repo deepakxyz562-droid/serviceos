@@ -192,11 +192,11 @@ const TABLE_MAP: Record<string, string> = {
   // ── AI Receptionist (Phase R2) ──
   // These models extend AiAgent/AiCall with IVR menus, escalation policies,
   // discrete call tags, and per-tenant billing counters. The tables MUST
-  // exist in Supabase — run `supabase-migration-ai-receptionist-r2.sql`
-  // in the Supabase SQL editor (idempotent) or `npx prisma db push` against
-  // the Supabase DATABASE_URL. Listing them explicitly (instead of relying
-  // on default capitalization) makes the AI Receptionist tables grep-able
-  // and documents which tables the subsystem depends on.
+  // exist in Supabase — run `bun run db:push` against the Supabase
+  // DATABASE_URL (or `npx prisma db push`) to provision them. Listing them
+  // explicitly (instead of relying on default capitalization) makes the AI
+  // Receptionist tables grep-able and documents which tables the subsystem
+  // depends on.
   aiIvrMenu: 'AiIvrMenu',
   aiEscalationPolicy: 'AiEscalationPolicy',
   aiCallTag: 'AiCallTag',

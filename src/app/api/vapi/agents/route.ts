@@ -181,9 +181,21 @@ export async function POST(request: NextRequest) {
       // ── Phase R5 — sync ambience + answering delay to Vapi ──
       backgroundSound: backgroundNoiseEnabled ? 'office' : undefined,
       responseDelaySeconds: typeof responseDelaySeconds === 'number' ? responseDelaySeconds : 0,
-      // Server URL for function calling → our bridge
-      serverUrl: getFunctionCallServerUrl(),
+      // Server URL for function calling → our bridge.
+      // getFunctionCallServerUrl() throws if no public URL is configured
+      // (VERCEL_URL / VAPI_SERVER_URL / NEXT_PUBLIC_APP_URL). Catch and
+      // surface a clear error instead of a generic 500.
     };
+
+    let serverUrl: string;
+    try {
+      serverUrl = getFunctionCallServerUrl();
+    } catch (e) {
+      return NextResponse.json({
+        error: (e as Error).message,
+      }, { status: 400 });
+    }
+    vapiPayload.serverUrl = serverUrl;
 
     let vapiAssistantId: string | null = null;
     let vapiError: string | null = null;
@@ -237,6 +249,18 @@ export async function PATCH(request: NextRequest) {
     const auth = await getAuthUser();
     if (!auth?.tenantId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    // ── Plan gate: require business+ to manage AI agents ──
+    // POST (create) AND PATCH (edit) both require the ai_receptionist plan
+    // feature. A downgraded user cannot modify existing agents — they must
+    // upgrade to manage their AI receptionist setup. GET remains open so
+    // downgraded users can still VIEW their existing agents in read-only mode.
+    const gate = await requirePlanFeature('ai_receptionist');
+    if (!gate.allowed) {
+      return NextResponse.json(
+        { error: gate.reason || 'AI Receptionist requires a Business plan or higher.' },
+        { status: 403 },
+      );
     }
     const body = await request.json();
     const {
