@@ -261,15 +261,8 @@ export default async function PublicBusinessHubPage({
   const socialLinks: Record<string, string> = safeJson(business.socialLinksJson, {})
   const businessHours: Record<string, { open?: string; close?: string }> = safeJson(business.businessHoursJson, {})
 
-  // Rating-breakdown buckets (5★ → 1★) for the reviews summary box.
-  const ratingBuckets = (() => {
-    const b = [0, 0, 0, 0, 0]
-    for (const r of reviews) {
-      const s = Math.max(1, Math.min(5, Math.round(r.rating)))
-      b[s - 1]++
-    }
-    return b.reverse() // 5-star first
-  })()
+  // NOTE: rating-breakdown buckets were removed per Google Maps ToS §3.2.4
+  // (the summary box that used them displayed Google's rating/reviewCount).
 
   // Build structured data.
   const localBusinessReviews: LocalBusinessReview[] = reviews.map((r) => ({
@@ -295,8 +288,10 @@ export default async function PublicBusinessHubPage({
     country: business.country,
     logo: business.logo || undefined,
     coverImage: business.coverImage || undefined,
-    rating: business.rating > 0 ? business.rating : undefined,
-    reviewCount: business.reviewCount > 0 ? business.reviewCount : undefined,
+    // rating + reviewCount removed from schema per Google Maps ToS §3.2.4 —
+    // these fields originated from Google Places API and cannot be surfaced
+    // (even in structured data). Customer reviews from our own Review table
+    // are still passed via `reviews` below.
     reviews: localBusinessReviews,
     openingHours: openingHours.length > 0 ? openingHours : undefined,
     sameAs: Object.values(socialLinks).filter(Boolean),
@@ -536,48 +531,16 @@ export default async function PublicBusinessHubPage({
                 <section id="reviews" aria-labelledby="reviews-heading">
                   <div className="flex items-center justify-between mb-4">
                     <h2 id="reviews-heading" className="text-2xl font-bold tracking-tight">
-                      Customer Reviews
+                      Customer Reviews ({reviews.length})
                     </h2>
-                    {business.rating > 0 && (
-                      <div className="flex items-center gap-2">
-                        <StarRating rating={business.rating} />
-                        <span className="text-sm font-medium text-foreground">
-                          {business.rating.toFixed(1)}
-                        </span>
-                        <span className="text-sm text-muted-foreground">
-                          ({business.reviewCount} reviews)
-                        </span>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Rating breakdown — 5★ → 1★ distribution bars. */}
-                  <div className="mb-4 flex items-center gap-6 rounded-lg border bg-muted/30 p-4">
-                    <div className="text-center">
-                      <p className="text-4xl font-bold text-emerald-700 dark:text-emerald-300">
-                        {business.rating > 0 ? business.rating.toFixed(1) : '—'}
-                      </p>
-                      <StarRating rating={business.rating} />
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {business.reviewCount} review{business.reviewCount !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      {ratingBuckets.map((count, idx) => {
-                        const stars = 5 - idx
-                        const pct = business.reviewCount > 0 ? (count / business.reviewCount) * 100 : 0
-                        return (
-                          <div key={stars} className="flex items-center gap-2 text-xs">
-                            <span className="w-6 text-muted-foreground">{stars}★</span>
-                            <div className="h-2 flex-1 overflow-hidden rounded bg-muted">
-                              <div className="h-full bg-amber-400" style={{ width: `${pct}%` }} />
-                            </div>
-                            <span className="w-8 text-right text-muted-foreground">{count}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
+                  {/* Rating summary box removed per Google Maps ToS §3.2.4.
+                      The big rating number + review count came from Google
+                      Places API (business.rating / business.reviewCount) and
+                      cannot be surfaced in user-visible UI. The individual
+                      customer reviews below are from our own Review table
+                      (genuine customer feedback) and remain intact. */}
 
                   <div className="space-y-4">
                     {reviews.map((r) => (
@@ -914,13 +877,10 @@ function PublicBusinessHero({
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight">
                 {business.name}
               </h1>
-              {business.rating > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <StarRating rating={business.rating} />
-                  <span className="text-sm font-semibold text-foreground">{business.rating.toFixed(1)}</span>
-                  <span className="text-sm text-muted-foreground">({business.reviewCount})</span>
-                </div>
-              )}
+              {/* Google rating removed per Maps ToS §3.2.4 — rating/reviewCount
+                  on Tenant originated from Google Places API and cannot be
+                  surfaced in user-visible UI. Customer reviews (from our own
+                  Review table) are still shown in the Reviews section below. */}
             </div>
             {business.tagline && (
               <p className="text-base text-muted-foreground mb-2">{business.tagline}</p>
@@ -1119,7 +1079,7 @@ function SimilarBusinessCard({ business }: { business: SimilarBusiness }) {
           </p>
         )}
 
-        {/* Location + rating row */}
+        {/* Location row — rating removed per Google Maps ToS §3.2.4 */}
         <div className="flex items-center justify-between gap-2 text-xs">
           <span className="flex items-center gap-1 text-muted-foreground min-w-0">
             <MapPin className="h-3 w-3 shrink-0" />
@@ -1127,17 +1087,6 @@ function SimilarBusinessCard({ business }: { business: SimilarBusiness }) {
               {business.city || '—'}{business.state ? `, ${business.state}` : ''}
             </span>
           </span>
-          {business.rating > 0 && (
-            <span className="flex items-center gap-0.5 font-medium text-amber-600 shrink-0">
-              <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-              {business.rating.toFixed(1)}
-              {business.reviewCount > 0 && (
-                <span className="text-muted-foreground font-normal">
-                  {' '}({business.reviewCount})
-                </span>
-              )}
-            </span>
-          )}
         </div>
 
         {/* Footer: claim status + CTA */}

@@ -937,6 +937,15 @@ export function MarketplaceBrowser({
     setSearchQuery('');
     setCityInput('');
     setCityFilter('');
+    // Also clear userLocation so the topbar LocationChip's label resets to
+    // "Location" (the chip prioritizes userLocation.city over cityInput).
+    // Without this, clearAll clears the city FILTER but the chip still shows
+    // the detected/picked city name — confusing because the UI says a city
+    // is active when the filter is actually empty.
+    setUserLocation(null);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('fieseros_user_location');
+    }
     selectVertical(null);
   };
 

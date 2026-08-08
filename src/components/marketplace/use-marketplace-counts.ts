@@ -71,7 +71,12 @@ export function useMarketplaceCounts(
       { country: country ?? 'all', city: normalizedCity ?? 'all' },
     ],
     queryFn: () => fetchCounts(country, normalizedCity),
-    staleTime: 60_000, // 60s — counts change rarely
+    // staleTime: 0 — counts must ALWAYS reflect the current city/country
+    // filter. When the user picks/clears a city, the sidebar count must
+    // update immediately, not show a stale 60s-cached value. The counts
+    // endpoint is a lightweight indexed COUNT query (~50ms), so refetching
+    // on every filter change is cheap.
+    staleTime: 0,
     gcTime: 5 * 60_000, // 5 min — keep in memory for back navigation
     refetchOnWindowFocus: false,
     retry: 1,

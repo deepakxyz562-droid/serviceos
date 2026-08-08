@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Building2, ShieldCheck, Star, Zap, CheckCircle2, Wallet, ChevronRight } from 'lucide-react';
+import { Building2, ShieldCheck, Star, Zap, CheckCircle2, Wallet, ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMarketplaceSearch } from './use-marketplace-search';
 import { useMarketplaceCounts } from './use-marketplace-counts';
@@ -236,7 +236,7 @@ export function MarketplaceSidebar({
     trustRatingHigh ||
     trustEmergency
   );
-  const { data: realCounts } = useMarketplaceCounts(
+  const { data: realCounts, isFetching: countsFetching } = useMarketplaceCounts(
     hasActiveTextOrTrustFilters ? null : activeCountry,
     hasActiveTextOrTrustFilters ? null : cityFilterDebounced || null,
   );
@@ -310,7 +310,12 @@ export function MarketplaceSidebar({
                 <span className="flex items-center gap-2">
                   <Building2 className="h-4 w-4" /> All providers
                 </span>
-                <span className="text-xs">{totalProviders}</span>
+                <span className="flex items-center gap-1.5 text-xs">
+                  {countsFetching && !hasActiveTextOrTrustFilters ? (
+                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" aria-hidden />
+                  ) : null}
+                  {totalProviders}
+                </span>
               </Link>
             </li>
             {verticals.map((vertical) => {

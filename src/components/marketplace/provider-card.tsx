@@ -323,8 +323,9 @@ function ProviderCardImpl({
     return <MinimalCard provider={listItem} className={className} href={href} onViewProfile={onViewProfile} />;
   }
 
-  const rating = provider.rating ?? 0;
-  const reviewCount = provider.reviewCount ?? 0;
+  // `rating` / `reviewCount` are intentionally NOT destructured here — per
+  // Google Maps ToS §3.2.4 they must not be surfaced in user-visible UI.
+  // The fields remain on the provider object for internal ranking only.
   const industry = provider.industry;
   const industryMeta = getIndustryIcon(industry || '');
   const industryCatalog = industry ? getIndustry(industry) : undefined;
@@ -434,13 +435,11 @@ function ProviderCardImpl({
             </div>
           </div>
 
-          {/* Social Proof Rating Stars Row */}
-          <div className="mt-3 flex items-center gap-2">
-            <RatingStars rating={rating} />
-            <span className="text-xs font-bold text-foreground">{rating.toFixed(1)}</span>
-            <span className="text-xs text-muted-foreground">({reviewCount})</span>
-            <span className="text-xs text-muted-foreground/50">· Google rating</span>
-          </div>
+          {/* Social Proof Rating Stars Row — REMOVED per Google Maps ToS §3.2.4.
+              The `rating`/`reviewCount` fields on the Tenant row originated
+              from Google Places API seeding and cannot be surfaced in
+              user-visible UI (only `googlePlaceId` can be stored indefinitely).
+              The fields remain in the DB for internal ranking only. */}
 
           {/* Contact links: website + phone at the bottom of the info column */}
           {(website || phone) ? (
@@ -511,17 +510,6 @@ function ProviderCardImpl({
             </span>
           )}
 
-          {website ? (
-            <a
-              href={website.startsWith('http') ? website : `https://${website}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400"
-            >
-              🌐 Visit Website
-            </a>
-          ) : null}
-
           {href ? (
             <Link
               href={profileHref}
@@ -573,8 +561,9 @@ function MinimalCard({
   href?: string;
   onViewProfile?: (provider: ProviderListItem | ProviderProfile) => void;
 }) {
-  const rating = provider.rating ?? 0;
-  const reviewCount = provider.reviewCount ?? 0;
+  // `rating` / `reviewCount` are intentionally NOT destructured here — per
+  // Google Maps ToS §3.2.4 they must not be surfaced in user-visible UI.
+  // The fields remain on the provider object for internal ranking only.
   const industry = provider.industry;
   const industryMeta = getIndustryIcon(industry || '');
   const industryCatalog = industry ? getIndustry(industry) : undefined;
@@ -656,12 +645,8 @@ function MinimalCard({
             </div>
           </div>
 
-          <div className="mt-3 flex items-center gap-2">
-            <RatingStars rating={rating} />
-            <span className="text-xs font-bold text-foreground">{rating.toFixed(1)}</span>
-            <span className="text-xs text-muted-foreground">({reviewCount})</span>
-            <span className="text-xs text-muted-foreground/50">· Google rating</span>
-          </div>
+          {/* Rating row — REMOVED per Google Maps ToS §3.2.4 (rating/reviewCount
+              on Tenant row originated from Google Places API). */}
 
           {/* Website link at bottom of info column (phone is in Column 3 'Call now' button) */}
           {/* Contact links: website + phone at the bottom of the info column */}
@@ -732,17 +717,6 @@ function MinimalCard({
               No phone on file
             </span>
           )}
-
-          {website ? (
-            <a
-              href={website.startsWith('http') ? website : `https://${website}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400"
-            >
-              🌐 Visit Website
-            </a>
-          ) : null}
 
           {href ? (
             <Link
