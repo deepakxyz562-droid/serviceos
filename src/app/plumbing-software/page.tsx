@@ -18,13 +18,21 @@ import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
+import { FeatureMatrix } from "@/components/seo/feature-matrix";
+import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
+import { AudienceGrid } from "@/components/seo/audience-grid";
+import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
+import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
+import { WhyFieserosCards } from "@/components/seo/why-fieseros-cards";
+import { getIndustryBySoftwareSlug } from "@/lib/seo/industry-config";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
+const cfg = getIndustryBySoftwareSlug("plumbing-software")!;
+
 export const metadata: Metadata = {
-  title: "Plumbing Software & CRM — Schedule, Dispatch & Invoice | Fieseros",
-  description:
-    "Plumbing business software for emergency dispatch, job tracking, and Email & SMS invoicing. The all-in-one plumbing CRM that helps plumbers get paid faster. Start free today.",
+  title: cfg.titleTag,
+  description: cfg.metaDescription,
   keywords: [
     "plumbing software",
     "plumbing CRM",
@@ -32,12 +40,11 @@ export const metadata: Metadata = {
     "plumber job management",
     "plumbing invoicing",
   ],
-  alternates: { canonical: "https://fieseros.com/plumbing-software" },
+  alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
-    title: "Plumbing Software & CRM | Fieseros",
-    description:
-      "Dispatch technicians, track job history per asset, send Email & SMS quotes and invoices. Plumbing software built for the way plumbers actually work.",
-    url: "https://fieseros.com/plumbing-software",
+    title: cfg.titleTag,
+    description: cfg.metaDescription,
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     siteName: "Fieseros",
     type: "website",
   },
@@ -87,7 +94,7 @@ const faqs = [
   {
     question: "How does Fieseros handle emergency plumbing dispatch?",
     answer:
-      "When an emergency call comes in, Fieseros shows you a live map of every technician's current location and job status. You can see who is closest, who is finishing up a job, and who has the right skills for the repair. With one click, the job is dispatched, the customer gets an ETA via SMS, and the technician receives full job details — address, customer history, asset information, and any prior repairs — on their phone. Most plumbing businesses significantly cut emergency response time after switching to Fieseros.",
+      "When an emergency call comes in, Fieseros shows you a live map of every technician's current location and job status. You can see who is closest, who is finishing up a job, and who has the right skills for the repair. With one click, the job is dispatched, the customer gets an ETA via SMS, and the technician receives full job details — address, customer history, asset information, and any prior repairs — on their phone. Fieseros helps you dispatch the closest qualified plumber quickly and keep the customer informed by SMS.",
   },
   {
     question: "Can I manage recurring service contracts for plumbing maintenance?",
@@ -102,7 +109,7 @@ const faqs = [
   {
     question: "Can customers pay on-site after a plumbing job is done?",
     answer:
-      "Yes. As soon as a technician marks the job complete, Fieseros generates a professional invoice and sends it to the customer via Email & SMS with a secure payment link. Customers can pay by card, UPI, or bank transfer right from their phone — while the plumber is still on-site if needed. You see payment status in real time and can set up automatic reminders for unpaid invoices. Most plumbing businesses using Fieseros get paid substantially faster than with paper invoices.",
+      "Yes. As soon as a technician marks the job complete, Fieseros generates a professional invoice and sends it to the customer via Email & SMS with a secure payment link. Customers can pay by card, UPI, or bank transfer right from their phone — while the plumber is still on-site if needed. You see payment status in real time and can set up automatic reminders for unpaid invoices. Fieseros sends invoices the moment the job is marked done and follows up with automated payment reminders, so invoices don't sit forgotten.",
   },
   {
     question: "How does Fieseros help with managing multiple plumbers?",
@@ -121,24 +128,24 @@ export default function PlumbingSoftwarePage() {
     name: "Fieseros — Plumbing Business Software",
     description:
       "Plumbing CRM and dispatch software with emergency routing, asset history, Email & SMS invoicing, and recurring maintenance contracts.",
-    url: "https://fieseros.com/plumbing-software",
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (
     <CornerstoneLayout
-      activePath="/plumbing-software"
+      activePath={`/${cfg.softwareSlug}`}
       breadcrumbs={[
         { name: "Home", url: "https://fieseros.com" },
-        { name: "Plumbing Software", url: "https://fieseros.com/plumbing-software" },
+        { name: `${cfg.name} Software`, url: `https://fieseros.com/${cfg.softwareSlug}` },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
-        eyebrow="Plumbing Software"
-        title="Plumbing Business Software That Keeps Your Pipes — and Schedule — Flowing"
-        subtitle="From emergency calls to scheduled maintenance, Fieseros helps plumbing businesses dispatch technicians, track jobs, send invoices by Email & SMS, and get paid faster."
+        eyebrow={`${cfg.name} Software`}
+        title={cfg.h1}
+        subtitle={cfg.subtitle}
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -146,7 +153,7 @@ export default function PlumbingSoftwarePage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
             <Droplets className="h-4 w-4" />
-            Start Free Trial
+            {cfg.primaryCta}
           </Link>
           <Link
             href="/contact-us"
@@ -161,6 +168,13 @@ export default function PlumbingSoftwarePage() {
         title="Built for the way plumbers actually work"
         subtitle="From the 2 a.m. burst pipe call to the annual water heater service contract — every plumbing workflow in one platform."
         features={features}
+      />
+
+      <FeatureMatrix industryName={cfg.name} />
+
+      <AiReceptionistIndustryBlock
+        industryName={cfg.name}
+        emergencyExample={cfg.emergencyExample}
       />
 
       {/* Pain points section */}
@@ -223,6 +237,10 @@ export default function PlumbingSoftwarePage() {
         </div>
       </section>
 
+      <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
+
+      <WorkflowDiagram industryName={cfg.name} />
+
       <ContentSection title="Why plumbing businesses choose Fieseros">
         <p>
           Plumbing is a business of extremes. On one end, you have scheduled
@@ -232,7 +250,11 @@ export default function PlumbingSoftwarePage() {
           gas leaks on a Sunday, flooded basements — where minutes matter and the
           customer is already stressed. A plumber scheduling software that
           handles only one of these isn&apos;t enough. Fieseros is built for
-          both, in a single workflow your team can actually use.
+          both, with{" "}
+          <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
+            scheduling and dispatch
+          </Link>{" "}
+          designed for the realities of the trade.
         </p>
         <p>
           The recurring side of plumbing is where most shops leave money on the
@@ -255,9 +277,11 @@ export default function PlumbingSoftwarePage() {
           that gets lost, or simply not marked up correctly. Fieseros lets
           technicians add parts as line items directly on the work order from
           their phone. Parts flow onto the customer&apos;s invoice at your
-          marked-up price — automatically. Most plumbing businesses recover
-          meaningful lost parts revenue within
-          the first month of using Fieseros.
+          marked-up price — automatically, with{" "}
+          <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
+            invoicing
+          </Link>{" "}
+          that captures every part used.
         </p>
         <p>
           Finally, there&apos;s dispatch and communication — the operational
@@ -269,10 +293,17 @@ export default function PlumbingSoftwarePage() {
           from Fieseros, all of this happens in one place. Live GPS shows every
           technician. Dispatch takes seconds. ETAs go to the customer
           automatically. Quotes and plumbing invoicing flow through Email & SMS,
-          the channels customers actually check. The result: happier customers,
-          more jobs per day, and faster payments.
+          the channels customers actually check — all in a single{" "}
+          <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
+            customer CRM
+          </Link>{" "}
+          record so the full job history travels with the customer.
         </p>
       </ContentSection>
+
+      <AudienceGrid industryName={cfg.name} audiences={cfg.audiences} />
+
+      <InlinePricingCards industryName={cfg.name} />
 
       <FaqSection
         faqs={faqs}

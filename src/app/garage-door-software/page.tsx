@@ -17,13 +17,21 @@ import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
+import { FeatureMatrix } from "@/components/seo/feature-matrix";
+import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
+import { AudienceGrid } from "@/components/seo/audience-grid";
+import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
+import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
+import { WhyFieserosCards } from "@/components/seo/why-fieseros-cards";
+import { getIndustryBySoftwareSlug } from "@/lib/seo/industry-config";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
+const cfg = getIndustryBySoftwareSlug("garage-door-software")!;
+
 export const metadata: Metadata = {
-  title: "Garage Door Software — Dispatch, Service Catalog & Repair Quotes | Fieseros",
-  description:
-    "Garage door software for same-day repair dispatch, service catalog, photo proof of worn parts, safety inspections, and tune-up contracts. Start free today.",
+  title: cfg.titleTag,
+  description: cfg.metaDescription,
   keywords: [
     "garage door software",
     "garage door CRM",
@@ -31,12 +39,11 @@ export const metadata: Metadata = {
     "garage door install software",
     "overhead door software",
   ],
-  alternates: { canonical: "https://fieseros.com/garage-door-software" },
+  alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
-    title: "Garage Door Software | Fieseros",
-    description:
-      "Dispatch same-day repairs, document worn parts with photos, run safety inspections, and bill recurring tune-up contracts. Built for garage door companies.",
-    url: "https://fieseros.com/garage-door-software",
+    title: cfg.titleTag,
+    description: cfg.metaDescription,
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     siteName: "Fieseros",
     type: "website",
   },
@@ -80,7 +87,7 @@ const faqs = [
   {
     question: "How does Fieseros help dispatch same-day garage door repairs?",
     answer:
-      "A broken torsion spring is one of the few home emergencies where a homeowner will call the first company that picks up the phone and can come out today. Fieseros shows you a live map of every tech's location and what jobs they're currently on. When the call comes in, you dispatch the closest tech, the customer gets an ETA through SMS, and the tech receives full job details on their phone. Most garage door companies using Fieseros win meaningfully more same-day repair calls simply because they can promise a real ETA instead of \"sometime this afternoon.\"",
+      "A broken torsion spring is one of the few home emergencies where a homeowner will call the first company that picks up the phone and can come out today. Fieseros shows you a live map of every tech's location and what jobs they're currently on. When the call comes in, you dispatch the closest tech, the customer gets an ETA through SMS, and the tech receives full job details on their phone. Fieseros helps you dispatch the closest tech quickly and send the customer a real ETA via SMS instead of a vague arrival window.",
   },
   {
     question: "How does the safety inspection checklist work?",
@@ -104,24 +111,24 @@ export default function GarageDoorSoftwarePage() {
     name: "Fieseros — Garage Door Contractor Software",
     description:
       "Garage door CRM and dispatch software with same-day repair routing, service catalog, photo proof of worn parts, safety inspections, and recurring tune-up contracts.",
-    url: "https://fieseros.com/garage-door-software",
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (
     <CornerstoneLayout
-      activePath="/garage-door-software"
+      activePath={`/${cfg.softwareSlug}`}
       breadcrumbs={[
         { name: "Home", url: "https://fieseros.com" },
-        { name: "Garage Door Software", url: "https://fieseros.com/garage-door-software" },
+        { name: `${cfg.name} Software`, url: `https://fieseros.com/${cfg.softwareSlug}` },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
-        eyebrow="Garage Door Software"
-        title="Garage Door Software That Wins Same-Day Repairs, Documents Every Worn Part, and Runs Recurring Tune-Ups"
-        subtitle="From same-day repair dispatch to a service catalog, safety inspections, and tune-up contracts, Fieseros is the garage door CRM built for repair and install companies."
+        eyebrow={`${cfg.name} Software`}
+        title={cfg.h1}
+        subtitle={cfg.subtitle}
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -129,7 +136,7 @@ export default function GarageDoorSoftwarePage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
             <DoorOpen className="h-4 w-4" />
-            Start Free Trial
+            {cfg.primaryCta}
           </Link>
           <Link
             href="/contact-us"
@@ -144,6 +151,13 @@ export default function GarageDoorSoftwarePage() {
         title="Built for the way garage door companies actually work"
         subtitle="From the 7 a.m. broken-spring call to the 3 p.m. new install walk-through — every garage door workflow in one platform."
         features={features}
+      />
+
+      <FeatureMatrix industryName={cfg.name} />
+
+      <AiReceptionistIndustryBlock
+        industryName={cfg.name}
+        emergencyExample={cfg.emergencyExample}
       />
 
       <section className="border-t bg-muted/20">
@@ -201,20 +215,40 @@ export default function GarageDoorSoftwarePage() {
         </div>
       </section>
 
+      <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
+
+      <WorkflowDiagram industryName={cfg.name} />
+
       <ContentSection title="Why garage door companies choose Fieseros">
         <p>
-          Garage door contracting is a business of two halves. On one side you have same-day repairs — broken springs, snapped cables, dead openers — where the homeowner calls the first company that picks up the phone and can come out today. On the other side you have new installs — full door replacements — where the sales process, the project scheduling, and the milestone invoicing determine whether you close the deal. Garage door software that handles only one of these halves just shifts the chaos. Fieseros is built to run both, on one dispatch board, in a single platform your techs and sales team actually use.
+          Garage door contracting is a business of two halves. On one side you have same-day repairs — broken springs, snapped cables, dead openers — where the homeowner calls the first company that picks up the phone and can come out today. On the other side you have new installs — full door replacements — where the sales process, the project scheduling, and the milestone invoicing determine whether you close the deal. Garage door software that handles only one of these halves just shifts the chaos. Fieseros is built to run both, on one dispatch board, in a single platform your techs and sales team actually use, with{" "}
+          <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
+            scheduling and dispatch
+          </Link>{" "}
+          built around same-day calls.
         </p>
         <p>
-          The same-day repair side of the business is where most garage door companies win or lose market share. A homeowner with a broken spring is not shopping around — they are calling the first three numbers on Google and going with whoever can be there fastest. Fieseros shows you a live map of every tech's location and what jobs they are currently on. You dispatch the closest tech, the customer gets a real ETA through SMS, and the tech gets full job details on their phone. Most garage door companies using Fieseros win meaningfully more same-day calls simply because they can promise a real arrival time instead of a vague window.
+          The same-day repair side of the business is where most garage door companies win or lose market share. A homeowner with a broken spring is not shopping around — they are calling the first three numbers on Google and going with whoever can be there fastest. Fieseros shows you a live map of every tech's location and what jobs they are currently on. You dispatch the closest tech, the customer gets a real ETA through SMS, and the tech gets full job details on their phone. Fieseros helps you dispatch the closest tech and send a real ETA via SMS instead of a vague arrival window.
         </p>
         <p>
-          The upsell side of the business is the silent revenue leak in every garage door company. A tech goes out on a broken spring call, notices that the rollers are worn, the cables are frayed, and the opener auto-reverse is failing — and mentions none of it, because there is no easy way to quote the additional work on the spot. Fieseros fixes this by making the upsell part of the workflow. Every service call ends with a custom safety inspection checklist. Findings get logged with photos, and any flagged item turns into a one-tap quote sent to the customer through Email & SMS. Whether the customer approves on the spot or three weeks later, the recommendation is on record — and the eventual repair revenue goes to you instead of the next company they call.
+          The upsell side of the business is the silent revenue leak in every garage door company. A tech goes out on a broken spring call, notices that the rollers are worn, the cables are frayed, and the opener auto-reverse is failing — and mentions none of it, because there is no easy way to quote the additional work on the spot. Fieseros fixes this by making the upsell part of the workflow. Every service call ends with a custom safety inspection checklist. Findings get logged with photos, and any flagged item turns into a one-tap quote sent to the customer through Email & SMS in the same{" "}
+          <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
+            customer CRM
+          </Link>{" "}
+          record. Whether the customer approves on the spot or three weeks later, the recommendation is on record — and the eventual repair revenue goes to you instead of the next company they call.
         </p>
         <p>
-          Finally, there is the install side of the business, which is where the real revenue lives. A new garage door install runs 1,500 to 5,000 dollars, and the project needs structured quoting, scheduling, and invoicing to close cleanly. Fieseros treats each install as a project — site measurement, door and panel selection from the service catalog, material ordering from the manufacturer, scheduling the install crew, milestone invoicing, and final invoicing on completion. The same platform that handles your same-day repair dispatch handles your install pipeline, so you see both revenue streams on one dashboard. Many garage door companies use Fieseros specifically to grow their install book because the project workflow makes it far easier to quote, schedule, and bill larger jobs.
+          Finally, there is the install side of the business, which is where the real revenue lives. A new garage door install runs 1,500 to 5,000 dollars, and the project needs structured quoting, scheduling, and invoicing to close cleanly. Fieseros treats each install as a project — site measurement, door and panel selection from the service catalog, material ordering from the manufacturer, scheduling the install crew, milestone{" "}
+          <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
+            invoicing
+          </Link>{" "}
+          , and final invoicing on completion. The same platform that handles your same-day repair dispatch handles your install pipeline, so you see both revenue streams on one dashboard. Many garage door companies use Fieseros specifically to grow their install book because the project workflow makes it far easier to quote, schedule, and bill larger jobs.
         </p>
       </ContentSection>
+
+      <AudienceGrid industryName={cfg.name} audiences={cfg.audiences} />
+
+      <InlinePricingCards industryName={cfg.name} />
 
       <FaqSection
         faqs={faqs}

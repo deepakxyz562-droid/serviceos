@@ -16,13 +16,21 @@ import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
+import { FeatureMatrix } from "@/components/seo/feature-matrix";
+import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
+import { AudienceGrid } from "@/components/seo/audience-grid";
+import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
+import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
+import { WhyFieserosCards } from "@/components/seo/why-fieseros-cards";
+import { getIndustryBySoftwareSlug } from "@/lib/seo/industry-config";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
+const cfg = getIndustryBySoftwareSlug("snow-removal-software")!;
+
 export const metadata: Metadata = {
-  title: "Snow Removal Software — Seasonal Contracts, Crew GPS & Proof of Service | Fieseros",
-  description:
-    "Snow and ice management software for seasonal contract billing, crew GPS tracking, and proof-of-service logs. Start free today.",
+  title: cfg.titleTag,
+  description: cfg.metaDescription,
   keywords: [
     "snow removal software",
     "snow plow software",
@@ -30,12 +38,11 @@ export const metadata: Metadata = {
     "snow removal CRM",
     "snow contract billing software",
   ],
-  alternates: { canonical: "https://fieseros.com/snow-removal-software" },
+  alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
-    title: "Snow Removal Software & CRM | Fieseros",
-    description:
-      "Bill seasonal contracts, track crew GPS location, and generate GPS-verified proof-of-service logs. Snow removal software built for storms.",
-    url: "https://fieseros.com/snow-removal-software",
+    title: cfg.titleTag,
+    description: cfg.metaDescription,
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     siteName: "Fieseros",
     type: "website",
   },
@@ -92,24 +99,24 @@ export default function SnowRemovalSoftwarePage() {
     name: "Fieseros — Snow Removal Business Software",
     description:
       "Snow and ice management CRM software with seasonal contract billing, crew GPS tracking, and proof-of-service logs.",
-    url: "https://fieseros.com/snow-removal-software",
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (
     <CornerstoneLayout
-      activePath="/snow-removal-software"
+      activePath={`/${cfg.softwareSlug}`}
       breadcrumbs={[
         { name: "Home", url: "https://fieseros.com" },
-        { name: "Snow Removal Software", url: "https://fieseros.com/snow-removal-software" },
+        { name: `${cfg.name} Software`, url: `https://fieseros.com/${cfg.softwareSlug}` },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
-        eyebrow="Snow Removal Software"
-        title="Snow Removal Software Built for 3 a.m. Storms, Slip-and-Fall Defense, and Seasonal Billing"
-        subtitle="From seasonal contract billing to GPS-verified proof-of-service logs, Fieseros helps snow operators bill, track, and defend every storm — without the 3 a.m. phone tree."
+        eyebrow={`${cfg.name} Software`}
+        title={cfg.h1}
+        subtitle={cfg.subtitle}
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -117,7 +124,7 @@ export default function SnowRemovalSoftwarePage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
             <Wind className="h-4 w-4" />
-            Start Free Trial
+            {cfg.primaryCta}
           </Link>
           <Link
             href="/contact-us"
@@ -132,6 +139,13 @@ export default function SnowRemovalSoftwarePage() {
         title="Built for the way snow operators actually work"
         subtitle="From the 3 a.m. dispatch to the spring slip-and-fall defense — every snow removal workflow in one platform."
         features={features}
+      />
+
+      <FeatureMatrix industryName={cfg.name} />
+
+      <AiReceptionistIndustryBlock
+        industryName={cfg.name}
+        emergencyExample={cfg.emergencyExample}
       />
 
       {/* Pain points section */}
@@ -193,6 +207,10 @@ export default function SnowRemovalSoftwarePage() {
         </div>
       </section>
 
+      <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
+
+      <WorkflowDiagram industryName={cfg.name} />
+
       <ContentSection title="Why snow removal businesses choose Fieseros">
         <p>
           Snow removal is unlike any other field service business. The work
@@ -204,7 +222,12 @@ export default function SnowRemovalSoftwarePage() {
           unmatched, and the cost of getting it wrong (missed properties,
           slip-and-fall claims, salt overuse, exhausted crews) is severe.
           Snow removal software has to be built around that reality — not
-          adapted from a generic scheduling tool designed for daytime trades.
+          adapted from a generic scheduling tool designed for daytime trades,
+          with{" "}
+          <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
+            scheduling and dispatch
+          </Link>{" "}
+          built for storm operations.
         </p>
         <p>
           The defining operational challenge in snow is dispatch under
@@ -226,7 +249,11 @@ export default function SnowRemovalSoftwarePage() {
           serviced at 2:14 a.m. On the revenue side, seasonal contracts and
           per-event pricing are queued automatically after each completed
           visit, so revenue that used to slip through the cracks becomes
-          automatic.
+          automatic — all tied to a single{" "}
+          <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
+            customer CRM
+          </Link>{" "}
+          record per property.
         </p>
         <p>
           Finally, there&apos;s the customer communication side. Pre-storm
@@ -234,9 +261,17 @@ export default function SnowRemovalSoftwarePage() {
           calls. Crew GPS tracking on the dispatch board shows you which
           properties have been serviced and which crew is closest, so you can
           redirect on the fly when a route falls behind. The chaos of a storm
-          becomes a managed, profitable operation.
+          becomes a managed, profitable operation, with{" "}
+          <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
+            invoicing
+          </Link>{" "}
+          that runs automatically after each completed visit.
         </p>
       </ContentSection>
+
+      <AudienceGrid industryName={cfg.name} audiences={cfg.audiences} />
+
+      <InlinePricingCards industryName={cfg.name} />
 
       <FaqSection
         faqs={faqs}

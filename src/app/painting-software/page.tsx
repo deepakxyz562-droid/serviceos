@@ -18,13 +18,21 @@ import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
+import { FeatureMatrix } from "@/components/seo/feature-matrix";
+import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
+import { AudienceGrid } from "@/components/seo/audience-grid";
+import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
+import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
+import { WhyFieserosCards } from "@/components/seo/why-fieseros-cards";
+import { getIndustryBySoftwareSlug } from "@/lib/seo/industry-config";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
+const cfg = getIndustryBySoftwareSlug("painting-software")!;
+
 export const metadata: Metadata = {
-  title: "Painting Software — Estimates, Crew Tracking & Progress Invoicing | Fieseros",
-  description:
-    "Painting contractor software for estimate-to-quote workflows, line-item estimating, project phasing, photo documentation, and milestone invoicing. The painting CRM that helps painters get paid. Start free today.",
+  title: cfg.titleTag,
+  description: cfg.metaDescription,
   keywords: [
     "painting software",
     "painting contractor software",
@@ -32,12 +40,11 @@ export const metadata: Metadata = {
     "painting estimate software",
     "painting invoicing",
   ],
-  alternates: { canonical: "https://fieseros.com/painting-software" },
+  alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
-    title: "Painting Software & CRM | Fieseros",
-    description:
-      "Build accurate estimates with line-item quoting, phase multi-room projects, document prep and coats with photos, track crew time against estimate, and bill by milestone. Painting software built for contractors.",
-    url: "https://fieseros.com/painting-software",
+    title: cfg.titleTag,
+    description: cfg.metaDescription,
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     siteName: "Fieseros",
     type: "website",
   },
@@ -121,24 +128,24 @@ export default function PaintingSoftwarePage() {
     name: "Fieseros — Painting Contractor Software",
     description:
       "Painting CRM and estimating software with line-item estimating, project phasing, prep and coat photo documentation, color and SKU tracking, crew time tracking, and milestone invoicing.",
-    url: "https://fieseros.com/painting-software",
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (
     <CornerstoneLayout
-      activePath="/painting-software"
+      activePath={`/${cfg.softwareSlug}`}
       breadcrumbs={[
         { name: "Home", url: "https://fieseros.com" },
-        { name: "Painting Software", url: "https://fieseros.com/painting-software" },
+        { name: `${cfg.name} Software`, url: `https://fieseros.com/${cfg.softwareSlug}` },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
-        eyebrow="Painting Software"
-        title="Painting Contractor Software That Protects Your Margin From Estimate to Final Coat"
-        subtitle="From a single-room repaint to a multi-week commercial project, Fieseros helps painters quote accurately, document prep and coats, track crew time, and bill by milestone."
+        eyebrow={`${cfg.name} Software`}
+        title={cfg.h1}
+        subtitle={cfg.subtitle}
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -146,7 +153,7 @@ export default function PaintingSoftwarePage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
             <Brush className="h-4 w-4" />
-            Start Free Trial
+            {cfg.primaryCta}
           </Link>
           <Link
             href="/contact-us"
@@ -161,6 +168,13 @@ export default function PaintingSoftwarePage() {
         title="Built for the way painting contractors actually work"
         subtitle="From the first walkthrough estimate to the final walk-through invoice — every painting workflow in one platform."
         features={features}
+      />
+
+      <FeatureMatrix industryName={cfg.name} />
+
+      <AiReceptionistIndustryBlock
+        industryName={cfg.name}
+        emergencyExample={cfg.emergencyExample}
       />
 
       {/* Pain points section */}
@@ -224,6 +238,10 @@ export default function PaintingSoftwarePage() {
         </div>
       </section>
 
+      <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
+
+      <WorkflowDiagram industryName={cfg.name} />
+
       <ContentSection title="Why painting contractors choose Fieseros">
         <p>
           Painting contracting looks simple from the outside — primer, two
@@ -231,11 +249,15 @@ export default function PaintingSoftwarePage() {
           where every gallon of paint, every hour of labor, and every coat
           of prep has to be tracked and billed accurately. A residential
           repaint estimated at 12 gallons that actually takes 18, a
-          commercial job where the crew runs substantially over the estimated hours, a
+          commercial job where the crew runs well over the estimated hours, a
           customer who swears you skipped the second coat — these are the
           things that quietly eat a painting contractor&apos;s margin.
           Painting software built for the way painters actually work fixes
-          all of it.
+          all of it, with{" "}
+          <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
+            scheduling and dispatch
+          </Link>{" "}
+          built for multi-room projects.
         </p>
         <p>
           Estimating is the first place margin is won or lost. Most painting
@@ -257,7 +279,11 @@ export default function PaintingSoftwarePage() {
           customer&apos;s, and contractors lose those disputes far more often
           than they should. Fieseros makes photo documentation part of the
           workflow: crews photograph every stage of every job, and the
-          photos attach permanently to the work order. Disputes get closed
+          photos attach permanently to the work order in the same{" "}
+          <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
+            customer CRM
+          </Link>{" "}
+          record as the rest of the job history. Disputes get closed
           in seconds. The same photos build a portfolio that closes future
           sales by showing the quality of your prep and finish work.
         </p>
@@ -268,9 +294,17 @@ export default function PaintingSoftwarePage() {
           Fieseros supports milestone billing: deposit on start, progress
           invoices at phase completions, final on walk-through. Crews clock
           in and out of each job from their phone, with timesheets
-          exportable for payroll — so you always know where you stand.
+          exportable for payroll — so you always know where you stand, with{" "}
+          <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
+            invoicing
+          </Link>{" "}
+          that pays you through every phase.
         </p>
       </ContentSection>
+
+      <AudienceGrid industryName={cfg.name} audiences={cfg.audiences} />
+
+      <InlinePricingCards industryName={cfg.name} />
 
       <FaqSection
         faqs={faqs}

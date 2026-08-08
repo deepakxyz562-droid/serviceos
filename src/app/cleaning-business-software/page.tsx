@@ -18,13 +18,21 @@ import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
+import { FeatureMatrix } from "@/components/seo/feature-matrix";
+import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
+import { AudienceGrid } from "@/components/seo/audience-grid";
+import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
+import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
+import { WhyFieserosCards } from "@/components/seo/why-fieseros-cards";
+import { getIndustryBySoftwareSlug } from "@/lib/seo/industry-config";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
+const cfg = getIndustryBySoftwareSlug("cleaning-business-software")!;
+
 export const metadata: Metadata = {
-  title: "Cleaning Business Software — Schedule, Track & Invoice | Fieseros",
-  description:
-    "Cleaning business software for recurring schedules, cleaner dispatch, GPS tracking, customer property notes, and Email & SMS reminders. The cleaning CRM that grows recurring revenue.",
+  title: cfg.titleTag,
+  description: cfg.metaDescription,
   keywords: [
     "cleaning business software",
     "cleaning CRM",
@@ -32,12 +40,11 @@ export const metadata: Metadata = {
     "maid service software",
     "janitorial software",
   ],
-  alternates: { canonical: "https://fieseros.com/cleaning-business-software" },
+  alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
-    title: "Cleaning Business Software | Fieseros",
-    description:
-      "Schedule one-time deep cleans and recurring weekly services. Track which cleaner is where, send Email & SMS reminders, store customer property notes, and never lose a payment.",
-    url: "https://fieseros.com/cleaning-business-software",
+    title: cfg.titleTag,
+    description: cfg.metaDescription,
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     siteName: "Fieseros",
     type: "website",
   },
@@ -107,7 +114,7 @@ const faqs = [
   {
     question: "Does Fieseros handle recurring billing for cleaning contracts?",
     answer:
-      "Yes — recurring billing is fully automated in Fieseros. When you set up a recurring schedule for a customer, you also set up the recurring billing: price, frequency (matches the cleaning cadence or a custom billing cycle), and payment method. Fieseros then generates and sends invoices automatically on the schedule you define. Customers receive invoices via Email and SMS with a secure payment link — they pay by card or bank transfer through the online customer portal. You see a dashboard showing paid, pending, and overdue invoices at a glance, with automatic payment reminders sent to customers who haven't paid. Most cleaning businesses using Fieseros eliminate overdue invoices almost entirely.",
+      "Yes — recurring billing is fully automated in Fieseros. When you set up a recurring schedule for a customer, you also set up the recurring billing: price, frequency (matches the cleaning cadence or a custom billing cycle), and payment method. Fieseros then generates and sends invoices automatically on the schedule you define. Customers receive invoices via Email and SMS with a secure payment link — they pay by card or bank transfer through the online customer portal. You see a dashboard showing paid, pending, and overdue invoices at a glance, with automatic payment reminders sent to customers who haven't paid. Fieseros automates invoicing and payment reminders so unpaid balances surface on the dashboard immediately.",
   },
   {
     question: "Can customers provide feedback after each cleaning visit?",
@@ -121,24 +128,24 @@ export default function CleaningBusinessSoftwarePage() {
     name: "Fieseros — Cleaning Business Software",
     description:
       "Cleaning CRM and scheduling software with recurring schedule automation, cleaner GPS tracking, customer property notes, quality checklists, and recurring invoicing.",
-    url: "https://fieseros.com/cleaning-business-software",
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (
     <CornerstoneLayout
-      activePath="/cleaning-business-software"
+      activePath={`/${cfg.softwareSlug}`}
       breadcrumbs={[
         { name: "Home", url: "https://fieseros.com" },
-        { name: "Cleaning Business Software", url: "https://fieseros.com/cleaning-business-software" },
+        { name: `${cfg.name} Business Software`, url: `https://fieseros.com/${cfg.softwareSlug}` },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
-        eyebrow="Cleaning Business Software"
-        title="Cleaning Business Software for Recurring Revenue & Happy Customers"
-        subtitle="Schedule one-time deep cleans and recurring weekly services. Track which cleaner is where, send Email & SMS reminders, and never lose track of a payment again."
+        eyebrow={`${cfg.name} Business Software`}
+        title={cfg.h1}
+        subtitle={cfg.subtitle}
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -146,7 +153,7 @@ export default function CleaningBusinessSoftwarePage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
             <Sparkles className="h-4 w-4" />
-            Start Free Trial
+            {cfg.primaryCta}
           </Link>
           <Link
             href="/contact-us"
@@ -161,6 +168,13 @@ export default function CleaningBusinessSoftwarePage() {
         title="Everything a cleaning business needs to grow recurring revenue"
         subtitle="Recurring schedules, reliable cleaner dispatch, customer property notes, quality control, and recurring billing — all in one Email, SMS & Push platform."
         features={features}
+      />
+
+      <FeatureMatrix industryName={cfg.name} />
+
+      <AiReceptionistIndustryBlock
+        industryName={cfg.name}
+        emergencyExample={cfg.emergencyExample}
       />
 
       {/* Pain points section */}
@@ -224,6 +238,10 @@ export default function CleaningBusinessSoftwarePage() {
         </div>
       </section>
 
+      <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
+
+      <WorkflowDiagram industryName={cfg.name} />
+
       <ContentSection title="Why cleaning businesses love Fieseros">
         <p>
           Cleaning is a recurring revenue business. The customer who hires you
@@ -231,11 +249,15 @@ export default function CleaningBusinessSoftwarePage() {
           every single week, generating predictable revenue with very little
           acquisition cost. The economics are beautiful when it works. But
           cleaning is also a business of a thousand small failures: a cleaner
-          who doesn't show up, a customer who forgets to leave the key, a
+          who doesn&apos;t show up, a customer who forgets to leave the key, a
           payment that slips through the cracks, a quality issue that turns a
           loyal customer into a churned one. Cleaning business software that
           can&apos;t prevent those small failures isn&apos;t worth the
-          subscription. Fieseros is built to prevent every one of them.
+          subscription. Fieseros is built to prevent every one of them, with{" "}
+          <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
+            scheduling and dispatch
+          </Link>{" "}
+          built around recurring visits.
         </p>
         <p>
           The biggest pain point in any cleaning business is staff reliability.
@@ -260,8 +282,12 @@ export default function CleaningBusinessSoftwarePage() {
           shared with the wrong people. When a cleaner leaves your team, you
           have to scramble to change every lockbox code they knew. Fieseros
           stores access details as customer notes your team can reference from
-          the mobile app. Update them anytime a code changes, and remove a
-          cleaner&apos;s app access when they leave your team.
+          the mobile app — all stored in a single{" "}
+          <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
+            customer CRM
+          </Link>{" "}
+          record. Update them anytime a code changes, and remove a cleaner&apos;s
+          app access when they leave your team.
         </p>
         <p>
           Finally, there&apos;s the combination of quality control and
@@ -270,17 +296,23 @@ export default function CleaningBusinessSoftwarePage() {
           clean, every time, meets the same standard — regardless of which
           cleaner did the work. Fieseros makes this possible with custom
           checklists per service type and photo proof for problem areas, so
-          you can spot quality issues before customers do. Recurring billing
+          you can spot quality issues before customers do. Recurring{" "}
+          <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
+            invoicing
+          </Link>{" "}
           means every invoice goes out on time, every payment is tracked, and
           every overdue balance is chased automatically — through Email, SMS
           and Push notifications, the channels customers actually respond to.
           Together, these turn a chaotic cleaning operation into a recurring
-          revenue machine. That&apos;s
-          what maid service software and janitorial software should do — not
-          just schedule jobs, but protect and grow the recurring revenue that
-          makes the business valuable.
+          revenue machine. That&apos;s what maid service software and
+          janitorial software should do — not just schedule jobs, but protect
+          and grow the recurring revenue that makes the business valuable.
         </p>
       </ContentSection>
+
+      <AudienceGrid industryName={cfg.name} audiences={cfg.audiences} />
+
+      <InlinePricingCards industryName={cfg.name} />
 
       <FaqSection
         faqs={faqs}

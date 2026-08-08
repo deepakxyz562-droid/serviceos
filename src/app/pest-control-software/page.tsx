@@ -14,13 +14,21 @@ import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
+import { FeatureMatrix } from "@/components/seo/feature-matrix";
+import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
+import { AudienceGrid } from "@/components/seo/audience-grid";
+import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
+import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
+import { WhyFieserosCards } from "@/components/seo/why-fieseros-cards";
+import { getIndustryBySoftwareSlug } from "@/lib/seo/industry-config";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
+const cfg = getIndustryBySoftwareSlug("pest-control-software")!;
+
 export const metadata: Metadata = {
-  title: "Pest Control Software — Quarterly Schedules, Visit History & Recurring Billing | Fieseros",
-  description:
-    "Pest control software for recurring quarterly treatments, automated reminders, and visit history per property. Start free today.",
+  title: cfg.titleTag,
+  description: cfg.metaDescription,
   keywords: [
     "pest control software",
     "pest control CRM",
@@ -28,12 +36,11 @@ export const metadata: Metadata = {
     "recurring treatment scheduling",
     "pest control scheduling software",
   ],
-  alternates: { canonical: "https://fieseros.com/pest-control-software" },
+  alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
-    title: "Pest Control Software & CRM | Fieseros",
-    description:
-      "Auto-schedule quarterly treatments, send automated prep reminders, track visit history per property, and auto-renew subscriptions. Pest control software built for recurring revenue.",
-    url: "https://fieseros.com/pest-control-software",
+    title: cfg.titleTag,
+    description: cfg.metaDescription,
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     siteName: "Fieseros",
     type: "website",
   },
@@ -59,12 +66,12 @@ const faqs = [
   {
     question: "How does Fieseros handle recurring quarterly pest control treatments?",
     answer:
-      "Quarterly treatment programs are the backbone of a profitable pest control business. You set up the customer's program once in Fieseros — services included, frequency (quarterly, bi-monthly, monthly), price, and payment method — and it auto-schedules each visit, sends the customer an Email & SMS reminder the day before, dispatches the technician, generates the application record, and charges the customer's stored card after the visit. When the annual program is up for renewal, Fieseros auto-renews it (with customer consent) and alerts you to any cancellations — so recurring revenue never silently lapses. Most pest control businesses significantly cut their office admin time after switching.",
+      "Quarterly treatment programs are the backbone of a profitable pest control business. You set up the customer's program once in Fieseros — services included, frequency (quarterly, bi-monthly, monthly), price, and payment method — and it auto-schedules each visit, sends the customer an Email & SMS reminder the day before, dispatches the technician, generates the application record, and charges the customer's stored card after the visit. When the annual program is up for renewal, Fieseros auto-renews it (with customer consent) and alerts you to any cancellations — so recurring revenue never silently lapses. Fieseros automates the quarterly program lifecycle so office admin work and renewal tracking are handled for you.",
   },
   {
     question: "Can Fieseros send pre-treatment prep reminders to customers?",
     answer:
-      "Yes. Some pest control treatments require customer preparation — vacate the house for 4 hours, cover fish tanks, remove food and dishes from counters, trim vegetation away from the foundation. When a technician shows up to an unprepared house, the visit is wasted and the customer is frustrated. Fieseros sends automated Email & SMS prep reminders 24 hours (and again 2 hours) before the appointment, customized to the treatment type. Prep-related no-charges drop sharply, technicians show up to houses that are ready for them, and customers feel professionally managed instead of surprised at the door.",
+      "Yes. Some pest control treatments require customer preparation — vacate the house for 4 hours, cover fish tanks, remove food and dishes from counters, trim vegetation away from the foundation. When a technician shows up to an unprepared house, the visit is wasted and the customer is frustrated. Fieseros sends automated Email & SMS prep reminders 24 hours (and again 2 hours) before the appointment, customized to the treatment type. Technicians show up to houses that are ready for them, and customers feel professionally managed instead of surprised at the door.",
   },
 ];
 
@@ -73,24 +80,24 @@ export default function PestControlSoftwarePage() {
     name: "Fieseros — Pest Control Business Software",
     description:
       "Pest control CRM and scheduling software with recurring quarterly treatments, automated prep reminders, and visit history per property.",
-    url: "https://fieseros.com/pest-control-software",
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (
     <CornerstoneLayout
-      activePath="/pest-control-software"
+      activePath={`/${cfg.softwareSlug}`}
       breadcrumbs={[
         { name: "Home", url: "https://fieseros.com" },
-        { name: "Pest Control Software", url: "https://fieseros.com/pest-control-software" },
+        { name: `${cfg.name} Software`, url: `https://fieseros.com/${cfg.softwareSlug}` },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
-        eyebrow="Pest Control Software"
-        title="Pest Control Software That Protects Recurring Revenue and Passes Every State Inspection"
-        subtitle="From quarterly treatment auto-renewal to visit history with photos, automated reminders, and recurring billing, Fieseros helps pest control businesses stay compliant, retain customers, and grow recurring revenue."
+        eyebrow={`${cfg.name} Software`}
+        title={cfg.h1}
+        subtitle={cfg.subtitle}
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -98,7 +105,7 @@ export default function PestControlSoftwarePage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
             <Bug className="h-4 w-4" />
-            Start Free Trial
+            {cfg.primaryCta}
           </Link>
           <Link
             href="/contact-us"
@@ -113,6 +120,13 @@ export default function PestControlSoftwarePage() {
         title="Built for the way pest control businesses actually operate"
         subtitle="From the quarterly treatment cycle to the state inspector's visit — every pest control workflow in one platform."
         features={features}
+      />
+
+      <FeatureMatrix industryName={cfg.name} />
+
+      <AiReceptionistIndustryBlock
+        industryName={cfg.name}
+        emergencyExample={cfg.emergencyExample}
       />
 
       {/* Pain points section */}
@@ -173,6 +187,10 @@ export default function PestControlSoftwarePage() {
         </div>
       </section>
 
+      <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
+
+      <WorkflowDiagram industryName={cfg.name} />
+
       <ContentSection title="Why pest control businesses choose Fieseros">
         <p>
           Pest control is a regulated, subscription-driven, high-volume
@@ -185,7 +203,11 @@ export default function PestControlSoftwarePage() {
           and product-specific documentation. Pest control software that
           can&apos;t handle both the recurring revenue engine and the
           regulatory documentation burden will sink a growing company
-          inside a single season.
+          inside a single season, with{" "}
+          <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
+            scheduling and dispatch
+          </Link>{" "}
+          that struggles to keep up.
         </p>
         <p>
           The recurring revenue side is where pest control businesses build
@@ -215,15 +237,26 @@ export default function PestControlSoftwarePage() {
         <p>
           Finally, there&apos;s the operational side — visit history,
           customer prep, and route handovers. Fieseros captures visit notes,
-          photos, and service history per customer property, sends automated
-          Email &amp; SMS prep reminders before appointments, and auto-schedules
-          recurring quarterly visits through recurring job schedules. New
-          technicians can pick up a route cold because the full property
-          history is on their phone. The result: fewer wasted visits and a
-          single platform built for the way pest control businesses actually
-          operate.
+          photos, and service history per customer property in a single{" "}
+          <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
+            customer CRM
+          </Link>{" "}
+          record, sends automated Email &amp; SMS prep reminders before
+          appointments, and auto-schedules recurring quarterly visits
+          through recurring job schedules with{" "}
+          <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
+            invoicing
+          </Link>{" "}
+          that runs after every visit. New technicians can pick up a route
+          cold because the full property history is on their phone. The
+          result: fewer wasted visits and a single platform built for the
+          way pest control businesses actually operate.
         </p>
       </ContentSection>
+
+      <AudienceGrid industryName={cfg.name} audiences={cfg.audiences} />
+
+      <InlinePricingCards industryName={cfg.name} />
 
       <FaqSection
         faqs={faqs}

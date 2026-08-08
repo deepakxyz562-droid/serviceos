@@ -16,13 +16,21 @@ import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
+import { FeatureMatrix } from "@/components/seo/feature-matrix";
+import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
+import { AudienceGrid } from "@/components/seo/audience-grid";
+import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
+import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
+import { WhyFieserosCards } from "@/components/seo/why-fieseros-cards";
+import { getIndustryBySoftwareSlug } from "@/lib/seo/industry-config";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
+const cfg = getIndustryBySoftwareSlug("landscaping-software")!;
+
 export const metadata: Metadata = {
-  title: "Landscaping Software — Crew Routing, Design-Build Quotes & Invoicing | Fieseros",
-  description:
-    "Landscaping business software for multi-stop crew routing, recurring maintenance contracts, design-build proposals, and material line-item billing. The all-in-one landscaping CRM that helps landscapers grow. Start free today.",
+  title: cfg.titleTag,
+  description: cfg.metaDescription,
   keywords: [
     "landscaping software",
     "landscaping CRM",
@@ -30,12 +38,11 @@ export const metadata: Metadata = {
     "landscape design software",
     "landscaping invoicing",
   ],
-  alternates: { canonical: "https://fieseros.com/landscaping-software" },
+  alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
-    title: "Landscaping Software & CRM | Fieseros",
-    description:
-      "Optimize multi-stop crew routes, manage recurring maintenance contracts, quote design-build projects, and bill materials as line items. Landscaping software built for the way crews actually work.",
-    url: "https://fieseros.com/landscaping-software",
+    title: cfg.titleTag,
+    description: cfg.metaDescription,
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     siteName: "Fieseros",
     type: "website",
   },
@@ -85,7 +92,7 @@ const faqs = [
   {
     question: "How does Fieseros handle recurring weekly mowing routes?",
     answer:
-      "Fieseros treats weekly and biweekly mow contracts as recurring schedules. You define the customer, the service (mow, trim, blow), the frequency, and the price — and Fieseros auto-generates each visit on the right day, assigns it to the crew that owns that neighborhood, and queues the invoice after the crew marks the job done. Customers get an Email & SMS reminder the day before, and you get route-density reports that show which neighborhoods are profitable and which crews are running behind. Most landscape businesses meaningfully cut drive time within the first month of using Fieseros routing.",
+      "Fieseros treats weekly and biweekly mow contracts as recurring schedules. You define the customer, the service (mow, trim, blow), the frequency, and the price — and Fieseros auto-generates each visit on the right day, assigns it to the crew that owns that neighborhood, and queues the invoice after the crew marks the job done. Customers get an Email & SMS reminder the day before, and you get route-density reports that show which neighborhoods are profitable and which crews are running behind. Fieseros automates the recurring schedule and route planning so crews spend less time driving between stops.",
   },
   {
     question: "Can I quote and sell design-build landscaping projects through Fieseros?",
@@ -105,7 +112,7 @@ const faqs = [
   {
     question: "How does invoicing work for landscaping businesses?",
     answer:
-      "As soon as a crew marks a job complete, Fieseros generates a professional invoice with labor, materials, and photos attached, then sends it to the customer via Email & SMS with a secure payment link. For design-build projects, you can set up milestone invoicing — deposit on approval, progress billing at phase completions, final on walk-through. Customers pay by card or bank transfer from their phone, and you see payment status in real time with automated reminders for unpaid balances. Most landscape businesses using Fieseros get paid substantially faster than with paper invoices.",
+      "As soon as a crew marks a job complete, Fieseros generates a professional invoice with labor, materials, and photos attached, then sends it to the customer via Email & SMS with a secure payment link. For design-build projects, you can set up milestone invoicing — deposit on approval, progress billing at phase completions, final on walk-through. Customers pay by card or bank transfer from their phone, and you see payment status in real time with automated reminders for unpaid balances. Fieseros generates and sends invoices automatically when the job is marked complete, with follow-up reminders for unpaid balances.",
   },
   {
     question: "Can I manage both residential and commercial landscaping contracts?",
@@ -119,24 +126,24 @@ export default function LandscapingSoftwarePage() {
     name: "Fieseros — Landscaping Business Software",
     description:
       "Landscaping CRM and crew dispatch software with multi-stop route planning, recurring maintenance contracts, design-build proposals, and seasonal scheduling.",
-    url: "https://fieseros.com/landscaping-software",
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (
     <CornerstoneLayout
-      activePath="/landscaping-software"
+      activePath={`/${cfg.softwareSlug}`}
       breadcrumbs={[
         { name: "Home", url: "https://fieseros.com" },
-        { name: "Landscaping Software", url: "https://fieseros.com/landscaping-software" },
+        { name: `${cfg.name} Software`, url: `https://fieseros.com/${cfg.softwareSlug}` },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
-        eyebrow="Landscaping Software"
-        title="Landscaping Business Software That Keeps Your Crews — and Your Margins — Growing"
-        subtitle="From weekly mow routes to multi-week design-build projects, Fieseros helps landscaping businesses optimize crews, quote faster, track materials, and get paid via Email & SMS."
+        eyebrow={`${cfg.name} Software`}
+        title={cfg.h1}
+        subtitle={cfg.subtitle}
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -144,7 +151,7 @@ export default function LandscapingSoftwarePage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
             <TreePine className="h-4 w-4" />
-            Start Free Trial
+            {cfg.primaryCta}
           </Link>
           <Link
             href="/contact-us"
@@ -159,6 +166,13 @@ export default function LandscapingSoftwarePage() {
         title="Built for the way landscaping crews actually work"
         subtitle="From the Monday-morning mow route to the multi-week hardscape install — every landscaping workflow in one platform."
         features={features}
+      />
+
+      <FeatureMatrix industryName={cfg.name} />
+
+      <AiReceptionistIndustryBlock
+        industryName={cfg.name}
+        emergencyExample={cfg.emergencyExample}
       />
 
       {/* Pain points section */}
@@ -222,6 +236,10 @@ export default function LandscapingSoftwarePage() {
         </div>
       </section>
 
+      <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
+
+      <WorkflowDiagram industryName={cfg.name} />
+
       <ContentSection title="Why landscaping businesses choose Fieseros">
         <p>
           Landscaping is a seasonal, weather-dependent business with two
@@ -231,7 +249,11 @@ export default function LandscapingSoftwarePage() {
           that bring bigger one-time revenue). Most landscaping software only
           handles one of these well. Fieseros is built to run both — from the
           recurring weekly route to the multi-week design-build — in a single
-          workflow your crews and office team can actually use.
+          workflow your crews and office team can actually use, with{" "}
+          <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
+            scheduling and dispatch
+          </Link>{" "}
+          designed for multi-crew days.
         </p>
         <p>
           The recurring maintenance side is where landscapers build long-term
@@ -244,32 +266,43 @@ export default function LandscapingSoftwarePage() {
           long. Fieseros automates the entire recurring schedule — set the
           contract once, and the right jobs show up on the right crew&apos;s
           phone every week, with reminders, invoicing, and renewal tracking
-          handled for you.
+          handled for you, all tied to a single{" "}
+          <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
+            customer CRM
+          </Link>{" "}
+          record.
         </p>
         <p>
           Then there&apos;s the design-build side, where margin is made or
           lost on accurate quoting and clean execution. A landscape design
           proposal that lives in an email thread can sit unanswered for weeks.
-          A material list that lives in your head can blow a budget
-          significantly. Fieseros turns site visits into visual proposals with before
-          photos, line-item scopes, and your price — sent to the customer
-          via Email & SMS, approved with a tap, and converted straight into a
-          scheduled job with materials reserved and a deposit invoice
-          generated. You close more design-build work, and you execute it
-          with the materials and crew already lined up.
+          A material list that lives in your head can blow a budget. Fieseros
+          turns site visits into visual proposals with before photos,
+          line-item scopes, and your price — sent to the customer via Email &
+          SMS, approved with a tap, and converted straight into a scheduled
+          job with materials reserved and a deposit invoice generated. You
+          close more design-build work, and you execute it with the materials
+          and crew already lined up.
         </p>
         <p>
           Finally, there&apos;s the operational backbone — crews, trucks, and
           materials moving across dozens of job sites every day. Fieseros
           shows you live GPS on every crew, optimized routes that minimize
-          drive time, real-time material usage that auto-flows to invoices,
-          and before/after photos that protect you in disputes and build a
+          drive time, real-time material usage that auto-flows to{" "}
+          <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
+            invoicing
+          </Link>
+          , and before/after photos that protect you in disputes and build a
           portfolio for future sales. Whether you&apos;re running two crews
           or twenty, landscaping dispatch software from Fieseros gives you
           the visibility to grow without the chaos that usually comes with
           it.
         </p>
       </ContentSection>
+
+      <AudienceGrid industryName={cfg.name} audiences={cfg.audiences} />
+
+      <InlinePricingCards industryName={cfg.name} />
 
       <FaqSection
         faqs={faqs}

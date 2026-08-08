@@ -17,13 +17,21 @@ import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
+import { FeatureMatrix } from "@/components/seo/feature-matrix";
+import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
+import { AudienceGrid } from "@/components/seo/audience-grid";
+import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
+import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
+import { WhyFieserosCards } from "@/components/seo/why-fieseros-cards";
+import { getIndustryBySoftwareSlug } from "@/lib/seo/industry-config";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
+const cfg = getIndustryBySoftwareSlug("hvac-software")!;
+
 export const metadata: Metadata = {
-  title: "HVAC Software — Dispatch, Service & Invoice | Fieseros",
-  description:
-    "HVAC service software for seasonal demand, preventive maintenance contracts, equipment history, and Email & SMS customer communication. Start free today.",
+  title: cfg.titleTag,
+  description: cfg.metaDescription,
   keywords: [
     "hvac software",
     "hvac CRM",
@@ -31,12 +39,11 @@ export const metadata: Metadata = {
     "hvac service management",
     "air conditioning software",
   ],
-  alternates: { canonical: "https://fieseros.com/hvac-software" },
+  alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
-    title: "HVAC Software — Dispatch, Service & Invoice | Fieseros",
-    description:
-      "Handle summer and winter demand spikes, track equipment service history, schedule preventive maintenance, and dispatch technicians — all in one HVAC CRM with Email, SMS, and Push notifications.",
-    url: "https://fieseros.com/hvac-software",
+    title: cfg.titleTag,
+    description: cfg.metaDescription,
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     siteName: "Fieseros",
     type: "website",
   },
@@ -66,7 +73,7 @@ const features: Feature[] = [
     icon: MessageSquare,
     title: "Automated SMS Reminders",
     description:
-      "Filter changes, seasonal start-ups, and tune-up reminders sent automatically via Email & SMS — the channels customers actually read. Customers tap to confirm, you tap to schedule. Renewal rates climb substantially.",
+      "Filter changes, seasonal start-ups, and tune-up reminders sent automatically via Email & SMS — the channels customers actually read. Customers tap to confirm, you tap to schedule.",
   },
   {
     icon: Camera,
@@ -86,12 +93,12 @@ const faqs = [
   {
     question: "How does Fieseros handle the summer and winter HVAC rush?",
     answer:
-      "Seasonal demand is the defining challenge of an HVAC business. When the first heatwave or cold snap hits, call volume can spike dramatically overnight. Fieseros handles the surge in three ways: first, an emergency triage queue that prioritizes calls by urgency (no AC in 100°F with elderly residents gets priority). Second, dynamic dispatch that shows every available technician, their certifications, and live location so you can route the right tech to the right job fast. Third, automated Email, SMS, and Push notifications that keep customers informed — ETA, technician name, status updates — so they stop calling you for updates. Most HVAC businesses using Fieseros report handling meaningfully more rush-period calls without adding staff.",
+      "Seasonal demand is the defining challenge of an HVAC business. When the first heatwave or cold snap hits, call volume can spike dramatically overnight. Fieseros handles the surge in three ways: first, an emergency triage queue that prioritizes calls by urgency (no AC in 100°F with elderly residents gets priority). Second, dynamic dispatch that shows every available technician, their certifications, and live location so you can route the right tech to the right job fast. Third, automated Email, SMS, and Push notifications that keep customers informed — ETA, technician name, status updates — so they stop calling you for updates. Fieseros helps you automate customer communication so fewer opportunities are missed during peak periods.",
   },
   {
     question: "Can I track preventive maintenance contracts in Fieseros?",
     answer:
-      "Yes — preventive maintenance contracts are a core workflow in Fieseros. You define each contract once: customer, equipment, service frequency (spring tune-up, fall furnace check, bi-annual, quarterly), price, and renewal date. Fieseros then automatically schedules each visit, sends the customer an SMS reminder before the appointment, dispatches the technician, generates the invoice, and tracks the contract renewal date. When renewal time approaches, Fieseros alerts you to reach out and lock in another year. HVAC businesses that switch to Fieseros typically see meaningful growth in maintenance contract revenue in the first year.",
+      "Yes — preventive maintenance contracts are a core workflow in Fieseros. You define each contract once: customer, equipment, service frequency (spring tune-up, fall furnace check, bi-annual, quarterly), price, and renewal date. Fieseros then automatically schedules each visit, sends the customer an SMS reminder before the appointment, dispatches the technician, generates the invoice, and tracks the contract renewal date. When renewal time approaches, Fieseros alerts you to reach out and lock in another year. Fieseros automates the maintenance contract lifecycle: scheduling, reminders, dispatch, invoicing, and renewal tracking.",
   },
   {
     question: "How does equipment service history work in HVAC software?",
@@ -111,7 +118,7 @@ const faqs = [
   {
     question: "Can I automate filter change and tune-up reminders to customers?",
     answer:
-      "Absolutely. Filter changes are the highest-leverage reminder an HVAC business can send — they keep equipment running efficiently, prevent expensive breakdowns, and generate goodwill (and often a tune-up visit). Fieseros sends automated SMS reminders at the interval you define for each piece of equipment — monthly for 1-inch filters, quarterly for 4-inch, annually for media filters. Customers tap to confirm they changed it themselves, or tap to schedule a service visit. This simple automation typically drives a meaningful increase in tune-up visits and a meaningful drop in emergency breakdown calls.",
+      "Absolutely. Filter changes are the highest-leverage reminder an HVAC business can send — they keep equipment running efficiently, prevent expensive breakdowns, and generate goodwill (and often a tune-up visit). Fieseros sends automated SMS reminders at the interval you define for each piece of equipment — monthly for 1-inch filters, quarterly for 4-inch, annually for media filters. Customers tap to confirm they changed it themselves, or tap to schedule a service visit. Fieseros automates the reminder workflow so customers stay on top of filter changes and you stay top-of-mind for service work.",
   },
 ];
 
@@ -120,24 +127,24 @@ export default function HvacSoftwarePage() {
     name: "Fieseros — HVAC Service Software",
     description:
       "HVAC CRM and dispatch software with seasonal demand scheduling, equipment asset tracking, preventive maintenance contracts, and Email & SMS invoicing.",
-    url: "https://fieseros.com/hvac-software",
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (
     <CornerstoneLayout
-      activePath="/hvac-software"
+      activePath={`/${cfg.softwareSlug}`}
       breadcrumbs={[
         { name: "Home", url: "https://fieseros.com" },
-        { name: "HVAC Software", url: "https://fieseros.com/hvac-software" },
+        { name: `${cfg.name} Software`, url: `https://fieseros.com/${cfg.softwareSlug}` },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
-        eyebrow="HVAC Software"
-        title="HVAC Service Software for Cooling, Heating & Everything in Between"
-        subtitle="Manage seasonal demand spikes, track equipment service history, schedule preventive maintenance, and send invoices that get paid — all in one platform with Email, SMS, and Push notifications."
+        eyebrow={`${cfg.name} Software`}
+        title={cfg.h1}
+        subtitle={cfg.subtitle}
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -145,7 +152,7 @@ export default function HvacSoftwarePage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
             <Flame className="h-4 w-4" />
-            Start Free Trial
+            {cfg.primaryCta}
           </Link>
           <Link
             href="/contact-us"
@@ -160,6 +167,13 @@ export default function HvacSoftwarePage() {
         title="HVAC software built for the realities of the trade"
         subtitle="Seasonal chaos, maintenance contracts, equipment history — every HVAC workflow in one platform."
         features={features}
+      />
+
+      <FeatureMatrix industryName={cfg.name} />
+
+      <AiReceptionistIndustryBlock
+        industryName={cfg.name}
+        emergencyExample={cfg.emergencyExample}
       />
 
       {/* Pain points section */}
@@ -222,6 +236,10 @@ export default function HvacSoftwarePage() {
         </div>
       </section>
 
+      <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
+
+      <WorkflowDiagram industryName={cfg.name} />
+
       <ContentSection title="How Fieseros transforms HVAC operations">
         <p>
           HVAC is a business defined by seasons. For six months of the year,
@@ -230,7 +248,11 @@ export default function HvacSoftwarePage() {
           suddenly you have 50 emergency calls before lunch. HVAC service
           management software that can&apos;t handle both modes — the steady
           recurring revenue engine and the seasonal surge — isn&apos;t really
-          HVAC software. Fieseros is built for both.
+          HVAC software. Fieseros is built for both, with{" "}
+          <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
+            scheduling and dispatch
+          </Link>{" "}
+          designed for the realities of the trade.
         </p>
         <p>
           The recurring revenue side of HVAC is where strong businesses are
@@ -247,30 +269,44 @@ export default function HvacSoftwarePage() {
         </p>
         <p>
           Equipment tracking is the second pillar of a strong HVAC operation.
-          When a customer calls about \"the AC in the upstairs bedroom that
-          keeps tripping,\" you need to know exactly which unit that is — model,
+          When a customer calls about &quot;the AC in the upstairs bedroom that
+          keeps tripping,&quot; you need to know exactly which unit that is — model,
           serial, install date, what was repaired last summer,
           whether it&apos;s still under warranty. Fieseros keeps a complete
-          asset record for every piece of equipment at every customer site.
-          This isn&apos;t just operational efficiency — it&apos;s how you build
-          trust. When a technician walks up to a unit already knowing its
-          history, customers notice. And when it comes time to recommend a
-          replacement, you have the data to back it up.
+          asset record for every piece of equipment at every customer site,
+          tied to a single{" "}
+          <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
+            customer CRM
+          </Link>{" "}
+          so the full history is one click away. This isn&apos;t just
+          operational efficiency — it&apos;s how you build trust. When a
+          technician walks up to a unit already knowing its history, customers
+          notice. And when it comes time to recommend a replacement, you have
+          the data to back it up.
         </p>
         <p>
           Finally, there&apos;s compliance — the part of HVAC that keeps
           business owners up at night. EPA 608 certification, gas furnace
           qualifications, manufacturer-specific training — each technician
-          has different credentials, and dispatching the wrong one isn&apos;t
-          just inefficient, it&apos;s a legal liability. Fieseros stores each
-          technician&apos;s certification documents in their profile and shows
-          their skills on the dispatch board so you can match techs to jobs
-          manually. Equipment service history is logged per asset, with photos
-          and notes attached to every visit, so you have a complete record in
-          any dispute. This is what air conditioning software should do: not
-          just schedule jobs, but protect the business running them.
+          has different credentials. Track technician certifications and
+          qualifications so dispatchers can assign the appropriate technician
+          to each job. Fieseros stores each technician&apos;s certification
+          documents in their profile and shows their skills on the dispatch
+          board so you can match techs to jobs manually. Equipment service
+          history is logged per asset, with photos and notes attached to every
+          visit, so you have a complete record in any dispute. This is what air
+          conditioning software should do: not just schedule jobs, but protect
+          the business running them — and integrate with broader{" "}
+          <Link href="/field-service-software" className="text-emerald-700 underline-offset-2 hover:underline">
+            field service management
+          </Link>{" "}
+          tools as you grow.
         </p>
       </ContentSection>
+
+      <AudienceGrid industryName={cfg.name} audiences={cfg.audiences} />
+
+      <InlinePricingCards industryName={cfg.name} />
 
       <FaqSection
         faqs={faqs}

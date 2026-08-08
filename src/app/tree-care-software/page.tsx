@@ -16,13 +16,21 @@ import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
+import { FeatureMatrix } from "@/components/seo/feature-matrix";
+import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
+import { AudienceGrid } from "@/components/seo/audience-grid";
+import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
+import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
+import { WhyFieserosCards } from "@/components/seo/why-fieseros-cards";
+import { getIndustryBySoftwareSlug } from "@/lib/seo/industry-config";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
+const cfg = getIndustryBySoftwareSlug("tree-care-software")!;
+
 export const metadata: Metadata = {
-  title: "Tree Care Software — Dispatch, Cert Tracking & Insurance-Ready Docs | Fieseros",
-  description:
-    "Tree care and arborist software for dangerous-tree photo logs, crew dispatch, certification storage, photo documentation, and recurring inspection contracts. Start free today.",
+  title: cfg.titleTag,
+  description: cfg.metaDescription,
   keywords: [
     "tree care software",
     "arborist software",
@@ -30,12 +38,11 @@ export const metadata: Metadata = {
     "tree care CRM",
     "tree service dispatch software",
   ],
-  alternates: { canonical: "https://fieseros.com/tree-care-software" },
+  alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
-    title: "Tree Care Software & CRM | Fieseros",
-    description:
-      "Dispatch crews, store ISA certifications per technician, document dangerous-tree assessments with photos, and run recurring tree-health inspection contracts. Tree care software built for arborists.",
-    url: "https://fieseros.com/tree-care-software",
+    title: cfg.titleTag,
+    description: cfg.metaDescription,
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     siteName: "Fieseros",
     type: "website",
   },
@@ -79,7 +86,7 @@ const faqs = [
   {
     question: "How does Fieseros handle dangerous-tree assessments and documentation?",
     answer:
-      "When an arborist assesses a hazardous tree, they photograph it from every angle in Fieseros, tag the specific hazard (split trunk, excessive lean, decay, root plate lift), and attach a written assessment to the customer's property record. The assessment is timestamped and stored permanently. If the tree later fails and causes damage — or if the customer delays removal and then blames you for not flagging the risk — you have defensible documentation of exactly what you saw, when, and what you recommended. Most tree care businesses see their dispute exposure drop sharply within months of switching to documented assessments.",
+      "When an arborist assesses a hazardous tree, they photograph it from every angle in Fieseros, tag the specific hazard (split trunk, excessive lean, decay, root plate lift), and attach a written assessment to the customer's property record. The assessment is timestamped and stored permanently. If the tree later fails and causes damage — or if the customer delays removal and then blames you for not flagging the risk — you have defensible documentation of exactly what you saw, when, and what you recommended. Fieseros stores timestamped, photo-supported assessments on the customer record so you have defensible documentation in any later dispute.",
   },
   {
     question: "How does Fieseros track ISA certifications and arborist qualifications?",
@@ -108,24 +115,24 @@ export default function TreeCareSoftwarePage() {
     name: "Fieseros — Tree Care Business Software",
     description:
       "Tree care and arborist CRM software with dangerous-tree photo logs, crew dispatch, certification storage, photo documentation, and recurring inspection contracts.",
-    url: "https://fieseros.com/tree-care-software",
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (
     <CornerstoneLayout
-      activePath="/tree-care-software"
+      activePath={`/${cfg.softwareSlug}`}
       breadcrumbs={[
         { name: "Home", url: "https://fieseros.com" },
-        { name: "Tree Care Software", url: "https://fieseros.com/tree-care-software" },
+        { name: `${cfg.name} Software`, url: `https://fieseros.com/${cfg.softwareSlug}` },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
-        eyebrow="Tree Care Software"
-        title="Tree Care Software Built for the Risks, Equipment, and Certifications Arborists Actually Carry"
-        subtitle="From dangerous-tree assessments to bucket truck dispatch and recurring inspection contracts, Fieseros helps tree care businesses document, dispatch, and grow recurring revenue — without the liability exposure."
+        eyebrow={`${cfg.name} Software`}
+        title={cfg.h1}
+        subtitle={cfg.subtitle}
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -133,7 +140,7 @@ export default function TreeCareSoftwarePage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
             <Trees className="h-4 w-4" />
-            Start Free Trial
+            {cfg.primaryCta}
           </Link>
           <Link
             href="/contact-us"
@@ -148,6 +155,13 @@ export default function TreeCareSoftwarePage() {
         title="Built for the way arborists and tree crews actually work"
         subtitle="From the hazardous-tree assessment to the annual inspection contract — every tree care workflow in one platform."
         features={features}
+      />
+
+      <FeatureMatrix industryName={cfg.name} />
+
+      <AiReceptionistIndustryBlock
+        industryName={cfg.name}
+        emergencyExample={cfg.emergencyExample}
       />
 
       {/* Pain points section */}
@@ -211,6 +225,10 @@ export default function TreeCareSoftwarePage() {
         </div>
       </section>
 
+      <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
+
+      <WorkflowDiagram industryName={cfg.name} />
+
       <ContentSection title="Why tree care businesses choose Fieseros">
         <p>
           Tree care is one of the highest-risk, highest-skill trades in
@@ -223,7 +241,11 @@ export default function TreeCareSoftwarePage() {
           cleaning company. It needs tree service software built around the
           realities of arboriculture: dangerous-tree assessments, certified
           crews, specialized equipment, and insurance-ready documentation on
-          every job.
+          every job, with{" "}
+          <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
+            scheduling and dispatch
+          </Link>{" "}
+          built around crews and equipment.
         </p>
         <p>
           The defining risk in tree care is property damage and the disputes
@@ -233,9 +255,13 @@ export default function TreeCareSoftwarePage() {
           insurance claims and lawsuits fast. Without proper documentation,
           the contractor usually loses. Fieseros makes documentation part
           of the workflow: timestamped photos, crew assignments, and notes
-          attached to every work order. When a claim or dispute arises, you
-          have a defensible, timestamped record of what was done — instead
-          of a vague memory and a paper work order.
+          attached to every work order in the same{" "}
+          <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
+            customer CRM
+          </Link>{" "}
+          record. When a claim or dispute arises, you have a defensible,
+          timestamped record of what was done — instead of a vague memory
+          and a paper work order.
         </p>
         <p>
           Then there&apos;s certification management — the operational
@@ -258,11 +284,18 @@ export default function TreeCareSoftwarePage() {
           care CRM, these contracts lapse silently when nobody tracks the
           renewal date, and the customer drifts to a competitor. Fieseros
           automates the entire inspection contract lifecycle: scheduling,
-          arborist dispatch, report generation, invoicing, and renewal
-          tracking. You set the contract once, and the recurring revenue
-          keeps flowing year after year.
+          arborist dispatch, report generation,{" "}
+          <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
+            invoicing
+          </Link>{" "}
+          , and renewal tracking. You set the contract once, and the
+          recurring revenue keeps flowing year after year.
         </p>
       </ContentSection>
+
+      <AudienceGrid industryName={cfg.name} audiences={cfg.audiences} />
+
+      <InlinePricingCards industryName={cfg.name} />
 
       <FaqSection
         faqs={faqs}

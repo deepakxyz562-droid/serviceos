@@ -17,13 +17,21 @@ import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
+import { FeatureMatrix } from "@/components/seo/feature-matrix";
+import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
+import { AudienceGrid } from "@/components/seo/audience-grid";
+import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
+import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
+import { WhyFieserosCards } from "@/components/seo/why-fieseros-cards";
+import { getIndustryBySoftwareSlug } from "@/lib/seo/industry-config";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
+const cfg = getIndustryBySoftwareSlug("handyman-software")!;
+
 export const metadata: Metadata = {
-  title: "Handyman Software — Scheduling, Quoting & On-Site Payment | Fieseros",
-  description:
-    "Handyman business software for same-day scheduling, flat-rate and time-and-materials quoting, on-site card payment, and recurring maintenance subscriptions. The handyman CRM that helps you get paid before you leave. Start free today.",
+  title: cfg.titleTag,
+  description: cfg.metaDescription,
   keywords: [
     "handyman software",
     "handyman CRM",
@@ -31,12 +39,11 @@ export const metadata: Metadata = {
     "handyman invoicing",
     "handyman business software",
   ],
-  alternates: { canonical: "https://fieseros.com/handyman-software" },
+  alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
-    title: "Handyman Software & CRM | Fieseros",
-    description:
-      "Schedule same-day jobs, quote flat-rate and time-and-materials, lock in scope with photo checklists, collect payment on-site, and run recurring home checkup subscriptions. Handyman software built for solo and small teams.",
-    url: "https://fieseros.com/handyman-software",
+    title: cfg.titleTag,
+    description: cfg.metaDescription,
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     siteName: "Fieseros",
     type: "website",
   },
@@ -86,7 +93,7 @@ const faqs = [
   {
     question: "How does Fieseros help a solo handyman run their business?",
     answer:
-      "Fieseros is built for solo and small-team handyman businesses — the kind of operation where you're the owner, the estimator, the technician, and the biller all at once. Customers call or message with a job, you slot them into your calendar from your phone, Fieseros sends them an Email & SMS confirmation with ETA, and when the job is done you tap to send a payment link and get paid before you leave. No spreadsheets, no paper invoices, no chasing payment. Most solo handymen using Fieseros recover meaningful admin time every week and get paid on the spot on most jobs.",
+      "Fieseros is built for solo and small-team handyman businesses — the kind of operation where you're the owner, the estimator, the technician, and the biller all at once. Customers call or message with a job, you slot them into your calendar from your phone, Fieseros sends them an Email & SMS confirmation with ETA, and when the job is done you tap to send a payment link and get paid before you leave. No spreadsheets, no paper invoices, no chasing payment. Fieseros automates scheduling confirmations, payment links, and customer reminders so solo handymen spend less time on admin.",
   },
   {
     question: "Can I quote both flat-rate and time-and-materials jobs?",
@@ -96,7 +103,7 @@ const faqs = [
   {
     question: "How does on-site payment work for handymen?",
     answer:
-      "When you mark a job complete, Fieseros generates the invoice and sends it to the customer's phone via Email & SMS with a secure payment link — while you're still standing in their kitchen. The customer taps the link, pays by card or bank transfer, and you see payment confirmation in real time before you walk out the door. No more I'll mail you a check, no more 30-day chases, no more writing off small unpaid invoices. Most handymen using Fieseros collect payment on most jobs before they leave the site, which dramatically improves cash flow and eliminates the awkward follow-up call.",
+      "When you mark a job complete, Fieseros generates the invoice and sends it to the customer's phone via Email & SMS with a secure payment link — while you're still standing in their kitchen. The customer taps the link, pays by card or bank transfer, and you see payment confirmation in real time before you walk out the door. No more I'll mail you a check, no more 30-day chases, no more writing off small unpaid invoices. Fieseros sends the payment link on job completion so payment can be collected before you leave the site.",
   },
   {
     question: "Can I offer recurring maintenance subscriptions to my handyman customers?",
@@ -120,24 +127,24 @@ export default function HandymanSoftwarePage() {
     name: "Fieseros — Handyman Business Software",
     description:
       "Handyman CRM and scheduling software with same-day job booking, flat-rate and T&M quoting, photo scope checklists, on-site card payment, recurring maintenance scheduling, and full customer job history.",
-    url: "https://fieseros.com/handyman-software",
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (
     <CornerstoneLayout
-      activePath="/handyman-software"
+      activePath={`/${cfg.softwareSlug}`}
       breadcrumbs={[
         { name: "Home", url: "https://fieseros.com" },
-        { name: "Handyman Software", url: "https://fieseros.com/handyman-software" },
+        { name: `${cfg.name} Software`, url: `https://fieseros.com/${cfg.softwareSlug}` },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
-        eyebrow="Handyman Software"
-        title="Handyman Software That Gets You Paid Before You Walk Out the Door"
-        subtitle="From same-day scheduling to on-site card payment, Fieseros helps solo and small-team handymen quote, document scope, collect payment, and turn one-off fixes into long-term customers."
+        eyebrow={`${cfg.name} Software`}
+        title={cfg.h1}
+        subtitle={cfg.subtitle}
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -145,7 +152,7 @@ export default function HandymanSoftwarePage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
             <HardHat className="h-4 w-4" />
-            Start Free Trial
+            {cfg.primaryCta}
           </Link>
           <Link
             href="/contact-us"
@@ -160,6 +167,13 @@ export default function HandymanSoftwarePage() {
         title="Built for the way solo and small-team handymen actually work"
         subtitle="From the 9 a.m. emergency call to the quarterly home checkup subscription — every handyman workflow in one lightweight platform."
         features={features}
+      />
+
+      <FeatureMatrix industryName={cfg.name} />
+
+      <AiReceptionistIndustryBlock
+        industryName={cfg.name}
+        emergencyExample={cfg.emergencyExample}
       />
 
       {/* Pain points section */}
@@ -223,6 +237,10 @@ export default function HandymanSoftwarePage() {
         </div>
       </section>
 
+      <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
+
+      <WorkflowDiagram industryName={cfg.name} />
+
       <ContentSection title="Why handyman businesses choose Fieseros">
         <p>
           Handyman work is the most entrepreneurial corner of the home
@@ -233,8 +251,12 @@ export default function HandymanSoftwarePage() {
           handyman who&apos;s running between five houses a day on a paper
           calendar. Handyman software has to be lightweight, fast, and built
           for the realities of one-person and small-team operations —
-          same-day scheduling, mixed quoting styles, on-site payment, and a
-          customer history that actually helps you do the next job better.
+          same-day{" "}
+          <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
+            scheduling and dispatch
+          </Link>{" "}
+          , mixed quoting styles, on-site payment, and a customer history
+          that actually helps you do the next job better.
         </p>
         <p>
           The biggest silent killer of handyman margin is scope creep. A
@@ -256,9 +278,9 @@ export default function HandymanSoftwarePage() {
           the invoice goes to the customer&apos;s phone via Email & SMS
           with a secure payment link. They pay by card or bank transfer while
           you&apos;re still packing up your tools. No chasing, no 30-day
-          waits, no writing off small unpaid invoices. Most handymen using
-          Fieseros collect payment on most jobs before they leave
-          the site.
+          waits, no writing off small unpaid invoices. Fieseros sends the
+          payment link on job completion so payment can be collected before
+          you leave the site.
         </p>
         <p>
           Finally, there&apos;s the long-term value of a handyman customer.
@@ -268,11 +290,23 @@ export default function HandymanSoftwarePage() {
           proper handyman CRM, you forget what you did last time and start
           every repeat visit cold. Fieseros stores every job against the
           customer forever — what you fixed, what you charged, what parts
-          you used, photos, and notes. Repeat customers feel known, you
-          diagnose faster, and a one-time job becomes a multi-year
-          relationship worth thousands.
+          you used, photos, and notes — in a single{" "}
+          <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
+            customer CRM
+          </Link>{" "}
+          timeline that also drives{" "}
+          <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
+            invoicing
+          </Link>{" "}
+          for every visit. Repeat customers feel known, you diagnose faster,
+          and a one-time job becomes a multi-year relationship worth
+          thousands.
         </p>
       </ContentSection>
+
+      <AudienceGrid industryName={cfg.name} audiences={cfg.audiences} />
+
+      <InlinePricingCards industryName={cfg.name} />
 
       <FaqSection
         faqs={faqs}

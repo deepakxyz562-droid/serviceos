@@ -16,25 +16,32 @@ import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
+import { FeatureMatrix } from "@/components/seo/feature-matrix";
+import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
+import { AudienceGrid } from "@/components/seo/audience-grid";
+import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
+import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
+import { WhyFieserosCards } from "@/components/seo/why-fieseros-cards";
+import { getIndustryBySoftwareSlug } from "@/lib/seo/industry-config";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
+const cfg = getIndustryBySoftwareSlug("electrical-contractor-software")!;
+
 export const metadata: Metadata = {
-  title: "Electrical Contractor Software — Dispatch, Invoice & Track | Fieseros",
-  description:
-    "Electrical contractor software for licensed electricians. License and certification storage, Email & SMS quotes and invoicing, multi-electrician dispatch. Start free.",
+  title: cfg.titleTag,
+  description: cfg.metaDescription,
   keywords: [
     "electrical contractor software",
     "electrician CRM",
     "electrical dispatch software",
     "electrician job management",
   ],
-  alternates: { canonical: "https://fieseros.com/electrical-contractor-software" },
+  alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
-    title: "Electrical Contractor Software | Fieseros",
-    description:
-      "From residential service calls to commercial installations — dispatch electricians, store licenses and certifications, document jobs with photos, and invoice by Email & SMS.",
-    url: "https://fieseros.com/electrical-contractor-software",
+    title: cfg.titleTag,
+    description: cfg.metaDescription,
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     siteName: "Fieseros",
     type: "website",
   },
@@ -83,7 +90,7 @@ const faqs = [
   {
     question: "How does materials billing work for electrical jobs?",
     answer:
-      "Electrical jobs use a lot of materials — wire by the foot, breakers, conduit, fittings, junction boxes, fixtures, plates — and every one of those materials needs to be billed to the customer at the right marked-up price. Add materials as line items on the work order from your phone. Materials flow onto the customer's invoice at your marked-up price. Most electrical contractors recover meaningful lost materials revenue within the first month of using Fieseros.",
+      "Electrical jobs use a lot of materials — wire by the foot, breakers, conduit, fittings, junction boxes, fixtures, plates — and every one of those materials needs to be billed to the customer at the right marked-up price. Add materials as line items on the work order from your phone. Materials flow onto the customer's invoice at your marked-up price. Fieseros captures materials as line items on the work order so they roll onto the final invoice automatically.",
   },
   {
     question: "Can I use Fieseros to quote commercial electrical jobs?",
@@ -107,24 +114,24 @@ export default function ElectricalContractorSoftwarePage() {
     name: "Fieseros — Electrical Contractor Software",
     description:
       "Electrician CRM and dispatch software with license and certification storage, multi-electrician dispatch, Email & SMS quotes and invoicing.",
-    url: "https://fieseros.com/electrical-contractor-software",
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (
     <CornerstoneLayout
-      activePath="/electrical-contractor-software"
+      activePath={`/${cfg.softwareSlug}`}
       breadcrumbs={[
         { name: "Home", url: "https://fieseros.com" },
-        { name: "Electrical Contractor Software", url: "https://fieseros.com/electrical-contractor-software" },
+        { name: `${cfg.name} Contractor Software`, url: `https://fieseros.com/${cfg.softwareSlug}` },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
-        eyebrow="Electrical Contractor Software"
-        title="Electrical Contractor Software for Licensed Pros Who Move Fast"
-        subtitle="From residential service calls to commercial installations, Fieseros helps electricians dispatch, track jobs, manage compliance documentation, and invoice — all from one platform with Email, SMS, and Push notifications."
+        eyebrow={`${cfg.name} Contractor Software`}
+        title={cfg.h1}
+        subtitle={cfg.subtitle}
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -132,7 +139,7 @@ export default function ElectricalContractorSoftwarePage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
             <Zap className="h-4 w-4" />
-            Start Free Trial
+            {cfg.primaryCta}
           </Link>
           <Link
             href="/contact-us"
@@ -147,6 +154,13 @@ export default function ElectricalContractorSoftwarePage() {
         title="Built for the realities of running an electrical contracting business"
         subtitle="Compliance, materials, multi-crew dispatch, quoting — every electrical workflow in one platform built for licensed pros."
         features={features}
+      />
+
+      <FeatureMatrix industryName={cfg.name} />
+
+      <AiReceptionistIndustryBlock
+        industryName={cfg.name}
+        emergencyExample={cfg.emergencyExample}
       />
 
       {/* Pain points section */}
@@ -208,6 +222,10 @@ export default function ElectricalContractorSoftwarePage() {
         </div>
       </section>
 
+      <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
+
+      <WorkflowDiagram industryName={cfg.name} />
+
       <ContentSection title="Electrical contractor software that handles compliance">
         <p>
           Electrical contracting is a business where speed matters — customers
@@ -215,9 +233,12 @@ export default function ElectricalContractorSoftwarePage() {
           new circuit installed before the drywallers arrive. But it&apos;s
           also a business where compliance, permits, and documentation can sink
           you just as fast as a slow response can lose you a job. Electrician
-          CRM software that handles only scheduling — without tackling
-          licensing, materials, and quoting — isn&apos;t really
-          electrical contractor software. Fieseros is built for the full
+          CRM software that handles only{" "}
+          <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
+            scheduling and dispatch
+          </Link>{" "}
+          — without tackling licensing, materials, and quoting — isn&apos;t
+          really electrical contractor software. Fieseros is built for the full
           reality of the trade.
         </p>
         <p>
@@ -232,7 +253,8 @@ export default function ElectricalContractorSoftwarePage() {
           stores every electrician&apos;s license, sends you renewal alerts 90,
           60, and 30 days out, and shows each electrician&apos;s skills on the
           dispatch board so you can match the right electrician to the right
-          job manually. Compliance becomes manageable, not anxious.
+          job manually. Track technician certifications and qualifications so
+          dispatchers can assign the appropriate technician to each job.
         </p>
         <p>
           Job documentation is the second pillar. Most non-trivial electrical
@@ -242,7 +264,11 @@ export default function ElectricalContractorSoftwarePage() {
           was completed months ago technically never closed out. That&apos;s a
           liability that can surface years later when the property is sold or
           the work is questioned. Fieseros keeps every work order, attached
-          document, photo, and note searchable forever. When a customer or
+          document, photo, and note searchable forever in the same{" "}
+          <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
+            customer CRM
+          </Link>{" "}
+          record as the rest of the customer history. When a customer or
           inspector asks about a job from two years ago, you have the complete
           record at your fingertips in seconds.
         </p>
@@ -251,18 +277,27 @@ export default function ElectricalContractorSoftwarePage() {
           and project management — the operational layer that determines
           whether your electrical business is profitable. Materials billing
           ensures every reel of wire, every breaker, every fitting makes it
-          onto the invoice at the right marked-up price — typically recovering
-          meaningful lost revenue within the first month. Quoting tools turn
-          hours of bid preparation into minutes using saved templates, so you
-          can respond to commercial bid opportunities faster than competitors.
-          And multi-site project management gives you a single dashboard for
+          onto the invoice at the right marked-up price, captured at the work
+          order so nothing slips through. Quoting tools turn hours of bid
+          preparation into minutes using saved templates, so you can respond
+          to commercial bid opportunities faster than competitors. And
+          multi-site project management gives you a single dashboard for
           complex commercial work — a 20-location LED retrofit, a 5-building
           rewiring project — with consolidated progress, dispatch, materials,
           and billing. This is what electrical dispatch software should do:
           not just send electricians to jobs, but protect the license, the
-          margin, and the project that make the business work.
+          margin, and the project that make the business work — with the
+          option to scale into broader{" "}
+          <Link href="/field-service-software" className="text-emerald-700 underline-offset-2 hover:underline">
+            field service management
+          </Link>{" "}
+          as you grow.
         </p>
       </ContentSection>
+
+      <AudienceGrid industryName={cfg.name} audiences={cfg.audiences} />
+
+      <InlinePricingCards industryName={cfg.name} />
 
       <FaqSection
         faqs={faqs}

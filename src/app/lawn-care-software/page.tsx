@@ -16,13 +16,21 @@ import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
+import { FeatureMatrix } from "@/components/seo/feature-matrix";
+import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
+import { AudienceGrid } from "@/components/seo/audience-grid";
+import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
+import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
+import { WhyFieserosCards } from "@/components/seo/why-fieseros-cards";
+import { getIndustryBySoftwareSlug } from "@/lib/seo/industry-config";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
+const cfg = getIndustryBySoftwareSlug("lawn-care-software")!;
+
 export const metadata: Metadata = {
-  title: "Lawn Care Software — Route Planning & Recurring Scheduling | Fieseros",
-  description:
-    "Lawn care business software for recurring route optimization, customer portals, and weather-aware rescheduling. The lawn care CRM that helps fertilization companies grow. Start free today.",
+  title: cfg.titleTag,
+  description: cfg.metaDescription,
   keywords: [
     "lawn care software",
     "lawn care CRM",
@@ -30,12 +38,11 @@ export const metadata: Metadata = {
     "weed control software",
     "lawn care routing",
   ],
-  alternates: { canonical: "https://fieseros.com/lawn-care-software" },
+  alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
-    title: "Lawn Care Software & CRM | Fieseros",
-    description:
-      "Optimize recurring routes, give customers a self-serve portal, and auto-invoice after every visit. Lawn care software built for fertilization and weed-control businesses.",
-    url: "https://fieseros.com/lawn-care-software",
+    title: cfg.titleTag,
+    description: cfg.metaDescription,
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     siteName: "Fieseros",
     type: "website",
   },
@@ -73,12 +80,12 @@ const faqs = [
   {
     question: "How does Fieseros handle recurring lawn treatment schedules?",
     answer:
-      "Lawn care is a recurring business — weekly mows, biweekly visits, six-week fertilization cycles. You define each customer's program (services, frequency, price) once in Fieseros, and it auto-generates every visit on the right day, assigns it to the right technician and route, sends the customer an Email & SMS reminder the day before, and queues the invoice after the visit is marked complete. When a customer's annual program renews, Fieseros reschedules the next season's visits automatically and alerts you to any cancellations. Most lawn care businesses significantly cut office admin time after switching.",
+      "Lawn care is a recurring business — weekly mows, biweekly visits, six-week fertilization cycles. You define each customer's program (services, frequency, price) once in Fieseros, and it auto-generates every visit on the right day, assigns it to the right technician and route, sends the customer an Email & SMS reminder the day before, and queues the invoice after the visit is marked complete. When a customer's annual program renews, Fieseros reschedules the next season's visits automatically and alerts you to any cancellations. Fieseros automates the recurring schedule, reminders, and invoicing so office admin work is reduced.",
   },
   {
     question: "How does route optimization work for lawn care businesses?",
     answer:
-      "Fieseros clusters your recurring customers by neighborhood and service day, then optimizes the driving order within each cluster to minimize drive time. Each technician sees their ordered route on their phone in the morning, with turn-by-turn directions between stops. When you add a new customer, Fieseros tells you which existing route and day they fit into — or warns you if they're outside your current service area. Most lawn care businesses meaningfully cut drive time after switching to Fieseros routing, which directly improves both margin and the number of lawns a crew can service in a day.",
+      "Fieseros clusters your recurring customers by neighborhood and service day, then optimizes the driving order within each cluster to minimize drive time. Each technician sees their ordered route on their phone in the morning, with turn-by-turn directions between stops. When you add a new customer, Fieseros tells you which existing route and day they fit into — or warns you if they're outside your current service area. Fieseros helps you plan routes by neighborhood and day so crews spend less time driving between stops.",
   },
   {
     question: "How does weather rescheduling work?",
@@ -88,7 +95,7 @@ const faqs = [
   {
     question: "Can customers pay automatically for recurring lawn care?",
     answer:
-      "You can store customer payment methods securely, and recurring programs can be set up as recurring invoices that go out automatically after each visit — so a customer on a six-treatment fertilization program receives a branded invoice via Email & SMS as a receipt after each application, with a secure payment link. Fieseros follows up with automated reminders for unpaid balances, so customers who prefer to pay manually still get nudged without you having to chase them. Most lawn care businesses using Fieseros get paid substantially faster and recover meaningful missed-billing revenue that previously slipped through the cracks.",
+      "You can store customer payment methods securely, and recurring programs can be set up as recurring invoices that go out automatically after each visit — so a customer on a six-treatment fertilization program receives a branded invoice via Email & SMS as a receipt after each application, with a secure payment link. Fieseros follows up with automated reminders for unpaid balances, so customers who prefer to pay manually still get nudged without you having to chase them. Fieseros automates invoicing and payment reminders so balances don't slip through the cracks.",
   },
   {
     question: "Does Fieseros work for both mowing and fertilization businesses?",
@@ -102,24 +109,24 @@ export default function LawnCareSoftwarePage() {
     name: "Fieseros — Lawn Care Business Software",
     description:
       "Lawn care CRM and routing software with recurring route optimization, customer self-serve portal, weather rescheduling, and auto-invoicing.",
-    url: "https://fieseros.com/lawn-care-software",
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (
     <CornerstoneLayout
-      activePath="/lawn-care-software"
+      activePath={`/${cfg.softwareSlug}`}
       breadcrumbs={[
         { name: "Home", url: "https://fieseros.com" },
-        { name: "Lawn Care Software", url: "https://fieseros.com/lawn-care-software" },
+        { name: `${cfg.name} Software`, url: `https://fieseros.com/${cfg.softwareSlug}` },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
-        eyebrow="Lawn Care Software"
-        title="Lawn Care Software Built for Recurring Routes, Visit Documentation, and Faster Payments"
-        subtitle="From six-week fertilization cycles to weekly mow routes, Fieseros helps lawn care businesses optimize driving, document every visit, and auto-invoice after every visit."
+        eyebrow={`${cfg.name} Software`}
+        title={cfg.h1}
+        subtitle={cfg.subtitle}
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -127,7 +134,7 @@ export default function LawnCareSoftwarePage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
             <Droplets className="h-4 w-4" />
-            Start Free Trial
+            {cfg.primaryCta}
           </Link>
           <Link
             href="/contact-us"
@@ -142,6 +149,13 @@ export default function LawnCareSoftwarePage() {
         title="Built for the way lawn care businesses actually run"
         subtitle="From the six-week fertilization cycle to the daily mow route — every lawn care workflow in one platform."
         features={features}
+      />
+
+      <FeatureMatrix industryName={cfg.name} />
+
+      <AiReceptionistIndustryBlock
+        industryName={cfg.name}
+        emergencyExample={cfg.emergencyExample}
       />
 
       {/* Pain points section */}
@@ -204,6 +218,10 @@ export default function LawnCareSoftwarePage() {
         </div>
       </section>
 
+      <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
+
+      <WorkflowDiagram industryName={cfg.name} />
+
       <ContentSection title="Why lawn care businesses choose Fieseros">
         <p>
           Lawn care is one of the most operationally intense field service
@@ -215,7 +233,11 @@ export default function LawnCareSoftwarePage() {
           billed — and the whole cycle has to repeat every six weeks without
           missing a single customer. Lawn care software that can&apos;t
           handle that rhythm will sink you in operational chaos inside a
-          single season.
+          single season, with{" "}
+          <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
+            scheduling and dispatch
+          </Link>{" "}
+          that struggles to keep up.
         </p>
         <p>
           The defining challenge of lawn care is recurring route density. A
@@ -236,7 +258,11 @@ export default function LawnCareSoftwarePage() {
           box somewhere. When a customer calls asking what was done on their
           lawn last August, you&apos;re guessing. Fieseros captures job notes,
           photos, and visit history per customer property, so you have a
-          complete service record.
+          complete service record in a single{" "}
+          <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
+            customer CRM
+          </Link>{" "}
+          timeline.
         </p>
         <p>
           Finally, there&apos;s the customer experience and cash flow side.
@@ -244,13 +270,21 @@ export default function LawnCareSoftwarePage() {
           you did, and an easy way to pay — and they want it without picking
           up the phone. Fieseros gives every customer a self-serve portal
           for schedules, treatment history, and invoices. Visits trigger
-          automatic Email & SMS reminders and post-visit invoices with payment
-          links. Recurring programs can be set up as automatic recurring invoices with payment reminders.
-          The result: fewer office calls, faster payments, and customers who
-          renew season after season because the experience is frictionless
-          from the first treatment to the last.
+          automatic Email & SMS reminders and post-visit{" "}
+          <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
+            invoicing
+          </Link>{" "}
+          with payment links. Recurring programs can be set up as automatic
+          recurring invoices with payment reminders. The result: fewer office
+          calls, faster payments, and customers who renew season after
+          season because the experience is frictionless from the first
+          treatment to the last.
         </p>
       </ContentSection>
+
+      <AudienceGrid industryName={cfg.name} audiences={cfg.audiences} />
+
+      <InlinePricingCards industryName={cfg.name} />
 
       <FaqSection
         faqs={faqs}

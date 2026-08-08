@@ -15,13 +15,21 @@ import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
+import { FeatureMatrix } from "@/components/seo/feature-matrix";
+import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
+import { AudienceGrid } from "@/components/seo/audience-grid";
+import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
+import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
+import { WhyFieserosCards } from "@/components/seo/why-fieseros-cards";
+import { getIndustryBySoftwareSlug } from "@/lib/seo/industry-config";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
+const cfg = getIndustryBySoftwareSlug("window-cleaning-software")!;
+
 export const metadata: Metadata = {
-  title: "Window Cleaning Software — Routes, Photo Proof & Storefront Billing | Fieseros",
-  description:
-    "Window cleaning software for recurring smart auto-dispatch, height-access safety checklists, before-and-after photo proof, and storefront contract billing. Start free today.",
+  title: cfg.titleTag,
+  description: cfg.metaDescription,
   keywords: [
     "window cleaning software",
     "window cleaning CRM",
@@ -29,12 +37,11 @@ export const metadata: Metadata = {
     "window cleaner scheduling",
     "storefront cleaning software",
   ],
-  alternates: { canonical: "https://fieseros.com/window-cleaning-software" },
+  alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
-    title: "Window Cleaning Software | Fieseros",
-    description:
-      "Optimize recurring routes, log height-access safety checks, capture before-and-after photo proof, and bill storefront contracts automatically. Built for window cleaning companies.",
-    url: "https://fieseros.com/window-cleaning-software",
+    title: cfg.titleTag,
+    description: cfg.metaDescription,
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     siteName: "Fieseros",
     type: "website",
   },
@@ -78,7 +85,7 @@ const faqs = [
   {
     question: "How does Fieseros optimize recurring window cleaning routes?",
     answer:
-      "Recurring residential window cleaning lives or dies on route density. A tech who drives 20 minutes between stops will struggle to do more than 10 jobs a day, while a tech with tightly clustered stops can do 16 or more. Fieseros looks at every recurring customer on your books, groups them by neighborhood and visit frequency, and produces an optimized weekly schedule that keeps each tech inside a tight geographic area. When a new customer books, Fieseros tells you which tech's route they fit into and which day of the week they should be scheduled for. Most window cleaning companies meaningfully cut their average drive time per stop within the first month.",
+      "Recurring residential window cleaning lives or dies on route density. A tech who drives 20 minutes between stops will struggle to do more than 10 jobs a day, while a tech with tightly clustered stops can do 16 or more. Fieseros looks at every recurring customer on your books, groups them by neighborhood and visit frequency, and produces an optimized weekly schedule that keeps each tech inside a tight geographic area. When a new customer books, Fieseros tells you which tech's route they fit into and which day of the week they should be scheduled for. Fieseros helps you cluster customers by neighborhood so techs spend less time driving between stops.",
   },
   {
     question: "How do before-and-after photos protect my window cleaning business?",
@@ -107,24 +114,24 @@ export default function WindowCleaningSoftwarePage() {
     name: "Fieseros — Window Cleaning Business Software",
     description:
       "Window cleaning CRM and route software with recurring smart auto-dispatch, height-access safety checklists, before-and-after photo proof, storefront contract billing, and surcharge quoting.",
-    url: "https://fieseros.com/window-cleaning-software",
+    url: `https://fieseros.com/${cfg.softwareSlug}`,
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
   });
 
   return (
     <CornerstoneLayout
-      activePath="/window-cleaning-software"
+      activePath={`/${cfg.softwareSlug}`}
       breadcrumbs={[
         { name: "Home", url: "https://fieseros.com" },
-        { name: "Window Cleaning Software", url: "https://fieseros.com/window-cleaning-software" },
+        { name: `${cfg.name} Software`, url: `https://fieseros.com/${cfg.softwareSlug}` },
       ]}
       additionalSchema={[appSchema]}
     >
       <CornerstoneHero
-        eyebrow="Window Cleaning Software"
-        title="Window Cleaning Software That Tightens Routes, Protects Against Disputes, and Bills Storefronts on Autopilot"
-        subtitle="From recurring residential smart auto-dispatch to height-access safety checklists, photo proof, and storefront contract billing, Fieseros is the window cleaning CRM built for crews on the move."
+        eyebrow={`${cfg.name} Software`}
+        title={cfg.h1}
+        subtitle={cfg.subtitle}
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -132,7 +139,7 @@ export default function WindowCleaningSoftwarePage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
             <Sparkles className="h-4 w-4" />
-            Start Free Trial
+            {cfg.primaryCta}
           </Link>
           <Link
             href="/contact-us"
@@ -147,6 +154,13 @@ export default function WindowCleaningSoftwarePage() {
         title="Built for the way window cleaning crews actually work"
         subtitle="From a 6 a.m. residential route to a 10 p.m. storefront strip-mall sweep — every window cleaning workflow in one platform."
         features={features}
+      />
+
+      <FeatureMatrix industryName={cfg.name} />
+
+      <AiReceptionistIndustryBlock
+        industryName={cfg.name}
+        emergencyExample={cfg.emergencyExample}
       />
 
       <section className="border-t bg-muted/20">
@@ -206,20 +220,40 @@ export default function WindowCleaningSoftwarePage() {
         </div>
       </section>
 
+      <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
+
+      <WorkflowDiagram industryName={cfg.name} />
+
       <ContentSection title="Why window cleaning companies choose Fieseros">
         <p>
-          Window cleaning is a route business where time is everything. A tech who finishes their route at 3 p.m. can take on more customers; a tech who finishes at 7 p.m. is burning out and looking for another job. The difference is almost never how fast they squeegee a pane — it is how efficiently they drive between stops, how much time they lose on jobs that needed different equipment, and how much of their day gets eaten by disputes, follow-ups, and end-of-month invoice chasing. Window cleaning software from Fieseros is built to attack each of those time sinks directly, so your crews do more jobs per day without working longer hours.
+          Window cleaning is a route business where time is everything. A tech who finishes their route at 3 p.m. can take on more customers; a tech who finishes at 7 p.m. is burning out and looking for another job. The difference is almost never how fast they squeegee a pane — it is how efficiently they drive between stops, how much time they lose on jobs that needed different equipment, and how much of their day gets eaten by disputes, follow-ups, and end-of-month invoice chasing. Window cleaning software from Fieseros is built to attack each of those time sinks directly, with{" "}
+          <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
+            scheduling and dispatch
+          </Link>{" "}
+          built around tight routes.
         </p>
         <p>
-          The route-density problem is where most residential window cleaning companies leave the most money on the table. A typical customer wants their windows cleaned twice a year — once in spring, once in fall. That means a 200-customer book generates 400 jobs a year, and the order in which those jobs get done is the single biggest driver of how many trucks you need and how many hours your techs drive. Fieseros clusters recurring customers by neighborhood and visit frequency, produces an optimized weekly schedule, and tells you which new bookings fit which tech's route. Most window cleaning companies meaningfully cut drive time per stop in the first month, which means each tech can take on meaningfully more customers without working longer hours.
+          The route-density problem is where most residential window cleaning companies leave the most money on the table. A typical customer wants their windows cleaned twice a year — once in spring, once in fall. That means a 200-customer book generates 400 jobs a year, and the order in which those jobs get done is the single biggest driver of how many trucks you need and how many hours your techs drive. Fieseros clusters recurring customers by neighborhood and visit frequency, produces an optimized weekly schedule, and tells you which new bookings fit which tech&apos;s route. Fieseros helps you plan routes so techs spend less time driving between stops.
         </p>
         <p>
-          The dispute problem is the second silent margin killer. A storefront manager calls and says the second-floor panes weren't done, or a homeowner claims the skylight still has streaks. Without photo proof, you end up sending a tech back out — unpaid — and the customer walks away thinking your work was sloppy. Fieseros makes before-and-after photos on every pane a non-negotiable part of the workflow. Every photo is timestamped and attached to the work order, and when the dispute call comes in, you have the proof in front of you in 10 seconds. The disputes that used to cost you a free return trip now get resolved in your favor in a single phone call.
+          The dispute problem is the second silent margin killer. A storefront manager calls and says the second-floor panes weren&apos;t done, or a homeowner claims the skylight still has streaks. Without photo proof, you end up sending a tech back out — unpaid — and the customer walks away thinking your work was sloppy. Fieseros makes before-and-after photos on every pane a non-negotiable part of the workflow, stored on the same{" "}
+          <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
+            customer CRM
+          </Link>{" "}
+          record as the rest of the job history. Every photo is timestamped and attached to the work order, and when the dispute call comes in, you have the proof in front of you in 10 seconds. The disputes that used to cost you a free return trip now get resolved in your favor in a single phone call.
         </p>
         <p>
-          Finally, there is the recurring storefront revenue that smooths out the seasonality of residential work. Storefront contracts — weekly or bi-weekly cleanings of retail fronts, restaurants, and office buildings — are billed on a fixed cycle and managed through the property manager, not the building owner. Fieseros automatically generates a branded invoice with a payment link after every completed visit and sends it via Email & SMS, then follows up with payment reminders for any unpaid balance. No end-of-month invoice run, no chasing property managers who pay net-60, no service pauses because someone forgot to follow up on an overdue invoice. The storefront book becomes the predictable base that lets you take on more lucrative residential work in the busy season without worrying about cash flow in the slow months.
+          Finally, there is the recurring storefront revenue that smooths out the seasonality of residential work. Storefront contracts — weekly or bi-weekly cleanings of retail fronts, restaurants, and office buildings — are billed on a fixed cycle and managed through the property manager, not the building owner. Fieseros automatically generates a branded invoice with a payment link after every completed visit and sends it via Email & SMS, then follows up with{" "}
+          <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
+            invoicing
+          </Link>{" "}
+          reminders for any unpaid balance. No end-of-month invoice run, no chasing property managers who pay net-60, no service pauses because someone forgot to follow up on an overdue invoice. The storefront book becomes the predictable base that lets you take on more lucrative residential work in the busy season without worrying about cash flow in the slow months.
         </p>
       </ContentSection>
+
+      <AudienceGrid industryName={cfg.name} audiences={cfg.audiences} />
+
+      <InlinePricingCards industryName={cfg.name} />
 
       <FaqSection
         faqs={faqs}

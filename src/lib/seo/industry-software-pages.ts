@@ -1,93 +1,70 @@
 /**
- * industry-software-pages.ts — Maps marketplace industry IDs to their
- * dedicated CRM software landing pages (e.g. plumbing → /plumbing-software).
+ * industry-software-pages.ts — Map industry IDs to SEO software page URLs.
+ * -----------------------------------------------------------------------
+ * Provides helpers used by the marketplace business detail page
+ * (src/app/[companySlug]/[city]/[slug]/page.tsx) to link from a provider's
+ * listing to the relevant industry CRM software landing page.
  *
- * Used by:
- *   - Business detail page CRM CTA (contextual "Run your business with Fieseros")
- *   - City browse page "For business owners" section
- *   - Industry hub page top CTA
+ * This module was missing (referenced but never created), causing the
+ * marketplace detail page to throw a module-not-found error. Created now
+ * as a thin wrapper over INDUSTRY_CONFIGS with safe fallbacks.
  *
- * Falls back to /field-service-software (the generic pillar page) for
- * industries without a dedicated landing page.
+ * Fallback policy:
+ *   - If the industry has a config entry (18 supported industries), return
+ *     the verified software page URL (e.g. /hvac-software).
+ *   - If the industry is NOT in the config (e.g. "appliance-repair",
+ *     "locksmith", "junk-removal", "others"), fall back to
+ *     /best-field-service-software — a page that always exists and covers
+ *     all field service industries generically.
+ *   - For null/undefined industry, fall back to /field-service-software.
  */
 
+import { INDUSTRY_CONFIGS } from './industry-config';
 import { getIndustry } from '@/lib/industry-catalog';
 
 /**
- * Canonical map of industry ID → CRM software page URL.
- * Mirrors the 18 routes that exist under src/app/*-software/page.tsx.
- * Industries not listed here fall back to /field-service-software.
+ * Returns the SEO software page URL for an industry.
+ * e.g. "hvac" → "/hvac-software", "pool-spa" → "/pool-service-software"
+ * Unknown industries fall back to "/best-field-service-software".
  */
-const INDUSTRY_TO_SOFTWARE_PAGE: Record<string, string> = {
-  plumbing: '/plumbing-software',
-  hvac: '/hvac-software',
-  cleaning: '/cleaning-business-software',
-  electrical: '/electrical-contractor-software',
-  landscaping: '/landscaping-software',
-  roofing: '/roofing-software',
-  painting: '/painting-software',
-  'pest-control': '/pest-control-software',
-  'pool-spa': '/pool-service-software',
-  handyman: '/handyman-software',
-  'window-cleaning': '/window-cleaning-software',
-  solar: '/solar-software',
-  // Adjacent markets with dedicated pages but no catalog entry:
-  construction: '/concrete-software',
-  flooring: '/concrete-software',
-  automotive: '/garage-door-software',
-  'home-services': '/snow-removal-software',
-  'junk-removal': '/snow-removal-software',
-  'health-wellness': '/pet-services-software',
-  'professional-services': '/tree-care-software',
-  'lawn-care': '/lawn-care-software',
-};
-
-/** Generic fallback for industries without a dedicated page. */
-const FALLBACK_SOFTWARE_PAGE = '/field-service-software';
-
-/**
- * Get the CRM software landing page URL for an industry.
- * Returns /field-service-software if no dedicated page exists.
- *
- * @param industry - The Tenant.industry value (e.g. 'plumbing', 'hvac')
- */
-export function getIndustrySoftwareUrl(industry?: string | null): string {
-  if (!industry) return FALLBACK_SOFTWARE_PAGE;
-  const id = industry.toLowerCase().trim();
-  return INDUSTRY_TO_SOFTWARE_PAGE[id] ?? FALLBACK_SOFTWARE_PAGE;
+export function getIndustrySoftwareUrl(industry: string | null | undefined): string {
+  if (!industry) return '/field-service-software';
+  const cfg = INDUSTRY_CONFIGS[industry];
+  if (cfg) return `/${cfg.softwareSlug}`;
+  // Unknown industry — fall back to the generic comparison page
+  return '/best-field-service-software';
 }
 
 /**
- * Get a human-readable label for the CRM software page CTA.
- * e.g. 'plumbing' → 'Plumbing Software', 'hvac' → 'HVAC Software'
+ * Returns the display label for the software page.
+ * e.g. "hvac" → "HVAC Software", "pool-spa" → "Pool Service Software"
  */
-export function getIndustrySoftwareLabel(industry?: string | null): string {
+export function getIndustrySoftwareLabel(industry: string | null | undefined): string {
   if (!industry) return 'Field Service Software';
-  const meta = getIndustry(industry);
-  if (meta) {
-    // Use the catalog's display name + " Software"
-    // Special-case HVAC so it renders as 'HVAC Software' not 'Hvac Software'
-    const name = meta.name;
-    return `${name} Software`;
-  }
-  // Fallback: title-case the industry ID
-  const titleCased = industry
-    .split('-')
-    .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : w))
-    .join(' ');
-  return `${titleCased} Software`;
+  const cfg = INDUSTRY_CONFIGS[industry];
+  if (cfg) return `${cfg.name} Software`;
+  // Try the industry catalog for a display name
+  const cat = getIndustry(industry);
+  const name = cat?.name || titleCase(industry);
+  return `${name} Software`;
 }
 
 /**
- * Get the display name (singular) for an industry.
- * e.g. 'plumbing' → 'Plumbing', 'hvac' → 'HVAC', 'pest-control' → 'Pest Control'
+ * Returns the display name for an industry.
+ * e.g. "hvac" → "HVAC", "pool-spa" → "Pool Service"
  */
-export function getIndustryDisplayName(industry?: string | null): string {
-  if (!industry) return 'Service';
-  const meta = getIndustry(industry);
-  if (meta) return meta.name;
-  return industry
-    .split('-')
-    .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : w))
-    .join(' ');
+export function getIndustryDisplayName(industry: string | null | undefined): string {
+  if (!industry) return 'Service Business';
+  const cfg = INDUSTRY_CONFIGS[industry];
+  if (cfg) return cfg.name;
+  const cat = getIndustry(industry);
+  return cat?.name || titleCase(industry);
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function titleCase(slug: string): string {
+  return slug
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
