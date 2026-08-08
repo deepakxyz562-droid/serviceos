@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { permanentRedirect } from 'next/navigation'
+import { permanentRedirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import {
   Star,
@@ -21,11 +21,6 @@ import {
   Globe,
   Mail,
   Navigation,
-  Search,
-  SearchX,
-  Rocket,
-  ArrowLeft,
-  Home,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -40,7 +35,6 @@ import {
   getLocalBusinessSchema,
   getFaqSchema,
   getServiceSchema,
-  getBreadcrumbSchema,
   type FaqItem,
   type LocalBusinessReview,
   type LocalBusinessHours,
@@ -203,19 +197,12 @@ export default async function PublicBusinessHubPage({
   }
 
   if (!business) {
-    // Friendly in-page "No business found" state.
-    // Returning a real UI (instead of calling notFound()) keeps the visitor
-    // inside the marketplace shell (same header/footer/breadcrumbs) and gives
-    // them clear next steps: search, browse the industry in that city, or
-    // claim a free listing. The page is marked noindex via generateMetadata.
-    return (
-      <NoBusinessFound
-        industry={industry}
-        city={city}
-        slug={slug}
-        resolvedIndustryId={resolvedIndustryId}
-      />
-    )
+    // HTTP 404 (not a soft 200/noindex) so Google de-indexes cleaned-out
+    // listings quickly. The friendly "business not found" UI is rendered by
+    // not-found.tsx, which preserves the marketplace shell (header / footer /
+    // breadcrumbs) and gives the visitor clear next steps. generateMetadata
+    // above already returns robots:noindex for this branch as belt-and-suspenders.
+    notFound()
   }
 
   const cleanPhone = business.phone ? business.phone.replace(/\s*\(\/\)\s*/g, '').trim() : null;
@@ -1346,153 +1333,7 @@ export async function generateStaticParams() {
   return []
 }
 
-// ── No-business-found empty state ───────────────────────────────────────────
-// Rendered when a visitor hits a /[industry]/[city]/[slug] URL that doesn't
-// match any business in the DB. Previously this called notFound() which shows
-// the generic Next.js 404 page — jarring and gives the visitor no context.
-// This component keeps the visitor inside the marketplace shell (same header +
-// footer + breadcrumbs) and gives them clear next steps:
-//   1. Search the marketplace
-//   2. Browse the same industry in the same city (if any providers exist)
-//   3. Claim a free listing (the CRM acquisition funnel)
-// The page is marked robots:noindex via generateMetadata so dead URLs don't
-// pollute the search index, but links remain followable.
-function NoBusinessFound({
-  industry,
-  city,
-  slug,
-  resolvedIndustryId,
-}: {
-  industry: string
-  city: string
-  slug: string
-  resolvedIndustryId: string | null
-}) {
-  const industryLabel = resolvedIndustryId
-    ? (getIndustryDisplayName(resolvedIndustryId) || prettifySlug(industry))
-    : prettifySlug(industry)
-  const cityLabel = prettifySlug(city)
-
-  // Plural industry slug for the browse-city link (e.g. /hvac-contractors/new-york).
-  const pluralSlug = resolvedIndustryId
-    ? mapIndustryToPluralSlug(resolvedIndustryId)
-    : null
-  const browseCityHref = pluralSlug ? `/${pluralSlug}/${city}` : `/marketplace?city=${encodeURIComponent(city)}`
-  const browseIndustryHref = pluralSlug ? `/${pluralSlug}` : '/marketplace'
-
-  const breadcrumbItems = [
-    { name: 'Home', url: '/' },
-    { name: 'Marketplace', url: '/marketplace' },
-    { name: `${industryLabel} in ${cityLabel}`, url: browseCityHref },
-    { name: 'Listing unavailable', url: `/${industry}/${city}/${slug}` },
-  ]
-
-  const breadcrumbSchema = getBreadcrumbSchema([
-    { name: 'Home', url: '/' },
-    { name: 'Marketplace', url: '/marketplace' },
-    { name: `${industryLabel} in ${cityLabel}`, url: browseCityHref },
-    { name: 'Listing unavailable', url: `/${industry}/${city}/${slug}` },
-  ])
-
-  return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
-      <StructuredData data={[breadcrumbSchema]} />
-      <MarketplaceHeader />
-
-      <main className="flex-1">
-        <div className="border-b bg-muted/20">
-          <div className="w-full px-4 sm:px-6 lg:px-8 py-3">
-            <Breadcrumbs items={breadcrumbItems} />
-          </div>
-        </div>
-
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-16 sm:py-24 text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/40">
-            <SearchX className="h-8 w-8 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-          </div>
-
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-            This business listing couldn&apos;t be found
-          </h1>
-
-          <p className="mt-3 text-base text-muted-foreground leading-relaxed">
-            We couldn&apos;t find a <span className="font-medium text-foreground">{industryLabel}</span> business
-            matching <span className="font-mono text-sm bg-muted px-1.5 py-0.5 rounded">{slug}</span> in
-            {' '}
-            <span className="font-medium text-foreground">{cityLabel}</span>. The listing may have been
-            removed, renamed, or the URL might be slightly off.
-          </p>
-
-          {/* Next-step cards */}
-          <nav
-            aria-label="What to do next"
-            className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 text-left"
-          >
-            <Link
-              href="/marketplace"
-              className="group flex flex-col gap-1 rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md"
-            >
-              <Search className="h-5 w-5 text-emerald-600" aria-hidden="true" />
-              <span className="font-semibold text-foreground group-hover:text-emerald-700">
-                Search the marketplace
-              </span>
-              <span className="text-sm text-muted-foreground">
-                Find verified {industryLabel.toLowerCase()} professionals near you.
-              </span>
-            </Link>
-
-            <Link
-              href={browseCityHref}
-              className="group flex flex-col gap-1 rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md"
-            >
-              <MapPin className="h-5 w-5 text-emerald-600" aria-hidden="true" />
-              <span className="font-semibold text-foreground group-hover:text-emerald-700">
-                Browse {industryLabel} in {cityLabel}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                See other providers in this area.
-              </span>
-            </Link>
-
-            <Link
-              href="/#signup"
-              className="group flex flex-col gap-1 rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md"
-            >
-              <Rocket className="h-5 w-5 text-emerald-600" aria-hidden="true" />
-              <span className="font-semibold text-foreground group-hover:text-emerald-700">
-                Claim your free listing
-              </span>
-              <span className="text-sm text-muted-foreground">
-                Run a {industryLabel.toLowerCase()} business? List it for free.
-              </span>
-            </Link>
-          </nav>
-
-          <div className="mt-10 flex flex-col sm:flex-row gap-2 justify-center">
-            <Link
-              href={browseIndustryHref}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to {industryLabel} listings
-            </Link>
-            <Link
-              href="/"
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-5 py-2.5 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
-            >
-              <Home className="h-4 w-4" />
-              Homepage
-            </Link>
-          </div>
-        </div>
-      </main>
-
-      <CornerstoneFooter />
-    </div>
-  )
-}
-
-// ── Small string helpers used by the no-business-found state ────────────────
+// ── Small string helpers used by generateMetadata ───────────────────────────
 function prettifySlug(slug: string): string {
   if (!slug) return ''
   return slug
