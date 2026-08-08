@@ -238,7 +238,11 @@ function generateTagline(name: string, industry: string, city: string | null): s
  * Falls back gracefully when city/state are missing:
  *   {Name} | {Industry} Company | Fieseros
  *
- * Truncated to 70 chars (Google's typical SERP truncation point).
+ * NO truncation — the full title is stored so the "| Fieseros" brand
+ * suffix is never cut off. Google's SERP visually truncates at ~60 chars
+ * for display, but the full <title> tag is indexed by Google, so there
+ * is no SEO downside to a longer title. The DB column is String? (TEXT,
+ * unlimited) so there's no storage constraint.
  *
  * NOTE: No Google ratings — Google Maps Platform ToS §3.2.4 restricts
  * indefinite storage of Places API content (only the Place ID can be
@@ -258,16 +262,20 @@ function generateSeoTitle(
   } else if (city) {
     locationSegment = ` in ${city}`;
   }
-  const base = `${name} | ${industryLabel} Company${locationSegment} | Fieseros`;
-  return safeSlice(base, 70);
+  return `${name} | ${industryLabel} Company${locationSegment} | Fieseros`;
 }
 
 /**
- * Generate SEO meta description (≤155 chars).
+ * Generate SEO meta description.
  *
  * Template:
  *   "{Name} is a {Industry} company in {City}, {ST}. Book trusted local
  *    professionals for quality workmanship and transparent pricing."
+ *
+ * NO truncation — the full description is stored so the closing sentence
+ * is never cut mid-word. The DB column is String? (TEXT, unlimited).
+ * Google's SERP visually truncates meta descriptions at ~155 chars for
+ * display, but the full content is indexed.
  *
  * NOTE: No Google ratings/review counts — Google Maps Platform ToS §3.2.4
  * restricts indefinite storage of Places API content.
@@ -286,8 +294,7 @@ function generateSeoDescription(
   } else if (city) {
     locationLabel = city;
   }
-  const base = `${name} is a ${industryLabel} company in ${locationLabel}. Book trusted local professionals for quality workmanship and transparent pricing.`;
-  return safeSlice(base, 155);
+  return `${name} is a ${industryLabel} company in ${locationLabel}. Book trusted local professionals for quality workmanship and transparent pricing.`;
 }
 
 /**
