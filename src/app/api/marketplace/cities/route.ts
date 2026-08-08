@@ -7,8 +7,31 @@ import { ttlCacheWrap, buildCacheKey } from '@/lib/ttl-cache';
 /**
  * GET /api/marketplace/cities
  *
- * Returns distinct cities that have at least one active, marketplace-enabled provider
- * in the database for the given country.
+ * Returns distinct cities that have at least one active, marketplace-enabled
+ * provider in the database for the given country.
+ *
+ * Each city includes a representative lat/lng (from the first tenant in that
+ * city with non-null coords) so the UI can center the map / compute radius
+ * filters.
+ *
+ * Implementation note (Supabase / PostgREST):
+ * --------------------------------------------
+ * The original implementation used `db.tenant.groupBy({ by: ['city','state'] })`.
+ * On Supabase projects where PostgREST aggregates are DISABLED
+ * (`db-aggregates-enabled=false`, error PGRST123), the adapter's groupBy
+ * falls back to a paged-distinct + per-value-count strategy that issues
+ * ~1400 count queries — far too slow for a 60s-cached endpoint.
+ *
+ * We now bypass groupBy entirely and fetch distinct cities directly via
+ * paged `findMany` (selecting only `city,state,latitude,longitude`), then
+ * deduplicate in JS. This is:
+ *   - 1 count() query  (head + Prefer: count=exact — no aggregates needed)
+ *   - N parallel findMany pages (N = ceil(total/1000), ~21 for 21k tenants)
+ *   - 0 per-city count queries
+ *
+ * The payload per page is tiny (4 small columns × 1000 rows ≈ 60KB), so
+ * 21 parallel requests complete in ~1-2s. The 60s TTL cache amortizes this
+ * across all marketplace visitors.
  */
 export async function GET(request: NextRequest) {
   const log = withRequestId(request);
@@ -29,76 +52,63 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await ttlCacheWrap(cacheKey, 60_000, async () => {
-      // PERFORMANCE: Use groupBy to fetch distinct (city, state) pairs
-      // directly from the DB instead of fetching all 5000+ tenant rows
-      // and deduplicating in JS. This reduces the payload from ~5000 rows
-      // to ~50-150 distinct city rows.
-      //
-      // We group by [city, state] to get distinct city+region pairs.
-      // Then we fetch one representative tenant per city for the lat/lng
-      // (using a separate lightweight query — the first tenant per city).
-      const cityGroups = await db.tenant.groupBy({
-        by: ['city', 'state'],
-        where: {
-          publicProfileEnabled: true,
-          marketplaceOptIn: true,
-          suspendedAt: null,
-          country,
-          city: { not: null, not: '' },
-        },
-        _count: { _all: true },
-        orderBy: { city: 'asc' },
-      });
+      const baseWhere = {
+        publicProfileEnabled: true,
+        marketplaceOptIn: true,
+        suspendedAt: null,
+        country,
+        city: { not: null, not: '' },
+      };
 
-      if (cityGroups.length === 0) return [];
+      // 1. Total matching tenants (head + count=exact — works without aggregates)
+      const total = await db.tenant.count({ where: baseWhere });
+      if (total === 0) return [];
 
-      // Fetch one representative tenant per city for lat/lng.
-      // We use findFirst with distinct on city — but Prisma's distinct
-      // doesn't work well with groupBy, so we just fetch the first tenant
-      // for each city. This is a small bounded query (one row per city).
-      const cityNames = cityGroups
-        .map((g) => g.city)
-        .filter((c): c is string => !!c);
+      // 2. Page through ALL matching tenants in parallel, selecting ONLY the
+      //    4 columns we need. PostgREST's default page size is 1000, so we
+      //    issue ceil(total/1000) parallel range requests.
+      const PAGE_SIZE = 1000;
+      const MAX_PAGES = 500; // safety cap (500k rows)
+      const pageCount = Math.min(Math.ceil(total / PAGE_SIZE), MAX_PAGES);
 
-      // Batch-fetch representative coords for all cities in one query.
-      // We use a raw approach: fetch all distinct (city, latitude, longitude)
-      // and pick the first non-null coord per city in JS. This is still much
-      // cheaper than fetching all tenant fields.
-      const coordRows = await db.tenant.findMany({
-        where: {
-          publicProfileEnabled: true,
-          marketplaceOptIn: true,
-          suspendedAt: null,
-          country,
-          city: { in: cityNames },
-          latitude: { not: null },
-          longitude: { not: null },
-        },
-        select: { city: true, latitude: true, longitude: true },
-        take: cityNames.length * 3, // a few candidates per city
-      });
+      const pages = await Promise.all(
+        Array.from({ length: pageCount }, async (_, i) => {
+          const from = i * PAGE_SIZE;
+          const to = from + PAGE_SIZE - 1;
+          return db.tenant.findMany({
+            where: baseWhere,
+            select: { city: true, state: true, latitude: true, longitude: true },
+            skip: from,
+            take: PAGE_SIZE,
+          });
+        }),
+      );
 
-      const coordMap = new Map<string, { lat: number; lng: number }>();
-      for (const r of coordRows) {
-        if (!r.city) continue;
-        const key = r.city.toLowerCase();
-        if (!coordMap.has(key) && r.latitude != null && r.longitude != null) {
-          coordMap.set(key, { lat: r.latitude, lng: r.longitude });
+      // 3. Deduplicate by (city, state), keeping the first non-null coord.
+      const cityMap = new Map<
+        string,
+        { city: string; region: string; lat: number; lng: number }
+      >();
+
+      for (const page of pages) {
+        for (const row of page) {
+          const city = (row.city ?? '').toString().trim();
+          if (!city) continue;
+          const state = (row.state ?? '').toString().trim();
+          const key = `${city.toLowerCase()}\u0001${state.toLowerCase()}`;
+          if (cityMap.has(key)) continue;
+          const lat = typeof row.latitude === 'number' ? row.latitude : Number(row.latitude) || 0;
+          const lng = typeof row.longitude === 'number' ? row.longitude : Number(row.longitude) || 0;
+          cityMap.set(key, {
+            city,
+            region: state,
+            lat: lat || 0,
+            lng: lng || 0,
+          });
         }
       }
 
-      return cityGroups
-        .filter((g): g is { city: string; state: string | null; _count: { _all: number } } => !!g.city)
-        .map((g) => {
-          const coord = coordMap.get(g.city.toLowerCase());
-          return {
-            city: g.city,
-            region: g.state || '',
-            lat: coord?.lat ?? 0,
-            lng: coord?.lng ?? 0,
-          };
-        })
-        .sort((a, b) => a.city.localeCompare(b.city));
+      return Array.from(cityMap.values()).sort((a, b) => a.city.localeCompare(b.city));
     });
 
     log.info(

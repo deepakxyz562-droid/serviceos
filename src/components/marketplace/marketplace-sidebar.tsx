@@ -281,10 +281,17 @@ export function MarketplaceSidebar({
     trustRatingHigh ||
     trustEmergency ||
     minRating > 0 ||
-    claimedFilter !== 'all' ||
-    (!!userLocation && !userLocation.lowAccuracy && radiusKm > 0)
+    claimedFilter !== 'all'
   );
-  const hasActiveFilters = hasCountBlindFilters || !!storeVertical || !!storeIndustry;
+  // Radius filter is separate from count-blind filters: the counts endpoint
+  // supports country + city but NOT radius. However, radius only affects
+  // which providers are DISPLAYED (within the radius), not how many exist
+  // in each category. So per-category counts remain valid when radius is
+  // active — we only need storeTotal (not realCounts) for the "All
+  // providers" total to reflect the radius-filtered count.
+  const hasRadiusFilter = !!userLocation && !userLocation.lowAccuracy && radiusKm > 0;
+  const hasActiveFilters =
+    hasCountBlindFilters || hasRadiusFilter || !!storeVertical || !!storeIndustry;
 
   // Always fetch counts with the current country + city — the counts endpoint
   // supports both, so the per-category counts reflect the location filter.
@@ -307,29 +314,32 @@ export function MarketplaceSidebar({
   //
   // Also falls back when realCounts is still loading (undefined) — the
   // loaded-subset counts are a reasonable interim display.
-  // realCountsUsable: true when the real DB counts can be safely shown for
-  // per-category counts. This is gated by `!hasCountBlindFilters` (NOT
-  // `!hasActiveFilters`) because vertical/industry filters don't invalidate
-  // the per-category counts — selecting "Plumbing" doesn't change how many
-  // electrical providers exist, so the real DB count for "Electrical" is
-  // still correct and should be displayed.
   //
-  // The "All providers" total is handled separately below — it uses
-  // `hasActiveFilters` (which includes vertical/industry) because when a
-  // category is selected, the total should reflect the filtered count (e.g.
-  // "All providers 491" for Plumbing), not the global count (6000).
+  // realCountsUsable: true when the real DB counts can be safely shown for
+  // per-category counts. Gated by `!hasCountBlindFilters` (NOT
+  // `!hasActiveFilters`) because:
+  //   - vertical/industry filters don't invalidate per-category counts
+  //     (selecting "Plumbing" doesn't change how many electrical providers
+  //     exist).
+  //   - radius filter doesn't invalidate per-category counts either (the
+  //     counts endpoint returns the city-filtered count per category, which
+  //     is still meaningful even when a radius narrows the displayed grid).
+  //   - Only search/trust/rating/claimed filters are truly count-blind
+  //     (they change which providers match, but the counts endpoint can't
+  //     reflect them).
   const realCountsUsable =
     realCounts &&
     !hasCountBlindFilters &&
     realCounts.total > 0;
 
   // ── Total providers count ──────────────────────────────────────────────
-  // When ANY filter is active, prefer `storeTotal` (the filtered API count)
-  // — this ensures "All providers N" matches the grid's actual result count
-  // (e.g. "All providers 200" when Plumbing is selected, not "5000").
-  // When NO filter is active, prefer `realTotal` (the DB-level count from
-  // the counts endpoint) — it's cached longer and more accurate than the
-  // 30s-cached API total.
+  // When ANY filter that the counts endpoint CANNOT reflect is active
+  // (search/trust/rating/claimed/radius/vertical/industry), prefer
+  // `storeTotal` (the filtered API count) — this ensures "All providers N"
+  // matches the grid's actual result count.
+  // When NO such filter is active (only country/city, which the counts
+  // endpoint supports), prefer `realTotal` (the DB-level count) — it's
+  // cached longer and more accurate than the 30s-cached API total.
   const realTotal = realCountsUsable ? realCounts!.total : null;
   const totalProviders = hasActiveFilters
     ? (storeTotal ?? total ?? activeProviders.length)

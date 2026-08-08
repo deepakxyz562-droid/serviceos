@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
-import { VERTICAL_MAP, getIndustry } from '@/lib/industry-catalog';
+import { VERTICAL_MAP, INDUSTRY_CATALOG, getIndustry } from '@/lib/industry-catalog';
 import { ttlCacheWrap, buildCacheKey } from '@/lib/ttl-cache';
 import { buildProviderWhereClause } from '@/lib/marketplace-pagination';
 
@@ -34,13 +34,26 @@ import { buildProviderWhereClause } from '@/lib/marketplace-pagination';
  * Caching: 60s in-memory TTL (counts change rarely; longer than the
  * 30s list cache because aggregations are more expensive).
  *
- * NOTE on the "1000 cap" bug: previously the Supabase adapter's groupBy()
- * fetched ALL matching rows over the wire and counted them in JS, which
- * hit PostgREST's default 1000-row response cap. This produced a wrong
- * "1000" total in production. The adapter has been fixed to use
- * PostgREST's native `count()` aggregate, and this endpoint now also
- * supports the `city` filter so counts stay accurate when a city is
- * selected.
+ * Implementation note (Supabase / PostgREST):
+ * --------------------------------------------
+ * The original implementation used `db.tenant.groupBy({ by: ['industry'] })`.
+ * On Supabase projects where PostgREST aggregates are DISABLED
+ * (`db-aggregates-enabled=false`, error PGRST123), the adapter's groupBy
+ * falls back to a paged-distinct + per-value-count strategy that pages
+ * through ALL matching rows to collect distinct industries — wasteful when
+ * the set of valid industries is already known from the catalog.
+ *
+ * We now iterate the ~25 known industry IDs from INDUSTRY_CATALOG and issue
+ * one `count()` per industry (head + Prefer: count=exact — no aggregates
+ * needed) in parallel, plus one `count()` for the total. This is:
+ *   - 26 parallel count() queries (all head-only, ~50ms each)
+ *   - 0 groupBy calls
+ *   - 0 paged row fetches
+ *
+ * Tenants whose `industry` is null, empty, or not in the catalog are still
+ * counted in `total` (via the unfiltered count query) but won't appear in
+ * any `byIndustry`/`byVertical` bucket — which is correct because the
+ * sidebar only renders catalog categories.
  */
 export async function GET(request: NextRequest) {
   const log = withRequestId(request);
@@ -66,50 +79,37 @@ export async function GET(request: NextRequest) {
         city,
       });
 
-      // Single groupBy query on industry — much cheaper than N+1 per
-      // vertical/industry. We aggregate by industry in SQL, then roll
-      // up to verticals in JS (cheap; only ~29 industries total).
-      //
-      // IMPORTANT: When using the Supabase adapter, groupBy() uses
-      // PostgREST's native `count()` aggregate (head:false + select
-      // with `,count()`) so it is NOT subject to the 1000-row response
-      // cap. Previously it fetched raw rows and counted in JS, which
-      // silently truncated at 1000 rows and produced wrong totals.
-      //
-      // BUGFIX (total mismatch): The previous implementation derived
-      // `total` by summing per-industry groupBy rows — but that loop
-      // SKIPPED tenants whose `industry` is null/empty (the `if (!industryId)
-      // continue` guard) AND tenants whose industry isn't mapped to a
-      // vertical. The providers list endpoint uses `db.tenant.count({ where })`
-      // which INCLUDES those tenants, so the sidebar's "All providers N"
-      // (which prefers realCounts.total when no filters are active) was
-      // systematically LOWER than the actual list count. We now compute
-      // `total` via a separate `count({ where })` query run in parallel
-      // with the groupBy, so the two endpoints agree byte-for-byte.
-      const [rows, total] = await Promise.all([
-        db.tenant.groupBy({
-          by: ['industry'],
-          _count: { _all: true },
-          where,
-        }),
+      // All known industry IDs from the catalog (~25). We count each one
+      // in parallel via head-only count() queries — no PostgREST aggregates
+      // required, so this works on every Supabase project regardless of
+      // the `db-aggregates-enabled` config.
+      const industryIds = INDUSTRY_CATALOG.map((i) => i.id);
+
+      // Total count (all matching tenants, including those with null/unknown
+      // industry) — run in parallel with the per-industry counts.
+      const [total, ...industryCounts] = await Promise.all([
         db.tenant.count({ where }),
+        ...industryIds.map((id) =>
+          db.tenant.count({
+            where: { ...where, industry: { equals: id } },
+          }),
+        ),
       ]);
 
       const byIndustry: Record<string, number> = {};
       const byVertical: Record<string, number> = {};
 
-      for (const row of rows) {
-        const industryId = (row.industry ?? '').toLowerCase().trim();
-        if (!industryId) continue;
-        const count = row._count._all;
-        byIndustry[industryId] = count;
-
-        // Roll up to vertical via the catalog map.
-        const verticalId = VERTICAL_MAP[industryId] ?? getIndustry(industryId)?.vertical;
-        if (verticalId) {
-          byVertical[verticalId] = (byVertical[verticalId] ?? 0) + count;
+      industryIds.forEach((id, i) => {
+        const count = industryCounts[i];
+        if (count > 0) {
+          byIndustry[id] = count;
+          // Roll up to vertical via the catalog map.
+          const verticalId = VERTICAL_MAP[id] ?? getIndustry(id)?.vertical;
+          if (verticalId) {
+            byVertical[verticalId] = (byVertical[verticalId] ?? 0) + count;
+          }
         }
-      }
+      });
 
       return { byVertical, byIndustry, total };
     });

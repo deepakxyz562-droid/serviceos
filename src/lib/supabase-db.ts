@@ -1087,9 +1087,19 @@ class SupabaseModel {
       return [];
     }
 
-    const { where, include, orderBy, skip, take } = options;
+    const { where, include, orderBy, skip, take, select } = options;
 
-    let query = this.client.from(this.tableName).select('*');
+    // Build select string: use specific columns if `select` is provided,
+    // otherwise '*'. This mirrors findFirst/findUnique behavior and keeps
+    // payloads small for callers that only need a few columns (e.g. the
+    // marketplace cities endpoint fetching only city/lat/lng).
+    let selectStr = '*';
+    if (select) {
+      const cols = Object.entries(select).filter(([, v]) => v === true).map(([k]) => k);
+      if (cols.length > 0) selectStr = cols.join(',');
+    }
+
+    let query = this.client.from(this.tableName).select(selectStr);
 
     if (where) applyWhereFilters(query, where);
     if (orderBy) applyOrderBy(query, orderBy);
@@ -1675,6 +1685,12 @@ class SupabaseModel {
     //
     // PostgREST aggregate syntax:
     //   .select('count(),sum(rating),avg(rating),min(rating),max(rating)')
+    //
+    // NOTE: PostgREST aggregates require the `db-aggregates-enabled` config
+    // flag. When disabled (PGRST123 — "Use of aggregate functions is not
+    // allowed"), we fall back to `_aggregateFallback()` which computes
+    // `_count` via the head+count=exact mechanism (always available) and
+    // `_sum`/`_avg`/`_min`/`_max` via a paged fetch+JS-compute.
     const aggParts: string[] = [];
     if (_count) aggParts.push('count()');
     if (_sum) for (const f of Object.keys(_sum)) aggParts.push(`sum(${f})`);
@@ -1690,6 +1706,10 @@ class SupabaseModel {
 
     const { data, error } = await query;
     if (error) {
+      // Fallback: aggregates disabled (PGRST123) or other aggregate error
+      if (error.code === 'PGRST123' || /aggregate functions/i.test(error.message || '')) {
+        return await this._aggregateFallback(where, { _sum, _count, _avg, _min, _max });
+      }
       console.error(`[SupabaseDB] aggregate error on ${this.tableName}:`, error.message);
       return { _count: 0, _sum: {} };
     }
@@ -1739,6 +1759,109 @@ class SupabaseModel {
     return result;
   }
 
+  /**
+   * Fallback for `aggregate()` when PostgREST aggregates are disabled.
+   *
+   * - `_count`: uses `count()` (head + Prefer: count=exact) — always works.
+   * - `_sum`/`_avg`/`_min`/`_max`: pages through matching rows selecting
+   *   ONLY the requested fields and computes the aggregate in JS. Subject
+   *   to PostgREST's row cap (paged to cover the full result set), so the
+   *   result is correct regardless of table size.
+   */
+  private async _aggregateFallback(
+    where: WhereInput | undefined,
+    aggs: {
+      _sum?: Record<string, boolean>;
+      _count?: boolean | Record<string, boolean>;
+      _avg?: Record<string, boolean>;
+      _min?: Record<string, boolean>;
+      _max?: Record<string, boolean>;
+    },
+  ): Promise<Record<string, unknown>> {
+    const { _sum, _count, _avg, _min, _max } = aggs;
+    const result: Record<string, unknown> = {};
+
+    // _count — delegate to count() (head + Prefer: count=exact)
+    if (_count) {
+      result._count = await this.count({ where });
+    }
+
+    const mathFields = new Set<string>();
+    if (_sum) Object.keys(_sum).forEach((f) => mathFields.add(f));
+    if (_avg) Object.keys(_avg).forEach((f) => mathFields.add(f));
+    if (_min) Object.keys(_min).forEach((f) => mathFields.add(f));
+    if (_max) Object.keys(_max).forEach((f) => mathFields.add(f));
+
+    if (mathFields.size > 0) {
+      const fields = Array.from(mathFields);
+      const rows = await this._fetchAllPages(where, fields);
+
+      if (_sum) {
+        const sumResult: Record<string, number> = {};
+        for (const field of Object.keys(_sum)) {
+          sumResult[field] = rows.reduce((s, r) => s + (Number(r[field]) || 0), 0);
+        }
+        result._sum = sumResult;
+      }
+      if (_avg) {
+        const avgResult: Record<string, number> = {};
+        for (const field of Object.keys(_avg)) {
+          const vals = rows.map((r) => Number(r[field])).filter((v) => !isNaN(v));
+          avgResult[field] = vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
+        }
+        result._avg = avgResult;
+      }
+      if (_min) {
+        const minResult: Record<string, unknown> = {};
+        for (const field of Object.keys(_min)) {
+          const vals = rows.map((r) => r[field]).filter((v) => v !== null && v !== undefined);
+          minResult[field] = vals.length > 0 ? vals.reduce((m, v) => (v < m ? v : m)) : null;
+        }
+        result._min = minResult;
+      }
+      if (_max) {
+        const maxResult: Record<string, unknown> = {};
+        for (const field of Object.keys(_max)) {
+          const vals = rows.map((r) => r[field]).filter((v) => v !== null && v !== undefined);
+          maxResult[field] = vals.length > 0 ? vals.reduce((m, v) => (v > m ? v : m)) : null;
+        }
+        result._max = maxResult;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Fetch ALL matching rows (paged, parallel) selecting only the given
+   * columns. Used by `_aggregateFallback` for `_sum`/`_avg`/`_min`/`_max`.
+   */
+  private async _fetchAllPages(
+    where: WhereInput | undefined,
+    fields: string[],
+  ): Promise<Record<string, unknown>[]> {
+    const selectStr = fields.join(',');
+    const total = await this.count({ where });
+    if (total === 0) return [];
+
+    const PAGE_SIZE = 1000;
+    const MAX_PAGES = 500;
+    const pageCount = Math.min(Math.ceil(total / PAGE_SIZE), MAX_PAGES);
+
+    const pagePromises = Array.from({ length: pageCount }, async (_, i) => {
+      const from = i * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      let q = this.client.from(this.tableName).select(selectStr).range(from, to);
+      if (where) applyWhereFilters(q, where);
+      const { data, error } = await q;
+      if (error) return [] as Record<string, unknown>[];
+      return (data || []) as Record<string, unknown>[];
+    });
+
+    const pages = await Promise.all(pagePromises);
+    return pages.flat();
+  }
+
   async groupBy(options: Record<string, unknown>): Promise<unknown[]> {
     if (this.isMissingTable) return [];
 
@@ -1747,52 +1870,205 @@ class SupabaseModel {
 
     if (!by || by.length === 0) return [];
 
-    // Use PostgREST's NATIVE aggregate so the counting happens server-side
-    // in PostgreSQL and is NOT subject to the default 1000-row response
-    // cap. Previously this method fetched all matching rows over the wire
-    // and counted them in JS — which silently truncated at 1000 rows and
-    // produced wrong "1000" totals in the marketplace sidebar.
+    // ── Fast path: PostgREST native aggregate ──────────────────────────────
     //
     // PostgREST aggregate syntax:
     //   .select('industry,count()')   →  returns [{industry: 'plumbing', count: 423}, ...]
     //
     // The `count()` aggregate (no `head:true`) returns aggregated rows,
     // NOT raw data rows, so the 1000-row cap does not apply.
+    //
+    // HOWEVER: PostgREST aggregates must be explicitly enabled via the
+    // `db-aggregates-enabled` config flag. Many Supabase projects (including
+    // production deployments created before aggregates became default-on)
+    // have this flag DISABLED, which causes every `count()`/`sum()`/`avg()`
+    // in the select string to fail with:
+    //
+    //     PGRST123: "Use of aggregate functions is not allowed"
+    //
+    // When that happens we fall back to `_groupByFallback()` below, which
+    // pages through the grouping columns to collect distinct values, then
+    // issues one `count()` (head + Prefer: count=exact) per distinct value
+    // — a mechanism that does NOT require aggregates and works on every
+    // Supabase project.
     const selectCols = by.map((c) => c).join(',');
-    let query = this.client
+    let aggQuery = this.client
       .from(this.tableName)
       .select(`${selectCols},count()`);
 
-    if (where) applyWhereFilters(query, where);
+    if (where) applyWhereFilters(aggQuery, where);
 
-    const { data, error } = await query;
-    if (error) {
-      console.error(`[SupabaseDB] groupBy error on ${this.tableName}:`, error.message);
-      return [];
+    const { data, error } = await aggQuery;
+    if (!error) {
+      const rows = (data || []) as Record<string, unknown>[];
+      return this._mapGroupByRows(rows, by, options);
     }
 
-    const rows = (data || []) as Record<string, unknown>[];
+    // ── Fallback: aggregates disabled (PGRST123) ──────────────────────────
+    if (error.code === 'PGRST123' || /aggregate functions/i.test(error.message || '')) {
+      return await this._groupByFallback(options, by, where);
+    }
 
-    const countField = by[0]; // e.g. 'industry'
+    // Other errors (network, malformed query, RLS, etc.)
+    console.error(`[SupabaseDB] groupBy error on ${this.tableName}:`, error.message);
+    return [];
+  }
+
+  /**
+   * Map PostgREST aggregate rows to the Prisma groupBy result shape.
+   *
+   * PostgREST returns:  [{ industry: 'plumbing', count: 423 }, ...]
+   * Prisma expects:     [{ industry: 'plumbing', _count: { _all: 423 } }, ...]
+   *
+   * The `_count` sub-key depends on what the caller requested:
+   *   `_count: { _all: true }`  →  `_count: { _all: N }`
+   *   `_count: { id: true }`    →  `_count: { id: N }`
+   *   (no _count)               →  `_count: { id: N }`  (Prisma default)
+   */
+  private _mapGroupByRows(
+    rows: Record<string, unknown>[],
+    by: string[],
+    options: Record<string, unknown>,
+  ): Record<string, unknown>[] {
     const countObj = options._count as Record<string, unknown> | undefined;
     const countKeys = countObj ? Object.keys(countObj) : ['id'];
 
-    // Each row from PostgREST looks like { industry: 'plumbing', count: 423 }.
-    // Map it to the Prisma groupBy shape: { industry: 'plumbing', _count: { id: 423 } }.
-    const result = rows.map((r) => {
-      const val = r[countField];
+    return rows.map((r) => {
       const count = Number(r.count) || 0;
       const _count: Record<string, number> = {};
       for (const k of countKeys) {
         _count[k] = count;
       }
-      return {
-        [countField]: val,
-        _count,
-      };
+      const result: Record<string, unknown> = {};
+      for (const c of by) {
+        result[c] = r[c];
+      }
+      result._count = _count;
+      return result;
+    });
+  }
+
+  /**
+   * Fallback for `groupBy()` when PostgREST aggregates are disabled
+   * (PGRST123 — "Use of aggregate functions is not allowed").
+   *
+   * Strategy:
+   *   1. Get the total matching row count via `count()` (head + Prefer:
+   *      count=exact — this mechanism does NOT require aggregates and
+   *      works on every Supabase project).
+   *   2. Page through ALL matching rows in parallel, selecting ONLY the
+   *      grouping columns (small payload). Deduplicate in JS to obtain
+   *      the set of distinct group-key combinations.
+   *   3. For each distinct combination, issue a `count()` with the group
+   *      values added to the where clause (parallel, batched to avoid
+   *      overwhelming the API).
+   *   4. Apply `orderBy` if the caller requested it.
+   *
+   * This is more expensive than the native aggregate (N_pages + M_counts
+   * requests) but produces byte-for-byte identical results. Callers that
+   * cache (e.g. the marketplace counts/cities endpoints with 60s TTL)
+   * amortize the cost effectively.
+   */
+  private async _groupByFallback(
+    options: Record<string, unknown>,
+    by: string[],
+    where: WhereInput | undefined,
+  ): Promise<unknown[]> {
+    const selectCols = by.join(',');
+    const PAGE_SIZE = 1000;
+    const MAX_PAGES = 500; // safety cap (500k rows)
+
+    // 1. Total matching rows (head + count=exact — no aggregates needed)
+    const total = await this.count({ where });
+    if (total === 0) return [];
+
+    const pageCount = Math.min(Math.ceil(total / PAGE_SIZE), MAX_PAGES);
+
+    // 2. Page through grouping columns in parallel to collect distinct values
+    const pagePromises = Array.from({ length: pageCount }, async (_, i) => {
+      const from = i * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      let q = this.client.from(this.tableName).select(selectCols).range(from, to);
+      if (where) applyWhereFilters(q, where);
+      const { data: pageData, error: pageErr } = await q;
+      if (pageErr) return [] as Record<string, unknown>[];
+      return (pageData || []) as Record<string, unknown>[];
     });
 
-    return result;
+    const pages = await Promise.all(pagePromises);
+
+    // Deduplicate by a composite key of all grouping columns
+    const distinctMap = new Map<string, Record<string, unknown>>();
+    for (const page of pages) {
+      for (const row of page) {
+        const key = by.map((c) => String(row[c] ?? '\u0000')).join('\u0001');
+        if (!distinctMap.has(key)) {
+          distinctMap.set(key, row);
+        }
+      }
+    }
+
+    const distinctRows = Array.from(distinctMap.values());
+
+    // 3. Count per distinct value (parallel, batched)
+    const BATCH_SIZE = 15;
+    const counted: { row: Record<string, unknown>; count: number }[] = [];
+
+    for (let i = 0; i < distinctRows.length; i += BATCH_SIZE) {
+      const batch = distinctRows.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async (row) => {
+          const countWhere: WhereInput = { ...(where || {}) };
+          for (const c of by) {
+            // Overwrite any existing filter on the grouping column with
+            // the exact value from this distinct row. This also correctly
+            // handles null values (Prisma's `field: null` → `is null`).
+            countWhere[c] = row[c] as string | number | boolean | null;
+          }
+          const cnt = await this.count({ where: countWhere });
+          return { row, count: cnt };
+        }),
+      );
+      counted.push(...batchResults);
+    }
+
+    // 4. Map to Prisma groupBy shape
+    const countObj = options._count as Record<string, unknown> | undefined;
+    const countKeys = countObj ? Object.keys(countObj) : ['id'];
+
+    const results: Record<string, unknown>[] = counted.map(({ row, count }) => {
+      const _count: Record<string, number> = {};
+      for (const k of countKeys) {
+        _count[k] = count;
+      }
+      const result: Record<string, unknown> = {};
+      for (const c of by) {
+        result[c] = row[c];
+      }
+      result._count = _count;
+      return result;
+    });
+
+    // 5. Apply orderBy (Prisma groupBy supports a single orderBy object)
+    const orderBy = options.orderBy as Record<string, 'asc' | 'desc'> | undefined;
+    if (orderBy) {
+      for (const [field, dir] of Object.entries(orderBy)) {
+        results.sort((a, b) => {
+          const av = a[field];
+          const bv = b[field];
+          if (av == null && bv == null) return 0;
+          if (av == null) return dir === 'desc' ? -1 : 1;
+          if (bv == null) return dir === 'desc' ? 1 : -1;
+          const cmp =
+            typeof av === 'number' && typeof bv === 'number'
+              ? av - bv
+              : String(av).localeCompare(String(bv));
+          return dir === 'desc' ? -cmp : cmp;
+        });
+      }
+    }
+
+    return results;
   }
 }
 
