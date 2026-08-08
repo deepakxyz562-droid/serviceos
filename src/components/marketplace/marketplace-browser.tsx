@@ -457,12 +457,24 @@ export function MarketplaceBrowser({
     }
 
     // 2. Fetch IP location dynamically if not cached
+    //
+    // BUGFIX (manual-pick guard): If the user picks a city from the
+    // LocationChip dropdown BEFORE this async IP lookup resolves, the
+    // IP callback would overwrite their `source:'manual'` pick — and
+    // because IP-derived cities often aren't in the cities catalogue,
+    // the LocationChip's <Select> would fall through to the placeholder,
+    // making the picked city "disappear" from the dropdown. We now skip
+    // the overwrite whenever the store already holds a manual pick.
     async function detectIpLocation() {
       try {
         const res = await fetch('/api/geocode/ip');
         if (!res.ok) return;
         const data = await res.json();
         if (data && data.lat && data.lng && active) {
+          // Manual picks always win — never overwrite them with an IP guess.
+          if (useMarketplaceSearch.getState().userLocation?.source === 'manual') {
+            return;
+          }
           setUserLocation({
             lat: data.lat,
             lng: data.lng,
@@ -480,10 +492,22 @@ export function MarketplaceBrowser({
     detectIpLocation();
 
     // 3. Ask for high-accuracy GPS permission in parallel
+    //
+    // BUGFIX (manual-pick guard): Same race-condition fix as the IP
+    // callback above. GPS resolution can take several seconds (especially
+    // with enableHighAccuracy:false + 5s timeout), during which the user
+    // may have already picked a city from the dropdown. A late-resolving
+    // GPS callback would otherwise overwrite their explicit pick — even
+    // though GPS is "higher accuracy", the user's explicit choice should
+    // be authoritative.
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           if (!active) return;
+          // Manual picks always win — never overwrite them with a GPS guess.
+          if (useMarketplaceSearch.getState().userLocation?.source === 'manual') {
+            return;
+          }
           const { latitude, longitude } = position.coords;
           try {
             const res = await fetch(`/api/geocode/reverse?lat=${latitude}&lng=${longitude}`);
@@ -495,6 +519,11 @@ export function MarketplaceBrowser({
               city = data.city || null;
               state = data.state || null;
               country = data.countryCode || null;
+            }
+            // Re-check AFTER the await — the user may have picked a city
+            // while the reverse-geocode request was in flight.
+            if (useMarketplaceSearch.getState().userLocation?.source === 'manual') {
+              return;
             }
             if (country) {
               setCountryFilter(country);

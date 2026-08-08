@@ -241,20 +241,59 @@ export function MarketplaceSidebar({
   // providers" total should reflect the FILTERED total (e.g. "All providers
   // 200" when Plumbing is selected), not the global total (5000). Using
   // storeTotal (the API's filtered count) ensures this.
-  const hasActiveFilters = !!(
+  // ── Filter classification ──────────────────────────────────────────────
+  // We split the old `hasActiveFilters` into two concepts:
+  //
+  //   hasActiveFilters      — ANY filter that changes which providers the
+  //                           GRID shows. Used for the "All providers" total
+  //                           (which should match the grid's filtered count,
+  //                           not the global count).
+  //
+  //   hasCountBlindFilters  — filters the /api/marketplace/counts endpoint
+  //                           CANNOT reflect. The counts endpoint only
+  //                           supports country + city grouping — it does NOT
+  //                           support search, trust, minRating, claimedFilter,
+  //                           or radius filters. When any of those are active,
+  //                           real DB counts would be MISLEADING (e.g. showing
+  //                           "Plumbing 491" when a search filter narrows it to
+  //                           5), so we fall back to loaded-subset counts.
+  //
+  //                           NOTE: vertical/industry filters are NOT count-
+  //                           blind — selecting "Plumbing" doesn't change how
+  //                           many providers are in each category, it only
+  //                           changes which ones the grid displays. So the real
+  //                           per-category counts remain valid and should be
+  //                           used. (Previously, selecting a category disabled
+  //                           real counts and showed loaded-subset counts like
+  //                           "Plumbing 24" instead of "Plumbing 491" — a
+  //                           high-confidence bug.)
+  //
+  //                           NOTE: country/city filters are NOT count-blind
+  //                           either — the counts endpoint supports both. So
+  //                           we always pass the current country/city to the
+  //                           counts hook (previously it was nulled-out
+  //                           whenever hasActiveFilters was true, which made
+  //                           the counts endpoint fetch GLOBAL counts even
+  //                           when a city filter was active).
+  const hasCountBlindFilters = !!(
     searchInput.trim() ||
     trustFullyVerified ||
     trustRatingHigh ||
     trustEmergency ||
-    storeVertical ||
-    storeIndustry ||
     minRating > 0 ||
     claimedFilter !== 'all' ||
     (!!userLocation && !userLocation.lowAccuracy && radiusKm > 0)
   );
+  const hasActiveFilters = hasCountBlindFilters || !!storeVertical || !!storeIndustry;
+
+  // Always fetch counts with the current country + city — the counts endpoint
+  // supports both, so the per-category counts reflect the location filter.
+  // (Previously this was `hasActiveFilters ? null : activeCountry`, which
+  // fetched GLOBAL counts whenever any filter was active — including a
+  // category click — making the per-category counts ignore the city filter.)
   const { data: realCounts, isFetching: countsFetching } = useMarketplaceCounts(
-    hasActiveFilters ? null : activeCountry,
-    hasActiveFilters ? null : cityFilterDebounced || null,
+    activeCountry,
+    cityFilterDebounced || null,
   );
 
   // ── Defensive fallback ──────────────────────────────────────────────────
@@ -268,9 +307,20 @@ export function MarketplaceSidebar({
   //
   // Also falls back when realCounts is still loading (undefined) — the
   // loaded-subset counts are a reasonable interim display.
+  // realCountsUsable: true when the real DB counts can be safely shown for
+  // per-category counts. This is gated by `!hasCountBlindFilters` (NOT
+  // `!hasActiveFilters`) because vertical/industry filters don't invalidate
+  // the per-category counts — selecting "Plumbing" doesn't change how many
+  // electrical providers exist, so the real DB count for "Electrical" is
+  // still correct and should be displayed.
+  //
+  // The "All providers" total is handled separately below — it uses
+  // `hasActiveFilters` (which includes vertical/industry) because when a
+  // category is selected, the total should reflect the filtered count (e.g.
+  // "All providers 491" for Plumbing), not the global count (6000).
   const realCountsUsable =
     realCounts &&
-    !hasActiveFilters &&
+    !hasCountBlindFilters &&
     realCounts.total > 0;
 
   // ── Total providers count ──────────────────────────────────────────────

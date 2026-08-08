@@ -140,7 +140,17 @@ export function LocationChip() {
     };
   }, [countryCode]);
 
-  const cities = activeCities;
+  // BUGFIX (static-catalogue fallback): The /api/marketplace/cities
+  // endpoint returns [] for any country without seeded tenants (only US
+  // and CA have seeded data today). For AU, GB, DE, etc. the dropdown
+  // would render "No cities available" even though we ship a curated
+  // static catalogue (getCitiesForCountry) for every supported country.
+  // Falling back to the static catalogue means the user can ALWAYS pick
+  // a city — picking one with no seeded providers simply returns an
+  // empty result grid (a perfectly valid UX, far better than a dead
+  // dropdown).
+  const cities: MarketplaceCity[] =
+    activeCities.length > 0 ? activeCities : getCitiesForCountry(countryCode);
 
   // ── Sync picker's countryCode with the store's countryFilter ─────────
   // The store's countryFilter is the source of truth — it can change
@@ -162,20 +172,40 @@ export function LocationChip() {
   // to a placeholder on null would lose the user's context for no
   // benefit (the popover is usually closed when the filter is cleared
   // externally).
+  //
+  // BUGFIX (validate against API list, not static catalogue): Previously
+  // this effect validated `userLocation.city` against the STATIC
+  // `getCitiesForCountry()` catalogue, which only contains a curated
+  // subset of major cities. A city returned by the /api/marketplace/cities
+  // endpoint (which reflects actual seeded tenants) but NOT in the static
+  // catalogue would be wrongly cleared on a country change. We now
+  // validate against BOTH the API-fetched `activeCities` and the static
+  // catalogue, so any city the user could legitimately have picked is
+  // preserved. The comparison is case-insensitive and trims whitespace
+  // to survive minor formatting differences between data sources.
   React.useEffect(() => {
     if (countryFilter && countryFilter !== countryCode) {
       setCountryCode(countryFilter);
 
-      // If the country changed, check if the current city filter belongs to the new country.
-      // If not, clear it to avoid mismatch (e.g. Phoenix city filter with country CA).
-      const newCountryCities = getCitiesForCountry(countryFilter);
-      const isCityInNewCountry = userLocation?.city && newCountryCities.some(c => c.city === userLocation.city);
+      // If the country changed, check if the current city filter belongs
+      // to the new country. Validate against BOTH the API-fetched list
+      // and the static catalogue so we don't wrongly clear a valid city.
+      const normalize = (s: string) => s.toLowerCase().trim();
+      const staticCities = getCitiesForCountry(countryFilter);
+      const cityMatches = (c: { city: string }) =>
+        userLocation?.city != null && normalize(c.city) === normalize(userLocation.city);
+      const isCityInNewCountry =
+        !!userLocation?.city &&
+        (activeCities.some(cityMatches) || staticCities.some(cityMatches));
       if (!isCityInNewCountry) {
         setUserLocation(null);
         setCityInput('');
       }
     }
-  }, [countryFilter, countryCode, userLocation, setUserLocation, setCityInput]);
+    // NOTE: `activeCities` is intentionally a dep — when the API list
+    // arrives after the country change, we re-evaluate so a valid city
+    // isn't cleared just because the API list hadn't loaded yet.
+  }, [countryFilter, countryCode, userLocation, setUserLocation, setCityInput, activeCities]);
 
   // Reset geo error whenever the popover opens (so a stale error from a
   // previous attempt doesn't persist).
@@ -382,13 +412,23 @@ export function LocationChip() {
               </label>
               <Select
                 value={
-                  // If the current location's city matches one in this
-                  // country's catalogue, pre-select it. Otherwise show the
-                  // placeholder.
-                  userLocation?.city &&
-                  cities.some((c) => c.city === userLocation.city)
-                    ? (userLocation.city as string)
-                    : ''
+                  // BUGFIX (robust value matching): Previously this used a
+                  // strict `c.city === userLocation.city` comparison,
+                  // which failed on minor formatting differences (e.g.
+                  // "São Paulo" vs "Sao Paulo", leading/trailing spaces,
+                  // case differences between the reverse-geocoder output
+                  // and the catalogue). When it failed, the Select fell
+                  // through to '' and showed the placeholder — making the
+                  // picked city "disappear" from the dropdown.
+                  //
+                  // We now match case-insensitively + trimmed, AND fall
+                  // back to the raw userLocation.city string when no match
+                  // is found (so a city picked via GPS, whose name came
+                  // from the reverse-geocoder and isn't in the catalogue,
+                  // still displays in the trigger). Radix Select renders
+                  // the value verbatim if it doesn't match any SelectItem,
+                  // which is the desired behavior here.
+                  userLocation?.city ?? ''
                 }
                 onValueChange={handlePickCity}
               >

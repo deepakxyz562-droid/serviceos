@@ -75,22 +75,34 @@ export async function GET(request: NextRequest) {
       // with `,count()`) so it is NOT subject to the 1000-row response
       // cap. Previously it fetched raw rows and counted in JS, which
       // silently truncated at 1000 rows and produced wrong totals.
-      const rows = await db.tenant.groupBy({
-        by: ['industry'],
-        _count: { _all: true },
-        where,
-      });
+      //
+      // BUGFIX (total mismatch): The previous implementation derived
+      // `total` by summing per-industry groupBy rows — but that loop
+      // SKIPPED tenants whose `industry` is null/empty (the `if (!industryId)
+      // continue` guard) AND tenants whose industry isn't mapped to a
+      // vertical. The providers list endpoint uses `db.tenant.count({ where })`
+      // which INCLUDES those tenants, so the sidebar's "All providers N"
+      // (which prefers realCounts.total when no filters are active) was
+      // systematically LOWER than the actual list count. We now compute
+      // `total` via a separate `count({ where })` query run in parallel
+      // with the groupBy, so the two endpoints agree byte-for-byte.
+      const [rows, total] = await Promise.all([
+        db.tenant.groupBy({
+          by: ['industry'],
+          _count: { _all: true },
+          where,
+        }),
+        db.tenant.count({ where }),
+      ]);
 
       const byIndustry: Record<string, number> = {};
       const byVertical: Record<string, number> = {};
-      let total = 0;
 
       for (const row of rows) {
         const industryId = (row.industry ?? '').toLowerCase().trim();
         if (!industryId) continue;
         const count = row._count._all;
         byIndustry[industryId] = count;
-        total += count;
 
         // Roll up to vertical via the catalog map.
         const verticalId = VERTICAL_MAP[industryId] ?? getIndustry(industryId)?.vertical;
