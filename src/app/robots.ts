@@ -17,6 +17,7 @@ export default function robots(): MetadataRoute.Robots {
           "/api/",
           "/form/",
           "/f/",
+          "/portal/",
           "/accept-invite",
           // Dynamic company-scoped portal/login routes — not indexable.
           "/*/login",

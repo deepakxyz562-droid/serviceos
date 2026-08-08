@@ -8,6 +8,11 @@ import {
   ChevronRight,
   Store,
   Compass,
+  TrendingUp,
+  CalendarClock,
+  FileText,
+  Users,
+  Navigation,
 } from 'lucide-react';
 
 import { db } from '@/lib/db';
@@ -23,12 +28,18 @@ import {
   getBreadcrumbSchema,
 } from '@/lib/seo/schemas';
 import {
+  getIndustrySoftwareUrl,
+  getIndustrySoftwareLabel,
+  getIndustryDisplayName,
+} from '@/lib/seo/industry-software-pages';
+import {
   computeCardType,
   fetchFeaturedListingsMap,
 } from '@/lib/marketplace-featured';
 import { MarketplaceBrowser } from '@/components/marketplace/marketplace-browser';
 import { MarketplaceHeader } from '@/components/marketplace/marketplace-header';
 import { MarketplaceMobileNav } from '@/components/marketplace/marketplace-mobile-nav';
+import { CornerstoneFooter } from '@/components/seo/cornerstone-footer';
 import type { ProviderListItem } from '@/components/marketplace/types';
 
 // ── Route config ────────────────────────────────────────────────────────────
@@ -583,7 +594,62 @@ export default async function PluralBrowsePage({
             </p>
           </div>
         </section>
+
+        {/* ── For business owners — CRM CTA ────────────────────────────────
+            Marketplace → CRM bridge: some visitors to /plumbers/london are
+            plumbers themselves looking for software. This CTA connects them
+            to the relevant industry software page (e.g. /plumbing-software).
+        */}
+        <section className="w-full px-4 sm:px-6 lg:px-8 py-10">
+          {(() => {
+            const softwareUrl = getIndustrySoftwareUrl(industryId);
+            const softwareLabel = getIndustrySoftwareLabel(industryId);
+            const industryName = getIndustryDisplayName(industryId);
+            return (
+              <div className="mx-auto max-w-4xl rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 p-6 sm:p-8">
+                <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 text-xs font-semibold uppercase tracking-wide mb-2">
+                  <TrendingUp className="h-4 w-4" />
+                  <span>For Business Owners in {cityName}</span>
+                </div>
+                <h2 className="text-xl font-bold text-foreground mb-2">
+                  Run your {industryName.toLowerCase()} business with Fieseros
+                </h2>
+                <p className="text-sm text-muted-foreground leading-relaxed mb-4 max-w-2xl">
+                  Manage leads, scheduling, dispatch, invoicing, and customer relationships in one
+                  platform. Built for {industryName.toLowerCase()} professionals in {cityName}.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <CalendarClock className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span>Scheduling &amp; Dispatch</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <FileText className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span>Invoicing &amp; Payments</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Users className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span>Customer CRM</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Navigation className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span>Route Optimization</span>
+                  </div>
+                </div>
+                <Link
+                  href={softwareUrl}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors"
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  Explore {softwareLabel}
+                </Link>
+              </div>
+            );
+          })()}
+        </section>
       </main>
+
+      <CornerstoneFooter />
 
       {/* Mobile bottom tab bar — same as /marketplace */}
       <MarketplaceMobileNav />

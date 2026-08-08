@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { listIndexableBusinessUrls } from "@/lib/public-business";
 import { getAllPosts } from "@/lib/blog";
 import { db } from "@/lib/db";
-import { mapIndustryToPluralSlug } from "@/lib/seo/plural-industry-slugs";
+import { mapIndustryToPluralSlug, PLURAL_SLUG_TO_INDUSTRY } from "@/lib/seo/plural-industry-slugs";
 
 /**
  * Dynamic sitemap for Fieseros public pages.
@@ -191,6 +191,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Priority 0.8 — higher than the 0.5 default and below the 1.0 homepage.
   // These pages have strong commercial intent but less freshness than the
   // individual business profile pages (which inherit tenant.updatedAt).
+
+  // ── Industry-only hub pages (/{pluralIndustry}) ──────────────────────────
+  // e.g. /plumbers, /electricians, /hvac — these are the top-level industry
+  // landing pages that breadcrumbs on business detail pages link to. They
+  // were previously missing (404) — now created at src/app/[companySlug]/page.tsx.
+  // We list all known plural industry slugs so Google discovers them.
+  const industryHubEntries: MetadataRoute.Sitemap = Object.keys(
+    PLURAL_SLUG_TO_INDUSTRY
+  ).map((slug) => ({
+    url: `${base}/${slug}`,
+    lastModified: now,
+    changeFrequency: 'weekly' as const,
+    priority: 0.8,
+  }));
+
   let browseEntries: MetadataRoute.Sitemap = [];
   try {
     const cities = await db.directoryLocation.findMany({
@@ -220,5 +235,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error("[sitemap] failed to list plural browse URLs:", err);
   }
 
-  return [...staticEntries, ...blogEntries, ...businessEntries, ...browseEntries];
+  return [...staticEntries, ...blogEntries, ...businessEntries, ...industryHubEntries, ...browseEntries];
 }

@@ -11,6 +11,8 @@ import { MarketplaceMobileFilters } from '@/components/marketplace/marketplace-m
 import { ReloadButton } from '@/components/marketplace/reload-button';
 import type { ProviderListItem } from '@/components/marketplace/types';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
+import { getAppUrl } from '@/lib/brand';
+import { CornerstoneFooter } from '@/components/seo/cornerstone-footer';
 import {
   MARKETPLACE_PAGE_SIZE,
   fetchFeaturedTenantIds,
@@ -20,7 +22,6 @@ import {
 } from '@/lib/marketplace-pagination';
 import { fetchFeaturedListingsMap } from '@/lib/marketplace-featured';
 import {
-  Wrench,
   Search,
   Home as HomeIcon,
   ChevronRight,
@@ -289,6 +290,13 @@ export default async function MarketplaceBrowsePage({
   // the user scrolls). We render all 24 in the JSON-LD so search engines see
   // a substantial sample. `numberOfItems` uses the TOTAL count (not the
   // loaded count) so Google knows the full catalog size.
+  //
+  // SEO FIX: URLs are now ABSOLUTE (https://fieseros.com/...) — Google's
+  // BreadcrumbList/ItemList validators strongly recommend absolute URLs for
+  // rich-result eligibility. aggregateRating was REMOVED per Google Maps
+  // Platform ToS §3.2.4 (the rating/reviewCount values originated from
+  // Google Places API and cannot be surfaced in structured data).
+  const appUrl = getAppUrl();
   const itemListLd = {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
@@ -296,9 +304,10 @@ export default async function MarketplaceBrowsePage({
     numberOfItems: totalProviders,
     itemListElement: providers.slice(0, 30).map((p, i) => {
       const slug = p.slug || p.publicSlug;
-      const canonicalHref = slug
+      const profilePath = slug
         ? `/${mapIndustryToUrlSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
         : '/marketplace';
+      const absoluteUrl = `${appUrl}${profilePath}`;
       return {
         '@type': 'ListItem',
         position: i + 1,
@@ -306,7 +315,7 @@ export default async function MarketplaceBrowsePage({
           '@type': 'LocalBusiness',
           name: p.name,
           description: p.description || p.tagline || undefined,
-          url: canonicalHref,
+          url: absoluteUrl,
           image: p.coverImage || undefined,
           address: {
             '@type': 'PostalAddress',
@@ -314,14 +323,8 @@ export default async function MarketplaceBrowsePage({
             addressRegion: p.state || undefined,
             addressCountry: p.country || undefined,
           },
-          aggregateRating:
-            p.rating && p.reviewCount
-              ? {
-                  '@type': 'AggregateRating',
-                  ratingValue: p.rating,
-                  reviewCount: p.reviewCount,
-                }
-              : undefined,
+          // aggregateRating removed — Google Maps ToS §3.2.4 prohibits
+          // surfacing Places API rating/reviewCount in structured data.
           knowsAbout: p.industry || undefined,
         },
       };
@@ -329,12 +332,10 @@ export default async function MarketplaceBrowsePage({
   };
 
   // ── BreadcrumbList JSON-LD ──────────────────────────────────────────────
-  // Relative URLs — Google's BreadcrumbList validator accepts relative URLs
-  // here, but Search Console recommends absolute URLs. We keep the visible
-  // breadcrumb links (rendered as <a href> below) relative so they work on
-  // any host, and the JSON-LD payload uses the same relative URLs for
-  // consistency. If Google warnings appear later, swap these for
-  // `https://fieseros.com/marketplace` (the canonical production origin).
+  // SEO FIX: JSON-LD now uses ABSOLUTE URLs (https://fieseros.com/...) for
+  // Google rich-result eligibility. Visible breadcrumb links (<a href>
+  // below) stay relative so they work on any host (localhost / prod / custom
+  // domains).
   const breadcrumbItems: Array<{ name: string; url: string }> = [
     { name: 'Home', url: '/marketplace' },
     { name: 'Marketplace', url: '/marketplace' },
@@ -366,7 +367,7 @@ export default async function MarketplaceBrowsePage({
       '@type': 'ListItem',
       position: i + 1,
       name: b.name,
-      item: b.url,
+      item: `${appUrl}${b.url}`,
     })),
   };
 
@@ -578,27 +579,14 @@ export default async function MarketplaceBrowsePage({
               </p>
             </div>
 
-            {/* Footer embedded at the end of the scrollable list column */}
-            <footer className="mt-10 border-t bg-background py-6 pl-4 pr-3 sm:pr-3 lg:pr-3 py-4 ">
-              <div className="w-full flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-between sm:text-left">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
-                    <Wrench className="h-3.5 w-3.5" />
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Fieseros Marketplace</p>
-                    <p className="text-xs text-muted-foreground">AI Marketplace & Operating System for Local Service Businesses</p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <a href="/" className="hover:text-foreground">← Fieseros Home</a>
-                  <a href="/#pricing" className="hover:text-foreground">For businesses</a>
-                  <a href="/#ai-receptionist" className="hover:text-foreground">AI Receptionist</a>
-                  <a href="/contact-us" className="hover:text-foreground">Contact</a>
-                  <span>© {new Date().getFullYear()} Fieseros</span>
-                </div>
-              </div>
-            </footer>
+            {/* ── CornerstoneFooter — connects the marketplace to the CRM
+                product cluster (18 industry pages + 4 comparison + 5 feature
+                pages). Previously the marketplace had its own minimal footer
+                that only linked to /, /#pricing, /contact-us — leaving the
+                marketplace as an SEO island disconnected from the 29 CRM
+                landing pages. The CornerstoneFooter provides the full
+                internal-linking mesh for PageRank flow. */}
+            <CornerstoneFooter />
           </main>
         </div>
       </div>
