@@ -8,6 +8,7 @@ import { useMarketplaceSearch } from './use-marketplace-search';
 import { useMarketplaceCounts } from './use-marketplace-counts';
 import type { ProviderListItem } from './types';
 import { getIndustry, VERTICALS } from '@/lib/industry-catalog';
+import { ClaimBusinessButton } from './claim-business-button';
 
 /**
  * MarketplaceSidebar
@@ -517,12 +518,7 @@ export function MarketplaceSidebar({
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
                 Claim your profile to manage your information, reply to quotes, and grow your customer reach.
               </p>
-              <Link
-                href="/claim"
-                className="mt-2.5 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 transition-colors"
-              >
-                Claim your business <ChevronRight className="h-3.5 w-3.5" />
-              </Link>
+              <ClaimBusinessButton variant="sidebar" />
             </div>
           </div>
         </div>

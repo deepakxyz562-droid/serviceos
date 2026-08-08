@@ -30,6 +30,7 @@ import {
 import { cn } from '@/lib/utils';
 import { getIndustry } from '@/lib/industry-catalog';
 import type { ProviderListItem, ProviderProfile } from './types';
+import { ClaimBusinessButton } from './claim-business-button';
 
 /**
  * ProviderCard — redesigned to match the slick-service-hub reference design.
@@ -536,12 +537,14 @@ function ProviderCardImpl({
             <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
               Claim your profile to update info, respond to leads and grow your business.
             </p>
-            <Link
-              href="/claim"
-              className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400"
-            >
-              Claim business <ArrowRight className="h-3 w-3" />
-            </Link>
+            <ClaimBusinessButton
+              variant="card"
+              tenantId={listItem.id}
+              tenantName={provider.name}
+              tenantCity={provider.city}
+              tenantState={provider.state}
+              profileHref={profileHref}
+            />
           </div>
         ) : null}
       </div>
@@ -742,12 +745,14 @@ function MinimalCard({
           <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
             Claim your profile to update info, respond to leads and grow your business.
           </p>
-          <Link
-            href="/claim"
-            className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400"
-          >
-            Claim business <ArrowRight className="h-3 w-3" />
-          </Link>
+          <ClaimBusinessButton
+            variant="card"
+            tenantId={provider.id}
+            tenantName={provider.name}
+            tenantCity={provider.city}
+            tenantState={provider.state}
+            profileHref={profileHref}
+          />
         </div>
       </div>
     </article>
