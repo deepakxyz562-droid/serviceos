@@ -24,7 +24,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Cleaning Business Software — Schedule, Track & Invoice | Fieseros",
   description:
-    "Cleaning business software for recurring schedules, cleaner dispatch, GPS tracking, secure access management, and Email & SMS reminders. The cleaning CRM that grows recurring revenue.",
+    "Cleaning business software for recurring schedules, cleaner dispatch, GPS tracking, customer property notes, and Email & SMS reminders. The cleaning CRM that grows recurring revenue.",
   keywords: [
     "cleaning business software",
     "cleaning CRM",
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Cleaning Business Software | Fieseros",
     description:
-      "Schedule one-time deep cleans and recurring weekly services. Track which cleaner is where, send Email & SMS reminders, manage access codes securely, and never lose a payment.",
+      "Schedule one-time deep cleans and recurring weekly services. Track which cleaner is where, send Email & SMS reminders, store customer property notes, and never lose a payment.",
     url: "https://fieseros.com/cleaning-business-software",
     siteName: "Fieseros",
     type: "website",
@@ -61,7 +61,7 @@ const features: Feature[] = [
     icon: KeyRound,
     title: "Customer Property Notes",
     description:
-      "Securely store access details per property — key location, alarm codes, gate codes, pet info, parking instructions. Cleaners see exactly what they need on their phone before they arrive. Encrypted, access-controlled.",
+      "Store access details per property — key location, alarm codes, gate codes, pet info, parking instructions. Cleaners see exactly what they need on their phone before they arrive. Stored per customer, visible to your team.",
   },
   {
     icon: MessageSquare,
@@ -97,7 +97,7 @@ const faqs = [
   {
     question: "How does Fieseros securely handle keys, alarm codes, and access information?",
     answer:
-      "Access management is one of the most sensitive parts of running a cleaning business. Fieseros stores access details per property — key location (e.g., \"under the flowerpot\" or \"lockbox #1234\"), alarm codes, gate codes, garage codes, pet information, and parking instructions — in encrypted fields that only the assigned cleaner can see, and only for the duration of their job. Office staff with the right permissions can view full access details; cleaners see only what they need for their current job. Every access to this information is logged, so you have a complete audit trail. When a cleaner leaves your team, their access is revoked instantly — no more scrambling to change lockbox codes.",
+      "Access management is one of the most sensitive parts of running a cleaning business. Fieseros stores access details as notes on the customer record. You control who on your team can see them, and you can update or remove access when staff change roles.",
   },
   {
     question: "How do quality checklists work for cleaning jobs?",
@@ -120,7 +120,7 @@ export default function CleaningBusinessSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "Fieseros — Cleaning Business Software",
     description:
-      "Cleaning CRM and scheduling software with recurring schedule automation, cleaner GPS tracking, secure access management, quality checklists, and recurring invoicing.",
+      "Cleaning CRM and scheduling software with recurring schedule automation, cleaner GPS tracking, customer property notes, quality checklists, and recurring invoicing.",
     url: "https://fieseros.com/cleaning-business-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
@@ -159,7 +159,7 @@ export default function CleaningBusinessSoftwarePage() {
 
       <FeatureGrid
         title="Everything a cleaning business needs to grow recurring revenue"
-        subtitle="Recurring schedules, reliable cleaner dispatch, secure access management, quality control, and recurring billing — all in one Email, SMS & Push platform."
+        subtitle="Recurring schedules, reliable cleaner dispatch, customer property notes, quality control, and recurring billing — all in one Email, SMS & Push platform."
         features={features}
       />
 
@@ -207,7 +207,7 @@ export default function CleaningBusinessSoftwarePage() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
                   "GPS check-in alerts you the moment a cleaner doesn't arrive on time",
-                  "Encrypted access vault — cleaners see only what they need, when they need it",
+                  "Customer property notes — access details available in the mobile app",
                   "Automated Email & SMS reminders before every clean — no more surprises",
                   "Recurring invoices generated and sent automatically, payments tracked",
                   "Quality checklists with photo proof — consistent results every time",
@@ -259,10 +259,9 @@ export default function CleaningBusinessSoftwarePage() {
           memory is a disaster waiting to happen. Keys get lost. Codes get
           shared with the wrong people. When a cleaner leaves your team, you
           have to scramble to change every lockbox code they knew. Fieseros
-          solves this with an encrypted access vault. Access details are stored
-          per property, visible only to the assigned cleaner during their job
-          window, and revoked instantly when a cleaner leaves your team. Every
-          view is logged for a complete audit trail.
+          stores access details as customer notes your team can reference from
+          the mobile app. Update them anytime a code changes, and remove a
+          cleaner&apos;s app access when they leave your team.
         </p>
         <p>
           Finally, there&apos;s the combination of quality control and
@@ -312,7 +311,7 @@ export default function CleaningBusinessSoftwarePage() {
             <Link href="/lawn-care-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Sun className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Lawn Care Software</h3>
-              <p className="text-sm text-muted-foreground">Route optimization, chemical tracking, customer portals.</p>
+              <p className="text-sm text-muted-foreground">Route planning, customer portal, recurring scheduling.</p>
             </Link>
             <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Award className="h-6 w-6 text-emerald-600 mb-3" />

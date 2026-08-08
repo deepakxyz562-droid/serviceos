@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import {
-  Snowflake,
   CloudSnow,
   Thermometer,
-  Truck,
   Clock,
   MapPin,
   Wind,
@@ -22,21 +20,21 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Snow Removal Software — Auto-Dispatch, Per-Inch Billing & Proof of Service | Fieseros",
+  title: "Snow Removal Software — Seasonal Contracts, Crew GPS & Proof of Service | Fieseros",
   description:
-    "Snow and ice management software for weather-triggered auto-dispatch, per-inch and seasonal contract billing, salt inventory tracking, plow smart auto-dispatch, and 24-hour proof-of-service logs. Start free today.",
+    "Snow and ice management software for seasonal contract billing, crew GPS tracking, and proof-of-service logs. Start free today.",
   keywords: [
     "snow removal software",
     "snow plow software",
     "snow and ice management software",
     "snow removal CRM",
-    "plow smart auto-dispatch",
+    "snow contract billing software",
   ],
   alternates: { canonical: "https://fieseros.com/snow-removal-software" },
   openGraph: {
     title: "Snow Removal Software & CRM | Fieseros",
     description:
-      "Trigger auto-dispatch on weather thresholds, bill per-inch or seasonal contracts, track salt inventory, optimize plow routes, and generate GPS-verified proof-of-service logs. Snow removal software built for storms.",
+      "Bill seasonal contracts, track crew GPS location, and generate GPS-verified proof-of-service logs. Snow removal software built for storms.",
     url: "https://fieseros.com/snow-removal-software",
     siteName: "Fieseros",
     type: "website",
@@ -46,12 +44,6 @@ export const metadata: Metadata = {
 
 const features: Feature[] = [
   {
-    icon: Snowflake,
-    title: "Weather-Triggered Auto-Dispatch",
-    description:
-      "Connect your weather feed and set trigger rules — 2 inches of accumulation, a winter storm warning, a freezing-rain alert. When the threshold hits, Fieseros auto-dispatches the right crews and routes without you making a single phone call at 3 a.m.",
-  },
-  {
     icon: CloudSnow,
     title: "Pre-Storm Customer SMS Notifications",
     description:
@@ -59,60 +51,39 @@ const features: Feature[] = [
   },
   {
     icon: Thermometer,
-    title: "Per-Inch & Seasonal Contract Billing",
+    title: "Seasonal Contract & Per-Event Billing",
     description:
-      "Track per-inch contracts (billed per inch of accumulation from your weather feed) and seasonal contracts (flat-fee for the whole winter) in the same system. Fieseros calculates what's owed per storm and queues the invoice automatically.",
-  },
-  {
-    icon: Truck,
-    title: "Plow Smart Auto-Dispatch",
-    description:
-      "Fieseros optimizes plow routes by service area, priority (hospital vs. retail vs. residential), and equipment (truck plow vs. skid steer vs. salt spreader). Each driver gets an ordered route on their phone with turn-by-turn directions between properties.",
+      "Track seasonal contracts (flat-fee for the whole winter) and per-event pricing. Fieseros queues invoices automatically after each completed visit.",
   },
   {
     icon: Clock,
     title: "24-Hour Proof-of-Service Logs",
     description:
-      "Every plowed property gets a timestamped, GPS-verified proof-of-service entry. When a commercial customer disputes whether you plowed at 2 a.m. or a slip-and-fall claim arises, you have defensible records of exactly when each lot was serviced.",
+      "Techs check in and out of every property with GPS verification, so you have a timestamped record of when each lot was serviced.",
   },
   {
     icon: MapPin,
     title: "Crew GPS Tracking in Storms",
     description:
-      "See every truck's live location during a storm, even when cell service is spotty. Fieseros tracks which properties have been serviced, which are pending, and which crew is closest — so you can redirect on the fly when a route falls behind.",
+      "See every truck's live location during a storm on the dispatch board.",
   },
 ];
 
 const faqs = [
   {
-    question: "How does weather-triggered auto-dispatch work for snow removal?",
+    question: "Can Fieseros handle both per-event and seasonal snow contracts?",
     answer:
-      "You connect a weather feed to Fieseros and define trigger rules — for example, auto-dispatch all commercial routes when 2 inches of accumulation is forecast, or trigger residential routes on a winter storm warning. When the threshold is crossed, Fieseros automatically dispatches the right crews to the right routes, sends drivers their ordered stops on their phones, and notifies customers that service is in motion. You're not making phone calls at 3 a.m. — you're watching it happen on a dashboard, with the ability to intervene if needed. Most snow operators using Fieseros significantly cut storm-time admin work.",
-  },
-  {
-    question: "Can Fieseros handle both per-inch and seasonal snow contracts?",
-    answer:
-      "Yes. Snow removal businesses typically run a mix of seasonal contracts (a flat fee for the whole winter) and per-inch contracts (billed per inch of accumulation, often tiered: 1–3 inches, 3–6 inches, 6+ inches). Fieseros tracks both in the same system, pulls accumulation data from your weather feed per service area, calculates what's owed per storm per customer, and queues the invoice automatically. Per-inch customers see a clear, weather-backed invoice; seasonal customers see a clean record of every service performed under their contract, which protects you if they ever question what they paid for.",
-  },
-  {
-    question: "How does salt and de-icer inventory tracking work?",
-    answer:
-      "Salt is one of the biggest variable costs in snow removal, and it's notoriously hard to track — spreaders don't measure precisely, drivers over-apply, and inventory shrinks. Fieseros lets drivers log salt load-outs and application amounts per property, tracks inventory across your yard and each truck, and flags when stock is running low before the next storm. Salt usage flows onto per-inch and per-service invoices where applicable, so you're not eating material costs on seasonal contracts that didn't budget for them. Most snow operators recover meaningful salt cost in the first season of accurate tracking.",
-  },
-  {
-    question: "How does plow smart auto-dispatch work?",
-    answer:
-      "Fieseros clusters your service properties by area and priority — hospitals and emergency facilities first, then commercial lots, then residential drives — and optimizes the driving order within each cluster based on equipment type (truck plow, skid steer, salt spreader). Each driver sees their ordered route on their phone with turn-by-turn directions between properties, and completed stops check off automatically based on GPS. When a route falls behind in a storm, you can see the backlog and redirect a nearby crew in real time — instead of discovering at sunrise that a whole neighborhood didn't get plowed.",
+      "Fieseros tracks seasonal contracts and per-event pricing in the same system. Per-event invoices are queued automatically after each completed visit.",
   },
   {
     question: "How does proof-of-service documentation protect snow removal businesses?",
     answer:
-      "Slip-and-fall claims are the single biggest liability exposure in snow removal. A customer or tenant claims the lot wasn't plowed, the property owner sues, and without proof you're liable. Fieseros generates a GPS-verified, timestamped proof-of-service entry on every property you service — when the crew arrived, when they left, what they did, and a photo if needed. When a claim arises, you have a defensible, timestamped record that the lot was serviced at 2:14 a.m. — most claims collapse the moment that documentation is produced, and your insurance carrier will thank you for keeping it.",
+      "Techs check in and out of every property through the mobile app with GPS verification, so you have a timestamped record of when each lot was serviced.",
   },
   {
     question: "Can Fieseros handle commercial and residential snow accounts together?",
     answer:
-      "Yes. Fieseros is built for snow removal businesses that run both commercial contracts (office parks, retail centers, HOAs, medical facilities) and residential driveways in the same operation. Commercial accounts get priority routing, per-inch or seasonal billing, and detailed proof-of-service logs for liability protection. Residential accounts get simpler per-event or seasonal billing and customer SMS notifications. Reports break out revenue and cost by account type so you can see whether commercial or residential is more profitable — and which properties to drop before next season because the service cost exceeds what you're charging.",
+      "Yes. Fieseros is built for snow removal businesses that run both commercial contracts (office parks, retail centers, HOAs, medical facilities) and residential driveways in the same operation. Commercial accounts get priority routing, seasonal or per-event billing, and detailed proof-of-service logs for liability protection. Residential accounts get simpler per-event or seasonal billing and customer SMS notifications. Reports break out revenue and cost by account type so you can see whether commercial or residential is more profitable — and which properties to drop before next season because the service cost exceeds what you're charging.",
   },
 ];
 
@@ -120,7 +91,7 @@ export default function SnowRemovalSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "Fieseros — Snow Removal Business Software",
     description:
-      "Snow and ice management CRM software with weather-triggered auto-dispatch, per-inch and seasonal contract billing, salt inventory tracking, plow smart auto-dispatch, crew GPS tracking, and 24-hour proof-of-service logs.",
+      "Snow and ice management CRM software with seasonal contract billing, crew GPS tracking, and proof-of-service logs.",
     url: "https://fieseros.com/snow-removal-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
@@ -137,8 +108,8 @@ export default function SnowRemovalSoftwarePage() {
     >
       <CornerstoneHero
         eyebrow="Snow Removal Software"
-        title="Snow Removal Software Built for 3 a.m. Storms, Slip-and-Fall Defense, and Per-Inch Billing"
-        subtitle="From weather-triggered auto-dispatch to GPS-verified proof-of-service logs, Fieseros helps snow operators trigger, route, bill, and defend every storm — without the 3 a.m. phone tree."
+        title="Snow Removal Software Built for 3 a.m. Storms, Slip-and-Fall Defense, and Seasonal Billing"
+        subtitle="From seasonal contract billing to GPS-verified proof-of-service logs, Fieseros helps snow operators bill, track, and defend every storm — without the 3 a.m. phone tree."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -159,7 +130,7 @@ export default function SnowRemovalSoftwarePage() {
 
       <FeatureGrid
         title="Built for the way snow operators actually work"
-        subtitle="From the weather-triggered 3 a.m. dispatch to the spring slip-and-fall defense — every snow removal workflow in one platform."
+        subtitle="From the 3 a.m. dispatch to the spring slip-and-fall defense — every snow removal workflow in one platform."
         features={features}
       />
 
@@ -172,9 +143,10 @@ export default function SnowRemovalSoftwarePage() {
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
               Most snow operators still dispatch at 3 a.m. with a clipboard
-              and a phone tree, track salt usage by guess, and defend
-              slip-and-fall claims with no proof. Here&apos;s what that costs
-              you — and what changes when you switch to Fieseros.
+              and a phone tree, defend slip-and-fall claims with no proof,
+              and lose track of which properties have actually been serviced.
+              Here&apos;s what that costs you — and what changes when you
+              switch to Fieseros.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -186,10 +158,9 @@ export default function SnowRemovalSoftwarePage() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
                   "Dispatching at 3 a.m. with a clipboard and a phone tree — chaos in every storm",
-                  "Salt usage untracked — you're eating material costs on seasonal contracts",
                   "Slip-and-fall claims with no proof you serviced the lot",
-                  "Per-inch contract revenue unbillable because nobody recorded the accumulation",
-                  "Drivers zigzagging across town because routes were built by hand",
+                  "Seasonal contract revenue unbillable because nobody tracks completed visits",
+                  "No visibility into which properties have been serviced and which are still pending",
                   "Customers calling at 4 a.m. asking are you coming?",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
@@ -206,11 +177,9 @@ export default function SnowRemovalSoftwarePage() {
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
-                  "Weather triggers auto-dispatch the right crews the moment thresholds are crossed",
-                  "Salt load-outs and applications logged per property — material costs recovered",
-                  "GPS-verified, timestamped proof-of-service on every property — claims defended",
-                  "Per-inch billing calculated automatically from your weather feed",
-                  "Routes optimized by area, priority, and equipment — no zigzagging in a storm",
+                  "Seasonal contracts and per-event pricing queued automatically after each visit",
+                  "Tech check-in/check-out with GPS verification on every property",
+                  "Crew GPS tracking shows live location on the dispatch board",
                   "Pre-storm SMS notifications tell customers what to expect — phone stops ringing",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
@@ -241,41 +210,31 @@ export default function SnowRemovalSoftwarePage() {
           The defining operational challenge in snow is dispatch under
           pressure. When a storm hits at 2 a.m., you can&apos;t be making
           phone calls to a list of drivers and hoping they show up. Fieseros
-          handles weather-triggered auto-dispatch: you define the rules (2
-          inches of accumulation, a winter storm warning, a freezing-rain
-          alert), and when the threshold is crossed, the right crews are
-          dispatched to the right routes automatically. Drivers get their
-          ordered stops on their phones with turn-by-turn directions. You
-          watch it happen on a dashboard and intervene only when a route
-          falls behind. The 3 a.m. phone tree becomes a managed operation.
+          puts every truck on a live dispatch board so you can see who is
+          out, who has checked in at which property, and who is closest to
+          the next stop. Drivers get full job details on their phones, and
+          customers receive automated SMS updates so they stop calling you at
+          4 a.m. The 3 a.m. phone tree becomes a managed operation.
         </p>
         <p>
           Then there&apos;s the liability and billing side. Slip-and-fall
           claims are the single biggest financial risk in snow removal — a
           single lawsuit can wipe out a season&apos;s profit. Without proof
-          of service, you lose those claims. Fieseros generates a
-          GPS-verified, timestamped proof-of-service entry on every property
-          you service, so when a claim arises, you have defensible records
-          that the lot was plowed at 2:14 a.m. On the revenue side, per-inch
-          contracts are notoriously hard to bill accurately without a system
-          — Fieseros pulls accumulation from your weather feed, calculates
-          what&apos;s owed per storm per customer, and queues the invoice
-          automatically. Revenue that used to be unbillable becomes
+          of service, you lose those claims. Fieseros logs a GPS-verified,
+          timestamped check-in and check-out on every property you service,
+          so when a claim arises you have defensible records that the lot was
+          serviced at 2:14 a.m. On the revenue side, seasonal contracts and
+          per-event pricing are queued automatically after each completed
+          visit, so revenue that used to slip through the cracks becomes
           automatic.
         </p>
         <p>
-          Finally, there&apos;s the cost side. Salt and de-icer are the
-          biggest variable costs in snow removal, and they&apos;re notoriously
-          hard to track — spreaders don&apos;t measure precisely, drivers
-          over-apply, and inventory shrinks invisibly. Fieseros lets drivers
-          log salt load-outs and applications per property, tracks inventory
-          across your yard and trucks, and flows material usage onto invoices
-          where applicable. Pre-storm SMS notifications keep customers
-          informed and stop the 4 a.m. phone calls. Crew GPS tracking lets
-          you see which properties are done, which are pending, and which
-          crew is closest — so you can redirect on the fly when a route falls
-          behind. The chaos of a storm becomes a managed, profitable
-          operation.
+          Finally, there&apos;s the customer communication side. Pre-storm
+          SMS notifications keep customers informed and stop the 4 a.m. phone
+          calls. Crew GPS tracking on the dispatch board shows you which
+          properties have been serviced and which crew is closest, so you can
+          redirect on the fly when a route falls behind. The chaos of a storm
+          becomes a managed, profitable operation.
         </p>
       </ContentSection>
 
@@ -298,17 +257,17 @@ export default function SnowRemovalSoftwarePage() {
             <Link href="/lawn-care-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Sun className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Lawn Care Software</h3>
-              <p className="text-sm text-muted-foreground">Route optimization, chemical tracking, customer portals.</p>
+              <p className="text-sm text-muted-foreground">Route planning, customer portal, recurring scheduling.</p>
             </Link>
             <Link href="/landscaping-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Trees className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Landscaping Software</h3>
-              <p className="text-sm text-muted-foreground">Crew routing, design-build quotes, material inventory.</p>
+              <p className="text-sm text-muted-foreground">Crew routing, design-build quotes, photo documentation.</p>
             </Link>
             <Link href="/roofing-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Home className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Roofing Software</h3>
-              <p className="text-sm text-muted-foreground">Aerial measurements, project phasing, storm claims.</p>
+              <p className="text-sm text-muted-foreground">Project phasing, photo documentation, milestone invoicing.</p>
             </Link>
             <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Award className="h-6 w-6 text-emerald-600 mb-3" />

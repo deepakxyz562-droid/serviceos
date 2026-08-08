@@ -23,7 +23,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "HVAC Software — Dispatch, Service & Invoice | Fieseros",
   description:
-    "HVAC service software for seasonal demand, preventive maintenance contracts, equipment history, certified technician dispatch, and Email & SMS customer communication. Start free today.",
+    "HVAC service software for seasonal demand, preventive maintenance contracts, equipment history, and Email & SMS customer communication. Start free today.",
   keywords: [
     "hvac software",
     "hvac CRM",
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "HVAC Software — Dispatch, Service & Invoice | Fieseros",
     description:
-      "Handle summer and winter demand spikes, track equipment service history, schedule preventive maintenance, and dispatch certified technicians — all in one HVAC CRM with Email, SMS, and Push notifications.",
+      "Handle summer and winter demand spikes, track equipment service history, schedule preventive maintenance, and dispatch technicians — all in one HVAC CRM with Email, SMS, and Push notifications.",
     url: "https://fieseros.com/hvac-software",
     siteName: "Fieseros",
     type: "website",
@@ -54,7 +54,7 @@ const features: Feature[] = [
     icon: Fan,
     title: "Equipment Asset Tracking",
     description:
-      "Every AC unit, furnace, heat pump, and mini-split is an asset record — model, serial, install date, refrigerant type, filter size, full service history. When a customer calls, you know the unit before they finish describing the problem.",
+      "Every AC unit, furnace, heat pump, and mini-split is an asset record — model, serial, install date, warranty info, and full service history. When a customer calls, you know the unit before they finish describing the problem.",
   },
   {
     icon: ShieldCheck,
@@ -78,7 +78,7 @@ const features: Feature[] = [
     icon: BadgeCheck,
     title: "Technician Skill-Based Dispatch",
     description:
-      "Tag each technician with certifications — EPA 608, NATE, manufacturer-specific. Fieseros only dispatches qualified techs to jobs that require those credentials, keeping you compliant and customers safe.",
+      "Tag each technician with skills and view them on the dispatch board so you can match the right tech to the right job manually.",
   },
 ];
 
@@ -96,17 +96,17 @@ const faqs = [
   {
     question: "How does equipment service history work in HVAC software?",
     answer:
-      "Every piece of HVAC equipment — central AC unit, furnace, heat pump, mini-split, commercial rooftop unit — gets an asset record in Fieseros. That record stores the model number, serial number, install date, refrigerant type, filter size, warranty info, and complete service history: every repair, every tune-up, every part replaced, every photo taken. When a customer calls about \"the AC in the upstairs bedroom,\" you can pull up that exact unit and see what was repaired last summer, what the tech noted, and whether it's still under warranty — before you even dispatch.",
+      "Every piece of HVAC equipment — central AC unit, furnace, heat pump, mini-split, commercial rooftop unit — gets an asset record in Fieseros. That record stores the model number, serial number, install date, warranty info, and complete service history: every repair, every tune-up, every part replaced, every photo taken. When a customer calls about \"the AC in the upstairs bedroom,\" you can pull up that exact unit and see what was repaired last summer, what the tech noted, and whether it's still under warranty — before you even dispatch.",
   },
   {
-    question: "How does Fieseros dispatch only certified technicians to certain jobs?",
+    question: "How does Fieseros show technician skills on the dispatch board?",
     answer:
-      "Each technician in Fieseros has a profile listing their certifications — EPA 608 Universal, NATE-certified, manufacturer-specific training (Carrier, Trane, Daikin), gas furnace certification, refrigerant handling credentials, and more. Each job type is tagged with the certifications required to perform it legally and safely. When you dispatch, Fieseros only shows you technicians whose certifications match the job requirements. This protects your business from compliance violations, your customers from unsafe work, and your technicians from being asked to do work they're not certified for.",
+      "Each technician in Fieseros has a profile where you can list their skills and store their certification documents — EPA 608, NATE, manufacturer-specific training, and more. When you're dispatching, Fieseros shows each available technician's skill tags right on the dispatch board so you can match the right tech to the right job yourself. You stay in control of who goes where — no automatic filtering, just the information you need at a glance.",
   },
   {
-    question: "Does Fieseros support seasonal pricing for HVAC services?",
+    question: "Does Fieseros support after-hours and emergency pricing for HVAC services?",
     answer:
-      "Yes. HVAC pricing legitimately varies by season — emergency AC repair in July is priced differently than a routine tune-up in March. Fieseros lets you set up seasonal pricing rules: higher rates during peak cooling season (June–August) and heating season (December–February), standard rates in shoulder months, and discounted pricing for maintenance contract customers. When a technician completes a job, the correct price is automatically applied based on the date, service type, and customer's contract status. No manual price lookups, no undercharging during peak season.",
+      "Fieseros supports emergency, weekend, evening, and holiday surcharges through pricing rules, so you can charge the right price for after-hours or urgent HVAC work. You can also apply a call-out fee, per-km travel fee, and minimum or maximum caps. No manual price lookups, no undercharging for after-hours work.",
   },
   {
     question: "Can I automate filter change and tune-up reminders to customers?",
@@ -119,7 +119,7 @@ export default function HvacSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "Fieseros — HVAC Service Software",
     description:
-      "HVAC CRM and dispatch software with seasonal demand scheduling, equipment asset tracking, preventive maintenance contracts, certified technician dispatch, and Email & SMS invoicing.",
+      "HVAC CRM and dispatch software with seasonal demand scheduling, equipment asset tracking, preventive maintenance contracts, and Email & SMS invoicing.",
     url: "https://fieseros.com/hvac-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
@@ -158,7 +158,7 @@ export default function HvacSoftwarePage() {
 
       <FeatureGrid
         title="HVAC software built for the realities of the trade"
-        subtitle="Seasonal chaos, maintenance contracts, equipment history, certified dispatch — every HVAC workflow in one platform."
+        subtitle="Seasonal chaos, maintenance contracts, equipment history — every HVAC workflow in one platform."
         features={features}
       />
 
@@ -187,7 +187,7 @@ export default function HvacSoftwarePage() {
                   "No record of what was repaired on that AC unit last summer",
                   "Maintenance contract renewals missed — customers drift to competitors",
                   "Tech dispatched to a job they aren't certified for — compliance risk",
-                  "Refrigerant logs scattered across paper notebooks and Excel files",
+                  "Equipment service history scattered across paper notebooks and Excel files",
                   "Customers call every 20 minutes asking \"when will the tech arrive?\"",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
@@ -207,8 +207,8 @@ export default function HvacSoftwarePage() {
                   "Emergency queue auto-triages by urgency — most critical jobs first",
                   "Complete equipment history pulled up the moment a customer calls",
                   "Maintenance contracts auto-renewed — never lose another one",
-                  "Certification-aware dispatch — only qualified techs assigned",
-                  "Refrigerant usage tracked per job with full compliance audit trail",
+                  "Skill tags shown on dispatch board — match the right tech to the right job",
+                  "Complete equipment service history per customer asset — model, serial, warranty, and every prior visit",
                   "Customers get automated SMS and Push updates — they stop calling you",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
@@ -249,7 +249,7 @@ export default function HvacSoftwarePage() {
           Equipment tracking is the second pillar of a strong HVAC operation.
           When a customer calls about \"the AC in the upstairs bedroom that
           keeps tripping,\" you need to know exactly which unit that is — model,
-          serial, install date, refrigerant type, what was repaired last summer,
+          serial, install date, what was repaired last summer,
           whether it&apos;s still under warranty. Fieseros keeps a complete
           asset record for every piece of equipment at every customer site.
           This isn&apos;t just operational efficiency — it&apos;s how you build
@@ -259,17 +259,16 @@ export default function HvacSoftwarePage() {
         </p>
         <p>
           Finally, there&apos;s compliance — the part of HVAC that keeps
-          business owners up at night. Refrigerant handling requires EPA 608
-          certification. Gas furnace work requires specific qualifications.
-          Commercial equipment often requires manufacturer-specific training.
-          Dispatching the wrong technician isn&apos;t just inefficient —
-          it&apos;s a legal liability. Fieseros tracks every technician&apos;s
-          certifications and only dispatches them to jobs they&apos;re qualified
-          for. Refrigerant usage is logged per job, with a complete audit trail
-          for EPA compliance. And every permit, inspection, and safety
-          document is stored against the job it belongs to — searchable
-          forever. This is what air conditioning software should do: not just
-          schedule jobs, but protect the business running them.
+          business owners up at night. EPA 608 certification, gas furnace
+          qualifications, manufacturer-specific training — each technician
+          has different credentials, and dispatching the wrong one isn&apos;t
+          just inefficient, it&apos;s a legal liability. Fieseros stores each
+          technician&apos;s certification documents in their profile and shows
+          their skills on the dispatch board so you can match techs to jobs
+          manually. Equipment service history is logged per asset, with photos
+          and notes attached to every visit, so you have a complete record in
+          any dispute. This is what air conditioning software should do: not
+          just schedule jobs, but protect the business running them.
         </p>
       </ContentSection>
 
@@ -292,7 +291,7 @@ export default function HvacSoftwarePage() {
             <Link href="/roofing-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Home className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Roofing Software</h3>
-              <p className="text-sm text-muted-foreground">Aerial measurements, project phasing, storm claims.</p>
+              <p className="text-sm text-muted-foreground">Project phasing, photo documentation, milestone invoicing.</p>
             </Link>
             <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Award className="h-6 w-6 text-emerald-600 mb-3" />
@@ -302,12 +301,12 @@ export default function HvacSoftwarePage() {
             <Link href="/plumbing-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Wrench className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Plumbing Software</h3>
-              <p className="text-sm text-muted-foreground">Emergency dispatch, parts inventory, and asset history.</p>
+              <p className="text-sm text-muted-foreground">Emergency dispatch, asset history, and recurring maintenance.</p>
             </Link>
             <Link href="/electrical-contractor-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Plug className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Electrical Software</h3>
-              <p className="text-sm text-muted-foreground">Job costing, code compliance, and parts tracking.</p>
+              <p className="text-sm text-muted-foreground">Multi-electrician dispatch, asset history, and invoicing.</p>
             </Link>
           </div>
         </div>

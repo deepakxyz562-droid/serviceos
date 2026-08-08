@@ -5,7 +5,6 @@ import {
   MessageSquare,
   Package,
   Users,
-  FileCheck,
   Zap,
   Wrench,
   CheckCircle2,
@@ -23,7 +22,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Electrical Contractor Software — Dispatch, Invoice & Track | Fieseros",
   description:
-    "Electrical contractor software for licensed electricians. Compliance and certification tracking, permit management, Email & SMS quotes and invoicing, multi-electrician dispatch. Start free.",
+    "Electrical contractor software for licensed electricians. License and certification storage, Email & SMS quotes and invoicing, multi-electrician dispatch. Start free.",
   keywords: [
     "electrical contractor software",
     "electrician CRM",
@@ -34,7 +33,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Electrical Contractor Software | Fieseros",
     description:
-      "From residential service calls to commercial installations — dispatch electricians, track permits and certifications, document jobs with photos, and invoice by Email & SMS.",
+      "From residential service calls to commercial installations — dispatch electricians, store licenses and certifications, document jobs with photos, and invoice by Email & SMS.",
     url: "https://fieseros.com/electrical-contractor-software",
     siteName: "Fieseros",
     type: "website",
@@ -47,13 +46,13 @@ const features: Feature[] = [
     icon: ShieldCheck,
     title: "Compliance & Certification Tracking",
     description:
-      "Every electrician's license, certification, and CEU credits tracked with renewal alerts. Each job tagged with the credentials required — Fieseros only dispatches electricians whose licenses are current and applicable.",
+      "Store every electrician's license, certification, and CEU credits in their profile with renewal alerts 90, 60, and 30 days before they expire.",
   },
   {
     icon: Camera,
     title: "Job Site Photo Documentation",
     description:
-      "Before, during, and after photos of every panel upgrade, rewiring job, and fixture install. Photos attach to the work order, support permit close-outs, and protect you in warranty and liability disputes.",
+      "Before, during, and after photos of every panel upgrade, rewiring job, and fixture install. Photos attach to the work order and protect you in warranty and liability disputes.",
   },
   {
     icon: MessageSquare,
@@ -65,7 +64,7 @@ const features: Feature[] = [
     icon: Package,
     title: "Parts & Materials Tracking",
     description:
-      "Track every reel of wire, every breaker, every conduit fitting, every junction box. Materials used on a job auto-deduct from inventory and roll onto the invoice at marked-up prices. No more unbilled materials.",
+      "Track every reel of wire, every breaker, every conduit fitting, every junction box. Add materials as line items on the work order and they roll onto the invoice at your marked-up price. No more unbilled materials.",
   },
   {
     icon: Users,
@@ -73,29 +72,18 @@ const features: Feature[] = [
     description:
       "Coordinate a team of electricians across multiple active job sites. See who is where, what they're certified for, and what they have on their van. Dispatch the right electrician to the right job, every time.",
   },
-  {
-    icon: FileCheck,
-    title: "Permit & Inspection Tracking",
-    description:
-      "Track permits pulled, inspection dates, inspector names, and pass/fail status for every job that requires it. Fieseros alerts you when an inspection is coming due and stores the signed-off permit closure for your records.",
-  },
 ];
 
 const faqs = [
   {
     question: "How does Fieseros track electrician licenses and certifications?",
     answer:
-      "Every electrician in Fieseros has a profile that stores their license number, license type (journeyman, master, residential, commercial), issuing authority, expiration date, and continuing education unit (CEU) credits. Fieseros sends you alerts 90, 60, and 30 days before any license expires, so you have time to ensure the electrician completes their CEUs and renews. Each job type is tagged with the license requirements for your jurisdiction — for example, a service upgrade over 200 amps may require a master electrician's signature. Fieseros only dispatches electricians whose current licenses match the job requirements. This protects your business from compliance violations and your customers from unsafe work performed by under-qualified electricians.",
-  },
-  {
-    question: "Can Fieseros help manage permits and inspections for electrical work?",
-    answer:
-      "Yes. Permit and inspection management is a core workflow for electrical contractors, and Fieseros handles it end-to-end. When you create a job that requires a permit — a panel upgrade, a new circuit installation, a commercial rewiring project — Fieseros tracks the permit application, permit number, issuing jurisdiction, expiration date, and required inspections (rough-in, final, etc.). You log inspection dates, inspector names, and pass/fail results against the job. Fieseros alerts you when an inspection is coming due so you can schedule it, and stores the signed-off permit closure documentation in the job record permanently. This keeps you compliant with inspectors and gives you a clean audit trail if questions arise years later.",
+      "Every electrician in Fieseros has a profile that stores their license number, license type (journeyman, master, residential, commercial), issuing authority, expiration date, and continuing education unit (CEU) credits. Fieseros sends you alerts 90, 60, and 30 days before any license expires, so you have time to ensure the electrician completes their CEUs and renews. When you're dispatching, Fieseros shows each electrician's skills and certifications on the dispatch board so you can match the right electrician to the right job manually. This protects your business from compliance violations and your customers from unsafe work performed by under-qualified electricians.",
   },
   {
     question: "How does materials billing work for electrical jobs?",
     answer:
-      "Electrical jobs use a lot of materials — wire by the foot, breakers, conduit, fittings, junction boxes, fixtures, plates — and every one of those materials needs to be billed to the customer at the right marked-up price. Fieseros tracks all of it. Your van and warehouse inventory is loaded into the system with cost and retail price. When an electrician uses materials on a job, they tap them into the work order from their phone (or scan a barcode if you've labeled them). The materials automatically deduct from inventory and add to the customer's invoice at your marked-up price. When stock hits a reorder threshold, Fieseros alerts you. Most electrical contractors recover meaningful lost materials revenue within the first month of using Fieseros.",
+      "Electrical jobs use a lot of materials — wire by the foot, breakers, conduit, fittings, junction boxes, fixtures, plates — and every one of those materials needs to be billed to the customer at the right marked-up price. Add materials as line items on the work order from your phone. Materials flow onto the customer's invoice at your marked-up price. Most electrical contractors recover meaningful lost materials revenue within the first month of using Fieseros.",
   },
   {
     question: "Can I use Fieseros to quote commercial electrical jobs?",
@@ -105,7 +93,7 @@ const faqs = [
   {
     question: "Does Fieseros help with safety documentation for electrical work?",
     answer:
-      "Yes. Electrical work carries serious safety risks — arc flash, shock, working at heights, energized circuits — and proper safety documentation protects both your electricians and your business. Fieseros lets you attach safety documentation to every job: lockout/tagout procedures, arc flash hazard analysis, PPE requirements, safety data sheets for any chemicals used, and pre-job safety briefings. Electricians acknowledge the safety briefings on their phone before starting work. Job site photos taken before, during, and after the work serve as additional safety documentation. If an incident occurs, you have a complete record showing that proper safety procedures were followed — invaluable for insurance claims, OSHA inquiries, and liability defense.",
+      "You can attach safety documents, photos, and notes to any job in Fieseros, so your documentation travels with the work order. Job site photos taken before, during, and after the work serve as additional documentation, and you have a complete record in one place if an incident occurs.",
   },
   {
     question: "How does Fieseros handle multi-site commercial electrical projects?",
@@ -118,7 +106,7 @@ export default function ElectricalContractorSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "Fieseros — Electrical Contractor Software",
     description:
-      "Electrician CRM and dispatch software with compliance and certification tracking, permit and inspection management, materials billing, Email & SMS quotes and invoicing, and multi-electrician dispatch.",
+      "Electrician CRM and dispatch software with license and certification storage, multi-electrician dispatch, Email & SMS quotes and invoicing.",
     url: "https://fieseros.com/electrical-contractor-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
@@ -157,7 +145,7 @@ export default function ElectricalContractorSoftwarePage() {
 
       <FeatureGrid
         title="Built for the realities of running an electrical contracting business"
-        subtitle="Compliance, permits, materials, multi-crew dispatch, quoting — every electrical workflow in one platform built for licensed pros."
+        subtitle="Compliance, materials, multi-crew dispatch, quoting — every electrical workflow in one platform built for licensed pros."
         features={features}
       />
 
@@ -183,7 +171,7 @@ export default function ElectricalContractorSoftwarePage() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
                   "Electrician license renewals sneak up — you find out when they lapse",
-                  "Permits and inspections tracked in a paper notebook that lives in a truck",
+                  "Job documents and photos scattered across trucks, inboxes, and paper notebooks",
                   "Materials used on jobs never make it onto the invoice — lost revenue",
                   "Quotes take days to build — customers go with the faster competitor",
                   "Multi-site commercial jobs tracked across spreadsheets that don't talk to each other",
@@ -204,8 +192,7 @@ export default function ElectricalContractorSoftwarePage() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
                   "License and CEU renewal alerts — never let a license lapse again",
-                  "Permits, inspections, and sign-offs tracked per job, searchable forever",
-                  "Materials auto-bill to the invoice at marked-up price — every time",
+                  "Materials added as line items — auto-flow to invoice at marked-up price",
                   "Quote templates turn hours of work into minutes — win more bids",
                   "Multi-site projects in one dashboard with consolidated progress and billing",
                   "Before, during, and after photos on every job — protection in any dispute",
@@ -229,7 +216,7 @@ export default function ElectricalContractorSoftwarePage() {
           also a business where compliance, permits, and documentation can sink
           you just as fast as a slow response can lose you a job. Electrician
           CRM software that handles only scheduling — without tackling
-          licensing, permits, materials, and quoting — isn&apos;t really
+          licensing, materials, and quoting — isn&apos;t really
           electrical contractor software. Fieseros is built for the full
           reality of the trade.
         </p>
@@ -242,23 +229,22 @@ export default function ElectricalContractorSoftwarePage() {
           on you. An electrician works a job they&apos;re no longer licensed
           for, the work gets flagged in an inspection, and suddenly
           you&apos;re facing fines, rework, and a damaged reputation. Fieseros
-          tracks every electrician&apos;s license, sends you renewal alerts 90,
-          60, and 30 days out, and only dispatches electricians whose current
-          licenses match the job requirements. Compliance becomes automatic,
-          not anxious.
+          stores every electrician&apos;s license, sends you renewal alerts 90,
+          60, and 30 days out, and shows each electrician&apos;s skills on the
+          dispatch board so you can match the right electrician to the right
+          job manually. Compliance becomes manageable, not anxious.
         </p>
         <p>
-          Permits and inspections are the second pillar. Most non-trivial
-          electrical work requires a permit — and inspections at specific
-          stages. In a paper-and-notebook operation, permit numbers get lost,
-          inspection dates slip, and a job that was completed months ago
-          technically never closed out. That&apos;s a liability that can surface
-          years later when the property is sold or the work is questioned.
-          Fieseros tracks permits pulled, required inspections, inspector
-          names, pass/fail results, and final sign-offs — all stored against
-          the job permanently. When a customer or inspector asks about a job
-          from two years ago, you have the complete paper trail at your
-          fingertips in seconds.
+          Job documentation is the second pillar. Most non-trivial electrical
+          work generates paperwork — photos, notes, and sign-offs — that
+          needs to stay with the job forever. In a paper-and-notebook
+          operation, documents get lost in a truck, dates slip, and a job that
+          was completed months ago technically never closed out. That&apos;s a
+          liability that can surface years later when the property is sold or
+          the work is questioned. Fieseros keeps every work order, attached
+          document, photo, and note searchable forever. When a customer or
+          inspector asks about a job from two years ago, you have the complete
+          record at your fingertips in seconds.
         </p>
         <p>
           Finally, there&apos;s the combination of materials billing, quoting,
@@ -274,7 +260,7 @@ export default function ElectricalContractorSoftwarePage() {
           rewiring project — with consolidated progress, dispatch, materials,
           and billing. This is what electrical dispatch software should do:
           not just send electricians to jobs, but protect the license, the
-          permit, the margin, and the project that make the business work.
+          margin, and the project that make the business work.
         </p>
       </ContentSection>
 
@@ -297,12 +283,12 @@ export default function ElectricalContractorSoftwarePage() {
             <Link href="/plumbing-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Wrench className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Plumbing Software</h3>
-              <p className="text-sm text-muted-foreground">Emergency dispatch, parts inventory, and asset history.</p>
+              <p className="text-sm text-muted-foreground">Emergency dispatch, asset history, and recurring maintenance.</p>
             </Link>
             <Link href="/hvac-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Thermometer className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">HVAC Software</h3>
-              <p className="text-sm text-muted-foreground">Dispatch, seasonal contracts, and refrigerant tracking.</p>
+              <p className="text-sm text-muted-foreground">Dispatch, seasonal contracts, and equipment history.</p>
             </Link>
             <Link href="/solar-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Sun className="h-6 w-6 text-emerald-600 mb-3" />

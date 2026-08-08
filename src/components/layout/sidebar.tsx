@@ -184,6 +184,13 @@ const ownerNavSections: NavSection[] = [
     ],
   },
   {
+    title: 'Marketplace',
+    items: [
+      { view: 'marketplaceDashboard', label: 'My Listing', icon: Store },
+      { view: 'claimBusiness', label: 'Claim Business', icon: ShieldCheck },
+    ],
+  },
+  {
     title: 'Setup & Admin',
     collapsible: true,
     defaultCollapsed: true,
@@ -232,6 +239,7 @@ const listingOnlyNavSections: NavSection[] = [
     title: 'Marketplace',
     items: [
       { view: 'marketplaceDashboard', label: 'My Listing', icon: Store },
+      { view: 'claimBusiness', label: 'Claim Business', icon: ShieldCheck },
       { view: 'serviceCatalog', label: 'Services', icon: WrenchIcon },
     ],
   },

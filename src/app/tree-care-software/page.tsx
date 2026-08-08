@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import {
   Camera,
-  Truck,
   BadgeCheck,
   CalendarClock,
   ShieldCheck,
@@ -23,7 +22,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Tree Care Software — Dispatch, Cert Tracking & Insurance-Ready Docs | Fieseros",
   description:
-    "Tree care and arborist software for dangerous-tree photo logs, crew and equipment dispatch, ISA certification tracking, stump-grinding follow-ups, insurance-ready documentation, and recurring inspection contracts. Start free today.",
+    "Tree care and arborist software for dangerous-tree photo logs, crew dispatch, certification storage, photo documentation, and recurring inspection contracts. Start free today.",
   keywords: [
     "tree care software",
     "arborist software",
@@ -35,7 +34,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Tree Care Software & CRM | Fieseros",
     description:
-      "Dispatch crews and equipment together, track ISA certifications per technician, document dangerous-tree assessments, schedule stump-grinding follow-ups, and run recurring tree-health inspection contracts. Tree care software built for arborists.",
+      "Dispatch crews, store ISA certifications per technician, document dangerous-tree assessments with photos, and run recurring tree-health inspection contracts. Tree care software built for arborists.",
     url: "https://fieseros.com/tree-care-software",
     siteName: "Fieseros",
     type: "website",
@@ -51,28 +50,22 @@ const features: Feature[] = [
       "Photograph hazardous trees from every angle, tag the hazard (split trunk, lean, decay), and attach the assessment to the customer's record. When a tree comes down in the next storm, you have dated documentation of the condition you flagged.",
   },
   {
-    icon: Truck,
-    title: "Crew, Chipper & Bucket Truck Dispatch",
-    description:
-      "Fieseros knows which jobs need a bucket truck, which need a chipper, which need a climber — and dispatches the right crew and equipment together. Equipment utilization is tracked, so no chipper sits idle while a crew waits.",
-  },
-  {
     icon: BadgeCheck,
     title: "ISA Certification Tracking",
     description:
-      "Track ISA Certified Arborist, TRAQ, and climbing certifications per technician. Fieseros flags jobs that require a specific certification and warns you before you dispatch an unqualified crew — critical for liability and insurance.",
+      "Store ISA Certified Arborist, TRAQ, and climbing certifications per technician with renewal alerts. Skills appear on the dispatch board so you can match techs to jobs manually.",
   },
   {
     icon: CalendarClock,
     title: "Stump-Grinding Follow-Up Scheduling",
     description:
-      "A tree removal creates a stump — and a follow-up job. Fieseros auto-schedules the stump grinding visit a few days later, sends the customer a reminder, and queues the invoice — so no stump job falls through the cracks.",
+      "Set up a recurring or follow-up schedule for stump grinding visits so no follow-up falls through the cracks.",
   },
   {
     icon: ShieldCheck,
     title: "Insurance-Ready Job Documentation",
     description:
-      "Every job generates a clean record: site photos, crew certifications, equipment used, safety briefings, and a proof-of-service log. When an insurance claim or property-damage dispute arises, you have a defensible, timestamped package ready to send.",
+      "Every job has timestamped photos, crew assignments, and notes attached to the work order.",
   },
   {
     icon: RefreshCw,
@@ -89,14 +82,9 @@ const faqs = [
       "When an arborist assesses a hazardous tree, they photograph it from every angle in Fieseros, tag the specific hazard (split trunk, excessive lean, decay, root plate lift), and attach a written assessment to the customer's property record. The assessment is timestamped and stored permanently. If the tree later fails and causes damage — or if the customer delays removal and then blames you for not flagging the risk — you have defensible documentation of exactly what you saw, when, and what you recommended. Most tree care businesses see their dispute exposure drop sharply within months of switching to documented assessments.",
   },
   {
-    question: "Can Fieseros dispatch the right crew and equipment for tree jobs?",
-    answer:
-      "Yes. Tree work is equipment-intensive: a small pruning job needs a climber and a ground crew; a removal might need a bucket truck, a chipper, a crane, and a four-person crew. Fieseros tracks your equipment and crews, and when you schedule a job, it shows you which combination is required and which is available. Equipment utilization is tracked so no chipper sits idle in the yard while a crew waits — and you can see whether you're using that expensive bucket truck enough to justify owning it versus renting when demand spikes. Most tree care businesses recover significant equipment cost in the first year.",
-  },
-  {
     question: "How does Fieseros track ISA certifications and arborist qualifications?",
     answer:
-      "Every technician's certifications are stored in their profile: ISA Certified Arborist, Tree Risk Assessment Qualification (TRAQ), climbing certifications, aerial rescue, first aid, and any state pesticide applicator licenses. When you schedule a job that requires a specific certification — a TRAQ assessment, a restricted-use pesticide application — Fieseros flags whether the assigned crew is qualified, and warns you before you dispatch someone who isn't. This protects you on liability and insurance, and makes audits straightforward when a customer, insurer, or regulator asks for proof of qualifications.",
+      "Certifications are stored per technician with renewal alerts, and skills appear on the dispatch board so you can match techs to jobs manually.",
   },
   {
     question: "How does stump-grinding follow-up scheduling work?",
@@ -106,7 +94,7 @@ const faqs = [
   {
     question: "How does Fieseros help with insurance and property-damage documentation?",
     answer:
-      "Tree work carries real property-damage risk: a limb on a roof, a trunk across a fence, a chipper throwing debris into a car. Fieseros generates a clean documentation package on every job — site photos before and after, crew certifications, equipment used, safety briefings conducted, neighbor notifications, and a proof-of-service log signed by the customer. When an insurance claim or a dispute arises — yours or the customer's — you have a defensible, timestamped package ready to hand over. Most tree care businesses using Fieseros see their insurance premiums and dispute costs drop significantly within the first year of consistent documentation.",
+      "Photos, crew assignments, and notes are attached to every job in Fieseros, so you have a timestamped record of what was done.",
   },
   {
     question: "Can I manage recurring tree-health inspection contracts?",
@@ -119,7 +107,7 @@ export default function TreeCareSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "Fieseros — Tree Care Business Software",
     description:
-      "Tree care and arborist CRM software with dangerous-tree photo logs, crew and equipment dispatch, ISA certification tracking, stump-grinding follow-ups, insurance-ready job documentation, and recurring tree-health inspection contracts.",
+      "Tree care and arborist CRM software with dangerous-tree photo logs, crew dispatch, certification storage, photo documentation, and recurring inspection contracts.",
     url: "https://fieseros.com/tree-care-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
@@ -185,10 +173,10 @@ export default function TreeCareSoftwarePage() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
                   "Insurance disputes over property damage with no documentation to defend yourself",
-                  "Bucket trucks and chippers sitting idle while crews wait for the right job",
+                  "Crew assignments tracked on paper — wrong tech on the wrong job",
                   "Stump-grinding follow-ups forgotten after the removal is done",
                   "Recurring inspection contracts lapsing because no one tracks renewal dates",
-                  "Crews dispatched to jobs they're not certified for — a liability nightmare",
+                  "Certifications buried in spreadsheets — no alerts when a TRAQ is about to lapse",
                   "No photo record of the tree's condition before it came down",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
@@ -206,11 +194,11 @@ export default function TreeCareSoftwarePage() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
                   "Photo-documented condition assessments on every hazardous tree",
-                  "Equipment and crew matched to each job — utilization tracked, no idle chippers",
-                  "Stump grinding auto-scheduled a few days after every removal",
+                  "Crew assignments and skills visible on the dispatch board",
+                  "Stump grinding scheduled as a follow-up so no removal leaves a stump behind",
                   "Inspection contracts auto-renewed — recurring revenue never silently lapses",
-                  "Certification tracking warns you before you dispatch an unqualified crew",
-                  "Insurance-ready documentation package on every job, timestamped and signed",
+                  "Certifications stored per technician with renewal alerts",
+                  "Photo documentation with timestamps on every job",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
@@ -244,25 +232,22 @@ export default function TreeCareSoftwarePage() {
           are daily realities for tree services, and they turn into
           insurance claims and lawsuits fast. Without proper documentation,
           the contractor usually loses. Fieseros makes documentation part
-          of the workflow: site photos before and after, crew
-          certifications, equipment used, safety briefings, neighbor
-          notifications, and a proof-of-service log signed by the customer.
-          When a claim or dispute arises, you have a defensible,
-          timestamped package ready to send — instead of a vague memory and
-          a paper work order.
+          of the workflow: timestamped photos, crew assignments, and notes
+          attached to every work order. When a claim or dispute arises, you
+          have a defensible, timestamped record of what was done — instead
+          of a vague memory and a paper work order.
         </p>
         <p>
-          Then there&apos;s equipment and certification management — the
-          operational complexity that makes or breaks a tree care business.
-          A removal might need a bucket truck, a chipper, a crane, and a
-          four-person crew with specific certifications. A TRAQ assessment
-          needs a qualified arborist. A restricted-use pesticide application
-          needs a licensed applicator. Fieseros tracks all of it:
-          equipment availability and utilization, technician certifications,
-          and job requirements. When you schedule a job, you see whether the
-          right crew and equipment are available, and whether they&apos;re
-          qualified. No chipper sits idle in the yard while a crew waits,
-          and no crew is dispatched to a job they&apos;re not certified for.
+          Then there&apos;s certification management — the operational
+          complexity that makes or breaks a tree care business. A removal
+          might need a four-person crew with specific certifications. A TRAQ
+          assessment needs a qualified arborist. A restricted-use pesticide
+          application needs a licensed applicator. Fieseros stores ISA
+          Certified Arborist, TRAQ, and climbing certifications per
+          technician with renewal alerts, and skills appear on the dispatch
+          board so you can match techs to jobs manually. You can see at a
+          glance which technician on your team holds the qualification a
+          given job calls for.
         </p>
         <p>
           Finally, there&apos;s the recurring revenue engine that most tree
@@ -298,17 +283,17 @@ export default function TreeCareSoftwarePage() {
             <Link href="/landscaping-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Trees className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Landscaping Software</h3>
-              <p className="text-sm text-muted-foreground">Crew routing, design-build quotes, material inventory.</p>
+              <p className="text-sm text-muted-foreground">Crew routing, design-build quotes, photo documentation.</p>
             </Link>
             <Link href="/lawn-care-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Sun className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Lawn Care Software</h3>
-              <p className="text-sm text-muted-foreground">Route optimization, chemical tracking, customer portals.</p>
+              <p className="text-sm text-muted-foreground">Route planning, customer portal, recurring scheduling.</p>
             </Link>
             <Link href="/roofing-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Home className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Roofing Software</h3>
-              <p className="text-sm text-muted-foreground">Aerial measurements, project phasing, storm claims.</p>
+              <p className="text-sm text-muted-foreground">Project phasing, photo documentation, milestone invoicing.</p>
             </Link>
             <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Award className="h-6 w-6 text-emerald-600 mb-3" />

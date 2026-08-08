@@ -21,10 +21,6 @@ import {
   Globe,
   Mail,
   Navigation,
-  TrendingUp,
-  CalendarClock,
-  FileText,
-  Users,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -48,11 +44,6 @@ import {
   resolveIndustryFromAnySlug,
 } from '@/lib/seo/plural-industry-slugs'
 import {
-  getIndustrySoftwareUrl,
-  getIndustrySoftwareLabel,
-  getIndustryDisplayName,
-} from '@/lib/seo/industry-software-pages'
-import {
   getPublicBusinessByUrl,
   getPublicServices,
   getPublicReviews,
@@ -74,6 +65,12 @@ import {
   type MarketplaceCardType,
 } from '@/lib/marketplace-featured'
 import { ClaimBusinessBanner } from '@/components/marketplace/claim-business-banner'
+import { CrmCtaSection } from '@/components/marketplace/crm-cta-section'
+import {
+  getIndustrySoftwareUrl,
+  getIndustrySoftwareLabel,
+  getIndustryDisplayName,
+} from '@/lib/seo/industry-software-pages'
 
 // ── Route config ────────────────────────────────────────────────────────────
 // This page no longer reads cookies/headers at render time — the
@@ -629,66 +626,23 @@ export default async function PublicBusinessHubPage({
                   For claimed businesses, the CTA is suppressed — they've
                   already claimed their listing and are either already a CRM
                   customer or will be upsold via in-app flows.
+
+                  The "Claim this business" button opens the ClaimBusinessModal
+                  (if authenticated) or a sign-in gate (if anonymous) — NOT a
+                  dead #book scroll link.
               */}
-              {!business.claimed && (() => {
-                const softwareUrl = getIndustrySoftwareUrl(business.industry)
-                const softwareLabel = getIndustrySoftwareLabel(business.industry)
-                const industryName = getIndustryDisplayName(business.industry)
-                return (
-                  <section
-                    id="crm-cta"
-                    aria-labelledby="crm-cta-heading"
-                    className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 p-6 sm:p-8"
-                  >
-                    <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 text-xs font-semibold uppercase tracking-wide mb-2">
-                      <TrendingUp className="h-4 w-4" />
-                      <span>For Business Owners</span>
-                    </div>
-                    <h2 id="crm-cta-heading" className="text-2xl font-bold tracking-tight text-foreground mb-2">
-                      Run your {industryName.toLowerCase()} business with Fieseros
-                    </h2>
-                    <p className="text-sm text-muted-foreground leading-relaxed mb-4 max-w-2xl">
-                      {business.name} is listed on the Fieseros Marketplace. If this is your business,
-                      claim this listing for free — or explore {softwareLabel.toLowerCase()} to manage
-                      leads, scheduling, dispatch, invoicing, and customer relationships in one platform.
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <CalendarClock className="h-4 w-4 text-emerald-600 shrink-0" />
-                        <span>Scheduling &amp; Dispatch</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <FileText className="h-4 w-4 text-emerald-600 shrink-0" />
-                        <span>Invoicing &amp; Payments</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Users className="h-4 w-4 text-emerald-600 shrink-0" />
-                        <span>Customer CRM</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Navigation className="h-4 w-4 text-emerald-600 shrink-0" />
-                        <span>Route Optimization</span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <Link
-                        href={softwareUrl}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors"
-                      >
-                        <TrendingUp className="h-4 w-4" />
-                        Explore {softwareLabel}
-                      </Link>
-                      <a
-                        href="#book"
-                        className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-background px-5 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/40 transition-colors"
-                      >
-                        <CheckCircle2 className="h-4 w-4" />
-                        Claim this business
-                      </a>
-                    </div>
-                  </section>
-                )
-              })()}
+              {!business.claimed && (
+                <CrmCtaSection
+                  tenantId={business.id}
+                  tenantName={business.name}
+                  tenantEmail={business.email}
+                  tenantCity={business.city}
+                  tenantState={business.state}
+                  softwareUrl={getIndustrySoftwareUrl(business.industry)}
+                  softwareLabel={getIndustrySoftwareLabel(business.industry)}
+                  industryName={getIndustryDisplayName(business.industry)}
+                />
+              )}
             </div>
 
             {/* Right: sticky CTA card + contact info */}

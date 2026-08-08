@@ -24,7 +24,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Plumbing Software & CRM — Schedule, Dispatch & Invoice | Fieseros",
   description:
-    "Plumbing business software for emergency dispatch, job tracking, parts inventory, and Email & SMS invoicing. The all-in-one plumbing CRM that helps plumbers get paid faster. Start free today.",
+    "Plumbing business software for emergency dispatch, job tracking, and Email & SMS invoicing. The all-in-one plumbing CRM that helps plumbers get paid faster. Start free today.",
   keywords: [
     "plumbing software",
     "plumbing CRM",
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Plumbing Software & CRM | Fieseros",
     description:
-      "Dispatch technicians, track job history per asset, send Email & SMS quotes and invoices, and manage parts inventory. Plumbing software built for the way plumbers actually work.",
+      "Dispatch technicians, track job history per asset, send Email & SMS quotes and invoices. Plumbing software built for the way plumbers actually work.",
     url: "https://fieseros.com/plumbing-software",
     siteName: "Fieseros",
     type: "website",
@@ -77,9 +77,9 @@ const features: Feature[] = [
   },
   {
     icon: Package,
-    title: "Inventory Tracking for Parts",
+    title: "Line-Item Billing on Work Orders",
     description:
-      "Know exactly how many copper fittings, PEX rolls, and valve cartridges are in the van and the warehouse. Parts used on a job auto-deduct from inventory and roll straight onto the invoice.",
+      "Add parts as line items directly to the work order from your phone. They flow onto the customer's invoice at your marked-up price when the job is marked complete.",
   },
 ];
 
@@ -95,9 +95,9 @@ const faqs = [
       "Yes. Fieseros is built for plumbing businesses that run annual water heater service contracts, bi-annual boiler inspections, and recurring backflow testing programs. You define the contract once — frequency, customer, asset, price — and Fieseros automatically schedules each visit, sends the customer an SMS reminder before the appointment, dispatches the technician, and generates the invoice after the job is marked complete. You can also track contract renewal dates so you never lose a maintenance customer to a competitor.",
   },
   {
-    question: "How does parts and materials tracking work on plumbing jobs?",
+    question: "How does parts billing work on plumbing jobs?",
     answer:
-      "Every plumber's van is stocked with parts — copper fittings, PEX, valves, fixtures, water heaters. Fieseros tracks all of it. When a technician uses parts on a job, they tap them into the work order from their phone. The parts automatically deduct from van inventory and add to the customer's invoice at your marked-up price. When stock hits a reorder threshold, Fieseros alerts you. No more losing money on parts the plumber forgot to bill for.",
+      "Add parts as line items directly to the work order from your phone. They flow onto the customer's invoice at your marked-up price when the job is marked complete.",
   },
   {
     question: "Can customers pay on-site after a plumbing job is done?",
@@ -120,7 +120,7 @@ export default function PlumbingSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "Fieseros — Plumbing Business Software",
     description:
-      "Plumbing CRM and dispatch software with emergency routing, asset history, parts inventory, Email & SMS invoicing, and recurring maintenance contracts.",
+      "Plumbing CRM and dispatch software with emergency routing, asset history, Email & SMS invoicing, and recurring maintenance contracts.",
     url: "https://fieseros.com/plumbing-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
@@ -186,7 +186,7 @@ export default function PlumbingSoftwarePage() {
                 {[
                   "Emergency calls lost in text messages and scattered apps, no idea which plumber is closest",
                   "No history of previous repairs when a customer calls about a leaky water heater",
-                  "Parts inventory tracked in your head — \"I think we have 3 valve cartridges left\"",
+                  "Parts used on a job forgotten in the rush — never make it onto the invoice",
                   "Invoices forgotten in the rush to the next emergency call",
                   "Maintenance contract renewals missed because no one tracks them",
                   "Customers call back asking for status — you have no idea which job is where",
@@ -207,7 +207,7 @@ export default function PlumbingSoftwarePage() {
                 {[
                   "Live map shows every plumber — dispatch the closest qualified tech in seconds",
                   "Full asset history per customer — see every repair on that water heater instantly",
-                  "Real-time inventory in the van and warehouse — parts auto-bill to the invoice",
+                  "Parts added as line items on the work order — auto-flow to the invoice at marked-up price",
                   "Invoices generated and sent by Email & SMS the moment the job is marked done",
                   "Maintenance contracts auto-scheduled — never miss a renewal again",
                   "Customer sees ETA, status, and invoice — no more \"where is my plumber?\" calls",
@@ -247,16 +247,16 @@ export default function PlumbingSoftwarePage() {
           flowing.
         </p>
         <p>
-          Then there&apos;s parts inventory — the silent margin killer in every
+          Then there&apos;s parts billing — the silent margin killer in every
           plumbing business. Every van carries copper fittings, PEX tubing,
           valves, cartridges, fixtures, and more. When a plumber uses parts on a
           job, those parts need to be billed to the customer. But in the rush of
           a busy day, parts get forgotten, written down on a paper work order
-          that gets lost, or simply not marked up correctly. Fieseros solves
-          this by tracking every part in real time. When the technician taps a
-          part into the work order, it deducts from van inventory and adds to
-          the customer&apos;s invoice at your marked-up price — automatically.
-          Most plumbing businesses recover meaningful lost parts revenue within
+          that gets lost, or simply not marked up correctly. Fieseros lets
+          technicians add parts as line items directly on the work order from
+          their phone. Parts flow onto the customer&apos;s invoice at your
+          marked-up price — automatically. Most plumbing businesses recover
+          meaningful lost parts revenue within
           the first month of using Fieseros.
         </p>
         <p>
@@ -293,12 +293,12 @@ export default function PlumbingSoftwarePage() {
             <Link href="/hvac-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Thermometer className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">HVAC Software</h3>
-              <p className="text-sm text-muted-foreground">Dispatch, seasonal contracts, and refrigerant tracking.</p>
+              <p className="text-sm text-muted-foreground">Dispatch, seasonal contracts, and equipment history.</p>
             </Link>
             <Link href="/electrical-contractor-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Plug className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Electrical Software</h3>
-              <p className="text-sm text-muted-foreground">Job costing, code compliance, and parts tracking.</p>
+              <p className="text-sm text-muted-foreground">Multi-electrician dispatch, asset history, and invoicing.</p>
             </Link>
             <Link href="/cleaning-business-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Sparkles className="h-6 w-6 text-emerald-600 mb-3" />

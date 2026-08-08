@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
 import {
-  SprayCan,
   CalendarClock,
   Users,
   CloudRain,
   FileText,
-  MapPin,
   Droplets,
   Wrench,
   CheckCircle2,
@@ -22,9 +20,9 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Lawn Care Software — Route Optimization & Chemical Tracking | Fieseros",
+  title: "Lawn Care Software — Route Planning & Recurring Scheduling | Fieseros",
   description:
-    "Lawn care business software for recurring route optimization, chemical application tracking, customer portals, and weather-aware rescheduling. The lawn care CRM that helps fertilization companies grow. Start free today.",
+    "Lawn care business software for recurring route optimization, customer portals, and weather-aware rescheduling. The lawn care CRM that helps fertilization companies grow. Start free today.",
   keywords: [
     "lawn care software",
     "lawn care CRM",
@@ -36,7 +34,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Lawn Care Software & CRM | Fieseros",
     description:
-      "Optimize recurring routes, track chemical applications per state regulations, give customers a self-serve portal, and auto-invoice after every visit. Lawn care software built for fertilization and weed-control businesses.",
+      "Optimize recurring routes, give customers a self-serve portal, and auto-invoice after every visit. Lawn care software built for fertilization and weed-control businesses.",
     url: "https://fieseros.com/lawn-care-software",
     siteName: "Fieseros",
     type: "website",
@@ -45,12 +43,6 @@ export const metadata: Metadata = {
 };
 
 const features: Feature[] = [
-  {
-    icon: SprayCan,
-    title: "Chemical Application Tracking",
-    description:
-      "Log every product, rate, and lawn area treated on every visit. Fieseros keeps a per-customer record of exactly what was sprayed, when, and at what concentration — so you're ready for any state inspection or customer question.",
-  },
   {
     icon: CalendarClock,
     title: "Recurring Route Optimization",
@@ -67,19 +59,13 @@ const features: Feature[] = [
     icon: CloudRain,
     title: "Weather-Aware Rescheduling",
     description:
-      "When rain is forecast, Fieseros flags affected routes, suggests make-up days, and notifies customers automatically — so you're not spraying in a downpour or scrambling to call 40 houses one by one.",
+      "Manually reschedule affected visits and Fieseros sends the customer an automated SMS/Email notification — no phone calls required.",
   },
   {
     icon: FileText,
     title: "Auto-Invoicing After Each Visit",
     description:
       "The moment a technician marks a visit complete, Fieseros generates the invoice and sends it via Email & SMS with a payment link. Recurring invoices with automatic reminders — reduce missed payments.",
-  },
-  {
-    icon: MapPin,
-    title: "Route Density Mapping",
-    description:
-      "See your customer map by neighborhood and spot the gaps. Fieseros highlights low-density zones where a few new customers would make a route profitable — and high-density zones worth adding a truck to.",
   },
 ];
 
@@ -90,11 +76,6 @@ const faqs = [
       "Lawn care is a recurring business — weekly mows, biweekly visits, six-week fertilization cycles. You define each customer's program (services, frequency, price) once in Fieseros, and it auto-generates every visit on the right day, assigns it to the right technician and route, sends the customer an Email & SMS reminder the day before, and queues the invoice after the visit is marked complete. When a customer's annual program renews, Fieseros reschedules the next season's visits automatically and alerts you to any cancellations. Most lawn care businesses significantly cut office admin time after switching.",
   },
   {
-    question: "Can I track chemical and fertilizer applications per customer?",
-    answer:
-      "Yes. On every visit, the technician logs the products used, the application rate, the square footage treated, and weather conditions at the time of application. Fieseros stores that record permanently against the customer's property — so when a customer calls asking what you sprayed last time, or a state inspector asks for application records, you have a complete, auditable history in seconds. This is critical for fertilization and weed-control businesses operating under state pesticide regulations, and it protects you in any misapplication dispute.",
-  },
-  {
     question: "How does route optimization work for lawn care businesses?",
     answer:
       "Fieseros clusters your recurring customers by neighborhood and service day, then optimizes the driving order within each cluster to minimize drive time. Each technician sees their ordered route on their phone in the morning, with turn-by-turn directions between stops. When you add a new customer, Fieseros tells you which existing route and day they fit into — or warns you if they're outside your current service area. Most lawn care businesses meaningfully cut drive time after switching to Fieseros routing, which directly improves both margin and the number of lawns a crew can service in a day.",
@@ -102,7 +83,7 @@ const faqs = [
   {
     question: "How does weather rescheduling work?",
     answer:
-      "When rain, high wind, or extreme heat is forecast, Fieseros flags the affected routes for the day and suggests make-up days based on each customer's flexibility and your available capacity. Customers receive an automated Email & SMS message letting them know about the reschedule — no calling 40 houses one by one. The rescheduled visit automatically inherits the original job details, pricing, and product list, so the technician just shows up and treats. Weather-related reschedules go from a full-day office fire drill to a few clicks on a dashboard.",
+      "Drag-and-drop affected visits to make-up days, and Fieseros sends customers an automated SMS/Email notification about the reschedule.",
   },
   {
     question: "Can customers pay automatically for recurring lawn care?",
@@ -110,9 +91,9 @@ const faqs = [
       "You can store customer payment methods securely, and recurring programs can be set up as recurring invoices that go out automatically after each visit — so a customer on a six-treatment fertilization program receives a branded invoice via Email & SMS as a receipt after each application, with a secure payment link. Fieseros follows up with automated reminders for unpaid balances, so customers who prefer to pay manually still get nudged without you having to chase them. Most lawn care businesses using Fieseros get paid substantially faster and recover meaningful missed-billing revenue that previously slipped through the cracks.",
   },
   {
-    question: "Does Fieseros work for both mowing and chemical application businesses?",
+    question: "Does Fieseros work for both mowing and fertilization businesses?",
     answer:
-      "Yes. Fieseros is built for the full lawn care spectrum — pure mowing companies, fertilization and weed-control specialists, and full-service operations that do both. Mowing visits use the routing and recurring-schedule tools; chemical applications add product tracking, application records, and regulatory documentation. Many Fieseros lawn care customers start with mowing and expand into chemical programs as they grow — the platform handles both without needing a second system, and reports break out revenue and cost by service line so you can see which side of the business is more profitable.",
+      "Yes. Fieseros is built for the full lawn care spectrum — pure mowing companies, fertilization and weed-control specialists, and full-service operations that do both. Mowing visits use the routing and recurring-schedule tools; fertilization and weed-control visits use the same scheduling, photo documentation, and customer communication tools. Many Fieseros lawn care customers start with mowing and expand into treatment programs as they grow — the platform handles both without needing a second system, and reports break out revenue and cost by service line so you can see which side of the business is more profitable.",
   },
 ];
 
@@ -120,7 +101,7 @@ export default function LawnCareSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "Fieseros — Lawn Care Business Software",
     description:
-      "Lawn care CRM and routing software with recurring route optimization, chemical application tracking, customer self-serve portal, weather rescheduling, and auto-invoicing.",
+      "Lawn care CRM and routing software with recurring route optimization, customer self-serve portal, weather rescheduling, and auto-invoicing.",
     url: "https://fieseros.com/lawn-care-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
@@ -137,8 +118,8 @@ export default function LawnCareSoftwarePage() {
     >
       <CornerstoneHero
         eyebrow="Lawn Care Software"
-        title="Lawn Care Software Built for Recurring Routes, Chemical Tracking, and Faster Payments"
-        subtitle="From six-week fertilization cycles to weekly mow routes, Fieseros helps lawn care businesses optimize driving, track every application, and auto-invoice after every visit."
+        title="Lawn Care Software Built for Recurring Routes, Visit Documentation, and Faster Payments"
+        subtitle="From six-week fertilization cycles to weekly mow routes, Fieseros helps lawn care businesses optimize driving, document every visit, and auto-invoice after every visit."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -172,7 +153,7 @@ export default function LawnCareSoftwarePage() {
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
               Most lawn care businesses still build routes by hand, track
-              chemical applications on paper, and chase payments weeks after
+              service visits on paper, and chase payments weeks after
               the visit. Here&apos;s what that costs you — and what changes
               when you switch to Fieseros.
             </p>
@@ -207,11 +188,10 @@ export default function LawnCareSoftwarePage() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
                   "Every treatment auto-scheduled — no missed applications, no lapses in the program",
-                  "Per-customer chemical records — every product, rate, and date, ready for inspection",
+                  "Per-customer visit history with notes and photos",
                   "Routes optimized by neighborhood and day — less drive time",
-                  "Weather reschedules handled automatically — customers notified, make-ups queued",
+                  "Weather reschedules handled with drag-and-drop — customers notified automatically",
                   "Invoices sent via Email & SMS the moment the technician marks the visit done",
-                  "Route density map shows you exactly where to add customers and where to stop serving",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
@@ -244,24 +224,19 @@ export default function LawnCareSoftwarePage() {
           loses money on fuel and drive time every single day. Without proper
           lawn care routing software, routes get built by hand each morning,
           technicians zigzag across town, and the office fields calls all
-          day from customers asking when you&apos;ll arrive. Fieseros
-          clusters your customers by neighborhood and day, optimizes the
-          driving order, and shows you exactly where to add new customers to
-          make a route profitable — and where to stop serving because the
-          drive cost exceeds the margin.
+          day from customers asking when you&apos;ll arrive. Fieseros helps you
+          plan routes by neighborhood and day, with drag-and-drop scheduling
+          to minimize drive time and keep crews on track.
         </p>
         <p>
-          Then there&apos;s the regulatory side. Fertilization and
-          weed-control businesses operate under state pesticide regulations
-          that require detailed application records — what product, what
-          rate, what date, what weather conditions, what area treated.
-          Without a proper lawn care CRM, these records live on paper work
-          orders that get lost or filed in a box somewhere. When a state
-          inspector shows up, or a customer calls asking what was sprayed on
-          their lawn last August, you&apos;re guessing. Fieseros captures
-          every application digitally, on the technician&apos;s phone, at
-          the moment of treatment — and stores it permanently against the
-          customer&apos;s property record.
+          Then there&apos;s the service record side. Lawn care customers
+          want to know what was done on each visit — what was treated, what
+          was noted, what photos were taken. Without a proper lawn care CRM,
+          these records live on paper work orders that get lost or filed in a
+          box somewhere. When a customer calls asking what was done on their
+          lawn last August, you&apos;re guessing. Fieseros captures job notes,
+          photos, and visit history per customer property, so you have a
+          complete service record.
         </p>
         <p>
           Finally, there&apos;s the customer experience and cash flow side.
@@ -296,17 +271,17 @@ export default function LawnCareSoftwarePage() {
             <Link href="/landscaping-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Trees className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Landscaping Software</h3>
-              <p className="text-sm text-muted-foreground">Crew routing, design-build quotes, material inventory.</p>
+              <p className="text-sm text-muted-foreground">Crew routing, design-build quotes, photo documentation.</p>
             </Link>
             <Link href="/tree-care-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <TreePine className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Tree Care Software</h3>
-              <p className="text-sm text-muted-foreground">Crew dispatch, cert tracking, insurance-ready docs.</p>
+              <p className="text-sm text-muted-foreground">Crew dispatch, photo documentation, recurring inspections.</p>
             </Link>
             <Link href="/snow-removal-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Snowflake className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Snow Removal Software</h3>
-              <p className="text-sm text-muted-foreground">Weather-triggered dispatch and per-inch billing.</p>
+              <p className="text-sm text-muted-foreground">Recurring contracts and crew GPS tracking.</p>
             </Link>
             <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Award className="h-6 w-6 text-emerald-600 mb-3" />

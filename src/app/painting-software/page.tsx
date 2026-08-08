@@ -24,7 +24,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Painting Software — Estimates, Crew Tracking & Progress Invoicing | Fieseros",
   description:
-    "Painting contractor software for estimate-to-quote workflows, paint quantity calculators, project phasing, photo documentation, and milestone invoicing. The painting CRM that helps painters get paid. Start free today.",
+    "Painting contractor software for estimate-to-quote workflows, line-item estimating, project phasing, photo documentation, and milestone invoicing. The painting CRM that helps painters get paid. Start free today.",
   keywords: [
     "painting software",
     "painting contractor software",
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Painting Software & CRM | Fieseros",
     description:
-      "Build accurate estimates with paint quantity calculators, phase multi-room projects, document prep and coats with photos, track crew time against estimate, and bill by milestone. Painting software built for contractors.",
+      "Build accurate estimates with line-item quoting, phase multi-room projects, document prep and coats with photos, track crew time against estimate, and bill by milestone. Painting software built for contractors.",
     url: "https://fieseros.com/painting-software",
     siteName: "Fieseros",
     type: "website",
@@ -49,7 +49,7 @@ const features: Feature[] = [
     icon: PaintRoller,
     title: "Estimate-to-Quote Workflow",
     description:
-      "Walk a job, measure the walls, plug in the paint system, and Fieseros calculates quantities, labor hours, and price — turning a site visit into a professional quote in minutes, not hours.",
+      "Build a line-item quote with labor, materials, and your price — sent to the customer via Email & SMS in minutes.",
   },
   {
     icon: Layers,
@@ -67,19 +67,19 @@ const features: Feature[] = [
     icon: Palette,
     title: "Color & SKU Tracking per Customer",
     description:
-      "Store each customer's exact color formulas, paint SKUs, and finish specs in their record. When they call two years later for touch-ups, you pull up the exact product — no guessing what they originally picked.",
+      "Store each customer's paint colors and product details as notes on their record, so touch-ups are a quick lookup.",
   },
   {
     icon: Clock,
     title: "Crew Time Tracking Against Estimate",
     description:
-      "Crews clock in and out of each job and phase from their phone. Fieseros compares actual hours against your estimated hours in real time, so you see margin drift the day it happens — not on the invoice after the job is done.",
+      "Crews clock in and out of each job from their phone, with timesheets exportable for payroll.",
   },
   {
     icon: FileText,
     title: "Progress Invoicing & Milestone Billing",
     description:
-      "For multi-week commercial and repaint projects, bill by milestone — deposit on start, progress at phase completion, final on walk-through. Fieseros tracks what's been billed vs. what's been earned, so you never over- or under-bill.",
+      "Bill by milestone — deposit on start, progress at phase completion, final on walk-through.",
   },
 ];
 
@@ -87,12 +87,12 @@ const faqs = [
   {
     question: "How does Fieseros help with painting estimates and quotes?",
     answer:
-      "Fieseros turns a site visit into a professional quote fast. You measure the walls and ceilings, enter the paint system (primer, finish coats, product line), and Fieseros calculates the gallon quantities, labor hours based on your production rates, materials, and your price. The quote goes to the customer via Email & SMS, where they approve with a tap in the customer portal. On approval, the quote converts into a scheduled job, material reservations, and a deposit invoice — no re-keying, no spreadsheets, no handwritten estimates that take an hour to write up. Most painting contractors significantly cut quoting time after switching.",
+      "You build a line-item quote in Fieseros with paint, materials, labor hours, and your price.",
   },
   {
     question: "Can I manage multi-room and multi-phase painting projects?",
     answer:
-      "Yes. Fieseros is built for the realities of whole-home repaints and commercial jobs that span weeks. You break the project into phases — prep, prime, living room, bedrooms, trim, final walk-through — each with its own crew, materials, and schedule. Crews see their phase on their phone, log time and materials against it, and mark it complete. You see phase-by-phase progress, billed-vs-earned, and any phase that's slipping behind — so a multi-week project stays on schedule instead of drifting into costly overtime and a margin-destroying final invoice.",
+      "Yes. Fieseros is built for the realities of whole-home repaints and commercial jobs that span weeks. You break the project into phases — prep, prime, living room, bedrooms, trim, final walk-through — each with its own crew, materials, and schedule. Crews see their phase on their phone, log time and materials against it, and mark it complete. You see phase-by-phase progress and any phase that's slipping behind — so a multi-week project stays on schedule instead of drifting into costly overtime and a margin-destroying final invoice.",
   },
   {
     question: "How does photo documentation work on painting jobs?",
@@ -102,17 +102,17 @@ const faqs = [
   {
     question: "Can I track paint colors and SKUs per customer for future touch-ups?",
     answer:
-      "Absolutely. Fieseros stores every customer's color formulas, paint brand, product line, sheen, and SKU in their record — room by room if needed. When a customer calls two years later asking for touch-up paint on the dining room accent wall, you pull up the exact specification in seconds — no guessing, no I think it was SW 7029. Customers love that you remember their color, and it drives repeat business when they're ready to repaint the rest of the house or refer you to a neighbor.",
+      "Store paint colors and product details as notes on the customer record, including per-room notes if needed.",
   },
   {
     question: "How does progress invoicing work for larger painting projects?",
     answer:
-      "For commercial repaints and multi-week residential jobs, Fieseros supports milestone billing: a deposit on project start, progress invoices at phase completions (prep done, walls complete, trim complete), and a final invoice on walk-through. Fieseros tracks earned revenue versus billed revenue on a percentage-of-completion basis, so you always know whether you're over-billed or under-billed at any point in the project. Customers appreciate predictable billing milestones, and you maintain positive cash flow throughout a long project instead of carrying weeks of labor and material costs on your own balance sheet.",
+      "For commercial repaints and multi-week residential jobs, Fieseros supports milestone billing: a deposit on project start, progress invoices at phase completions (prep done, walls complete, trim complete), and a final invoice on walk-through. Customers appreciate predictable billing milestones, and you maintain positive cash flow throughout a long project instead of carrying weeks of labor and material costs on your own balance sheet.",
   },
   {
     question: "How does crew time tracking work for painting contractors?",
     answer:
-      "Crew members clock in and out of each job and each phase from their phone, with optional GPS verification. Fieseros compares actual hours against your estimated hours in real time — so if a crew is taking substantially longer than estimated on a bedroom repaint, you see it on day one and can adjust the estimate, the crew, or the scope before the margin is gone. At the end of each week, you get clean timesheet exports for payroll, plus reports on production rates per crew and per task type that feed straight back into more accurate estimates on the next job.",
+      "Crew members clock in and out of each job from their phone. Timesheets export cleanly for payroll.",
   },
 ];
 
@@ -120,7 +120,7 @@ export default function PaintingSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "Fieseros — Painting Contractor Software",
     description:
-      "Painting CRM and estimating software with paint quantity calculators, project phasing, prep and coat photo documentation, color and SKU tracking, crew time tracking, and milestone invoicing.",
+      "Painting CRM and estimating software with line-item estimating, project phasing, prep and coat photo documentation, color and SKU tracking, crew time tracking, and milestone invoicing.",
     url: "https://fieseros.com/painting-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
@@ -206,11 +206,11 @@ export default function PaintingSoftwarePage() {
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
-                  "Paint quantity calculators turn site visits into accurate quotes in minutes",
+                  "Line-item quotes turn site visits into professional estimates in minutes",
                   "Prep and coat photos on every job — disputes closed with timestamped proof",
                   "Progress invoicing keeps cash flowing through multi-week projects",
-                  "Crew clock-in/clock-out compared against estimate in real time",
-                  "Color and SKU stored per customer forever — touch-ups are a 10-second lookup",
+                  "Crew clock-in/clock-out from each job, with timesheets exportable for payroll",
+                  "Paint colors stored per customer as notes — touch-ups are a quick lookup",
                   "Phase-by-phase progress visible before a project slips into overtime",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
@@ -243,11 +243,11 @@ export default function PaintingSoftwarePage() {
           square footage times an assumed coverage rate, plus labor at a
           rough guess. When the estimate is wrong, the crew runs out of
           paint mid-job, somebody drives to the supplier, and the overage
-          comes out of your pocket. Fieseros calculates quantities from
-          your actual production rates, builds a professional quote on the
-          spot, and converts the approved quote into material reservations
-          and a deposit invoice — so the job starts with the right
-          materials, the right price, and cash already in the bank.
+          comes out of your pocket. Fieseros lets you build a line-item quote
+          from your price book, send it to the customer via Email & SMS, and
+          convert the approved quote into a scheduled job and a deposit
+          invoice — so the job starts with the right price and cash already
+          in the bank.
         </p>
         <p>
           Then there&apos;s the documentation problem. Painting disputes
@@ -266,11 +266,9 @@ export default function PaintingSoftwarePage() {
           or whole-home job can tie up tens of thousands of dollars in labor
           and materials before the customer pays a dime — if you let it.
           Fieseros supports milestone billing: deposit on start, progress
-          invoices at phase completions, final on walk-through. You track
-          earned revenue against billed revenue so you always know where you
-          stand. Crew time tracking compares actual hours to estimated hours
-          in real time, so margin drift becomes visible on day one — not on
-          the final invoice when the money is already gone.
+          invoices at phase completions, final on walk-through. Crews clock
+          in and out of each job from their phone, with timesheets
+          exportable for payroll — so you always know where you stand.
         </p>
       </ContentSection>
 
@@ -298,12 +296,12 @@ export default function PaintingSoftwarePage() {
             <Link href="/concrete-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <HardHat className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Concrete Software</h3>
-              <p className="text-sm text-muted-foreground">Pour scheduling, yardage calculators, milestone billing.</p>
+              <p className="text-sm text-muted-foreground">Project phasing, photo documentation, milestone billing.</p>
             </Link>
             <Link href="/roofing-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Home className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Roofing Software</h3>
-              <p className="text-sm text-muted-foreground">Aerial measurements, project phasing, storm claims.</p>
+              <p className="text-sm text-muted-foreground">Project phasing, photo documentation, milestone invoicing.</p>
             </Link>
             <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Award className="h-6 w-6 text-emerald-600 mb-3" />

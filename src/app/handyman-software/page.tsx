@@ -72,7 +72,7 @@ const features: Feature[] = [
     icon: RefreshCw,
     title: "Recurring Maintenance Subscriptions",
     description:
-      "Offer quarterly home checkup subscriptions: HVAC filter changes, gutter cleans, smoke-alarm tests, small fixes caught early. Fieseros auto-schedules each visit, charges the customer's card, and sends the Email & SMS reminder.",
+      "Offer quarterly home checkup subscriptions: HVAC filter changes, gutter cleans, smoke-alarm tests, small fixes caught early. Fieseros auto-schedules each visit, sends the customer an Email & SMS reminder, and queues an invoice after the visit.",
   },
   {
     icon: History,
@@ -101,7 +101,7 @@ const faqs = [
   {
     question: "Can I offer recurring maintenance subscriptions to my handyman customers?",
     answer:
-      "Absolutely. Many handymen are now offering quarterly home checkup subscriptions — HVAC filter changes, gutter cleans, smoke-alarm battery tests, small fixes caught early — as a way to smooth out income and build long-term customer relationships. You set up the subscription once in Fieseros, and it auto-schedules each visit, charges the customer's stored card, sends them an Email & SMS reminder, and queues the work order. Recurring subscriptions turn one-off handyman customers into predictable monthly revenue, and they give you a reason to be in the house when bigger repair opportunities come up.",
+      "Absolutely. Many handymen are now offering quarterly home checkup subscriptions — HVAC filter changes, gutter cleans, smoke-alarm battery tests, small fixes caught early — as a way to smooth out income and build long-term customer relationships. You set up the subscription once in Fieseros, and it auto-schedules each visit, sends the customer an Email & SMS reminder, and queues an invoice after the visit. Recurring subscriptions turn one-off handyman customers into predictable monthly revenue, and they give you a reason to be in the house when bigger repair opportunities come up.",
   },
   {
     question: "How does Fieseros handle scope creep on fixed-price handyman jobs?",
@@ -119,7 +119,7 @@ export default function HandymanSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "Fieseros — Handyman Business Software",
     description:
-      "Handyman CRM and scheduling software with same-day job booking, flat-rate and T&M quoting, photo scope checklists, on-site card payment, recurring maintenance subscriptions, and full customer job history.",
+      "Handyman CRM and scheduling software with same-day job booking, flat-rate and T&M quoting, photo scope checklists, on-site card payment, recurring maintenance scheduling, and full customer job history.",
     url: "https://fieseros.com/handyman-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
@@ -209,7 +209,7 @@ export default function HandymanSoftwarePage() {
                   "On-site card payment collected before you walk out the door",
                   "Full customer history of every fix — pulled up in seconds",
                   "Same-day scheduling on your phone with Email & SMS ETA to the customer",
-                  "Quarterly home checkup subscriptions set up once and auto-billed",
+                  "Quarterly home checkup subscriptions set up once with auto-scheduled visits and reminders",
                   "T&M timer started on arrival, invoice built from actual time and materials",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
@@ -298,7 +298,7 @@ export default function HandymanSoftwarePage() {
             <Link href="/concrete-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <HardHat className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Concrete Software</h3>
-              <p className="text-sm text-muted-foreground">Pour scheduling, yardage calculators, milestone billing.</p>
+              <p className="text-sm text-muted-foreground">Pour scheduling, photo documentation, milestone billing.</p>
             </Link>
             <Link href="/garage-door-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <DoorOpen className="h-6 w-6 text-emerald-600 mb-3" />

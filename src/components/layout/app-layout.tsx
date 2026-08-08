@@ -101,6 +101,7 @@ const LeadDiscoveryView = lazy(() => import('@/components/views/lead-discovery-v
 const JourneyAutomationView = lazy(() => import('@/components/views/journey-automation-view').then(m => ({ default: m.JourneyAutomationView })));
 const MarketplaceView = lazy(() => import('@/components/views/marketplace-view').then(m => ({ default: m.MarketplaceView })));
 const ProviderMarketplaceDashboard = lazy(() => import('@/components/marketplace/provider-marketplace-dashboard').then(m => ({ default: m.ProviderMarketplaceDashboard })));
+const ClaimBusinessView = lazy(() => import('@/components/views/claim-business-view').then(m => ({ default: m.ClaimBusinessView })));
 const ListingProviderDashboard = lazy(() => import('@/components/marketplace/listing-provider-dashboard').then(m => ({ default: m.ListingProviderDashboard })));
 const EnterpriseView = lazy(() => import('@/components/views/enterprise-view').then(m => ({ default: m.EnterpriseView })));
 const AiCampaignGeneratorView = lazy(() => import('@/components/views/ai-campaign-generator-view').then(m => ({ default: m.AiCampaignGeneratorView })));
@@ -231,6 +232,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   journeyAutomation: JourneyAutomationView,
   marketplace: MarketplaceView,
   marketplaceDashboard: ProviderMarketplaceDashboard,
+  claimBusiness: ClaimBusinessView,
   enterprise: EnterpriseView,
   aiCampaignGenerator: AiCampaignGeneratorView,
   webviewEngine: WebviewEngineView,
@@ -363,7 +365,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     (auth?.tenant as any)?.signupMode === 'listing_only' ||
     (auth?.tenant as any)?.listingTier === 'claimed_free';
   const listingAllowedViews = new Set([
-    'marketplaceDashboard', 'serviceCatalog', 'billing', 'helpCenter',
+    'marketplaceDashboard', 'serviceCatalog', 'billing', 'helpCenter', 'claimBusiness',
   ]);
   useEffect(() => {
     if (isListingOnlyTenant && !listingAllowedViews.has(currentView)) {

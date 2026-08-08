@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import {
   HardHat,
   CloudRain,
-  Calculator,
-  Package,
   Clock,
   DollarSign,
   Truck,
@@ -22,9 +20,9 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Concrete Software — Pour Scheduling, Yardage & Milestone Billing | Fieseros",
+  title: "Concrete Software — Pour Scheduling, Site-Prep Photos & Milestone Billing | Fieseros",
   description:
-    "Concrete contractor software for site-prep photo documentation, multi-day pour scheduling with weather watch, yardage calculators, form inventory, and milestone invoicing. Start free today.",
+    "Concrete contractor software for site-prep photo documentation, multi-day pour scheduling, and milestone invoicing. Start free today.",
   keywords: [
     "concrete software",
     "concrete contractor software",
@@ -36,7 +34,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Concrete Software | Fieseros",
     description:
-      "Document site prep with photos, schedule pours around the weather, calculate yardage, track forms and rebar, and bill by milestone. Built for concrete and paving contractors.",
+      "Document site prep with photos, schedule pours, and bill by milestone. Built for concrete and paving contractors.",
     url: "https://fieseros.com/concrete-software",
     siteName: "Fieseros",
     type: "website",
@@ -53,21 +51,9 @@ const features: Feature[] = [
   },
   {
     icon: CloudRain,
-    title: "Multi-Day Pour Scheduling with Weather Watch",
+    title: "Multi-Day Pour Scheduling",
     description:
-      "Concrete pours are weather-sensitive, and a rained-out pour costs you a ready-mix restocking fee plus a day of crew time. Fieseros watches the forecast for every scheduled pour day and flags rain risk 48 hours out, so you can reschedule the truck and crew before the forms fill with water.",
-  },
-  {
-    icon: Calculator,
-    title: "Concrete Yardage Calculator",
-    description:
-      "Enter slab dimensions, thickness, and waste factor, and Fieseros calculates yards to order from the ready-mix plant. The same calculator handles rebar tonnage, form board linear feet, and finish chemical quantities — no more over-ordering or short pours.",
-  },
-  {
-    icon: Package,
-    title: "Form & Material Inventory",
-    description:
-      "Track every form board, stake, rebar size, and sheet of poly you own across the yard, the trailer, and the job site. Fieseros flags forms left on completed jobs so you can pull them back before they get damaged or stolen.",
+      "Schedule pours and dependent steps on the Fieseros calendar. Drag-and-drop to reschedule when the forecast changes, and Fieseros sends automated SMS/Email updates to the crew and customer.",
   },
   {
     icon: Clock,
@@ -87,12 +73,7 @@ const faqs = [
   {
     question: "How does Fieseros help schedule concrete pours around the weather?",
     answer:
-      "A concrete pour is one of the most weather-sensitive operations in all of construction. Rain on a fresh pour ruins the finish, costs you a ready-mix restocking fee if you cancel at the last minute, and burns a full day of crew time you can't get back. Fieseros watches the forecast for every scheduled pour day and flags rain risk 48 hours in advance, so you have time to call the ready-mix plant and reschedule without penalty. When you shift a pour, Fieseros reschedules the dependent steps — finishing crew, curing blankets, saw-cutting — automatically. You stop losing money to weather you could have seen coming.",
-  },
-  {
-    question: "Can Fieseros calculate concrete yardage and rebar quantities?",
-    answer:
-      "Yes. The Fieseros yardage calculator takes slab length, width, thickness, and waste factor, and returns the yards of concrete to order from the ready-mix plant. The same tool calculates rebar tonnage by bar size and spacing, form board linear feet, stake count, and finish chemical quantities. Every number rolls into the estimate, and when the estimate is approved, the material order goes to your supplier automatically. You stop over-ordering to be safe and stop shorting pours because someone miscounted the square footage of a stamped patio.",
+      "Schedule pours and dependent steps on the Fieseros calendar. Drag-and-drop to reschedule when the forecast changes, and Fieseros sends automated SMS/Email updates to the crew and customer.",
   },
   {
     question: "How does site-prep photo documentation protect my concrete business?",
@@ -105,14 +86,9 @@ const faqs = [
       "Yes, and milestone billing is essential for cash flow in concrete work because material costs are front-loaded. A typical driveway or patio project gets billed in three stages — 30% deposit on contract signature to cover forms and rebar, 40% on subgrade and form completion before the pour, and 30% on final finish and cure. Fieseros triggers each invoice automatically when the corresponding milestone is marked complete in the field. Customers pay through a secure online payment link by card or bank transfer. You stop carrying 5,000 to 15,000 dollars in material costs on your supplier credit line while you wait for the homeowner to pay the final bill.",
   },
   {
-    question: "How does Fieseros track form boards and reusable materials?",
-    answer:
-      "Forms, stakes, screed bars, and rebar chairs are reusable assets that quietly walk off job sites if you don't track them. Fieseros keeps an inventory of every form board and stake you own, tagged by location — yard, trailer, or active job site. When a job completes, Fieseros prompts the crew to confirm the forms were pulled and returned, and flags any that didn't come back. You stop buying new forms to replace ones that are sitting in a pile at a finished job three towns over, which is one of the most common silent costs in concrete contracting.",
-  },
-  {
     question: "Does Fieseros work for both residential flatwork and commercial pours?",
     answer:
-      "Yes. Residential flatwork — driveways, patios, walkways, basement floors — uses the photo-driven, milestone-billed, weather-watched workflow described above. Commercial pours — warehouse slabs, parking lots, foundations — use the same project phasing but with larger crews, longer timelines, engineered mix designs, and inspection checkpoints. Fieseros handles both under one platform, so a contractor running residential driveways during the week and a commercial warehouse pour on the weekend sees everything on one dispatch board. The same yardage calculator, the same weather watch, the same milestone invoicing — just applied to jobs of different scale.",
+      "Yes. Residential flatwork — driveways, patios, walkways, basement floors — uses the photo-driven, milestone-billed workflow described above. Commercial pours — warehouse slabs, parking lots, foundations — use the same project phasing but with larger crews, longer timelines, engineered mix designs, and inspection checkpoints. Fieseros handles both under one platform, so a contractor running residential driveways during the week and a commercial warehouse pour on the weekend sees everything on one dispatch board. The same photo documentation, the same calendar scheduling, the same milestone invoicing — just applied to jobs of different scale.",
   },
 ];
 
@@ -120,7 +96,7 @@ export default function ConcreteSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "Fieseros — Concrete Contractor Software",
     description:
-      "Concrete CRM and project management software with site-prep photo documentation, multi-day pour scheduling, yardage calculator, form inventory, crew time-tracking, and milestone invoicing.",
+      "Concrete CRM and project management software with site-prep photo documentation, multi-day pour scheduling, and milestone invoicing.",
     url: "https://fieseros.com/concrete-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
@@ -138,7 +114,7 @@ export default function ConcreteSoftwarePage() {
       <CornerstoneHero
         eyebrow="Concrete Software"
         title="Concrete Contractor Software That Pours on Schedule, Documents Every Step, and Bills by Milestone"
-        subtitle="From site-prep photos to weather-watched pour scheduling, yardage calculation, form inventory, and milestone invoicing, Fieseros is the concrete CRM built for flatwork and commercial pours alike."
+        subtitle="From site-prep photos to multi-day pour scheduling and milestone invoicing, Fieseros is the concrete CRM built for flatwork and commercial pours alike."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -181,10 +157,8 @@ export default function ConcreteSoftwarePage() {
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
-                  "Pours scheduled without weather watching — rained-out pour costs a restocking fee",
-                  "Yardage calculated by hand — short pour on a 40-yard driveway means a second truck",
+                  "Pours scheduled without a calendar — rescheduling means calling every crew member individually",
                   "No photos of subgrade or rebar before the pour — warranty disputes are he-said-she-said",
-                  "Forms left at completed jobs — you buy new ones because you can't find the old ones",
                   "Crew hours tracked on paper — a driveway runs 2 hours over budget and nobody knows",
                   "Final payment held up because the homeowner says the finish wasn't what they expected",
                 ].map((item) => (
@@ -202,10 +176,8 @@ export default function ConcreteSoftwarePage() {
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
-                  "Weather watch flags rain risk 48 hours out — reschedule the truck before the fee hits",
-                  "Yardage calculator orders exact quantities — no short pours, no over-ordering",
+                  "Pours and dependent steps on one calendar — drag-and-drop to reschedule when the forecast shifts",
                   "Subgrade and rebar photos timestamped before every pour — disputes resolved instantly",
-                  "Form inventory tracked by location — every board pulled back at job completion",
                   "Crew hours tracked against the estimate — overruns visible the day they happen",
                   "Milestone invoicing — deposit, prep, and finish each billed on completion",
                 ].map((item) => (
@@ -222,10 +194,10 @@ export default function ConcreteSoftwarePage() {
 
       <ContentSection title="Why concrete contractors choose Fieseros">
         <p>
-          Concrete is one of the most operationally punishing trades in construction. A single pour day involves a ready-mix truck scheduled to the minute, a crew of four to eight finishers who all need to show up at the same time, weather that can ruin the entire pour if it changes in the wrong direction, and material costs that are front-loaded before you see a dollar from the customer. Concrete contractor software that handles scheduling without weather watching, or estimating without yardage calculation, just shifts the chaos somewhere else. Fieseros is built to run the entire concrete workflow — from site-prep photos to final cure and seal — in one platform your crew actually uses.
+          Concrete is one of the most operationally punishing trades in construction. A single pour day involves a ready-mix truck scheduled to the minute, a crew of four to eight finishers who all need to show up at the same time, and material costs that are front-loaded before you see a dollar from the customer. Concrete contractor software that handles scheduling without a real calendar, or estimating without photo documentation of site prep, just shifts the chaos somewhere else. Fieseros is built to run the entire concrete workflow — from site-prep photos to final cure and seal — in one platform your crew actually uses.
         </p>
         <p>
-          The weather problem is the single most expensive operational risk in concrete contracting. A pour scheduled for Thursday that gets rained out costs you a ready-mix restocking fee if you cancel too late, burns a full day of crew time you can't get back, and pushes the whole project schedule back by a week or more. Fieseros watches the forecast for every scheduled pour day and flags rain risk 48 hours in advance, so you have time to call the plant and reschedule without penalty. When you shift a pour, the dependent steps — finishing crew, curing blankets, saw-cutting — reschedule automatically. Most concrete contractors using Fieseros significantly cut their weather-related losses in the first season.
+          The scheduling problem is the single most expensive operational risk in concrete contracting. A pour scheduled for Thursday that gets rained out costs you a ready-mix restocking fee if you cancel too late, burns a full day of crew time you can't get back, and pushes the whole project schedule back by a week or more. Fieseros puts every pour and its dependent steps — finishing crew, curing blankets, saw-cutting — on one calendar. When the forecast shifts, drag-and-drop rescheduling moves the pour and updates the crew and customer through automated SMS/Email reminders. Most concrete contractors using Fieseros significantly cut their weather-related losses in the first season.
         </p>
         <p>
           The documentation problem is the second silent killer. Concrete warranty disputes almost always come down to one question — what was the subgrade condition before the pour? Without photos of excavation depth, compaction, form placement, and rebar layout, you have no defense when a homeowner claims the cracks in their driveway are your fault. Fieseros makes that documentation automatic. Crews capture photos at every step of site prep, all timestamped and attached to the work order, before the ready-mix truck ever arrives. When the warranty dispute comes six months or two years later, you have photographic evidence of every step you took, and the conversation usually ends in your favor instead of in a free replacement pour.
@@ -254,7 +226,7 @@ export default function ConcreteSoftwarePage() {
             <Link href="/painting-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Paintbrush className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Painting Software</h3>
-              <p className="text-sm text-muted-foreground">Estimates, paint calculators, milestone invoicing.</p>
+              <p className="text-sm text-muted-foreground">Estimates, line-item quoting, milestone invoicing.</p>
             </Link>
             <Link href="/handyman-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Hammer className="h-6 w-6 text-emerald-600 mb-3" />
@@ -264,7 +236,7 @@ export default function ConcreteSoftwarePage() {
             <Link href="/garage-door-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <DoorOpen className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Garage Door Software</h3>
-              <p className="text-sm text-muted-foreground">Same-day repair dispatch, spring catalogs, financing.</p>
+              <p className="text-sm text-muted-foreground">Same-day repair dispatch, safety inspections, tune-up contracts.</p>
             </Link>
             <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Award className="h-6 w-6 text-emerald-600 mb-3" />

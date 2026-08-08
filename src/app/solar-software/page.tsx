@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import {
   Sun,
-  PanelTop,
-  FileText,
   CalendarClock,
-  BatteryCharging,
   TrendingUp,
   Wrench,
   CheckCircle2,
@@ -21,9 +18,9 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Solar Software — Site Surveys, PTO Tracking & O&M Contracts | Fieseros",
+  title: "Solar Software — Site Surveys, Install Project Management & O&M Contracts | Fieseros",
   description:
-    "Solar installation software for site-survey and shading docs, system design proposals, multi-week install project management, PTO workflow tracking, and recurring O&M contracts. Start free today.",
+    "Solar installation software for site-survey photo documentation, multi-week install project management, milestone invoicing, and recurring O&M contracts. Start free today.",
   keywords: [
     "solar software",
     "solar CRM",
@@ -35,7 +32,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Solar Software | Fieseros",
     description:
-      "Document site surveys and shading, generate system design proposals, track multi-week installs, manage PTO workflow, and run recurring O&M contracts. Built for solar installation companies.",
+      "Document site surveys with photos, manage multi-week installs, bill by milestone, and run recurring O&M contracts. Built for solar installation companies.",
     url: "https://fieseros.com/solar-software",
     siteName: "Fieseros",
     type: "website",
@@ -51,34 +48,16 @@ const features: Feature[] = [
       "Site surveyors capture roof pitch, azimuth, obstructions, and shade-producing trees with timestamped photos and a horizon shading sketch. The complete survey becomes the foundation for system design — and your defense if production ever underperforms the proposal.",
   },
   {
-    icon: PanelTop,
-    title: "System Design Proposal Generation",
-    description:
-      "Turn the site survey into a branded solar proposal in minutes — system size, panel and inverter selection, estimated annual production, payback period, and 25-year savings. Customers sign the proposal electronically and the project moves straight into install planning.",
-  },
-  {
-    icon: FileText,
-    title: "Permitting & Inspection Paperwork Tracking",
-    description:
-      "Track every permit application, utility interconnection form, and inspection request through its approval lifecycle. Fieseros flags permits that have been sitting at the AHJ for 10 days so you can follow up — instead of finding out three weeks later that the job is stuck.",
-  },
-  {
     icon: CalendarClock,
     title: "Multi-Week Install Project Management",
     description:
       "A residential solar install is a 2 to 4 week project, not a single-day job. Fieseros phases the project — permit approval, material delivery, install day, inspection, PTO — and shows you exactly which project is at which stage on a single board.",
   },
   {
-    icon: BatteryCharging,
-    title: "PTO & System Monitoring Integration",
-    description:
-      "Track the permission-to-operate workflow from utility approval to system activation, and pull production data from monitoring platforms so you can spot underperforming systems before the customer calls you. O&M contracts get auto-scheduled based on actual system performance data.",
-  },
-  {
     icon: TrendingUp,
     title: "Recurring O&M Contracts & Lease Billing",
     description:
-      "Bill monthly lease payments, recurring O&M contracts, and monitoring subscriptions on autopilot. Fieseros charges the customer's card on file, sends a branded receipt, and flags failed payments before they snowball into three months of unbilled service.",
+      "Fieseros queues recurring invoices automatically, sends them via Email & SMS, and follows up with payment reminders for unpaid balances.",
   },
 ];
 
@@ -89,29 +68,9 @@ const faqs = [
       "Every solar project starts with a site survey, and the quality of that survey determines whether the system produces what you promised. Fieseros gives site surveyors a structured workflow — roof pitch, azimuth, obstruction photos, attic access, electrical panel capacity, and a horizon shading sketch. Every photo is timestamped and geotagged, and the complete survey becomes the foundation for system design. If the system ever underperforms the proposal, you can pull the original shading documentation and show the customer that the design accounted for the conditions present at the time of survey. Most solar companies using Fieseros substantially cut their site-survey-to-proposal time.",
   },
   {
-    question: "Can Fieseros generate solar proposals and system designs?",
-    answer:
-      "Yes. Once the site survey is complete, Fieseros turns the data into a branded solar proposal — system size in kilowatts, panel count and model, inverter selection, estimated annual production in kilowatt-hours, payback period, and 25-year savings compared to utility rates. The proposal includes financing options if you offer them, and the customer signs electronically through a link sent by Email & SMS. The signed proposal moves the project straight into permitting and install planning, with the design specs attached to the project record. Your sales team quotes more jobs in a week, and every proposal looks consistent and professional.",
-  },
-  {
-    question: "How does Fieseros track permitting and utility interconnection?",
-    answer:
-      "Permitting paperwork is the single biggest source of stalled solar projects. A permit that sits at the authority having jurisdiction for three weeks without follow-up can push an install out by a month, and most solar companies have no visibility into which permits are stuck where. Fieseros tracks every permit application, utility interconnection form, and inspection request through its approval lifecycle. Each submission has a status, a submitted date, and an expected response date. Fieseros flags anything that has been sitting past its expected response date so your project coordinator can follow up with the AHJ or utility. Most solar companies using Fieseros meaningfully cut their average permit-to-PTO time.",
-  },
-  {
-    question: "How does the PTO (permission to operate) workflow work?",
-    answer:
-      "Permission to operate is the final utility approval that allows a solar system to be turned on, and it is the milestone that determines when a project can be billed in full. Fieseros tracks the PTO workflow from final inspection through utility approval to system activation. The project dashboard shows you exactly which projects are at which stage — installed but awaiting inspection, inspected but awaiting PTO, PTO received and ready to activate. When PTO is granted, Fieseros can trigger the final invoice automatically and schedule the customer activation call. You stop losing track of installed systems that are sitting idle waiting for utility paperwork, which is one of the most frustrating revenue leaks in solar.",
-  },
-  {
-    question: "Can Fieseros integrate with solar system monitoring platforms?",
-    answer:
-      "Yes. Fieseros pulls production data from major solar monitoring platforms — Enphase, SolarEdge, Tesla, and others — so you can see actual kilowatt-hour production across every system you have installed. When a system underperforms its expected output, Fieseros flags it on the O&M dashboard so you can dispatch a technician before the customer ever notices. The same integration lets you schedule recurring O&M visits based on actual system performance data rather than a fixed calendar. A system that is producing 95 percent of expected output does not need a service visit; a system producing 70 percent does. You spend your O&M time on systems that actually need attention.",
-  },
-  {
     question: "How do recurring O&M contracts and lease billing work?",
     answer:
-      "Many solar companies run recurring revenue streams — monthly lease payments on financed systems, annual O&M contracts, monthly monitoring subscriptions — that are notoriously hard to track without dedicated software. Fieseros lets you define each recurring billing relationship once with the customer, the amount, the frequency, and the payment method on file. The system charges the card on the scheduled date, sends a branded receipt, and flags any failed payment on the dashboard so you can follow up before the customer owes three months of unbilled service. O&M contracts also auto-schedule their annual or semi-annual visits, send the customer an Email & SMS reminder, and queue the technician dispatch. Recurring revenue becomes truly passive instead of a monthly administrative grind.",
+      "Fieseros queues recurring invoices automatically on the schedule you define, sends them via Email & SMS, and follows up with payment reminders for unpaid balances.",
   },
 ];
 
@@ -119,7 +78,7 @@ export default function SolarSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "Fieseros — Solar Installation Business Software",
     description:
-      "Solar CRM and project management software with site-survey documentation, system design proposals, permitting paperwork tracking, multi-week install management, PTO workflow, monitoring integration, and recurring O&M contracts.",
+      "Solar CRM and project management software with site-survey photo documentation, multi-week install project management, milestone invoicing, and recurring O&M contracts.",
     url: "https://fieseros.com/solar-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
@@ -136,8 +95,8 @@ export default function SolarSoftwarePage() {
     >
       <CornerstoneHero
         eyebrow="Solar Software"
-        title="Solar Software That Moves Every Project from Site Survey to PTO Without Falling Through the Cracks"
-        subtitle="From site-survey and shading documentation to system design proposals, permitting paperwork tracking, multi-week install management, PTO workflow, and recurring O&M contracts, Fieseros is the solar CRM built for installation companies."
+        title="Solar Software That Moves Every Project from Site Survey to Activation Without Falling Through the Cracks"
+        subtitle="From site-survey photo documentation to multi-week install project management, milestone invoicing, and recurring O&M contracts, Fieseros is the solar CRM built for installation companies."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -158,7 +117,7 @@ export default function SolarSoftwarePage() {
 
       <FeatureGrid
         title="Built for the way solar installation companies actually work"
-        subtitle="From the first site-survey photo to the moment the utility grants permission to operate — every solar workflow in one platform."
+        subtitle="From the first site-survey photo to system activation — every solar workflow in one platform."
         features={features}
       />
 
@@ -180,12 +139,11 @@ export default function SolarSoftwarePage() {
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
-                  "Permit applications sit at the AHJ for 3 weeks and nobody follows up",
+                  "No project board — installs stall at inspection or activation with nobody noticing",
                   "Site-survey photos live on the surveyor's phone, lost when they quit",
-                  "No visibility into which installs are stuck at inspection versus PTO",
+                  "No visibility into which installs are stuck at inspection versus activation",
                   "O&M contracts sold verbally and forgotten — zero recurring revenue tracked",
-                  "Underperforming systems discovered when the customer calls to complain",
-                  "Lease and financing payments tracked manually — failed charges slip for months",
+                  "Recurring lease and O&M payments tracked manually — invoices slip for months",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <span className="text-destructive mt-0.5">✗</span>
@@ -201,12 +159,10 @@ export default function SolarSoftwarePage() {
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
-                  "Permitting paperwork tracked through every approval stage — stuck permits flagged",
-                  "Site-survey photos attached to the project record permanently — surveyor-proof",
-                  "Project board shows every install's stage — permit, install, inspection, PTO at a glance",
-                  "O&M contracts auto-scheduled and auto-billed — real recurring revenue on autopilot",
-                  "Monitoring integration flags underperforming systems before the customer notices",
-                  "Lease and subscription billing runs on autopilot — failed charges surface immediately",
+                  "Site-survey photos attached to the project record permanently",
+                  "Project board shows every install's stage at a glance",
+                  "O&M contracts auto-scheduled with Email & SMS reminders",
+                  "Recurring invoices queued automatically with payment reminders for unpaid balances",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
@@ -221,16 +177,16 @@ export default function SolarSoftwarePage() {
 
       <ContentSection title="Why solar installation companies choose Fieseros">
         <p>
-          Solar installation is one of the most project-management-intensive businesses in residential contracting. A single residential install runs 2 to 4 weeks from signed contract to permission to operate, and during that window it touches a site survey, a system design, a permitting submission, a utility interconnection application, material ordering, an install day with a crew of three to five, a building inspection, a utility inspection, and finally PTO. Solar software that handles only one piece of this workflow — quoting, or install scheduling, or monitoring — just shifts the chaos somewhere else. Fieseros is built to run the entire project lifecycle in one platform your sales, project management, and install teams actually use.
+          Solar installation is one of the most project-management-intensive businesses in residential contracting. A single residential install runs 2 to 4 weeks from signed contract to system activation, and during that window it touches a site survey, a system design, a permitting submission, a utility interconnection application, material ordering, an install day with a crew of three to five, a building inspection, a utility inspection, and finally PTO. Solar software that handles only one piece of this workflow — quoting, or install scheduling — just shifts the chaos somewhere else. Fieseros is built to run the entire project lifecycle in one platform your sales, project management, and install teams actually use.
         </p>
         <p>
-          The permitting problem is the single biggest revenue leak in most solar companies. A permit that sits at the authority having jurisdiction for three weeks without follow-up pushes an install out by a month, and most solar companies have no visibility into which permits are stuck where. Fieseros tracks every permit application, utility interconnection form, and inspection request through its approval lifecycle. Each submission has a status, a submitted date, and an expected response date. Anything past its expected response date gets flagged on the dashboard so your project coordinator can follow up. Most solar companies using Fieseros meaningfully cut their average permit-to-PTO time, which means more installs close in a given quarter with the same headcount.
+          The visibility problem is the single biggest revenue leak in most solar companies. A project that stalls at inspection, or sits at the utility waiting on PTO, can push an install out by weeks, and most solar companies have no clear view into which projects are stuck where. Fieseros puts every install on a project board so you can see at a glance which job is at site survey, which is at install, which is at inspection, and which is awaiting activation. Site-survey photos and notes are attached to the project record permanently, so the next person picking up the project has everything they need without chasing down a surveyor who left the company.
         </p>
         <p>
-          The PTO and monitoring side is where post-install revenue either gets captured or quietly slips away. Permission to operate is the milestone that determines when a project can be billed in full, and too many installed systems sit idle for weeks because nobody is tracking the utility approval. Fieseros tracks PTO from final inspection through utility approval to system activation, and triggers the final invoice automatically when PTO is granted. Once the system is live, the monitoring integration pulls actual production data so you can spot underperforming systems before the customer calls you. A system producing 70 percent of expected output gets a service visit dispatched; a system producing 95 percent does not. You spend your O&M time on systems that actually need attention, instead of waiting for complaint calls.
+          The install project management side is where post-install revenue either gets captured or quietly slips away. Fieseros phases each project — site survey, material delivery, install day, inspection, activation — and milestone invoicing lets you bill by phase: deposit on contract signature, progress on install completion, final on system activation. You stop carrying 5,000 to 25,000 dollars in material and labor costs while you wait for the utility paperwork to clear.
         </p>
         <p>
-          Finally, there is the recurring revenue that most solar companies fail to operationalize. Monthly lease payments, annual O&M contracts, and monitoring subscriptions can add up to 10 to 20 percent of total revenue for a mature solar company — but only if they are tracked and billed consistently. Fieseros runs all of it on autopilot. The system charges the customer's card on the scheduled date, sends a branded receipt, and flags any failed payment on the dashboard so you can follow up before it snowballs into three months of unbilled service. O&M contracts auto-schedule their visits, send Email & SMS reminders, and queue the technician dispatch. Recurring revenue becomes truly passive, which is what makes a solar company attractive to acquirers and resilient to the boom-and-bust cycle of new installs.
+          Finally, there is the recurring revenue that most solar companies fail to operationalize. Monthly lease payments, annual O&M contracts, and monitoring subscriptions can add up to 10 to 20 percent of total revenue for a mature solar company — but only if they are tracked and billed consistently. Fieseros queues recurring invoices automatically on the schedule you define, sends them via Email & SMS, and follows up with payment reminders for unpaid balances. O&M contracts auto-schedule their visits with Email & SMS reminders so the customer is never surprised by a service call. Recurring revenue becomes truly passive, which is what makes a solar company attractive to acquirers and resilient to the boom-and-bust cycle of new installs.
         </p>
       </ContentSection>
 
@@ -253,17 +209,17 @@ export default function SolarSoftwarePage() {
             <Link href="/roofing-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Home className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Roofing Software</h3>
-              <p className="text-sm text-muted-foreground">Aerial measurements, project phasing, storm claims.</p>
+              <p className="text-sm text-muted-foreground">Project phasing, photo documentation, milestone invoicing.</p>
             </Link>
             <Link href="/electrical-contractor-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Plug className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Electrical Software</h3>
-              <p className="text-sm text-muted-foreground">Job costing, code compliance, and parts tracking.</p>
+              <p className="text-sm text-muted-foreground">Multi-electrician dispatch, asset history, and invoicing.</p>
             </Link>
             <Link href="/hvac-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Thermometer className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">HVAC Software</h3>
-              <p className="text-sm text-muted-foreground">Dispatch, seasonal contracts, and refrigerant tracking.</p>
+              <p className="text-sm text-muted-foreground">Dispatch, seasonal contracts, and equipment history.</p>
             </Link>
             <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Award className="h-6 w-6 text-emerald-600 mb-3" />

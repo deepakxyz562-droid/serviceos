@@ -23,7 +23,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Pet Services Software — Dog Walking, Pet Sitting & Mobile Grooming | Fieseros",
   description:
-    "Pet services software for recurring per-pet scheduling, customer pet profiles, geo-tracked dog walks, sitter dispatch with GPS check-in, and subscription billing. Start free today.",
+    "Pet services software for recurring per-pet scheduling, customer pet profiles, GPS check-in dog walks, sitter dispatch with GPS check-in, and subscription billing. Start free today.",
   keywords: [
     "pet services software",
     "dog walking software",
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Pet Services Software | Fieseros",
     description:
-      "Schedule recurring walks per pet, keep vaccination and behavior profiles, track dog walks with GPS and photo proof, dispatch sitters with check-in, and bill subscriptions automatically. Built for pet services businesses.",
+      "Schedule recurring walks per pet, keep vaccination and behavior profiles, track dog walk visits with GPS check-in and photo updates, dispatch sitters with check-in, and bill subscriptions automatically. Built for pet services businesses.",
     url: "https://fieseros.com/pet-services-software",
     siteName: "Fieseros",
     type: "website",
@@ -58,27 +58,27 @@ const features: Feature[] = [
   },
   {
     icon: MapPin,
-    title: "Geo-Tracked Dog Walks with Route Map",
+    title: "GPS Check-In for Dog Walks",
     description:
-      "Every dog walk is GPS-tracked from start to finish, with the route map, distance, and duration logged to the visit record. When the customer asks whether their dog actually got a full 30-minute walk, you have a map and a timestamp to show them.",
+      "Walkers check in at the start of every walk and check out at the end, with GPS verification and visit duration logged to the visit record.",
   },
   {
     icon: Smartphone,
     title: "Sitter Dispatch & GPS Check-In",
     description:
-      "Sitters and walkers check in and out of every visit through Fieseros, with GPS verification that they actually arrived at the customer's address. The dispatch board shows you who is on which visit, who is between visits, and who is running late.",
+      "Sitters and walkers check in and out of every visit through Fieseros, with GPS verification that they actually arrived at the customer's address. The dispatch board shows you who is on which visit and who has finished for the day.",
   },
   {
     icon: Bell,
-    title: "Customer App for Live Updates",
+    title: "Customer Portal for Pet Updates",
     description:
-      "Customers get a branded app where they see their pet's schedule, live walk tracking, photo updates from the sitter, and a complete visit history. The 6 p.m. \"did you walk my dog today?\" text message becomes a thing of the past.",
+      "Customers get a branded portal where they see their pet's schedule, photo updates from the sitter, and a complete visit history.",
   },
   {
     icon: Repeat,
     title: "Subscription Billing for Multi-Pet Households",
     description:
-      "Bill recurring pet care as a monthly subscription — 12 walks a month for one dog, twice-weekly sitting for two cats, mobile grooming every six weeks — and Fieseros sends automatic payment reminders after each visit. Multi-pet households get a single consolidated invoice.",
+      "Bill recurring pet care as a monthly subscription with recurring invoices sent via Email & SMS and automatic payment reminders for unpaid balances.",
   },
 ];
 
@@ -91,7 +91,7 @@ const faqs = [
   {
     question: "How does GPS tracking on dog walks work?",
     answer:
-      "When a walker starts a dog walk in Fieseros, the app begins recording the GPS route from the moment they leave the customer's home until the moment they return. The route map, total distance, and exact duration are logged to the visit record, and the customer can see the walk live in their app or review it afterward. This solves two problems at once. First, it gives the customer proof that their dog actually got the full 30-minute walk they paid for, which is the single most common complaint in dog walking. Second, it protects your business — if a customer claims the walker only did a 10-minute loop, you have a map and a timestamp that prove otherwise.",
+      "Walkers check in at the start and check out at the end of every walk, with GPS verification that confirms they were at the customer's address. The visit duration is logged to the visit record, and the customer can see the visit history in their portal.",
   },
   {
     question: "Can Fieseros track pet vaccinations and behavior notes?",
@@ -111,7 +111,7 @@ const faqs = [
   {
     question: "Can Fieseros handle mobile grooming in addition to walking and sitting?",
     answer:
-      "Yes. Mobile grooming is a slightly different workflow — appointments are longer, the groomer drives a fully equipped van, and the job includes a documented service menu — but it fits cleanly into the same Fieseros platform. The groomer's schedule is built the same way a walker's is, with smart auto-dispatch between appointments. The pet profile carries grooming-specific notes — coat type, last groom, skin conditions, behavior during grooming — so a new groomer covering a route has everything they need. Billing works the same way, either as a one-time invoice per groom or as a recurring subscription for customers who book every six weeks. A pet services company running all three lines — walking, sitting, and mobile grooming — sees everything on one dispatch board.",
+      "Yes. Mobile grooming is a slightly different workflow — appointments are longer, the groomer drives a fully equipped van, and the job includes a documented service menu — but it fits cleanly into the same Fieseros platform. The groomer's schedule is built the same way a walker's is, with drag-and-drop scheduling between appointments. The pet profile carries grooming-specific notes — coat type, last groom, skin conditions, behavior during grooming — so a new groomer covering a route has everything they need. Billing works the same way, either as a one-time invoice per groom or as a recurring subscription for customers who book every six weeks. A pet services company running all three lines — walking, sitting, and mobile grooming — sees everything on one dispatch board.",
   },
 ];
 
@@ -119,7 +119,7 @@ export default function PetServicesSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "Fieseros — Pet Services Business Software",
     description:
-      "Pet services CRM and dispatch software with recurring per-pet scheduling, customer pet profiles, geo-tracked dog walks, sitter GPS check-in, customer app for live updates, and subscription billing.",
+      "Pet services CRM and dispatch software with recurring per-pet scheduling, customer pet profiles, GPS check-in dog walks, sitter GPS check-in, customer portal for visit updates, and subscription billing.",
     url: "https://fieseros.com/pet-services-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
@@ -137,7 +137,7 @@ export default function PetServicesSoftwarePage() {
       <CornerstoneHero
         eyebrow="Pet Services Software"
         title="Pet Services Software That Proves Every Walk, Protects Every Pet, and Bills Every Subscription on Autopilot"
-        subtitle="From recurring per-pet scheduling and full pet profiles to geo-tracked dog walks, sitter GPS check-in, and subscription billing, Fieseros is the pet services CRM built for dog walking, pet sitting, and mobile grooming companies."
+        subtitle="From recurring per-pet scheduling and full pet profiles to GPS check-in dog walks, sitter GPS check-in, and subscription billing, Fieseros is the pet services CRM built for dog walking, pet sitting, and mobile grooming companies."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -202,11 +202,10 @@ export default function PetServicesSoftwarePage() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
                   "Recurring schedules auto-built every week — sick walker means one-tap reassignment",
-                  "GPS walk map and timestamp on every visit — proof the walk actually happened",
+                  "GPS check-in and check-out on every walk — proof the visit actually happened",
                   "Vaccination records tracked with expiration alerts — liability covered",
                   "Sitter check-in GPS-verified — they're at the right house at the right time",
                   "Subscription billing auto-sends invoices with reminders after every visit — no end-of-month chase",
-                  "Multi-pet households get one clean consolidated monthly invoice",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
@@ -224,13 +223,13 @@ export default function PetServicesSoftwarePage() {
           Pet services is a business built on trust. Customers hand you the keys to their home and the care of an animal they love, and they expect you to show up on time, every time, with proof that the visit actually happened. The operational complexity underneath that trust is significant — recurring weekly schedules across hundreds of pets, dozens of walkers and sitters moving across town every day, vaccination and behavioral records that need to follow each pet, and billing that needs to run smoothly so the customer relationship never feels transactional. Pet services software that handles only scheduling, or only billing, just shifts the chaos. Fieseros is built to run the entire workflow in one platform your walkers, sitters, and office staff actually use.
         </p>
         <p>
-          The proof-of-service problem is the single most important issue in pet services. When a customer pays 25 dollars for a 30-minute dog walk, they want to know the walk actually happened — that the walker showed up, walked for the full 30 minutes, and didn't just stop at the corner for 10 minutes. Fieseros solves this with GPS-tracked walks. Every walk is recorded from start to finish, with a route map, distance, and exact duration logged to the visit record. The customer can see the walk live in their app or review it afterward. This single feature eliminates the most common complaint in dog walking, and it protects your business when a customer claims a walker cut a walk short — you have a map and a timestamp that prove otherwise.
+          The proof-of-service problem is the single most important issue in pet services. When a customer pays 25 dollars for a 30-minute dog walk, they want to know the walk actually happened — that the walker showed up and stayed for the full 30 minutes. Fieseros solves this with GPS check-in and check-out. Walkers check in at the start of every walk and check out at the end, with GPS verification that confirms they were at the customer's address. The visit duration is logged to the visit record, and the customer can see the visit history in their portal. This single feature eliminates the most common complaint in dog walking, and it protects your business when a customer claims a walker cut a walk short — you have a timestamped record that proves otherwise.
         </p>
         <p>
           The pet-profile and vaccination side is the silent liability that most pet services companies don't think about until it becomes a problem. If a dog in your pack walking service bites another dog and you can't produce proof of current rabies vaccination, you are exposed legally and operationally. Fieseros makes pet records part of the workflow. Every pet has a full profile — vaccination records with expiration dates, behavioral notes, feeding instructions, vet and emergency contacts, and handling preferences. When a new sitter covers a route, they see every relevant note before they knock on the door. Fieseros also flags pets whose vaccinations are expiring, so you can remind the customer to update their records before they become a liability for your business.
         </p>
         <p>
-          Finally, there is the recurring billing that determines whether a pet services business is operationally healthy or perpetually cash-strapped. Most pet services run on weekly or monthly recurring revenue — 12 walks a month, twice-weekly sitting, mobile grooming every six weeks — and chasing those payments at the end of the month eats office time and damages customer relationships. Fieseros runs all of it as recurring subscriptions that auto-generate invoices with secure payment links. After every visit (or on a fixed monthly cycle) the customer receives a branded invoice by Email & SMS, multi-pet households get a single consolidated invoice, and Fieseros follows up with automatic payment reminders for any unpaid balance. Overdue invoices surface immediately on the dashboard so you can follow up before the situation escalates. Most pet services companies using Fieseros meaningfully cut their days-sales-outstanding, which means invoices get paid promptly without anyone in the office chasing them.
+          Finally, there is the recurring billing that determines whether a pet services business is operationally healthy or perpetually cash-strapped. Most pet services run on weekly or monthly recurring revenue — 12 walks a month, twice-weekly sitting, mobile grooming every six weeks — and chasing those payments at the end of the month eats office time and damages customer relationships. Fieseros runs all of it as recurring subscriptions that auto-generate invoices with secure payment links. After every visit (or on a fixed monthly cycle) the customer receives a branded invoice by Email & SMS, and Fieseros follows up with automatic payment reminders for any unpaid balance. Overdue invoices surface immediately on the dashboard so you can follow up before the situation escalates. Most pet services companies using Fieseros meaningfully cut their days-sales-outstanding, which means invoices get paid promptly without anyone in the office chasing them.
         </p>
       </ContentSection>
 
@@ -253,7 +252,7 @@ export default function PetServicesSoftwarePage() {
             <Link href="/pest-control-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Bug className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Pest Control Software</h3>
-              <p className="text-sm text-muted-foreground">Quarterly schedules, chemical records, termite bonds.</p>
+              <p className="text-sm text-muted-foreground">Recurring quarterly schedules, automated reminders, and visit history.</p>
             </Link>
             <Link href="/cleaning-business-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Sparkles className="h-6 w-6 text-emerald-600 mb-3" />
@@ -263,7 +262,7 @@ export default function PetServicesSoftwarePage() {
             <Link href="/pool-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Droplets className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Pool Service Software</h3>
-              <p className="text-sm text-muted-foreground">Weekly routes, chemical logs, recurring billing.</p>
+              <p className="text-sm text-muted-foreground">Weekly routes, equipment inspections, recurring billing.</p>
             </Link>
             <Link href="/best-field-service-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Award className="h-6 w-6 text-emerald-600 mb-3" />

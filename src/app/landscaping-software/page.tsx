@@ -22,7 +22,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Landscaping Software — Crew Routing, Design-Build Quotes & Invoicing | Fieseros",
   description:
-    "Landscaping business software for multi-stop crew routing, recurring maintenance contracts, design-build proposals, and material inventory. The all-in-one landscaping CRM that helps landscapers grow. Start free today.",
+    "Landscaping business software for multi-stop crew routing, recurring maintenance contracts, design-build proposals, and material line-item billing. The all-in-one landscaping CRM that helps landscapers grow. Start free today.",
   keywords: [
     "landscaping software",
     "landscaping CRM",
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Landscaping Software & CRM | Fieseros",
     description:
-      "Optimize multi-stop crew routes, manage recurring maintenance contracts, quote design-build projects, and track plant and material inventory. Landscaping software built for the way crews actually work.",
+      "Optimize multi-stop crew routes, manage recurring maintenance contracts, quote design-build projects, and bill materials as line items. Landscaping software built for the way crews actually work.",
     url: "https://fieseros.com/landscaping-software",
     siteName: "Fieseros",
     type: "website",
@@ -57,9 +57,9 @@ const features: Feature[] = [
   },
   {
     icon: Leaf,
-    title: "Plant & Material Inventory",
+    title: "Material Line-Item Billing",
     description:
-      "Track mulch by the yard, pavers by the pallet, and nursery stock by the SKU. Materials pulled for a job auto-deduct from inventory and roll onto the customer invoice at your marked-up price — so material costs never eat your margin silently.",
+      "Add materials as line items on the work order and they roll onto the customer invoice at your marked-up price.",
   },
   {
     icon: Sprout,
@@ -95,7 +95,7 @@ const faqs = [
   {
     question: "How does material and plant inventory work for landscapers?",
     answer:
-      "Landscapers carry a lot of material — mulch by the yard, stone by the ton, nursery stock, pavers, edging, irrigation parts. Fieseros tracks all of it across your yard and each truck. When a crew loads material for a job, they log it on their phone; it deducts from inventory and adds to the customer invoice at your markup. Reorder alerts fire when stock runs low, so you're never turning away a job because you're out of edging or under-ordering mulch. Most landscape businesses recover meaningful lost material revenue within the first month of switching.",
+      "Crews log materials used as line items on the work order from their phone. Materials flow onto the customer's invoice at your marked-up price.",
   },
   {
     question: "Can crews use Fieseros on their phones in the field?",
@@ -118,7 +118,7 @@ export default function LandscapingSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "Fieseros — Landscaping Business Software",
     description:
-      "Landscaping CRM and crew dispatch software with multi-stop route planning, recurring maintenance contracts, design-build proposals, material inventory, and seasonal scheduling.",
+      "Landscaping CRM and crew dispatch software with multi-stop route planning, recurring maintenance contracts, design-build proposals, and seasonal scheduling.",
     url: "https://fieseros.com/landscaping-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "29", priceCurrency: "USD" },
@@ -206,7 +206,7 @@ export default function LandscapingSoftwarePage() {
                 {[
                   "Routes optimized automatically — crews hit 8–12 jobs in the right order, every day",
                   "Proposals sent via Email & SMS, customers approve with a tap, no more lost email threads",
-                  "Materials auto-deduct from inventory and roll onto the invoice at your marked-up price",
+                  "Materials added as line items on the work order — auto-flow to invoice at marked-up price",
                   "Recurring mow contracts set once — auto-scheduled for the whole season",
                   "Before/after photos on every job, attached to the work order and ready for disputes",
                   "Invoices generated and sent via Email & SMS the moment the crew marks the job done",
@@ -290,12 +290,12 @@ export default function LandscapingSoftwarePage() {
             <Link href="/lawn-care-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Sun className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Lawn Care Software</h3>
-              <p className="text-sm text-muted-foreground">Route optimization, chemical tracking, customer portals.</p>
+              <p className="text-sm text-muted-foreground">Route planning, customer portal, recurring scheduling.</p>
             </Link>
             <Link href="/tree-care-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <TreePine className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Tree Care Software</h3>
-              <p className="text-sm text-muted-foreground">Crew dispatch, cert tracking, insurance-ready docs.</p>
+              <p className="text-sm text-muted-foreground">Crew dispatch, photo documentation, recurring inspections.</p>
             </Link>
             <Link href="/handyman-software" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
               <Hammer className="h-6 w-6 text-emerald-600 mb-3" />

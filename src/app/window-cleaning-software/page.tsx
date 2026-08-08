@@ -3,7 +3,6 @@ import {
   Route,
   HardHat,
   Camera,
-  SprayCan,
   Building2,
   Sparkles,
   Wrench,
@@ -53,19 +52,13 @@ const features: Feature[] = [
     icon: HardHat,
     title: "Height & Access Safety Checklists",
     description:
-      "Before a tech sets up a 32-foot extension ladder or ropes a high-rise facade, they complete a height-access safety checklist in Fieseros — anchor points, ladder angle, fall arrest inspection. The completed checklist is timestamped and stored on the work order.",
+      "Build custom safety checklists per job type. Techs complete them on their phone, with photos for any flagged items, and the completed checklist is timestamped and stored on the work order.",
   },
   {
     icon: Camera,
     title: "Before & After Photo Proof",
     description:
       "Techs snap before photos of every dirty pane and after photos of every clean one, all attached to the work order. When a storefront manager disputes whether the second-floor windows were done, you have timestamped proof they were.",
-  },
-  {
-    icon: SprayCan,
-    title: "Water-Fed-Pole vs Squeegee Job Tracking",
-    description:
-      "Fieseros tracks which method each job requires — water-fed pole for high exterior panes, traditional squeegee for interiors and detailing — and assigns the right tech with the right equipment. You stop sending a squeegee-only crew to a job that needs a 40-foot pole.",
   },
   {
     icon: Building2,
@@ -77,7 +70,7 @@ const features: Feature[] = [
     icon: Sparkles,
     title: "Hard-Water Stain Surcharge Quoting",
     description:
-      "When a tech spots hard-water stains or oxidized frames during a routine clean, they tap a button to add a surcharge quote — with photos — sent to the customer via Email & SMS. Upsells that used to be a shoulder-shrug conversation now generate real revenue.",
+      "When a tech spots hard-water stains or oxidized frames during a routine clean, they add a quote line item with photos attached, sent to the customer via Email & SMS. Upsells that used to be a shoulder-shrug conversation now generate real revenue.",
   },
 ];
 
@@ -96,11 +89,6 @@ const faqs = [
     question: "Can Fieseros handle both residential and storefront commercial contracts?",
     answer:
       "Yes, and that mix is the hallmark of a healthy window cleaning business. Residential jobs are typically one-off or seasonal, billed per visit, and scheduled by route density. Storefront contracts are weekly, bi-weekly, or monthly, billed on a recurring cycle, and managed through the property manager rather than the building owner. Fieseros handles both workflows on the same dispatch board. Storefront contracts auto-generate invoices with payment links after every visit, residential jobs generate a one-time invoice on completion, and you see both revenue streams on a single dashboard. Many window cleaning companies use Fieseros to deliberately grow their storefront book because the recurring revenue smooths out the seasonality of residential work.",
-  },
-  {
-    question: "How does Fieseros track water-fed-pole versus squeegee jobs?",
-    answer:
-      "Not every window cleaning tech can or should do every job. High exterior panes on a three-story home require a water-fed pole and DI water system, while a ground-floor storefront with interior glass is a traditional squeegee and detail job. Fieseros tags every job with the method it requires, and the dispatch board shows you at a glance which tech has which equipment in their van. When you assign a job, Fieseros warns you if the tech doesn't have the right method on their profile. You stop sending a squeegee-only tech to a job that needs a 40-foot pole, which is the kind of mistake that costs you a customer and a half-day of wasted driving.",
   },
   {
     question: "How does recurring storefront billing work?",
@@ -203,7 +191,7 @@ export default function WindowCleaningSoftwarePage() {
                   "Routes clustered by neighborhood — same jobs done meaningfully faster",
                   "Before and after photos on every pane — disputes resolved in seconds",
                   "Height-access checklist completed and timestamped on every work order",
-                  "Job method tagged per stop — the right tech with the right gear shows up",
+                  "Job details and tags visible at a glance on the dispatch board",
                   "Storefront contracts auto-send invoices with payment links after every visit — no monthly invoice run",
                   "Surcharge quotes sent from the field — upsell revenue captured every week",
                 ].map((item) => (
