@@ -271,6 +271,26 @@ export default async function PublicBusinessHubPage({
   }
   const isMinimalListing = cardType === 'normal-minimal'
 
+  // ── Similar Businesses subtitle (Fix A + B) ──────────────────────────────
+  // getSimilarProviders has a 2-tier fallback:
+  //   Tier 1: same industry + same city
+  //   Tier 2: same industry + same country (any city)
+  // The subtitle must reflect WHICH tier the results came from so it's not
+  // misleading — e.g. "Other HVAC providers in Wallasey" when all results are
+  // actually from London / Manchester (tier-2 fallback) would be wrong.
+  //
+  // matchTier is derived from the results: if every provider shares the
+  // current business's city, it's tier 1; otherwise tier 2.
+  const industryDisplayName = getIndustryDisplayName(business.industry) || prettifySlug(business.industry || 'service')
+  const allSameCity = similarProviders.length > 0 &&
+    similarProviders.every((p) => p.city === business.city)
+  const similarSubtitle = allSameCity
+    ? `Other ${industryDisplayName} providers in ${business.city || 'your area'}`
+    : `More ${industryDisplayName} providers across ${countryNameFromCode(business.country)}`
+  const browseIndustryHref = resolvedIndustryId
+    ? `/${mapIndustryToPluralSlug(resolvedIndustryId)}`
+    : '/marketplace'
+
   // Note: auth state is no longer fetched server-side. The ClaimBusinessBanner
   // component reads auth state from the shared Zustand store (hydrated by
   // MarketplaceHeader on mount via /api/auth/me). This lets the page stay
@@ -614,23 +634,6 @@ export default async function PublicBusinessHubPage({
                 </section>
               )}
 
-              {/* Similar Businesses — same industry + same city (fallback: same country) */}
-              {similarProviders.length > 0 && (
-                <section id="similar" aria-labelledby="similar-heading">
-                  <h2 id="similar-heading" className="text-2xl font-bold tracking-tight mb-4">
-                    Similar Businesses
-                  </h2>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Other {business.industry || 'service'} providers near {business.city || 'you'}
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {similarProviders.map((p) => (
-                      <SimilarBusinessCard key={p.id} business={p} />
-                    ))}
-                  </div>
-                </section>
-              )}
-
               {/* ── Contextual CRM CTA — marketplace → CRM bridge ──────────────────
                   Shown ONLY on unclaimed business pages (business.claimed === false).
                   This is the strategic funnel: a business owner Googling
@@ -887,6 +890,39 @@ export default async function PublicBusinessHubPage({
               </div>
             </div>
           </div>
+
+          {/* ── Similar Businesses (full-width, Fix D) ─────────────────────────
+              Moved OUT of the left 2/3 column to full page width so the cards
+              get more horizontal room (3-up on desktop instead of 2-up in a
+              narrow column). The subtitle is contextual (Fix A + B):
+                • Tier 1 (same city):  "Other HVAC providers in Wallasey"
+                • Tier 2 (country):    "More HVAC providers across United Kingdom" */}
+          {similarProviders.length > 0 && (
+            <section id="similar" aria-labelledby="similar-heading" className="mt-12 lg:mt-16 pt-12 lg:pt-16 border-t">
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-6">
+                <div>
+                  <h2 id="similar-heading" className="text-2xl font-bold tracking-tight">
+                    Similar Businesses
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {similarSubtitle}
+                  </p>
+                </div>
+                <Link
+                  href={browseIndustryHref}
+                  className="text-sm font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 inline-flex items-center gap-1 shrink-0"
+                >
+                  View all {industryDisplayName}
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {similarProviders.map((p) => (
+                  <SimilarBusinessCard key={p.id} business={p} />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </main>
 
@@ -1117,67 +1153,101 @@ function ReviewCard({
   )
 }
 
-// ── Similar business card ───────────────────────────────────────────────────
+// ── Similar business card (Fix C — redesigned) ──────────────────────────────
+// Clean, modern card matching the marketplace browse page's design language:
+//   • Identity row: avatar (initials) + name + verified badge
+//   • Industry • Location line with icons
+//   • 2-line tagline
+//   • Footer: claim status + "View details" CTA
+// No gradient header, no rating (ToS-safe). Avatar uses deterministic pastel
+// colors so every provider gets a stable, visually distinct identity.
+
+function buildInitials(name: string): string {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('')
+}
+
+function avatarColors(name: string): { bg: string; text: string } {
+  const palettes = [
+    { bg: 'bg-emerald-100 dark:bg-emerald-950/60', text: 'text-emerald-700 dark:text-emerald-300' },
+    { bg: 'bg-blue-100 dark:bg-blue-950/60', text: 'text-blue-700 dark:text-blue-300' },
+    { bg: 'bg-violet-100 dark:bg-violet-950/60', text: 'text-violet-700 dark:text-violet-300' },
+    { bg: 'bg-amber-100 dark:bg-amber-950/60', text: 'text-amber-700 dark:text-amber-300' },
+    { bg: 'bg-rose-100 dark:bg-rose-950/60', text: 'text-rose-700 dark:text-rose-300' },
+    { bg: 'bg-teal-100 dark:bg-teal-950/60', text: 'text-teal-700 dark:text-teal-300' },
+  ]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0
+  }
+  return palettes[Math.abs(hash) % palettes.length]
+}
 
 function SimilarBusinessCard({ business }: { business: SimilarBusiness }) {
+  const initials = buildInitials(business.name)
+  const colors = avatarColors(business.name)
+  const industryLabel = getIndustryDisplayName(business.industry) || prettifySlug(business.industry || 'service')
+
   return (
     <Link
       href={business.canonicalUrl}
-      className="group flex flex-col rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden transition-all hover:shadow-md hover:border-emerald-300"
+      className="group flex flex-col rounded-xl border bg-card text-card-foreground shadow-sm transition-all hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700"
     >
-      {/* Cover image / gradient header */}
-      <div className="relative h-28 bg-gradient-to-br from-emerald-700 to-teal-700 overflow-hidden">
-        {business.coverImage ? (
-          <img
-            src={business.coverImage}
-            alt={business.name}
-            className="h-full w-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
-            onError={(e) => {
-              ;(e.currentTarget as HTMLImageElement).style.display = 'none'
-            }}
-          />
-        ) : null}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-        <div className="absolute bottom-2 left-3 right-3">
-          <h3 className="text-sm font-bold text-white line-clamp-1 drop-shadow-sm">
-            {business.name}
-          </h3>
+      {/* Identity row: avatar + name + verified badge */}
+      <div className="flex items-start gap-3 p-4 pb-3">
+        <div className={`h-11 w-11 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 ${colors.bg} ${colors.text}`}>
+          {initials}
         </div>
-      </div>
-
-      {/* Body */}
-      <div className="p-3 space-y-2 flex-1 flex flex-col">
-        {business.tagline && (
-          <p className="text-xs text-muted-foreground line-clamp-2">
-            {business.tagline}
-          </p>
-        )}
-
-        {/* Location row — rating removed per Google Maps ToS §3.2.4 */}
-        <div className="flex items-center justify-between gap-2 text-xs">
-          <span className="flex items-center gap-1 text-muted-foreground min-w-0">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <h3 className="font-semibold text-sm text-foreground line-clamp-1 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+              {business.name}
+            </h3>
+            {business.claimed && (
+              <BadgeCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" aria-label="Verified business" />
+            )}
+          </div>
+          {/* Industry • Location */}
+          <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground min-w-0">
+            <Wrench className="h-3 w-3 shrink-0" />
+            <span className="truncate">{industryLabel}</span>
+            <span className="text-muted-foreground/40 shrink-0">·</span>
             <MapPin className="h-3 w-3 shrink-0" />
             <span className="truncate">
               {business.city || '—'}{business.state ? `, ${business.state}` : ''}
             </span>
-          </span>
+          </div>
         </div>
+      </div>
 
-        {/* Footer: claim status + CTA */}
-        <div className="mt-auto flex items-center justify-between pt-2 border-t">
-          {business.claimed ? (
-            <span className="flex items-center gap-1 text-xs text-emerald-700">
-              <BadgeCheck className="h-3.5 w-3.5" />
-              Claimed
-            </span>
-          ) : (
-            <span className="text-xs text-muted-foreground">Unclaimed</span>
-          )}
-          <span className="flex items-center gap-0.5 text-xs font-medium text-emerald-700 group-hover:gap-1 transition-all">
-            View
-            <ChevronRight className="h-3 w-3" />
+      {/* Tagline */}
+      {business.tagline && (
+        <p className="px-4 pb-3 text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+          {business.tagline}
+        </p>
+      )}
+
+      {/* Footer: claim status + View details CTA */}
+      <div className="mt-auto flex items-center justify-between pt-3 px-4 pb-4 border-t">
+        {business.claimed ? (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Verified
           </span>
-        </div>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock className="h-3.5 w-3.5" />
+            Unclaimed
+          </span>
+        )}
+        <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 group-hover:gap-1.5 transition-all">
+          View details
+          <ChevronRight className="h-3.5 w-3.5" />
+        </span>
       </div>
     </Link>
   )
@@ -1339,4 +1409,20 @@ function prettifySlug(slug: string): string {
   return slug
     .replace(/-/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+/**
+ * Convert an ISO 3166-1 alpha-2 country code ("US", "GB", "IN") to its
+ * English display name ("United States", "United Kingdom", "India").
+ * Uses the built-in Intl.DisplayNames API (Node 14+ / all modern browsers).
+ * Falls back to the raw code if the API is unavailable or the code is unknown.
+ */
+function countryNameFromCode(code: string): string {
+  if (!code) return 'your country'
+  try {
+    const names = new Intl.DisplayNames(['en'], { type: 'region' })
+    return names.of(code) || code
+  } catch {
+    return code
+  }
 }
