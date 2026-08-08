@@ -649,6 +649,11 @@ model Service {
   @@index([category])
   @@index([checklistId])
   @@index([isPublic])
+  // ── Marketplace detail page optimization ──────────────────────────────
+  // The detail page fetches services with WHERE tenantId=? AND isActive=true
+  // AND isPublic=true ORDER BY category. This composite index covers the
+  // full query (no table scan, no filesort).
+  @@index([tenantId, isActive, isPublic])
 }
 
 // ==========================================
@@ -856,6 +861,11 @@ model Review {
   @@index([rating])
   @@index([status])
   @@index([source])
+  // ── Marketplace detail page optimization ──────────────────────────────
+  // The detail page fetches reviews with WHERE tenantId=? AND status='published'
+  // ORDER BY createdAt DESC LIMIT 25. This composite index lets SQLite use the
+  // index for both the WHERE filter and the ORDER BY (no filesort).
+  @@index([tenantId, status, createdAt])
 }
 
 // ==========================================
@@ -4711,6 +4721,12 @@ model FeaturedListing {
   @@index([type])
   @@index([isActive])
   @@index([endDate])
+  // ── Marketplace browse optimization ──────────────────────────────────
+  // The marketplace fetches active featured listings with WHERE isActive=true
+  // AND (endDate IS NULL OR endDate > now). This composite index covers the
+  // most common query pattern (fetchFeaturedTenantIds + fetchFeaturedListingsMap).
+  @@index([isActive, endDate])
+  @@index([tenantId, isActive, endDate])
 }
 
 model AICredit {

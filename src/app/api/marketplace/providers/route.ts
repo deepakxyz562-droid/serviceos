@@ -103,6 +103,31 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
   const trustRatingHigh = searchParams.get('trustRatingHigh') === 'true';
   const trustEmergency = searchParams.get('trustEmergency') === 'true';
 
+  // ── New server-side filters (Phase 2) ──────────────────────────────────
+  // minRating: 0 = no filter. > 0 excludes unrated (rating=0) providers.
+  const minRating = Math.max(0, Math.min(5, parseFloat(searchParams.get('minRating') || '0') || 0));
+  // claimedFilter: 'all' | 'claimed' | 'unclaimed'
+  const claimedFilterRaw = searchParams.get('claimedFilter')?.trim().toLowerCase() || 'all';
+  const claimedFilter: 'all' | 'claimed' | 'unclaimed' =
+    claimedFilterRaw === 'claimed' || claimedFilterRaw === 'unclaimed' ? claimedFilterRaw : 'all';
+  // Location params for radius filtering (bounding box + haversine post-filter)
+  const latParam = parseFloat(searchParams.get('lat') || '');
+  const lngParam = parseFloat(searchParams.get('lng') || '');
+  const hasLocation =
+    Number.isFinite(latParam) &&
+    Number.isFinite(lngParam) &&
+    latParam >= -90 &&
+    latParam <= 90 &&
+    lngParam >= -180 &&
+    lngParam <= 180;
+  const userLat = hasLocation ? latParam : null;
+  const userLng = hasLocation ? lngParam : null;
+  const radiusKmParam = parseFloat(searchParams.get('radiusKm') || '');
+  const radiusKm =
+    hasLocation && Number.isFinite(radiusKmParam) && radiusKmParam > 0
+      ? Math.min(500, radiusKmParam)
+      : null;
+
   // ── Cursor mode ────────────────────────────────────────────────────────
   // When `cursor` is present (even if empty string), use the new keyset
   // pagination path. This is the preferred path for the browse page.
@@ -127,6 +152,11 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
       trustEmergency,
       featuredOnly,
       serviceId,
+      minRating,
+      claimedFilter,
+      userLat,
+      userLng,
+      radiusKm,
     });
 
     try {
@@ -150,6 +180,11 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
             trustFullyVerified,
             trustRatingHigh,
             trustEmergency,
+            minRating,
+            claimedFilter,
+            userLat,
+            userLng,
+            radiusKm,
           });
           const featuredTenants = await db.tenant.findMany({
             where: { ...where, id: { in: Array.from(await fetchFeaturedTenantIds()) } },
@@ -158,7 +193,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
           });
           const filteredIds = new Set(featuredTenants.map((t) => t.id));
           const page = await fetchProviderPage({
-            filters: { country, search, city, industry, vertical, trustFullyVerified, trustRatingHigh, trustEmergency },
+            filters: { country, search, city, industry, vertical, trustFullyVerified, trustRatingHigh, trustEmergency, minRating, claimedFilter, userLat, userLng, radiusKm },
             cursor,
             pageSize,
             featuredTenantIds: filteredIds,
@@ -181,7 +216,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
           : await fetchFeaturedListingsMap(Array.from(featuredIds));
 
         return fetchProviderPage({
-          filters: { country, search, city, industry, vertical, trustFullyVerified, trustRatingHigh, trustEmergency },
+          filters: { country, search, city, industry, vertical, trustFullyVerified, trustRatingHigh, trustEmergency, minRating, claimedFilter, userLat, userLng, radiusKm },
           cursor,
           pageSize,
           featuredTenantIds: featuredIds,
@@ -216,7 +251,11 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
         total: result.total,
       }, {
         headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          // Allow browser/CDN caching for 30s, with stale-while-revalidate
+          // for 60s after. The in-memory TTL cache (30s) is the authoritative
+          // cache; this header just lets the browser reuse the response for
+          // navigation back/forward without re-fetching.
+          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
         },
       });
     } catch (err) {
@@ -232,27 +271,21 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
   const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10) || 20, 100);
   const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0);
 
-  // Location query params for distance-aware ranking + filtering.
-  const latParam = parseFloat(searchParams.get('lat') || '');
-  const lngParam = parseFloat(searchParams.get('lng') || '');
-  const hasLocation =
-    Number.isFinite(latParam) &&
-    Number.isFinite(lngParam) &&
-    latParam >= -90 &&
-    latParam <= 90 &&
-    lngParam >= -180 &&
-    lngParam <= 180;
-  const userLat = hasLocation ? latParam : null;
-  const userLng = hasLocation ? lngParam : null;
-  const radiusKm =
+  // Offset mode uses its own radius handling (bounding box + haversine +
+  // rankProviders). We pass userLat/userLng/radiusKm=null to
+  // buildProviderWhereClause so it doesn't add a duplicate bounding box.
+  // The offset mode's radiusKm defaults to 50 when location is present
+  // (backward compat with marketplace-landing + marketplace-compact).
+  const offsetRadiusKm =
     hasLocation && searchParams.get('radiusKm')
       ? Math.max(1, Math.min(500, parseFloat(searchParams.get('radiusKm')!) || 50))
       : 50;
 
   // ── Base where: 3-gate eligibility ─────────────────────────────────────
-  // Use the shared builder so vertical + industry + trust all go into SQL
-  // (no post-fetch filtering). This keeps the offset path consistent with
-  // the cursor path and avoids the "fetch 200, filter to 5" pattern.
+  // Use the shared builder so vertical + industry + trust + minRating +
+  // claimedFilter all go into SQL (no post-fetch filtering).
+  // NOTE: location/radius is NOT passed here — the offset mode handles it
+  // manually below (bounding box + haversine + rankProviders).
   const where: Record<string, unknown> = buildProviderWhereClause({
     country,
     search,
@@ -262,10 +295,12 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
     trustFullyVerified,
     trustRatingHigh,
     trustEmergency,
+    minRating,
+    claimedFilter,
   });
 
   if (hasLocation) {
-    const box = boundingBox(userLat!, userLng!, radiusKm);
+    const box = boundingBox(userLat!, userLng!, offsetRadiusKm);
     const boxClauses = [
       { latitude: { gte: box.minLat, lte: box.maxLat } },
       { longitude: { gte: box.minLng, lte: box.maxLng } },
@@ -297,20 +332,14 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
     });
 
     // ── In-app industry filter ──
+    // Option A: match PRIMARY industry only (consistent with counts groupBy).
+    // Previously this also checked businessCategoriesJson for multi-category
+    // tenants, but that caused a count/list mismatch. Removed for consistency.
     let filtered = tenants;
     if (industry) {
-      filtered = filtered.filter((t) => {
-        if ((t.industry ?? '').toLowerCase().trim() === industry) return true;
-        try {
-          const cats = JSON.parse(t.businessCategoriesJson || '[]');
-          return (
-            Array.isArray(cats) &&
-            cats.some((c) => typeof c === 'string' && c.toLowerCase() === industry)
-          );
-        } catch {
-          return false;
-        }
-      });
+      filtered = filtered.filter((t) =>
+        (t.industry ?? '').toLowerCase().trim() === industry,
+      );
     }
 
     // Vertical filter is now applied at SQL level (buildProviderWhereClause
@@ -461,7 +490,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
     });
 
     log.info(
-      { returned: items.length, total: filtered.length, industry, vertical, city, serviceId, search, featuredOnly, hasLocation, radiusKm },
+      { returned: items.length, total: filtered.length, industry, vertical, city, serviceId, search, featuredOnly, hasLocation, offsetRadiusKm },
       'marketplace/providers: offset list',
     );
 
@@ -472,7 +501,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
       offset,
     }, {
       headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
       },
     });
   } catch (err) {

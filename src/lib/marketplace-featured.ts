@@ -122,12 +122,36 @@ export function isFeaturedProvider(
  * Fetch all active FeaturedListing rows for the given tenant IDs and return
  * a Map keyed by tenantId. If multiple rows exist per tenant, the one with the
  * highest priority wins.
+ *
+ * PERFORMANCE: Result is cached at the module level for 120 seconds.
+ * Featured listings change rarely (only when a SuperAdmin toggles them),
+ * so a 120s TTL is safe and eliminates the per-request DB query on the
+ * detail page and marketplace browse page.
  */
+const FEATURED_MAP_CACHE_TTL_MS = 120_000;
+let _featuredMapCache: {
+  key: string;
+  value: Map<string, FeaturedListingRow>;
+  expiresAt: number;
+} | null = null;
+
+function featuredMapCacheKey(tenantIds: string[]): string {
+  // Sort for deterministic key (order doesn't matter for the query).
+  return [...tenantIds].sort().join(',');
+}
+
 export async function fetchFeaturedListingsMap(
   tenantIds: string[],
 ): Promise<Map<string, FeaturedListingRow>> {
+  if (tenantIds.length === 0) return new Map();
+
+  // Check cache — hit only if the exact same set of IDs is cached.
+  const key = featuredMapCacheKey(tenantIds);
+  if (_featuredMapCache && _featuredMapCache.key === key && Date.now() < _featuredMapCache.expiresAt) {
+    return _featuredMapCache.value;
+  }
+
   const map = new Map<string, FeaturedListingRow>();
-  if (tenantIds.length === 0) return map;
   const rows = await db.featuredListing.findMany({
     where: {
       tenantId: { in: tenantIds },
@@ -154,6 +178,10 @@ export async function fetchFeaturedListingsMap(
       });
     }
   }
+
+  // Cache for 120s. Even if two requests race past the cache check, both
+  // will just run the query and the last writer wins — no corruption.
+  _featuredMapCache = { key, value: map, expiresAt: Date.now() + FEATURED_MAP_CACHE_TTL_MS };
   return map;
 }
 

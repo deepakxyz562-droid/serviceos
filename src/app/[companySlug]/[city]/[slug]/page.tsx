@@ -335,8 +335,16 @@ export default async function PublicBusinessHubPage({
   const pluralIndustrySlug = mapIndustryToPluralSlug(business.industry)
   const industryBrowseUrl = `/${pluralIndustrySlug}`
   const cityBrowseUrl = `/${pluralIndustrySlug}/${business.cityUrlSlug}`
+  // ── Back-link preserves city + country params ──────────────────────────
+  // When the user clicks "Home" in the breadcrumb, we link back to
+  // /marketplace WITH the business's city + country as URL params. This
+  // ensures the SSR page fetches with the right location context, and
+  // the Zustand persist middleware restores the remaining filters (sort,
+  // trust, radius, etc.) from localStorage. Without this, the back-link
+  // would drop all filters and show the unfiltered marketplace.
+  const marketplaceBackUrl = `/marketplace?city=${encodeURIComponent(business.city || '')}&country=${encodeURIComponent(business.country || '')}`
   const breadcrumbItems = [
-    { name: 'Home', url: '/marketplace' },
+    { name: 'Home', url: marketplaceBackUrl },
     { name: business.industry || 'Service', url: industryBrowseUrl },
     { name: business.city || 'Area', url: cityBrowseUrl },
     { name: business.name, url: business.canonicalUrl },
@@ -347,7 +355,14 @@ export default async function PublicBusinessHubPage({
       <StructuredData data={allSchema} />
       <MarketplaceHeader />
 
-      <main id="main-content" className="flex-1">
+      {/* NOTE: This page does NOT use id="main-content" — the browse page
+          (/marketplace) uses that ID for its scrollable list container.
+          Having the same ID on both pages caused a race condition in the
+          scroll-restoration logic (getElementById could return either
+          element during React's unmount/mount transition). The detail
+          page's window scrolls naturally (no overflow-y-auto container),
+          so it doesn't need the ID. */}
+      <main className="flex-1">
         {/* Breadcrumb bar */}
         <div className="border-b bg-muted/20">
           <div className="w-full px-4 sm:px-6 lg:px-8 py-3">

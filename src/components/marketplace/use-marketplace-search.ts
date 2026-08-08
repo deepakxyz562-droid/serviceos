@@ -42,6 +42,7 @@
  */
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { ProviderListItem } from './types';
 
 /** Sort keys kept in sync with MarketplaceBrowser.SORTS. */
@@ -217,73 +218,109 @@ interface MarketplaceSearchState {
   setExpansionLevel: (level: 'city' | '50km' | '100km' | 'nationwide') => void;
 }
 
-export const useMarketplaceSearch = create<MarketplaceSearchState>((set) => ({
-  searchInput: '',
-  cityInput: '',
-  cityFilter: '',
-  // Default sort = 'recommended' (composite 40/30/20/10 ranking from
-  // src/lib/marketplace-ranking.ts — featured-first, then by distance /
-  // rating / verified / featured). When no user location is available the
-  // ranking lib falls back to a 50/33/17 (rating/verified/featured) split.
-  // Kept here so the breadcrumb Sort dropdown and the grid start in sync on
-  // first paint.
-  sort: 'recommended',
-  verticalFilter: null,
-  industryFilter: null,
-  // No verticals expanded by default — the active vertical auto-expands via
-  // the sidebar component's derived state.
-  expandedVerticals: {},
-  trustFullyVerified: false,
-  trustRatingHigh: false,
-  trustEmergency: false,
-  // No country filter until MarketplaceBrowser seeds it from the server's
-  // GeoIP-detected country on mount. null = global results on first paint
-  // (briefly — the seed happens in a layout effect before paint whenever
-  // possible, so the user usually never sees the unfiltered state).
-  countryFilter: null,
-  // No user location until the user clicks "Use my location" or selects
-  // the "Near Me" mobile tab. When null, 'recommended' falls back to the
-  // no-location ranking split and 'distance' is disabled in the dropdown.
-  userLocation: null,
-  // No filtered providers until MarketplaceBrowser hydrates + computes its
-  // filtered list. The sidebar falls back to its raw `providers` prop on
-  // first paint (SSR), then subscribes to this once the browser publishes.
-  filteredProviders: null,
-  // No total count until the browser publishes (from the hook's API response).
-  // The sidebar falls back to its `total` prop (from the SSR COUNT query).
-  totalProvidersCount: null,
-  // Default expansion level = 'city' (the narrowest). MarketplaceBrowser
-  // resets this to 'city' whenever any filter or the user location changes,
-  // so the ladder always starts at the narrowest step for the new context.
-  expansionLevel: 'city',
-  radiusKm: 25,
-  minRating: 0,
-  claimedFilter: 'all',
-  setSearchInput: (v) => set({ searchInput: v }),
-  setCityInput: (v) => set({ cityInput: v }),
-  setCityFilter: (v) => set({ cityFilter: v }),
-  setSort: (v) => set({ sort: v }),
-  setVerticalFilter: (v) => set({ verticalFilter: v }),
-  setIndustryFilter: (v) => set({ industryFilter: v }),
-  selectVertical: (v) => set({ verticalFilter: v, industryFilter: null }),
-  selectIndustry: (industryId, parentVertical) =>
-    set({ industryFilter: industryId, verticalFilter: parentVertical }),
-  toggleVerticalExpanded: (verticalId) =>
-    set((s) => ({
-      expandedVerticals: {
-        ...s.expandedVerticals,
-        [verticalId]: !s.expandedVerticals[verticalId],
-      },
-    })),
-  toggleTrustFullyVerified: () => set((s) => ({ trustFullyVerified: !s.trustFullyVerified })),
-  toggleTrustRatingHigh: () => set((s) => ({ trustRatingHigh: !s.trustRatingHigh })),
-  toggleTrustEmergency: () => set((s) => ({ trustEmergency: !s.trustEmergency })),
-  setRadiusKm: (v) => set({ radiusKm: v }),
-  setMinRating: (v) => set({ minRating: v }),
-  setClaimedFilter: (v) => set({ claimedFilter: v }),
-  setCountryFilter: (code) => set({ countryFilter: code }),
-  setUserLocation: (loc) => set({ userLocation: loc }),
-  setFilteredProviders: (list) => set({ filteredProviders: list }),
-  setTotalProvidersCount: (n) => set({ totalProvidersCount: n }),
-  setExpansionLevel: (level) => set({ expansionLevel: level }),
-}));
+export const useMarketplaceSearch = create<MarketplaceSearchState>()(
+  persist(
+    (set) => ({
+      searchInput: '',
+      cityInput: '',
+      cityFilter: '',
+      // Default sort = 'recommended' (composite 40/30/20/10 ranking from
+      // src/lib/marketplace-ranking.ts — featured-first, then by distance /
+      // rating / verified / featured). When no user location is available the
+      // ranking lib falls back to a 50/33/17 (rating/verified/featured) split.
+      // Kept here so the breadcrumb Sort dropdown and the grid start in sync on
+      // first paint.
+      sort: 'recommended',
+      verticalFilter: null,
+      industryFilter: null,
+      // No verticals expanded by default — the active vertical auto-expands via
+      // the sidebar component's derived state.
+      expandedVerticals: {},
+      trustFullyVerified: false,
+      trustRatingHigh: false,
+      trustEmergency: false,
+      // No country filter until MarketplaceBrowser seeds it from the server's
+      // GeoIP-detected country on mount. null = global results on first paint
+      // (briefly — the seed happens in a layout effect before paint whenever
+      // possible, so the user usually never sees the unfiltered state).
+      countryFilter: null,
+      // No user location until the user clicks "Use my location" or selects
+      // the "Near Me" mobile tab. When null, 'recommended' falls back to the
+      // no-location ranking split and 'distance' is disabled in the dropdown.
+      userLocation: null,
+      // No filtered providers until MarketplaceBrowser hydrates + computes its
+      // filtered list. The sidebar falls back to its raw `providers` prop on
+      // first paint (SSR), then subscribes to this once the browser publishes.
+      filteredProviders: null,
+      // No total count until the browser publishes (from the hook's API response).
+      // The sidebar falls back to its `total` prop (from the SSR COUNT query).
+      totalProvidersCount: null,
+      // Default expansion level = 'city' (the narrowest). MarketplaceBrowser
+      // resets this to 'city' whenever any filter or the user location changes,
+      // so the ladder always starts at the narrowest step for the new context.
+      expansionLevel: 'city',
+      radiusKm: 25,
+      minRating: 0,
+      claimedFilter: 'all',
+      setSearchInput: (v) => set({ searchInput: v }),
+      setCityInput: (v) => set({ cityInput: v }),
+      setCityFilter: (v) => set({ cityFilter: v }),
+      setSort: (v) => set({ sort: v }),
+      setVerticalFilter: (v) => set({ verticalFilter: v }),
+      setIndustryFilter: (v) => set({ industryFilter: v }),
+      selectVertical: (v) => set({ verticalFilter: v, industryFilter: null }),
+      selectIndustry: (industryId, parentVertical) =>
+        set({ industryFilter: industryId, verticalFilter: parentVertical }),
+      toggleVerticalExpanded: (verticalId) =>
+        set((s) => ({
+          expandedVerticals: {
+            ...s.expandedVerticals,
+            [verticalId]: !s.expandedVerticals[verticalId],
+          },
+        })),
+      toggleTrustFullyVerified: () => set((s) => ({ trustFullyVerified: !s.trustFullyVerified })),
+      toggleTrustRatingHigh: () => set((s) => ({ trustRatingHigh: !s.trustRatingHigh })),
+      toggleTrustEmergency: () => set((s) => ({ trustEmergency: !s.trustEmergency })),
+      setRadiusKm: (v) => set({ radiusKm: v }),
+      setMinRating: (v) => set({ minRating: v }),
+      setClaimedFilter: (v) => set({ claimedFilter: v }),
+      setCountryFilter: (code) => set({ countryFilter: code }),
+      setUserLocation: (loc) => set({ userLocation: loc }),
+      setFilteredProviders: (list) => set({ filteredProviders: list }),
+      setTotalProvidersCount: (n) => set({ totalProvidersCount: n }),
+      setExpansionLevel: (level) => set({ expansionLevel: level }),
+    }),
+    {
+      // ── Persist to localStorage so filters survive page refresh + back-nav ──
+      // The user confirmed persisting ALL filters (city, radius, rating,
+      // claimed, trust, sort, vertical/industry). This ensures a consistent
+      // experience when navigating List → Detail → Back.
+      name: 'marketplace-filters',
+      storage: createJSONStorage(() => localStorage),
+      // Only persist the FILTER fields — NOT derived data (filteredProviders,
+      // totalProvidersCount) or ephemeral UX state (expansionLevel).
+      // Also skip userLocation when it's IP-derived (lowAccuracy) — IP
+      // locations are re-detected on mount and shouldn't be cached.
+      partialize: (state) => ({
+        searchInput: state.searchInput,
+        cityInput: state.cityInput,
+        cityFilter: state.cityFilter,
+        sort: state.sort,
+        verticalFilter: state.verticalFilter,
+        industryFilter: state.industryFilter,
+        expandedVerticals: state.expandedVerticals,
+        trustFullyVerified: state.trustFullyVerified,
+        trustRatingHigh: state.trustRatingHigh,
+        trustEmergency: state.trustEmergency,
+        countryFilter: state.countryFilter,
+        radiusKm: state.radiusKm,
+        minRating: state.minRating,
+        claimedFilter: state.claimedFilter,
+        // Only persist GPS/manual locations — IP locations are re-detected.
+        userLocation: state.userLocation && !state.userLocation.lowAccuracy
+          ? state.userLocation
+          : null,
+      }),
+    },
+  ),
+);

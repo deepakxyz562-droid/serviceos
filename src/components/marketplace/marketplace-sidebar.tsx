@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Building2, ShieldCheck, Star, Zap, CheckCircle2, Wallet, ChevronRight, Loader2 } from 'lucide-react';
+import { Building2, ShieldCheck, Star, Zap, CheckCircle2, Wallet, ChevronRight, Loader2, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMarketplaceSearch } from './use-marketplace-search';
 import { useMarketplaceCounts } from './use-marketplace-counts';
@@ -92,6 +92,15 @@ export function MarketplaceSidebar({
   const setMinRating = useMarketplaceSearch((s) => s.setMinRating);
   const claimedFilter = useMarketplaceSearch((s) => s.claimedFilter);
   const setClaimedFilter = useMarketplaceSearch((s) => s.setClaimedFilter);
+  // Phase 2: the radius slider is DISABLED when the user's location is
+  // IP-derived (lowAccuracy). IP geocodes can be off by 50km+, which makes
+  // a Haversine radius filter misleading (the user would see "no results
+  // within 25km" when the truth is their lat/lng is just imprecise). The
+  // server-side filter is also skipped in that case (see MarketplaceBrowser's
+  // `effectiveRadiusKm` derivation), so disabling the slider keeps the UI
+  // in sync with what the API actually does.
+  const userLocation = useMarketplaceSearch((s) => s.userLocation);
+  const radiusDisabled = !!userLocation?.lowAccuracy;
 
   // Vertical/industry filter state from the shared store (instant filtering).
   const storeVertical = useMarketplaceSearch((s) => s.verticalFilter);
@@ -220,26 +229,32 @@ export function MarketplaceSidebar({
   // shows "Plumbing (200)" — matching what the user would see if they
   // scrolled through all pages.
   //
-  // We keep the real DB-level counts ACTIVE even when a vertical/industry
-  // category OR a city filter is selected — the counts endpoint now
-  // supports `country` + `city` params (same where-clause as the providers
-  // list), so it always returns accurate grouped totals for the visible
-  // location context.
+  // We ONLY use the real DB-level counts when NO filter that the counts
+  // endpoint can't reflect is active. The counts endpoint groups by
+  // industry + country + city — it does NOT support search, trust, minRating,
+  // claimedFilter, or radius filters. When any of those are active, we fall
+  // back to loaded-subset counts (from the API's filtered response) so the
+  // sidebar always matches the grid.
   //
-  // We only DISABLE the real counts (fall back to loaded-subset) when a
-  // free-text search OR trust filter is active — the counts endpoint
-  // can't reflect an arbitrary "search=acme + trustRatingHigh"
-  // combination (it only groups by industry + country + city), so the
-  // loaded subset is the only accurate source in that case.
-  const hasActiveTextOrTrustFilters = !!(
+  // We also disable real counts when vertical/industry is active — even
+  // though the counts endpoint returns per-industry counts, the "All
+  // providers" total should reflect the FILTERED total (e.g. "All providers
+  // 200" when Plumbing is selected), not the global total (5000). Using
+  // storeTotal (the API's filtered count) ensures this.
+  const hasActiveFilters = !!(
     searchInput.trim() ||
     trustFullyVerified ||
     trustRatingHigh ||
-    trustEmergency
+    trustEmergency ||
+    storeVertical ||
+    storeIndustry ||
+    minRating > 0 ||
+    claimedFilter !== 'all' ||
+    (!!userLocation && !userLocation.lowAccuracy && radiusKm > 0)
   );
   const { data: realCounts, isFetching: countsFetching } = useMarketplaceCounts(
-    hasActiveTextOrTrustFilters ? null : activeCountry,
-    hasActiveTextOrTrustFilters ? null : cityFilterDebounced || null,
+    hasActiveFilters ? null : activeCountry,
+    hasActiveFilters ? null : cityFilterDebounced || null,
   );
 
   // ── Defensive fallback ──────────────────────────────────────────────────
@@ -255,16 +270,20 @@ export function MarketplaceSidebar({
   // loaded-subset counts are a reasonable interim display.
   const realCountsUsable =
     realCounts &&
-    !hasActiveTextOrTrustFilters &&
+    !hasActiveFilters &&
     realCounts.total > 0;
 
-  // Now that realCounts is defined, compute the total providers count.
-  // Prefer the real DB-level total from the counts endpoint when no
-  // text/trust filters are active — it's the most accurate (the SSR/API
-  // `total` is correct too, but the counts endpoint is cached longer and
-  // avoids re-counting on every filter change).
+  // ── Total providers count ──────────────────────────────────────────────
+  // When ANY filter is active, prefer `storeTotal` (the filtered API count)
+  // — this ensures "All providers N" matches the grid's actual result count
+  // (e.g. "All providers 200" when Plumbing is selected, not "5000").
+  // When NO filter is active, prefer `realTotal` (the DB-level count from
+  // the counts endpoint) — it's cached longer and more accurate than the
+  // 30s-cached API total.
   const realTotal = realCountsUsable ? realCounts!.total : null;
-  const totalProviders = realTotal ?? storeTotal ?? total ?? activeProviders.length;
+  const totalProviders = hasActiveFilters
+    ? (storeTotal ?? total ?? activeProviders.length)
+    : (realTotal ?? storeTotal ?? total ?? activeProviders.length);
 
   // Helper: count providers in a vertical — prefer real DB count, fall back
   // to loaded-subset count.
@@ -312,7 +331,7 @@ export function MarketplaceSidebar({
                   <Building2 className="h-4 w-4" /> All providers
                 </span>
                 <span className="flex items-center gap-1.5 text-xs">
-                  {countsFetching && !hasActiveTextOrTrustFilters ? (
+                  {countsFetching && !hasActiveFilters ? (
                     <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" aria-hidden />
                   ) : null}
                   {totalProviders}
@@ -396,28 +415,58 @@ export function MarketplaceSidebar({
         </div>
 
         {/* ─── Service Radius Filter ────────────────────────────────────────── */}
+        {/* Phase 2: the slider now goes up to 200km (server accepts up to 500).
+            The old 50km cap was silently bypassed client-side via the
+            `radiusKm < 50` guard in MarketplaceBrowser's `filtered` memo —
+            that guard has been removed (the filter is now server-side), so
+            we lift the cap to give users a real range. The slider is also
+            DISABLED when the user's location is IP-derived (lowAccuracy),
+            with a tooltip + hint text explaining why. */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
               Service Radius
             </h2>
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              {radiusKm >= 50 ? '50+ km' : `${radiusKm} km`}
+            <span
+              className={cn(
+                'text-xs font-semibold text-emerald-600 dark:text-emerald-400',
+                radiusDisabled && 'opacity-50',
+              )}
+              title={radiusDisabled ? 'Enable precise location for radius filtering' : undefined}
+            >
+              {radiusKm} km
             </span>
           </div>
           <input
             type="range"
             min={5}
-            max={50}
+            max={200}
             step={5}
             value={radiusKm}
             onChange={(e) => setRadiusKm(Number(e.target.value))}
-            className="w-full accent-emerald-600 cursor-pointer h-1.5 bg-muted rounded-lg"
+            disabled={radiusDisabled}
+            aria-label={`Service radius in kilometers${radiusDisabled ? ' (disabled — precise location required)' : ''}`}
+            title={radiusDisabled ? 'Enable precise location for radius filtering' : undefined}
+            className={cn(
+              'w-full accent-emerald-600 h-1.5 bg-muted rounded-lg',
+              radiusDisabled
+                ? 'cursor-not-allowed opacity-50'
+                : 'cursor-pointer',
+            )}
           />
           <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
             <span>5 km</span>
-            <span>50+ km</span>
+            <span>200 km</span>
           </div>
+          {radiusDisabled ? (
+            <p
+              className="mt-1.5 flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400"
+              title="Enable precise location for radius filtering"
+            >
+              <MapPin className="h-3 w-3 shrink-0" aria-hidden />
+              Precise location required
+            </p>
+          ) : null}
         </div>
 
         {/* ─── Rating Filter ───────────────────────────────────────────────── */}

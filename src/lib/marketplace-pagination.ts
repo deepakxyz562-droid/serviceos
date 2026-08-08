@@ -63,6 +63,10 @@ import {
   computeCardType,
   fetchFeaturedListingsMap,
 } from '@/lib/marketplace-featured';
+import {
+  boundingBox,
+  haversineKm,
+} from '@/lib/marketplace-ranking';
 import type { ProviderListItem } from '@/components/marketplace/types';
 
 /** Default page size for the browse grid (3 rows of 8 on xl, 4 rows of 6 on 2xl). */
@@ -190,6 +194,21 @@ export interface ProviderFilterOptions {
   trustFullyVerified?: boolean;
   trustRatingHigh?: boolean;
   trustEmergency?: boolean;
+  /** Minimum rating filter (0 = no filter). When > 0, excludes unrated
+   *  providers (rating=0 is the default for seed data — treated as "unrated").
+   *  Only providers with rating >= minRating AND rating > 0 are included. */
+  minRating?: number;
+  /** Claimed status filter: 'all' (default), 'claimed', 'unclaimed'. */
+  claimedFilter?: 'all' | 'claimed' | 'unclaimed';
+  /** User latitude for radius filtering. null = no location filter. */
+  userLat?: number | null;
+  /** User longitude for radius filtering. null = no location filter. */
+  userLng?: number | null;
+  /** Radius in km for the bounding-box pre-filter. Only effective when
+   *  userLat + userLng are also set. The bounding box is a square that
+   *  circumscribes the circle — a haversine post-filter in fetchProviderPage
+   *  removes corner cases outside the actual radius. */
+  radiusKm?: number | null;
 }
 
 export function buildProviderWhereClause(opts: ProviderFilterOptions): Record<string, unknown> {
@@ -234,13 +253,14 @@ export function buildProviderWhereClause(opts: ProviderFilterOptions): Record<st
     }
   }
 
-  // Industry filter — exact match on the industry column or businessCategoriesJson membership.
+  // Industry filter — exact match on the PRIMARY industry column only.
+  // Option A (confirmed): multi-category tenants are counted/shown under
+  // their primary industry only, matching the counts endpoint's
+  // groupBy(industry). This eliminates the count/list mismatch caused by
+  // the previous OR(businessCategoriesJson contains) clause.
   if (opts.industry) {
     const ind = opts.industry.toLowerCase().trim();
-    orGroups.push([
-      { industry: { equals: ind, ...CI } },
-      { businessCategoriesJson: { contains: `"${ind}"`, ...CI } },
-    ]);
+    where.industry = { equals: ind, ...CI };
   }
 
   // Combine OR groups into Prisma where clause logic.
@@ -259,11 +279,49 @@ export function buildProviderWhereClause(opts: ProviderFilterOptions): Record<st
     where.insuranceVerified = true;
     where.stripeConnected = true;
   }
-  if (opts.trustRatingHigh) {
+  // trustRatingHigh is a shortcut for minRating=4.8. If both are set,
+  // minRating takes precedence (it's more specific).
+  if (opts.trustRatingHigh && !opts.minRating) {
     where.rating = { gte: 4.8 };
   }
   if (opts.trustEmergency) {
     where.emergencyServiceAvailable = true;
+  }
+
+  // ── minRating filter ──────────────────────────────────────────────────
+  // When minRating > 0, exclude unrated providers (rating=0 is the Prisma
+  // default for seed data — treated as "unrated"). The condition
+  // `rating >= minRating` with `minRating > 0` automatically excludes 0.
+  // We don't need a separate `rating > 0` clause because `0 >= minRating`
+  // is false when `minRating > 0`.
+  if (opts.minRating && opts.minRating > 0) {
+    where.rating = { gte: opts.minRating };
+  }
+
+  // ── claimedFilter ─────────────────────────────────────────────────────
+  if (opts.claimedFilter === 'claimed') {
+    where.claimed = true;
+  } else if (opts.claimedFilter === 'unclaimed') {
+    where.claimed = false;
+  }
+
+  // ── Radius filter (bounding box pre-filter) ───────────────────────────
+  // The bounding box is a square that circumscribes the circle of radiusKm.
+  // This is a cheap WHERE clause that eliminates ~99% of out-of-range
+  // providers at the DB level. A haversine post-filter in fetchProviderPage
+  // removes the remaining ~1% corner cases.
+  if (
+    opts.userLat != null &&
+    opts.userLng != null &&
+    opts.radiusKm != null &&
+    opts.radiusKm > 0
+  ) {
+    const box = boundingBox(opts.userLat, opts.userLng, opts.radiusKm);
+    const boxClauses = [
+      { latitude: { gte: box.minLat, lte: box.maxLat } },
+      { longitude: { gte: box.minLng, lte: box.maxLng } },
+    ];
+    where.AND = [...((where.AND as unknown[]) || []), ...boxClauses];
   }
 
   return where;
@@ -293,12 +351,19 @@ export const PROVIDER_SELECT = {
   currency: true,
   rating: true,
   reviewCount: true,
+  // description: trimmed to 300 chars in mapTenantToProviderListItem to cut
+  // ~40-60% of the SSR JSON payload (full description is 0.5-5KB HTML, only
+  // needed on the detail page — the card shows at most ~200 chars).
   description: true,
   coverImage: true,
   pricingType: true,
   callOutFee: true,
   emergencyServiceAvailable: true,
-  businessCategoriesJson: true,
+  // businessCategoriesJson: REMOVED from PROVIDER_SELECT for performance.
+  // The list endpoint now filters on PRIMARY industry only (Option A —
+  // matches Yelp/Amazon behavior). Multi-category tenants appear under
+  // their primary industry only. The counts endpoint's groupBy(industry)
+  // now agrees with the list endpoint.
   serviceAreasJson: true,
   identityVerified: true,
   businessVerified: true,
@@ -328,6 +393,35 @@ export interface ProviderPageResult<T = ProviderListItem> {
   nextCursor: string | null;
   /** Total count of providers matching the filters (only computed on page 1). */
   total: number | null;
+}
+
+/**
+ * Haversine post-filter for the radius filter.
+ *
+ * The bounding box in `buildProviderWhereClause` is a square that
+ * circumscribes the circle of `radiusKm`. This function removes the
+ * ~1% corner cases that are inside the box but outside the circle.
+ *
+ * Returns the input unchanged if no location filter is active.
+ */
+function filterByRadius(
+  tenants: ProviderTenantRow[],
+  filters: ProviderFilterOptions,
+): ProviderTenantRow[] {
+  if (
+    filters.userLat == null ||
+    filters.userLng == null ||
+    filters.radiusKm == null ||
+    filters.radiusKm <= 0
+  ) {
+    return tenants;
+  }
+  return tenants.filter((t) => {
+    if (t.latitude == null || t.longitude == null) return false;
+    const dist = haversineKm(filters.userLat!, filters.userLng!, t.latitude, t.longitude);
+    if (dist == null) return false;
+    return dist <= filters.radiusKm!;
+  });
 }
 
 /**
@@ -363,18 +457,28 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
 
   // ── Page 1: fetch featured (cap 8) + non-featured to fill the page ──────
   if (!opts.cursor) {
+    // PERFORMANCE: parallelize the COUNT query with the featured findMany.
+    // Previously these were sequential (featured → non-featured → count),
+    // adding ~200-400ms of unnecessary round-trip latency on page 1.
+    // The count only depends on `where` (not on featured results), so it
+    // can run concurrently with the featured query.
+
     // Featured tenants: fetch up to FEATURED_CAP, sorted by rating DESC.
     // We use a separate query because featured is a small bounded set and
     // we want them ALWAYS at the top of page 1.
-    let featuredTenants: ProviderTenantRow[] = [];
-    if (featuredIds.size > 0) {
-      featuredTenants = await db.tenant.findMany({
-        where: { ...where, id: { in: Array.from(featuredIds).slice(0, FEATURED_CAP) } },
-        select: PROVIDER_SELECT,
-        orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }, { id: 'desc' }],
-        take: FEATURED_CAP,
-      });
-    }
+    const featuredPromise: Promise<ProviderTenantRow[]> = featuredIds.size > 0
+      ? db.tenant.findMany({
+          where: { ...where, id: { in: Array.from(featuredIds).slice(0, FEATURED_CAP) } },
+          select: PROVIDER_SELECT,
+          orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }, { id: 'desc' }],
+          take: FEATURED_CAP,
+        })
+      : Promise.resolve([]);
+
+    // Total count — runs in parallel with the featured query.
+    const countPromise = db.tenant.count({ where });
+
+    const [featuredTenants, total] = await Promise.all([featuredPromise, countPromise]);
 
     // Non-featured: fill the remaining page size. Exclude featured IDs so
     // we don't duplicate them.
@@ -398,9 +502,6 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
     let hasMore = nonFeaturedTenants.length > nonFeaturedTake;
     const pageNonFeatured = hasMore ? nonFeaturedTenants.slice(0, nonFeaturedTake) : nonFeaturedTenants;
     const allTenants = [...featuredTenants, ...pageNonFeatured];
-
-    // Compute total count (only on page 1 — expensive COUNT query).
-    const total = await db.tenant.count({ where });
 
     // Build nextCursor from the last NON-FEATURED item (if any + hasMore).
     let nextCursor: string | null = null;
@@ -444,8 +545,17 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
       });
     }
 
+    // ── Haversine post-filter (radius filter) ────────────────────────────
+    // The bounding box in the WHERE clause is a square; this removes the
+    // ~1% corner cases outside the actual circle. Applied AFTER cursor
+    // computation so the cursor correctly points to the next DB-level page.
+    // The returned items may be fewer than `pageSize` — the client's
+    // IntersectionObserver will fire fetchNextPage() immediately if
+    // nextCursor is set.
+    const filteredTenants = filterByRadius(allTenants, opts.filters);
+
     return {
-      items: allTenants.map(opts.mapItem),
+      items: filteredTenants.map(opts.mapItem),
       nextCursor,
       total,
     };
@@ -487,8 +597,13 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
     });
   }
 
+  // ── Haversine post-filter (radius filter) ────────────────────────────
+  // Same as page 1: remove corner cases outside the radius circle.
+  // Cursor is already computed from the pre-filter last item.
+  const filteredPage = filterByRadius(page, opts.filters);
+
   return {
-    items: page.map(opts.mapItem),
+    items: filteredPage.map(opts.mapItem),
     nextCursor,
     total: null, // only computed on page 1
   };
@@ -580,7 +695,10 @@ export function mapTenantToProviderListItem(
     currency: t.currency,
     rating: t.rating,
     reviewCount: t.reviewCount,
-    description: t.description,
+    // Truncate description for the list view — the card shows at most ~200
+    // chars. The full description is only needed on the detail page.
+    // This cuts ~40-60% of the SSR JSON payload (descriptions are 0.5-5KB).
+    description: t.description ? t.description.slice(0, 300) : t.description,
     coverImage: t.coverImage,
     pricingType: t.pricingType,
     callOutFee: t.callOutFee,

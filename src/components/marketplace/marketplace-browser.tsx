@@ -190,8 +190,11 @@ export function MarketplaceBrowser({
   const trustRatingHigh = useMarketplaceSearch((s) => s.trustRatingHigh);
   const trustEmergency = useMarketplaceSearch((s) => s.trustEmergency);
   const radiusKm = useMarketplaceSearch((s) => s.radiusKm);
+  const setRadiusKm = useMarketplaceSearch((s) => s.setRadiusKm);
   const minRating = useMarketplaceSearch((s) => s.minRating);
+  const setMinRating = useMarketplaceSearch((s) => s.setMinRating);
   const claimedFilter = useMarketplaceSearch((s) => s.claimedFilter);
+  const setClaimedFilter = useMarketplaceSearch((s) => s.setClaimedFilter);
 
   // ── Country filter (store-driven, not a frozen server prop) ──────────
   // The server's GeoIP-detected country is passed as `detectedCountry` and
@@ -215,8 +218,24 @@ export function MarketplaceBrowser({
   // (fetched without filters) wouldn't match the hook's queryKey, so we
   // let the hook fetch fresh. This gives a brief loading state on deep-
   // linked filter URLs, but the data is correct.
+  // ── Phase 2: server-side filter params ─────────────────────────────────
+  // minRating, claimedFilter and radiusKm now filter at the DB level. The
+  // radius filter additionally needs the user's lat/lng — but ONLY when the
+  // location is high-accuracy (GPS / manual). IP-derived lowAccuracy
+  // locations are too imprecise for a Haversine radius filter (a city-level
+  // IP geocode can be off by 50km+), so we pass `null` for lat/lng AND
+  // radiusKm in that case — the server then skips the radius filter
+  // entirely. The sidebar's radius slider is also disabled when
+  // lowAccuracy is true (see marketplace-sidebar.tsx).
+  const hasPreciseLocation = !!(userLocation && !userLocation.lowAccuracy);
+  const userLat = hasPreciseLocation ? userLocation!.lat : null;
+  const userLng = hasPreciseLocation ? userLocation!.lng : null;
+  const effectiveRadiusKm = hasPreciseLocation ? radiusKm : null;
+
   // Only use SSR initial data if the current active filters match the initial filters exactly.
   // This prevents React Query from seeding filtered queries with the wrong SSR initial data.
+  // The SSR page fetches WITHOUT minRating / claimedFilter / radius filters, so if any of
+  // those are active we must NOT use the SSR seed (it would be stale).
   const matchesInitial = React.useMemo(() => {
     return (
       searchQuery === (initialFilters.search ?? '') &&
@@ -226,7 +245,10 @@ export function MarketplaceBrowser({
       (countryFilter ?? detectedCountry ?? null) === initialFilters.country &&
       !trustFullyVerified &&
       !trustRatingHigh &&
-      !trustEmergency
+      !trustEmergency &&
+      minRating === 0 &&
+      claimedFilter === 'all' &&
+      effectiveRadiusKm === null
     );
   }, [
     searchQuery,
@@ -239,6 +261,9 @@ export function MarketplaceBrowser({
     trustFullyVerified,
     trustRatingHigh,
     trustEmergency,
+    minRating,
+    claimedFilter,
+    effectiveRadiusKm,
   ]);
 
   const {
@@ -260,6 +285,12 @@ export function MarketplaceBrowser({
       trustFullyVerified,
       trustRatingHigh,
       trustEmergency,
+      // Phase 2 server-side filters:
+      minRating,
+      claimedFilter,
+      userLat,
+      userLng,
+      radiusKm: effectiveRadiusKm,
     },
     matchesInitial ? providers : undefined,
     matchesInitial ? initialNextCursor : undefined,
@@ -339,20 +370,33 @@ export function MarketplaceBrowser({
     setCountryFilter,
   ]);
 
-  // Sync countryFilter when the server detected (proxy or URL) country changes.
-  // If the new country is different, we align the store and clear any active
-  // city/userLocation filters to prevent mismatch (e.g. Phoenix city filter with country CA/UK).
+  // ── Seed countryFilter from GeoIP on the very first mount ───────────
+  // Only seeds when the store has NO countryFilter (e.g. first visit).
+  // Once a country is set (from the Zustand persist middleware OR from a
+  // manual selection in the LocationChip country dropdown), NEVER override
+  // it — the user's choice takes priority over the server's GeoIP guess.
+  //
+  // The previous version of this effect cleared `cityInput`, `cityFilter`,
+  // and `userLocation` whenever `detectedCountry !== countryFilter`. That
+  // fired on EVERY mount AND whenever `countryFilter` changed, which wiped
+  // persisted city filters on back-navigation: e.g. the store had
+  // `countryFilter='AU'` (manually picked + persisted) but `/marketplace`
+  // was hit fresh with `detectedCountry='US'` (GeoIP) — the effect then
+  // reset `countryFilter` to 'US' AND wiped the persisted `cityFilter`.
+  // Those values are persisted by the Zustand persist middleware and
+  // should survive back-navigation unchanged. `didSeedCountryRef` ensures
+  // this effect runs at most once per component instance.
+  const didSeedCountryRef = React.useRef(false);
   React.useEffect(() => {
-    if (detectedCountry && detectedCountry !== countryFilter) {
+    if (didSeedCountryRef.current) return;
+    didSeedCountryRef.current = true;
+    if (!countryFilter && detectedCountry) {
       setCountryFilter(detectedCountry);
-      setCityInput('');
-      setCityFilter('');
-      setUserLocation(null);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('fieseros_user_location');
-      }
     }
-  }, [detectedCountry, countryFilter, setCountryFilter, setCityInput, setCityFilter, setUserLocation]);
+    // Do NOT clear cityInput/cityFilter/userLocation here — those are
+    // persisted by the Zustand persist middleware and should survive
+    // back-navigation.
+  }, [detectedCountry, countryFilter, setCountryFilter]);
 
   // ── Auto-detect user location on mount (localStorage -> IP -> GPS) ──
   // Runs EXACTLY ONCE (didDetectRef guards against StrictMode double-invoke).
@@ -482,51 +526,72 @@ export function MarketplaceBrowser({
     };
   }, []);
 
+  // ── Ref to the scrollable <main> ancestor (#main-content in the parent
+  // (browse)/page.tsx). The <main> itself is owned by the server component
+  // parent, so we attach a callback ref to OUR outermost <div> and walk up
+  // via `closest('main')`. This is more robust than `getElementById` — it
+  // doesn't depend on the ID being globally unique, and it survives cases
+  // where the detail page (which no longer uses that ID) is involved.
+  const scrollContainerRef = React.useRef<HTMLElement | null>(null);
+  const setScrollContainer = React.useCallback<React.RefCallback<HTMLElement>>((node) => {
+    const main = node?.closest('main');
+    scrollContainerRef.current = main instanceof HTMLElement ? main : null;
+  }, []);
+
   // ── Scroll position restoration for back navigation ────────────────────
-  // The marketplace uses a CUSTOM scroll container (#main-content), not the
-  // window. Next.js's `experimental.scrollRestoration` only handles window
-  // scrolling, so we manually save/restore the scroll position of
-  // #main-content to sessionStorage on unmount/mount.
+  // The marketplace uses a CUSTOM scroll container (the <main id="main-
+  // content"> in the parent (browse)/page.tsx), not the window. Next.js's
+  // `experimental.scrollRestoration` only handles window scrolling, so we
+  // manually save/restore the scroll position to sessionStorage.
   //
   // This is the single biggest perceived-speed win for back navigation:
   // without it, the user lands at the top of the page after back-nav and
   // has to scroll back down to find their previous position — which feels
   // slow even if the page rendered instantly.
+  //
+  // SPLIT into TWO effects (was previously a single effect with both
+  // restore-on-mount AND save-on-unmount, but they were mutually
+  // exclusive — the restore branch early-returned a `cancelAnimationFrame`
+  // cleanup, so when restore fired the save-on-unmount cleanup was never
+  // registered. Scroll restoration worked ONCE, then never again):
+  //   1. Restore-on-mount (deps []): reads sessionStorage and restores.
+  //   2. Save-on-unmount (deps []): returns a cleanup that writes the
+  //      current scrollTop to sessionStorage when the component unmounts.
+
+  // 1. RESTORE on mount — double-rAF so the list has rendered its full
+  // height before we attempt to restore scroll position. A single rAF
+  // fires before the browser has laid out the new content; the second
+  // rAF fires after layout, so `container.scrollTop = scrollY` sticks.
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
+    const saved = sessionStorage.getItem('marketplace-scroll-y');
+    if (!saved) return;
+    const scrollY = parseInt(saved, 10);
+    if (isNaN(scrollY)) return;
 
-    const STORAGE_KEY = 'mp_scroll_pos';
-    const container = document.getElementById('main-content');
-
-    // RESTORE on mount (after a brief delay to let the first page render).
-    // We use requestAnimationFrame to wait for the DOM to settle.
-    if (container) {
-      const saved = sessionStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const scrollY = parseInt(saved, 10);
-        if (!isNaN(scrollY) && scrollY > 0) {
-          // Restore after the first paint so the content has height.
-          const raf = requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              container.scrollTop = scrollY;
-            });
-          });
-          // Clear the saved position so a fresh navigation (not back-nav)
-          // doesn't restore to a stale position.
-          sessionStorage.removeItem(STORAGE_KEY);
-          // Cancel the raf if the component unmounts before it fires.
-          return () => cancelAnimationFrame(raf);
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        const container = scrollContainerRef.current;
+        if (container) {
+          container.scrollTop = scrollY;
         }
-      }
-    }
+      });
+    });
+    return () => cancelAnimationFrame(raf2);
+  }, []);
 
-    // SAVE on unmount: capture the scroll position so the next mount
-    // (back-navigation) can restore it.
+  // 2. SAVE on unmount — capture the container reference at effect-run
+  // time (on mount) so the cleanup can read `scrollTop` even after React
+  // has detached the ref during the unmount commit. The DOM node itself
+  // is still valid (just detached from the document); reading `.scrollTop`
+  // returns the last rendered scroll position.
+  React.useEffect(() => {
+    const container = scrollContainerRef.current;
     return () => {
-      const c = document.getElementById('main-content');
-      if (c && c.scrollTop > 0) {
+      if (container) {
         try {
-          sessionStorage.setItem(STORAGE_KEY, String(c.scrollTop));
+          sessionStorage.setItem('marketplace-scroll-y', String(container.scrollTop));
         } catch {}
       }
     };
@@ -654,12 +719,13 @@ export function MarketplaceBrowser({
   // with JS, preventDefault + store update = instant filter).
 
   // ── Compute the sorted list (filters are server-side now) ──────────────
-  // With server-side cursor pagination, the API already applies all filters
-  // (search / city / vertical / industry / trust) before returning items.
-  // The hook's `loadedProviders` is the flattened list of all loaded pages —
-  // already filtered. We only need to SORT it here (the server fetches in a
-  // stable (rating DESC, reviewCount DESC, id DESC) order, but the user can
-  // pick a different client-side sort).
+  // With server-side cursor pagination, the API already applies ALL filters
+  // (search / city / vertical / industry / trust / minRating / claimedFilter
+  // / radiusKm) before returning items. The hook's `loadedProviders` is the
+  // flattened list of all loaded pages — already filtered. We only need to
+  // SORT it here (the server fetches in a stable (rating DESC, reviewCount
+  // DESC, id DESC) order, but the user can pick a different client-side
+  // sort).
   //
   // Sort changes do NOT trigger a refetch — we just re-sort the already-
   // loaded items. This is instant and avoids resetting the user's scroll.
@@ -667,32 +733,15 @@ export function MarketplaceBrowser({
   // distance across pages (the server fetches by rating). This is acceptable
   // for the browse grid — a future enhancement could send lat/lng to the
   // server for true distance-sorted pagination.
+  //
+  // PHASE 2 NOTE: The three client-side filters that used to live here
+  // (minRating, claimedFilter, radiusKm Haversine) have been REMOVED — they
+  // are now applied by the server (see useMarketplaceProviders params). This
+  // fixes the "filter hides items the server already paginated past" bug
+  // (e.g. enabling "claimed only" used to shrink the visible grid because
+  // client-side filtering removed items the server had already counted).
   const filtered = React.useMemo(() => {
     let list = loadedProviders;
-
-    // Apply client-side filters first:
-    // 1. Rating
-    if (minRating > 0) {
-      list = list.filter((p) => (p.rating ?? 0) >= minRating);
-    }
-
-    // 2. Claimed Status
-    if (claimedFilter === 'claimed') {
-      list = list.filter((p) => p.claimed === true);
-    } else if (claimedFilter === 'unclaimed') {
-      list = list.filter((p) => !p.claimed);
-    }
-
-    // 3. Service Radius (only when GPS userLocation is set — NOT IP-derived
-    // lowAccuracy locations, which are too imprecise for a 25km Haversine
-    // filter. IP locations power ranking only, never filtering.)
-    if (userLocation && !userLocation.lowAccuracy && radiusKm < 50) {
-      list = list.filter((p) => {
-        const dist = haversineKm(userLocation.lat, userLocation.lng, p.latitude, p.longitude);
-        if (dist === null) return true;
-        return dist <= radiusKm;
-      });
-    }
 
     if ((sort === 'recommended' || sort === 'distance') && userLocation) {
       if (sort === 'distance') {
@@ -714,9 +763,10 @@ export function MarketplaceBrowser({
         // filterByRadius=false: the BROWSE page must show ALL opted-in
         // providers, regardless of the user's geographic distance. Distance
         // affects RANK ORDER only (closer providers float up via the 40%
-        // distance weight) but never FILTERS providers out. This is critical
-        // because a user in India viewing /marketplace?country=US would
-        // otherwise see 1 card (13,000km > serviceRadiusKm of 15-39km).
+        // distance weight) but never FILTERS providers out. (The radius
+        // FILTER is now applied server-side via the `radiusKm` API param —
+        // this `filterByRadius=false` flag is about the RANKING lib, not
+        // about whether to filter the result set.)
         list = rankProviders(
           list.map((p) => ({ ...p, featured: !!p.featured })),
           {
@@ -774,7 +824,7 @@ export function MarketplaceBrowser({
     }
 
     return list;
-  }, [loadedProviders, sort, userLocation, radiusKm, minRating, claimedFilter]);
+  }, [loadedProviders, sort, userLocation]);
 
   // All loaded items are visible (no client-side slicing — the hook's
   // fetchNextPage() grows the list as the user scrolls).
@@ -968,6 +1018,14 @@ export function MarketplaceBrowser({
       localStorage.removeItem('fieseros_user_location');
     }
     selectVertical(null);
+    // Phase 2: reset the server-side filter params to their defaults so the
+    // next fetch matches the "no filters" SSR baseline. Without this, the
+    // user could clear-all and still see a filtered grid (e.g. minRating=4.5
+    // was active, clearAll cleared the chips, but minRating stayed 4.5 →
+    // the next fetch still filtered by rating).
+    setMinRating(0);
+    setClaimedFilter('all');
+    setRadiusKm(25); // matches the store's default (see use-marketplace-search.ts)
   };
 
   // ── Progressive empty-state fallback ladder derived values ────────────
@@ -1011,7 +1069,7 @@ export function MarketplaceBrowser({
     !filtering;
 
   return (
-    <div className="pl-4 pr-3 sm:pr-3 lg:pr-3 py-4">
+    <div ref={setScrollContainer} className="pl-4 pr-3 sm:pr-3 lg:pr-3 py-4">
       {/* Country banner removed per user request */}
 
       {/* The search bar + LocationChip live in the marketplace header
@@ -1076,8 +1134,12 @@ export function MarketplaceBrowser({
           <span>
             Only <strong className="font-semibold">{filtered.length}</strong>{' '}
             {filtered.length === 1 ? 'provider' : 'providers'} in{' '}
-            <strong className="font-semibold">{locationLabel}</strong>.{' '}
-            Showing results within <strong className="font-semibold">{radiusKm}km</strong>.
+            <strong className="font-semibold">{locationLabel}</strong>.
+            {hasPreciseLocation ? (
+              <>
+                {' '}Showing results within <strong className="font-semibold">{radiusKm}km</strong>.
+              </>
+            ) : null}
           </span>
         </div>
       ) : null}

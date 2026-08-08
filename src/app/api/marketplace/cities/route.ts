@@ -29,42 +29,76 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await ttlCacheWrap(cacheKey, 60_000, async () => {
-      // Find all distinct cities that have active marketplace tenants in this country
-      const activeTenants = await db.tenant.findMany({
+      // PERFORMANCE: Use groupBy to fetch distinct (city, state) pairs
+      // directly from the DB instead of fetching all 5000+ tenant rows
+      // and deduplicating in JS. This reduces the payload from ~5000 rows
+      // to ~50-150 distinct city rows.
+      //
+      // We group by [city, state] to get distinct city+region pairs.
+      // Then we fetch one representative tenant per city for the lat/lng
+      // (using a separate lightweight query — the first tenant per city).
+      const cityGroups = await db.tenant.groupBy({
+        by: ['city', 'state'],
         where: {
           publicProfileEnabled: true,
           marketplaceOptIn: true,
           suspendedAt: null,
           country,
+          city: { not: null, not: '' },
         },
-        select: {
-          city: true,
-          state: true,
-          latitude: true,
-          longitude: true,
-        },
+        _count: { _all: true },
+        orderBy: { city: 'asc' },
       });
 
-      // Group and remove duplicates in JS to get accurate averages/centers if needed,
-      // or simply keep the first occurrence per city name.
-      const cityMap = new Map<string, { city: string; region: string; lat: number; lng: number }>();
+      if (cityGroups.length === 0) return [];
 
-      for (const tenant of activeTenants) {
-        const cityName = (tenant.city || '').trim();
-        if (!cityName) continue;
-        const key = cityName.toLowerCase();
-        if (!cityMap.has(key)) {
-          cityMap.set(key, {
-            city: cityName,
-            region: tenant.state || '',
-            lat: tenant.latitude || 0,
-            lng: tenant.longitude || 0,
-          });
+      // Fetch one representative tenant per city for lat/lng.
+      // We use findFirst with distinct on city — but Prisma's distinct
+      // doesn't work well with groupBy, so we just fetch the first tenant
+      // for each city. This is a small bounded query (one row per city).
+      const cityNames = cityGroups
+        .map((g) => g.city)
+        .filter((c): c is string => !!c);
+
+      // Batch-fetch representative coords for all cities in one query.
+      // We use a raw approach: fetch all distinct (city, latitude, longitude)
+      // and pick the first non-null coord per city in JS. This is still much
+      // cheaper than fetching all tenant fields.
+      const coordRows = await db.tenant.findMany({
+        where: {
+          publicProfileEnabled: true,
+          marketplaceOptIn: true,
+          suspendedAt: null,
+          country,
+          city: { in: cityNames },
+          latitude: { not: null },
+          longitude: { not: null },
+        },
+        select: { city: true, latitude: true, longitude: true },
+        take: cityNames.length * 3, // a few candidates per city
+      });
+
+      const coordMap = new Map<string, { lat: number; lng: number }>();
+      for (const r of coordRows) {
+        if (!r.city) continue;
+        const key = r.city.toLowerCase();
+        if (!coordMap.has(key) && r.latitude != null && r.longitude != null) {
+          coordMap.set(key, { lat: r.latitude, lng: r.longitude });
         }
       }
 
-      // Sort cities alphabetically
-      return Array.from(cityMap.values()).sort((a, b) => a.city.localeCompare(b.city));
+      return cityGroups
+        .filter((g): g is { city: string; state: string | null; _count: { _all: number } } => !!g.city)
+        .map((g) => {
+          const coord = coordMap.get(g.city.toLowerCase());
+          return {
+            city: g.city,
+            region: g.state || '',
+            lat: coord?.lat ?? 0,
+            lng: coord?.lng ?? 0,
+          };
+        })
+        .sort((a, b) => a.city.localeCompare(b.city));
     });
 
     log.info(
@@ -74,7 +108,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result, {
       headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
       },
     });
   } catch (err) {

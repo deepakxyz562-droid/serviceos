@@ -174,9 +174,21 @@ export function MarketplaceHeader({
 }
 
 function Logo() {
+  // Read city + country from the store so the logo link preserves the
+  // user's location context when navigating back to /marketplace.
+  // This ensures the SSR page fetches with the right city/country, and
+  // the Zustand persist middleware restores the remaining filters.
+  const cityFilter = useMarketplaceSearch((s) => s.cityFilter);
+  const countryFilter = useMarketplaceSearch((s) => s.countryFilter);
+
+  const params = new URLSearchParams();
+  if (cityFilter) params.set('city', cityFilter);
+  if (countryFilter) params.set('country', countryFilter);
+  const href = params.toString() ? `/marketplace?${params.toString()}` : '/marketplace';
+
   return (
     <Link
-      href="/marketplace"
+      href={href}
       className="flex shrink-0 items-center gap-2.5"
       aria-label="Fieseros Marketplace — home"
     >

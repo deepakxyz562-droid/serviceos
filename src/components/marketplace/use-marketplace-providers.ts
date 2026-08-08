@@ -97,6 +97,16 @@ export interface UseMarketplaceProvidersParams {
   trustRatingHigh: boolean;
   /** Trust filter: only 24/7 emergency providers. */
   trustEmergency: boolean;
+  /** Minimum rating filter (0 = no filter, > 0 excludes unrated). Server-side. */
+  minRating: number;
+  /** Claimed status filter: 'all' | 'claimed' | 'unclaimed'. Server-side. */
+  claimedFilter: 'all' | 'claimed' | 'unclaimed';
+  /** User latitude for radius filtering. null = no location filter. Server-side. */
+  userLat: number | null;
+  /** User longitude for radius filtering. null = no location filter. Server-side. */
+  userLng: number | null;
+  /** Radius in km for bounding-box + haversine filter. null = no radius filter. Server-side. */
+  radiusKm: number | null;
   /** Page size (default 24). */
   pageSize?: number;
 }
@@ -151,6 +161,11 @@ function buildQueryKey(params: UseMarketplaceProvidersParams) {
       trustFullyVerified: params.trustFullyVerified,
       trustRatingHigh: params.trustRatingHigh,
       trustEmergency: params.trustEmergency,
+      minRating: params.minRating,
+      claimedFilter: params.claimedFilter,
+      userLat: params.userLat ?? 'none',
+      userLng: params.userLng ?? 'none',
+      radiusKm: params.radiusKm ?? 'none',
       pageSize: params.pageSize ?? 24,
     },
   ] as const;
@@ -177,6 +192,12 @@ async function fetchPage(
   if (params.trustFullyVerified) url.searchParams.set('trustFullyVerified', 'true');
   if (params.trustRatingHigh) url.searchParams.set('trustRatingHigh', 'true');
   if (params.trustEmergency) url.searchParams.set('trustEmergency', 'true');
+  // ── New server-side filters (Phase 2) ──
+  if (params.minRating > 0) url.searchParams.set('minRating', String(params.minRating));
+  if (params.claimedFilter !== 'all') url.searchParams.set('claimedFilter', params.claimedFilter);
+  if (params.userLat != null) url.searchParams.set('lat', String(params.userLat));
+  if (params.userLng != null) url.searchParams.set('lng', String(params.userLng));
+  if (params.radiusKm != null && params.radiusKm > 0) url.searchParams.set('radiusKm', String(params.radiusKm));
 
   const res = await fetch(url.toString(), {
     headers: { Accept: 'application/json' },
