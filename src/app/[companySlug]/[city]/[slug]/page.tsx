@@ -71,6 +71,16 @@ import {
   getIndustrySoftwareLabel,
   getIndustryDisplayName,
 } from '@/lib/seo/industry-software-pages'
+import { getIndustryPlatformFaqs } from '@/lib/marketplace/industry-content'
+import {
+  QuickFacts,
+  AboutIndustryInCity,
+  ServiceAreaMap,
+  HiringChecklist,
+  HowBookingWorks,
+  TrustVerification,
+  PlatformFaqs as PlatformFaqsSection,
+} from './evergreen-sections'
 
 // ── Route config ────────────────────────────────────────────────────────────
 // This page no longer reads cookies/headers at render time — the
@@ -343,7 +353,17 @@ export default async function PublicBusinessHubPage({
     sameAs: Object.values(socialLinks).filter(Boolean),
   })
 
-  const faqSchema = faqs.length > 0 ? getFaqSchema(faqs) : null
+  // ── FAQ schema (always populated) ───────────────────────────────────────
+  // Merge business-authored FAQs with platform-level FAQs (from
+  // getIndustryPlatformFaqs). The platform FAQs are always present (3 per
+  // industry), so every detail page is now eligible for FAQ rich results
+  // in Google Search — even when the business has no FAQs of their own.
+  const platformFaqsForSchema = getIndustryPlatformFaqs(business.industry, business.city)
+  const allFaqsForSchema: FaqItem[] = [
+    ...faqs,
+    ...platformFaqsForSchema.map((f) => ({ question: f.question, answer: f.answer })),
+  ]
+  const faqSchema = allFaqsForSchema.length > 0 ? getFaqSchema(allFaqsForSchema) : null
 
   const serviceSchemas = services.slice(0, 5).map((s) =>
     getServiceSchema({
@@ -461,9 +481,44 @@ export default async function PublicBusinessHubPage({
         {/* Main content grid */}
         <div className="w-full px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
-            {/* Left: content sections */}
+            {/* Left: content sections.
+
+                NARRATIVE ORDER (after adding evergreen blocks):
+                  1. QuickFacts            — always (at-a-glance stats)
+                  2. AboutIndustryInCity  — always (SEO paragraph)
+                  3. About {business}      — conditional on description
+                  4. Services              — conditional, marketplace-only
+                  5. Gallery               — conditional
+                  6. ServiceAreaMap        — always (map + service-area chips)
+                  7. HiringChecklist       — always (industry-specific guide)
+                  8. HowBookingWorks       — always (3-step flow)
+                  9. Certifications        — conditional, marketplace-only
+                 10. Reviews               — conditional
+                 11. Business FAQs         — conditional (business-authored)
+                 12. PlatformFaqs          — always (platform-level FAQs)
+                 13. TrustVerification     — always (explains the 4 badges)
+                 14. CRM CTA               — conditional, unclaimed only
+
+                The 7 evergreen sections (1, 2, 6, 7, 8, 12, 13) ensure the
+                page has genuine content depth for EVERY listing — claimed or
+                not, marketplace or not. Prevents Google from treating thin
+                listings as low-quality content. */}
             <div className="lg:col-span-2 space-y-12">
-              {/* About */}
+              {/* 1. Quick Facts — always present */}
+              <QuickFacts
+                business={business}
+                serviceAreas={serviceAreas}
+                isMinimalListing={isMinimalListing}
+              />
+
+              {/* 2. About {Industry} services in {City} — always present (SEO) */}
+              <AboutIndustryInCity
+                business={business}
+                serviceAreas={serviceAreas}
+                isMinimalListing={isMinimalListing}
+              />
+
+              {/* 3. About {business.name} — conditional on description */}
               {business.description && (
                 <section id="about" aria-labelledby="about-heading">
                   <h2 id="about-heading" className="text-2xl font-bold tracking-tight mb-4">
@@ -478,21 +533,9 @@ export default async function PublicBusinessHubPage({
                     // admin themselves, so this is acceptable for a public page.
                     dangerouslySetInnerHTML={{ __html: business.description }}
                   />
-                  {serviceAreas.length > 0 && (
-                    <div className="mt-6">
-                      <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
-                        <MapPin className="h-4 w-4 text-emerald-700" />
-                        Areas Served
-                      </h3>
-                      <div className="flex flex-wrap gap-2">
-                        {serviceAreas.map((area, i) => (
-                          <span key={i} className="inline-flex items-center rounded-md bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                            {area}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {/* Note: service-area chips were moved to the dedicated
+                      ServiceAreaMap section below (always renders with a
+                      Google Map embed). Keeping them here too would duplicate. */}
                 </section>
               )}
 
@@ -559,7 +602,37 @@ export default async function PublicBusinessHubPage({
                 </section>
               )}
 
-              {/* Certifications — marketplace providers only */}
+              {/* 6. Service Area + Map — always present.
+                  Renders service-area chips + a Google Maps embed of the
+                  business's address (or city center if no address). Uses
+                  the ?output=embed URL pattern — no Google Maps API key
+                  required. Subsumes the old inline Areas Served chips. */}
+              <ServiceAreaMap
+                business={business}
+                serviceAreas={serviceAreas}
+                isMinimalListing={isMinimalListing}
+              />
+
+              {/* 7. Hiring Checklist — always present.
+                  Industry-specific 4-6 item guide on what to look for /
+                  ask when hiring a provider in this trade. */}
+              <HiringChecklist
+                business={business}
+                serviceAreas={serviceAreas}
+                isMinimalListing={isMinimalListing}
+              />
+
+              {/* 8. How Booking Works — always present.
+                  3-step visual explainer. Steps vary by listing type:
+                  full marketplace → book online flow; unclaimed w/ email →
+                  quote request flow; minimal → call to inquire flow. */}
+              <HowBookingWorks
+                business={business}
+                serviceAreas={serviceAreas}
+                isMinimalListing={isMinimalListing}
+              />
+
+              {/* 9. Certifications — marketplace providers only */}
               {business.marketplaceOptIn && certifications.length > 0 ? (
                 <section id="certifications" aria-labelledby="cert-heading">
                   <h2 id="cert-heading" className="text-2xl font-bold tracking-tight mb-4 flex items-center gap-2">
@@ -633,6 +706,28 @@ export default async function PublicBusinessHubPage({
                   </div>
                 </section>
               )}
+
+              {/* 12. Platform FAQs — always present.
+                  3 platform-level FAQs about hiring this industry in this
+                  city. Renders BELOW the business-authored FAQs above (if
+                  any). Always present so every detail page is eligible for
+                  FAQ rich results in Google Search. */}
+              <PlatformFaqsSection
+                business={business}
+                serviceAreas={serviceAreas}
+                isMinimalListing={isMinimalListing}
+              />
+
+              {/* 13. Trust & Verification — always present.
+                  Explains what each of the 4 Fieseros verification badges
+                  means (Identity / Business / Insured / Licensed). Builds
+                  trust even on unclaimed listings by showing that Fieseros
+                  has a real verification process. */}
+              <TrustVerification
+                business={business}
+                serviceAreas={serviceAreas}
+                isMinimalListing={isMinimalListing}
+              />
 
               {/* ── Contextual CRM CTA — marketplace → CRM bridge ──────────────────
                   Shown ONLY on unclaimed business pages (business.claimed === false).
