@@ -29,6 +29,8 @@
  *      padded fluff. Google's Helpful Content Update penalises filler.
  */
 
+import { getIndustryDisplayName as getBroadIndustryDisplayName } from '@/lib/seo/industry-software-pages'
+
 export interface HiringChecklistItem {
   title: string
   description: string
@@ -39,6 +41,21 @@ export interface PlatformFaq {
   answer: string
 }
 
+/**
+ * A "common service" in this category — e.g. "Interior Window Cleaning",
+ * "Exterior Window Cleaning". Used by the CommonServices section on the
+ * detail page to show category-level service cards clearly labeled as
+ * "common in this category, not necessarily offered by this business".
+ *
+ * When the 3-state verification feature ships later, these cards become
+ * the foundation that transitions between:
+ *   🟡 Publicly reported  →  🔵 Business claimed  →  🟢 Fieseros verified
+ */
+export interface CommonService {
+  name: string
+  description: string
+}
+
 interface IndustryContent {
   /** Returns an ~120-150 word paragraph about hiring this industry in `city`. */
   aboutParagraph: (city: string, country: string) => string
@@ -46,6 +63,19 @@ interface IndustryContent {
   hiringChecklist: HiringChecklistItem[]
   /** Returns 3 platform-level FAQs for this industry in `city`. */
   platformFaqs: (city: string) => PlatformFaq[]
+}
+
+/**
+ * A sub-industry match — e.g. "window cleaning" detected inside the broad
+ * "cleaning" industry. When a sub-industry is detected, its (more specific)
+ * content overrides the broad industry content. This fixes the bug where a
+ * Window Cleaning business was shown generic house-cleaning content.
+ */
+interface SubIndustryMatch {
+  /** The sub-industry key (e.g. 'window-cleaning', 'carpet-cleaning'). */
+  key: string
+  /** The full IndustryContent for this sub-industry. */
+  content: IndustryContent
 }
 
 // ── Per-industry content ────────────────────────────────────────────────────
@@ -738,6 +768,259 @@ const MOVERS_CONTENT: IndustryContent = {
 
 // ── Generic fallback (for unmapped industries) ──────────────────────────────
 
+// ── Sub-industries (cleaning) ───────────────────────────────────────────────
+//
+// The broad "cleaning" industry covers very different trades: window cleaning,
+// carpet cleaning, pressure washing, gutter cleaning, house cleaning, etc.
+// Showing generic house-cleaning content on a Window Cleaning business page
+// is a real content-accuracy bug. These sub-industry blocks override the broad
+// CLEANING_CONTENT when the business name / tagline signals a sub-specialty.
+//
+// Detection happens in `detectSubIndustry()` below — scans business name +
+// tagline for keywords (window, carpet, pressure, gutter).
+
+const WINDOW_CLEANING_CONTENT: IndustryContent = {
+  aboutParagraph: (city, _country) =>
+    `Hiring a professional window cleaning service in ${city} keeps your glass clear, extends the life of your windows by removing corrosive grime, and reaches high or hard-to-access windows safely. Window cleaning providers typically offer interior and exterior glass cleaning, screen cleaning, frame and track cleaning, and hard-water stain removal — and many also handle related exterior work like pressure washing, gutter cleaning, and roof or solar-panel cleaning. When comparing providers, ask whether they carry liability insurance (working at height carries real risk), whether they bring their own purified-water equipment or expect water access on-site, and whether they offer a streak-free guarantee. Fieseros lists window cleaning businesses serving ${city}, with verification status visible on each profile so you can quickly filter for providers whose identity, business, insurance, and licensing have been independently checked.`,
+  hiringChecklist: [
+    {
+      title: 'Confirm liability insurance',
+      description:
+        'Window cleaning involves ladders, lifts, and working at height — a real fall risk. The provider should carry general liability insurance covering both worker injury and property damage. Ask for the insurance carrier name and policy number.',
+    },
+    {
+      title: 'Ask what\'s included in the quoted price',
+      description:
+        'Clarify whether screens, tracks, frames, sills, and hard-water stain removal are included or cost extra. Vague "window cleaning" quotes often cover only the glass itself — get the scope in writing.',
+    },
+    {
+      title: 'Check equipment + water-source policy',
+      description:
+        'Professional window cleaners typically bring their own purified-water-fed pole systems (no spots). If they expect to use your water, confirm access. High-rise work may require lift equipment — confirm the provider has it.',
+    },
+    {
+      title: 'Ask about hard-water + stain removal',
+      description:
+        'Sprinkler overspray and mineral deposits etch glass over time. Ask whether the provider offers chemical stain removal (typically an add-on) and whether they warranty the result — some stains can\'t be fully removed.',
+    },
+    {
+      title: 'Get a written estimate + frequency guidance',
+      description:
+        'A reputable cleaner quotes per window or per pane (not a flat "house call" rate) and recommends a cleaning frequency (quarterly / biannual / annual) based on your environment. Avoid providers who quote without seeing the windows.',
+    },
+  ],
+  platformFaqs: (city) => [
+    {
+      question: 'How do I know a window cleaning service on Fieseros is verified?',
+      answer:
+        'Every Fieseros provider profile shows four verification badges — Identity, Business, Insurance, and Licence. A green "Confirmed" badge means we\'ve independently checked that credential; "Pending" means the provider is still submitting documentation.',
+    },
+    {
+      question: `What should I ask a window cleaner in ${city} before hiring them?`,
+      answer:
+        'Ask about liability insurance (height work is risky), what\'s included in the quoted price (screens, tracks, frames, stain removal), what equipment they bring, hard-water stain removal options, and recommended cleaning frequency. The "Before hiring" section above lists the full checklist.',
+    },
+    {
+      question: 'Is it free to get a quote through Fieseros?',
+      answer:
+        'Yes. Requesting a quote through Fieseros is always free for the customer. The provider receives your request and responds directly — there\'s no middleman fee, no commission, and no obligation to proceed with the service.',
+    },
+  ],
+}
+
+const CARPET_CLEANING_CONTENT: IndustryContent = {
+  aboutParagraph: (city, _country) =>
+    `Professional carpet cleaning in ${city} removes ground-in dirt, allergens, and stains that regular vacuuming leaves behind — and extends the life of your carpet by years. Carpet cleaning providers typically offer hot-water extraction (steam cleaning), dry cleaning, stain and pet-odour treatment, upholstery cleaning, and rug cleaning. When comparing providers, ask which method they use (hot-water extraction is the industry standard recommended by most carpet manufacturers), whether they move furniture or expect you to clear the room, and how long the carpet will take to dry (typically 6–12 hours for steam, 1–2 hours for dry cleaning). Fieseros lists carpet cleaning businesses serving ${city}, with verification status visible on each profile so you can quickly filter for providers whose identity, business, insurance, and licensing have been independently checked.`,
+  hiringChecklist: [
+    {
+      title: 'Ask which cleaning method they use',
+      description:
+        'Hot-water extraction (steam cleaning) is the industry standard recommended by most carpet manufacturers. Dry cleaning (encapsulation) is faster but less thorough. Match the method to your carpet type and soil level.',
+    },
+    {
+      title: 'Confirm furniture-moving policy',
+      description:
+        'Some providers move light furniture; others expect you to clear the room entirely. Clarify what\'s included in the quoted price — moving furniture mid-job usually triggers an add-on charge.',
+    },
+    {
+      title: 'Ask about drying time',
+      description:
+        'Steam cleaning: 6–12 hours to dry. Dry cleaning: 1–2 hours. If you have pets or kids, plan accordingly. Avoid providers who claim "instant dry" — it\'s not physically possible with extraction methods.',
+    },
+    {
+      title: 'Get a per-room or per-sq-ft quote',
+      description:
+        'Reputable carpet cleaners quote per room (with a max room size) or per square foot. Avoid vague "whole house" quotes — they\'re typically padded and you can\'t compare across providers.',
+    },
+    {
+      title: 'Ask about stain + pet-odour treatment',
+      description:
+        'Basic cleaning doesn\'t remove set-in stains or pet urine. Ask whether the provider offers enzyme treatment for pet odour and stain-removal add-ons, and get those prices up front.',
+    },
+  ],
+  platformFaqs: (city) => [
+    {
+      question: 'How do I know a carpet cleaning service on Fieseros is verified?',
+      answer:
+        'Every Fieseros provider profile shows four verification badges — Identity, Business, Insurance, and Licence. A green "Confirmed" badge means we\'ve independently checked that credential; "Pending" means the provider is still submitting documentation.',
+    },
+    {
+      question: `What should I ask a carpet cleaner in ${city} before hiring them?`,
+      answer:
+        'Ask which cleaning method they use (hot-water extraction vs. dry), whether they move furniture, expected drying time, per-room vs. per-sq-ft pricing, and stain/pet-odour treatment options. The "Before hiring" section above lists the full checklist.',
+    },
+    {
+      question: 'Is it free to get a quote through Fieseros?',
+      answer:
+        'Yes. Requesting a quote through Fieseros is always free for the customer. The provider receives your request and responds directly — there\'s no middleman fee, no commission, and no obligation to proceed with the service.',
+    },
+  ],
+}
+
+const PRESSURE_WASHING_CONTENT: IndustryContent = {
+  aboutParagraph: (city, _country) =>
+    `Pressure washing in ${city} restores driveways, decks, siding, and fences by removing years of algae, grime, and stains — but done wrong, it can etch concrete, splinter wood, or force water behind siding and cause rot. Pressure washing providers typically offer driveway and sidewalk cleaning, deck and fence washing, house siding (vinyl, stucco, brick), roof soft-washing, and graffiti removal. When comparing providers, ask whether they adjust pressure per surface (concrete needs ~3000 PSI; wood and siding need <1500 PSI or soft-wash), whether they use surface cleaners (rotary attachments that clean evenly without zebra-stripes), and whether they carry liability insurance for water-intrusion damage. Fieseros lists pressure washing businesses serving ${city}, with verification status visible on each profile so you can quickly filter for providers whose identity, business, insurance, and licensing have been independently checked.`,
+  hiringChecklist: [
+    {
+      title: 'Ask about pressure-per-surface',
+      description:
+        'Concrete handles ~3000 PSI. Wood, vinyl siding, and stucco need <1500 PSI or a soft-wash (detergent + low pressure). A provider who uses one nozzle for everything will damage your surfaces.',
+    },
+    {
+      title: 'Confirm surface-cleaner vs. wand',
+      description:
+        'Surface cleaners (rotary attachments) clean driveways evenly without zebra-stripes. Wand-only cleaning leaves visible streaks. Professional pressure washers always use surface cleaners for flatwork.',
+    },
+    {
+      title: 'Confirm liability insurance',
+      description:
+        'Pressure washing can force water behind siding, etch concrete, or damage landscaping. The provider should carry general liability insurance covering water-intrusion and property damage.',
+    },
+    {
+      title: 'Ask about soft-washing for roofs',
+      description:
+        'Asphalt shingle roofs MUST NOT be pressure-washed (it strips granules). Roof cleaning requires soft-washing (low-pressure detergent application). Confirm the provider knows the difference before letting them near your roof.',
+    },
+    {
+      title: 'Get a per-sq-ft quote + before/after photos',
+      description:
+        'Reputable pressure washers quote per square foot (not a flat "driveway special") and show before/after photos of previous work. Avoid providers who won\'t put the price per sq ft in writing.',
+    },
+  ],
+  platformFaqs: (city) => [
+    {
+      question: 'How do I know a pressure washing service on Fieseros is verified?',
+      answer:
+        'Every Fieseros provider profile shows four verification badges — Identity, Business, Insurance, and Licence. A green "Confirmed" badge means we\'ve independently checked that credential; "Pending" means the provider is still submitting documentation.',
+    },
+    {
+      question: `What should I ask a pressure washer in ${city} before hiring them?`,
+      answer:
+        'Ask about pressure-per-surface settings, whether they use surface cleaners (not just wands), liability insurance for water-intrusion damage, soft-washing for roofs (never pressure-wash shingles), and per-sq-ft pricing. The "Before hiring" section above lists the full checklist.',
+    },
+    {
+      question: 'Is it free to get a quote through Fieseros?',
+      answer:
+        'Yes. Requesting a quote through Fieseros is always free for the customer. The provider receives your request and responds directly — there\'s no middleman fee, no commission, and no obligation to proceed with the service.',
+    },
+  ],
+}
+
+const GUTTER_CLEANING_CONTENT: IndustryContent = {
+  aboutParagraph: (city, _country) =>
+    `Gutter cleaning in ${city} is one of those small-jobs-that-matter: clogged gutters cause roof leaks, foundation damage, fascia rot, and ice dams in cold climates. Professional gutter cleaning providers typically offer hand-scoop or vacuum debris removal, downspout flushing, gutter brightening (exterior stain removal), gutter guard inspection, and minor repairs (re-sealing seams, re-securing hangers). When comparing providers, ask whether they clean by hand or with a pressure washer (pressure washing gutters can damage seals and force water behind fascia), whether they flush downspouts (many skip this), and whether they bag and haul away the debris or leave it on-site. Fieseros lists gutter cleaning businesses serving ${city}, with verification status visible on each profile so you can quickly filter for providers whose identity, business, insurance, and licensing have been independently checked.`,
+  hiringChecklist: [
+    {
+      title: 'Hand-scoop vs. pressure-wash',
+      description:
+        'Hand-scooping (with a gutter spoon) is the safe method. Pressure-washing gutters can damage seals, force water behind the fascia, and blast debris onto your siding. Insist on hand-scoop or vacuum.',
+    },
+    {
+      title: 'Confirm downspout flushing is included',
+      description:
+        'Many cheap gutter cleaners scoop the troughs but skip the downspouts — leaving clogs that cause the same overflow you paid to fix. Confirm downspout flushing (running water through) is in the quote.',
+    },
+    {
+      title: 'Confirm liability insurance',
+      description:
+        'Gutter cleaning means climbing ladders to roof height — a serious fall risk. The provider must carry general liability covering worker injury and property damage. Ask for the insurance carrier name.',
+    },
+    {
+      title: 'Ask about debris disposal',
+      description:
+        'Reputable providers bag and haul away the debris. Some leave it on-site for you to deal with. Clarify disposal is included in the quoted price.',
+    },
+    {
+      title: 'Ask about gutter guard inspection + repairs',
+      description:
+        'If you have gutter guards, ask whether they remove and re-install them for cleaning (guards still need periodic cleaning). Get minor repairs (loose hangers, leaky seams) quoted separately so you can decide.',
+    },
+  ],
+  platformFaqs: (city) => [
+    {
+      question: 'How do I know a gutter cleaning service on Fieseros is verified?',
+      answer:
+        'Every Fieseros provider profile shows four verification badges — Identity, Business, Insurance, and Licence. A green "Confirmed" badge means we\'ve independently checked that credential; "Pending" means the provider is still submitting documentation.',
+    },
+    {
+      question: `What should I ask a gutter cleaner in ${city} before hiring them?`,
+      answer:
+        'Ask whether they hand-scoop or pressure-wash (hand-scoop is safe, pressure-washing damages seals), whether downspout flushing is included, whether they carry liability insurance for height work, debris disposal, and gutter guard handling. The "Before hiring" section above lists the full checklist.',
+    },
+    {
+      question: 'Is it free to get a quote through Fieseros?',
+      answer:
+        'Yes. Requesting a quote through Fieseros is always free for the customer. The provider receives your request and responds directly — there\'s no middleman fee, no commission, and no obligation to proceed with the service.',
+    },
+  ],
+}
+
+// ── Sub-industry detection ──────────────────────────────────────────────────
+//
+// Scans the business name + tagline for sub-industry keywords. Returns the
+// first match (priority order matters: 'window' before 'cleaning' so a
+// "Window Cleaning" business doesn't fall through to generic CLEANING_CONTENT).
+//
+// Only sub-industries of CLEANING are detected here. Other broad industries
+// (hvac, plumbing, electrical, etc.) don't have the same content-mismatch
+// problem because their names are specific enough that the existing
+// substring matching in resolveIndustryContent() works correctly.
+
+const SUB_INDUSTRY_KEYWORDS: Array<{ key: string; keywords: string[]; content: IndustryContent }> = [
+  { key: 'window-cleaning', keywords: ['window clean', 'window wash', 'window clean', 'window washing', 'windows'], content: WINDOW_CLEANING_CONTENT },
+  { key: 'carpet-cleaning', keywords: ['carpet clean', 'carpet wash', 'carpet shampoo', 'upholstery clean', 'rug clean'], content: CARPET_CLEANING_CONTENT },
+  { key: 'pressure-washing', keywords: ['pressure wash', 'power wash', 'pressure cleaning', 'power cleaning'], content: PRESSURE_WASHING_CONTENT },
+  { key: 'gutter-cleaning', keywords: ['gutter clean', 'gutter clear', 'gutter guard', 'downspout'], content: GUTTER_CLEANING_CONTENT },
+]
+
+/**
+ * Detect a sub-industry from the business name + tagline. Returns null if no
+ * sub-industry is detected (caller falls back to the broad industry content).
+ *
+ * Only called when the broad industry is "cleaning" (the only industry with
+ * a content-mismatch problem). Other industries return null immediately.
+ */
+function detectSubIndustry(
+  industry: string | null,
+  businessName: string | null,
+  tagline: string | null,
+): SubIndustryMatch | null {
+  if (!industry) return null
+  const i = industry.toLowerCase()
+  // Only run sub-industry detection for the "cleaning" broad industry.
+  if (!i.includes('clean')) return null
+
+  const haystack = `${businessName || ''} ${tagline || ''}`.toLowerCase()
+  if (!haystack.trim()) return null
+
+  for (const sub of SUB_INDUSTRY_KEYWORDS) {
+    if (sub.keywords.some((kw) => haystack.includes(kw))) {
+      return { key: sub.key, content: sub.content }
+    }
+  }
+  return null
+}
+
 const GENERIC_CONTENT: IndustryContent = {
   aboutParagraph: (city, _country) =>
     `Hiring a trusted local service provider in ${city} is a decision worth doing carefully — the right contractor saves you time, money, and stress, while the wrong one can leave you with shoddy work, surprise charges, and property damage. Professional service businesses handle installation, repair, maintenance, and consultation work across their trade. When comparing providers, verify they hold any required state or local licences for their industry, carry liability insurance (and workers’ comp if they have employees), and provide a written estimate before any work begins. Watch for red flags: cash-only payments, refusal to provide a written quote, pressure to decide on the spot, or contractors who want to skip permits. Fieseros lists service businesses serving ${city}, with verification status visible on each profile so you can quickly filter for providers whose identity, business, insurance, and licensing have been independently checked.`,
@@ -816,6 +1099,10 @@ const INDUSTRY_CONTENT_MAP: Record<string, IndustryContent> = {
  * matching IndustryContent object. Uses exact-match first, then
  * substring heuristics (mirrors mapIndustryToPluralSlug in plural-industry-slugs.ts).
  * Falls back to GENERIC_CONTENT for anything unknown.
+ *
+ * NOTE: For sub-industry detection (e.g. "Window Cleaning" inside the broad
+ * "cleaning" industry), use `resolveIndustryContentWithSubIndustry()` instead.
+ * This function returns the BROAD-industry content only.
  */
 function resolveIndustryContent(industry: string | null | undefined): IndustryContent {
   if (!industry) return GENERIC_CONTENT
@@ -843,12 +1130,240 @@ function resolveIndustryContent(industry: string | null | undefined): IndustryCo
   return GENERIC_CONTENT
 }
 
+/**
+ * Resolve an industry string AND detect any sub-industry from the business
+ * name + tagline. Returns the most specific IndustryContent available:
+ *
+ *   1. If a sub-industry is detected (e.g. "Window Cleaning" for a business
+ *      named "Squeaky Dan's Window Cleaning"), return the sub-industry content.
+ *   2. Otherwise, return the broad-industry content via resolveIndustryContent().
+ *
+ * This fixes the content-mismatch bug where a Window Cleaning business was
+ * shown generic house-cleaning content (regular residential cleaning, deep
+ * cleans, move-in/move-out cleans, etc.).
+ */
+function resolveIndustryContentWithSubIndustry(
+  industry: string | null | undefined,
+  businessName: string | null,
+  tagline: string | null,
+): { content: IndustryContent; subIndustryKey: string | null } {
+  // Try sub-industry detection first (only triggers for "cleaning" broad industry).
+  const sub = detectSubIndustry(industry ?? null, businessName, tagline)
+  if (sub) {
+    return { content: sub.content, subIndustryKey: sub.key }
+  }
+  return { content: resolveIndustryContent(industry), subIndustryKey: null }
+}
+
+// ── Common services map ─────────────────────────────────────────────────────
+//
+// A separate map (kept out of the IndustryContent interface for cleanliness)
+// listing the common services typically offered in each industry. Used by
+// the CommonServices section on the detail page — clearly labeled as
+// "common in this category, not necessarily offered by this business".
+//
+// Includes sub-industry entries (window-cleaning, carpet-cleaning, etc.) so
+// the Common Services section is also sub-industry-aware.
+
+const INDUSTRY_COMMON_SERVICES: Record<string, CommonService[]> = {
+  hvac: [
+    { name: 'AC Repair & Installation', description: 'Central air conditioning repair, recharge, and new system installation.' },
+    { name: 'Furnace Repair & Replacement', description: 'Gas, electric, and oil furnace repair, tune-ups, and full replacement.' },
+    { name: 'Heat Pump Service', description: 'Heat pump installation, repair, and seasonal maintenance.' },
+    { name: 'Annual Tune-Up', description: 'Preventive maintenance to keep heating and cooling systems efficient.' },
+    { name: 'Indoor Air Quality', description: 'Duct cleaning, humidifier install, and air filtration systems.' },
+    { name: 'Emergency HVAC Service', description: 'After-hours repair for heating and cooling failures.' },
+  ],
+  plumbing: [
+    { name: 'Leak Repair', description: 'Drips, burst pipes, slab leaks, and hidden leak detection.' },
+    { name: 'Water Heater Service', description: 'Tank and tankless water heater repair, install, and flush.' },
+    { name: 'Drain Cleaning', description: 'Clogged drain snaking, hydro-jetting, and camera inspection.' },
+    { name: 'Toilet Repair & Install', description: 'Running toilet fixes, replacement, and low-flow upgrades.' },
+    { name: 'Faucet & Fixture Install', description: 'Kitchen, bath, and shower faucet replacement and repair.' },
+    { name: 'Sewer Line Service', description: 'Sewer line camera inspection, repair, and replacement.' },
+  ],
+  electrical: [
+    { name: 'Panel Upgrade', description: 'Service panel replacement, breaker box upgrade, and sub-panel install.' },
+    { name: 'Outlet & Switch Install', description: 'New outlets, GFCI upgrades, dimmer switches, and smart switches.' },
+    { name: 'Lighting Install', description: 'Recessed lighting, ceiling fans, and exterior lighting.' },
+    { name: 'EV Charger Install', description: 'Level 2 home EV charging station installation.' },
+    { name: 'Whole-House Rewire', description: 'Knob-and-tube or aluminum wiring replacement.' },
+    { name: 'Emergency Electrical', description: 'After-hours fault diagnosis and power restoration.' },
+  ],
+  cleaning: [
+    { name: 'Regular Residential Cleaning', description: 'Weekly, biweekly, or monthly home cleaning visits.' },
+    { name: 'Deep Clean', description: 'Top-to-bottom detailed cleaning of all surfaces and rooms.' },
+    { name: 'Move-In / Move-Out Clean', description: 'Empty-property cleaning for tenants and sellers.' },
+    { name: 'Post-Construction Clean', description: 'Dust and debris removal after renovations or builds.' },
+    { name: 'Commercial Janitorial', description: 'Office and commercial space recurring cleaning.' },
+    { name: 'Carpet & Upholstery', description: 'Steam cleaning of carpets, rugs, and upholstered furniture.' },
+  ],
+  'window-cleaning': [
+    { name: 'Exterior Window Cleaning', description: 'Outside glass cleaning including hard-to-reach and upper-floor windows.' },
+    { name: 'Interior Window Cleaning', description: 'Inside glass cleaning, tracks, sills, and frames.' },
+    { name: 'Screen Cleaning', description: 'Removal and washing of window screens.' },
+    { name: 'Hard-Water Stain Removal', description: 'Chemical treatment for mineral deposits and sprinkler overspray.' },
+    { name: 'Gutter Cleaning', description: 'Hand-scoop debris removal and downspout flushing.' },
+    { name: 'Pressure Washing', description: 'Driveway, sidewalk, siding, and deck washing.' },
+  ],
+  'carpet-cleaning': [
+    { name: 'Hot-Water Extraction', description: 'Steam cleaning — the industry-standard deep-clean method.' },
+    { name: 'Dry Carpet Cleaning', description: 'Low-moisture encapsulation cleaning with 1–2 hour dry time.' },
+    { name: 'Stain Removal', description: 'Targeted treatment for wine, coffee, ink, and pet stains.' },
+    { name: 'Pet Odour Treatment', description: 'Enzyme treatment for urine and pet odour.' },
+    { name: 'Upholstery Cleaning', description: 'Sofa, chair, and mattress steam cleaning.' },
+    { name: 'Area Rug Cleaning', description: 'In-plant or on-site cleaning of oriental and area rugs.' },
+  ],
+  'pressure-washing': [
+    { name: 'Driveway & Sidewalk Cleaning', description: 'Concrete flatwork cleaning with surface cleaners (no zebra-stripes).' },
+    { name: 'Deck & Fence Washing', description: 'Low-pressure wood cleaning with appropriate PSI settings.' },
+    { name: 'House Siding Wash', description: 'Vinyl, stucco, and brick exterior soft-washing.' },
+    { name: 'Roof Soft-Wash', description: 'Low-pressure detergent wash — never pressure-wash shingles.' },
+    { name: 'Graffiti Removal', description: 'Chemical and pressure removal of graffiti from masonry.' },
+    { name: 'Patio & Paver Cleaning', description: 'Stone paver cleaning with sand re-sweeping.' },
+  ],
+  'gutter-cleaning': [
+    { name: 'Gutter Debris Removal', description: 'Hand-scoop or vacuum cleaning of leaves and debris.' },
+    { name: 'Downspout Flushing', description: 'Running water through downspouts to clear clogs.' },
+    { name: 'Gutter Brightening', description: 'Exterior stain and streak removal.' },
+    { name: 'Gutter Guard Inspection', description: 'Removal, clean, and re-install of gutter guards.' },
+    { name: 'Minor Gutter Repairs', description: 'Re-sealing seams, re-securing hangers, fixing leaks.' },
+    { name: 'Roof & Gutter Combo', description: 'Bundle roof inspection with gutter cleaning.' },
+  ],
+  landscaping: [
+    { name: 'Lawn Maintenance', description: 'Weekly mowing, edging, and blowing.' },
+    { name: 'Garden Design', description: 'Planting plans, garden beds, and hardscape integration.' },
+    { name: 'Irrigation Install', description: 'Sprinkler system design, install, and repair.' },
+    { name: 'Hardscaping', description: 'Patios, retaining walls, walkways, and fire pits.' },
+    { name: 'Tree & Shrub Trimming', description: 'Pruning, shaping, and deadwood removal.' },
+    { name: 'Seasonal Cleanup', description: 'Spring and fall leaf removal and bed prep.' },
+  ],
+  roofing: [
+    { name: 'Roof Inspection', description: 'Visual and drone inspection for leaks, storm damage, and wear.' },
+    { name: 'Leak Repair', description: 'Targeted shingle, flashing, and valley repair.' },
+    { name: 'Roof Replacement', description: 'Full tear-off and re-roof with new underlayment and shingles.' },
+    { name: 'Gutter Install', description: 'Seamless gutter installation and downspout extension.' },
+    { name: 'Skylight Install', description: 'Velux and fixed skylight installation and reflashing.' },
+    { name: 'Storm Damage Assessment', description: 'Insurance-grade inspection after hail or wind events.' },
+  ],
+  'pest-control': [
+    { name: 'Termite Treatment', description: 'Liquid barrier and bait station termite protection.' },
+    { name: 'Rodent Control', description: 'Trapping, exclusion, and ongoing rodent monitoring.' },
+    { name: 'Bed Bug Treatment', description: 'Heat treatment and chemical protocols for bed bugs.' },
+    { name: 'Wasp & Bee Removal', description: 'Nest removal and stinging-insect control.' },
+    { name: 'Mosquito Abatement', description: 'Seasonal mosquito misting and larvicide programs.' },
+    { name: 'Quarterly Preventive', description: 'Recurring perimeter pest prevention.' },
+  ],
+  painting: [
+    { name: 'Interior Wall Painting', description: 'Walls, ceilings, and trim with prep and primer.' },
+    { name: 'Exterior Painting', description: 'Siding, stucco, and trim with pressure-wash prep.' },
+    { name: 'Cabinet Refinishing', description: 'Kitchen and bath cabinet repaint or refinish.' },
+    { name: 'Deck Staining', description: 'Wood deck cleaning, staining, and sealing.' },
+    { name: 'Drywall Repair', description: 'Patching, sanding, and texture matching before paint.' },
+    { name: 'Specialty Finishes', description: 'Limewash, Venetian plaster, and faux finishes.' },
+  ],
+  'auto-repair': [
+    { name: 'Oil Change', description: 'Conventional, synthetic blend, and full synthetic oil service.' },
+    { name: 'Brake Service', description: 'Pad, rotor, and caliper replacement and inspection.' },
+    { name: 'Transmission Repair', description: 'Fluid flush, rebuild, and replacement.' },
+    { name: 'Engine Diagnostics', description: 'Check-engine light diagnosis and computer scanning.' },
+    { name: 'Tyre Service', description: 'Rotation, balancing, alignment, and replacement.' },
+    { name: 'AC Recharge', description: 'A/C system recharge and leak detection.' },
+  ],
+  locksmith: [
+    { name: 'Lockout Service', description: 'Home, auto, and business emergency lockout response.' },
+    { name: 'Lock Install & Rekey', description: 'Deadbolt install, rekeying, and master key systems.' },
+    { name: 'Smart Lock Fitting', description: 'Keypad, biometric, and app-controlled lock install.' },
+    { name: 'Safe Opening', description: 'Combination change and lost-key safe opening.' },
+    { name: 'Auto Key Programming', description: 'Transponder and key fob cutting and programming.' },
+    { name: 'Commercial Security', description: 'Master key systems and access control for businesses.' },
+  ],
+  handyman: [
+    { name: 'Drywall Repair', description: 'Hole patching, crack repair, and texture matching.' },
+    { name: 'Furniture Assembly', description: 'Flat-pack furniture, shelving, and storage assembly.' },
+    { name: 'TV Mounting', description: 'Wall mounting with in-wall cable concealment.' },
+    { name: 'Fixture Install', description: 'Light fixtures, ceiling fans, and towel bars.' },
+    { name: 'Door & Window Repair', description: 'Sticking doors, broken hardware, and weatherstripping.' },
+    { name: 'General Repairs', description: 'Small jobs that don\'t need a specialist contractor.' },
+  ],
+  salon: [
+    { name: 'Haircut & Styling', description: 'Men\'s, women\'s, and children\'s cuts and styling.' },
+    { name: 'Colour Services', description: 'Single process, highlights, balayage, and colour correction.' },
+    { name: 'Facials & Skin Care', description: 'Customised facials, peels, and skin treatments.' },
+    { name: 'Manicure & Pedicure', description: 'Gel, regular, and spa manicures and pedicures.' },
+    { name: 'Waxing & Threading', description: 'Brow, lip, and full-body waxing and threading.' },
+    { name: 'Makeup Application', description: 'Event, bridal, and lesson makeup services.' },
+  ],
+  'pet-care': [
+    { name: 'Dog Walking', description: 'Solo and group walks, 30/60/90 minute options.' },
+    { name: 'Pet Sitting', description: 'In-home overnight or drop-in pet sitting.' },
+    { name: 'Boarding', description: 'Facility-based pet boarding with play areas.' },
+    { name: 'Grooming', description: 'Bath, haircut, nail trim, and breed-specific styling.' },
+    { name: 'Dog Training', description: 'Obedience, behaviour modification, and puppy training.' },
+    { name: 'Veterinary Support', description: 'Transport, medication, and post-surgery care.' },
+  ],
+  movers: [
+    { name: 'Local Moving', description: 'Same-city residential moves with full-service loading.' },
+    { name: 'Long-Distance Moving', description: 'Interstate and cross-country moving with tracking.' },
+    { name: 'Packing Services', description: 'Full or partial packing with materials included.' },
+    { name: 'Furniture Disassembly', description: 'Bed, desk, and table breakdown and reassembly.' },
+    { name: 'Specialty Item Transport', description: 'Pianos, antiques, safes, and artwork.' },
+    { name: 'Storage', description: 'Short-term and long-term storage between moves.' },
+  ],
+}
+
+// Fallback for industries not in the map (e.g. unmapped or new industries).
+const GENERIC_COMMON_SERVICES: CommonService[] = [
+  { name: 'Standard Service', description: 'The core service this category of business typically offers.' },
+  { name: 'Repair & Maintenance', description: 'Ongoing maintenance and repair work.' },
+  { name: 'Installation', description: 'New installation and setup services.' },
+  { name: 'Consultation', description: 'On-site assessment and project scoping.' },
+  { name: 'Emergency Service', description: 'After-hours or urgent response.' },
+  { name: 'Free Quote', description: 'On-site or virtual cost estimate.' },
+]
+
+// ── Templated-description detector ──────────────────────────────────────────
+//
+// Detects the auto-generated boilerplate description that was created from
+// a template (e.g. "Looking for reliable {X} services in {Y}? {Name} is a
+// trusted {X} business based in {Y}, {State}. Contact {Name} today for
+// quality workmanship, transparent pricing, and professional service.").
+//
+// When a templated description is detected, the detail page replaces it
+// with an honest business-specific paragraph + Claim CTA instead of showing
+// the boilerplate. Google's Helpful Content Update penalises templated text.
+
+const TEMPLATE_SIGNALS: RegExp[] = [
+  /^looking for reliable /i,
+  /is a trusted .* business/i,
+  /contact .+ today for/i,
+  /quality workmanship, transparent pricing/i,
+  /professional service\.?$/i,
+]
+
+/**
+ * Returns true if the given description is empty, too short (<400 chars), or
+ * matches the templated-boilerplate pattern. When true, the detail page
+ * should replace the description with an honest business-specific paragraph
+ * (see the AboutBusiness section in evergreen-sections.tsx) rather than
+ * showing the boilerplate.
+ */
+export function isTemplatedDescription(description: string | null | undefined): boolean {
+  if (!description || !description.trim()) return true
+  const trimmed = description.trim()
+  // Short descriptions are treated as templated (insufficient unique content).
+  if (trimmed.length < 400) return true
+  // Match any 2 of the 5 template signals → templated.
+  const matches = TEMPLATE_SIGNALS.filter((re) => re.test(trimmed)).length
+  return matches >= 2
+}
+
 // ── Public API ──────────────────────────────────────────────────────────────
 
 /**
- * Returns an ~120-150 word evergreen paragraph about hiring this
- * industry in `city`. Used by the "About {Industry} services in {City}"
- * section on the marketplace detail page.
+ * Returns an ~120-150 word evergreen paragraph about hiring this industry
+ * in `city`. Sub-industry aware: a "Window Cleaning" business gets
+ * window-cleaning-specific content, not generic house-cleaning content.
  *
  * `city` falls back to "your area" if null (so the paragraph still reads
  * naturally even when a business has no city set — though in practice
@@ -858,26 +1373,31 @@ export function getIndustryAboutParagraph(
   industry: string | null,
   city: string | null,
   country: string,
+  businessName?: string | null,
+  tagline?: string | null,
 ): string {
   const cityName = city?.trim() || 'your area'
-  return resolveIndustryContent(industry).aboutParagraph(cityName, country)
+  const { content } = resolveIndustryContentWithSubIndustry(industry, businessName ?? null, tagline ?? null)
+  return content.aboutParagraph(cityName, country)
 }
 
 /**
  * Returns 4-6 hiring checklist items specific to this industry.
- * Used by the "What to expect when hiring a {Industry}" section.
+ * Sub-industry aware (window cleaning, carpet cleaning, etc.).
+ * Used by the "Before hiring a {Industry}" section.
  */
 export function getIndustryHiringChecklist(
   industry: string | null,
+  businessName?: string | null,
+  tagline?: string | null,
 ): HiringChecklistItem[] {
-  return resolveIndustryContent(industry).hiringChecklist
+  const { content } = resolveIndustryContentWithSubIndustry(industry, businessName ?? null, tagline ?? null)
+  return content.hiringChecklist
 }
 
 /**
  * Returns 3 platform-level FAQs for this industry in `city`.
- * Used by the "Frequently asked questions about {industry} in {city}"
- * section — these render IN ADDITION TO any business-authored FAQs the
- * provider has entered (business FAQs render first, platform FAQs below).
+ * Sub-industry aware (window cleaning, carpet cleaning, etc.).
  *
  * The returned FAQs are also merged into the FAQ JSON-LD schema so
  * every detail page is eligible for FAQ rich results in Google Search,
@@ -886,7 +1406,74 @@ export function getIndustryHiringChecklist(
 export function getIndustryPlatformFaqs(
   industry: string | null,
   city: string | null,
+  businessName?: string | null,
+  tagline?: string | null,
 ): PlatformFaq[] {
   const cityName = city?.trim() || 'your area'
-  return resolveIndustryContent(industry).platformFaqs(cityName)
+  const { content } = resolveIndustryContentWithSubIndustry(industry, businessName ?? null, tagline ?? null)
+  return content.platformFaqs(cityName)
+}
+
+/**
+ * Returns the resolved industry display name for use in section headings.
+ * Sub-industry aware: returns "Window Cleaning" for a window-cleaning
+ * business (instead of the broad "Cleaning").
+ *
+ * Falls back to the broad-industry display name when no sub-industry is
+ * detected, then to a slugified industry name.
+ */
+export function getResolvedIndustryDisplayName(
+  industry: string | null,
+  businessName?: string | null,
+  tagline?: string | null,
+): string {
+  const { content: _content, subIndustryKey } = resolveIndustryContentWithSubIndustry(
+    industry,
+    businessName ?? null,
+    tagline ?? null,
+  )
+  // Map sub-industry keys to display names. Keep these in sync with the
+  // SUB_INDUSTRY_KEYWORDS entries above.
+  const SUB_INDUSTRY_DISPLAY_NAMES: Record<string, string> = {
+    'window-cleaning': 'Window Cleaning',
+    'carpet-cleaning': 'Carpet Cleaning',
+    'pressure-washing': 'Pressure Washing',
+    'gutter-cleaning': 'Gutter Cleaning',
+  }
+  if (subIndustryKey && subIndustryKey in SUB_INDUSTRY_DISPLAY_NAMES) {
+    return SUB_INDUSTRY_DISPLAY_NAMES[subIndustryKey]
+  }
+  // Fall back to the broad-industry display name via the existing helper
+  // (imported at the top of this file).
+  return getBroadIndustryDisplayName(industry)
+}
+
+/**
+ * Returns 4-6 "common services" typically offered in this industry.
+ * Sub-industry aware (window cleaning, carpet cleaning, etc.).
+ *
+ * Used by the CommonServices section on the detail page — cards are
+ * clearly labeled "Common services in this category — not necessarily
+ * offered by this business" so we never claim the specific business
+ * offers these services.
+ */
+export function getIndustryCommonServices(
+  industry: string | null,
+  businessName?: string | null,
+  tagline?: string | null,
+): CommonService[] {
+  const { subIndustryKey } = resolveIndustryContentWithSubIndustry(industry, businessName ?? null, tagline ?? null)
+  // Try sub-industry first, then broad industry, then generic fallback.
+  if (subIndustryKey && subIndustryKey in INDUSTRY_COMMON_SERVICES) {
+    return INDUSTRY_COMMON_SERVICES[subIndustryKey]
+  }
+  if (industry) {
+    const i = industry.toLowerCase().trim()
+    // Try exact match + substring matches (mirrors resolveIndustryContent).
+    if (i in INDUSTRY_COMMON_SERVICES) return INDUSTRY_COMMON_SERVICES[i]
+    for (const key of Object.keys(INDUSTRY_COMMON_SERVICES)) {
+      if (i.includes(key) || key.includes(i)) return INDUSTRY_COMMON_SERVICES[key]
+    }
+  }
+  return GENERIC_COMMON_SERVICES
 }
