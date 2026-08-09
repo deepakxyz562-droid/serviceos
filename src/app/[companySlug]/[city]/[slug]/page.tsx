@@ -504,21 +504,7 @@ export default async function PublicBusinessHubPage({
                 not, marketplace or not. Prevents Google from treating thin
                 listings as low-quality content. */}
             <div className="lg:col-span-2 space-y-12">
-              {/* 1. Quick Facts — always present */}
-              <QuickFacts
-                business={business}
-                serviceAreas={serviceAreas}
-                isMinimalListing={isMinimalListing}
-              />
-
-              {/* 2. About {Industry} services in {City} — always present (SEO) */}
-              <AboutIndustryInCity
-                business={business}
-                serviceAreas={serviceAreas}
-                isMinimalListing={isMinimalListing}
-              />
-
-              {/* 3. About {business.name} — conditional on description */}
+                            {/* 3. About {business.name} — conditional on description */}
               {business.description && (
                 <section id="about" aria-labelledby="about-heading">
                   <h2 id="about-heading" className="text-2xl font-bold tracking-tight mb-4">
@@ -538,6 +524,30 @@ export default async function PublicBusinessHubPage({
                       Google Map embed). Keeping them here too would duplicate. */}
                 </section>
               )}
+                            {/* 6. Service Area + Map — always present.
+                  Renders service-area chips + a Google Maps embed of the
+                  business's address (or city center if no address). Uses
+                  the ?output=embed URL pattern — no Google Maps API key
+                  required. Subsumes the old inline Areas Served chips. */}
+              <ServiceAreaMap
+                business={business}
+                serviceAreas={serviceAreas}
+                isMinimalListing={isMinimalListing}
+              />
+
+              {/* 1. Quick Facts — always present */}
+              <QuickFacts
+                business={business}
+                serviceAreas={serviceAreas}
+                isMinimalListing={isMinimalListing}
+              />
+
+              {/* 2. About {Industry} services in {City} — always present (SEO) */}
+              <AboutIndustryInCity
+                business={business}
+                serviceAreas={serviceAreas}
+                isMinimalListing={isMinimalListing}
+              />
 
               {/* Services — hidden for minimal listings (seed data / expired
                   trials) to keep the detail page consistent with the browse
@@ -601,17 +611,6 @@ export default async function PublicBusinessHubPage({
                   </div>
                 </section>
               )}
-
-              {/* 6. Service Area + Map — always present.
-                  Renders service-area chips + a Google Maps embed of the
-                  business's address (or city center if no address). Uses
-                  the ?output=embed URL pattern — no Google Maps API key
-                  required. Subsumes the old inline Areas Served chips. */}
-              <ServiceAreaMap
-                business={business}
-                serviceAreas={serviceAreas}
-                isMinimalListing={isMinimalListing}
-              />
 
               {/* 7. Hiring Checklist — always present.
                   Industry-specific 4-6 item guide on what to look for /
