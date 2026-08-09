@@ -71,15 +71,21 @@ import {
   getIndustrySoftwareLabel,
   getIndustryDisplayName,
 } from '@/lib/seo/industry-software-pages'
-import { getIndustryPlatformFaqs } from '@/lib/marketplace/industry-content'
+import { getIndustryPlatformFaqs, getResolvedIndustryDisplayName } from '@/lib/marketplace/industry-content'
 import {
   QuickFacts,
   AboutIndustryInCity,
+  AboutBusiness,
   ServiceAreaMap,
+  CommonServices,
   HiringChecklist,
   HowBookingWorks,
   TrustVerification,
   PlatformFaqs as PlatformFaqsSection,
+  HeroActions,
+  MobileContactCard,
+  CompactTrustBadges,
+  ExploreCategoryInCity,
 } from './evergreen-sections'
 
 // ── Route config ────────────────────────────────────────────────────────────
@@ -150,10 +156,19 @@ export async function generateMetadata({
       description,
       ...(ogImage ? { images: [ogImage] } : {}),
     },
-    // Auto-index rule: only index when profile is rich enough.
+    // Auto-index rule: 3-tier profile scoring (anti-template-spinning).
+    //   Tier A (Rich)   → index, follow
+    //   Tier B (Medium) → index, follow
+    //   Tier C (Thin)   → noindex, follow (discoverable via internal links
+    //                     but not indexed until the owner claims + enriches
+    //                     the profile — prevents 100K thin pages from
+    //                     hitting Google's index at once).
+    // The `isIndexable` flag is derived from the tier (A/B → true, C → false).
+    // Tier C uses `follow: true` (not `false`) so link equity still flows
+    // to claimed/verified peer businesses via the Similar Businesses section.
     robots: business.isIndexable
       ? { index: true, follow: true }
-      : { index: false, follow: false },
+      : { index: false, follow: true },
   }
 }
 
@@ -282,16 +297,21 @@ export default async function PublicBusinessHubPage({
   const isMinimalListing = cardType === 'normal-minimal'
 
   // ── Similar Businesses subtitle (Fix A + B) ──────────────────────────────
-  // getSimilarProviders has a 2-tier fallback:
+  // Sub-industry aware: a Window Cleaning business shows "Other Window Cleaning
+  // providers" instead of "Other Cleaning providers". getSimilarProviders has
+  // a 2-tier fallback:
   //   Tier 1: same industry + same city
   //   Tier 2: same industry + same country (any city)
   // The subtitle must reflect WHICH tier the results came from so it's not
-  // misleading — e.g. "Other HVAC providers in Wallasey" when all results are
-  // actually from London / Manchester (tier-2 fallback) would be wrong.
+  // misleading.
   //
   // matchTier is derived from the results: if every provider shares the
   // current business's city, it's tier 1; otherwise tier 2.
-  const industryDisplayName = getIndustryDisplayName(business.industry) || prettifySlug(business.industry || 'service')
+  const industryDisplayName = getResolvedIndustryDisplayName(
+    business.industry,
+    business.name,
+    business.tagline,
+  )
   const allSameCity = similarProviders.length > 0 &&
     similarProviders.every((p) => p.city === business.city)
   const similarSubtitle = allSameCity
@@ -353,16 +373,33 @@ export default async function PublicBusinessHubPage({
     sameAs: Object.values(socialLinks).filter(Boolean),
   })
 
-  // ── FAQ schema (always populated) ───────────────────────────────────────
-  // Merge business-authored FAQs with platform-level FAQs (from
-  // getIndustryPlatformFaqs). The platform FAQs are always present (3 per
-  // industry), so every detail page is now eligible for FAQ rich results
-  // in Google Search — even when the business has no FAQs of their own.
-  const platformFaqsForSchema = getIndustryPlatformFaqs(business.industry, business.city)
-  const allFaqsForSchema: FaqItem[] = [
-    ...faqs,
-    ...platformFaqsForSchema.map((f) => ({ question: f.question, answer: f.answer })),
-  ]
+  // ── FAQ schema (claimed listings only) ──────────────────────────────────
+  // Google's FAQ rich-result eligibility is now restricted (March 2023
+  // algorithm update — FAQ rich results only show for "authoritative
+  // government and health websites"). Emitting FAQ JSON-LD on every page
+  // (including 100K unclaimed seed listings) adds schema noise without
+  // rich-result upside, and risks Google treating the site as
+  // schema-spammy.
+  //
+  // Policy: emit FAQ JSON-LD ONLY when the listing is claimed by a real
+  // business owner. Claimed listings have business-authored FAQs (real
+  // content) + the platform FAQs are contextually appropriate. Unclaimed
+  // listings still render the platform FAQs visibly (useful for users +
+  // long-tail SEO text) but without the JSON-LD schema.
+  //
+  // Sub-industry aware: a Window Cleaning business gets window-cleaning FAQs.
+  const platformFaqsForSchema = getIndustryPlatformFaqs(
+    business.industry,
+    business.city,
+    business.name,
+    business.tagline,
+  )
+  const allFaqsForSchema: FaqItem[] = business.claimed
+    ? [
+        ...faqs,
+        ...platformFaqsForSchema.map((f) => ({ question: f.question, answer: f.answer })),
+      ]
+    : []
   const faqSchema = allFaqsForSchema.length > 0 ? getFaqSchema(allFaqsForSchema) : null
 
   const serviceSchemas = services.slice(0, 5).map((s) =>
@@ -436,47 +473,23 @@ export default async function PublicBusinessHubPage({
           </div>
         </div>
 
-        {/* Hero */}
+        {/* Hero — passes business data; HeroActions renders Call/Website/Directions
+            buttons for unclaimed listings only (claimed listings get the full
+            booking panel in the right sidebar). */}
         <PublicBusinessHero business={business} services={services.length} />
 
-        {/* Trust badges — marketplace providers only. Surfaces the 4-gate
-            verification (identity / business / insurance / licence) that the
-            old /marketplace/[slug] page showed. */}
-        {business.marketplaceOptIn ? (
-          <div className="border-b bg-muted/20">
-            <div className="w-full px-4 sm:px-6 lg:px-8 py-4">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <TrustBadge
-                  icon={ShieldCheck}
-                  label="Identity Verified"
-                  value={business.identityVerified ? 'Confirmed' : 'Pending'}
-                  ok={business.identityVerified}
-                />
-                <TrustBadge
-                  icon={BadgeCheck}
-                  label="Business Verified"
-                  value={business.businessVerified ? 'Confirmed' : 'Pending'}
-                  ok={business.businessVerified}
-                />
-                <TrustBadge
-                  icon={ShieldCheck}
-                  label="Insured"
-                  value={
-                    business.insuranceProvider ??
-                    (business.insuranceVerified ? 'Verified' : 'Pending')
-                  }
-                  ok={business.insuranceVerified}
-                />
-                <TrustBadge
-                  icon={Award}
-                  label="Licence"
-                  value={business.licenceNumber ?? 'Verified'}
-                  ok={Boolean(business.licenceNumber)}
-                />
-              </div>
-            </div>
-          </div>
-        ) : null}
+        {/* Compact trust badges — replaces the always-4-badge strip. Shows a
+            single "Not yet verified" summary when <3 badges confirmed (the
+            common case for unclaimed/seed listings); shows the full 4-badge
+            strip when ≥3 confirmed (claimed + verified businesses). */}
+        <CompactTrustBadges business={business} />
+
+        {/* Mobile contact card — compact Call/Website/Directions/Email row
+            shown under the hero on mobile only. Desktop keeps the right
+            sidebar with full Business Information. Solves the problem of
+            Business Information being buried below all evergreen sections
+            on mobile. */}
+        <MobileContactCard business={business} />
 
         {/* Main content grid */}
         <div className="w-full px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
@@ -485,8 +498,13 @@ export default async function PublicBusinessHubPage({
 
                 NARRATIVE ORDER (after adding evergreen blocks):
                   1. QuickFacts            — always (at-a-glance stats)
-                  2. AboutIndustryInCity  — always (SEO paragraph)
-                  3. About {business}      — conditional on description
+                  2. About {business.name}  — always (FACTS first: real
+                                             description or honest Tier-2
+                                             rewrite + Claim CTA)
+                  3. AboutIndustryInCity   — always (CONTEXT: SEO paragraph
+                                             about the industry in this city,
+                                             ends with a business-specific
+                                             bridge sentence)
                   4. Services              — conditional, marketplace-only
                   5. Gallery               — conditional
                   6. ServiceAreaMap        — always (map + service-area chips)
@@ -499,42 +517,18 @@ export default async function PublicBusinessHubPage({
                  13. TrustVerification     — always (explains the 4 badges)
                  14. CRM CTA               — conditional, unclaimed only
 
-                The 7 evergreen sections (1, 2, 6, 7, 8, 12, 13) ensure the
+                The 7 evergreen sections (1, 2, 3, 6, 7, 8, 12, 13) ensure the
                 page has genuine content depth for EVERY listing — claimed or
                 not, marketplace or not. Prevents Google from treating thin
-                listings as low-quality content. */}
-            <div className="lg:col-span-2 space-y-12">
-                            {/* 3. About {business.name} — conditional on description */}
-              {business.description && (
-                <section id="about" aria-labelledby="about-heading">
-                  <h2 id="about-heading" className="text-2xl font-bold tracking-tight mb-4">
-                    About {business.name}
-                  </h2>
-                  <div
-                    className="prose prose-slate dark:prose-invert max-w-none prose-p:text-muted-foreground prose-p:leading-relaxed prose-a:text-emerald-700 dark:prose-a:text-emerald-400 prose-a:no-underline hover:prose-a:underline prose-strong:text-foreground prose-headings:text-foreground"
-                    // Description is now authored via a rich HTML editor in the
-                    // Public Hub settings tab. We render it verbatim — the
-                    // editor only produces a safe subset (no <script> / inline
-                    // event handlers) and the content is owned by the tenant
-                    // admin themselves, so this is acceptable for a public page.
-                    dangerouslySetInnerHTML={{ __html: business.description }}
-                  />
-                  {/* Note: service-area chips were moved to the dedicated
-                      ServiceAreaMap section below (always renders with a
-                      Google Map embed). Keeping them here too would duplicate. */}
-                </section>
-              )}
-                            {/* 6. Service Area + Map — always present.
-                  Renders service-area chips + a Google Maps embed of the
-                  business's address (or city center if no address). Uses
-                  the ?output=embed URL pattern — no Google Maps API key
-                  required. Subsumes the old inline Areas Served chips. */}
-              <ServiceAreaMap
-                business={business}
-                serviceAreas={serviceAreas}
-                isMinimalListing={isMinimalListing}
-              />
+                listings as low-quality content.
 
+                SEO LAYERING (consultant model):
+                  Layer 1 FACTS     → QuickFacts + About {business}
+                  Layer 2 CONTEXT   → AboutIndustryInCity (industry + city
+                                      + location-context variation sentence)
+                  Layer 3 DISCOVERY → Similar Businesses + ExploreCategoryInCity
+                                      (sub-category + view-all internal links) */}
+            <div className="lg:col-span-2 space-y-12">
               {/* 1. Quick Facts — always present */}
               <QuickFacts
                 business={business}
@@ -542,7 +536,26 @@ export default async function PublicBusinessHubPage({
                 isMinimalListing={isMinimalListing}
               />
 
-              {/* 2. About {Industry} services in {City} — always present (SEO) */}
+              {/* 2. About {business.name} — Tier 1 (genuine description) or
+                  Tier 2 (honest rewrite + Claim CTA for templated/empty).
+                  FACTS FIRST: this is the business-specific layer (Layer 1).
+                  Renders before the industry/city context so visitors (and
+                  search engines) see what we actually KNOW about this
+                  business before reading category/location context. */}
+              <AboutBusiness
+                business={business}
+                serviceAreas={serviceAreas}
+                isMinimalListing={isMinimalListing}
+              />
+
+              {/* 3. About {Industry} services in {City} — always present (SEO).
+                  CONTEXT LAYER (Layer 2): category + location content. The
+                  paragraph is industry+city scoped; a business-specific
+                  bridge sentence is appended so the section connects the
+                  category context to this specific listing. A location-
+                  context variation sentence (climate + foundation type +
+                  licensing body) is woven in to break the city-name-swap
+                  template-spinning pattern at 100K-listing scale. */}
               <AboutIndustryInCity
                 business={business}
                 serviceAreas={serviceAreas}
@@ -612,19 +625,53 @@ export default async function PublicBusinessHubPage({
                 </section>
               )}
 
-              {/* 7. Hiring Checklist — always present.
-                  Industry-specific 4-6 item guide on what to look for /
-                  ask when hiring a provider in this trade. */}
+              {/* 6. Service Area + Map — always present.
+                  Renders service-area chips + a Google Maps embed of the
+                  business's address (or city center if no address). Uses
+                  the ?output=embed URL pattern — no Google Maps API key
+                  required. Subsumes the old inline Areas Served chips. */}
+              <ServiceAreaMap
+                business={business}
+                serviceAreas={serviceAreas}
+                isMinimalListing={isMinimalListing}
+              />
+
+              {/* 7. Common Services — always present.
+                  Generic category-level service cards clearly labeled
+                  "Common services in this category — not necessarily offered
+                  by this business". Sub-industry aware (window cleaning,
+                  carpet cleaning, etc.).
+
+                  BUSINESS VERIFIED TAGS: when the business's real services
+                  list contains a fuzzy match for a common-service name,
+                  that card shows a "Business Verified" badge. This wires
+                  the 3-state verification roadmap (Publicly reported →
+                  Business claimed → Fieseros verified) without claiming
+                  the business offers services it doesn't. */}
+              <CommonServices
+                business={business}
+                serviceAreas={serviceAreas}
+                isMinimalListing={isMinimalListing}
+                businessServices={services}
+              />
+
+              {/* 8. Hiring Checklist — always present (compact).
+                  Industry-specific 4-6 item guide, rendered as a single
+                  compact card with checkmark lines (~1/3 the height of the
+                  previous 5-card vertical list). Sub-industry aware. */}
               <HiringChecklist
                 business={business}
                 serviceAreas={serviceAreas}
                 isMinimalListing={isMinimalListing}
               />
 
-              {/* 8. How Booking Works — always present.
-                  3-step visual explainer. Steps vary by listing type:
-                  full marketplace → book online flow; unclaimed w/ email →
-                  quote request flow; minimal → call to inquire flow. */}
+              {/* 9. How Booking/Contacting Works — always present.
+                  3-step visual explainer. Title + steps adapt to listing type:
+                    • Unclaimed → "How contacting this business works"
+                    • Claimed   → "How booking with {name} works"
+                  Previously the unclaimed flow said "Browse their services"
+                  which was misleading (unclaimed businesses typically have
+                  no services listed). */}
               <HowBookingWorks
                 business={business}
                 serviceAreas={serviceAreas}
@@ -747,18 +794,24 @@ export default async function PublicBusinessHubPage({
                   The "Claim this business" button opens the ClaimBusinessModal
                   (if authenticated) or a sign-in gate (if anonymous) — NOT a
                   dead #book scroll link.
+
+                  id="claim-cta" is the anchor target for the "Claim this
+                  business" button in the AboutBusiness section (Tier 2
+                  rewrite) so the CTA scrolls into view when clicked.
               */}
               {!business.claimed && (
-                <CrmCtaSection
-                  tenantId={business.id}
-                  tenantName={business.name}
-                  tenantEmail={business.email}
-                  tenantCity={business.city}
-                  tenantState={business.state}
-                  softwareUrl={getIndustrySoftwareUrl(business.industry)}
-                  softwareLabel={getIndustrySoftwareLabel(business.industry)}
-                  industryName={getIndustryDisplayName(business.industry)}
-                />
+                <div id="claim-cta">
+                  <CrmCtaSection
+                    tenantId={business.id}
+                    tenantName={business.name}
+                    tenantEmail={business.email}
+                    tenantCity={business.city}
+                    tenantState={business.state}
+                    softwareUrl={getIndustrySoftwareUrl(business.industry)}
+                    softwareLabel={getIndustrySoftwareLabel(business.industry)}
+                    industryName={getIndustryDisplayName(business.industry)}
+                  />
+                </div>
               )}
             </div>
 
@@ -1017,6 +1070,25 @@ export default async function PublicBusinessHubPage({
               </div>
             </section>
           )}
+
+          {/* ── Explore {Industry} in {City} — DISCOVERY LAYER (Layer 3) ───────
+              Internal-linking hub: sub-category links (derived from the
+              CommonServices list) + a "View all {industry} businesses in
+              {city}" CTA pointing to the /{pluralSlug}/{city} browse page.
+
+              This is the marketplace topical architecture signal — it tells
+              Google how this business page relates to its category, its
+              location, and the broader marketplace. Each sub-category link
+              is a real URL (/{pluralSlug}/{city}?service=...); the view-all
+              link goes to the existing /{pluralSlug}/{city} page.
+
+              Renders always (even when similarProviders is empty) because
+              the internal-linking value is independent of peer listings. */}
+          <ExploreCategoryInCity
+            business={business}
+            serviceAreas={serviceAreas}
+            isMinimalListing={isMinimalListing}
+          />
         </div>
       </main>
 
@@ -1093,7 +1165,7 @@ function PublicBusinessHero({
               {business.industry && (
                 <span className="inline-flex items-center gap-1">
                   <Wrench className="h-3.5 w-3.5" />
-                  {business.industry}
+                  {getResolvedIndustryDisplayName(business.industry, business.name, business.tagline)}
                 </span>
               )}
               {business.city && (
@@ -1108,7 +1180,17 @@ function PublicBusinessHero({
                   {services} service{services !== 1 ? 's' : ''}
                 </span>
               )}
+              {!business.claimed && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+                  <ShieldCheck className="h-3 w-3" />
+                  Unclaimed
+                </span>
+              )}
             </div>
+            {/* Action buttons — rendered for unclaimed listings only. Claimed
+                marketplace listings get the full booking panel in the right
+                sidebar, so hero actions would be redundant. */}
+            <HeroActions business={business} />
           </div>
         </div>
       </div>
@@ -1367,30 +1449,6 @@ function StarRating({ rating }: { rating: number }) {
 }
 
 // ── Info row ────────────────────────────────────────────────────────────────
-
-function TrustBadge({
-  icon: Icon,
-  label,
-  value,
-  ok,
-}: {
-  icon: LucideIcon
-  label: string
-  value: string
-  ok: boolean
-}) {
-  return (
-    <div className="flex items-center gap-2 rounded-lg border bg-card p-3">
-      <Icon className={`h-5 w-5 shrink-0 ${ok ? 'text-emerald-600' : 'text-amber-500'}`} />
-      <div className="min-w-0">
-        <p className="truncate text-xs font-semibold text-foreground">{label}</p>
-        <p className={`truncate text-[11px] ${ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground'}`}>
-          {value}
-        </p>
-      </div>
-    </div>
-  )
-}
 
 function InfoRow({
   icon: Icon,

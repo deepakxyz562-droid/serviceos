@@ -58,11 +58,53 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { city: citySlug } = await params;
   const city = deslugifyCity(citySlug);
+
+  // Count providers for this industry + city. Mirrors the Page component's
+  // findMany WHERE clause so the count reflects exactly what would render.
+  // Wrapped in try/catch — default to 0 on error so a DB failure fails safe
+  // to noindex (empty city page) rather than risk indexing thin content.
+  let providerCount = 0;
+  try {
+    providerCount = await db.tenant.count({
+      where: {
+        publicProfileEnabled: true,
+        marketplaceOptIn: true,
+        suspendedAt: null,
+        // Combine industry + city filter groups with AND so BOTH apply.
+        // (A bare top-level `OR` key would be silently overwritten by the
+        // next `OR` key in the object literal — JS dedupes duplicate keys.)
+        AND: [
+          {
+            OR: [
+              { industry: { equals: cfg.industryId } },
+              { businessCategoriesJson: { contains: `"${cfg.industryId}"` } },
+            ],
+          },
+          {
+            OR: [
+              { city: { contains: city } },
+              { city: { contains: citySlug } },
+              { state: { contains: city } },
+              { state: { contains: citySlug } },
+              { serviceAreasJson: { contains: city } },
+              { serviceAreasJson: { contains: citySlug } },
+            ],
+          },
+        ],
+      },
+    });
+  } catch (err) {
+    console.error("[contractors-city] generateMetadata tenant.count failed:", err);
+    providerCount = 0;
+  }
+
   return {
     title: `${cfg.name} Contractors in ${city} | Fieseros Marketplace`,
     description: `Find verified ${cfg.contractorNoun} in ${city}. Compare reviews, request quotes, and book services on the Fieseros Marketplace.`,
     alternates: { canonical: `https://fieseros.com${cfg.contractorsBasePath}/${citySlug}` },
-    robots: { index: true, follow: true },
+    robots: providerCount > 0
+      ? { index: true, follow: true }
+      : { index: false, follow: true },
   };
 }
 
@@ -221,7 +263,12 @@ export default async function Page({
     } satisfies ProviderListItem;
   });
 
-  // Don't 404 even with zero providers — the page stays SEO-indexable so
-  // long-tail city searches can still land here and funnel to /#signup.
+  // Don't 404 even with zero providers — the page still renders for lead
+  // capture (visitors who arrive via direct link or internal navigation),
+  // BUT generateMetadata sets robots: noindex,follow when the city has zero
+  // providers. This preserves the lead-capture funnel while preventing 1000s
+  // of empty city pages from hitting Google's index (programmatic-SEO thin-
+  // content protection). `follow: true` keeps link equity flowing to
+  // claimed/verified peer businesses via internal links.
   return <IndustryContractorsCityPage config={cfg} city={city} providers={providers} />;
 }

@@ -142,20 +142,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const businessUrls = await listIndexableBusinessUrls()
     businessEntries = businessUrls.map((entry) => {
+      // Tier-based priority: Tier A (rich, claimed, verified) gets 0.8,
+      // Tier B (medium) gets 0.5. Tier C is never emitted by
+      // listIndexableBusinessUrls (excluded via isIndexableByTier). This
+      // differentiates crawl priority at 100K-listing scale so Google
+      // crawls high-quality pages more aggressively than thin ones.
+      const tier = (entry as { tier?: 'A' | 'B' }).tier
+      const priority = tier === 'A' ? 0.8 : tier === 'B' ? 0.5 : 0.7
       // Support both new { url, lastModified } shape and legacy string.
       if (typeof entry === 'string') {
         return {
           url: entry,
           lastModified: now,
           changeFrequency: "weekly" as const,
-          priority: 0.8,
+          priority,
         }
       }
       return {
         url: entry.url,
         lastModified: entry.lastModified || now,
         changeFrequency: "weekly" as const,
-        priority: 0.8,
+        priority,
       }
     })
   } catch (err) {
@@ -217,8 +224,60 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // The 4 most popular industries on the marketplace (by search volume +
     // provider count). Adding more here linearly increases sitemap size.
     const topIndustries = ["plumbing", "electrical", "cleaning", "hvac"];
+
+    // ── Demand-gated emission (anti-template-spinning) ─────────────────────
+    // Per the consultant's principle "only create pages where there is real
+    // business/listing demand": fetch the set of (city, industry) combos
+    // that actually have ≥1 provider, then only emit sitemap entries for
+    // those combos. This prevents 1000s of empty city pages from hitting
+    // Google's index via the sitemap (the per-page robots directive in the
+    // [city]/page.tsx files also sets noindex,follow on empty pages as
+    // belt-and-suspenders, but excluding them from the sitemap is the
+    // primary signal).
+    //
+    // Single batched query: fetch all tenants matching the top industries,
+    // build a Set of `${citySlug}|${industry}` keys, then check membership
+    // when emitting entries. Cheaper than N×M count queries.
+    const tenantsForDemand = await db.tenant.findMany({
+      where: {
+        publicProfileEnabled: true,
+        marketplaceOptIn: true,
+        suspendedAt: null,
+        OR: topIndustries.flatMap((industry) => [
+          { industry: { equals: industry } },
+          { businessCategoriesJson: { contains: `"${industry}"` } },
+        ]),
+      },
+      select: { industry: true, city: true, businessCategoriesJson: true },
+    });
+    // Build the demand Set. A tenant counts toward an industry if either
+    // its primary industry matches OR its businessCategoriesJson contains
+    // the industry id. City is slugified to match the directoryLocation
+    // citySlug format (so "Los Angeles" → "los-angeles").
+    const demandKeys = new Set<string>();
+    for (const t of tenantsForDemand) {
+      if (!t.city) continue;
+      const citySlug = t.city
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .trim();
+      if (!citySlug) continue;
+      // A tenant may count for multiple industries (via businessCategoriesJson).
+      for (const industry of topIndustries) {
+        const matches =
+          t.industry === industry ||
+          t.businessCategoriesJson?.includes(`"${industry}"`);
+        if (matches) {
+          demandKeys.add(`${citySlug}|${industry}`);
+        }
+      }
+    }
     for (const city of cities) {
       for (const industry of topIndustries) {
+        // Skip city+industry combos with zero providers — demand-gated.
+        if (!demandKeys.has(`${city.citySlug}|${industry}`)) continue;
         const plural = mapIndustryToPluralSlug(industry);
         browseEntries.push({
           url: `${base}/${plural}/${city.citySlug}`,

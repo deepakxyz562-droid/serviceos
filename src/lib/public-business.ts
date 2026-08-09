@@ -18,6 +18,8 @@ import { db } from '@/lib/db'
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas'
 import { mapIndustryToPluralSlug } from '@/lib/seo/plural-industry-slugs'
 import { getIndustryKit, durationToMinutes } from '@/lib/industry-kits'
+import { computeProfileTier, isIndexableByTier, type ProfileTier } from '@/lib/marketplace/profile-tier'
+import { isTemplatedDescription } from '@/lib/marketplace/industry-content'
 
 /**
  * Explicit column selection for the public-business tenant lookup.
@@ -144,6 +146,13 @@ export interface PublicBusinessData {
   insuranceProvider: string | null
   emergencyServiceAvailable: boolean
   isIndexable: boolean  // computed: rich-enough check passed
+  /**
+   * 3-tier profile quality score (A=rich / B=medium / C=thin). Drives
+   * indexation (Tier C → noindex,follow) and sitemap priority
+   * (A=0.8, B=0.5). Computed at read time from fields already on the
+   * Tenant model — no DB column required. See profile-tier.ts.
+   */
+  profileTier: ProfileTier
   canonicalUrl: string
   googlePlaceId: string | null
   website: string | null
@@ -363,21 +372,40 @@ async function buildPublicBusinessData(
   const descriptionLongEnough = Boolean(
     tenant.description && tenant.description.trim().length >= 40,
   )
-  // SEO FIX: Removed the `hasEnoughServices (publicServiceCount >= 3)` gate.
-  // 81/100 production marketplace providers are UNCLAIMED listings (like
-  // Yelp/Manta/YellowPages) — they have 0 services in our DB but still render
-  // 97KB of useful HTML (name, industry, address, phone, hours, FAQs,
-  // LocalBusiness JSON-LD, claim CTA). Excluding them from indexing was
-  // incorrect for a directory model. The detail-page service section simply
-  // shows a "no services listed yet" state, which is fine — the page still
-  // has unique, indexable content. `publicServiceCount` is kept in the
-  // signature for backward compat (the caller still fetches services for the
-  // rendered service list) but no longer gates indexability.
-  const isIndexable = Boolean(
-    tenant.publicProfileEnabled &&
-    descriptionLongEnough &&
+  // ── 3-tier profile scoring (anti-template-spinning at 100K scale) ──────
+  // The previous binary "rich enough" rule (description ≥40 chars + image)
+  // would let 100K bulk-seeded Google Places listings all pass the gate and
+  // hit Google's index at once — the programmatic-SEO failure mode. The
+  // 3-tier model differentiates:
+  //   Tier A (Rich)   → claimed + real description + ≥3 services + image + verified
+  //   Tier B (Medium) → meets the ≥40 char + image baseline (current behavior)
+  //   Tier C (Thin)   → noindex,follow (discoverable but not indexed)
+  //
+  // `publicServiceCount` is now used for tier scoring (not as a hard gate).
+  // `reviewCount` is already on the tenant row. The templated-description
+  // detector flags onboarding-boilerplate descriptions so Tier A requires a
+  // genuine authored description.
+  const confirmedBadgeCount = [
+    tenant.identityVerified,
+    tenant.businessVerified,
+    tenant.insuranceVerified,
+    Boolean(tenant.licenceNumber),
+  ].filter(Boolean).length
+  const profileTier = computeProfileTier({
+    claimed: tenant.claimed,
+    description: tenant.description,
+    isTemplatedDescription: isTemplatedDescription(tenant.description),
+    serviceCount: publicServiceCount,
     hasImage,
-  )
+    confirmedBadgeCount,
+    reviewCount: tenant.reviewCount ?? 0,
+    publicProfileEnabled: tenant.publicProfileEnabled,
+  })
+  // `isIndexable` is retained for backward-compat with callers that read it
+  // directly. It's now derived from the tier: Tier A + B are indexable,
+  // Tier C is not. The page's `robots` directive + sitemap exclusion use
+  // the tier directly for finer-grained control.
+  const isIndexable = isIndexableByTier(profileTier) && descriptionLongEnough
 
   return {
     id: tenant.id,
@@ -440,6 +468,7 @@ async function buildPublicBusinessData(
     insuranceProvider: tenant.insuranceProvider,
     emergencyServiceAvailable: tenant.emergencyServiceAvailable,
     isIndexable,
+    profileTier,
     canonicalUrl,
     googlePlaceId: tenant.googlePlaceId,
     website: tenant.website,
@@ -729,6 +758,13 @@ export const getSimilarProviders = unstable_cache(
 export interface IndexableBusinessUrl {
   url: string
   lastModified?: string
+  /**
+   * Profile tier (A=rich / B=medium). Tier C is never emitted — those
+   * listings are excluded from the sitemap entirely (noindex,follow).
+   * Used by sitemap.ts to set differentiated `priority` per URL so Google
+   * crawls Tier A pages more aggressively than Tier B.
+   */
+  tier?: 'A' | 'B'
 }
 
 /**
@@ -761,35 +797,38 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
         slug: true,
         industry: true,
         city: true,
+        state: true,
+        country: true,
         description: true,
+        claimed: true,
         coverImage: true,
         logo: true,
         galleryJson: true,
+        reviewCount: true,
+        identityVerified: true,
+        businessVerified: true,
+        insuranceVerified: true,
+        licenceNumber: true,
         updatedAt: true,
       },
     })
 
-    // ── Filter tenants in JS (cheap, zero DB round-trips) ──
-    // Apply the description + image "rich enough" checks. This is the ONLY
-    // filtering step now — the old `service count >= 3` gate was removed
-    // (see SEO FIX note in buildPublicBusinessData()).
+    // ── Filter + tier-score in JS (single DB round-trip) ────────────────
+    // We fetch the fields needed for tier scoring alongside the existing
+    // "rich enough" check, then compute the tier per tenant. Tier C
+    // listings are excluded from the sitemap (noindex,follow). Tier A + B
+    // are emitted with their tier so sitemap.ts can set differentiated
+    // priority (A=0.8, B=0.5).
     //
-    // SEO FIX (production sitemap empty — ROOT CAUSE):
-    // The previous version used `db.service.groupBy()` to batch-count
-    // services per tenant. BUT the Supabase REST adapter (supabase-db.ts:1709)
-    // has a STUB `groupBy()` that always returns `[]` — it's not implemented.
-    // So in production (USE_SUPABASE_DB=true), every tenant got
-    // serviceCount=0 → ALL failed the `>= 3` check → 0 business URLs in the
-    // sitemap → GSC "Discovered pages: 0".
-    //
-    // Additionally, 81/100 production marketplace providers are UNCLAIMED
-    // listings (like Yelp/Manta) with 0 services in our DB — they SHOULD be
-    // in the sitemap regardless. Removing the service-count gate fixes both
-    // issues at once: no more broken groupBy dependency, and unclaimed
-    // listings get indexed (they have 97KB of unique HTML each).
-    //
-    // Mirrors buildPublicBusinessData(): (1) defaultCoverImageForIndustry()
-    // fallback for NULL coverImage, (2) description minimum 40 chars.
+    // We don't fetch the service count here (would require a per-tenant
+    // Service query or a groupBy — the Supabase REST adapter stubs the
+    // latter). Instead, tier scoring uses serviceCount=0 for sitemap
+    // purposes, which means sitemap tier scoring is conservative: a
+    // Tier-A listing (rich + claimed + verified + reviews) might score
+    // as Tier B in the sitemap if it has ≥3 services. That's fine — the
+    // per-page robots directive uses the accurate tier (with real service
+    // count) computed in buildPublicBusinessData(). The sitemap priority
+    // is a hint, not a directive; under-scoring is safe.
     const candidates = tenants.filter((t) => {
       const descriptionLongEnough = Boolean(
         t.description && t.description.trim().length >= 40,
@@ -810,6 +849,43 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
 
     const entries: IndexableBusinessUrl[] = []
     for (const t of candidates) {
+      // ── Tier scoring (conservative — serviceCount=0 for sitemap) ──────
+      // See the comment above the candidates filter for why we don't fetch
+      // the per-tenant service count here. The per-page robots directive
+      // uses the accurate tier; the sitemap priority is a hint.
+      let galleryCount = 0
+      try {
+        const g = JSON.parse(t.galleryJson || '[]')
+        if (Array.isArray(g)) galleryCount = g.length
+      } catch {
+        galleryCount = 0
+      }
+      const effectiveCoverImageB =
+        t.coverImage || defaultCoverImageForIndustry(t.industry)
+      const hasImageB = Boolean(effectiveCoverImageB || t.logo || galleryCount > 0)
+      const confirmedBadges = [
+        t.identityVerified,
+        t.businessVerified,
+        t.insuranceVerified,
+        Boolean(t.licenceNumber),
+      ].filter(Boolean).length
+      const tier = computeProfileTier({
+        claimed: t.claimed,
+        description: t.description,
+        isTemplatedDescription: isTemplatedDescription(t.description),
+        serviceCount: 0, // conservative — see comment above
+        hasImage: hasImageB,
+        confirmedBadgeCount: confirmedBadges,
+        reviewCount: t.reviewCount ?? 0,
+        publicProfileEnabled: true, // already filtered above
+      })
+      // Tier C is excluded from the sitemap entirely (noindex,follow).
+      // The `candidates` filter already ensured description ≥40 chars + has
+      // image, so the only way to land in Tier C here is when
+      // publicProfileEnabled was true at the DB filter but the tier scorer
+      // returns C. Belt-and-suspenders: skip Tier C explicitly.
+      if (!isIndexableByTier(tier)) continue
+
       // PLURAL industry slug — matches the new /{pluralIndustry}/{city}/{slug}
       // canonical URL scheme.
       const industrySlug = mapIndustryToPluralSlug(t.industry)
@@ -826,6 +902,7 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
       entries.push({
         url: `${SITE_URL}/${industrySlug}/${citySlug}/${t.slug}`,
         lastModified,
+        tier,
       })
     }
     return entries
