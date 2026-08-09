@@ -13,6 +13,7 @@ import {
   FileText,
   Users,
   Navigation,
+  MapPin,
 } from 'lucide-react';
 
 import { db } from '@/lib/db';
@@ -36,9 +37,17 @@ import {
   computeCardType,
   fetchFeaturedListingsMap,
 } from '@/lib/marketplace-featured';
+import { computeCityPageTierFromProviders } from '@/lib/marketplace/city-page-tier';
+import {
+  fetchNearbyCitiesWithProviders,
+  fetchServiceAreaProviders,
+  type NearbyCityEntry,
+  type ServiceAreaProvider,
+} from '@/lib/marketplace/city-page-fallbacks';
 import { MarketplaceBrowser } from '@/components/marketplace/marketplace-browser';
 import { MarketplaceHeader } from '@/components/marketplace/marketplace-header';
 import { MarketplaceMobileNav } from '@/components/marketplace/marketplace-mobile-nav';
+import { ProviderCard } from '@/components/marketplace/provider-card';
 import { CornerstoneFooter } from '@/components/seo/cornerstone-footer';
 import type { ProviderListItem } from '@/components/marketplace/types';
 
@@ -172,11 +181,66 @@ export async function generateMetadata({
   const canonicalPath = `/${companySlug}/${city}`;
   const canonicalUrl = `${appUrl}${canonicalPath}`;
 
+  // ── SEO gate: count providers for this industry + city ──────────────────
+  // Tier-aware indexing (Phase 3b): a page is indexable only if it has enough
+  // providers to be useful to searchers. The city-page-tier model has 4 tiers
+  // (EMPTY / SPARSE / READY / STRONG); only READY+STRONG should be indexed.
+  //
+  // This metadata path uses a cheap `db.tenant.count()` (not the full findMany
+  // the page body runs) so we approximate the tier using only the count:
+  //   - 0 providers        → EMPTY  → noindex, follow
+  //   - 1–4 providers      → SPARSE → noindex, follow (too thin to index)
+  //   - 5+ providers       → READY or STRONG → index (the page body computes
+  //                          the exact tier for rendering, but for the robots
+  //                          meta the count threshold is sufficient)
+  //
+  // `follow: true` is always preserved so link equity still flows to
+  // nearby-city links + "list your business" CTAs rendered on EMPTY/SPARSE
+  // pages — discoverable, not indexed (the consultant's recommendation).
+  //
+  // This MUST mirror the Page body's WHERE clause (industry OR + city OR)
+  // so the count reflects exactly what would render. Wrapped in try/catch —
+  // default to 0 on error so a DB failure fails safe to noindex rather than
+  // risk indexing a page that renders empty.
+  let providerCount = 0;
+  try {
+    providerCount = await db.tenant.count({
+      where: {
+        publicProfileEnabled: true,
+        marketplaceOptIn: true,
+        suspendedAt: null,
+        AND: [
+          {
+            OR: [
+              { industry: { equals: industryId } },
+              { businessCategoriesJson: { contains: `"${industryId}"` } },
+            ],
+          },
+          {
+            OR: [
+              { city: { contains: cityName } },
+              { city: { contains: city } },
+              { state: { contains: cityName } },
+              { state: { contains: city } },
+              { serviceAreasJson: { contains: cityName } },
+              { serviceAreasJson: { contains: city } },
+            ],
+          },
+        ],
+      },
+    });
+  } catch (err) {
+    console.error('[plural-browse] generateMetadata tenant.count failed:', err);
+    providerCount = 0;
+  }
+
   return {
     title,
     description,
     alternates: { canonical: canonicalPath },
-    robots: { index: true, follow: true },
+    robots: providerCount >= 5
+      ? { index: true, follow: true }
+      : { index: false, follow: true },
     openGraph: {
       title,
       description,
@@ -225,15 +289,21 @@ export default async function PluralBrowsePage({
   // small town we haven't seeded), fall back to de-slugifying the param.
   // We DO NOT 404 on unknown cities — the page stays SEO-indexable so
   // long-tail city searches can still land here.
+  //
+  // `isKnownCity` tracks whether we found a DirectoryLocation row — this
+  // feeds the tier classifier (unknown cities with 0 providers get a
+  // slightly different EMPTY reason string, but no behavior change).
   let cityName = deslugifyCity(city);
   let cityLat: number | null = null;
   let cityLng: number | null = null;
+  let isKnownCity = false;
   try {
     const dirLoc = await db.directoryLocation.findFirst({
       where: { citySlug: city, isActive: true },
       select: { city: true, latitude: true, longitude: true },
     });
     if (dirLoc) {
+      isKnownCity = true;
       cityName = dirLoc.city;
       cityLat = dirLoc.latitude ?? null;
       cityLng = dirLoc.longitude ?? null;
@@ -398,6 +468,42 @@ export default async function PluralBrowsePage({
     } satisfies ProviderListItem;
   });
 
+  // ── 5b. Compute the city-page tier (EMPTY / SPARSE / READY / STRONG) ────
+  // The page body uses the FULL tier (with quality-provider + phone signals)
+  // to decide whether to render the fallback sections (service-area providers
+  // + nearby cities). The metadata path uses a simpler count-based check
+  // (see generateMetadata above); here we compute the precise tier.
+  const tierResult = computeCityPageTierFromProviders(providers, isKnownCity);
+
+  // ── 5c. Fallbacks: nearby cities + service-area providers ──────────────
+  // Only fetch when the page is EMPTY or SPARSE — READY/STRONG pages render
+  // the full MarketplaceBrowser grid and don't need the supplementary
+  // fallback content (which would just add noise to a page that's already
+  // rich enough to index).
+  //
+  // Both helpers run in parallel via Promise.all to keep latency down. Each
+  // helper independently fails-safe (returns [] on DB error), so a failure
+  // in one doesn't block the other.
+  let nearbyCities: NearbyCityEntry[] = [];
+  let serviceAreaProviders: ServiceAreaProvider[] = [];
+  if (tierResult.tier === 'EMPTY' || tierResult.tier === 'SPARSE') {
+    // Exclude the origin city + any city already represented in the
+    // providers list (so service-area providers don't duplicate what's
+    // already shown above).
+    const excludeCityNames = [
+      cityName,
+      ...providers.map((p) => p.city).filter(Boolean) as string[],
+    ];
+    try {
+      [nearbyCities, serviceAreaProviders] = await Promise.all([
+        fetchNearbyCitiesWithProviders(industryId, city, { usePluralPath: true }),
+        fetchServiceAreaProviders(industryId, city, excludeCityNames),
+      ]);
+    } catch (err) {
+      console.error('[plural-browse] fallback fetch failed:', err);
+    }
+  }
+
   // ── 6. Build JSON-LD: ItemList + BreadcrumbList ────────────────────────
   const appUrl = getAppUrl();
   const canonicalPath = `/${companySlug}/${city}`;
@@ -530,8 +636,13 @@ export default async function PluralBrowsePage({
           </div>
         </section>
 
-        {/* Provider grid — empty state if no providers */}
-        {providers.length === 0 ? (
+        {/* ── Provider grid (depends on tier) ─────────────────────────────
+            EMPTY  → skip the grid; render the CTA + fallback sections below.
+            SPARSE → render the grid AS USUAL (1-4 providers), then render the
+                     supplementary CTA + fallback sections below.
+            READY/STRONG → render the grid only (rich enough to stand alone). */}
+        {tierResult.tier === 'EMPTY' ? (
+          /* ── Section A (EMPTY) — honest messaging + CTA ─────────────── */
           <section className="w-full px-4 sm:px-6 lg:px-8 py-12">
             <div className="mx-auto max-w-2xl rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/40">
@@ -541,9 +652,10 @@ export default async function PluralBrowsePage({
                 No {industryPluralName.toLowerCase()} found in {cityName} yet
               </h2>
               <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                We don&apos;t have any verified {industryPluralName.toLowerCase()} listed in {cityName} yet.
-                Try browsing all {industryPluralName.toLowerCase()} on the Fieseros marketplace, or
-                list your own business to be the first.
+                We don&apos;t currently have verified {industryPluralName.toLowerCase()} listed in {cityName}.
+                {serviceAreaProviders.length > 0 || nearbyCities.length > 0
+                  ? ' Browse nearby options below, or list your business to be the first.'
+                  : ' Try browsing all ' + industryPluralName.toLowerCase() + ' on the Fieseros marketplace, or list your own business to be the first.'}
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Link
@@ -564,6 +676,7 @@ export default async function PluralBrowsePage({
             </div>
           </section>
         ) : (
+          /* ── Provider grid (SPARSE / READY / STRONG) ─────────────────── */
           <section className="w-full px-4 sm:px-6 lg:px-8 py-6">
             <MarketplaceBrowser
               providers={providers}
@@ -574,6 +687,139 @@ export default async function PluralBrowsePage({
                 search: null,
               }}
             />
+          </section>
+        )}
+
+        {/* ── Section A (SPARSE) — supplementary CTA below the grid ──────
+            Only rendered for SPARSE pages (1-4 providers). The grid above
+            already shows the providers; this section adds the "browse nearby"
+            hint + list-your-business CTA so visitors aren't stuck on a
+            thin page. */}
+        {tierResult.tier === 'SPARSE' && (
+          <section className="w-full px-4 sm:px-6 lg:px-8 py-8 border-t bg-muted/10">
+            <div className="mx-auto max-w-3xl rounded-2xl border border-amber-200 dark:border-amber-900/70 bg-amber-50/60 dark:bg-amber-950/20 p-5 sm:p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/60">
+                  <Compass className="h-5 w-5 text-amber-700 dark:text-amber-300" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-base font-semibold text-foreground mb-1">
+                    We have {providers.length} {industryPluralName.toLowerCase()} in {cityName}
+                  </h2>
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                    See them above, or browse nearby areas with more options. Know a great {industryPluralName.toLowerCase().replace(/s$/, '')} in {cityName}? Ask them to list on Fieseros.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <Link
+                      href="/#pricing"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors"
+                    >
+                      <Store className="h-4 w-4" />
+                      List your business
+                    </Link>
+                    <Link
+                      href={`/marketplace?industry=${encodeURIComponent(industryId)}`}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted/40 transition-colors"
+                    >
+                      <Compass className="h-4 w-4" />
+                      Browse all {industryPluralName.toLowerCase()}
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── Section B — providers serving {city} (service-area fallback) ─
+            Rendered for EMPTY + SPARSE pages when nearby tenants exist whose
+            service radius covers this city. Reuses the existing ProviderCard
+            component for visual consistency. Each card's href points to the
+            provider's full profile page (same URL pattern as the grid above). */}
+        {(tierResult.tier === 'EMPTY' || tierResult.tier === 'SPARSE') && serviceAreaProviders.length > 0 && (
+          <section className="w-full px-4 sm:px-6 lg:px-8 py-8 border-t">
+            <div className="mx-auto max-w-5xl">
+              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 text-xs font-semibold uppercase tracking-wide mb-2">
+                <Navigation className="h-4 w-4" />
+                <span>Service-area providers</span>
+              </div>
+              <h2 className="text-2xl font-bold text-foreground mb-1">
+                Providers serving {cityName}
+              </h2>
+              <p className="text-sm text-muted-foreground mb-6 max-w-2xl leading-relaxed">
+                These {industryPluralName.toLowerCase()} are based nearby and serve {cityName}.
+              </p>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {serviceAreaProviders.map((p) => {
+                  const slug = p.slug || p.publicSlug;
+                  const href = slug
+                    ? `/${mapIndustryToPluralSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
+                    : '#';
+                  return (
+                    <ProviderCard
+                      key={p.id}
+                      provider={p}
+                      href={href}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── Section C — browse nearby cities ───────────────────────────
+            Rendered for EMPTY + SPARSE pages when other DirectoryLocation
+            cities nearby have providers in the same industry. Each card links
+            to that city's page (built with usePluralPath:true so it points
+            to /{industry-plural}/{city-slug} — same route as this page). */}
+        {(tierResult.tier === 'EMPTY' || tierResult.tier === 'SPARSE') && nearbyCities.length > 0 && (
+          <section className="w-full px-4 sm:px-6 lg:px-8 py-8 border-t bg-muted/10">
+            <div className="mx-auto max-w-5xl">
+              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 text-xs font-semibold uppercase tracking-wide mb-2">
+                <MapPin className="h-4 w-4" />
+                <span>Nearby areas</span>
+              </div>
+              <h2 className="text-2xl font-bold text-foreground mb-1">
+                Browse nearby cities
+              </h2>
+              <p className="text-sm text-muted-foreground mb-6 max-w-2xl leading-relaxed">
+                {industryPluralName} in cities close to {cityName} with verified listings on Fieseros.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {nearbyCities.map((c) => (
+                  <Link
+                    key={c.citySlug}
+                    href={c.href}
+                    className="group rounded-xl border border-border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-md"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-foreground truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
+                          {c.city}
+                        </div>
+                        {c.region && (
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {c.region}
+                          </div>
+                        )}
+                      </div>
+                      <MapPin className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/30 px-2 py-0.5 text-muted-foreground">
+                        <Navigation className="h-3 w-3" />
+                        {c.distanceKm} km away
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30 px-2 py-0.5 font-medium text-emerald-700 dark:text-emerald-300">
+                        <Store className="h-3 w-3" />
+                        {c.providerCount} provider{c.providerCount !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
           </section>
         )}
 

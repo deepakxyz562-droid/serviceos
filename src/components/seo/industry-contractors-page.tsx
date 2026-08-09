@@ -23,6 +23,7 @@ import Link from "next/link";
 import {
   Building2,
   MapPin,
+  Navigation,
   Store,
   ArrowRight,
   ArrowLeft,
@@ -41,6 +42,11 @@ import {
   slugifyCity,
   mapIndustryToUrlSlug,
 } from "@/lib/seo/schemas";
+import { type CityPageTier } from "@/lib/marketplace/city-page-tier";
+import {
+  type NearbyCityEntry,
+  type ServiceAreaProvider,
+} from "@/lib/marketplace/city-page-fallbacks";
 
 const SITE_URL = "https://fieseros.com";
 
@@ -289,11 +295,33 @@ export function IndustryContractorsCityPage({
   config,
   city,
   providers,
+  tier,
+  nearbyCities,
+  serviceAreaProviders,
 }: {
   config: IndustryConfig;
   city: string;
   providers: ProviderListItem[];
+  /** Optional — city-page tier computed by `computeCityPageTierFromProviders`.
+   *  When provided, EMPTY/SPARSE tiers trigger the fallback sections below
+   *  the provider grid (service-area providers + nearby cities). When
+   *  undefined, the component renders the legacy behavior (grid + CTAs only). */
+  tier?: CityPageTier;
+  /** Optional — nearby cities with providers in the same industry.
+   *  Rendered as a card grid when tier is EMPTY or SPARSE. */
+  nearbyCities?: NearbyCityEntry[];
+  /** Optional — service-area providers (located elsewhere but willing to travel).
+   *  Rendered via ProviderCard when tier is EMPTY or SPARSE. */
+  serviceAreaProviders?: ServiceAreaProvider[];
 }) {
+  // Whether to render the fallback sections. Only rendered for EMPTY/SPARSE
+  // tiers (when the page is too thin to index on its own). READY/STRONG pages
+  // are rich enough to stand alone — fallbacks would just add noise.
+  const showFallbacks = tier === "EMPTY" || tier === "SPARSE";
+  const hasServiceArea =
+    showFallbacks && !!serviceAreaProviders && serviceAreaProviders.length > 0;
+  const hasNearby =
+    showFallbacks && !!nearbyCities && nearbyCities.length > 0;
   const industryIcon = getIndustryIcon(config.industryId);
   const citySlug = slugifyCity(city);
   const canonicalPath = `${config.contractorsBasePath}/${citySlug}`;
@@ -435,6 +463,99 @@ export function IndustryContractorsCityPage({
                   />
                 );
               })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Section B — providers serving {city} (service-area fallback) ──
+          Rendered for EMPTY + SPARSE pages when nearby tenants exist whose
+          service radius covers this city. Reuses the existing ProviderCard
+          component for visual consistency. Each card's href points to the
+          provider's full profile page (same URL pattern as the grid above). */}
+      {hasServiceArea && serviceAreaProviders && (
+        <section className="w-full px-4 sm:px-6 lg:px-8 py-8 border-t">
+          <div className="mx-auto max-w-5xl">
+            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 text-xs font-semibold uppercase tracking-wide mb-2">
+              <Navigation className="h-4 w-4" />
+              <span>Service-area providers</span>
+            </div>
+            <h2 className="text-2xl font-bold text-foreground mb-1">
+              Providers serving {city}
+            </h2>
+            <p className="text-sm text-muted-foreground mb-6 max-w-2xl leading-relaxed">
+              These {config.contractorNoun} are based nearby and serve {city}.
+            </p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {serviceAreaProviders.map((p) => {
+                const slug = p.slug || p.publicSlug;
+                const href = slug
+                  ? `/${mapIndustryToUrlSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
+                  : "#";
+                return (
+                  <ProviderCard
+                    key={p.id}
+                    provider={p}
+                    href={href}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Section C — browse nearby cities ──────────────────────────────
+          Rendered for EMPTY + SPARSE pages when other DirectoryLocation
+          cities nearby have providers in the same industry. Each card links
+          to that city's contractor page (built with usePluralPath:false so
+          it points to /{industry}-contractors/{city-slug} — same route as
+          this page). */}
+      {hasNearby && nearbyCities && (
+        <section className="w-full px-4 sm:px-6 lg:px-8 py-8 border-t bg-muted/10">
+          <div className="mx-auto max-w-5xl">
+            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 text-xs font-semibold uppercase tracking-wide mb-2">
+              <MapPin className="h-4 w-4" />
+              <span>Nearby areas</span>
+            </div>
+            <h2 className="text-2xl font-bold text-foreground mb-1">
+              Browse nearby cities
+            </h2>
+            <p className="text-sm text-muted-foreground mb-6 max-w-2xl leading-relaxed">
+              {config.contractorNoun} in cities close to {city} with verified listings on Fieseros.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {nearbyCities.map((c) => (
+                <Link
+                  key={c.citySlug}
+                  href={c.href}
+                  className="group rounded-xl border border-border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-foreground truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
+                        {c.city}
+                      </div>
+                      {c.region && (
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {c.region}
+                        </div>
+                      )}
+                    </div>
+                    <MapPin className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/30 px-2 py-0.5 text-muted-foreground">
+                      <Navigation className="h-3 w-3" />
+                      {c.distanceKm} km away
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30 px-2 py-0.5 font-medium text-emerald-700 dark:text-emerald-300">
+                      <Store className="h-3 w-3" />
+                      {c.providerCount} provider{c.providerCount !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                </Link>
+              ))}
             </div>
           </div>
         </section>
