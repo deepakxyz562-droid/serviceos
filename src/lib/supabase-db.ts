@@ -565,6 +565,10 @@ function buildOrConditionPart(cond: WhereInput): string | null {
         parts.push(`${orField}.lte.${toOrLiteral(op.lte)}`);
       } else if (op.in !== undefined) {
         parts.push(`${orField}.in.(${(op.in as (string | number | boolean)[]).map(toOrLiteral).join(',')})`);
+      } else if (op.notIn !== undefined) {
+        // Issue #1 Fix A: handle notIn inside OR clauses (was silently dropped).
+        // PostgREST syntax: field=not.in.(val1,val2,val3)
+        parts.push(`${orField}.not.in.(${(op.notIn as (string | number | boolean)[]).map(toOrLiteral).join(',')})`);
       }
     } else if (orValue === null) {
       parts.push(`${orField}.is.null`);
@@ -670,6 +674,18 @@ function applyWhereFilters(
       }
       if (op.in !== undefined) {
         query.in(field, op.in as (string | number | boolean)[]);
+      }
+      // Issue #1 Fix A: handle notIn operator (was silently dropped, causing
+      // featured tenants to reappear on marketplace page 2+ because
+      // `id: { notIn: featuredIds }` in keysetWhere was silently ignored).
+      // PostgREST translates this to field=not.in.(val1,val2,val3).
+      if (op.notIn !== undefined) {
+        const vals = op.notIn as (string | number | boolean)[];
+        if (vals.length > 0) {
+          // supabase-js: .not(field, 'in', '(val1,val2,val3)')
+          // The parentheses-wrapped list is PostgREST's IN list syntax.
+          query.not(field, 'in', `(${vals.join(',')})`);
+        }
       }
       if (op.contains !== undefined) {
         const fieldName = field.endsWith('Json') ? `${field}::text` : field;
@@ -1112,10 +1128,17 @@ class SupabaseModel {
     const { data, error } = await query;
     if (error) {
       const whereStr = where ? JSON.stringify(where).substring(0, 200) : 'none';
+      // Issue #1 Fix B: THROW instead of silently returning []. The previous
+      // behavior masked PostgREST errors (missing columns, RLS denials,
+      // malformed filters, transient timeouts) as empty result sets, which
+      // caused the marketplace infinite scroll to stop loading with NO
+      // user-visible error — the API returned 200 with items:[], nextCursor:null.
+      // Throwing here lets the API route's catch block return a proper 500,
+      // which the client hook surfaces as a retryable error banner.
       console.error(
         `[SupabaseDB] findMany error on ${this.tableName}: code=${error.code} message="${error.message}" details="${error.details || ''}" hint="${error.hint || ''}" where=${whereStr}`
       );
-      return [];
+      throw new Error(`[SupabaseDB] findMany on ${this.tableName} failed: ${error.message} (code=${error.code}${error.hint ? `, hint="${error.hint}"` : ''})`);
     }
 
     let results = (data || []) as Record<string, unknown>[];
@@ -1153,9 +1176,12 @@ class SupabaseModel {
 
     const { data, error } = await query.limit(1).single();
     if (error) {
+      // PGRST116 = "JSON object requested, 0 rows returned" — this is the
+      // expected "no match" case for findUnique, NOT an error. Return null.
       if (error.code === 'PGRST116') return null;
+      // Issue #1 Fix B: THROW on real errors instead of silently returning null.
       console.error(`[SupabaseDB] findUnique error on ${this.tableName}:`, error.message);
-      return null;
+      throw new Error(`[SupabaseDB] findUnique on ${this.tableName} failed: ${error.message} (code=${error.code})`);
     }
 
     if (include && data) {
@@ -1185,13 +1211,16 @@ class SupabaseModel {
 
     const { data, error } = await query.limit(1).single();
     if (error) {
-      if (error.code === 'PGRST116') return null; // No rows found — not an error
-      // Log detailed error context for production debugging
+      // PGRST116 = no rows found — this is a legitimate "no match" case, NOT
+      // an error. Return null for that code only.
+      if (error.code === 'PGRST116') return null;
+      // Issue #1 Fix B: THROW on real errors instead of silently returning null.
+      // Log detailed error context for production debugging.
       const whereStr = where ? JSON.stringify(where).substring(0, 200) : 'none';
       console.error(
         `[SupabaseDB] findFirst error on ${this.tableName}: code=${error.code} message="${error.message}" details="${error.details || ''}" hint="${error.hint || ''}" where=${whereStr}`
       );
-      return null;
+      throw new Error(`[SupabaseDB] findFirst on ${this.tableName} failed: ${error.message} (code=${error.code}${error.hint ? `, hint="${error.hint}"` : ''})`);
     }
 
     if (include && data) {
@@ -1911,7 +1940,10 @@ class SupabaseModel {
 
     // Other errors (network, malformed query, RLS, etc.)
     console.error(`[SupabaseDB] groupBy error on ${this.tableName}:`, error.message);
-    return [];
+    // Issue #1 Fix B: THROW on real errors instead of silently returning [].
+    // This surfaces malformed groupBy queries (e.g. bad column names) instead
+    // of masking them as empty aggregates.
+    throw new Error(`[SupabaseDB] groupBy on ${this.tableName} failed: ${error.message} (code=${error.code})`);
   }
 
   /**

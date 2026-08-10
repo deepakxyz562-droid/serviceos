@@ -23,6 +23,24 @@ import {
   Droplets,
   Hammer,
   Leaf,
+  Trees,
+  Snowflake,
+  Dog,
+  Sun,
+  BrickWall,
+  DoorOpen,
+  Sprout,
+  Car,
+  House,
+  HardHat,
+  Lock as LockIcon,
+  PaintRoller,
+  Grid3x3,
+  ShieldCheck,
+  Laptop,
+  Stethoscope,
+  Briefcase,
+  LayoutGrid,
 } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
@@ -36,6 +54,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { INDUSTRY_CATALOG } from '@/lib/industry-catalog';
 
 interface AuthPageProps {
   onAuthSuccess: (user: any, tenant: any) => void;
@@ -46,33 +65,39 @@ interface AuthPageProps {
 // Business auth tab state
 type BusinessTab = 'login' | 'register';
 
-const INDUSTRIES = [
-  { value: 'plumbing', label: 'Plumbing' },
-  { value: 'cleaning', label: 'Cleaning' },
-  { value: 'packers-movers', label: 'Packers & Movers' },
-  { value: 'window-cleaning', label: 'Window Cleaning' },
-  { value: 'pest-control', label: 'Pest Control' },
-  { value: 'hvac', label: 'HVAC' },
-  { value: 'electrical', label: 'Electrical' },
-  { value: 'landscaping', label: 'Landscaping' },
-  { value: 'courier', label: 'Courier' },
-  { value: 'home-repair', label: 'Home Repair' },
-  { value: 'salon-beauty', label: 'Salon & Beauty' },
-];
+// ── Industry list — derived from INDUSTRY_CATALOG (single source of truth) ──
+// Previously this was a hardcoded 11-entry list with broken IDs (packers-movers,
+// courier, home-repair, salon-beauty) that don't exist in INDUSTRY_CATALOG.
+// Now derived from the canonical catalog (31 industries as of 2026-08-10).
+// 'others' is excluded from the signup picker (it's a fallback, not a real choice).
+const SIGNUP_INDUSTRIES = INDUSTRY_CATALOG
+  .filter((i) => i.id !== 'others')
+  .map((i) => ({ value: i.id, label: i.name }));
 
-const INDUSTRY_ICONS = [
-  { icon: Wrench, label: 'Plumbing', color: 'text-emerald-300' },
-  { icon: Sparkles, label: 'Cleaning', color: 'text-teal-300' },
-  { icon: Truck, label: 'Movers', color: 'text-amber-300' },
-  { icon: Droplets, label: 'Windows', color: 'text-cyan-300' },
-  { icon: Bug, label: 'Pest Ctrl', color: 'text-red-300' },
-  { icon: Wind, label: 'HVAC', color: 'text-sky-300' },
-  { icon: Flame, label: 'Electrical', color: 'text-yellow-300' },
-  { icon: Leaf, label: 'Landscape', color: 'text-green-300' },
-  { icon: Package, label: 'Courier', color: 'text-orange-300' },
-  { icon: Hammer, label: 'Repair', color: 'text-lime-300' },
-  { icon: Scissors, label: 'Salon', color: 'text-pink-300' },
-];
+// Map catalog icon names → Lucide components for the visual icon strip.
+const ICON_MAP: Record<string, typeof Wrench> = {
+  Wrench, Sparkles, Wind, Flame, Leaf, Bug, Droplets, Hammer,
+  Scissors, Truck, Package, Trees, Snowflake, Dog, Sun, BrickWall,
+  DoorOpen, Sprout, Car, House, Building2, HardHat, LockIcon, PaintRoller,
+  Grid3x3, ShieldCheck, Laptop, Stethoscope, Briefcase, LayoutGrid,
+};
+
+const INDUSTRY_ICONS = SIGNUP_INDUSTRIES.slice(0, 11).map((i, idx) => {
+  const catalogEntry = INDUSTRY_CATALOG.find((c) => c.id === i.value);
+  const iconKey = catalogEntry?.icon || 'LayoutGrid';
+  const Icon = ICON_MAP[iconKey] || LayoutGrid;
+  // Color palette cycling for visual variety
+  const colors = [
+    'text-emerald-300', 'text-teal-300', 'text-amber-300', 'text-cyan-300',
+    'text-red-300', 'text-sky-300', 'text-yellow-300', 'text-green-300',
+    'text-orange-300', 'text-lime-300', 'text-pink-300',
+  ];
+  return {
+    icon: Icon,
+    label: i.label.length > 10 ? i.label.slice(0, 8) + '…' : i.label,
+    color: colors[idx % colors.length],
+  };
+});
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -382,7 +407,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
                     <SelectValue placeholder="Select your industry" />
                   </SelectTrigger>
                   <SelectContent>
-                    {INDUSTRIES.map((industry) => (
+                    {SIGNUP_INDUSTRIES.map((industry) => (
                       <SelectItem key={industry.value} value={industry.value}>{industry.label}</SelectItem>
                     ))}
                   </SelectContent>

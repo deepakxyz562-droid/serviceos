@@ -63,7 +63,7 @@ export function SignupModeSelector({
   async function handleChoose(mode: 'crm_trial' | 'listing_only') {
     setBusy(mode === 'crm_trial' ? 'crm' : 'listing');
     try {
-      const res = await authFetch('/api/tenants/me/signup-mode?XTransformPort=3000', {
+      const res = await authFetch('/api/tenants/me/signup-mode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode }),

@@ -751,7 +751,149 @@ export const INDUSTRY_CATALOG: Industry[] = [
   },
 
   // =========================================================================
-  // 25. OTHERS
+  // 26. CONCRETE
+  // =========================================================================
+  {
+    id: 'concrete',
+    name: 'Concrete',
+    icon: 'BrickWall',
+    emoji: '🧱',
+    description: 'Concrete pouring, stamping, finishing, driveways, patios, and foundations',
+    vertical: 'home-property',
+    hasSeoPage: false,
+    subServices: [
+      { slug: 'driveway-install', name: 'Concrete Driveway', description: 'New driveway pour and finish', category: 'Installation', defaultPrice: 4500, duration: '8h', icon: 'Truck' },
+      { slug: 'patio-install', name: 'Concrete Patio', description: 'Patio pour, stamp, and finish', category: 'Installation', defaultPrice: 3200, duration: '6h', icon: 'Grid2x2' },
+      { slug: 'foundation', name: 'Foundation Work', description: 'Slab and foundation pour', category: 'Foundation', defaultPrice: 8500, duration: '12h', icon: 'Layers' },
+      { slug: 'stamped-concrete', name: 'Stamped Concrete', description: 'Decorative stamped and colored concrete', category: 'Decorative', defaultPrice: 1800, duration: '6h', icon: 'Palette' },
+      { slug: 'concrete-repair', name: 'Concrete Repair', description: 'Crack fill, resurface, and patch', category: 'Repair', defaultPrice: 650, duration: '3h', icon: 'Hammer' },
+      { slug: 'concrete-leveling', name: 'Concrete Leveling', description: 'Mud jacking and slab leveling', category: 'Repair', defaultPrice: 1200, duration: '4h', icon: 'AlignHorizontalDistributeCenter' },
+    ],
+    jobTypes: ['Pour', 'Finishing', 'Repair', 'Leveling', 'Estimate'],
+    employeeRoles: ['Concrete Mason', 'Lead Finisher', 'Laborer', 'Form Carpenter'],
+  },
+
+  // =========================================================================
+  // 27. GARAGE DOOR
+  // =========================================================================
+  {
+    id: 'garage-door',
+    name: 'Garage Door',
+    icon: 'DoorOpen',
+    emoji: '🚪',
+    description: 'Garage door installation, spring replacement, opener repair, and maintenance',
+    vertical: 'home-property',
+    hasSeoPage: false,
+    subServices: [
+      { slug: 'garage-door-install', name: 'Garage Door Install', description: 'New garage door installation', category: 'Installation', defaultPrice: 1200, duration: '4h', icon: 'DoorOpen' },
+      { slug: 'spring-replacement', name: 'Spring Replacement', description: 'Torsion and extension spring replace', category: 'Repair', defaultPrice: 280, duration: '2h', icon: 'RefreshCw' },
+      { slug: 'opener-repair', name: 'Opener Repair', description: 'Garage door opener fix and install', category: 'Opener', defaultPrice: 220, duration: '2h', icon: 'Settings' },
+      { slug: 'cable-replacement', name: 'Cable Replacement', description: 'Lift cable and drum replacement', category: 'Repair', defaultPrice: 180, duration: '1h 30m', icon: 'Cable' },
+      { slug: 'panel-replacement', name: 'Panel Replacement', description: 'Damaged panel swap', category: 'Repair', defaultPrice: 320, duration: '2h', icon: 'RectangleVertical' },
+      { slug: 'garage-door-maintenance', name: 'Maintenance Tune-Up', description: 'Lube, balance, and safety check', category: 'Maintenance', defaultPrice: 120, duration: '1h', icon: 'Wrench' },
+    ],
+    jobTypes: ['Install', 'Repair', 'Maintenance', 'Tune-Up', 'Estimate'],
+    employeeRoles: ['Garage Door Tech', 'Lead Tech', 'Installer'],
+  },
+
+  // =========================================================================
+  // 28. LAWN CARE
+  // =========================================================================
+  // Note: 'lawn-care' is aliased to 'landscaping' in INDUSTRY_ID_ALIASES
+  // for back-compat with legacy Tenant.industry values. This entry makes
+  // lawn-care a first-class industry for the dedicated SEO route folder
+  // (/lawn-care-contractors/) while keeping the alias for legacy data.
+  {
+    id: 'lawn-care',
+    name: 'Lawn Care',
+    icon: 'Sprout',
+    emoji: '🌱',
+    description: 'Lawn mowing, fertilization, aeration, weed control, and seasonal maintenance',
+    vertical: 'outdoor-utility',
+    hasSeoPage: false,
+    subServices: [
+      { slug: 'lawn-mowing', name: 'Lawn Mowing', description: 'Weekly/biweekly mowing and edging', category: 'Maintenance', defaultPrice: 45, duration: '45m', icon: 'Scissors' },
+      { slug: 'fertilization', name: 'Fertilization', description: 'Lawn fertilizer and weed control program', category: 'Treatment', defaultPrice: 85, duration: '1h', icon: 'FlaskConical' },
+      { slug: 'aeration', name: 'Aeration', description: 'Core aeration and overseeding', category: 'Treatment', defaultPrice: 220, duration: '2h', icon: 'Wind' },
+      { slug: 'weed-control', name: 'Weed Control', description: 'Pre/post-emergent weed treatment', category: 'Treatment', defaultPrice: 75, duration: '1h', icon: 'Bug' },
+      { slug: 'lawn-renovation', name: 'Lawn Renovation', description: 'Full lawn reseed and topsoil', category: 'Renovation', defaultPrice: 850, duration: '6h', icon: 'Leaf' },
+      { slug: 'leaf-removal', name: 'Leaf Removal', description: 'Fall leaf cleanup and haul', category: 'Seasonal', defaultPrice: 180, duration: '2h', icon: 'Trees' },
+    ],
+    jobTypes: ['Maintenance', 'Treatment', 'Renovation', 'Seasonal', 'Estimate'],
+    employeeRoles: ['Lawn Care Tech', 'Crew Lead', 'Spray Tech'],
+  },
+
+  // =========================================================================
+  // 29. PET SERVICES
+  // =========================================================================
+  {
+    id: 'pet-services',
+    name: 'Pet Services',
+    icon: 'Dog',
+    emoji: '🐕',
+    description: 'Pet grooming, sitting, walking, boarding, and mobile pet care',
+    vertical: 'health-personal',
+    hasSeoPage: false,
+    subServices: [
+      { slug: 'pet-grooming', name: 'Pet Grooming', description: 'Bath, haircut, nails, and ear cleaning', category: 'Grooming', defaultPrice: 75, duration: '1h 30m', icon: 'Scissors' },
+      { slug: 'mobile-grooming', name: 'Mobile Grooming', description: 'At-home grooming service', category: 'Grooming', defaultPrice: 120, duration: '1h 30m', icon: 'Truck' },
+      { slug: 'pet-sitting', name: 'Pet Sitting', description: 'In-home pet sitting and check-ins', category: 'Sitting', defaultPrice: 45, duration: '1h', icon: 'Home' },
+      { slug: 'dog-walking', name: 'Dog Walking', description: 'Daily or on-demand dog walks', category: 'Walking', defaultPrice: 25, duration: '30m', icon: 'Footprints' },
+      { slug: 'pet-boarding', name: 'Pet Boarding', description: 'Overnight boarding in facility', category: 'Boarding', defaultPrice: 55, duration: '24h', icon: 'Bed' },
+      { slug: 'pet-taxi', name: 'Pet Taxi', description: 'Vet and grooming transport', category: 'Transport', defaultPrice: 40, duration: '1h', icon: 'Car' },
+    ],
+    jobTypes: ['Grooming', 'Sitting', 'Walking', 'Boarding', 'Transport'],
+    employeeRoles: ['Groomer', 'Pet Sitter', 'Dog Walker', 'Mobile Groomer'],
+  },
+
+  // =========================================================================
+  // 30. SNOW REMOVAL
+  // =========================================================================
+  {
+    id: 'snow-removal',
+    name: 'Snow Removal',
+    icon: 'Snowflake',
+    emoji: '❄️',
+    description: 'Snow plowing, shoveling, de-icing, and seasonal snow contracts',
+    vertical: 'outdoor-utility',
+    hasSeoPage: false,
+    subServices: [
+      { slug: 'driveway-plowing', name: 'Driveway Plowing', description: 'Residential driveway snow plow', category: 'Residential', defaultPrice: 65, duration: '30m', icon: 'Truck' },
+      { slug: 'commercial-plowing', name: 'Commercial Plowing', description: 'Parking lot and commercial plow', category: 'Commercial', defaultPrice: 350, duration: '3h', icon: 'Building2' },
+      { slug: 'sidewalk-shoveling', name: 'Sidewalk Shoveling', description: 'Hand shovel walkways and steps', category: 'Residential', defaultPrice: 45, duration: '45m', icon: 'Footprints' },
+      { slug: 'de-icing', name: 'De-Icing', description: 'Salt and de-icer application', category: 'Treatment', defaultPrice: 55, duration: '30m', icon: 'Snowflake' },
+      { slug: 'roof-snow-removal', name: 'Roof Snow Removal', description: 'Roof snow and ice dam removal', category: 'Roof', defaultPrice: 450, duration: '4h', icon: 'TriangleAlert' },
+      { slug: 'seasonal-contract', name: 'Seasonal Contract', description: 'Full-season snow removal contract', category: 'Contract', defaultPrice: 1200, duration: 'Season', icon: 'Calendar' },
+    ],
+    jobTypes: ['Plowing', 'Shoveling', 'De-Icing', 'Roof Removal', 'Contract'],
+    employeeRoles: ['Snow Plow Operator', 'Shoveler', 'Crew Lead'],
+  },
+
+  // =========================================================================
+  // 31. TREE CARE
+  // =========================================================================
+  {
+    id: 'tree-care',
+    name: 'Tree Care',
+    icon: 'Trees',
+    emoji: '🌳',
+    description: 'Tree removal, trimming, pruning, stump grinding, and arborist services',
+    vertical: 'outdoor-utility',
+    hasSeoPage: false,
+    subServices: [
+      { slug: 'tree-removal', name: 'Tree Removal', description: 'Full tree take-down and haul', category: 'Removal', defaultPrice: 1200, duration: '6h', icon: 'Trees' },
+      { slug: 'tree-trimming', name: 'Tree Trimming', description: 'Canopy trim and shaping', category: 'Trimming', defaultPrice: 380, duration: '3h', icon: 'Scissors' },
+      { slug: 'tree-pruning', name: 'Tree Pruning', description: 'Structural and health pruning', category: 'Pruning', defaultPrice: 320, duration: '2h 30m', icon: 'Leaf' },
+      { slug: 'stump-grinding', name: 'Stump Grinding', description: 'Stump grind and removal', category: 'Removal', defaultPrice: 280, duration: '2h', icon: 'Circle' },
+      { slug: 'emergency-tree-service', name: 'Emergency Tree Service', description: 'Storm damage and hazardous tree', category: 'Emergency', defaultPrice: 1800, duration: '4h', icon: 'TriangleAlert' },
+      { slug: 'arborist-consultation', name: 'Arborist Consultation', description: 'Tree health assessment and report', category: 'Consultation', defaultPrice: 180, duration: '1h 30m', icon: 'ClipboardCheck' },
+    ],
+    jobTypes: ['Removal', 'Trimming', 'Pruning', 'Stump Grinding', 'Emergency', 'Consultation'],
+    employeeRoles: ['Arborist', 'Tree Climber', 'Groundsman', 'Crew Lead'],
+  },
+
+  // =========================================================================
+  // 32. OTHERS
   // =========================================================================
   {
     id: 'others',

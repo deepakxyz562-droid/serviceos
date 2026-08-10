@@ -21,6 +21,7 @@ import {
   Globe,
   Mail,
   Navigation,
+  ArrowLeft,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -438,14 +439,15 @@ export default async function PublicBusinessHubPage({
   const pluralIndustrySlug = mapIndustryToPluralSlug(business.industry)
   const industryBrowseUrl = `/${pluralIndustrySlug}`
   const cityBrowseUrl = `/${pluralIndustrySlug}/${business.cityUrlSlug}`
-  // ── Back-link preserves city + country params ──────────────────────────
-  // When the user clicks "Home" in the breadcrumb, we link back to
-  // /marketplace WITH the business's city + country as URL params. This
-  // ensures the SSR page fetches with the right location context, and
-  // the Zustand persist middleware restores the remaining filters (sort,
-  // trust, radius, etc.) from localStorage. Without this, the back-link
-  // would drop all filters and show the unfiltered marketplace.
-  const marketplaceBackUrl = `/marketplace?city=${encodeURIComponent(business.city || '')}&country=${encodeURIComponent(business.country || '')}`
+  // ── Back-link targets /marketplace WITHOUT city/country params ────────
+  // Previously this passed the business's city + country as URL params, which
+  // forcibly re-applied a city filter even when the user had explicitly
+  // cleared it (Issue #2 filter persistence bug). Now we link to a plain
+  // /marketplace and let the Zustand persist middleware (localStorage key
+  // 'marketplace-filters') restore the user's actual filter state — including
+  // the cleared city. The country is still auto-detected via GeoIP on mount
+  // by MarketplaceBrowser, so country scoping is preserved.
+  const marketplaceBackUrl = '/marketplace'
   const breadcrumbItems = [
     { name: 'Home', url: marketplaceBackUrl },
     { name: business.industry || 'Service', url: industryBrowseUrl },
@@ -476,7 +478,7 @@ export default async function PublicBusinessHubPage({
         {/* Hero — passes business data; HeroActions renders Call/Website/Directions
             buttons for unclaimed listings only (claimed listings get the full
             booking panel in the right sidebar). */}
-        <PublicBusinessHero business={business} services={services.length} />
+        <PublicBusinessHero business={business} services={services.length} backHref={marketplaceBackUrl} />
 
         {/* Compact trust badges — replaces the always-4-badge strip. Shows a
             single "Not yet verified" summary when <3 badges confirmed (the
@@ -1121,15 +1123,33 @@ export default async function PublicBusinessHubPage({
 function PublicBusinessHero({
   business,
   services,
+  backHref,
 }: {
   business: PublicBusinessData
   services: number
+  backHref?: string
 }) {
   if (!business) return null
   return (
     <section className="border-b bg-gradient-to-b from-emerald-50/60 to-background dark:from-emerald-950/20">
       {/* Cover image removed per user request */}
       <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+        {/* Back to marketplace — server-rendered Link (Option A) matching the
+            blog detail page pattern (src/app/blog/[slug]/page.tsx:102-109).
+            Placed at the top of the hero so it's the first interactive element
+            users see. Uses ArrowLeft icon + muted text that turns emerald on
+            hover. The breadcrumb bar above already links to /marketplace (and
+            to industry/city browse pages), but this prominent button is more
+            discoverable than the small muted breadcrumb text. */}
+        {backHref && (
+          <Link
+            href={backHref}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 mb-6"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to marketplace
+          </Link>
+        )}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
           {/* Logo — hidden entirely when null (the flex container's
               `items-start sm:items-center` keeps the h1 vertically centered

@@ -57,6 +57,13 @@ const INDUSTRY_PLURAL_DISPLAY: Record<string, string> = {
   'general-contractor': 'Contractors',
   construction: 'Contractors',
   locksmith: 'Locksmiths',
+  // ── Added 2026-08-10: 6 industries with dedicated SEO contractor folders ──
+  concrete: 'Concrete Contractors',
+  'garage-door': 'Garage Door Contractors',
+  'lawn-care': 'Lawn Care Services',
+  'pet-services': 'Pet Services',
+  'snow-removal': 'Snow Removal Services',
+  'tree-care': 'Tree Care Services',
 };
 
 function getIndustryPluralDisplayName(industryId: string): string {

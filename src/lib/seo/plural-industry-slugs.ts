@@ -43,6 +43,13 @@ export const INDUSTRY_TO_PLURAL_SLUG: Record<string, string> = {
   'general-contractor': 'contractors',
   construction: 'contractors',
   locksmith: 'locksmiths',
+  // ── Added 2026-08-10: 6 industries with dedicated SEO contractor folders ──
+  concrete: 'concrete-contractors',
+  'garage-door': 'garage-door-contractors',
+  'lawn-care': 'lawn-care-contractors',
+  'pet-services': 'pet-services-contractors',
+  'snow-removal': 'snow-removal-contractors',
+  'tree-care': 'tree-care-contractors',
 };
 
 // Reverse map: plural URL slug → canonical industry ID

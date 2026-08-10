@@ -215,6 +215,8 @@ model Tenant {
   // Marketplace claim requests — a tenant can have many claim attempts
   // (only one will be approved; the rest are rejected).
   claimRequests       ClaimRequest[]
+  // Customers (tenant-scoped — mirrors Lead/Job/Invoice tenant scoping)
+  customers           Customer[]
 
   @@index([slug])
   @@index([plan])
@@ -1375,6 +1377,10 @@ model Customer {
   whatsappId         String?
   preferredCurrency  String   @default("USD")  // Customer's preferred display currency
   workspaceId        String?
+  // tenantId is the canonical tenant scope for Customer (mirrors Lead/Job/Invoice).
+  // workspaceId is kept for back-compat (Customer → Workspace → Tenant indirection).
+  // New code should prefer tenantId; existing workspace: { tenantId } queries still work.
+  tenantId           String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -1396,6 +1402,7 @@ model Customer {
   unsubscribedAt              DateTime?
 
   workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
   jobs      Job[]
   invoices  Invoice[]
   recurringInvoices RecurringInvoice[]
@@ -1414,6 +1421,7 @@ model Customer {
   @@index([phone])
   @@index([email])
   @@index([workspaceId])
+  @@index([tenantId])
   @@index([portalEnabled])
   @@index([invitationStatus])
 }

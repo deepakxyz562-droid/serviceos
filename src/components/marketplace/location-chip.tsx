@@ -90,6 +90,7 @@ export function LocationChip() {
   const setUserLocation = useMarketplaceSearch((s) => s.setUserLocation);
   const setCityInput = useMarketplaceSearch((s) => s.setCityInput);
   const setCityFilter = useMarketplaceSearch((s) => s.setCityFilter);
+  const setUserExplicitlyClearedCity = useMarketplaceSearch((s) => s.setUserExplicitlyClearedCity);
   const countryFilter = useMarketplaceSearch((s) => s.countryFilter);
   const setCountryFilter = useMarketplaceSearch((s) => s.setCountryFilter);
 
@@ -253,8 +254,11 @@ export function LocationChip() {
     setCountryFilter(code);
     setCountryCode(code);
     // Close the popover so the user sees the chip update immediately.
+    // User explicitly picked a location via GPS — clear the cleared flag so
+    // auto-detect can resume on future mounts (Issue #2).
+    setUserExplicitlyClearedCity(false);
     setOpen(false);
-  }, [requestLocation, setCityInput, setUserLocation, setCountryFilter, countryCode]);
+  }, [requestLocation, setCityInput, setUserLocation, setCountryFilter, countryCode, setUserExplicitlyClearedCity]);
 
   const handlePickCity = React.useCallback(
     (cityName: string) => {
@@ -278,9 +282,12 @@ export function LocationChip() {
         lowAccuracy: false,
       });
       setCityInput(city.city);
+      // User explicitly picked a city — clear the cleared flag so auto-detect
+      // can resume on future mounts (Issue #2).
+      setUserExplicitlyClearedCity(false);
       setOpen(false);
     },
-    [cities, setCityInput, setUserLocation, setCountryFilter, countryCode]
+    [cities, setCityInput, setUserLocation, setCountryFilter, countryCode, setUserExplicitlyClearedCity]
   );
 
   const handleClear = React.useCallback(() => {
@@ -294,10 +301,13 @@ export function LocationChip() {
     // what makes the chip + grid + sidebar all snap to "all data in this
     // country" the instant the user clicks "Clear location".
     setCityFilter('');
+    // Mark that the user has explicitly cleared the city — prevents the GPS
+    // auto-detect from re-applying it on the next mount (Issue #2).
+    setUserExplicitlyClearedCity(true);
     clearGpsLocation();
     setGeoError(null);
     setOpen(false);
-  }, [clearGpsLocation, setCityInput, setCityFilter, setUserLocation]);
+  }, [clearGpsLocation, setCityInput, setCityFilter, setUserLocation, setUserExplicitlyClearedCity]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

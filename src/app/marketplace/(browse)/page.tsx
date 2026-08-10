@@ -557,7 +557,17 @@ export default async function MarketplaceBrowsePage({
                   industry: industryFilter,
                   city: params.city ?? null,
                   search: params.search ?? null,
-                  country: params.country ?? null,
+                  // Issue #1 Fix G: align initialFilters.country with the value
+                  // the SSR actually fetched with (detectedCountry from GeoIP).
+                  // Previously this was `params.country ?? null`, which is null
+                  // on a plain /marketplace visit. But MarketplaceBrowser seeds
+                  // countryFilter from detectedCountry on mount, so after
+                  // hydration countryFilter='US' (or whatever GeoIP returned)
+                  // didn't match initialFilters.country=null → matchesInitial=false
+                  // → SSR-fetched page 1 was thrown away and re-fetched client-side
+                  // (wasteful round-trip + skeleton flash). Normalizing to uppercase
+                  // matches the GeoIP format so the initial comparison succeeds.
+                  country: params.country?.toUpperCase() ?? detectedCountry ?? null,
                 }}
               />
             )}

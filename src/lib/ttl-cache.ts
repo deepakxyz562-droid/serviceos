@@ -56,16 +56,29 @@ export function ttlCacheSet<T>(key: string, value: T, ttlMs: number): void {
 /**
  * Get-or-compute helper. Returns the cached value if fresh, otherwise calls
  * `compute()`, caches the result with the given TTL, and returns it.
+ *
+ * Issue #1 Fix E: the optional `shouldCache` predicate lets callers skip
+ * caching for results that are likely transient failures (e.g. an empty
+ * page-2+ response from a PostgREST timeout). Without this, a transient
+ * empty result would be cached for the full TTL, blocking retries.
+ *
+ * Example:
+ *   await ttlCacheWrap(key, 30_000, compute, (result) => result.items.length > 0);
  */
 export async function ttlCacheWrap<T>(
   key: string,
   ttlMs: number,
   compute: () => Promise<T>,
+  shouldCache?: (value: T) => boolean,
 ): Promise<T> {
   const cached = ttlCacheGet<T>(key);
   if (cached !== undefined) return cached;
   const fresh = await compute();
-  ttlCacheSet(key, fresh, ttlMs);
+  // Only cache the result if the caller's predicate (if any) approves.
+  // Default behavior (no predicate) caches everything — preserves backward compat.
+  if (!shouldCache || shouldCache(fresh)) {
+    ttlCacheSet(key, fresh, ttlMs);
+  }
   return fresh;
 }
 

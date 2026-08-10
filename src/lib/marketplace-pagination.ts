@@ -566,16 +566,36 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
   //   (rating, reviewCount, id) < (cursor.r, cursor.rc, cursor.id)
   // via three OR clauses (rating < r) OR (rating = r AND reviewCount < rc) OR
   // (rating = r AND reviewCount = rc AND id < id).
+  //
+  // Issue #1 Fix C: preserve any existing OR/AND groups from the base `where`
+  // (set by buildProviderWhereClause when the user has a city OR search filter
+  // active). Previously the literal spread `{ ...where, OR: [keysetClauses] }`
+  // OVERWROTE where.OR with the keyset clauses, silently dropping the user's
+  // city/search filter on page 2+. Now we wrap BOTH the existing OR (if any)
+  // AND the keyset clauses inside an AND array so neither overwrites the other.
   const cursor = opts.cursor;
-  const keysetWhere = {
+  const keysetWhere: Record<string, unknown> = {
     ...where,
     id: { notIn: Array.from(featuredIds) },
-    OR: [
-      { rating: { lt: cursor.r } },
-      { rating: cursor.r, reviewCount: { lt: cursor.rc } },
-      { rating: cursor.r, reviewCount: cursor.rc, id: { lt: cursor.id } },
+    AND: [
+      // Preserve any existing AND groups from the base where clause.
+      ...(Array.isArray(where.AND) ? (where.AND as Record<string, unknown>[]) : []),
+      // Wrap any existing top-level OR (city/search filter) so it isn't
+      // overwritten by the keyset OR below.
+      ...(where.OR ? [{ OR: where.OR }] : []),
+      // The keyset pagination clauses — always wrapped in their own OR group.
+      {
+        OR: [
+          { rating: { lt: cursor.r } },
+          { rating: cursor.r, reviewCount: { lt: cursor.rc } },
+          { rating: cursor.r, reviewCount: cursor.rc, id: { lt: cursor.id } },
+        ],
+      },
     ],
   };
+  // Remove the now-wrapped top-level OR to avoid PostgREST seeing both the
+  // AND-wrapped copy AND the original (which would double-apply the filter).
+  delete keysetWhere.OR;
 
   const tenants = await db.tenant.findMany({
     where: keysetWhere,

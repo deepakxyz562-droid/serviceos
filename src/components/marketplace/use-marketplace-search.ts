@@ -194,6 +194,21 @@ interface MarketplaceSearchState {
   minRating: number;
   /** Claimed status filter ('all' | 'claimed' | 'unclaimed'). */
   claimedFilter: 'all' | 'claimed' | 'unclaimed';
+  /**
+   * True when the user has EXPLICITLY cleared the city filter (via the
+   * LocationChip's "Clear location" button, the active-filter chip's X, or
+   * by deleting all text in the city input). Persisted so it survives
+   * navigation (browse → detail → back).
+   *
+   * This flag prevents the GPS auto-detect effect in MarketplaceBrowser from
+   * re-applying a city filter the user just cleared. Without it, the
+   * mount-once auto-detect sees `cityFilter === ''`, treats it as "user hasn't
+   * picked a city yet", and silently calls `setCityFilter(detectedCity)` —
+   * overwriting the user's cleared state (Issue #2 filter persistence bug).
+   *
+   * Reset to false whenever the user picks a city (GPS, dropdown, or typing).
+   */
+  userExplicitlyClearedCity: boolean;
   setSearchInput: (v: string) => void;
   setCityInput: (v: string) => void;
   /** Set the debounced city filter (called by MarketplaceBrowser's debounce effect). */
@@ -210,6 +225,8 @@ interface MarketplaceSearchState {
   setRadiusKm: (v: number) => void;
   setMinRating: (v: number) => void;
   setClaimedFilter: (v: 'all' | 'claimed' | 'unclaimed') => void;
+  /** Mark that the user has explicitly cleared the city filter (or picked a new one). */
+  setUserExplicitlyClearedCity: (v: boolean) => void;
   setCountryFilter: (code: string | null) => void;
   setUserLocation: (loc: MarketplaceUserLocation | null) => void;
   setFilteredProviders: (list: ProviderListItem[] | null) => void;
@@ -262,6 +279,8 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>()(
       radiusKm: 25,
       minRating: 0,
       claimedFilter: 'all',
+      // Default false — the user hasn't cleared anything on first visit.
+      userExplicitlyClearedCity: false,
       setSearchInput: (v) => set({ searchInput: v }),
       setCityInput: (v) => set({ cityInput: v }),
       setCityFilter: (v) => set({ cityFilter: v }),
@@ -284,6 +303,7 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>()(
       setRadiusKm: (v) => set({ radiusKm: v }),
       setMinRating: (v) => set({ minRating: v }),
       setClaimedFilter: (v) => set({ claimedFilter: v }),
+      setUserExplicitlyClearedCity: (v) => set({ userExplicitlyClearedCity: v }),
       setCountryFilter: (code) => set({ countryFilter: code }),
       setUserLocation: (loc) => set({ userLocation: loc }),
       setFilteredProviders: (list) => set({ filteredProviders: list }),
@@ -316,6 +336,8 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>()(
         radiusKm: state.radiusKm,
         minRating: state.minRating,
         claimedFilter: state.claimedFilter,
+        // Persist the cleared-city flag so it survives browse → detail → back nav.
+        userExplicitlyClearedCity: state.userExplicitlyClearedCity,
         // Only persist GPS/manual locations — IP locations are re-detected.
         userLocation: state.userLocation && !state.userLocation.lowAccuracy
           ? state.userLocation

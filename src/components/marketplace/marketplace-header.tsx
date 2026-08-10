@@ -89,6 +89,17 @@ export function MarketplaceHeader({
   const setSearchInput = useMarketplaceSearch((s) => s.setSearchInput);
   const cityInput = useMarketplaceSearch((s) => s.cityInput);
   const setCityInput = useMarketplaceSearch((s) => s.setCityInput);
+  // Issue #2: when the user types in the city input, clear the
+  // userExplicitlyClearedCity flag (they're now actively picking a city).
+  // When they delete all text, set it to true (they're clearing).
+  const setUserExplicitlyClearedCity = useMarketplaceSearch((s) => s.setUserExplicitlyClearedCity);
+  const handleCityChange = React.useCallback(
+    (v: string) => {
+      setCityInput(v);
+      setUserExplicitlyClearedCity(v === '');
+    },
+    [setCityInput, setUserExplicitlyClearedCity]
+  );
 
   // Seed store from URL params on first mount (deep-link support).
   // Runs ONCE — a `didSeedRef` guard survives React StrictMode's double-invoke.
@@ -128,7 +139,7 @@ export function MarketplaceHeader({
                 searchValue={searchInput}
                 onSearchChange={setSearchInput}
                 cityValue={cityInput}
-                onCityChange={setCityInput}
+                onCityChange={handleCityChange}
                 navigateOnSearch
               />
             </form>
@@ -160,7 +171,7 @@ export function MarketplaceHeader({
             searchValue={searchInput}
             onSearchChange={setSearchInput}
             cityValue={cityInput}
-            onCityChange={setCityInput}
+            onCityChange={handleCityChange}
           />
           <HeaderAction />
         </div>

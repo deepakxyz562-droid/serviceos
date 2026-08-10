@@ -40,6 +40,7 @@ import {
   MapPin,
   Search,
   ChevronRight,
+  ChevronDown,
 } from 'lucide-react';
 import { ProviderCard } from './provider-card';
 import { useMarketplaceSearch, type MarketplaceSortKey } from './use-marketplace-search';
@@ -195,6 +196,15 @@ export function MarketplaceBrowser({
   const setMinRating = useMarketplaceSearch((s) => s.setMinRating);
   const claimedFilter = useMarketplaceSearch((s) => s.claimedFilter);
   const setClaimedFilter = useMarketplaceSearch((s) => s.setClaimedFilter);
+
+  // ── userExplicitlyClearedCity flag (Issue #2 filter persistence) ─────
+  // True when the user has EXPLICITLY cleared the city filter. The mount-once
+  // GPS auto-detect effect below reads this to decide whether to auto-set
+  // cityFilter from a detected location. Without this guard, navigating
+  // browse → detail → back would re-trigger auto-detect and silently re-apply
+  // the city the user just cleared (because the component remounts and the
+  // auto-detect sees `cityFilter === ''` as "user hasn't picked yet").
+  const setUserExplicitlyClearedCity = useMarketplaceSearch((s) => s.setUserExplicitlyClearedCity);
 
   // ── Country filter (store-driven, not a frozen server prop) ──────────
   // The server's GeoIP-detected country is passed as `detectedCountry` and
@@ -445,9 +455,13 @@ export function MarketplaceBrowser({
               });
               // GPS (high accuracy) — sync cityFilter so the API does a
               // DB-level city-substring filter. IP cities are too unreliable.
+              // GUARD (Issue #2): skip if the user has explicitly cleared the
+              // city filter — otherwise navigating back from a detail page
+              // would re-trigger this and silently re-apply the cleared city.
               if (parsed.source === 'gps' && parsed.city) {
                 const current = useMarketplaceSearch.getState().cityFilter;
-                if (!current) setCityFilter(parsed.city);
+                const cleared = useMarketplaceSearch.getState().userExplicitlyClearedCity;
+                if (!current && !cleared) setCityFilter(parsed.city);
               }
               return;
             }
@@ -539,9 +553,13 @@ export function MarketplaceBrowser({
             // GPS is high-accuracy — sync the city filter so the API does
             // a proper DB-level city-substring filter (not just client-side
             // ranking). Only set if user hasn't already typed a city.
+            // GUARD (Issue #2): also skip if the user has explicitly cleared
+            // the city filter — otherwise a late-resolving GPS callback after
+            // browse → detail → back would silently re-apply the cleared city.
             if (city) {
               const current = useMarketplaceSearch.getState().cityFilter;
-              if (!current) setCityFilter(city);
+              const cleared = useMarketplaceSearch.getState().userExplicitlyClearedCity;
+              if (!current && !cleared) setCityFilter(city);
             }
           } catch {}
         },
@@ -1010,6 +1028,9 @@ export function MarketplaceBrowser({
       onClear: () => {
         setCityInput('');
         setCityFilter('');
+        // Mark that the user has explicitly cleared the city — prevents the
+        // GPS auto-detect from re-applying it on the next mount (Issue #2).
+        setUserExplicitlyClearedCity(true);
       },
     });
   if (verticalFilter) {
@@ -1037,6 +1058,9 @@ export function MarketplaceBrowser({
     setSearchQuery('');
     setCityInput('');
     setCityFilter('');
+    // Mark that the user has explicitly cleared the city — prevents the GPS
+    // auto-detect from re-applying it on the next mount (Issue #2).
+    setUserExplicitlyClearedCity(true);
     // Also clear userLocation so the topbar LocationChip's label resets to
     // "Location" (the chip prioritizes userLocation.city over cityInput).
     // Without this, clearAll clears the city FILTER but the chip still shows
@@ -1480,6 +1504,27 @@ export function MarketplaceBrowser({
           )
         ) : null}
       </div>
+
+      {/* ── "Load more" button fallback (Issue #1 Fix F) ─────────────────── */}
+      {/* IntersectionObserver doesn't always fire reliably — some mobile
+          browsers, accessibility tools, or short pages (where the sentinel
+          never enters the rootMargin) can leave the user stranded with no
+          way to load page 2+. This explicit button gives them a manual
+          fallback that always works. Hidden when: loading, no more pages,
+          or currently filtering (the observer is torn down during filtering
+          and a manual click would conflict with the in-flight refetch). */}
+      {hasMore && !filtering && !loadingMore ? (
+        <div className="mt-2 flex justify-center pb-4">
+          <button
+            type="button"
+            onClick={() => fetchNextPageRef.current()}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+          >
+            <ChevronDown className="h-4 w-4" aria-hidden />
+            Load more providers
+          </button>
+        </div>
+      ) : null}
 
       {/* ── Helpful hint when there are results but no city filter ──────── */}
       {filtered.length > 0 && !cityFilter ? (

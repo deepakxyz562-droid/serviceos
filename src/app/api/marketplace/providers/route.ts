@@ -222,6 +222,15 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
           featuredTenantIds: featuredIds,
           mapItem: (t) => mapTenantToProviderListItem(t, featuredMap),
         });
+      }, (result) => {
+        // Issue #1 Fix E: don't cache empty page-2+ results.
+        // An empty result on page 1 (no cursor) is legitimate (no matching
+        // providers) and safe to cache. An empty result on page 2+ (cursor
+        // present) is suspicious — it could be a transient PostgREST error
+        // that was masked as an empty array (before Fix B made adapter
+        // errors throw). Skip caching so the next request retries fresh.
+        if (!cursor) return true; // page 1 — always cache (even if empty)
+        return result.items.length > 0; // page 2+ — only cache non-empty
       });
 
       // Vertical filter is now applied at SQL level (buildProviderWhereClause
