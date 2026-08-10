@@ -7,6 +7,13 @@ import {
   computeCardType,
   fetchFeaturedListingsMap,
 } from "@/lib/marketplace-featured";
+import { computeCityPageTierFromProviders } from "@/lib/marketplace/city-page-tier";
+import {
+  fetchNearbyCitiesWithProviders,
+  fetchServiceAreaProviders,
+  type NearbyCityEntry,
+  type ServiceAreaProvider,
+} from "@/lib/marketplace/city-page-fallbacks";
 import type { ProviderListItem } from "@/components/marketplace/types";
 
 const CONTRACTORS_PATH = "/roofing-contractors";
@@ -63,6 +70,17 @@ export async function generateMetadata({
   // findMany WHERE clause so the count reflects exactly what would render.
   // Wrapped in try/catch — default to 0 on error so a DB failure fails safe
   // to noindex (empty city page) rather than risk indexing thin content.
+  //
+  // Tier-aware indexing (Phase 3c): a page is indexable only if it has
+  // enough providers to be useful to searchers. The city-page-tier model
+  // has 4 tiers (EMPTY / SPARSE / READY / STRONG); only READY+STRONG
+  // should be indexed.
+  //   - 0 providers        -> EMPTY  -> noindex, follow
+  //   - 1-4 providers      -> SPARSE -> noindex, follow (too thin to index)
+  //   - 5+ providers       -> READY or STRONG -> index (the page body
+  //                         computes the exact tier for rendering, but
+  //                         for the robots meta the count threshold is
+  //                         sufficient)
   let providerCount = 0;
   try {
     providerCount = await db.tenant.count({
@@ -102,7 +120,7 @@ export async function generateMetadata({
     title: `${cfg.name} Contractors in ${city} | Fieseros Marketplace`,
     description: `Find verified ${cfg.contractorNoun} in ${city}. Compare reviews, request quotes, and book services on the Fieseros Marketplace.`,
     alternates: { canonical: `https://fieseros.com${cfg.contractorsBasePath}/${citySlug}` },
-    robots: providerCount > 0
+    robots: providerCount >= 5
       ? { index: true, follow: true }
       : { index: false, follow: true },
   };
@@ -263,12 +281,66 @@ export default async function Page({
     } satisfies ProviderListItem;
   });
 
+  // ── Tier-aware indexing + fallbacks (Phase 3c) ────────────────────────
+  // Compute the city-page tier using the full quality-provider + phone
+  // signals. The metadata path uses a cheaper count-only check; here we
+  // compute the precise tier to drive fallback rendering decisions.
+  let isKnownCity = false;
+  try {
+    const dirLoc = await db.directoryLocation.findFirst({
+      where: { citySlug, isActive: true },
+      select: { id: true },
+    });
+    isKnownCity = !!dirLoc;
+  } catch {
+    /* ignore — default false */
+  }
+
+  const tierResult = computeCityPageTierFromProviders(providers, isKnownCity);
+
+  // Fallbacks (nearby cities + service-area providers) are only fetched
+  // for EMPTY/SPARSE pages. READY/STRONG pages are rich enough to stand
+  // alone — fetching fallbacks would add DB load without value.
+  let nearbyCities: NearbyCityEntry[] = [];
+  let serviceAreaProviders: ServiceAreaProvider[] = [];
+  if (tierResult.tier === "EMPTY" || tierResult.tier === "SPARSE") {
+    const citySlugForFallback = slugifyCity(city);
+    const excludeCityNames = [
+      city,
+      ...(providers.map((p) => p.city).filter(Boolean) as string[]),
+    ];
+    try {
+      [nearbyCities, serviceAreaProviders] = await Promise.all([
+        fetchNearbyCitiesWithProviders(cfg.industryId, citySlugForFallback, {
+          usePluralPath: false,
+        }),
+        fetchServiceAreaProviders(
+          cfg.industryId,
+          citySlugForFallback,
+          excludeCityNames,
+        ),
+      ]);
+    } catch (err) {
+      console.error("[contractors-city] fallback fetch failed:", err);
+    }
+  }
+
   // Don't 404 even with zero providers — the page still renders for lead
   // capture (visitors who arrive via direct link or internal navigation),
-  // BUT generateMetadata sets robots: noindex,follow when the city has zero
-  // providers. This preserves the lead-capture funnel while preventing 1000s
-  // of empty city pages from hitting Google's index (programmatic-SEO thin-
-  // content protection). `follow: true` keeps link equity flowing to
-  // claimed/verified peer businesses via internal links.
-  return <IndustryContractorsCityPage config={cfg} city={city} providers={providers} />;
+  // BUT generateMetadata sets robots: noindex,follow when the city has fewer
+  // than 5 providers (EMPTY/SPARSE tiers). This preserves the lead-capture
+  // funnel while preventing 1000s of thin city pages from hitting Google's
+  // index (programmatic-SEO thin-content protection). `follow: true` keeps
+  // link equity flowing to claimed/verified peer businesses via internal
+  // links + nearby-city links rendered on EMPTY/SPARSE pages.
+  return (
+    <IndustryContractorsCityPage
+      config={cfg}
+      city={city}
+      providers={providers}
+      tier={tierResult.tier}
+      nearbyCities={nearbyCities}
+      serviceAreaProviders={serviceAreaProviders}
+    />
+  );
 }
