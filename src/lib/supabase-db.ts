@@ -622,7 +622,22 @@ function applyWhereFilters(
       continue;
     }
     if (field === 'NOT' && value !== null && typeof value === 'object' && !Array.isArray(value)) {
-      // Apply NOT filter by negating each condition in the object
+      // Apply NOT filter by negating each condition in the object.
+      //
+      // CRITICAL — NULL semantics:
+      // Prisma's `NOT: { field: value }` semantics EXCLUDE rows where
+      // `field = value`, but INCLUDE rows where `field IS NULL` (because
+      // NULL does not equal `value`). PostgREST's `.neq(field, value)`
+      // implements SQL `field != value`, which evaluates to NULL (not true)
+      // when `field` is NULL — so `.neq()` silently DROPS NULL rows.
+      //
+      // This previously caused every tenant with `signupMode = null`
+      // (91,281 rows in production) to be hidden from the company search
+      // despite Prisma's intent to include them.
+      //
+      // Fix: for every "not equals value" branch, emit
+      //   `(field IS NULL OR field != value)`
+      // via PostgREST's `or()` so NULL rows are preserved.
       const notConditions = value as WhereInput;
       for (const [notField, notValue] of Object.entries(notConditions)) {
         if (notValue === undefined) continue;
@@ -630,26 +645,39 @@ function applyWhereFilters(
           // Negate operator conditions
           const op = notValue as WhereOperator;
           if (op.equals !== undefined) {
-            if (op.equals === null) { query.not(notField, 'is', null); }
-            else { query.neq(notField, op.equals as string | number | boolean); }
+            if (op.equals === null) {
+              // NOT equals null → field IS NOT NULL
+              query.not(notField, 'is', null);
+            } else {
+              // NOT equals value → (field IS NULL OR field != value)
+              const v = op.equals as string | number | boolean;
+              query.or(`${notField}.is.null,${notField}.neq.${v}`);
+            }
           } else if (op.in !== undefined) {
-            // NOT IN: apply each as neq individually (PostgREST has no direct notIn)
-            // Using .not('in', ...) with parentheses syntax
+            // NOT IN: include NULL rows, then exclude each value.
+            // We only need to add the `is.null` branch once; subsequent
+            // `.neq()` calls further restrict non-NULL rows.
+            query.or(`${notField}.is.null`);
             for (const v of op.in as (string | number | boolean)[]) {
               query.neq(notField, v);
             }
           } else if (op.contains !== undefined) {
-            query.not(notField, 'ilike', `%${op.contains}%`);
+            // NOT contains: NULL rows should be included (NULL doesn't contain anything).
+            query.or(`${notField}.is.null,${notField}.not.ilike.%${op.contains}%`);
           } else {
-            // Fallback: treat as a simple not-equals
-            query.neq(notField, notValue as string | number | boolean);
+            // Fallback: treat as a simple not-equals, preserving NULLs.
+            const v = notValue as string | number | boolean;
+            query.or(`${notField}.is.null,${notField}.neq.${v}`);
           }
         } else {
           // Simple value: NOT equals
           if (notValue === null) {
+            // NOT equals null → field IS NOT NULL
             query.not(notField, 'is', null);
           } else {
-            query.neq(notField, notValue as string | number | boolean);
+            // NOT equals value → (field IS NULL OR field != value)
+            const v = notValue as string | number | boolean;
+            query.or(`${notField}.is.null,${notField}.neq.${v}`);
           }
         }
       }
