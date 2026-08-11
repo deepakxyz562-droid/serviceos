@@ -44,7 +44,14 @@ const BUSINESS_PER_FILE = 40_000;
  * If the business count is 0 (e.g. DB unavailable), we still emit ID 0 so
  * the static routes are always discoverable.
  */
-export async function generateSitemaps(): Promise<number[]> {
+// FIX (Q2-Fix 2 follow-up): Next.js 16 requires generateSitemaps() to return
+// objects with an `id` property (e.g. [{ id: 0 }, { id: 1 }, ...]) — NOT plain
+// numbers. Plain numbers cause a build-time error:
+//   "id property is required for every item returned from generateSitemaps"
+// The framework uses `item.id` to generate the sitemap filename
+// (/sitemap/0.xml, /sitemap/1.xml, ...) and passes `{ id }` back into the
+// sitemap({ id }) function below.
+export async function generateSitemaps(): Promise<{ id: number }[]> {
   let businessCount = 0;
   try {
     businessCount = await countIndexableBusinessTenants();
@@ -54,7 +61,7 @@ export async function generateSitemaps(): Promise<number[]> {
   }
   const businessFileCount = Math.max(1, Math.ceil(businessCount / BUSINESS_PER_FILE));
   // ID 0 = static/etc, IDs 1..businessFileCount = business pages
-  return Array.from({ length: 1 + businessFileCount }, (_, i) => i);
+  return Array.from({ length: 1 + businessFileCount }, (_, i) => ({ id: i }));
 }
 
 /**
