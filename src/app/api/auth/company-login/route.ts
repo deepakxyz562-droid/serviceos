@@ -367,6 +367,12 @@ export async function POST(request: NextRequest) {
         industry: tenant.industry,
         onboardingCompleted: tenant.onboardingCompleted,
       },
+      // Include `token` in the JSON body (not just the cookie) so that
+      // non-browser clients (mobile app via expo-secure-store) can read it.
+      // Browsers ignore this field and use the http-only cookie; native apps
+      // cannot read cookies and depend on `token` being in the body —
+      // matches the customer-login success path above.
+      token,
     });
     response.cookies.set({ ...COOKIE_OPTIONS, value: token });
     return response;

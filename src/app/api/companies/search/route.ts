@@ -5,7 +5,13 @@ import { db } from '@/lib/db';
  * GET /api/companies/search?q=abc
  *
  * Search companies by name or slug (case-insensitive, prefix match).
- * Used by the "Find your company" search box on the landing page.
+ * Used by the "Find your company" search box on the login page (PWA + mobile).
+ *
+ * CRM-ONLY: Excludes tenants with `signupMode = 'listing_only'` (free
+ * marketplace listings with no CRM). Such tenants have no staff/employees and
+ * cannot be logged into, so showing them in the company finder is misleading.
+ * Tenants with `signupMode = 'crm_trial'` or `null` (legacy / undecided) are
+ * included. Marketplace browsing uses separate /api/marketplace/* endpoints.
  *
  * Returns up to 10 matches with { name, slug, logo, industry }.
  */
@@ -26,6 +32,10 @@ export async function GET(request: NextRequest) {
           { slug: { contains: q } },
         ],
         suspendedAt: null,
+        // Exclude free marketplace-only listings — they have no CRM/staff.
+        // `signupMode = 'listing_only'` tenants should not appear in the
+        // company finder because nobody can log into them.
+        NOT: { signupMode: 'listing_only' },
       },
       select: {
         id: true,
