@@ -71,6 +71,7 @@ export async function PUT(request: NextRequest) {
       phone,
       email,
       location,
+      avatar,
       emergencyContactName,
       emergencyContactRelationship,
       emergencyContactPhone,
@@ -80,6 +81,7 @@ export async function PUT(request: NextRequest) {
       phone?: string;
       email?: string;
       location?: string;
+      avatar?: string;
       emergencyContactName?: string;
       emergencyContactRelationship?: string;
       emergencyContactPhone?: string;
@@ -138,14 +140,26 @@ export async function PUT(request: NextRequest) {
       }
       await db.user.update({
         where: { id: employee.userId },
-        data: { email: email.trim(), name: typeof name === 'string' ? name.trim() : employee.name },
+        data: {
+          email: email.trim(),
+          name: typeof name === 'string' ? name.trim() : employee.name,
+          ...(typeof avatar === 'string' && avatar.trim() ? { avatar: avatar.trim() } : {}),
+        },
       });
-    } else if (typeof name === 'string' && name.trim() && name !== employee.name && employee.userId) {
-      // Keep the User.name in sync if the Employee name changed
-      await db.user.update({
-        where: { id: employee.userId },
-        data: { name: name.trim() },
-      });
+    } else if (
+      (typeof name === 'string' && name.trim() && name !== employee.name) ||
+      (typeof avatar === 'string' && avatar.trim())
+    ) {
+      // Keep the User.name + avatar in sync if the Employee name or avatar changed
+      const userPatch: Record<string, unknown> = {};
+      if (typeof name === 'string' && name.trim()) userPatch.name = name.trim();
+      if (typeof avatar === 'string' && avatar.trim()) userPatch.avatar = avatar.trim();
+      if (employee.userId && Object.keys(userPatch).length > 0) {
+        await db.user.update({
+          where: { id: employee.userId },
+          data: userPatch,
+        });
+      }
     }
 
     const updated = await db.employee.update({

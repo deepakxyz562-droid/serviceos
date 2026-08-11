@@ -25,11 +25,12 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  DollarSign, Plus, Loader2, UploadCloud, X, FileText,
+  DollarSign, Plus, Loader2, UploadCloud, X, FileText, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { CANONICAL_EXPENSE_CATEGORIES } from '@/lib/job-taxonomy';
 
 interface JobLite {
   id: string;
@@ -50,9 +51,12 @@ interface JobExpense {
   employeeName: string | null;
 }
 
-const CATEGORIES = [
-  'General', 'Travel', 'Materials', 'Fuel', 'Food', 'Tools', 'Equipment', 'Misc',
-];
+// Use the shared canonical taxonomy so PWA + Mobile + backend validation
+// never drift. The mobile app previously had a 5-item set with 'labor'
+// (mobile-only) and 'other' (→ Misc). The canonical list keeps the PWA's
+// richer 8-item set PLUS 'Labor' (between Equipment and Misc) so mobile's
+// 'labor' category round-trips cleanly. See src/lib/job-taxonomy.ts.
+const CATEGORIES: readonly string[] = CANONICAL_EXPENSE_CATEGORIES;
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -81,6 +85,9 @@ export function JobExpensesSection({ job }: { job: JobLite }) {
   const [totals, setTotals] = useState({ count: 0, totalAmount: 0, pendingCount: 0, approvedCount: 0, reimbursedCount: 0 });
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Tracks the expense currently being deleted (id) so we can show a spinner
+  // on the trash button + disable further deletes while one is in flight.
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
@@ -100,6 +107,48 @@ export function JobExpensesSection({ job }: { job: JobLite }) {
   useEffect(() => {
     fetchExpenses();
   }, [fetchExpenses]);
+
+  // ── Delete an expense row ────────────────────────────────────────
+  // Calls DELETE /api/jobs/[id]/expenses/[expenseId] (employee may only
+  // delete their own expenses — the backend enforces ownership). On
+  // success, removes the row from local state AND recomputes the totals
+  // summary so the header count/amount updates immediately (avoids an
+  // extra round-trip to refetch the whole list).
+  const handleDeleteExpense = async (expense: JobExpense) => {
+    const confirmed = window.confirm(
+      `Delete expense ${expense.number || ''}?\n${expense.description} — ${format(expense.amount, expense.currency)}`,
+    );
+    if (!confirmed) return;
+    setDeletingId(expense.id);
+    try {
+      const res = await authFetch(
+        `/api/jobs/${job.id}/expenses/${expense.id}?XTransformPort=3000`,
+        { method: 'DELETE' },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to delete expense');
+      // Optimistic-but-confirmed: remove the row + recompute the totals
+      // locally so the summary header updates without a refetch.
+      setExpenses((prev) => prev.filter((e) => e.id !== expense.id));
+      setTotals((prev) => {
+        const wasPending = expense.status === 'pending';
+        const wasApproved = expense.status === 'approved';
+        const wasReimbursed = expense.status === 'reimbursed';
+        return {
+          count: Math.max(0, prev.count - 1),
+          totalAmount: Math.max(0, prev.totalAmount - expense.amount),
+          pendingCount: Math.max(0, prev.pendingCount - (wasPending ? 1 : 0)),
+          approvedCount: Math.max(0, prev.approvedCount - (wasApproved ? 1 : 0)),
+          reimbursedCount: Math.max(0, prev.reimbursedCount - (wasReimbursed ? 1 : 0)),
+        };
+      });
+      toast.success('Expense deleted');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete expense');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <>
@@ -144,18 +193,34 @@ export function JobExpensesSection({ job }: { job: JobLite }) {
                   {e.employeeName ? ` · ${e.employeeName}` : ''}
                 </p>
               </div>
-              <div className="text-right shrink-0">
-                <p className="text-sm font-semibold text-foreground">{format(e.amount, e.currency)}</p>
-                {e.receiptUrl && (
-                  <a
-                    href={e.receiptUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-emerald-700 hover:underline inline-flex items-center min-h-[44px] px-1"
-                  >
-                    View receipt
-                  </a>
-                )}
+              <div className="flex items-start gap-2 shrink-0">
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-foreground">{format(e.amount, e.currency)}</p>
+                  {e.receiptUrl && (
+                    <a
+                      href={e.receiptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-emerald-700 hover:underline inline-flex items-center min-h-[44px] px-1"
+                    >
+                      View receipt
+                    </a>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteExpense(e)}
+                  disabled={deletingId === e.id}
+                  aria-label={`Delete expense ${e.number || ''}`}
+                  title="Delete expense"
+                  className="inline-flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] mt-0.5"
+                >
+                  {deletingId === e.id ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-3.5" />
+                  )}
+                </button>
               </div>
             </div>
           ))}

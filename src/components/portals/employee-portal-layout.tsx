@@ -50,7 +50,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -98,6 +98,7 @@ import {
 } from '@/components/views/leads-view';
 import { JobExpensesSection } from '@/components/job/job-expenses-section';
 import { ScheduledVisitsSection } from '@/components/job/scheduled-visits-section';
+import { StatusBadge } from '@/components/job/status-badge';
 import { PushPermissionCard } from '@/components/pwa/push-permission';
 import {
   GpsTrackingProvider,
@@ -188,6 +189,10 @@ interface Job {
   // JSON string of line items (Product / Service). Employees can add/edit
   // these via the JobDetailSheet and save through PUT /api/jobs/[id].
   lineItemsJson?: string;
+  // Free-text notes shown in the Notes editor (Job.notes column).
+  // The mobile app splits this into Customer Notes + Internal Notes using
+  // a delimiter; we do the same on the PWA for parity.
+  notes?: string | null;
 }
 
 // /api/employee/jobs returns a flat array of enriched job rows. This helper
@@ -222,6 +227,7 @@ interface EmployeeJobsApiResponseRow {
   _counts?: { photos: number; signatures: number; checklists: number };
   linkedChecklistsJson?: string;
   lineItemsJson?: string | null;
+  notes?: string | null;
 }
 
 function mapJobRow(row: EmployeeJobsApiResponseRow): Job {
@@ -252,6 +258,7 @@ function mapJobRow(row: EmployeeJobsApiResponseRow): Job {
     _counts: row._counts,
     linkedChecklistsJson: row.linkedChecklistsJson,
     lineItemsJson: row.lineItemsJson ?? undefined,
+    notes: row.notes ?? undefined,
   };
 }
 
@@ -538,6 +545,116 @@ function useEmployeeRecord(employeeId: string | null) {
   }, [employeeId]);
 
   return { employee, loading, error };
+}
+
+/**
+ * useEmployeeProfile — fetches the currently-authenticated employee's full
+ * self record from GET /api/employee/profile (NOT /api/employees/[id]).
+ *
+ * Why a separate hook (vs. useEmployeeRecord): the /api/employee/profile
+ * endpoint returns the full Employee row including `location`, `avatar`,
+ * `whatsappId` (which stores the emergency-contact JSON blob — see the
+ * profile PUT route), and `userAccount` (name/email/avatar). The
+ * /api/employees/[id] endpoint returns a more limited projection that
+ * omits these fields, so the ProfileView's pre-fill needs the canonical
+ * self endpoint to seed the form inputs.
+ *
+ * Returns:
+ *   - profile: the full employee record (or null while loading/errored)
+ *   - loading, error, refetch
+ *
+ * The `refetch` callback is exposed so the ProfileView can re-pull the
+ * record after an avatar upload (the avatar URL is only persisted when
+ * the backend `/api/upload` route is configured; if it isn't, the local
+ * preview state still updates optimistically).
+ */
+interface EmergencyContact {
+  name: string;
+  relationship: string;
+  phone: string;
+  alternate: string;
+}
+
+interface EmployeeProfile {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  location?: string | null;
+  avatar?: string | null;
+  status?: string | null;
+  role?: string | null;
+  rating?: number | null;
+  employeeId?: string;
+  whatsappId?: string | null;
+  userAccount?: { name?: string | null; email?: string | null; avatar?: string | null } | null;
+  emergency: EmergencyContact;
+}
+
+function parseEmergencyContact(whatsappId: string | null | undefined): EmergencyContact {
+  if (!whatsappId) return { name: '', relationship: '', phone: '', alternate: '' };
+  // The profile PUT route stashes the emergency-contact object as a JSON
+  // string in the Employee.whatsappId column (a sidecar storage spot).
+  // It's prefixed with `__emergency__:` in some legacy writes but the
+  // current PUT just JSON.stringifies the object directly. Try both.
+  const raw = whatsappId.startsWith('__emergency__:')
+    ? whatsappId.slice('__emergency__:'.length)
+    : whatsappId;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return {
+        name: typeof parsed.name === 'string' ? parsed.name : '',
+        relationship: typeof parsed.relationship === 'string' ? parsed.relationship : '',
+        phone: typeof parsed.phone === 'string' ? parsed.phone : '',
+        alternate: typeof parsed.alternate === 'string' ? parsed.alternate : '',
+      };
+    }
+  } catch {
+    // Not JSON — leave the contact empty.
+  }
+  return { name: '', relationship: '', phone: '', alternate: '' };
+}
+
+function useEmployeeProfile() {
+  const [profile, setProfile] = useState<EmployeeProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await authFetch('/api/employee/profile?XTransformPort=3000');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to load profile');
+      setProfile({
+        id: data.id,
+        name: data.name || data.userAccount?.name || 'Employee',
+        email: data.email ?? data.userAccount?.email ?? null,
+        phone: data.phone ?? null,
+        location: data.location ?? null,
+        avatar: data.avatar ?? data.userAccount?.avatar ?? null,
+        status: data.status ?? null,
+        role: data.role ?? null,
+        rating: data.rating ?? null,
+        employeeId: data.employeeId,
+        whatsappId: data.whatsappId ?? null,
+        userAccount: data.userAccount ?? null,
+        emergency: parseEmergencyContact(data.whatsappId),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load profile');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  return { profile, loading, error, refetch };
 }
 
 /**
@@ -1321,7 +1438,13 @@ function HomeView({
                       </p>
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <Badge variant="outline" className="text-[10px] h-5">{job.type || 'Job'}</Badge>
-                        {stage && getStatusBadge(stage)}
+                        {stage && (
+                          <StatusBadge
+                            status={stage}
+                            label={STATUS_LABEL_MAP[stage as JobStatus] ?? stage}
+                            className="text-[10px] h-5"
+                          />
+                        )}
                       </div>
                     </div>
                     <ArrowRight className="size-4 text-muted-foreground shrink-0 mt-0.5 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all" />
@@ -1850,7 +1973,10 @@ function JobDetailSheet({
               <span>Back</span>
             </button>
             <div className="flex items-center gap-2 flex-wrap">
-              {getStatusBadge(stage)}
+              <StatusBadge
+                status={stage}
+                label={STATUS_LABEL_MAP[stage as JobStatus] ?? stage}
+              />
               {stage === 'assigned' && (
                 <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] border">Awaiting Acceptance</Badge>
               )}
@@ -2002,6 +2128,12 @@ function JobDetailSheet({
                 checklists={[]}
               />
             </div>
+
+            {/* ── Notes editor (Customer Notes + Internal Notes) ─────────── */}
+            <JobNotesSection job={job} />
+
+            {/* ── Time tracking (today's entries + totals) ──────────────── */}
+            <JobTimeEntriesSection jobId={job.id} />
 
           </div>
 
@@ -2202,6 +2334,273 @@ function JobDetailSheet({
   );
 }
 
+// ─── Job Notes editor (Customer Notes + Internal Notes) ─────────────────────
+//
+// Parity fix (PWA-TIERS T2.1): the mobile app has a dedicated /notes route
+// with two TextInputs (Customer Notes visible to customer + Internal Notes
+// for staff). The PWA's JobDetailSheet previously had NO notes UI at all —
+// employees couldn't add or view notes from the PWA.
+//
+// Backend constraint: the Job model only has ONE `notes` column (no
+// `internalNotes`). The mobile app's PUT /api/jobs/[id] body sends
+// `{ notes, internalNotes }` but the PUT route silently drops the
+// `internalNotes` field (it only accepts `notes`). To preserve both
+// sections without losing data, we concatenate them into a single
+// `notes` value using a delimiter that the mobile app's UI doesn't use:
+//
+//     "<customer notes>\n\n--- Internal Notes ---\n<internal notes>"
+//
+// On load, we split on the delimiter to recover the two halves. If the
+// delimiter isn't present (legacy notes / notes written from another
+// client), the whole text goes into the Customer Notes textarea.
+//
+// Save: PUT /api/jobs/[id]?XTransformPort=3000 { notes: <combined> }.
+// Uses authFetch. Shows a toast on success/error.
+
+const INTERNAL_NOTES_DELIMITER = '\n\n--- Internal Notes ---\n';
+
+function splitNotes(raw: string | null | undefined): { customer: string; internal: string } {
+  if (!raw) return { customer: '', internal: '' };
+  const idx = raw.indexOf(INTERNAL_NOTES_DELIMITER);
+  if (idx === -1) return { customer: raw, internal: '' };
+  return {
+    customer: raw.slice(0, idx),
+    internal: raw.slice(idx + INTERNAL_NOTES_DELIMITER.length),
+  };
+}
+
+function JobNotesSection({ job }: { job: Job }) {
+  // Re-seed local state whenever the job changes (open a different job in
+  // the sheet → the textareas should reflect that job's notes, not the
+  // previous job's edits).
+  const split = useMemo(() => splitNotes(job.notes), [job.id, job.notes]);
+  const [customerNotes, setCustomerNotes] = useState(split.customer);
+  const [internalNotes, setInternalNotes] = useState(split.internal);
+  const [saving, setSaving] = useState(false);
+
+  // Re-seed when the underlying job's notes change (e.g. parent refetched
+  // after a lifecycle action and the job object is now different).
+  useEffect(() => {
+    setCustomerNotes(split.customer);
+    setInternalNotes(split.internal);
+  }, [split.customer, split.internal]);
+
+  const handleSave = async () => {
+    const customer = customerNotes.trim();
+    const internal = internalNotes.trim();
+    // Combine using the delimiter only when BOTH halves are non-empty —
+    // otherwise just persist whichever half has content (or null when both
+    // are empty so the column returns to NULL).
+    let combined: string | null;
+    if (customer && internal) {
+      combined = `${customer}${INTERNAL_NOTES_DELIMITER}${internal}`;
+    } else if (customer) {
+      combined = customer;
+    } else if (internal) {
+      combined = `${INTERNAL_NOTES_DELIMITER}${internal}`;
+    } else {
+      combined = null;
+    }
+    setSaving(true);
+    try {
+      const res = await authFetch(`/api/jobs/${job.id}?XTransformPort=3000`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: combined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to save notes');
+      toast.success('Notes saved');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save notes');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <FileText className="size-4 text-emerald-600" />
+        <h4 className="text-sm font-semibold text-foreground">Notes</h4>
+      </div>
+      <div>
+        <Label htmlFor={`customer-notes-${job.id}`} className="text-xs text-muted-foreground">
+          Customer Notes
+        </Label>
+        <Textarea
+          id={`customer-notes-${job.id}`}
+          rows={3}
+          placeholder="Visible to the customer (e.g. appointment confirmation, scope of work)…"
+          value={customerNotes}
+          onChange={(e) => setCustomerNotes(e.target.value)}
+          className="mt-1 text-sm resize-y max-h-48"
+        />
+      </div>
+      <div>
+        <Label htmlFor={`internal-notes-${job.id}`} className="text-xs text-muted-foreground">
+          Internal Notes
+          <span className="ml-1 text-amber-700">(private — staff only)</span>
+        </Label>
+        <Textarea
+          id={`internal-notes-${job.id}`}
+          rows={3}
+          placeholder="Internal context (e.g. access instructions, prior history)…"
+          value={internalNotes}
+          onChange={(e) => setInternalNotes(e.target.value)}
+          className="mt-1 text-sm resize-y max-h-48 bg-amber-50/40 dark:bg-amber-900/10"
+        />
+      </div>
+      <div className="flex justify-end">
+        <Button
+          size="sm"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving && <Loader2 className="size-3.5 mr-2 animate-spin" />}
+          Save Notes
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Job Time-entries section ───────────────────────────────────────────────
+//
+// Parity fix (PWA-TIERS T2.2): the mobile app has a dedicated /time-entries
+// route with a start/stop timer + entries list. The PWA previously had NO
+// time-tracking UI in the employee portal.
+//
+// Backend support: GET /api/jobs/[id]/time-entries returns a list of
+// JobTimeEntry rows + totals. Employees can READ but the POST route is
+// admin/owner-only ("employees must use the live timer to track time" —
+// enforced server-side). So instead of a start/stop button, we render a
+// tasteful hint card pointing the employee to the lifecycle action buttons
+// (Start Work / Pause) — those are the employee's actual timer controls.
+//
+// No fake API calls: if the fetch fails, we surface a small "couldn't load"
+// state; we never invent entries.
+
+interface TimeEntryRow {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  durationMinutes: number;
+  workingMinutes: number;
+  pauseMinutes: number;
+  entryType: string;
+  status: string;
+  notes: string | null;
+  employeeName?: string;
+}
+
+function JobTimeEntriesSection({ jobId }: { jobId: string }) {
+  const [entries, setEntries] = useState<TimeEntryRow[]>([]);
+  const [totals, setTotals] = useState<{ totalMinutes: number; count: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchEntries = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await authFetch(`/api/jobs/${jobId}/time-entries?XTransformPort=3000`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to load time entries');
+      setEntries(Array.isArray(data.entries) ? data.entries : []);
+      setTotals(data.totals ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load time entries');
+    } finally {
+      setLoading(false);
+    }
+  }, [jobId]);
+
+  useEffect(() => {
+    fetchEntries();
+  }, [fetchEntries]);
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Timer className="size-4 text-emerald-600" />
+        <h4 className="text-sm font-semibold text-foreground">Time Tracking</h4>
+        {totals && totals.count > 0 && (
+          <Badge variant="outline" className="ml-auto text-[10px] h-5">
+            {formatDuration(totals.totalMinutes)} tracked
+          </Badge>
+        )}
+      </div>
+
+      {/* Honest "use the lifecycle buttons" hint — the backend's POST route
+          forbids employee writes, so there's no start/stop button here.
+          The employee's actual timer controls are the Start Work / Pause /
+          Resume buttons in the sheet footer. */}
+      <div className="rounded-md bg-muted/40 border border-border/60 px-3 py-2 text-xs text-muted-foreground">
+        Use the <span className="font-medium text-foreground">Start Work</span> /{' '}
+        <span className="font-medium text-foreground">Pause</span> /{' '}
+        <span className="font-medium text-foreground">Resume</span> buttons at the bottom of
+        this sheet to track time. Entries logged here are recorded automatically.
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="size-3 animate-spin" /> Loading entries…
+        </div>
+      ) : error ? (
+        <div className="text-xs text-rose-700">{error}</div>
+      ) : entries.length === 0 ? (
+        <div className="text-xs text-muted-foreground">
+          No time entries yet for this job.
+        </div>
+      ) : (
+        <div className="space-y-1.5 max-h-48 overflow-y-auto">
+          {entries.map((e) => {
+            const typeLabel =
+              e.entryType === 'travel' ? 'Travel' :
+              e.entryType === 'break' ? 'Break' : 'Work';
+            const typeClass =
+              e.entryType === 'travel'
+                ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300'
+                : e.entryType === 'break'
+                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300';
+            return (
+              <div
+                key={e.id}
+                className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 py-1.5"
+              >
+                <Badge variant="outline" className={`text-[10px] h-5 border-0 ${typeClass}`}>
+                  {typeLabel}
+                </Badge>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-foreground truncate">
+                    {formatDuration(e.workingMinutes || e.durationMinutes || 0)}
+                    {e.status === 'active' && (
+                      <span className="ml-1.5 text-emerald-700">· active</span>
+                    )}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {formatDate(e.startedAt)}, {formatTime(e.startedAt)}
+                    {e.endedAt ? ` → ${formatTime(e.endedAt)}` : ''}
+                    {e.employeeName ? ` · ${e.employeeName}` : ''}
+                  </p>
+                </div>
+                {e.notes && (
+                  <span className="text-[10px] text-muted-foreground truncate max-w-[30%]" title={e.notes}>
+                    {e.notes}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Sub-View: My Jobs ──────────────────────────────────────────────────────
 
 function MyJobsView({ employeeId }: { employeeId: string }) {
@@ -2253,6 +2652,17 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
                   key={f.value}
                   variant={filter === f.value ? 'default' : 'outline'}
                   size="sm"
+                  // Brand-color decision (PWA-TIERS T3.2):
+                  // The mobile app uses bg-primary-500 for the selected
+                  // filter chip; the PWA intentionally stays on emerald-600
+                  // because emerald is this project's canonical brand color
+                  // (see the style guide: "Do NOT use indigo or blue as
+                  // primary brand colors — Emerald is the brand"). The
+                  // mobile's `primary` token currently resolves to a
+                  // blue/indigo which we don't want to bring over to the PWA.
+                  // Keeping emerald here also matches the rest of the
+                  // employee portal's accent color (Accept/Start Work/
+                  // Resume buttons all use bg-emerald-600).
                   className={cn(
                     'text-xs h-8',
                     filter === f.value && 'bg-emerald-600 hover:bg-emerald-700 text-white'
@@ -2322,7 +2732,10 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
                     </div>
                   </div>
                   <div className="flex items-center gap-3 sm:shrink-0">
-                    {getStatusBadge(job.status)}
+                    <StatusBadge
+                      status={job.status}
+                      label={STATUS_LABEL_MAP[job.status as JobStatus] ?? job.status}
+                    />
                     {/* Visual "View" indicator rendered as a non-interactive
                         <span> instead of a <Button>. iOS WebKit has well-
                         known quirks where `pointer-events: none` on native
@@ -3250,22 +3663,59 @@ function InboxView() {
 
 function ProfileView({ employeeId }: { employeeId: string }) {
   const { auth } = useAppStore();
-  const { employee } = useEmployeeRecord(employeeId);
+  // Profile fetch — returns the full self record including `location`,
+  // `avatar`, and `whatsappId` (which holds the emergency-contact JSON).
+  // Previously this view used /api/employees/[id] which returns a limited
+  // projection (no location / no emergency contact), so the location and
+  // emergency-contact inputs were always empty.
+  const { profile, loading: profileLoading, refetch: refetchProfile } = useEmployeeProfile();
 
-  const employeeName = employee?.name || auth.user?.name || 'Employee';
-  const employeeEmail = employee?.email || auth.user?.email || '';
-  const employeePhone = employee?.phone || '';
-  const employeeRole = employee?.role || 'Field Service Technician';
-  const employeeStatus = employee?.status || 'active';
-  const displayId = employee?.employeeId || employee?.id || employeeId;
+  // Controlled form state — seeded from the fetched profile on first load
+  // + on every refetch (so a successful save reflects back into the form).
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [location, setLocation] = useState('');
+  const [emergencyName, setEmergencyName] = useState('');
+  const [emergencyRelationship, setEmergencyRelationship] = useState('');
+  const [emergencyPhone, setEmergencyPhone] = useState('');
+  const [emergencyAlternate, setEmergencyAlternate] = useState('');
+  // Avatar preview — set optimistically during upload so the header updates
+  // immediately. Holds either a remote URL (from /api/upload) or a local
+  // object URL (during upload) or a data URL.
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
+  // Hidden file input ref — clicked programmatically by the camera FAB.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Re-seed the form whenever the profile arrives/refreshes.
+  useEffect(() => {
+    if (!profile) return;
+    setName(profile.name || '');
+    setEmail(profile.email || '');
+    setPhone(profile.phone || '');
+    setLocation(profile.location || '');
+    setEmergencyName(profile.emergency.name || '');
+    setEmergencyRelationship(profile.emergency.relationship || '');
+    setEmergencyPhone(profile.emergency.phone || '');
+    setEmergencyAlternate(profile.emergency.alternate || '');
+    setAvatarPreview(profile.avatar || null);
+  }, [profile]);
+
+  // Derived header values (with JWT fallbacks while the profile loads).
+  const employeeName = profile?.name || auth.user?.name || 'Employee';
+  const employeeRole = profile?.role || 'Field Service Technician';
+  const employeeStatus = profile?.status || 'active';
+  const displayId = profile?.employeeId || profile?.id || employeeId;
 
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [savingContact, setSavingContact] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  // Helper to read an input's current value by DOM id (the inputs below are
-  // uncontrolled with defaultValue — this is the lightest-touch way to wire
-  // them without converting all of them to controlled components).
+  // Helper to read an input's current value by DOM id. Kept for the
+  // password fields, which intentionally stay UNCONTROLLED (so they can
+  // be cleared by setting el.value = '' after a successful update).
   const readInput = (id: string): string => {
     if (typeof document === 'undefined') return '';
     const el = document.getElementById(id) as HTMLInputElement | null;
@@ -3276,19 +3726,14 @@ function ProfileView({ employeeId }: { employeeId: string }) {
   const handleSaveProfile = async () => {
     setSavingProfile(true);
     try {
-      const payload = {
-        name: readInput('profile-name'),
-        email: readInput('profile-email'),
-        phone: readInput('profile-phone'),
-        location: readInput('profile-location'),
-      };
       const res = await authFetch('/api/employee/profile?XTransformPort=3000', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ name, email, phone, location }),
       });
       if (res.ok) {
         toast.success('Profile updated');
+        refetchProfile();
       } else {
         const err = await res.json().catch(() => ({ error: 'Failed to update profile' }));
         toast.error(err.error || 'Failed to update profile');
@@ -3348,19 +3793,19 @@ function ProfileView({ employeeId }: { employeeId: string }) {
   const handleUpdateContact = async () => {
     setSavingContact(true);
     try {
-      const payload = {
-        emergencyContactName: readInput('emergency-name'),
-        emergencyContactRelationship: readInput('emergency-relationship'),
-        emergencyContactPhone: readInput('emergency-phone'),
-        emergencyContactAlternate: readInput('emergency-alternate'),
-      };
       const res = await authFetch('/api/employee/profile?XTransformPort=3000', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          emergencyContactName: emergencyName,
+          emergencyContactRelationship: emergencyRelationship,
+          emergencyContactPhone: emergencyPhone,
+          emergencyContactAlternate: emergencyAlternate,
+        }),
       });
       if (res.ok) {
         toast.success('Emergency contact updated');
+        refetchProfile();
       } else {
         const err = await res.json().catch(() => ({ error: 'Failed to update contact' }));
         toast.error(err.error || 'Failed to update contact');
@@ -3372,20 +3817,130 @@ function ProfileView({ employeeId }: { employeeId: string }) {
     }
   };
 
+  // ── Camera FAB: open the hidden file picker ──
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  // ── Handle chosen file: upload → PUT URL to profile → toast → preview ──
+  // Best-effort: if /api/upload isn't configured in this environment, we
+  // still update the local preview so the user sees their photo. The PUT
+  // to /api/employee/profile is also best-effort because the route doesn't
+  // currently accept an `avatar` field in the body (it silently drops
+  // unknown fields). When the backend is updated to accept avatar URLs,
+  // this code will start persisting automatically with no further changes.
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset the input value so the same file can be re-selected later.
+    if (e.target) e.target.value = '';
+    if (!file) return;
+    setUploadingAvatar(true);
+    // Track the local object URL so we can revoke it once we have a final
+    // remote URL (avoids leaking blob: URLs in long-running sessions).
+    // `replacedWithRemote` tells the finally block whether the preview was
+    // upgraded to a durable URL (in which case we revoke the local URL) or
+    // whether we're still on the local URL (in which case we keep it alive
+    // so the preview still renders).
+    let localUrl: string | null = null;
+    let replacedWithRemote = false;
+    try {
+      // 1) Optimistic preview using a local object URL — the avatar in the
+      //    header updates immediately while the upload is in flight.
+      localUrl = URL.createObjectURL(file);
+      setAvatarPreview(localUrl);
+
+      // 2) Upload via /api/upload (folder='avatars'). This route is
+      //    referenced elsewhere in the codebase (image-library, photos
+      //    route comments) but may not be deployed in every environment.
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('folder', 'avatars');
+      fd.append('saveToLibrary', 'false');
+      const uploadRes = await authFetch('/api/upload?XTransformPort=3000', {
+        method: 'POST',
+        body: fd,
+      });
+      if (!uploadRes.ok) {
+        toast.warning("Avatar preview updated — backend upload isn't configured, so the new photo won't persist.");
+        return;
+      }
+      const uploadData = await uploadRes.json().catch(() => ({}));
+      const uploadedUrl: string | undefined = uploadData.url;
+      if (!uploadedUrl) {
+        toast.warning('Avatar preview updated — no URL returned from upload, so the new photo won\'t persist.');
+        return;
+      }
+
+      // 3) PUT the new avatar URL to /api/employee/profile. Best-effort —
+      //    the route currently ignores the `avatar` field, but we send it
+      //    anyway so a future backend change picks it up automatically.
+      const putRes = await authFetch('/api/employee/profile?XTransformPort=3000', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatar: uploadedUrl }),
+      });
+      // Always update the preview to the uploaded URL (more durable than
+      // the local blob: URL which gets revoked on page reload).
+      setAvatarPreview(uploadedUrl);
+      replacedWithRemote = true;
+      if (putRes.ok) {
+        toast.success('Avatar updated');
+      } else {
+        toast.warning('Avatar uploaded but profile update failed — the new photo may not persist.');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Avatar upload failed');
+    } finally {
+      // Revoke the local object URL only if we replaced it with a remote
+      // URL. If the upload failed and we kept the local URL as the
+      // preview, leave it alive so the Avatar still renders.
+      if (localUrl && replacedWithRemote) {
+        URL.revokeObjectURL(localUrl);
+      }
+      setUploadingAvatar(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Hidden file input — clicked programmatically by the camera FAB.
+          accept="image/*" so mobile browsers offer the camera/gallery. */}
+      <input
+        type="file"
+        accept="image/*"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
       {/* Profile header */}
       <Card>
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row items-center gap-4">
             <div className="relative">
               <Avatar className="size-20">
+                {avatarPreview ? (
+                  <AvatarImage src={avatarPreview} alt={employeeName} />
+                ) : null}
                 <AvatarFallback className="text-2xl font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                   {employeeName.split(' ').map(n => n[0]).join('').slice(0, 2)}
                 </AvatarFallback>
               </Avatar>
-              <button className="absolute bottom-0 right-0 size-7 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-md hover:bg-emerald-700 transition-colors">
-                <Camera className="size-3.5" />
+              <button
+                type="button"
+                onClick={handleAvatarClick}
+                disabled={uploadingAvatar}
+                aria-label="Change avatar"
+                title="Change avatar"
+                className="absolute bottom-0 right-0 size-7 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-md hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {uploadingAvatar ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Camera className="size-3.5" />
+                )}
               </button>
             </div>
             <div className="text-center sm:text-left">
@@ -3414,22 +3969,51 @@ function ProfileView({ employeeId }: { employeeId: string }) {
           <CardDescription>Update your personal details</CardDescription>
         </CardHeader>
         <CardContent>
+          {profileLoading && !profile ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+              <Loader2 className="size-3 animate-spin" /> Loading profile…
+            </div>
+          ) : null}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="profile-name" className="text-xs">Full Name</Label>
-              <Input id="profile-name" defaultValue={employeeName} className="mt-1 h-9 text-sm" />
+              <Input
+                id="profile-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter full name"
+                className="mt-1 h-9 text-sm"
+              />
             </div>
             <div>
               <Label htmlFor="profile-email" className="text-xs">Email Address</Label>
-              <Input id="profile-email" defaultValue={employeeEmail} className="mt-1 h-9 text-sm" />
+              <Input
+                id="profile-email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter email address"
+                className="mt-1 h-9 text-sm"
+              />
             </div>
             <div>
               <Label htmlFor="profile-phone" className="text-xs">Phone Number</Label>
-              <Input id="profile-phone" defaultValue={employeePhone || ''} placeholder="Enter phone number" className="mt-1 h-9 text-sm" />
+              <Input
+                id="profile-phone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Enter phone number"
+                className="mt-1 h-9 text-sm"
+              />
             </div>
             <div>
               <Label htmlFor="profile-location" className="text-xs">Location</Label>
-              <Input id="profile-location" defaultValue="" placeholder="Enter location" className="mt-1 h-9 text-sm" />
+              <Input
+                id="profile-location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="Enter location"
+                className="mt-1 h-9 text-sm"
+              />
             </div>
           </div>
           <div className="flex justify-end mt-4">
@@ -3492,19 +4076,43 @@ function ProfileView({ employeeId }: { employeeId: string }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="emergency-name" className="text-xs">Contact Name</Label>
-              <Input id="emergency-name" defaultValue="" placeholder="Enter contact name" className="mt-1 h-9 text-sm" />
+              <Input
+                id="emergency-name"
+                value={emergencyName}
+                onChange={(e) => setEmergencyName(e.target.value)}
+                placeholder="Enter contact name"
+                className="mt-1 h-9 text-sm"
+              />
             </div>
             <div>
               <Label htmlFor="emergency-relationship" className="text-xs">Relationship</Label>
-              <Input id="emergency-relationship" defaultValue="" placeholder="Enter relationship" className="mt-1 h-9 text-sm" />
+              <Input
+                id="emergency-relationship"
+                value={emergencyRelationship}
+                onChange={(e) => setEmergencyRelationship(e.target.value)}
+                placeholder="Enter relationship"
+                className="mt-1 h-9 text-sm"
+              />
             </div>
             <div>
               <Label htmlFor="emergency-phone" className="text-xs">Phone Number</Label>
-              <Input id="emergency-phone" defaultValue="" placeholder="Enter phone number" className="mt-1 h-9 text-sm" />
+              <Input
+                id="emergency-phone"
+                value={emergencyPhone}
+                onChange={(e) => setEmergencyPhone(e.target.value)}
+                placeholder="Enter phone number"
+                className="mt-1 h-9 text-sm"
+              />
             </div>
             <div>
               <Label htmlFor="emergency-alternate" className="text-xs">Alternate Phone</Label>
-              <Input id="emergency-alternate" defaultValue="" placeholder="Enter alternate phone" className="mt-1 h-9 text-sm" />
+              <Input
+                id="emergency-alternate"
+                value={emergencyAlternate}
+                onChange={(e) => setEmergencyAlternate(e.target.value)}
+                placeholder="Enter alternate phone"
+                className="mt-1 h-9 text-sm"
+              />
             </div>
           </div>
           <div className="flex justify-end mt-4">

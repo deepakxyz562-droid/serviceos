@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { logActivity } from '@/lib/activity-log';
 import { requireCrmTenant } from '@/lib/require-crm-tenant';
+import { normalizeExpenseCategory } from '@/lib/job-taxonomy';
 
 /**
  * Resolves a tenant ID from the auth user, falling back to the first tenant
@@ -258,7 +259,11 @@ export async function POST(request: NextRequest) {
         submittedByName: authUser.name || authUser.email || null,
         jobId: jobId || null,
         jobTitle: resolvedJobTitle,
-        category: category || 'General',
+        // Normalize the category so both PWA (capitalized) and mobile
+        // (lowercase) uploads land in a single canonical bucket. This also
+        // maps mobile's 'other' → 'Misc' and adds 'Labor' (mobile-only) to
+        // the canonical set.
+        category: normalizeExpenseCategory(category),
         description: description.trim(),
         amount: Number(amount),
         currency: currency || baseCurrency,

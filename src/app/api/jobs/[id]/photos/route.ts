@@ -8,8 +8,12 @@ import {
 } from '@/lib/supabase-storage';
 import { randomUUID } from 'crypto';
 import path from 'path';
+import {
+  CANONICAL_PHOTO_TYPES,
+  normalizePhotoType,
+} from '@/lib/job-taxonomy';
 
-const VALID_PHOTO_TYPES = ['before', 'after', 'progress', 'issue', 'other'];
+const VALID_PHOTO_TYPES = [...CANONICAL_PHOTO_TYPES];
 
 /**
  * Extract the binary content + mime type from a base64 data URL.
@@ -61,8 +65,11 @@ export async function GET(
     }
 
     const where: { jobId: string; photoType?: string } = { jobId };
-    if (type && VALID_PHOTO_TYPES.includes(type)) {
-      where.photoType = type;
+    if (type) {
+      // Normalize the requested type so legacy mobile queries (e.g. ?type=during)
+      // resolve to the canonical bucket (progress) instead of returning empty.
+      const normalized = normalizePhotoType(type);
+      if (normalized) where.photoType = normalized;
     }
 
     const photos = await db.jobPhoto.findMany({
@@ -162,11 +169,15 @@ export async function POST(
       syncStatus = body.syncStatus || 'synced';
     }
 
-    if (!VALID_PHOTO_TYPES.includes(photoType)) {
-      return NextResponse.json(
-        { error: `Invalid photoType. Must be one of: ${VALID_PHOTO_TYPES.join(', ')}` },
-        { status: 400 }
-      );
+    // Normalize legacy / mobile photo types (during → progress, evidence → issue)
+    // so both clients can upload without being rejected. If the input is not a
+    // recognized alias, fall back to 'before' rather than 400-ing, to avoid
+    // blocking field staff.
+    const normalizedType = normalizePhotoType(photoType);
+    if (normalizedType) {
+      photoType = normalizedType;
+    } else {
+      photoType = 'before';
     }
 
     if (!fileDataUrl) {
