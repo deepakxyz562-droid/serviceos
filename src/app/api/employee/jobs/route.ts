@@ -120,6 +120,7 @@ interface LifecycleTimestamps {
   arrived?: string;
   working?: string;
   paused?: string;
+  resumed?: string;
   completed?: string;
 }
 
@@ -135,7 +136,11 @@ function parseLifecycleTimestamps(notificationLogJson: string): LifecycleTimesta
           : undefined;
       if (!ts) continue;
       const action = String(entry.action || '').toLowerCase();
-      if (action in out) continue; // keep first
+      // FIX (Q1.5): Do NOT "keep first" — for pause/resume we want the LATEST
+      // event so multi-cycle pause→resume→pause→resume resolves correctly.
+      // The previous `if (action in out) continue;` guard was buggy (it
+      // checked action names against stage keys, which never matched) AND
+      // would have prevented correct multi-cycle resolution if it had matched.
       if (action === 'assigned') out.assigned = ts;
       else if (action === 'accepted') out.accepted = ts;
       else if (action === 'start_travel' || action === 'travelling' || action === 'started' || action === 'en_route')
@@ -143,6 +148,7 @@ function parseLifecycleTimestamps(notificationLogJson: string): LifecycleTimesta
       else if (action === 'arrive' || action === 'arrived') out.arrived = ts;
       else if (action === 'start_work' || action === 'working') out.working = ts;
       else if (action === 'pause' || action === 'paused') out.paused = ts;
+      else if (action === 'resume' || action === 'resumed') out.resumed = ts;
       else if (action === 'complete' || action === 'completed') out.completed = ts;
     }
   } catch {
@@ -156,7 +162,15 @@ function deriveLifecycleState(
   ts: LifecycleTimestamps,
 ): string {
   if (job.status === 'completed' || job.completedAt) return 'completed';
-  if (ts.working) return ts.paused ? 'paused' : 'working';
+  // FIX (Q1.5): Correctly resolve working vs paused across multi-cycle
+  // pause/resume. If the most recent pause/resume event was a resume
+  // (i.e. resumed > paused), the job is working again. ISO 8601 timestamps
+  // compare lexicographically, so a simple string comparison is safe.
+  if (ts.working) {
+    if (ts.resumed && (!ts.paused || ts.resumed > ts.paused)) return 'working';
+    if (ts.paused) return 'paused';
+    return 'working';
+  }
   if (ts.arrived) return 'arrived';
   if (ts.travelling) return 'travelling';
   if (ts.accepted || job.assignmentStatus === 'accepted') return 'accepted';

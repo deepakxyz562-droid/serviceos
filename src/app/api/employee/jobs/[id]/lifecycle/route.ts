@@ -332,58 +332,88 @@ export async function POST(
       }
 
       case 'pause': {
+        // FIX (Q1.5): Pause must update BOTH Job.status AND metadataJson
+        // (setLifecycleTimestamp 'paused') — not just notificationLogJson.
+        // Previously only notificationLogJson was written, so the job's
+        // canonical lifecycle state never advanced to 'paused' and the UI
+        // could not reliably render the Resume button. Mirrors admin route.
         updatedJob = await db.job.update({
           where: { id: jobId },
-          data: { notificationLogJson: logJson },
+          data: {
+            status: 'paused',
+            notificationLogJson: logJson,
+            metadataJson: setLifecycleTimestamp(job.metadataJson, 'paused', now),
+          },
           include: { assignee: true, customer: true },
         });
 
-        const activeEntry = await db.jobTimeEntry.findFirst({
-          where: { jobId: job.id, employeeId: employee.id, status: 'active' },
-          orderBy: { startedAt: 'desc' },
-        });
-        if (activeEntry) {
-          const pauses = parsePauses(activeEntry.pausesJson);
-          pauses.push({ start: now.toISOString(), end: null, minutes: 0 });
-          await db.jobTimeEntry.update({
-            where: { id: activeEntry.id },
-            data: {
-              status: 'paused',
-              pausesJson: JSON.stringify(pauses),
-            },
+        // JobTimeEntry side-effect is non-critical — don't fail the lifecycle
+        // action if the JobTimeEntry table/update errors (matches arrive/complete).
+        try {
+          const activeEntry = await db.jobTimeEntry.findFirst({
+            where: { jobId: job.id, employeeId: employee.id, status: 'active' },
+            orderBy: { startedAt: 'desc' },
           });
+          if (activeEntry) {
+            const pauses = parsePauses(activeEntry.pausesJson);
+            pauses.push({ start: now.toISOString(), end: null, minutes: 0 });
+            await db.jobTimeEntry.update({
+              where: { id: activeEntry.id },
+              data: {
+                status: 'paused',
+                pausesJson: JSON.stringify(pauses),
+              },
+            });
+          }
+        } catch (entryErr) {
+          console.warn('[lifecycle/pause] JobTimeEntry update failed (non-critical):', entryErr instanceof Error ? entryErr.message : entryErr);
         }
         break;
       }
 
       case 'resume': {
+        // FIX (Q1.5): Resume must update BOTH Job.status (back to in_progress)
+        // AND metadataJson (setLifecycleTimestamp 'resumed') — not just
+        // notificationLogJson. Without this, parseLifecycleTimestamps never
+        // sees a 'resumed' event and deriveLifecycleState permanently returns
+        // 'paused' after the first pause, leaving the UI stuck on Resume Work.
         updatedJob = await db.job.update({
           where: { id: jobId },
-          data: { notificationLogJson: logJson },
+          data: {
+            status: 'in_progress',
+            notificationLogJson: logJson,
+            metadataJson: setLifecycleTimestamp(job.metadataJson, 'resumed', now),
+          },
           include: { assignee: true, customer: true },
         });
 
-        const pausedEntry = await db.jobTimeEntry.findFirst({
-          where: { jobId: job.id, employeeId: employee.id, status: 'paused' },
-          orderBy: { startedAt: 'desc' },
-        });
-        if (pausedEntry) {
-          const pauses = parsePauses(pausedEntry.pausesJson);
-          const openIdx = pauses.findIndex((p) => !p.end);
-          if (openIdx >= 0) {
-            pauses[openIdx].end = now.toISOString();
-            pauses[openIdx].minutes = Math.max(
-              1,
-              Math.round((now.getTime() - new Date(pauses[openIdx].start).getTime()) / 60000),
-            );
-          }
-          await db.jobTimeEntry.update({
-            where: { id: pausedEntry.id },
-            data: {
-              status: 'active',
-              pausesJson: JSON.stringify(pauses),
-            },
+        // JobTimeEntry side-effect is non-critical — don't fail the lifecycle
+        // action if the JobTimeEntry table/update errors (matches arrive/complete).
+        try {
+          const pausedEntry = await db.jobTimeEntry.findFirst({
+            where: { jobId: job.id, employeeId: employee.id, status: 'paused' },
+            orderBy: { startedAt: 'desc' },
           });
+          if (pausedEntry) {
+            const pauses = parsePauses(pausedEntry.pausesJson);
+            const openIdx = pauses.findIndex((p) => !p.end);
+            if (openIdx >= 0) {
+              pauses[openIdx].end = now.toISOString();
+              pauses[openIdx].minutes = Math.max(
+                1,
+                Math.round((now.getTime() - new Date(pauses[openIdx].start).getTime()) / 60000),
+              );
+            }
+            await db.jobTimeEntry.update({
+              where: { id: pausedEntry.id },
+              data: {
+                status: 'active',
+                pausesJson: JSON.stringify(pauses),
+              },
+            });
+          }
+        } catch (entryErr) {
+          console.warn('[lifecycle/resume] JobTimeEntry update failed (non-critical):', entryErr instanceof Error ? entryErr.message : entryErr);
         }
         break;
       }

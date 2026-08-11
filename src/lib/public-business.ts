@@ -770,7 +770,7 @@ export interface IndexableBusinessUrl {
 /**
  * List all indexable businesses for the sitemap.
  *
- * Returns `{ url, lastModified }` tuples so the sitemap can emit a real
+ * Returns `{ url, lastModified, tier }` tuples so the sitemap can emit a real
  * `<lastmod>` per URL (the tenant's `updatedAt`), giving Google an accurate
  * freshness signal. Previously this returned plain `string[]` which forced
  * the sitemap to use a shared "now" timestamp for every entry — providing
@@ -779,41 +779,105 @@ export interface IndexableBusinessUrl {
  * The `lastModified` field is optional so callers that only need URLs can
  * ignore it. The sitemap.ts consumer uses it; other callers (if any) can
  * just read `.url`.
+ *
+ * FIX (Q2-Fix 1): Previously this function called `db.tenant.findMany` with
+ * NO `take`/`skip`, then filtered in JS. In production (USE_SUPABASE_DB=true)
+ * the Supabase REST adapter only attaches a PostgREST `Range` header when
+ * `skip` or `take` is provided — without it PostgREST caps the response at
+ * 1000 rows by default. With ~100K marketplace tenants this silently
+ * truncated the sitemap to ~900 entries (1000 − ~100 pruned by the JS-side
+ * description/image filter).
+ *
+ * The fix paginates the DB fetch in a loop using `skip`/`take` so each page
+ * gets its own `Range` header, bypassing the default cap. The page size is
+ * 1000 to match the PostgREST default cap (slightly under to leave headroom).
+ * The loop terminates when a page returns fewer rows than `pageSize`.
+ *
+ * The optional `offset`/`limit` parameters support the sitemap-index pattern
+ * (Fix 2): `src/app/sitemap.ts` calls this in a loop with `generateSitemaps()`
+ * to emit `/sitemap/0.xml`, `/sitemap/1.xml`, … each with ≤40K URLs.
  */
-export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[]> {
+export async function listIndexableBusinessUrls(options?: {
+  offset?: number
+  limit?: number
+}): Promise<IndexableBusinessUrl[]> {
   try {
-    // Fetch tenants with publicProfileEnabled=true (cheap filter first),
-    // then apply the rest of the "rich enough" rule in JS.
-    //
-    // SEO FIX (Concern #3): We now also select `updatedAt` so the sitemap
-    // can emit a real `<lastmod>` per URL instead of a shared "now".
-    const tenants = await db.tenant.findMany({
-      where: {
-        publicProfileEnabled: true,
-        suspendedAt: null,
-      },
-      select: {
-        id: true,
-        slug: true,
-        industry: true,
-        city: true,
-        state: true,
-        country: true,
-        description: true,
-        claimed: true,
-        coverImage: true,
-        logo: true,
-        galleryJson: true,
-        reviewCount: true,
-        identityVerified: true,
-        businessVerified: true,
-        insuranceVerified: true,
-        licenceNumber: true,
-        updatedAt: true,
-      },
-    })
+    const PAGE_SIZE = 1000
+    const hardLimit = options?.limit // optional cap for sitemap-index pagination
+    const offsetStart = Math.max(0, options?.offset ?? 0)
 
-    // ── Filter + tier-score in JS (single DB round-trip) ────────────────
+    const allTenants: Array<{
+      id: string
+      slug: string
+      industry: string
+      city: string
+      state: string
+      country: string
+      description: string | null
+      claimed: boolean
+      coverImage: string | null
+      logo: string | null
+      galleryJson: string | null
+      reviewCount: number | null
+      identityVerified: boolean
+      businessVerified: boolean
+      insuranceVerified: boolean
+      licenceNumber: string | null
+      updatedAt: Date | string
+    }> = []
+
+    let skip = offsetStart
+    let fetchedThisCall = 0
+    // Loop until either (a) a page returns < PAGE_SIZE rows (we've exhausted
+    // the dataset), or (b) we've hit the optional `limit` cap.
+    while (true) {
+      // If a hard limit is set, don't fetch beyond it.
+      if (hardLimit !== undefined && fetchedThisCall >= hardLimit) break
+      const remaining = hardLimit !== undefined ? hardLimit - fetchedThisCall : undefined
+      const take = remaining !== undefined ? Math.min(PAGE_SIZE, remaining) : PAGE_SIZE
+
+      const page = await db.tenant.findMany({
+        where: {
+          publicProfileEnabled: true,
+          suspendedAt: null,
+          // Push the description-non-null check down into the DB layer so we
+          // don't waste page budget on rows that will be JS-pruned. PostgREST
+          // has no native char-length filter, so the ≥40-char check stays in JS,
+          // but `not: null` alone prunes a meaningful chunk of empty rows.
+          description: { not: null },
+        },
+        select: {
+          id: true,
+          slug: true,
+          industry: true,
+          city: true,
+          state: true,
+          country: true,
+          description: true,
+          claimed: true,
+          coverImage: true,
+          logo: true,
+          galleryJson: true,
+          reviewCount: true,
+          identityVerified: true,
+          businessVerified: true,
+          insuranceVerified: true,
+          licenceNumber: true,
+          updatedAt: true,
+        },
+        skip,
+        take,
+        orderBy: { id: 'asc' }, // stable pagination order
+      })
+
+      if (!page || page.length === 0) break
+      allTenants.push(...page)
+      fetchedThisCall += page.length
+      if (page.length < take) break // last page reached
+      skip += page.length
+    }
+
+    // ── Filter + tier-score in JS (single pass over the paginated result) ──
     // We fetch the fields needed for tier scoring alongside the existing
     // "rich enough" check, then compute the tier per tenant. Tier C
     // listings are excluded from the sitemap (noindex,follow). Tier A + B
@@ -829,7 +893,7 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
     // per-page robots directive uses the accurate tier (with real service
     // count) computed in buildPublicBusinessData(). The sitemap priority
     // is a hint, not a directive; under-scoring is safe.
-    const candidates = tenants.filter((t) => {
+    const candidates = allTenants.filter((t) => {
       const descriptionLongEnough = Boolean(
         t.description && t.description.trim().length >= 40,
       )
@@ -850,9 +914,6 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
     const entries: IndexableBusinessUrl[] = []
     for (const t of candidates) {
       // ── Tier scoring (conservative — serviceCount=0 for sitemap) ──────
-      // See the comment above the candidates filter for why we don't fetch
-      // the per-tenant service count here. The per-page robots directive
-      // uses the accurate tier; the sitemap priority is a hint.
       let galleryCount = 0
       try {
         const g = JSON.parse(t.galleryJson || '[]')
@@ -880,10 +941,6 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
         publicProfileEnabled: true, // already filtered above
       })
       // Tier C is excluded from the sitemap entirely (noindex,follow).
-      // The `candidates` filter already ensured description ≥40 chars + has
-      // image, so the only way to land in Tier C here is when
-      // publicProfileEnabled was true at the DB filter but the tier scorer
-      // returns C. Belt-and-suspenders: skip Tier C explicitly.
       if (!isIndexableByTier(tier)) continue
 
       // PLURAL industry slug — matches the new /{pluralIndustry}/{city}/{slug}
@@ -909,6 +966,53 @@ export async function listIndexableBusinessUrls(): Promise<IndexableBusinessUrl[
   } catch (err) {
     console.error('[public-business] listIndexableBusinessUrls error:', err)
     return []
+  }
+}
+
+/**
+ * Count indexable marketplace tenants for sitemap-index sizing.
+ *
+ * Used by `generateSitemaps()` in `src/app/sitemap.ts` to compute how many
+ * sitemap files to emit (each capped at PER_FILE URLs, well under Google's
+ * 50,000-URL-per-file limit).
+ *
+ * This returns the raw count of tenants matching the same `where` clause as
+ * `listIndexableBusinessUrls()` (publicProfileEnabled + not suspended +
+ * description not null). The actual emitted URL count will be ≤ this number
+ * after the JS-side description-length/image/tier filter is applied — but
+ * using the raw count for sizing is safe (over-estimates pages, never under).
+ */
+export async function countIndexableBusinessTenants(): Promise<number> {
+  try {
+    // NOTE: Prisma `count` is NOT supported by the Supabase REST adapter
+    // (PostgREST `count` is returned via a `Prefer: count=exact` header +
+    // `Content-Range` response header, which the adapter doesn't implement).
+    // Fall back to paginating `findMany` with `select: { id: true }` and
+    // summing page lengths — cheap (single column) and reliable.
+    const PAGE_SIZE = 1000
+    let total = 0
+    let skip = 0
+    while (true) {
+      const page = await db.tenant.findMany({
+        where: {
+          publicProfileEnabled: true,
+          suspendedAt: null,
+          description: { not: null },
+        },
+        select: { id: true },
+        skip,
+        take: PAGE_SIZE,
+        orderBy: { id: 'asc' },
+      })
+      if (!page || page.length === 0) break
+      total += page.length
+      if (page.length < PAGE_SIZE) break
+      skip += page.length
+    }
+    return total
+  } catch (err) {
+    console.error('[public-business] countIndexableBusinessTenants error:', err)
+    return 0
   }
 }
 
