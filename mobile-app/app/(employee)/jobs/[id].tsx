@@ -183,22 +183,43 @@ function LifecycleBadge({ state }: { state: string }) {
 }
 
 // Resolve the effective V1.5 lifecycle stage for a job: prefer lifecycleState
-// (returned by /api/jobs/[id]), fall back to a status-derived mapping so
-// legacy jobs without lifecycleState still render the right footer buttons.
-// Ported from the PWA's resolveLifecycleStage (employee-portal-layout.tsx).
+// (returned by /api/jobs/[id] — now enriched), fall back to a status-derived
+// mapping so legacy jobs without lifecycleState still render the right footer
+// buttons. Ported from the PWA's resolveLifecycleStage.
+//
+// FIX: Previously missing cases for 'travelling', 'arrived', 'paused' — all
+// three fell through to default 'assigned', which broke the lifecycle flow
+// (after start_travel/arrive/pause the footer snapped back to "Accept Job").
+// Also added assignmentStatus==='accepted' check for the 'assigned' case,
+// mirroring the PWA (the employee backend route keeps status='assigned' but
+// sets assignmentStatus='accepted' after the accept action).
 function resolveLifecycleStage(job: Job | undefined | null): string {
   if (!job) return 'assigned';
   if (job.lifecycleState) return job.lifecycleState;
   switch (job.status) {
     case 'accepted':
       return 'accepted';
+    case 'travelling':
+    case 'en_route':
+      return 'travelling';
+    case 'arrived':
+    case 'on_site':
+      return 'arrived';
     case 'in_progress':
+    case 'working':
       return 'working';
+    case 'paused':
+    case 'on_hold':
+      return 'paused';
     case 'completed':
     case 'invoice_generated':
       return job.status;
+    case 'cancelled':
+      return 'cancelled';
     case 'assigned':
-      return 'assigned';
+      // The employee lifecycle route keeps status='assigned' but sets
+      // assignmentStatus='accepted' after accept. Detect that here.
+      return job.assignmentStatus === 'accepted' ? 'accepted' : 'assigned';
     case 'pending':
       return 'assigned';
     default:
@@ -275,6 +296,18 @@ export default function JobDetailScreen() {
       show('Unable to open maps.', 'error');
     });
   }, [job, show]);
+
+  // Smart back button: try router.back() first (works when there's a previous
+  // screen in the stack). If the stack is empty (deep link, notification tap),
+  // fall back to the Jobs tab so the user isn't stuck. This fixes the reported
+  // "back button not going to job page" issue.
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(employee)/jobs');
+    }
+  }, []);
 
   const runLifecycle = useCallback(
     async (
@@ -380,7 +413,7 @@ export default function JobDetailScreen() {
   if (isLoading && !job) {
     return (
       <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-background">
-        <Header onBack={() => router.back()} title="Job Details" />
+        <Header onBack={handleBack} title="Job Details" />
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 40 + insets.bottom }}>
           <SkeletonList count={3} />
         </ScrollView>
@@ -391,7 +424,7 @@ export default function JobDetailScreen() {
   if (error || !job) {
     return (
       <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-background">
-        <Header onBack={() => router.back()} title="Job Details" />
+        <Header onBack={handleBack} title="Job Details" />
         <EmptyState
           icon={<StickyNote size={48} color={COLORS.mutedForeground} />}
           title="Job not found"
@@ -425,7 +458,7 @@ export default function JobDetailScreen() {
   // double-padding when SafeAreaView also applies paddingBottom.
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
-      <Header onBack={() => router.back()} title="Job Details" />
+      <Header onBack={handleBack} title="Job Details" />
 
       <ScrollView
         className="flex-1"

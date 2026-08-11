@@ -34,6 +34,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const filter = searchParams.get('filter') || 'all';
 
+    // Pagination support: ?limit=50&offset=0
+    // Default: no limit (backwards-compatible — returns all). The mobile app
+    // can opt into pagination by sending ?limit=50&offset=0 for faster loads.
+    const limitRaw = searchParams.get('limit');
+    const offsetRaw = searchParams.get('offset');
+    const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 50, 1), 200) : undefined;
+    const offset = offsetRaw ? Math.max(parseInt(offsetRaw, 10) || 0, 0) : 0;
+
     // Today's window
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
@@ -62,41 +70,98 @@ export async function GET(request: NextRequest) {
     }
     // 'all' → no extra filter
 
+    // FIX: Use `select` to drop heavy JSON columns (metadataJson,
+    // notificationLogJson) that the list view doesn't need — they can be
+    // several KB each and bloat the payload for large job lists. The job
+    // detail endpoint (/api/jobs/[id]) still returns them.
+    //
+    // Also apply pagination when limit is provided.
     const jobs = await db.job.findMany({
       where,
-      include: {
-        assignee: true,
-        customer: true,
+      select: {
+        id: true,
+        title: true,
+        jobNumber: true,
+        status: true,
+        assignmentStatus: true,
+        scheduledAt: true,
+        startedAt: true,
+        completedAt: true,
+        actualStartTime: true,
+        actualEndTime: true,
+        createdAt: true,
+        address: true,
+        latitude: true,
+        longitude: true,
+        notes: true,
+        internalNotes: true,
+        quotedAmount: true,
+        estimatedDuration: true,
+        priority: true,
+        type: true,
+        verificationPin: true,
+        customerPin: true,
+        requiresPin: true,
+        notificationLogJson: true, // needed for parseLifecycleTimestamps
+        // metadataJson intentionally omitted — too heavy for list view
+        assignee: {
+          select: { id: true, name: true, phone: true, role: true, status: true, avatar: true, rating: true, completedJobs: true },
+        },
+        customer: {
+          select: { id: true, name: true, phone: true, email: true, address: true },
+        },
         resource: true,
       },
       orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'desc' }],
+      ...(limit ? { take: limit, skip: offset } : {}),
     });
 
-    // Parse lifecycle timestamps from notificationLogJson + add count of
-    // JobPhoto / JobSignature / JobChecklist for quick UI display.
-    const enriched = await Promise.all(
-      jobs.map(async (job) => {
-        const lifecycleTimestamps = parseLifecycleTimestamps(job.notificationLogJson);
-        const lifecycleState = deriveLifecycleState(job, lifecycleTimestamps);
+    // FIX: Batch the count queries. Previously this did 3 separate COUNT
+    // queries PER job (3N+1 total queries). Now we do 3 grouped aggregate
+    // queries total (one for photos, one for signatures, one for checklists),
+    // then merge the counts in memory. This reduces DB round-trips from
+    // 3N+1 to 4, a massive speedup for employees with many jobs.
+    const jobIds = jobs.map((j) => j.id);
 
-        const [photoCount, signatureCount, checklistCount] = await Promise.all([
-          db.jobPhoto.count({ where: { jobId: job.id } }),
-          db.jobSignature.count({ where: { jobId: job.id } }),
-          db.jobChecklist.count({ where: { jobId: job.id } }),
-        ]);
-
-        return {
-          ...job,
-          lifecycleTimestamps,
-          lifecycleState,
-          _counts: {
-            photos: photoCount,
-            signatures: signatureCount,
-            checklists: checklistCount,
-          },
-        };
+    const [photoCounts, signatureCounts, checklistCounts] = await Promise.all([
+      db.jobPhoto.groupBy({
+        by: ['jobId'],
+        where: { jobId: { in: jobIds } },
+        _count: { _all: true },
       }),
-    );
+      db.jobSignature.groupBy({
+        by: ['jobId'],
+        where: { jobId: { in: jobIds } },
+        _count: { _all: true },
+      }),
+      db.jobChecklist.groupBy({
+        by: ['jobId'],
+        where: { jobId: { in: jobIds } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    // Build lookup maps for O(1) merge
+    const photoMap = new Map(photoCounts.map((r) => [r.jobId, r._count._all]));
+    const sigMap = new Map(signatureCounts.map((r) => [r.jobId, r._count._all]));
+    const checklistMap = new Map(checklistCounts.map((r) => [r.jobId, r._count._all]));
+
+    // Enrich with lifecycle state + timestamps + counts (in-memory, no DB hits)
+    const enriched = jobs.map((job) => {
+      const lifecycleTimestamps = parseLifecycleTimestamps(job.notificationLogJson);
+      const lifecycleState = deriveLifecycleState(job, lifecycleTimestamps);
+
+      return {
+        ...job,
+        lifecycleTimestamps,
+        lifecycleState,
+        _counts: {
+          photos: photoMap.get(job.id) ?? 0,
+          signatures: sigMap.get(job.id) ?? 0,
+          checklists: checklistMap.get(job.id) ?? 0,
+        },
+      };
+    });
 
     return NextResponse.json(enriched);
   } catch (error) {

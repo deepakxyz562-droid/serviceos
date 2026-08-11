@@ -59,12 +59,46 @@ function unwrap<T>(r: unknown, key?: string): T {
 
 // ── Jobs list / detail ──────────────────────────────────────────────
 
+const JOBS_PAGE_SIZE = 50;
+
 export function useEmployeeJobs(filter: 'all' | 'today' | 'scheduled' = 'all') {
   return useQuery({
     queryKey: ['jobs', 'employee', filter],
     queryFn: async () => {
-      const r = await api.get<unknown>('/api/employee/jobs', { filter });
+      // FIX: Use pagination (?limit=50) to avoid fetching ALL jobs at once.
+      // The backend now supports ?limit=&offset= params. We fetch the first
+      // page here; useLoadMoreJobs() below handles loading additional pages.
+      const r = await api.get<unknown>('/api/employee/jobs', {
+        filter,
+        limit: JOBS_PAGE_SIZE,
+        offset: 0,
+      });
       return asArray<Job>(r);
+    },
+  });
+}
+
+/**
+ * Load additional pages of employee jobs (infinite-scroll / "Load More").
+ * Uses the same query key prefix so the first page is shared.
+ */
+export function useLoadMoreJobs(filter: 'all' | 'today' | 'scheduled' = 'all') {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ offset }: { offset: number }) => {
+      const r = await api.get<unknown>('/api/employee/jobs', {
+        filter,
+        limit: JOBS_PAGE_SIZE,
+        offset,
+      });
+      return asArray<Job>(r);
+    },
+    onSuccess: (newJobs, vars) => {
+      // Append the new page to the existing cached list
+      qc.setQueryData(['jobs', 'employee', filter], (old: unknown) => {
+        const oldList = Array.isArray(old) ? old : [];
+        return [...oldList, ...newJobs];
+      });
     },
   });
 }
@@ -115,7 +149,22 @@ export function useJobLifecycle() {
           ...(longitude !== undefined ? { longitude } : {}),
         }
       ),
-    onSuccess: (_data, vars) => {
+    onSuccess: (data, vars) => {
+      // FIX: Use the mutation response to update the job detail cache
+      // INSTANTLY — don't wait for a refetch. The backend response
+      // includes { job: updatedJob } with the new status. We patch the
+      // cached job with the returned data so the UI (footer buttons,
+      // badges) updates immediately.
+      if (data?.job) {
+        const updatedJob = data.job as Job;
+        qc.setQueryData(['job', vars.id], (old: unknown) => {
+          if (!old || typeof old !== 'object') return updatedJob;
+          return { ...(old as object), ...updatedJob };
+        });
+      }
+      // Still invalidate to trigger a background refetch for the freshest
+      // data (lifecycleTimestamps, _counts, etc. which may not be in the
+      // mutation response). But the UI is already updated from setQueryData.
       qc.invalidateQueries({ queryKey: ['job', vars.id] });
       qc.invalidateQueries({ queryKey: ['jobs', 'employee'] });
     },

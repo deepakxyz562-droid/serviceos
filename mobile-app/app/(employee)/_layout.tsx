@@ -2,8 +2,17 @@
  * Employee Tab Layout — 5 bottom tabs matching the PWA employee portal.
  * Today | Jobs | Schedule | Shift | Profile
  *
- * Inventory is kept (per user request) as a push screen from the Today card.
- * All nested routes are declared with href:null.
+ * IMPORTANT (fix): headerShown is now `false` for ALL tab screens. Each
+ * screen renders its own in-page title at the top edge (with safe-area
+ * top padding). This eliminates the "double title" bug where the tab
+ * navigator's header AND the in-page title both showed.
+ *
+ * IMPORTANT (fix): Push screens (jobs/[id], inventory, inbox/[id], etc.)
+ * are NO LONGER declared here. They now have their own nested <Stack>
+ * layouts (jobs/_layout.tsx, inventory/_layout.tsx, inbox/_layout.tsx).
+ * This fixes:
+ *   1. The "6th tab" bug — inventory was auto-discovered as a tab.
+ *   2. The broken back button — tabs have no "back"; Stacks do.
  */
 import React from 'react';
 import { Tabs } from 'expo-router';
@@ -16,10 +25,7 @@ export default function EmployeeLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: true,
-        headerStyle: { backgroundColor: '#fff' },
-        headerTitleStyle: { fontWeight: 'bold', color: '#1F2937' },
-        headerShadowVisible: false,
+        headerShown: false,
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: {
@@ -37,7 +43,6 @@ export default function EmployeeLayout() {
         options={{
           title: 'Today',
           tabBarLabel: 'Today',
-          headerTitle: 'Today',
           tabBarIcon: ({ color }) => <Home size={22} color={color} />,
         }}
       />
@@ -54,7 +59,6 @@ export default function EmployeeLayout() {
         options={{
           title: 'Schedule',
           tabBarLabel: 'Schedule',
-          headerTitle: 'Schedule',
           tabBarIcon: ({ color }) => <CalendarDays size={22} color={color} />,
         }}
       />
@@ -71,27 +75,17 @@ export default function EmployeeLayout() {
         options={{
           title: 'Profile',
           tabBarLabel: 'Profile',
-          headerTitle: 'My Account',
           tabBarIcon: ({ color }) => <User size={22} color={color} />,
         }}
       />
 
-      {/* Push screens — hidden from tab bar */}
-      <Tabs.Screen name="jobs/[id]" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="jobs/[id]/photos" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="jobs/[id]/signature" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="jobs/[id]/checklist" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="jobs/[id]/expenses" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="jobs/[id]/visits" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="jobs/[id]/completion" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="jobs/[id]/time-entries" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="jobs/[id]/notes" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="inventory" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="inventory/[id]" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="inbox" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="inbox/[id]" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="notifications" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="performance" options={{ href: null, headerShown: false }} />
+      {/* Non-tab route groups — declared with href:null so they don't
+          appear in the tab bar. These are handled by their own nested
+          <Stack> layouts (see jobs/_layout.tsx, inventory/_layout.tsx,
+          inbox/_layout.tsx). Notifications/performance are standalone
+          push screens. */}
+      <Tabs.Screen name="notifications" options={{ href: null }} />
+      <Tabs.Screen name="performance" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -2,8 +2,13 @@
  * Customer Tab Layout — 5 bottom tabs matching the PWA customer portal.
  * Home | Browse (Marketplace) | Bookings | Invoices | Profile
  *
- * All push/detail screens are declared with href:null so they don't appear
- * in the tab bar but are still navigable via router.push().
+ * IMPORTANT (fix): headerShown is now `false` for ALL tab screens. Each
+ * screen renders its own in-page title at the top edge (with safe-area
+ * top padding). This eliminates the "double title" bug.
+ *
+ * IMPORTANT (fix): Push screens (marketplace/[slug], bookings/[id], etc.)
+ * are NO LONGER declared here. They now have their own nested <Stack>
+ * layouts. This fixes the broken back button (tabs have no "back").
  */
 import React from 'react';
 import { Tabs } from 'expo-router';
@@ -16,10 +21,7 @@ export default function CustomerLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: true,
-        headerStyle: { backgroundColor: '#fff' },
-        headerTitleStyle: { fontWeight: 'bold', color: '#1F2937' },
-        headerShadowVisible: false,
+        headerShown: false,
         tabBarActiveTintColor: COLORS.customerAccent,
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: {
@@ -37,7 +39,6 @@ export default function CustomerLayout() {
         options={{
           title: 'Home',
           tabBarLabel: 'Home',
-          headerTitle: 'Dashboard',
           tabBarIcon: ({ color }) => <Home size={22} color={color} />,
         }}
       />
@@ -46,7 +47,6 @@ export default function CustomerLayout() {
         options={{
           title: 'Marketplace',
           tabBarLabel: 'Browse',
-          headerTitle: 'Fieseros Marketplace',
           tabBarIcon: ({ color }) => <ShoppingBag size={22} color={color} />,
         }}
       />
@@ -71,23 +71,18 @@ export default function CustomerLayout() {
         options={{
           title: 'Profile',
           tabBarLabel: 'Profile',
-          headerTitle: 'My Account',
           tabBarIcon: ({ color }) => <User size={22} color={color} />,
         }}
       />
 
-      {/* Push screens — hidden from tab bar */}
-      <Tabs.Screen name="marketplace/[slug]" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="marketplace/book" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="bookings/[id]" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="invoices/[id]" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="tracking/[id]" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="quotes" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="messages" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="messages/[id]" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="reviews" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="payments" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="orders" options={{ href: null, headerShown: false }} />
+      {/* Non-tab route groups — handled by nested <Stack> layouts.
+          Standalone push screens declared href:null. */}
+      <Tabs.Screen name="tracking" options={{ href: null }} />
+      <Tabs.Screen name="quotes" options={{ href: null }} />
+      <Tabs.Screen name="messages" options={{ href: null }} />
+      <Tabs.Screen name="reviews" options={{ href: null }} />
+      <Tabs.Screen name="payments" options={{ href: null }} />
+      <Tabs.Screen name="orders" options={{ href: null }} />
     </Tabs>
   );
 }

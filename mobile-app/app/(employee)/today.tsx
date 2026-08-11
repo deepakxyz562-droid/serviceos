@@ -35,7 +35,6 @@ import {
   LogOut,
   Briefcase,
   Bell,
-  Package,
   CalendarClock,
   Hourglass,
 } from 'lucide-react-native';
@@ -424,14 +423,8 @@ export default function TodayScreen() {
               />
             </View>
 
-            {/* Quick-link cards: Inventory + Schedule */}
+            {/* Quick-link card: Schedule (Inventory moved to Profile screen) */}
             <View className="mb-3 flex-row gap-2">
-              <QuickLinkCard
-                icon={<Package size={20} color={COLORS.primary} />}
-                title="Manage Inventory"
-                subtitle="Stock, adjustments, alerts"
-                onPress={() => router.push('/(employee)/inventory')}
-              />
               <QuickLinkCard
                 icon={<CalendarClock size={20} color={COLORS.info} />}
                 title="My Schedule"

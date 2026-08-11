@@ -53,6 +53,7 @@ export async function GET(
             address: true,
           },
         },
+        resource: true,
       },
     });
 
@@ -63,11 +64,106 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ job });
+    // ── Enrich with lifecycle state + timestamps + counts ──
+    // FIX: Previously this endpoint returned only the raw job row, so the
+    // mobile app (which fetches job detail from this endpoint) never received
+    // `lifecycleState` or `lifecycleTimestamps`. The mobile's
+    // resolveLifecycleStage then fell back to job.status, which is missing
+    // cases for 'travelling', 'arrived', 'paused' — breaking the entire
+    // lifecycle flow on mobile. Now we enrich identically to the list endpoint
+    // (/api/employee/jobs) so both PWA and mobile receive the same data.
+    const lifecycleTimestamps = parseLifecycleTimestamps(job.notificationLogJson);
+    const lifecycleState = deriveLifecycleState(job, lifecycleTimestamps);
+
+    const [photoCount, signatureCount, checklistCount] = await Promise.all([
+      db.jobPhoto.count({ where: { jobId: job.id } }),
+      db.jobSignature.count({ where: { jobId: job.id } }),
+      db.jobChecklist.count({ where: { jobId: job.id } }),
+    ]);
+
+    return NextResponse.json({
+      job: {
+        ...job,
+        lifecycleTimestamps,
+        lifecycleState,
+        _counts: {
+          photos: photoCount,
+          signatures: signatureCount,
+          checklists: checklistCount,
+        },
+      },
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch job';
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+// ─── Lifecycle enrichment helpers (mirrors /api/employee/jobs) ────────────
+
+interface LifecycleEntry {
+  action: string;
+  timestamp?: string;
+  [key: string]: unknown;
+}
+
+interface LifecycleTimestamps {
+  assigned?: string;
+  accepted?: string;
+  travelling?: string;
+  arrived?: string;
+  working?: string;
+  paused?: string;
+  resumed?: string;
+  completed?: string;
+}
+
+function parseLifecycleTimestamps(notificationLogJson: string): LifecycleTimestamps {
+  const out: LifecycleTimestamps = {};
+  try {
+    const parsed = JSON.parse(notificationLogJson || '[]') as LifecycleEntry[];
+    if (!Array.isArray(parsed)) return out;
+    for (const entry of parsed) {
+      const ts =
+        typeof entry.timestamp === 'string'
+          ? entry.timestamp
+          : undefined;
+      if (!ts) continue;
+      const action = String(entry.action || '').toLowerCase();
+      // For pause/resume we want the LATEST event so multi-cycle
+      // pause→resume→pause→resume resolves correctly.
+      if (action === 'assigned') out.assigned = ts;
+      else if (action === 'accepted') out.accepted = ts;
+      else if (action === 'start_travel' || action === 'travelling' || action === 'started' || action === 'en_route')
+        out.travelling = ts;
+      else if (action === 'arrive' || action === 'arrived') out.arrived = ts;
+      else if (action === 'start_work' || action === 'working') out.working = ts;
+      else if (action === 'pause' || action === 'paused') out.paused = ts;
+      else if (action === 'resume' || action === 'resumed') out.resumed = ts;
+      else if (action === 'complete' || action === 'completed') out.completed = ts;
+    }
+  } catch {
+    // ignore
+  }
+  return out;
+}
+
+function deriveLifecycleState(
+  job: { status: string; actualStartTime?: Date | null; completedAt?: Date | null; assignmentStatus?: string | null },
+  ts: LifecycleTimestamps,
+): string {
+  if (job.status === 'completed' || job.completedAt) return 'completed';
+  // Correctly resolve working vs paused across multi-cycle pause/resume.
+  // ISO 8601 timestamps compare lexicographically.
+  if (ts.working) {
+    if (ts.resumed && (!ts.paused || ts.resumed > ts.paused)) return 'working';
+    if (ts.paused) return 'paused';
+    return 'working';
+  }
+  if (ts.arrived) return 'arrived';
+  if (ts.travelling) return 'travelling';
+  if (ts.accepted || job.assignmentStatus === 'accepted') return 'accepted';
+  return 'assigned';
 }
 
 export async function PUT(

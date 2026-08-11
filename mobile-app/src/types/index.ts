@@ -216,6 +216,9 @@ export interface Job {
   priority?: string | null;
   type?: string | null;
   metadataJson?: string | null;
+  // Set by the employee lifecycle route after `accept` (status stays 'assigned'
+  // but assignmentStatus becomes 'accepted'). Used by resolveLifecycleStage.
+  assignmentStatus?: string | null;
   customer: {
     id: string;
     name: string;

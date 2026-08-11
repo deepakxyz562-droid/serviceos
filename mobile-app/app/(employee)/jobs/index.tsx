@@ -25,10 +25,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Search, MapPin, Clock, X, Briefcase } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { Spinner } from '@/components/ui/Spinner';
+import { Spinner, InlineSpinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonList } from '@/components/ui/Skeleton';
-import { useEmployeeJobs } from '@/hooks/use-jobs';
+import { useEmployeeJobs, useLoadMoreJobs } from '@/hooks/use-jobs';
 import { COLORS, JOB_LIFECYCLE, type JobLifecycleState } from '@/lib/constants';
 import {
   getStatusVariant,
@@ -74,6 +74,16 @@ export default function JobsListScreen() {
   const [filter, setFilter] = useState<FilterKey>('all');
 
   const { data, isLoading, isRefetching, refetch, error } = useEmployeeJobs('all');
+  const loadMore = useLoadMoreJobs('all');
+
+  // "Load More" handler — fetches the next page and appends to the list.
+  // Only show the button if the last page returned a full page (50 jobs),
+  // indicating there may be more.
+  const hasMore = (data?.length ?? 0) >= 50;
+  const handleLoadMore = useCallback(() => {
+    if (loadMore.isPending || !hasMore) return;
+    loadMore.mutate({ offset: data?.length ?? 0 });
+  }, [loadMore, hasMore, data?.length]);
 
   const filteredJobs = useMemo<Job[]>(() => {
     const list = data ?? [];
@@ -269,6 +279,30 @@ export default function JobsListScreen() {
             colors={[COLORS.primary]}
             tintColor={COLORS.primary}
           />
+        }
+        ListFooterComponent={
+          hasMore ? (
+            <View className="mt-3 mb-2 items-center">
+              <Pressable
+                onPress={handleLoadMore}
+                disabled={loadMore.isPending}
+                className={`rounded-xl px-6 py-3 ${
+                  loadMore.isPending ? 'bg-muted' : 'bg-primary-500'
+                }`}
+                accessibilityRole="button"
+                accessibilityLabel="Load more jobs"
+              >
+                {loadMore.isPending ? (
+                  <View className="flex-row items-center">
+                    <InlineSpinner color="#fff" />
+                    <Text className="ml-2 font-semibold text-white">Loading…</Text>
+                  </View>
+                ) : (
+                  <Text className="font-semibold text-white">Load More</Text>
+                )}
+              </Pressable>
+            </View>
+          ) : null
         }
       />
     </SafeAreaView>
