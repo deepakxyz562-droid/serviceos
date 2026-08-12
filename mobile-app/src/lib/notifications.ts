@@ -37,6 +37,8 @@ function ensureNotificationHandler() {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
       shouldPlaySound: true,
       shouldSetBadge: true,
     }),
@@ -136,13 +138,18 @@ export async function registerForPushNotifications(): Promise<string | null> {
     // Using the app slug ('fieseros-app') does NOT work — Expo's push
     // service rejects it with 'Project ID not found'. We read the projectId
     // from Constants.expoConfig.extra.eas.projectId instead.
+    //
+    // CRITICAL FIX: Previously this returned `null` when no EAS projectId
+    // was configured, and the Profile screen's handleTogglePush() mistook
+    // that null for a permission denial — showing the misleading message
+    // "Permission denied — enable notifications in Settings." even though
+    // the user HAD granted permission. Now we throw a clear, actionable
+    // error so the UI can show the real reason push can't be enabled.
     const projectId = getEasProjectId();
     if (!projectId) {
-      console.warn(
-        '[notifications] No EAS projectId found. Push notifications require ' +
-          'an EAS project. Run `eas init` or set extra.eas.projectId in app.config.ts.'
+      throw new Error(
+        'Push notifications require an EAS project ID. Set EAS_PROJECT_ID in the app .env file (get it from https://expo.dev → your project → Project ID, or run `eas init` in the mobile-app directory).'
       );
-      return null;
     }
 
     const tokenData = await Notifications.getExpoPushTokenAsync({

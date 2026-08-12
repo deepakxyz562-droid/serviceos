@@ -92,10 +92,32 @@ export async function GET(request: NextRequest) {
     }
     // 'all' → no extra filter
 
-    // FIX: Use `select` to drop heavy JSON columns (metadataJson,
-    // notificationLogJson) that the list view doesn't need — they can be
-    // several KB each and bloat the payload for large job lists. The job
-    // detail endpoint (/api/jobs/[id]) still returns them.
+    // FIX: Use `select` to drop heavy JSON columns (metadataJson) that the
+    // list view doesn't need. notificationLogJson IS included because
+    // parseLifecycleTimestamps needs it. The job detail endpoint
+    // (/api/jobs/[id]) still returns the full row via `include`.
+    //
+    // CRITICAL FIX: The previous select clause included 6 fields that do NOT
+    // exist in the Prisma Job schema — `startedAt`, `latitude`, `longitude`,
+    // `internalNotes`, `customerPin`, `requiresPin`. Prisma throws a
+    // validation error ("Unknown field for select statement on model Job")
+    // whenever ANY of these is requested, causing every authenticated call
+    // to /api/employee/jobs to return 500 "Failed to fetch jobs".
+    //
+    // Impact:
+    //   - Mobile app (TanStack Query): surfaces the error as "Couldn't load
+    //     jobs / Failed to fetch jobs / Retry".
+    //   - PWA (employee-portal-view.tsx): silently swallows the 500
+    //     (`if (todayRes.ok)`) and shows empty job lists — so the bug was
+    //     INVISIBLE on the PWA but the data was never loading there either.
+    //
+    // Removing these fields fixes BOTH clients. The fields map to:
+    //   startedAt     → actualStartTime (already selected, exists in schema)
+    //   latitude/long → checkInLat/checkInLng (exist but are check-in GPS,
+    //                   not job location; the list view doesn't use them)
+    //   internalNotes → never existed; the notes screen reads job.notes
+    //   customerPin   → verificationPin (already selected) is the job PIN
+    //   requiresPin   → never existed; callers fall back to !!verificationPin
     //
     // Also apply pagination when limit is provided.
     const jobs = await db.job.findMany({
@@ -107,23 +129,17 @@ export async function GET(request: NextRequest) {
         status: true,
         assignmentStatus: true,
         scheduledAt: true,
-        startedAt: true,
         completedAt: true,
         actualStartTime: true,
         actualEndTime: true,
         createdAt: true,
         address: true,
-        latitude: true,
-        longitude: true,
         notes: true,
-        internalNotes: true,
         quotedAmount: true,
         estimatedDuration: true,
         priority: true,
         type: true,
         verificationPin: true,
-        customerPin: true,
-        requiresPin: true,
         notificationLogJson: true, // needed for parseLifecycleTimestamps
         // metadataJson intentionally omitted — too heavy for list view
         assignee: {
