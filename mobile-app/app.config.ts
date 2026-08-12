@@ -90,6 +90,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   extra: {
     API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL || 'https://fieseros.com',
+    // EAS project ID — required by expo-notifications getExpoPushTokenAsync
+    // (SDK 50+). Get this from https://expo.dev → your project → Project ID,
+    // or run `eas init` in the mobile-app directory. Set as EAS_PROJECT_ID
+    // in your .env file.
+    eas: {
+      projectId: process.env.EAS_PROJECT_ID || '',
+    },
     router: {
       origin: false,
     },

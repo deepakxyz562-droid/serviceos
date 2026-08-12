@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveEmployee } from '../shift/route';
 
 /**
- * GET /api/employee/jobs?filter=today|upcoming|completed|all
+ * GET /api/employee/jobs?filter=today|upcoming|completed|scheduled|all
  *
  * Lists jobs assigned to the current employee (resolved via JWT employeeId,
  * Employee.userId link, or workspace fallback).
@@ -13,7 +13,10 @@ import { resolveEmployee } from '../shift/route';
  *   - today      — scheduled for today (or assigned today with no scheduled date)
  *   - upcoming   — scheduled for a future date
  *   - completed  — status=completed
+ *   - scheduled  — scheduled within [from, to] date range (mobile app)
  *   - all        — everything assigned to this employee
+ *
+ * Pagination: ?limit=50&offset=0 (optional — mobile app uses this)
  *
  * Includes customer + assignee relations and a parsed `lifecycleTimestamps`
  * derived from the job's notificationLogJson (so the UI can render the
@@ -42,6 +45,10 @@ export async function GET(request: NextRequest) {
     const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 50, 1), 200) : undefined;
     const offset = offsetRaw ? Math.max(parseInt(offsetRaw, 10) || 0, 0) : 0;
 
+    // Date range for filter=scheduled (mobile app's Schedule screen)
+    const fromRaw = searchParams.get('from');
+    const toRaw = searchParams.get('to');
+
     // Today's window
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
@@ -67,6 +74,21 @@ export async function GET(request: NextRequest) {
       where.status = { notIn: ['completed', 'cancelled'] };
     } else if (filter === 'completed') {
       where.status = 'completed';
+    } else if (filter === 'scheduled') {
+      // Mobile app Schedule screen: jobs within [from, to] date range.
+      // Exclude cancelled jobs. If from/to are missing, behaves like 'all'.
+      where.status = { not: 'cancelled' };
+      if (fromRaw && toRaw) {
+        const fromDate = new Date(fromRaw);
+        fromDate.setHours(0, 0, 0, 0);
+        const toDate = new Date(toRaw);
+        toDate.setHours(23, 59, 59, 999);
+        where.scheduledAt = { gte: fromDate, lte: toDate };
+      } else if (fromRaw) {
+        const fromDate = new Date(fromRaw);
+        fromDate.setHours(0, 0, 0, 0);
+        where.scheduledAt = { gte: fromDate };
+      }
     }
     // 'all' → no extra filter
 
@@ -113,7 +135,11 @@ export async function GET(request: NextRequest) {
         resource: true,
       },
       orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'desc' }],
-      ...(limit ? { take: limit, skip: offset } : {}),
+      // FIX: Only add `skip` when offset > 0. The Supabase REST adapter
+      // (PostgREST) can error on `skip: 0` in some configurations, and it's
+      // a no-op anyway. This also makes the first-page query identical to
+      // the PWA's non-paginated query (which works reliably).
+      ...(limit ? { take: limit, ...(offset > 0 ? { skip: offset } : {}) } : {}),
     });
 
     // FIX: Batch the count queries. Previously this did 3 separate COUNT
@@ -146,15 +172,36 @@ export async function GET(request: NextRequest) {
     const sigMap = new Map(signatureCounts.map((r) => [r.jobId, r._count._all]));
     const checklistMap = new Map(checklistCounts.map((r) => [r.jobId, r._count._all]));
 
-    // Enrich with lifecycle state + timestamps + counts (in-memory, no DB hits)
+    // Batch-fetch service names for jobs that have a serviceId.
+    // The Job model stores `serviceId` as a scalar (no Prisma relation),
+    // so we look up Service records separately and merge in memory —
+    // same pattern as the count queries above.
+    const serviceIds = [
+      ...new Set(
+        jobs.map((j) => (j as { serviceId?: string | null }).serviceId).filter(Boolean) as string[]
+      ),
+    ];
+    const services =
+      serviceIds.length > 0
+        ? await db.service.findMany({
+            where: { id: { in: serviceIds } },
+            select: { id: true, name: true, basePrice: true, duration: true, icon: true },
+          })
+        : [];
+    const serviceMap = new Map(services.map((s) => [s.id, s]));
+
+    // Enrich with lifecycle state + timestamps + counts + service (in-memory)
     const enriched = jobs.map((job) => {
       const lifecycleTimestamps = parseLifecycleTimestamps(job.notificationLogJson);
       const lifecycleState = deriveLifecycleState(job, lifecycleTimestamps);
+      const serviceId = (job as { serviceId?: string | null }).serviceId;
+      const service = serviceId ? serviceMap.get(serviceId) ?? null : null;
 
       return {
         ...job,
         lifecycleTimestamps,
         lifecycleState,
+        service,
         _counts: {
           photos: photoMap.get(job.id) ?? 0,
           signatures: sigMap.get(job.id) ?? 0,
@@ -165,7 +212,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(enriched);
   } catch (error) {
-    console.error('[employee/jobs GET] error:', error);
+    // Log the FULL error (including Prisma code + message) so server logs
+    // show exactly what failed. The generic 'Failed to fetch jobs' message
+    // is returned to the client for security.
+    const err = error as { code?: string; message?: string; stack?: string };
+    console.error('[employee/jobs GET] error:', {
+      code: err?.code,
+      message: err?.message,
+      stack: err?.stack?.split('\n').slice(0, 5).join('\n'),
+    });
     return NextResponse.json({ error: 'Failed to fetch jobs' }, { status: 500 });
   }
 }

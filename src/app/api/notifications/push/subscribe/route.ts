@@ -8,21 +8,23 @@ export const dynamic = 'force-dynamic';
 /**
  * POST /api/notifications/push/subscribe
  *
- * Persist a Web Push subscription for the authenticated user. Called from the
- * browser after `pushManager.subscribe()` succeeds. We look up an existing row
- * by `[userId, endpoint]` and update-or-create it so re-subscribing the same
- * device doesn't create duplicate rows.
+ * Persist a push subscription for the authenticated user. Supports TWO formats:
+ *
+ * 1. Web Push (browser/PWA):
+ *    { endpoint: string, keys: { p256dh, auth }, expirationTime? }
+ *    Requires VAPID keys to be configured on the server.
+ *
+ * 2. Expo Push (native mobile app):
+ *    { platform: 'ios'|'android', token: string, expoPushToken: string }
+ *    Does NOT require VAPID keys — Expo handles push delivery internally.
+ *    We store the Expo token as a synthetic endpoint: `expo://{token}`.
+ *
+ * We look up an existing row by `[userId, endpoint]` and update-or-create
+ * it so re-subscribing the same device doesn't create duplicate rows.
  *
  * NOTE: We do NOT use Prisma's compound-unique `upsert()` because the Supabase
  * REST adapter (used in production) cannot resolve the `userId_endpoint`
  * constraint name. We use findFirst → update | create instead.
- *
- * Body:
- *   {
- *     endpoint: string,
- *     keys: { p256dh: string, auth: string },
- *     expirationTime?: number | null
- *   }
  *
  * NOTE: tenantId is required by the PushSubscription model. If the user has
  * no tenant (shouldn't happen for employees, but possible for seed/admin
@@ -31,7 +33,7 @@ export const dynamic = 'force-dynamic';
  * Error codes (returned as `code` field for client-side branching):
  *   AUTH_REQUIRED    — 401, no session / session expired
  *   NO_TENANT        — 400, user has no tenantId (superadmin/seed account)
- *   NOT_CONFIGURED   — 503, VAPID keys missing on server
+ *   NOT_CONFIGURED   — 503, VAPID keys missing (Web Push only)
  *   VALIDATION       — 400, missing/invalid endpoint or keys
  *   DB_ERROR         — 500, Prisma error (unique constraint, connection, etc.)
  *   UNKNOWN          — 500, unexpected error
@@ -54,36 +56,61 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    if (!isWebPushConfigured()) {
-      return NextResponse.json(
-        {
-          error: 'Push notifications are not configured on the server (missing VAPID keys)',
-          code: 'NOT_CONFIGURED',
-        },
-        { status: 503 }
-      );
-    }
 
     const body = await request.json();
-    const { endpoint, keys, expirationTime } = body || {};
+    const { endpoint, keys, expirationTime, expoPushToken, platform } = body || {};
 
-    if (!endpoint || typeof endpoint !== 'string') {
-      return NextResponse.json(
-        { error: 'endpoint is required', code: 'VALIDATION' },
-        { status: 400 }
-      );
-    }
-    if (!keys || typeof keys.p256dh !== 'string' || typeof keys.auth !== 'string') {
-      return NextResponse.json(
-        { error: 'keys.p256dh and keys.auth are required', code: 'VALIDATION' },
-        { status: 400 }
-      );
-    }
+    // ── Determine subscription type ──────────────────────────────────
+    // Expo native apps send { expoPushToken, platform, token }.
+    // Browsers (PWA) send { endpoint, keys: { p256dh, auth } }.
+    const isExpoToken =
+      typeof expoPushToken === 'string' && expoPushToken.length > 0;
 
-    const keysJson = JSON.stringify({
-      p256dh: keys.p256dh,
-      auth: keys.auth,
-    });
+    let finalEndpoint: string;
+    let keysJson: string;
+
+    if (isExpoToken) {
+      // Expo push tokens don't use VAPID — skip the isWebPushConfigured() check.
+      // Store as a synthetic endpoint so the same [userId, endpoint] dedup logic
+      // works for both Web Push and Expo subscriptions.
+      finalEndpoint = `expo://${expoPushToken}`;
+      keysJson = JSON.stringify({
+        type: 'expo',
+        platform: typeof platform === 'string' ? platform : 'unknown',
+        token: expoPushToken,
+      });
+    } else {
+      // Web Push path — require VAPID + valid endpoint + keys
+      if (!isWebPushConfigured()) {
+        return NextResponse.json(
+          {
+            error: 'Push notifications are not configured on the server (missing VAPID keys)',
+            code: 'NOT_CONFIGURED',
+          },
+          { status: 503 }
+        );
+      }
+
+      if (!endpoint || typeof endpoint !== 'string') {
+        return NextResponse.json(
+          { error: 'endpoint is required', code: 'VALIDATION' },
+          { status: 400 }
+        );
+      }
+      if (!keys || typeof keys.p256dh !== 'string' || typeof keys.auth !== 'string') {
+        return NextResponse.json(
+          { error: 'keys.p256dh and keys.auth are required', code: 'VALIDATION' },
+          { status: 400 }
+        );
+      }
+
+      finalEndpoint = endpoint;
+      keysJson = JSON.stringify({
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+        ...(typeof expirationTime === 'number' ? { expirationTime } : {}),
+      });
+    }
 
     // userAgent for debugging which device/browser owns each subscription.
     const userAgent = request.headers.get('user-agent') || null;
@@ -101,7 +128,7 @@ export async function POST(request: NextRequest) {
     // adapter because it only uses simple column filters.
     try {
       const existing = await db.pushSubscription.findFirst({
-        where: { userId: user.id, endpoint },
+        where: { userId: user.id, endpoint: finalEndpoint },
         select: { id: true },
       });
 
@@ -123,7 +150,7 @@ export async function POST(request: NextRequest) {
           data: {
             tenantId: user.tenantId,
             userId: user.id,
-            endpoint,
+            endpoint: finalEndpoint,
             keysJson,
             userAgent,
             isActive: true,
@@ -152,7 +179,7 @@ export async function POST(request: NextRequest) {
         meta: dbError.meta,
         message: rawMessage,
         userId: user.id,
-        endpointPreview: endpoint.slice(0, 60),
+        endpointPreview: finalEndpoint.slice(0, 60),
       });
 
       // Map known error patterns to user-friendly messages. Include the
@@ -201,7 +228,8 @@ export async function POST(request: NextRequest) {
  * keep the row (isActive=false) rather than hard-deleting so we can audit
  * device churn, but either way the subscription won't receive pushes.
  *
- * Body: { endpoint: string }
+ * Body (Web Push):  { endpoint: string }
+ * Body (Expo):      { expoPushToken: string }  OR  { token: string }
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -214,9 +242,25 @@ export async function DELETE(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { endpoint } = body || {};
+    const { endpoint, expoPushToken, token } = body || {};
 
-    if (!endpoint || typeof endpoint !== 'string') {
+    // Normalise: Expo tokens can arrive as `expoPushToken` or `token`.
+    // Convert to the same synthetic endpoint format used in POST.
+    let finalEndpoint: string | undefined =
+      typeof endpoint === 'string' ? endpoint : undefined;
+    if (!finalEndpoint) {
+      const expoToken =
+        typeof expoPushToken === 'string'
+          ? expoPushToken
+          : typeof token === 'string'
+            ? token
+            : undefined;
+      if (expoToken) {
+        finalEndpoint = `expo://${expoToken}`;
+      }
+    }
+
+    if (!finalEndpoint) {
       return NextResponse.json(
         { error: 'endpoint is required', code: 'VALIDATION' },
         { status: 400 }
@@ -227,7 +271,7 @@ export async function DELETE(request: NextRequest) {
     // includes userId, so this is safe even without a tenantId check).
     await db.pushSubscription
       .updateMany({
-        where: { userId: user.id, endpoint },
+        where: { userId: user.id, endpoint: finalEndpoint },
         data: { isActive: false },
       })
       .catch(() => null);

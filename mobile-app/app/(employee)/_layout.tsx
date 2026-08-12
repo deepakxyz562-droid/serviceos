@@ -83,7 +83,14 @@ export default function EmployeeLayout() {
           appear in the tab bar. These are handled by their own nested
           <Stack> layouts (see jobs/_layout.tsx, inventory/_layout.tsx,
           inbox/_layout.tsx). Notifications/performance are standalone
-          push screens. */}
+          push screens.
+
+          CRITICAL: inbox/ and inventory/ are DIRECTORIES with their own
+          _layout.tsx (nested Stack). If they are NOT explicitly declared
+          here with href:null, Expo Router auto-discovers them and shows
+          them as extra tabs in the bottom bar. */}
+      <Tabs.Screen name="inbox" options={{ href: null }} />
+      <Tabs.Screen name="inventory" options={{ href: null }} />
       <Tabs.Screen name="notifications" options={{ href: null }} />
       <Tabs.Screen name="performance" options={{ href: null }} />
     </Tabs>
