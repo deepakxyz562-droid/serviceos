@@ -24,9 +24,15 @@ export async function GET() {
     return new Response(xml, {
       headers: {
         "Content-Type": "application/xml; charset=UTF-8",
-        // Cache at the CDN/browser for 1 hour. Sitemaps don't change often,
-        // and Google re-crawls them on its own schedule anyway.
-        "Cache-Control": "public, max-age=3600, s-maxage=3600",
+        // Cache at the CDN/browser for 1 hour. After that, the CDN may serve
+        // a STALE response for up to 24h while regenerating in the background.
+        // This is critical: sitemap regeneration can take 30s+ on a cold cache
+        // (100+ sequential Supabase REST calls). Without stale-while-revalidate,
+        // Googlebot hits a cold cache after the 1h TTL expires, waits 30s, and
+        // gives up — reporting "Sitemap could not be read" in Search Console.
+        // With SWR, Googlebot always gets an instant response (the stale one)
+        // while Vercel regenerates fresh data in the background.
+        "Cache-Control": "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400",
       },
     });
   } catch (error) {

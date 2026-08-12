@@ -55,7 +55,12 @@ export async function GET(
     return new Response(xml, {
       headers: {
         "Content-Type": "application/xml; charset=UTF-8",
-        "Cache-Control": "public, max-age=3600, s-maxage=3600",
+        // Cache at the CDN/browser for 1 hour. After that, the CDN may serve
+        // a STALE response for up to 24h while regenerating in the background.
+        // This prevents Googlebot from hitting a 30s+ cold-cache timeout when
+        // the 1h TTL expires mid-crawl — it gets the stale sitemap instantly
+        // while Vercel regenerates fresh data in the background.
+        "Cache-Control": "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400",
       },
     });
   } catch (error) {
