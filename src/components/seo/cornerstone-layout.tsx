@@ -104,12 +104,15 @@ export function CornerstoneHero({
 export function ContentSection({
   title,
   children,
+  id,
 }: {
   title: string;
   children: ReactNode;
+  /** Optional anchor id for in-page navigation (table of contents). */
+  id?: string;
 }) {
   return (
-    <section className="border-t">
+    <section id={id} className="border-t">
       <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
         <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-6">
           {title}

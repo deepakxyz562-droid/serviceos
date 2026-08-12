@@ -561,6 +561,152 @@ export function IndustryContractorsCityPage({
         </section>
       )}
 
+      {/* ── Local SEO content sections (READY/STRONG only) ─────────────────
+          These sections only render for indexed city pages (tier READY or
+          STRONG). For EMPTY/SPARSE pages (noindex), they'd be filler content
+          without providers to back it up, which Google flags as thin. The
+          content adds E-E-A-T depth + local relevance signals that help the
+          page rank for "{industry} contractors in {city}" queries. */}
+      {!showFallbacks && providers.length > 0 && (
+        <>
+          {/* About {industry} in {city} */}
+          <section className="border-t">
+            <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-4">
+                About {config.name.toLowerCase()} contractors in {city}
+              </h2>
+              <div className="space-y-4 text-muted-foreground leading-relaxed">
+                <p>
+                  {city} has a mix of residential and commercial properties that
+                  rely on local {config.contractorNoun} for routine maintenance,
+                  emergency repairs, and new installations. {config.emergencyExample !== "My AC isn't working" ? `Common emergency requests include ${config.emergencyExample.toLowerCase()}.` : `Whether it's a ${config.emergencyExample.toLowerCase()} or a scheduled installation, response time and local reputation matter.`}
+                </p>
+                <p>
+                  The {config.contractorNoun} listed above have opted into the
+                  Fieseros Marketplace, which means they have active business
+                  profiles, verified contact information, and have agreed to
+                  receive quote requests from local customers. Each profile
+                  shows the services offered, service area, and any
+                  verifications completed (identity, business, insurance).
+                </p>
+                <p>
+                  When choosing a {config.contractorNoun.replace(/s$/, "")} in {city},
+                  consider three things: <strong>local presence</strong> (a
+                  contractor based in or near {city} can respond faster),
+                  <strong> verification status</strong> (identity-verified and
+                  insurance-verified businesses carry less risk), and
+                  <strong> service area coverage</strong> (verify your
+                  neighbourhood is within their travel radius).
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* How to choose */}
+          <section className="border-t bg-muted/20">
+            <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-4">
+                How to choose a {config.contractorNoun.replace(/s$/, "")} in {city}
+              </h2>
+              <div className="space-y-3">
+                {[
+                  {
+                    title: "Verify licensing and insurance",
+                    desc: `Ask for proof of licensing specific to ${config.name.toLowerCase()} work in your province or state, and confirm the contractor carries liability insurance. Insurance-verified businesses on Fieseros have uploaded proof — look for the insurance badge on their profile.`,
+                  },
+                  {
+                    title: "Check local service area",
+                    desc: `A contractor based in or near ${city} will respond faster and charge less for travel. Review the service area listed on each profile to confirm your neighbourhood is covered.`,
+                  },
+                  {
+                    title: "Compare multiple quotes",
+                    desc: `Request quotes from at least three ${config.contractorNoun} for any non-emergency work. Pricing can vary significantly based on the contractor's schedule, overhead, and current ${config.demandLabel}.`,
+                  },
+                  {
+                    title: "Ask about warranties and guarantees",
+                    desc: `Reputable ${config.contractorNoun} stand behind their work with written warranties on labour and clearly state the manufacturer warranty on parts. Get both in writing before work begins.`,
+                  },
+                  {
+                    title: `Confirm availability for ${config.demandLabel}`,
+                    desc: `${config.name} work often has ${config.demandLabel}. If your need is time-sensitive (especially emergencies like "${config.emergencyExample}"), confirm the contractor's current response time before requesting a quote.`,
+                  },
+                ].map((item, i) => (
+                  <div key={i} className="rounded-lg border bg-card p-4">
+                    <h3 className="font-semibold text-foreground mb-1">{item.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Local FAQ */}
+          <section className="border-t">
+            <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-6 text-center">
+                {config.name} contractors in {city} — FAQ
+              </h2>
+              <div className="space-y-3">
+                {[
+                  {
+                    q: `How much do ${config.contractorNoun} charge in ${city}?`,
+                    a: `Pricing varies by job type, urgency, and contractor experience. Most ${config.contractorNoun} in ${city} offer free quotes — request quotes from at least three providers to compare. Emergency or after-hours calls typically carry a premium. ${config.name} businesses with higher verification status (insurance, business license) often charge more but carry less risk.`,
+                  },
+                  {
+                    q: `How quickly can a ${config.contractorNoun.replace(/s$/, "")} respond in ${city}?`,
+                    a: `Response time depends on the contractor's current schedule and your location within ${city}. For emergencies like "${config.emergencyExample}", look for contractors with emergencyServiceAvailable on their profile. Most listed providers respond to quote requests within a few hours during business hours.`,
+                  },
+                  {
+                    q: `Are the ${config.contractorNoun} on this page verified?`,
+                    a: `Each provider has a Fieseros Marketplace profile. Verification badges (identity, business, insurance) indicate which documents the contractor has uploaded and we have reviewed. Verified badges reduce risk but do not guarantee work quality — always check references for large projects.`,
+                  },
+                  {
+                    q: `Can I leave a review for a ${config.contractorNoun.replace(/s$/, "")} in ${city}?`,
+                    a: `Yes. After working with a contractor, you can leave a review on their Fieseros profile. Reviews help other ${city} residents make informed decisions and help quality contractors stand out. Be specific about the work performed, timeliness, and overall experience.`,
+                  },
+                ].map((faq, i) => (
+                  <details key={i} className="group rounded-lg border bg-card p-4">
+                    <summary className="cursor-pointer font-medium text-foreground flex items-center justify-between gap-2">
+                      {faq.q}
+                      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground group-open:rotate-90 transition-transform" />
+                    </summary>
+                    <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{faq.a}</p>
+                  </details>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Related services in {city} */}
+          <section className="border-t bg-muted/20">
+            <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
+                Other contractors in {city}
+              </h2>
+              <p className="text-muted-foreground text-center mb-8 max-w-2xl mx-auto">
+                Browse other verified service businesses on the Fieseros Marketplace serving {city}.
+              </p>
+              <div className="flex flex-wrap justify-center gap-3">
+                {config.relatedIndustries.slice(0, 6).map((rel) => {
+                  // Map software slug back to contractors path
+                  // e.g. "plumbing-software" → "plumbing-contractors"
+                  const contractorSlug = rel.slug.replace("-software", "").replace("electrical-contractor", "electrical");
+                  return (
+                    <Link
+                      key={rel.slug}
+                      href={`/${contractorSlug}-contractors/${citySlug}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:border-emerald-500/40"
+                    >
+                      {rel.name} Contractors
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+
       {/* ── Software cross-link + claim CTA ─────────────────────────────── */}
       <section className="border-t bg-muted/10">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-12 text-center">
