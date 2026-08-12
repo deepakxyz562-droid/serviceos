@@ -120,28 +120,35 @@ export async function GET(request: NextRequest) {
     //   requiresPin   → never existed; callers fall back to !!verificationPin
     //
     // Also apply pagination when limit is provided.
+    //
+    // CRITICAL FIX (round 2): Use `include` instead of `select`.
+    //
+    // The previous `select` clause included 3 RELATION fields
+    // (`assignee`, `customer`, `resource`). On Prisma (local SQLite) this
+    // works fine — Prisma understands `resource: true` means "load the
+    // relation". But the Supabase REST adapter's `findMany` only handles
+    // `select` entries where `v === true` as COLUMN names — it passes them
+    // straight to PostgREST as column names. So `resource: true` became
+    // `select=...,resource` which PostgREST rejects (the actual column is
+    // `resourceId`), causing HTTP 500 on production.
+    //
+    // The adapter also silently drops object-valued entries
+    // (`assignee: { select: {...} }`) because they fail the `v === true`
+    // filter — so even without the 500, customer/assignee names would be
+    // missing from production responses.
+    //
+    // `include` IS properly handled by the adapter's `resolveIncludes`,
+    // which uses RELATION_MAP (Job.assignee/customer/resource are all
+    // mapped) to fetch relations via separate queries. This works on
+    // BOTH Prisma (SQLite/local) and the Supabase adapter (production).
+    //
+    // Tradeoff: `include` returns ALL scalar fields (including metadataJson,
+    // which was previously omitted to reduce payload size). The metadataJson
+    // field defaults to "{}" (4 bytes) so this is negligible for most jobs.
+    // We strip it from the response below to preserve the payload optimization.
     const jobs = await db.job.findMany({
       where,
-      select: {
-        id: true,
-        title: true,
-        jobNumber: true,
-        status: true,
-        assignmentStatus: true,
-        scheduledAt: true,
-        completedAt: true,
-        actualStartTime: true,
-        actualEndTime: true,
-        createdAt: true,
-        address: true,
-        notes: true,
-        quotedAmount: true,
-        estimatedDuration: true,
-        priority: true,
-        type: true,
-        verificationPin: true,
-        notificationLogJson: true, // needed for parseLifecycleTimestamps
-        // metadataJson intentionally omitted — too heavy for list view
+      include: {
         assignee: {
           select: { id: true, name: true, phone: true, role: true, status: true, avatar: true, rating: true, completedJobs: true },
         },
@@ -164,6 +171,13 @@ export async function GET(request: NextRequest) {
     // then merge the counts in memory. This reduces DB round-trips from
     // 3N+1 to 4, a massive speedup for employees with many jobs.
     const jobIds = jobs.map((j) => j.id);
+
+    // Guard: if no jobs found, skip the count queries and return early.
+    // PostgREST `in: []` (empty IN filter) can return unexpected results
+    // or errors, and there's nothing to enrich anyway.
+    if (jobIds.length === 0) {
+      return NextResponse.json([]);
+    }
 
     const [photoCounts, signatureCounts, checklistCounts] = await Promise.all([
       db.jobPhoto.groupBy({
@@ -206,15 +220,20 @@ export async function GET(request: NextRequest) {
         : [];
     const serviceMap = new Map(services.map((s) => [s.id, s]));
 
-    // Enrich with lifecycle state + timestamps + counts + service (in-memory)
+    // Enrich with lifecycle state + timestamps + counts + service (in-memory).
+    // Strip metadataJson from the response to preserve the payload optimization
+    // (we switched from `select` to `include` above, which returns all scalars).
     const enriched = jobs.map((job) => {
       const lifecycleTimestamps = parseLifecycleTimestamps(job.notificationLogJson);
       const lifecycleState = deriveLifecycleState(job, lifecycleTimestamps);
       const serviceId = (job as { serviceId?: string | null }).serviceId;
       const service = serviceId ? serviceMap.get(serviceId) ?? null : null;
 
+      // Destructure out metadataJson so it's NOT spread into the response.
+      const { metadataJson: _metadataJson, ...jobWithoutMetadata } = job as typeof job & { metadataJson?: unknown };
+
       return {
-        ...job,
+        ...jobWithoutMetadata,
         lifecycleTimestamps,
         lifecycleState,
         service,
