@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import {
-  listIndexableBusinessUrls,
+  listAllIndexableBusinessUrls,
   countIndexableBusinessTenants,
 } from "@/lib/public-business";
 import { getAllPosts } from "@/lib/blog";
@@ -35,6 +35,53 @@ export const BASE_URL = "https://fieseros.com";
 /** Max URLs per business sitemap file (safe margin under Google's 50K cap). */
 export const BUSINESS_PER_FILE = 40_000;
 
+// ── In-memory caching ─────────────────────────────────────────────────────
+//
+// Sitemap generation on production (Supabase REST) is expensive:
+//   - countIndexableBusinessTenants: ~100 sequential HTTP requests
+//   - listAllIndexableBusinessUrls: ~100 sequential HTTP requests (cursor-based)
+//
+// Without caching, EVERY request to /sitemap.xml or /sitemap/N.xml would
+// re-run these queries → 30+ second timeouts.
+//
+// With caching, the expensive queries run ONCE per TTL period. All
+// subsequent requests are served from memory in <1ms. The cache is a simple
+// Map — sufficient for a single-server deployment. For multi-server, a
+// Redis-backed cache would be needed.
+//
+// Cache TTL: 1 hour. Sitemaps don't need to be fresher than that — Google
+// re-crawls them on its own schedule (hours to days).
+
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+const cache = new Map<string, CacheEntry<unknown>>();
+
+/** Get a cached value, or undefined if expired/missing. */
+function getCached<T>(key: string): T | undefined {
+  const entry = cache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() > entry.expiresAt) {
+    cache.delete(key);
+    return undefined;
+  }
+  return entry.data as T;
+}
+
+/** Store a value in the cache with the TTL. */
+function setCached<T>(key: string, data: T): void {
+  cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
+/** Force-clear all sitemap caches (useful for manual invalidation). */
+export function clearSitemapCache(): void {
+  cache.clear();
+}
+
 /**
  * Returns the list of sitemap IDs.
  *
@@ -43,8 +90,14 @@ export const BUSINESS_PER_FILE = 40_000;
  *
  * If the business count is 0 (e.g. DB unavailable), we still emit ID 0 so
  * the static routes are always discoverable.
+ *
+ * Result is cached for 1 hour to avoid re-running the expensive count query.
  */
 export async function getSitemapIds(): Promise<{ id: number }[]> {
+  const cacheKey = "sitemap-ids";
+  const cached = getCached<{ id: number }[]>(cacheKey);
+  if (cached) return cached;
+
   let businessCount = 0;
   try {
     businessCount = await countIndexableBusinessTenants();
@@ -57,7 +110,11 @@ export async function getSitemapIds(): Promise<{ id: number }[]> {
     Math.ceil(businessCount / BUSINESS_PER_FILE),
   );
   // ID 0 = static/etc, IDs 1..businessFileCount = business pages
-  return Array.from({ length: 1 + businessFileCount }, (_, i) => ({ id: i }));
+  const ids = Array.from({ length: 1 + businessFileCount }, (_, i) => ({
+    id: i,
+  }));
+  setCached(cacheKey, ids);
+  return ids;
 }
 
 /**
@@ -245,10 +302,34 @@ export async function buildStaticSitemap(): Promise<MetadataRoute.Sitemap> {
 }
 
 /**
+ * Fetch ALL indexable business URLs (cached for 1 hour).
+ *
+ * Uses `listAllIndexableBusinessUrls()` which does CURSOR-BASED pagination
+ * (id > lastId) — O(n) total instead of the O(n²) offset-based approach
+ * that was causing 30s+ timeouts on production (Supabase REST).
+ *
+ * The full list is cached in memory for 1 hour. Each sitemap page then
+ * just slices this cached list — no DB queries needed for subsequent
+ * requests.
+ */
+async function getAllBusinessUrlsCached() {
+  const cacheKey = "all-business-urls";
+  const cached = getCached<
+    Array<{ url: string; lastModified?: string; tier?: "A" | "B" }>
+  >(cacheKey);
+  if (cached) return cached;
+
+  const urls = await listAllIndexableBusinessUrls();
+  setCached(cacheKey, urls);
+  return urls;
+}
+
+/**
  * Build a single business-page sitemap chunk (IDs 1..N).
  *
- * Calls `listIndexableBusinessUrls({ offset, limit })` which paginates the
- * underlying DB query with `skip`/`take`.
+ * Slices from the cached full list of business URLs (fetched once per hour
+ * via cursor-based pagination). This is instant for all pages after the
+ * first request populates the cache.
  */
 export async function buildBusinessSitemap(
   pageZeroIndexed: number,
@@ -256,12 +337,10 @@ export async function buildBusinessSitemap(
   const now = new Date().toISOString();
   const offset = pageZeroIndexed * BUSINESS_PER_FILE;
   try {
-    const businessUrls = await listIndexableBusinessUrls({
-      offset,
-      limit: BUSINESS_PER_FILE,
-    });
-    return businessUrls.map((entry) => {
-      const tier = (entry as { tier?: "A" | "B" }).tier;
+    const allUrls = await getAllBusinessUrlsCached();
+    const pageUrls = allUrls.slice(offset, offset + BUSINESS_PER_FILE);
+    return pageUrls.map((entry) => {
+      const tier = entry.tier;
       const priority = tier === "A" ? 0.8 : tier === "B" ? 0.5 : 0.7;
       return {
         url: entry.url,

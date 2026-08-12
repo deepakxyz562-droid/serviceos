@@ -970,6 +970,156 @@ export async function listIndexableBusinessUrls(options?: {
 }
 
 /**
+ * List ALL indexable business URLs using CURSOR-BASED pagination.
+ *
+ * WHY THIS EXISTS (alongside the offset-based `listIndexableBusinessUrls`):
+ * The offset-based variant uses `skip`/`take` which is O(n²) on Supabase
+ * REST — each page with `skip: 80000` must scan & discard 80K rows before
+ * returning the next 1000. For sitemap page 3 (offset 80000), this meant
+ * 40 sequential HTTP requests × ~500ms each = 30+ seconds → timeout.
+ *
+ * This cursor-based variant uses `where: { id: { gt: lastId } }` which lets
+ * the DB use the primary-key index to jump directly to the next page — O(n)
+ * total instead of O(n²). It fetches ALL indexable URLs in a single pass,
+ * so the caller (sitemap-builder) can slice the result for each sitemap
+ * page without re-querying the DB.
+ *
+ * The result is cached by the caller (sitemap-builder.ts) for 1 hour, so
+ * the expensive full-table scan only happens once per hour — all sitemap
+ * page requests are then served from the in-memory cache.
+ */
+export async function listAllIndexableBusinessUrls(): Promise<IndexableBusinessUrl[]> {
+  try {
+    const PAGE_SIZE = 1000
+    const allTenants: Array<{
+      id: string
+      slug: string
+      industry: string
+      city: string
+      description: string | null
+      claimed: boolean
+      coverImage: string | null
+      logo: string | null
+      galleryJson: string | null
+      reviewCount: number | null
+      identityVerified: boolean
+      businessVerified: boolean
+      insuranceVerified: boolean
+      licenceNumber: string | null
+      updatedAt: Date | string
+    }> = []
+
+    // ── Cursor-based pagination: id > lastId ──
+    // Each iteration fetches the next PAGE_SIZE rows ordered by id ASC.
+    // The `id > lastId` WHERE clause uses the PK index for an instant
+    // seek — no row scanning needed (unlike `skip: N` which scans N rows).
+    let lastId: string | undefined = undefined
+    while (true) {
+      const page = await db.tenant.findMany({
+        where: {
+          publicProfileEnabled: true,
+          suspendedAt: null,
+          description: { not: null },
+          ...(lastId ? { id: { gt: lastId } } : {}),
+        },
+        select: {
+          id: true,
+          slug: true,
+          industry: true,
+          city: true,
+          description: true,
+          claimed: true,
+          coverImage: true,
+          logo: true,
+          galleryJson: true,
+          reviewCount: true,
+          identityVerified: true,
+          businessVerified: true,
+          insuranceVerified: true,
+          licenceNumber: true,
+          updatedAt: true,
+        },
+        take: PAGE_SIZE,
+        orderBy: { id: 'asc' },
+      })
+
+      if (!page || page.length === 0) break
+      allTenants.push(...page)
+      lastId = page[page.length - 1].id
+      if (page.length < PAGE_SIZE) break // last page reached
+    }
+
+    // ── Filter + tier-score in JS (same logic as listIndexableBusinessUrls) ──
+    const candidates = allTenants.filter((t) => {
+      const descriptionLongEnough = Boolean(
+        t.description && t.description.trim().length >= 40,
+      )
+      if (!descriptionLongEnough) return false
+
+      let gallery: Array<{ url?: string }> = []
+      try {
+        gallery = JSON.parse(t.galleryJson || '[]')
+      } catch {
+        gallery = []
+      }
+      const effectiveCoverImage =
+        t.coverImage || defaultCoverImageForIndustry(t.industry)
+      const hasImage = Boolean(effectiveCoverImage || t.logo || gallery.length > 0)
+      return hasImage
+    })
+
+    const entries: IndexableBusinessUrl[] = []
+    for (const t of candidates) {
+      let galleryCount = 0
+      try {
+        const g = JSON.parse(t.galleryJson || '[]')
+        if (Array.isArray(g)) galleryCount = g.length
+      } catch {
+        galleryCount = 0
+      }
+      const effectiveCoverImageB =
+        t.coverImage || defaultCoverImageForIndustry(t.industry)
+      const hasImageB = Boolean(effectiveCoverImageB || t.logo || galleryCount > 0)
+      const confirmedBadges = [
+        t.identityVerified,
+        t.businessVerified,
+        t.insuranceVerified,
+        Boolean(t.licenceNumber),
+      ].filter(Boolean).length
+      const tier = computeProfileTier({
+        claimed: t.claimed,
+        description: t.description,
+        isTemplatedDescription: isTemplatedDescription(t.description),
+        serviceCount: 0, // conservative — same as listIndexableBusinessUrls
+        hasImage: hasImageB,
+        confirmedBadgeCount: confirmedBadges,
+        reviewCount: t.reviewCount ?? 0,
+        publicProfileEnabled: true,
+      })
+      if (!isIndexableByTier(tier)) continue
+
+      const industrySlug = mapIndustryToPluralSlug(t.industry)
+      const citySlug = slugifyCity(t.city)
+      const lastModified =
+        t.updatedAt instanceof Date
+          ? t.updatedAt.toISOString()
+          : t.updatedAt
+            ? new Date(t.updatedAt as string).toISOString()
+            : undefined
+      entries.push({
+        url: `${SITE_URL}/${industrySlug}/${citySlug}/${t.slug}`,
+        lastModified,
+        tier,
+      })
+    }
+    return entries
+  } catch (err) {
+    console.error('[public-business] listAllIndexableBusinessUrls error:', err)
+    return []
+  }
+}
+
+/**
  * Count indexable marketplace tenants for sitemap-index sizing.
  *
  * Used by `generateSitemaps()` in `src/app/sitemap.ts` to compute how many
