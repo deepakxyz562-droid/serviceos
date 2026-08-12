@@ -47,6 +47,7 @@ import {
   DoorOpen,
   RefreshCw,
 } from 'lucide-react';
+import { BrandMark } from '@/components/brand/brand-mark';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -4156,9 +4157,7 @@ function EmployeeSidebar({
       {/* Logo */}
       <div className="p-6 pb-4">
         <div className="flex items-center gap-2.5">
-          <div className="size-9 rounded-lg bg-emerald-600 flex items-center justify-center">
-            <Zap className="size-5 text-white" />
-          </div>
+          <BrandMark size={36} />
           <span className="text-lg font-bold text-foreground">Fieseros</span>
         </div>
         <div className="mt-3 flex items-center gap-3">

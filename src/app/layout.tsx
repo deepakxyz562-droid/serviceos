@@ -7,6 +7,7 @@ import { PwaProvider } from "@/components/pwa/pwa-provider";
 import { CookieConsentBanner } from "@/components/legal/cookie-consent-banner";
 import { StructuredData } from "@/components/seo/structured-data";
 import { WebVitalsReporter } from "@/components/seo/web-vitals-reporter";
+import { Analytics } from "@/components/analytics/analytics";
 import { getOrganizationSchema, getWebsiteSchema } from "@/lib/seo/schemas";
 import { BRAND } from "@/lib/brand";
 
@@ -165,6 +166,11 @@ export default function RootLayout({
             __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('${SW_URL}',{scope:'/'}).catch(function(){})}`,
           }}
         />
+        {/* Google Analytics 4 (gtag.js) with Consent Mode v2.
+            Loaded on every page. Default consent is "denied" until the
+            cookie banner receives an explicit accept. See
+            src/components/analytics/analytics.tsx for the full flow. */}
+        <Analytics />
       </head>
       <body
         className={`${poppins.variable} ${geistMono.variable} antialiased bg-background text-foreground font-sans`}

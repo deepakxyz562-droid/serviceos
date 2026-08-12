@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { Wrench, ArrowRight, ChevronDown } from "lucide-react";
+import { ArrowRight, ChevronDown } from "lucide-react";
+import { BrandMark } from "@/components/brand/brand-mark";
 
 /**
  * Shared header for all SEO cornerstone pages.
- * Matches the Fieseros brand identity (emerald accent, Wrench logo mark).
+ * Matches the Fieseros brand identity (emerald accent, Fieseros logo mark).
  * Server component — uses CSS-only hover dropdowns (group-hover) so no client JS.
  */
 export function CornerstoneHeader({ activePath }: { activePath?: string }) {
@@ -42,9 +43,7 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-2.5 group">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0 shadow-sm bg-emerald-600 shadow-emerald-500/20">
-            <Wrench className="h-5 w-5 text-white" />
-          </span>
+          <BrandMark size={32} className="shadow-emerald-500/20" />
           <span className="text-xl font-bold tracking-tight text-foreground">
             Fieseros
           </span>

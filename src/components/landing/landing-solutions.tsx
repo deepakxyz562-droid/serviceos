@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Wrench, ChevronDown, type LucideIcon } from 'lucide-react';
+import { ChevronDown, type LucideIcon } from 'lucide-react';
+import { BrandMark } from '@/components/brand/brand-mark';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
@@ -182,9 +183,7 @@ export function LandingFooter() {
           {/* Brand + nested Company & Legal (desktop) */}
           <div className="col-span-2 md:col-span-3">
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-sm bg-emerald-600 shadow-emerald-500/20">
-                <Wrench className="w-5 h-5 text-white" />
-              </div>
+              <BrandMark size={32} className="shadow-black/20" />
               <span className="text-xl font-bold text-background tracking-tight">Fieseros</span>
             </div>
             <p className="text-background/70 text-sm max-w-xs leading-relaxed">

@@ -71,6 +71,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import Image from 'next/image';
+import { BrandMark } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -546,9 +547,7 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-sm bg-emerald-600 shadow-emerald-500/20">
-              <Wrench className="w-5 h-5 text-white" />
-            </div>
+            <BrandMark size={32} className="shadow-emerald-500/20" />
             <span className="text-xl font-bold text-foreground tracking-tight">Fieseros</span>
           </div>
 
@@ -1789,9 +1788,7 @@ function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-6 gap-8">
           <div className="col-span-2">
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-sm bg-emerald-600 shadow-emerald-500/20">
-                <Wrench className="w-5 h-5 text-white" />
-              </div>
+              <BrandMark size={32} className="shadow-black/20" />
               <span className="text-xl font-bold text-background tracking-tight">Fieseros</span>
             </div>
             <p className="text-background/70 text-sm max-w-xs leading-relaxed">

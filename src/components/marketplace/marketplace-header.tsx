@@ -3,7 +3,6 @@
 import * as React from 'react';
 import Link from 'next/link';
 import {
-  Wrench,
   Search,
   MapPin,
   LayoutDashboard,
@@ -12,6 +11,7 @@ import {
   LogOut,
   ChevronDown,
 } from 'lucide-react';
+import { BrandMark } from '@/components/brand/brand-mark';
 import { useMarketplaceSearch } from './use-marketplace-search';
 import { useAppStore } from '@/store/app-store';
 import {
@@ -203,9 +203,7 @@ function Logo() {
       className="flex shrink-0 items-center gap-2.5"
       aria-label="Fieseros Marketplace — home"
     >
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
-        <Wrench className="h-4 w-4" />
-      </span>
+      <BrandMark size={36} className="shadow-sm" />
       <span className="hidden min-w-0 flex-col leading-none sm:flex">
         <span className="truncate text-[15px] font-semibold tracking-tight text-foreground">
           Fieseros <span className="text-emerald-600">Marketplace</span>

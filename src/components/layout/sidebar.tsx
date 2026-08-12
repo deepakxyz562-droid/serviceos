@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/app-store';
 import { useBelowLg } from '@/hooks/use-mobile';
 import { prefetchView } from '@/lib/view-prefetch';
 import type { ViewType } from '@/types/workflow';
+import { BrandMark } from '@/components/brand/brand-mark';
 import {
   LayoutDashboard,
   Target,
@@ -17,7 +18,6 @@ import {
   BarChart3,
   Variable,
   Settings,
-  Wrench,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -681,18 +681,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
           isExpandedMode ? 'justify-start gap-3' : 'justify-center'
         )}
       >
-        <div className={cn(
-          'flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-sm',
-          isSuperAdmin
-            ? 'bg-red-600 shadow-red-500/20'
-            : 'bg-emerald-600 shadow-emerald-500/20'
-        )}>
-          {isSuperAdmin ? (
-            <ShieldCheck className="size-5 text-white" />
-          ) : (
-            <Wrench className="size-5 text-white" />
-          )}
-        </div>
+        <BrandMark size={32} className="shadow-sm" />
         {isExpandedMode && (
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-lg font-bold tracking-tight whitespace-nowrap text-sidebar-foreground">

@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   Building2,
 } from 'lucide-react';
+import { BrandMark } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -862,9 +863,7 @@ function MarketplaceHeader({
           className="flex items-center gap-2"
           aria-label="Fieseros home"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
-            <Sparkles className="h-4 w-4" />
-          </span>
+          <BrandMark size={32} className="shadow-sm" />
           <span className="text-lg font-bold text-foreground">Fieseros</span>
         </button>
 
@@ -898,9 +897,7 @@ function MarketplaceFooter() {
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
-              <Sparkles className="h-3.5 w-3.5" />
-            </span>
+            <BrandMark size={28} />
             <div>
               <p className="text-sm font-semibold text-foreground">Fieseros</p>
               <p className="text-xs text-muted-foreground">

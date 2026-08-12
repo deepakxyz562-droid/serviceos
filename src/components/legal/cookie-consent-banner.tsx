@@ -6,6 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Cookie } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { updateAnalyticsConsent } from "@/lib/analytics/consent";
 
 /**
  * CookieConsentBanner
@@ -152,11 +153,17 @@ export function CookieConsentBanner() {
 
   const handleAcceptAll = () => {
     writeConsent({ ...ACCEPT_ALL, timestamp: Date.now() });
+    // Push the decision to Google Consent Mode v2 so GA4 starts writing
+    // cookies immediately, without a page reload.
+    updateAnalyticsConsent(ACCEPT_ALL);
     setDismissed(true);
   };
 
   const handleNecessaryOnly = () => {
     writeConsent({ ...NECESSARY_ONLY, timestamp: Date.now() });
+    // Explicitly deny analytics/advertising storage so any modeled tracking
+    // the user may have implicitly had is stopped.
+    updateAnalyticsConsent(NECESSARY_ONLY);
     setDismissed(true);
   };
 
