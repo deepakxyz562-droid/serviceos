@@ -6,7 +6,7 @@ import { CornerstoneLayout } from "@/components/seo/cornerstone-layout";
 import { StructuredData } from "@/components/seo/structured-data";
 import { BlogCard } from "@/components/blog/blog-card";
 import { getPost, getAllSlugs, getRelatedPosts, blogPostUrl, formatBlogDate } from "@/lib/blog";
-import { getBlogPostingSchema, getBreadcrumbSchema } from "@/lib/seo/schemas";
+import { getBlogPostingSchema } from "@/lib/seo/schemas";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import remarkGfm from "remark-gfm";
 import rehypeSlug from "rehype-slug";
@@ -80,11 +80,10 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     keywords: post.keywords,
   });
 
-  const breadcrumbSchema = getBreadcrumbSchema([
-    { name: "Home", url: "https://fieseros.com" },
-    { name: "Blog", url: "https://fieseros.com/blog" },
-    { name: post.title, url },
-  ]);
+  // NOTE: BreadcrumbList JSON-LD is emitted by the <Breadcrumbs> component
+  // rendered inside <CornerstoneLayout> (see breadcrumbs.tsx). Do NOT also
+  // pass a breadcrumb schema via additionalSchema — that produces duplicate
+  // BreadcrumbList blocks (flagged in SEO-AUDIT-2).
 
   return (
     <CornerstoneLayout
@@ -94,7 +93,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         { name: "Blog", url: "/blog" },
         { name: post.title, url: `/blog/${slug}` },
       ]}
-      additionalSchema={[blogPostingSchema, breadcrumbSchema]}
+      additionalSchema={[blogPostingSchema]}
     >
       {/* Article header */}
       <header className="border-b bg-gradient-to-b from-emerald-50/50 to-background dark:from-emerald-950/20">

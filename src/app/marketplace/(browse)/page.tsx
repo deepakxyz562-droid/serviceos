@@ -133,6 +133,10 @@ export async function generateMetadata({
     city?: string;
     search?: string;
     country?: string;
+    rating?: string;
+    radius?: string;
+    sort?: string;
+    page?: string;
   }>;
 }): Promise<Metadata> {
   const params = await searchParams;
@@ -176,7 +180,27 @@ export async function generateMetadata({
   // Additionally, when ANY filter is active we set robots.index=false so the
   // filtered URL is never indexed (but follow=true so Google can still crawl
   // the provider links on the page to discover their canonical hub URLs).
-  const hasFilters = !!(verticalFilter || industryFilter || cityFilter || searchFilter);
+  //
+  // SEO-FIX-5: Extended the filter check to cover ALL URL params that produce
+  // distinct filter/sort/paginate URLs — `country`, `rating`, `radius`, `sort`,
+  // `page` — in addition to the original `vertical`/`industry`/`city`/`search`.
+  // Without these, URLs like `/marketplace?rating=4.5&radius=25` or
+  // `/marketplace?sort=rating&page=3` would render with index=true (the
+  // unconditional canonical to /marketplace mitigates duplication but does
+  // not stop Google from indexing the URL itself). Note: `country` here is
+  // the explicit URL param only — GeoIP-detected country (x-vercel-ip-country
+  // header) does NOT trigger noindex because the URL stays bare /marketplace.
+  const hasFilters = !!(
+    verticalFilter ||
+    industryFilter ||
+    cityFilter ||
+    searchFilter ||
+    params.country ||
+    params.rating ||
+    params.radius ||
+    params.sort ||
+    params.page
+  );
   const canonicalUrl = '/marketplace';
 
   return {

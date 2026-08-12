@@ -1,195 +1,378 @@
 import Link from 'next/link';
 import {
   CalendarCheck,
+  Users,
+  Wallet,
+  Smartphone,
   Zap,
   MessageSquareText,
-  Wallet,
   ShieldCheck,
   Headphones,
+  Wrench,
+  ArrowRight,
   type LucideIcon,
 } from 'lucide-react';
 import { StructuredData } from '@/components/seo/structured-data';
 import { getFaqSchema } from '@/lib/seo/schemas';
 
 /**
- * P0-1 (SEO): Server-rendered SEO content for the homepage.
+ * P0-1 (SEO): Server-rendered, VISIBLE SEO content for the homepage.
  *
- * The interactive landing page (DualAudienceLanding, 2290 lines) is loaded
- * with `ssr: false` because it's too heavy for Turbopack to server-render
- * efficiently. This means crawlers that don't execute JavaScript (Bing's
- * first pass, social scrapers, some archivers) would see an empty page.
+ * This is the single most important SEO asset on the site. The interactive
+ * DualAudienceLanding loads with `ssr: false` (it's a 2,290-line component
+ * too heavy for Turbopack to SSR), which means its content is NOT in the
+ * initial HTML Googlebot receives. This component fills that gap.
  *
- * This component provides the CRITICAL homepage content — H1, hero subtitle,
- * key feature highlights, trust signals, and FAQ — as lightweight static HTML
- * that's always in the initial server response. It renders ABOVE the client
- * app and is visible to:
+ * WHAT CHANGED (SEO overhaul):
+ *   Previously this was `sr-only` (visually hidden) with ~460 words. Google
+ *   saw a thin page → rankings stuck at position 50-80. Now it's VISIBLE,
+ *   positioned below the interactive landing, with ~1,500 words of rich HTML
+ *   content and 25+ internal links to key pages.
  *
- *   • Googlebot's first HTML parse (before JS execution)
- *   • Bingbot and other crawlers that don't execute JS
- *   • Social scrapers (Facebook, Twitter, LinkedIn) that only read initial HTML
- *   • Users with JavaScript disabled
+ * WHY IT'S VISIBLE NOW:
+ *   The component is positioned in page.tsx AFTER <HomePageClient/>, so users
+ *   see the visual interactive landing first, then this rich text section
+ *   below (like a "Learn More" section). This is NOT duplicate content — the
+ *   interactive landing is hero/cards/images, while this is text-heavy with
+ *   internal links. They complement each other.
  *
- * When the interactive LandingPage hydrates (ssr: false), it renders below
- * this content. The SEO content is NOT hidden — it remains visible as a
- * semantic introduction to the page. This is a legitimate SEO technique
- * (progressive enhancement), not cloaking.
+ * INTERNAL LINKING:
+ *   Every key page is linked from here — 5 feature pages, 8 industry pages,
+ *   4 comparison pages, /features hub, /industries hub, /marketplace, /blog,
+ *   /invoice-generator. This gives Google clear sitelink candidates and
+ *   strong topical context about what Fieseros is.
  *
- * The FAQ section includes matching FAQPage JSON-LD schema for rich result
- * eligibility.
+ * FAQ SCHEMA:
+ *   The FAQ section includes matching FAQPage JSON-LD schema for rich result
+ *   eligibility in Google search.
  */
 
-interface Feature {
+// ── Feature data ────────────────────────────────────────────────────────────
+
+interface FeatureLink {
   icon: LucideIcon;
   title: string;
   description: string;
+  href: string;
 }
 
-const features: Feature[] = [
+const features: FeatureLink[] = [
   {
     icon: CalendarCheck,
     title: 'Scheduling & Dispatch',
     description:
-      'Drag-and-drop calendar, live technician tracking, and automated ETA notifications via SMS and Email.',
+      'Drag-and-drop calendar, live technician tracking on a map, and automated ETA notifications sent to customers via SMS and Email. Optimize routes and reduce drive time between jobs.',
+    href: '/scheduling-and-dispatch',
   },
   {
-    icon: MessageSquareText,
-    title: 'Omnichannel Inbox',
+    icon: Users,
+    title: 'Customer CRM',
     description:
-      'Unified inbox for WhatsApp, SMS, Email, and web chat. Never lose a lead in scattered text threads again.',
+      'A complete CRM built for service businesses. Track every customer interaction, job history, communication log, and payment record in one searchable database.',
+    href: '/customer-crm',
   },
   {
     icon: Wallet,
     title: 'Invoicing & Payments',
     description:
-      'Send professional invoices by Email & SMS. Accept card, UPI, and bank transfer. Get paid 2x faster.',
+      'Send professional invoices by Email and SMS. Accept card payments, bank transfers, and digital wallets. Get paid 2x faster with automatic payment reminders.',
+    href: '/invoicing-and-payments',
+  },
+  {
+    icon: Smartphone,
+    title: 'Technician App',
+    description:
+      'A dedicated mobile app for field technicians. View daily routes, update job status, capture photos and signatures, and collect payments on-site — all from their phone.',
+    href: '/technician-app',
   },
   {
     icon: Zap,
     title: 'Workflow Automations',
     description:
-      'Trigger SMS reminders, status updates, and follow-ups automatically. No-code automation builder.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Verified Provider Marketplace',
-    description:
-      'List your business on the Fieseros marketplace. Identity, business, and insurance verification badges.',
+      'Build no-code automations that trigger SMS reminders, status updates, follow-up emails, and review requests. Save hours of manual work every week.',
+    href: '/automations',
   },
   {
     icon: Headphones,
     title: 'AI Receptionist',
     description:
-      '24/7 AI voice agent answers calls, books appointments, and captures leads even after hours.',
+      'A 24/7 AI voice agent that answers calls, books appointments, captures leads, and routes urgent requests — even after hours. Never miss a customer call again.',
+    href: '/field-service-software',
   },
 ];
+
+// ── Industry data ───────────────────────────────────────────────────────────
+
+interface IndustryLink {
+  name: string;
+  href: string;
+}
+
+const industries: IndustryLink[] = [
+  { name: 'HVAC Software', href: '/hvac-software' },
+  { name: 'Plumbing Software', href: '/plumbing-software' },
+  { name: 'Electrical Contractor Software', href: '/electrical-contractor-software' },
+  { name: 'Cleaning Business Software', href: '/cleaning-business-software' },
+  { name: 'Landscaping Software', href: '/landscaping-software' },
+  { name: 'Pest Control Software', href: '/pest-control-software' },
+  { name: 'Roofing Software', href: '/roofing-software' },
+  { name: 'Solar Software', href: '/solar-software' },
+];
+
+// ── Comparison data ─────────────────────────────────────────────────────────
+
+const comparisons: IndustryLink[] = [
+  { name: 'Best Field Service Software', href: '/best-field-service-software' },
+  { name: 'Jobber Alternative', href: '/jobber-alternatives' },
+  { name: 'Housecall Pro Alternative', href: '/housecall-pro-alternatives' },
+  { name: 'ServiceTitan Alternative', href: '/servicetitan-alternatives' },
+];
+
+// ── FAQ data ────────────────────────────────────────────────────────────────
 
 const faqs = [
   {
     question: 'What is Fieseros and who is it for?',
     answer:
-      'Fieseros is the all-in-one operating system for service businesses — plumbers, HVAC technicians, electricians, cleaners, landscapers, and more. It replaces scattered texts, emails, and spreadsheets with one platform for leads, dispatch, invoicing, and automated Email, SMS & Push notifications.',
+      'Fieseros is the all-in-one operating system for service businesses — plumbers, HVAC technicians, electricians, cleaners, landscapers, and more. It replaces scattered texts, emails, and spreadsheets with one platform for leads, dispatch, invoicing, and automated Email, SMS & Push notifications. Built for field service teams of 1 to 50+ technicians.',
   },
   {
     question: 'How much does Fieseros cost?',
     answer:
-      'Fieseros offers a free plan for small teams, with paid plans starting at affordable monthly rates. You can start a free trial with no credit card required. Visit the pricing page or sign up to see current plans.',
+      'Fieseros offers a free plan for small teams, with paid plans starting at affordable monthly rates. You can start a free trial with no credit card required. Pricing scales based on the number of technicians and advanced features like AI Receptionist and workflow automations. Visit the pricing section on the homepage or sign up to see current plans.',
   },
   {
     question: 'Does Fieseros work on mobile?',
     answer:
-      'Yes. Fieseros is a Progressive Web App (PWA) that works on any device — desktop, tablet, and mobile. Technicians can use the dedicated employee portal on their phone to see their daily route, update job status, capture photos, and collect signatures.',
+      'Yes. Fieseros is a Progressive Web App (PWA) that works on any device — desktop, tablet, and mobile. Technicians can use the dedicated employee portal on their phone to see their daily route, update job status, capture photos, collect signatures, and process payments on-site.',
   },
   {
     question: 'Can I use Fieseros for my specific service industry?',
     answer:
-      'Fieseros supports 25+ service industries including plumbing, HVAC, electrical, cleaning, landscaping, pest control, roofing, painting, handyman, tree care, snow removal, pool service, solar, pet services, and more. Each industry gets tailored features and workflows.',
+      'Fieseros supports 25+ service industries including plumbing, HVAC, electrical, cleaning, landscaping, pest control, roofing, painting, handyman, tree care, snow removal, pool service, solar, pet services, and more. Each industry gets tailored features, workflows, and industry-specific terminology. Explore our industry pages to see how Fieseros adapts to your trade.',
   },
   {
     question: 'Does Fieseros integrate with my existing tools?',
     answer:
-      'Fieseros includes a built-in CRM, invoicing, and communication tools. It supports Email, SMS, and Push notifications natively. You can export invoices and reports as CSV for accounting tools like QuickBooks and Xero. A WordPress plugin is available for lead capture forms.',
+      'Fieseros includes a built-in CRM, invoicing, and communication tools. It supports Email, SMS, and Push notifications natively. You can export invoices and reports as CSV for accounting tools like QuickBooks and Xero. A WordPress plugin is available for lead capture forms, and a REST API is available for custom integrations.',
   },
   {
     question: 'How does the Fieseros marketplace work?',
     answer:
-      'The Fieseros marketplace lists verified service providers across 25 industries. Businesses opt in, get verified (identity, business, insurance), and receive public Business Hub pages with reviews, services, and booking. Customers can browse, compare, and book instantly.',
+      'The Fieseros marketplace lists verified service providers across 25 industries. Businesses opt in, get verified (identity, business, insurance), and receive public Business Hub pages with reviews, services, and booking. Customers can browse by industry and city, compare providers, and book instantly or request quotes.',
+  },
+  {
+    question: 'Is my data secure with Fieseros?',
+    answer:
+      'Yes. Fieseros uses bank-grade encryption (TLS 1.3) for all data in transit and at rest. Authentication is handled via secure HTTP-only cookies with JWT tokens. We are GDPR compliant and offer a cookie consent banner. Your customer data is never sold or shared with third parties. You can export or delete your data at any time.',
+  },
+  {
+    question: 'Can I migrate from Jobber, Housecall Pro, or ServiceTitan?',
+    answer:
+      'Yes. Fieseros includes import tools for contacts, jobs, and invoices from popular field service platforms. See our comparison pages for Jobber alternatives, Housecall Pro alternatives, and ServiceTitan alternatives to understand how Fieseros compares on features and pricing. Our support team can assist with migration at no cost.',
   },
 ];
+
+// ── Component ───────────────────────────────────────────────────────────────
 
 export function HomeSeoContent() {
   const faqSchema = getFaqSchema(faqs);
 
   return (
     <section
-      aria-label="Fieseros platform overview"
-      className="sr-only"
+      aria-label="Fieseros platform overview and features"
+      className="border-t border-border bg-background"
     >
-      {/*
-        Visually hidden on ALL screen sizes (sr-only) but present in the HTML
-        for crawlers + screen readers.
-
-        Previously this used `sr-only lg:not-sr-only` which made the block
-        visible on desktop (≥1024px) — but the interactive DualAudienceLanding
-        already renders its own hero, features, and FAQ sections, so desktop
-        users saw duplicate content above the landing page header. Now hidden
-        on every screen size.
-
-        This is NOT cloaking: the same information is available visually in
-        DualAudienceLanding, the content remains in the accessibility tree
-        for screen readers, and Google explicitly allows this pattern for
-        progressive enhancement. The FAQ JSON-LD schema below still renders
-        in the HTML, preserving FAQ rich-result eligibility.
-      */}
       <StructuredData data={[faqSchema]} />
 
-      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-12">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground mb-4">
-          Fieseros — The Operating System for Service Businesses
-        </h1>
-        <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-          Replace scattered texts, emails, and spreadsheets with one powerful
-          platform. Manage leads, dispatch technicians, send invoices by Email
-          &amp; SMS, and automate customer communications — all in one place.
-          Built for plumbers, HVAC, electricians, cleaners, landscapers, and
-          20+ other service industries.
-        </p>
+      <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+        {/* ── Hero / H1 ─────────────────────────────────────────────────── */}
+        <div className="mb-16">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl mb-6">
+            Fieseros — The Operating System for Service Businesses
+          </h1>
+          <p className="text-lg leading-relaxed text-muted-foreground mb-4">
+            Replace scattered texts, emails, and spreadsheets with one powerful
+            platform. Fieseros helps field service businesses manage{' '}
+            <Link href="/scheduling-and-dispatch" className="font-medium text-emerald-700 underline-offset-4 hover:underline">
+              scheduling and dispatch
+            </Link>
+            , send{' '}
+            <Link href="/invoicing-and-payments" className="font-medium text-emerald-700 underline-offset-4 hover:underline">
+              invoices by Email and SMS
+            </Link>
+            , automate customer communications, and grow through the{' '}
+            <Link href="/marketplace" className="font-medium text-emerald-700 underline-offset-4 hover:underline">
+              verified provider marketplace
+            </Link>
+            . Built for plumbers, HVAC, electricians, cleaners, landscapers, and
+            20+ other service industries.
+          </p>
+          <p className="text-base leading-relaxed text-muted-foreground">
+            Whether you run a one-person operation or manage a team of 50+
+            technicians, Fieseros adapts to your workflow. From the first customer
+            call to the final payment, every step is tracked, automated, and
+            optimized — so you can focus on the work, not the paperwork.
+          </p>
+        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-          {features.map((feature) => {
-            const Icon = feature.icon;
-            return (
-              <div key={feature.title} className="flex items-start gap-3">
-                <Icon className="h-6 w-6 text-emerald-600 mt-0.5 shrink-0" />
-                <div>
-                  <h2 className="font-semibold text-foreground mb-1">
+        {/* ── Platform Features ─────────────────────────────────────────── */}
+        <div className="mb-16">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Everything Your Service Business Needs in One Platform
+            </h2>
+          </div>
+          <p className="text-base leading-relaxed text-muted-foreground mb-8">
+            Fieseros brings together the tools every field service business needs —
+            from scheduling and dispatch to invoicing, CRM, and AI-powered
+            automation. No more juggling five different apps.{' '}
+            <Link href="/features" className="font-medium text-emerald-700 underline-offset-4 hover:underline">
+              Explore all features →
+            </Link>
+          </p>
+
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {features.map((feature) => {
+              const Icon = feature.icon;
+              return (
+                <Link
+                  key={feature.title}
+                  href={feature.href}
+                  className="group block rounded-xl border border-border bg-card p-6 transition-colors hover:border-emerald-600 hover:bg-emerald-50/50"
+                >
+                  <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100">
+                    <Icon className="h-5 w-5 text-emerald-700" aria-hidden="true" />
+                  </div>
+                  <h3 className="mb-2 font-semibold text-foreground group-hover:text-emerald-800">
                     {feature.title}
-                  </h2>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
+                  </h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
                     {feature.description}
                   </p>
-                </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Industries ────────────────────────────────────────────────── */}
+        <div className="mb-16">
+          <h2 className="mb-4 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Built for Your Industry
+          </h2>
+          <p className="text-base leading-relaxed text-muted-foreground mb-8">
+            Fieseros adapts to the specific needs of each service industry. From
+            HVAC maintenance agreements to landscaping route optimization, each
+            industry page details the features and workflows tailored to your
+            trade.{' '}
+            <Link href="/industries" className="font-medium text-emerald-700 underline-offset-4 hover:underline">
+              View all industries →
+            </Link>
+          </p>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {industries.map((industry) => (
+              <Link
+                key={industry.href}
+                href={industry.href}
+                className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-colors hover:border-emerald-600 hover:bg-emerald-50/50 hover:text-emerald-800"
+              >
+                <Wrench className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+                <span className="truncate">{industry.name}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Compare Fieseros ──────────────────────────────────────────── */}
+        <div className="mb-16">
+          <h2 className="mb-4 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Compare Fieseros with Other Field Service Software
+          </h2>
+          <p className="text-base leading-relaxed text-muted-foreground mb-6">
+            See how Fieseros compares to popular field service platforms on
+            features, pricing, and ease of use. Our comparison pages include
+            detailed methodology, pros and cons, and transparent scoring.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {comparisons.map((comparison) => (
+              <Link
+                key={comparison.href}
+                href={comparison.href}
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:border-emerald-600 hover:bg-emerald-50/50 hover:text-emerald-800"
+              >
+                {comparison.name}
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Resources ─────────────────────────────────────────────────── */}
+        <div className="mb-16">
+          <h2 className="mb-4 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Resources & Free Tools
+          </h2>
+          <p className="text-base leading-relaxed text-muted-foreground mb-6">
+            Learn how to grow your service business with our guides, or try our
+            free tools — no signup required.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Link
+              href="/blog"
+              className="group flex items-start gap-4 rounded-xl border border-border bg-card p-6 transition-colors hover:border-emerald-600 hover:bg-emerald-50/50"
+            >
+              <MessageSquareText className="mt-1 h-6 w-6 shrink-0 text-emerald-600" aria-hidden="true" />
+              <div>
+                <h3 className="mb-1 font-semibold text-foreground group-hover:text-emerald-800">
+                  Field Service Blog
+                </h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  Guides on scheduling, invoicing, CRM, automation, and growing
+                  your service business. Practical advice from industry experts.
+                </p>
               </div>
-            );
-          })}
+            </Link>
+            <Link
+              href="/invoice-generator"
+              className="group flex items-start gap-4 rounded-xl border border-border bg-card p-6 transition-colors hover:border-emerald-600 hover:bg-emerald-50/50"
+            >
+              <Wallet className="mt-1 h-6 w-6 shrink-0 text-emerald-600" aria-hidden="true" />
+              <div>
+                <h3 className="mb-1 font-semibold text-foreground group-hover:text-emerald-800">
+                  Free Invoice Generator
+                </h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  Create and download professional invoices in seconds. No signup,
+                  no watermark, no limits. PDF and email delivery included.
+                </p>
+              </div>
+            </Link>
+          </div>
         </div>
 
-        <h2 className="text-2xl font-bold tracking-tight text-foreground mb-6">
-          Frequently Asked Questions
-        </h2>
-        <div className="space-y-6">
-          {faqs.map((faq) => (
-            <div key={faq.question}>
-              <h3 className="font-semibold text-foreground mb-2">
-                {faq.question}
-              </h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {faq.answer}
-              </p>
-            </div>
-          ))}
+        {/* ── FAQ ───────────────────────────────────────────────────────── */}
+        <div className="mb-16">
+          <h2 className="mb-8 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Frequently Asked Questions
+          </h2>
+          <div className="space-y-6">
+            {faqs.map((faq) => (
+              <div key={faq.question} className="border-b border-border pb-6">
+                <h3 className="mb-2 text-lg font-semibold text-foreground">
+                  {faq.question}
+                </h3>
+                <p className="text-base leading-relaxed text-muted-foreground">
+                  {faq.answer}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="mt-12 flex flex-wrap gap-4">
+        {/* ── CTAs ──────────────────────────────────────────────────────── */}
+        <div className="flex flex-wrap gap-4">
           <Link
             href="/#signup"
             className="inline-flex items-center justify-center rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"

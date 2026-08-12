@@ -174,6 +174,7 @@ const channels = [
     badge: 'Works instantly',
     features: ['Quote & invoice templates', 'Payment links', 'Campaign broadcasts', 'Automated reminders'],
     image: '/images/landing/channel-email.png',
+    alt: 'Fieseros branded email template for quotes, invoices, and receipts',
   },
   {
     icon: MessageSquareText,
@@ -182,6 +183,7 @@ const channels = [
     badge: 'Works instantly',
     features: ['Booking confirmations', 'Day-of reminders', 'Payment links', 'Two-way chat'],
     image: '/images/landing/channel-sms.png',
+    alt: 'Fieseros SMS message showing a booking confirmation and payment link',
   },
   {
     icon: MessageCircle,
@@ -190,6 +192,7 @@ const channels = [
     badge: 'BYO number',
     features: ['Two-way WhatsApp chat', 'Quote & photo sharing', 'Booking reminders', 'Unified inbox with Email + SMS'],
     image: '/images/landing/channel-whatsapp.png',
+    alt: 'Fieseros WhatsApp chat with customer showing job photos and quotes',
   },
 ];
 
@@ -1112,7 +1115,7 @@ function CrmChannels() {
                 <div className="relative h-28 sm:h-32 overflow-hidden bg-muted border-b border-border">
                   <Image
                     src={ch.image}
-                    alt={`${ch.title} channel preview`}
+                    alt={ch.alt}
                     fill
                     sizes="(max-width: 768px) 100vw, 33vw"
                     className="object-cover"

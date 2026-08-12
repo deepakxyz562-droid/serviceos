@@ -38,7 +38,6 @@ import type { ProviderListItem } from "@/components/marketplace/types";
 import type { IndustryConfig } from "@/lib/seo/industry-config";
 import {
   getItemListSchema,
-  getBreadcrumbSchema,
   slugifyCity,
   mapIndustryToUrlSlug,
 } from "@/lib/seo/schemas";
@@ -155,10 +154,10 @@ export function IndustryContractorsLanding({
     })),
   });
 
-  const breadcrumbLd = getBreadcrumbSchema([
-    { name: "Home", url: "/" },
-    { name: `${config.name} Contractors`, url: config.contractorsBasePath },
-  ]);
+  // NOTE: BreadcrumbList JSON-LD is emitted by the <Breadcrumbs> component
+  // rendered inside <CornerstoneLayout> (see breadcrumbs.tsx). Do NOT also
+  // pass a breadcrumb schema via additionalSchema — that produces duplicate
+  // BreadcrumbList blocks (flagged in SEO-AUDIT-2).
 
   return (
     <CornerstoneLayout
@@ -167,7 +166,7 @@ export function IndustryContractorsLanding({
         { name: "Home", url: "/" },
         { name: `${config.name} Contractors`, url: config.contractorsBasePath },
       ]}
-      additionalSchema={[itemListLd, breadcrumbLd]}
+      additionalSchema={[itemListLd]}
     >
       {/* ── Hero ────────────────────────────────────────────────────────── */}
       <section className="border-b bg-gradient-to-b from-emerald-50/50 to-background dark:from-emerald-950/20">
@@ -345,11 +344,10 @@ export function IndustryContractorsCityPage({
     }),
   });
 
-  const breadcrumbLd = getBreadcrumbSchema([
-    { name: "Home", url: "/" },
-    { name: `${config.name} Contractors`, url: config.contractorsBasePath },
-    { name: city, url: canonicalPath },
-  ]);
+  // NOTE: BreadcrumbList JSON-LD is emitted by the <Breadcrumbs> component
+  // rendered inside <CornerstoneLayout> (see breadcrumbs.tsx). Do NOT also
+  // pass a breadcrumb schema via additionalSchema — that produces duplicate
+  // BreadcrumbList blocks (flagged in SEO-AUDIT-2).
 
   return (
     <CornerstoneLayout
@@ -359,7 +357,7 @@ export function IndustryContractorsCityPage({
         { name: `${config.name} Contractors`, url: config.contractorsBasePath },
         { name: city, url: canonicalPath },
       ]}
-      additionalSchema={[itemListLd, breadcrumbLd]}
+      additionalSchema={[itemListLd]}
     >
       {/* ── Hero ────────────────────────────────────────────────────────── */}
       <section className="border-b bg-gradient-to-b from-emerald-50/50 to-background dark:from-emerald-950/20">

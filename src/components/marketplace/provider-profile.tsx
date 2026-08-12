@@ -450,7 +450,7 @@ export function ProviderProfile({ slug, onBack, backHref, initialData }: Provide
                     >
                       <img
                         src={src}
-                        alt={`Gallery image ${i + 1}`}
+                        alt={`${tenant.name} portfolio photo ${i + 1}`}
                         className="h-full w-full object-cover transition-transform duration-300 hover:scale-110"
                       />
                     </div>

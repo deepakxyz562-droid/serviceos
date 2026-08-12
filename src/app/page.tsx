@@ -143,15 +143,21 @@ export default async function HomePage() {
           fetchPriority="high"
         />
       )}
-      {/* Server-rendered SEO content — visible to crawlers + anonymous visitors.
+      {/* Interactive client app — auth routing + landing page.
+          Renders first so users see the visual hero immediately. */}
+      <HomePageClient />
+      {/* Server-rendered SEO content — VISIBLE rich text with internal links.
+          Positioned below the interactive landing so users see the visual
+          hero first, then supplementary content below. For Googlebot, this
+          is in the initial HTML (before JS execution) with 1,500+ words and
+          25+ internal links to key pages — giving Google clear sitelink
+          candidates and strong topical context.
           Skipped for authenticated users to prevent FOUC on hard refresh. */}
       {!hasAuthCookie && <HomeSeoContent />}
       {/* Hourly-rotating European city spotlight — server-rendered, populated
           by the standalone external cron at /api/cron/featured-location.
           Skipped for authenticated users (they go straight to the dashboard). */}
       {!hasAuthCookie && <FeaturedEuropeanLocation />}
-      {/* Interactive client app — auth routing + landing page */}
-      <HomePageClient />
     </>
   );
 }

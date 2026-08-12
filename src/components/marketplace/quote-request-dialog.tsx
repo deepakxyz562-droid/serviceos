@@ -431,7 +431,7 @@ export function QuoteRequestDialog({
                     >
                       <img
                         src={url}
-                        alt={`Photo ${idx + 1}`}
+                        alt={`Customer-uploaded photo ${idx + 1} attached to quote request`}
                         className="h-full w-full object-cover"
                         onError={(e) => {
                           (e.currentTarget as HTMLImageElement).style.display = 'none';

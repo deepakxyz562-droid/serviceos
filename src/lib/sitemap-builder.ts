@@ -134,6 +134,13 @@ export async function buildStaticSitemap(): Promise<MetadataRoute.Sitemap> {
     // ─── Marketplace ─────────────────────────────────────────────────────
     { path: "/marketplace", priority: 0.9, changeFreq: "weekly" },
 
+    // ─── Cornerstone: Hub pages (sitelink targets + navigation hubs) ─────
+    // /features and /industries aggregate the 5 feature pages and 19
+    // industry pages respectively. They give Google clean sitelink targets
+    // and give users a discoverable index of every product surface.
+    { path: "/features", priority: 0.9, changeFreq: "monthly" },
+    { path: "/industries", priority: 0.9, changeFreq: "monthly" },
+
     // ─── Cornerstone: Industry pages (high commercial intent) ────────────
     { path: "/field-service-software", priority: 0.9, changeFreq: "monthly" },
     { path: "/plumbing-software", priority: 0.9, changeFreq: "monthly" },

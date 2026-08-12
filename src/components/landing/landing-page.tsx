@@ -298,6 +298,7 @@ const primaryChannels = [
     bestFor: 'Quotes, invoices, receipts, newsletters',
     description: 'Send branded emails from day one. Built-in templates for quotes, invoices, receipts, and campaigns.',
     image: '/images/landing/channel-email.png',
+    alt: 'Fieseros branded email template for quotes, invoices, and receipts',
     primary: true,
   },
   {
@@ -308,6 +309,7 @@ const primaryChannels = [
     bestFor: 'Reminders, confirmations, urgent updates',
     description: 'Reach customers instantly with SMS reminders, booking confirmations, and payment links.',
     image: '/images/landing/channel-sms.png',
+    alt: 'Fieseros SMS message showing a booking confirmation and payment link',
     primary: true,
   },
   {
@@ -318,6 +320,7 @@ const primaryChannels = [
     bestFor: 'Job updates, owner alerts, real-time pings',
     description: 'Keep owners and technicians instantly informed with web and mobile push notifications for every job lifecycle event.',
     image: '/images/landing/channel-push.png',
+    alt: 'Fieseros push notification alert for real-time job updates',
     primary: true,
   },
 ];
@@ -751,7 +754,7 @@ function HeroSection({ onGetStarted, onTryDemo }: { onGetStarted: () => void; on
               <div className="rounded-xl border border-border bg-white shadow-lg p-3 w-44">
                 <div className="flex items-center gap-2 mb-1">
                   <div className="w-7 h-7 rounded-full bg-emerald-100 border border-emerald-200 overflow-hidden relative">
-                    <Image src="/images/landing/persona-technician.png" alt="Technician" fill sizes="28px" className="object-cover" />
+                    <Image src="/images/landing/persona-technician.png" alt="Field technician portrait shown in the tech-en-route notification card" fill sizes="28px" className="object-cover" />
                   </div>
                   <div>
                     <div className="text-xs font-semibold text-foreground leading-tight">Tech en route</div>
@@ -1303,7 +1306,7 @@ function ChannelsSection() {
                     <div className="relative aspect-square overflow-hidden bg-muted">
                       <Image
                         src={ch.image}
-                        alt={`${ch.title} channel`}
+                        alt={ch.alt}
                         fill
                         sizes="(max-width: 768px) 50vw, 25vw"
                         className="object-cover"
