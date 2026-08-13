@@ -60,8 +60,11 @@ export async function GET(
       return new Response(cachedXml, {
         headers: {
           "Content-Type": "application/xml; charset=UTF-8",
+          // 1h max-age (was 24h) so Google re-validates sooner after deploys.
+          // 24h stale-while-revalidate means the CDN still serves instantly
+          // while regenerating in the background.
           "Cache-Control":
-            "public, max-age=86400, s-maxage=86400, stale-while-revalidate=86400",
+            "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400",
         },
       });
     }
@@ -98,19 +101,11 @@ export async function GET(
     return new Response(xml, {
       headers: {
         "Content-Type": "application/xml; charset=UTF-8",
-        // Cache at the CDN for 24 HOURS. After that, the CDN may serve a
-        // STALE response for another 24h while regenerating in the background.
-        //
-        // WHY 24h (was 1h):
-        //   Sitemaps don't change often — Google re-crawls on its own schedule
-        //   (hours to days). A 1h TTL meant the CDN cache expired frequently,
-        //   and the next Googlebot fetch hit a cold cache (30s+ generation on
-        //   Supabase) → "Sitemap could not be read" in Search Console.
-        //   With 24h max-age + 24h SWR, Googlebot ALWAYS gets an instant
-        //   response, and the sitemap-warm cron (every 30 min) keeps the
-        //   in-memory cache fresh so regeneration is fast when the CDN does
-        //   revalidate.
-        "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=86400",
+        // 1h max-age + 24h SWR. Google re-validates within 1h of a deploy,
+        // and the CDN serves stale instantly during background regeneration.
+        // The per-page fallback query is ~500ms (cursor-paginated, not
+        // load-all), so regeneration is fast even on a cold Redis cache.
+        "Cache-Control": "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400",
       },
     });
   } catch (error) {

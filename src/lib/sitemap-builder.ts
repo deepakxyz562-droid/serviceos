@@ -9,6 +9,7 @@ import {
   mapIndustryToPluralSlug,
   PLURAL_SLUG_TO_INDUSTRY,
 } from "@/lib/seo/plural-industry-slugs";
+import { slugifyCity } from "@/lib/seo/schemas";
 import { sharedCacheWrap, sharedCacheGet, sharedCacheSet } from "@/lib/shared-cache";
 import { CircuitOpenError, rethrowIfCircuitOpen } from "@/lib/circuit-breaker";
 
@@ -430,55 +431,201 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
 }
 
 /**
- * Fetch ALL indexable business URLs (UNCACHED — see note below).
- *
- * Uses `listAllIndexableBusinessUrls()` which does CURSOR-BASED pagination
- * (id > lastId) — O(n) total instead of the O(n²) offset-based approach
- * that was causing 30s+ timeouts on production (Supabase REST).
- *
- * NOTE: The full ~91K-URL list is NO LONGER cached as a single Redis blob.
- * Previously this used sharedCacheWrap under key
- * `fieseros:sitemap:all-business-urls`, but that blob was ~10MB and silently
- * failed on Upstash Free tier (HTTP 413, treated as null by sharedCacheWrap).
- * The per-page pre-serialized XML cache (`fieseros:sitemap:xml:{id}`,
- * ~100KB each) is the cache layer — this function is just the uncached data
- * fetcher used by buildBusinessSitemap() to slice into pages.
- *
- * The sitemap-warm cron (every 30 min) calls buildAndCacheAllSitemapXmlPages()
- * which calls this function ONCE, slices it into ~91 pages, and stores each
- * page's FINISHED XML as its own Redis key. So in steady state, this function
- * only runs during warming — never on user-facing sitemap requests.
+ * Fetch ALL indexable business URLs (used only by the warmer, which is
+ * currently STOPPED). Kept for backward compatibility — buildBusinessSitemap
+ * no longer calls this; it fetches per-page directly from the DB.
  */
 async function getAllBusinessUrlsCached() {
   return listAllIndexableBusinessUrls();
 }
 
+// ── Per-page cursor pagination with cached boundaries ─────────────────────
+//
+// PROBLEM (the root cause of "Sitemap could not be read"):
+//   The previous buildBusinessSitemap() loaded ALL ~80K+ indexable tenants
+//   into memory (via getAllBusinessUrlsCached → listAllIndexableBusinessUrls),
+//   then sliced out the requested page. On Supabase Free-tier, loading 80K
+//   rows takes 15-30s → Vercel function timeout → the catch block returned []
+//   → the route served HTTP 200 with an empty <urlset> → Google recorded
+//   "0 discovered pages / Sitemap could not be read."
+//
+// SOLUTION:
+//   Fetch ONLY the requested page's rows directly from the DB using cursor
+//   pagination (id > lastId). Each page query touches exactly BUSINESS_PER_FILE
+//   rows via an indexed PK seek — O(1000), not O(80000).
+//
+//   To know the starting cursor for page N, we need the last ID of page N-1.
+//   This is cached in Redis (`fieseros:sitemap:lastid:{N}`) for 6h. On the
+//   first cold request, we walk the cursor chain from page 0 (each step is
+//   a 1000-row query that returns only IDs — lightweight). For deep pages
+//   on a completely cold cache, we fall back to a single skip-based query
+//   (O(N) index scan, returns 1 row) to avoid excessive recursion.
+//
+//   No recurring warmer is needed — the CDN cache (1h max-age + 24h SWR)
+//   means Google almost never hits the origin. When it does, the per-page
+//   query is ~500ms, well within Vercel's 10s limit.
+//
+// WHY we skip the JS tier filter (description ≥40 chars, hasImage, tier):
+//   The previous code loaded all rows then filtered in JS — this REQUIRED
+//   loading everything. By using only the DB-level filter
+//   (publicProfileEnabled + not suspended + description not null), we can
+//   paginate at the DB level. Tier-C profiles still render (with robots:noindex,
+//   not 404), so including them in the sitemap is harmless — Google discovers
+//   the URL, sees noindex, and moves on. The sitemap index count matches
+//   countIndexableBusinessTenants() exactly, so there are no "phantom" pages.
+
+/** WHERE clause shared by countIndexableBusinessTenants and buildBusinessSitemap. */
+const INDEXABLE_WHERE = {
+  publicProfileEnabled: true,
+  suspendedAt: null,
+  description: { not: null },
+} as const;
+
+/** Redis TTL for cached page boundaries. 6h — boundaries rarely change. */
+const BOUNDARY_TTL_MS = 6 * 60 * 60 * 1000;
+
+/** Max recursion depth before falling back to skip-based boundary lookup. */
+const MAX_RECURSION_DEPTH = 3;
+
+/**
+ * Get the last tenant ID on a given sitemap page (0-indexed).
+ *
+ * This is the "boundary" — the cursor that the NEXT page uses as its
+ * starting point (id > boundary).
+ *
+ * Returns undefined if the page doesn't exist (out of range) or is the
+ * last partial page (we don't cache partial-page boundaries since they
+ * shift as new tenants are added).
+ *
+ * @param pageIndex  0-indexed page number
+ * @param depth      recursion depth (internal — for cold-cache fallback)
+ */
+async function getPageLastId(
+  pageIndex: number,
+  depth = 0,
+): Promise<string | undefined> {
+  if (pageIndex < 0) return undefined;
+
+  // 1. Try Redis cache first (cross-instance, ~50ms)
+  const cacheKey = `fieseros:sitemap:lastid:${pageIndex}`;
+  const cached = await sharedCacheGet<string>(cacheKey);
+  if (cached !== undefined) return cached;
+
+  // 2. Cold-cache fallback for deep pages: use a single skip query.
+  //    O(N*1000) index scan but returns only 1 row (just the ID).
+  //    Acceptable on Supabase because it scans the PK index, not the table.
+  //    Result is cached so this only runs once per page.
+  if (depth > MAX_RECURSION_DEPTH) {
+    const rows = await db.tenant.findMany({
+      where: INDEXABLE_WHERE,
+      select: { id: true },
+      skip: (pageIndex + 1) * BUSINESS_PER_FILE - 1,
+      take: 1,
+      orderBy: { id: "asc" },
+    });
+    const lastId = rows.length > 0 ? rows[0].id : undefined;
+    if (lastId) {
+      await sharedCacheSet(cacheKey, lastId, BOUNDARY_TTL_MS).catch(() => {});
+    }
+    return lastId;
+  }
+
+  // 3. Normal path: get the previous page's last ID (recursive), then
+  //    fetch this page's IDs via cursor (indexed PK seek, O(1000)).
+  const startCursor =
+    pageIndex === 0
+      ? undefined
+      : await getPageLastId(pageIndex - 1, depth + 1);
+
+  const rows = await db.tenant.findMany({
+    where: {
+      ...INDEXABLE_WHERE,
+      ...(startCursor ? { id: { gt: startCursor } } : {}),
+    },
+    select: { id: true },
+    take: BUSINESS_PER_FILE,
+    orderBy: { id: "asc" },
+  });
+
+  if (rows.length === 0) {
+    return undefined; // page doesn't exist
+  }
+
+  const lastId = rows[rows.length - 1].id;
+
+  // Only cache full pages. Partial pages (the last page) are not cached
+  // because they shift as new tenants are added — recompute each time.
+  if (rows.length === BUSINESS_PER_FILE) {
+    await sharedCacheSet(cacheKey, lastId, BOUNDARY_TTL_MS).catch(() => {});
+  }
+
+  return lastId;
+}
+
 /**
  * Build a single business-page sitemap chunk (IDs 1..N).
  *
- * Slices from the cached full list of business URLs (fetched once per hour
- * via cursor-based pagination). This is instant for all pages after the
- * first request populates the cache.
+ * Fetches ONLY this page's rows from the DB — never loads all tenants.
+ * Uses cursor pagination (id > lastId) with cached page boundaries.
+ *
+ * THROWS on error (does NOT swallow) — the route handler's catch block
+ * returns HTTP 503 so Googlebot retries. Previously this caught errors
+ * and returned [], which the route served as HTTP 200 with an empty
+ * <urlset> — Google recorded that as "0 discovered pages."
  */
 export async function buildBusinessSitemap(
   pageZeroIndexed: number,
 ): Promise<MetadataRoute.Sitemap> {
-  const now = new Date().toISOString();
-  const offset = pageZeroIndexed * BUSINESS_PER_FILE;
-  try {
-    const allUrls = await getAllBusinessUrlsCached();
-    const pageUrls = allUrls.slice(offset, offset + BUSINESS_PER_FILE);
-    return pageUrls.map((entry) => ({
-      url: entry.url,
-      lastModified: entry.lastModified || now,
-    }));
-  } catch (err) {
-    console.error(
-      `[sitemap] failed to list business URLs for page ${pageZeroIndexed}:`,
-      err,
+  // Get the starting cursor (last ID of the previous page)
+  const startCursor =
+    pageZeroIndexed === 0
+      ? undefined
+      : await getPageLastId(pageZeroIndexed - 1);
+
+  // If page > 0 and the previous page has no entries, this page is out of range.
+  if (pageZeroIndexed > 0 && startCursor === undefined) {
+    throw new Error(
+      `Sitemap page ${pageZeroIndexed + 1} is out of range (previous page has no entries)`,
     );
-    return [];
   }
+
+  const rows = await db.tenant.findMany({
+    where: {
+      ...INDEXABLE_WHERE,
+      ...(startCursor ? { id: { gt: startCursor } } : {}),
+    },
+    select: {
+      id: true,
+      slug: true,
+      industry: true,
+      city: true,
+      updatedAt: true,
+    },
+    take: BUSINESS_PER_FILE,
+    orderBy: { id: "asc" },
+  });
+
+  if (rows.length === 0) {
+    throw new Error(
+      `Sitemap page ${pageZeroIndexed + 1} returned no rows from database`,
+    );
+  }
+
+  const now = new Date().toISOString();
+  return rows.map((t) => {
+    const industrySlug = mapIndustryToPluralSlug(t.industry);
+    const citySlug = slugifyCity(t.city);
+    const lastModified =
+      t.updatedAt instanceof Date
+        ? t.updatedAt.toISOString()
+        : typeof t.updatedAt === "string"
+          ? new Date(t.updatedAt).toISOString()
+          : now;
+    return {
+      url: `${BASE_URL}/${industrySlug}/${citySlug}/${t.slug}`,
+      lastModified,
+    };
+  });
 }
 
 // ── XML serialization helpers ──────────────────────────────────────────────

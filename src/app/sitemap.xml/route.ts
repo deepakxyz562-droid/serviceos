@@ -24,12 +24,11 @@ export async function GET() {
     return new Response(xml, {
       headers: {
         "Content-Type": "application/xml; charset=UTF-8",
-        // Cache at the CDN for 24 HOURS + 24h stale-while-revalidate.
-        // The sitemap index changes only when business count crosses a
-        // BUSINESS_PER_FILE boundary — rarely. 24h TTL is safe and prevents
-        // Googlebot from hitting cold-cache regeneration (which can take 30s+
-        // on Supabase and cause "Sitemap could not be read" errors).
-        "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=86400",
+        // 1h max-age + 24h SWR. The sitemap index changes only when business
+        // count crosses a BUSINESS_PER_FILE boundary — rarely. But a shorter
+        // max-age ensures Google picks up new pages within 1h of a deploy
+        // instead of waiting up to 24h.
+        "Cache-Control": "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400",
       },
     });
   } catch (error) {
