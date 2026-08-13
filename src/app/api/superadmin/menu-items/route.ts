@@ -108,6 +108,13 @@ async function saveGlobalMenuConfig(items: MenuItemEntry[]): Promise<void> {
 // ENABLED in the tenant view even though the tenant's sidebar was hiding
 // it. That mismatch caused "I toggled it off globally but it still shows
 // as on for the tenant" confusion.
+//
+// Under Option A (global hide = absolute floor): if global enabled=false,
+// the result is ALWAYS false regardless of any tenant override. The tenant
+// can only hide MORE, not re-enable. This keeps the superadmin UI
+// consistent with the actual sidebar behavior — if a menu is globally
+// hidden, it shows as "off" in the tenant view too, even if a stale
+// tenant menuConfig entry says enabled=true.
 async function getTenantMenuConfig(tenantId: string): Promise<MenuItemEntry[]> {
   // Start from the global config so the tenant view reflects global
   // defaults (including global disables). This is the baseline the tenant
@@ -132,15 +139,22 @@ async function getTenantMenuConfig(tenantId: string): Promise<MenuItemEntry[]> {
     }
   }
 
-  // Overlay tenant overrides on top of the global config: when the tenant
-  // has an explicit entry for a key, the tenant's value wins; otherwise the
-  // global value applies.
-  return globalConfig.map((item) => ({
-    ...item,
-    enabled: tenantEnabledByKey.has(item.key)
-      ? (tenantEnabledByKey.get(item.key) as boolean)
-      : item.enabled,
-  }));
+  // Overlay tenant overrides on top of the global config.
+  // Option A: if global is false, the result is ALWAYS false (absolute
+  // floor). If global is true, the tenant override applies (tenant can
+  // hide further with enabled=false, or leave visible with enabled=true
+  // / no override).
+  return globalConfig.map((item) => {
+    if (!item.enabled) {
+      // Global hide = absolute floor. Tenant cannot re-enable.
+      return { ...item, enabled: false };
+    }
+    const tenantOverride = tenantEnabledByKey.get(item.key);
+    return {
+      ...item,
+      enabled: tenantOverride !== undefined ? tenantOverride : item.enabled,
+    };
+  });
 }
 
 function getDefaultItems(): MenuItemEntry[] {
@@ -243,24 +257,54 @@ export async function PUT(request: NextRequest) {
         }
         const settings = parseSettings(tenant.settingsJson);
 
-        // SPARSE OVERRIDE storage: store ONLY the toggled item as a tenant
-        // override, NOT a full snapshot of the catalog. This is critical
-        // because getTenantMenuConfig() overlays tenant overrides on the
-        // GLOBAL config — if we wrote a full snapshot here, every catalog
-        // item would get a tenant value and the tenant would stop
-        // inheriting global changes. With sparse storage, only items the
-        // superadmin explicitly toggled for this tenant override global;
-        // everything else inherits the global setting.
+        // SPARSE OVERRIDE storage (Option A):
+        // Store ONLY the toggled item as a tenant override, NOT a full
+        // snapshot of the catalog. Only persist an override when:
+        //   - The toggle DIFFERS from the global state (no redundant
+        //     overrides that just duplicate global).
+        //   - AND it's a HIDE (enabled=false). A tenant CANNOT re-enable
+        //     a globally-hidden item (global hide = absolute floor), so
+        //     enabled=true overrides are never stored.
+        // If the toggle matches global (or tries to re-enable a global
+        // hide), we REMOVE any existing override for this key so the
+        // tenant inherits the global setting cleanly. This auto-cleans
+        // stale entries over time as items are toggled.
+
+        // Read the global enabled state for this key (read-only, stays
+        // inside the transaction via tx).
+        const globalTenants = await tx.tenant.findMany({ take: 1 });
+        let globalEnabled = true; // default: visible
+        if (globalTenants.length > 0) {
+          const gSettings = parseSettings(globalTenants[0].settingsJson);
+          const gConfig = gSettings[GLOBAL_CONFIG_KEY] as MenuItemEntry[] | undefined;
+          if (gConfig) {
+            const gEntry = gConfig.find((g) => g.key === menuKey);
+            if (gEntry) globalEnabled = gEntry.enabled;
+          }
+        }
+
         const existingConfig = (settings.menuConfig as MenuItemEntry[] | undefined) || [];
-        // Drop any prior entry for this key so we don't accumulate dupes.
+        // Drop any prior entry for this key (we re-add below only if needed).
         const filtered = existingConfig.filter(
           (item) => item && typeof item.key === 'string' && item.key !== menuKey,
         );
-        const catalogItem = MENU_CATALOG.find((i) => i.key === menuKey);
-        if (!catalogItem) {
-          throw new Error(`Unknown menu key: ${menuKey}`);
+
+        // Should we persist a tenant override for this key?
+        // Only if it's a HIDE that differs from global.
+        const shouldStoreOverride = !enabled && globalEnabled;
+
+        if (shouldStoreOverride) {
+          const catalogItem = MENU_CATALOG.find((i) => i.key === menuKey);
+          if (!catalogItem) {
+            throw new Error(`Unknown menu key: ${menuKey}`);
+          }
+          filtered.push({ ...catalogItem, enabled: false });
         }
-        settings.menuConfig = [...filtered, { ...catalogItem, enabled }];
+        // else: toggle matches global, or tenant tried to re-enable a
+        // global hide (no-op under Option A). Either way, don't store
+        // an override — the tenant inherits global.
+
+        settings.menuConfig = filtered;
         await tx.tenant.update({
           where: { id: tenantId },
           data: { settingsJson: JSON.stringify(settings) },
@@ -333,13 +377,54 @@ export async function POST(request: NextRequest) {
           throw new Error(`Tenant ${tenantId} not found`);
         }
         const settings = parseSettings(tenant.settingsJson);
-        const rawConfig = (settings.menuConfig as MenuItemEntry[] | undefined) || getDefaultItems();
-        const currentItems = mergeWithCatalog(rawConfig);
-        const updatedItems = currentItems.map((item) => {
-          const update = items.find((i: { key: string }) => i.key === item.key);
-          return update ? { ...item, enabled: update.enabled } : item;
-        });
-        settings.menuConfig = updatedItems;
+
+        // SPARSE OVERRIDE storage (Option A):
+        // The UI sends the FULL items array (all catalog items with their
+        // current enabled state) on bulk save. We must NOT store this as a
+        // full snapshot — that would create a stale snapshot that breaks
+        // global inheritance (the original Bug C, which was fixed in PUT
+        // but not POST until now).
+        //
+        // Instead, read the global config and persist ONLY the tenant
+        // overrides that:
+        //   - DIFFER from global (no redundant entries)
+        //   - AND are HIDES (enabled=false). A tenant cannot re-enable a
+        //     globally-hidden item (Option A), so enabled=true overrides
+        //     are never stored.
+        // This also auto-cleans stale snapshots: any existing menuConfig
+        // entries that now match global are dropped.
+
+        // Read the global config (read-only, stays inside the transaction).
+        const globalTenants = await tx.tenant.findMany({ take: 1 });
+        const globalConfig = globalTenants.length > 0
+          ? (parseSettings(globalTenants[0].settingsJson)[GLOBAL_CONFIG_KEY] as MenuItemEntry[] | undefined)
+          : undefined;
+        const globalEnabledByKey = new Map<string, boolean>();
+        if (globalConfig) {
+          for (const g of globalConfig) {
+            if (g && typeof g.key === 'string') {
+              globalEnabledByKey.set(g.key, !!g.enabled);
+            }
+          }
+        }
+
+        // Build the new sparse tenant override list.
+        const newOverrides: MenuItemEntry[] = [];
+        for (const update of items) {
+          if (!update || typeof update.key !== 'string') continue;
+          const globalEnabled = globalEnabledByKey.get(update.key) ?? true;
+          // Only store a tenant override if it's a HIDE that differs
+          // from global. A tenant cannot re-enable a globally-hidden
+          // item, so enabled=true when global=false is a no-op (not stored).
+          if (!update.enabled && globalEnabled) {
+            const catalogItem = MENU_CATALOG.find((i) => i.key === update.key);
+            if (catalogItem) {
+              newOverrides.push({ ...catalogItem, enabled: false });
+            }
+          }
+        }
+
+        settings.menuConfig = newOverrides;
         await tx.tenant.update({
           where: { id: tenantId },
           data: { settingsJson: JSON.stringify(settings) },

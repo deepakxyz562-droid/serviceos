@@ -32,12 +32,17 @@ function parseSettings(raw: unknown): Record<string, unknown> {
  * Combines global (superadmin) defaults with tenant-specific overrides.
  * Used by the sidebar to show/hide menu items.
  *
- * TENANT OVERRIDES GLOBAL: when the tenant has an explicit entry for a
- * menu key, the tenant's `enabled` value WINS over the global default.
- *   - tenant.enabled=false  -> add to disabled set (restrict further)
- *   - tenant.enabled=true   -> REMOVE from disabled set (override a
- *     global disable so the tenant can see this menu again)
- * Items not present in tenantMenuConfig inherit the global setting.
+ * GLOBAL HIDE = ABSOLUTE FLOOR (Option A):
+ *   - Global enabled=false  -> item is hidden for EVERY tenant. No tenant
+ *     override can re-enable it.
+ *   - Global enabled=true (or no entry) -> tenants inherit "visible".
+ *   - Tenant enabled=false -> hides the item FOR THIS TENANT ONLY
+ *     (restricts further beyond the global default).
+ *   - Tenant enabled=true  -> NO-OP. Cannot override a global hide.
+ *
+ * This prevents the bug where a stale tenant `menuConfig` snapshot (full
+ * catalog with enabled=true) silently re-enabled every globally-hidden
+ * menu the moment a tenant refreshed their CRM page.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -82,7 +87,11 @@ export async function GET(request: NextRequest) {
     }
 
     // 2. Fetch tenant-specific disabled menus from tenant's settingsJson.
-    //    Tenant.enabled=true OVERRIDES a global disable (removes the key).
+    //    Tenant can ONLY hide more (add to disabledKeys). A tenant CANNOT
+    //    re-enable a globally-hidden item — global hide is an absolute
+    //    floor. This prevents stale tenant menuConfig snapshots (which may
+    //    contain enabled=true for globally-hidden items) from silently
+    //    re-enabling those items on tenant refresh.
     try {
       const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
       if (tenant) {
@@ -91,13 +100,12 @@ export async function GET(request: NextRequest) {
         if (tenantMenuConfig) {
           for (const item of tenantMenuConfig) {
             if (!item.enabled) {
+              // Tenant hides this item further (restricts beyond global).
               disabledKeys.add(item.key);
-            } else {
-              // Tenant explicitly enabled this item — let it override a
-              // global disable. Items not present in tenantMenuConfig
-              // continue to inherit the global setting.
-              disabledKeys.delete(item.key);
             }
+            // else: tenant says enabled=true. Under Option A this is a
+            // NO-OP — we deliberately do NOT call disabledKeys.delete().
+            // A tenant cannot un-hide a globally-hidden item.
           }
         }
       }
