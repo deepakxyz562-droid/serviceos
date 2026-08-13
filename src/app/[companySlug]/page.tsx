@@ -9,7 +9,6 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
-import { db } from '@/lib/db';
 import { getAppUrl } from '@/lib/brand';
 import { VERTICALS, getIndustry } from '@/lib/industry-catalog';
 import {
@@ -26,6 +25,10 @@ import {
   getIndustrySoftwareLabel,
   getIndustryDisplayName,
 } from '@/lib/seo/industry-software-pages';
+import {
+  fetchIndustryHubTopProviders,
+  fetchTopDirectoryCities,
+} from '@/lib/seo/contractor-cache';
 import { MarketplaceHeader } from '@/components/marketplace/marketplace-header';
 import { MarketplaceMobileNav } from '@/components/marketplace/marketplace-mobile-nav';
 import { CornerstoneFooter } from '@/components/seo/cornerstone-footer';
@@ -168,41 +171,10 @@ export default async function IndustryHubPage({
     trialEndsAt: Date | null;
   }> = [];
   try {
-    tenants = await db.tenant.findMany({
-      where: {
-        publicProfileEnabled: true,
-        marketplaceOptIn: true,
-        suspendedAt: null,
-        OR: [
-          { industry: { equals: industryId } },
-          { businessCategoriesJson: { contains: `"${industryId}"` } },
-        ],
-      },
-      orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }],
-      take: 12,
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        publicSlug: true,
-        tagline: true,
-        industry: true,
-        city: true,
-        state: true,
-        country: true,
-        rating: true,
-        reviewCount: true,
-        description: true,
-        coverImage: true,
-        claimed: true,
-        plan: true,
-        planStatus: true,
-        listingTier: true,
-        trialEndsAt: true,
-      },
-    });
+    const cached = await fetchIndustryHubTopProviders(industryId, 12);
+    tenants = cached as typeof tenants;
   } catch (err) {
-    console.error('[industry-hub] tenant.findMany failed:', err);
+    console.error('[industry-hub] fetchIndustryHubTopProviders failed:', err);
   }
 
   // ── 2. Fetch featured-listing map ─────────────────────────────────────
@@ -289,14 +261,9 @@ export default async function IndustryHubPage({
   // Also query DirectoryLocation for known cities (top 24 by population)
   let directoryCities: Array<{ city: string; citySlug: string; countryCode: string }> = [];
   try {
-    directoryCities = await db.directoryLocation.findMany({
-      where: { isActive: true },
-      orderBy: { population: 'desc' },
-      take: 24,
-      select: { city: true, citySlug: true, countryCode: true },
-    });
+    directoryCities = await fetchTopDirectoryCities(24);
   } catch (err) {
-    console.error('[industry-hub] directoryLocation.findMany failed:', err);
+    console.error('[industry-hub] fetchTopDirectoryCities failed:', err);
   }
 
   // ── 5. Build JSON-LD: ItemList + BreadcrumbList ───────────────────────

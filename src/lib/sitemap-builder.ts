@@ -9,7 +9,7 @@ import {
   mapIndustryToPluralSlug,
   PLURAL_SLUG_TO_INDUSTRY,
 } from "@/lib/seo/plural-industry-slugs";
-import { sharedCacheWrap } from "@/lib/shared-cache";
+import { sharedCacheWrap, sharedCacheGet, sharedCacheSet } from "@/lib/shared-cache";
 import { CircuitOpenError, rethrowIfCircuitOpen } from "@/lib/circuit-breaker";
 
 /**
@@ -58,6 +58,52 @@ export const BASE_URL = "https://fieseros.com";
  *   Now 2,500 (~37 files) → ~4s cold-cache, safe for all crawlers.
  */
 export const BUSINESS_PER_FILE = 2_500;
+
+/**
+ * Stable lastmod timestamp for static / industry-hub / browse URLs.
+ *
+ * WHY NOT `new Date()` per request:
+ *   Google ignores <lastmod> when it always equals the fetch time — it
+ *   detects the pattern and treats the field as noise. A module-level
+ *   constant (computed once when the serverless instance boots) keeps
+ *   lastmod stable for the instance lifetime. Combined with the 1h-fresh
+ *   / 24h-stale shared cache, the served lastmod is stable for up to 25h
+ *   — giving Google a meaningful "page last verified" hint.
+ *
+ *   Blog posts use their own publish date (getAllPosts). Business pages
+ *   use their own updatedAt (from listAllIndexableBusinessUrls). Only
+ *   the truly-static routes — which change only on deploy — use this.
+ */
+const SITE_LASTMOD = new Date().toISOString();
+
+/**
+ * Redis key for a pre-serialized sitemap page's XML.
+ *
+ * WHY PRE-SERIALIZED XML (not the raw URL list):
+ *   The previous approach stored ALL ~91K business URLs as ONE JSON blob
+ *   in a single Redis key (`fieseros:sitemap:all-business-urls`). That
+ *   blob was ~10MB — hitting Upstash Free tier's 10MB request size limit.
+ *   The SET command silently failed (Upstash returned HTTP 413), so the
+ *   cache never populated → every sitemap request ran the full 91K-row
+ *   Supabase query → Supabase CPU overload.
+ *
+ *   Now each sitemap page's FINISHED XML string is stored as its own key:
+ *     fieseros:sitemap:xml:0  → static sitemap XML  (~100 KB)
+ *     fieseros:sitemap:xml:1  → business page 1 XML  (~250 KB)
+ *     fieseros:sitemap:xml:2  → business page 2 XML  (~250 KB)
+ *     ...up to ~37 pages
+ *
+ *   Each key is well under the 10MB limit. The route handler reads the
+ *   pre-built XML string directly — zero DB queries, zero JSON.parse,
+ *   zero serialization. Response time: ~50ms instead of 3-5s.
+ *
+ *   The sitemap-warm cron (every 30 min) generates all pages and stores
+ *   them. If a key is missing (cold Redis, first deploy), the route
+ *   handler falls back to the slower build-and-cache path.
+ */
+function sitemapXmlKey(id: number): string {
+  return `fieseros:sitemap:xml:${id}`;
+}
 
 // ── In-memory caching ─────────────────────────────────────────────────────
 //
@@ -156,10 +202,36 @@ export async function getSitemapIds(): Promise<{ id: number }[]> {
 
 /**
  * The static + blog + industry-hub + browse sitemap (ID 0).
+ *
+ * Cached via the shared cache (Redis when configured, in-memory fallback):
+ *   - freshTtl: 1 hour  — serve instantly, no DB query
+ *   - staleTtl: 24 hours — serve stale + background-refresh
+ *
+ * The expensive part is the browse-entries query (cursor pagination over
+ * all indexable businesses matching the top 4 industries). Without this
+ * cache, every cold-cache request to /sitemap/0.xml took 5–12s on
+ * Supabase Free-tier. With the cache, only the first request after expiry
+ * pays that cost; all subsequent requests within 25h are instant.
  */
 export async function buildStaticSitemap(): Promise<MetadataRoute.Sitemap> {
-  const now = new Date().toISOString();
+  const result = await sharedCacheWrap<MetadataRoute.Sitemap>(
+    "fieseros:sitemap:static",
+    60 * 60 * 1000, // fresh: 1h
+    24 * 60 * 60 * 1000, // stale: 24h
+    buildStaticSitemapUncached,
+  );
+  return result.value;
+}
 
+/**
+ * Uncached implementation — does the actual DB queries.
+ *
+ * Designed to NEVER throw: the only DB-dependent part (browse entries) is
+ * wrapped in try/catch, so a Supabase failure degrades gracefully (browse
+ * entries are omitted, but static + blog + industry entries are still
+ * returned).
+ */
+async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: {
     path: string;
     priority: number;
@@ -250,7 +322,7 @@ export async function buildStaticSitemap(): Promise<MetadataRoute.Sitemap> {
   // generation. Only <loc> and <lastmod> are emitted per URL.
   const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((r) => ({
     url: `${BASE_URL}${r.path}`,
-    lastModified: now,
+    lastModified: SITE_LASTMOD,
   }));
 
   // Dynamic: blog articles (from MDX files in content/blog/).
@@ -264,7 +336,7 @@ export async function buildStaticSitemap(): Promise<MetadataRoute.Sitemap> {
     PLURAL_SLUG_TO_INDUSTRY,
   ).map((slug) => ({
     url: `${BASE_URL}/${slug}`,
-    lastModified: now,
+    lastModified: SITE_LASTMOD,
   }));
 
   // ── Dynamic: plural browse pages (/{pluralIndustry}/{city}) ───────────────
@@ -339,7 +411,7 @@ export async function buildStaticSitemap(): Promise<MetadataRoute.Sitemap> {
         const plural = mapIndustryToPluralSlug(industry);
         browseEntries.push({
           url: `${BASE_URL}/${plural}/${city.citySlug}`,
-          lastModified: now,
+          lastModified: SITE_LASTMOD,
         });
       }
     }
@@ -493,4 +565,104 @@ export function serializeSitemapIndex(ids: { id: number }[]): string {
     `${sitemaps}\n` +
     `</sitemapindex>`
   );
+}
+
+// ── Pre-serialized XML caching ──────────────────────────────────────────────
+//
+// CRITICAL FIX: The previous approach stored all ~91K business URLs as ONE
+// JSON blob in Redis (`fieseros:sitemap:all-business-urls`). That blob was
+// ~10MB, hitting Upstash Free tier's 10MB request size limit → SET silently
+// failed → cache never populated → every sitemap request ran the full 91K-row
+// Supabase query → Supabase CPU overload.
+//
+// Now each sitemap page's FINISHED XML string is stored as its own Redis key:
+//   fieseros:sitemap:xml:0  → static sitemap XML  (~100 KB)
+//   fieseros:sitemap:xml:1  → business page 1 XML  (~250 KB)
+//   ...up to ~37 pages
+//
+// Each key is well under 10MB. The route handler reads the pre-built XML
+// directly — zero DB queries, zero JSON.parse, zero serialization.
+
+/** TTL for pre-serialized XML: 1h fresh (matches the shared cache pattern). */
+const SITEMAP_XML_TTL_MS = 60 * 60 * 1000; // 1h
+const SITEMAP_XML_STALE_MS = 24 * 60 * 60 * 1000; // 24h stale
+
+/**
+ * Get a pre-serialized sitemap page's XML from the shared cache.
+ *
+ * Returns the raw XML string if cached, or undefined if not cached.
+ * The route handler calls this FIRST — if it returns a string, the response
+ * is sent immediately with zero DB queries.
+ *
+ * This does NOT recompute on miss (unlike sharedCacheWrap) — the caller
+ * falls back to the build path and then caches the result for next time.
+ */
+export async function getCachedSitemapXml(id: number): Promise<string | undefined> {
+  return sharedCacheGet<string>(sitemapXmlKey(id));
+}
+
+/**
+ * Build ALL sitemap pages' XML and store each in Redis as a separate key.
+ *
+ * Called by the sitemap-warm cron (every 30 min). This is the ONLY place
+ * that populates the pre-serialized XML cache. After this runs, every
+ * /sitemap/N.xml request is a instant Redis GET (~50ms) instead of a
+ * 3-15s Supabase query.
+ *
+ * Strategy:
+ *   1. Get sitemap IDs (cached, ~1 Redis GET)
+ *   2. Build static sitemap entries (cached, 1h/24h SWR)
+ *   3. Build business URL list (cached, 1h/24h SWR — the expensive part)
+ *   4. For each page: slice the entries, serialize to XML, store in Redis
+ *
+ * Each page's XML is stored independently, so a failure on one page doesn't
+ * affect the others. Empty pages are NOT cached (so transient Supabase
+ * failures don't poison the cache).
+ *
+ * @returns Summary of pages built + any errors
+ */
+export async function buildAndCacheAllSitemapXmlPages(): Promise<{
+  pagesBuilt: number;
+  pagesFailed: number;
+  errors: string[];
+}> {
+  const errors: string[] = [];
+  let pagesBuilt = 0;
+  let pagesFailed = 0;
+
+  const ids = await getSitemapIds();
+
+  // Build all pages. We process them sequentially to avoid sending too many
+  // concurrent Redis SET commands (each ~250KB) — Upstash Free tier has
+  // connection limits. Sequential is fine since each SET is ~5ms.
+  for (const { id } of ids) {
+    try {
+      const entries =
+        id === 0
+          ? await buildStaticSitemap()
+          : await buildBusinessSitemap(id - 1);
+
+      if (entries.length === 0 && id > 0) {
+        // Don't cache empty business pages — could be a transient failure.
+        // (ID 0 / static sitemap can legitimately have entries even if the
+        // browse query failed — it always has static + blog + industry entries.)
+        pagesFailed++;
+        continue;
+      }
+
+      const xml = serializeUrlSet(entries);
+      await sharedCacheSet(
+        sitemapXmlKey(id),
+        xml,
+        SITEMAP_XML_TTL_MS,
+        SITEMAP_XML_STALE_MS,
+      );
+      pagesBuilt++;
+    } catch (err) {
+      errors.push(`page ${id}: ${(err as Error).message}`);
+      pagesFailed++;
+    }
+  }
+
+  return { pagesBuilt, pagesFailed, errors };
 }

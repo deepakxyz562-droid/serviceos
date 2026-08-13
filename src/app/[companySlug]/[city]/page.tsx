@@ -34,6 +34,10 @@ import {
   getIndustryDisplayName,
 } from '@/lib/seo/industry-software-pages';
 import {
+  fetchPluralCityProviders,
+  fetchDirectoryLocationFull,
+} from '@/lib/seo/contractor-cache';
+import {
   computeCardType,
   fetchFeaturedListingsMap,
 } from '@/lib/marketplace-featured';
@@ -211,33 +215,12 @@ export async function generateMetadata({
   // risk indexing a page that renders empty.
   let providerCount = 0;
   try {
-    providerCount = await db.tenant.count({
-      where: {
-        publicProfileEnabled: true,
-        marketplaceOptIn: true,
-        suspendedAt: null,
-        AND: [
-          {
-            OR: [
-              { industry: { equals: industryId } },
-              { businessCategoriesJson: { contains: `"${industryId}"` } },
-            ],
-          },
-          {
-            OR: [
-              { city: { contains: cityName } },
-              { city: { contains: city } },
-              { state: { contains: cityName } },
-              { state: { contains: city } },
-              { serviceAreasJson: { contains: cityName } },
-              { serviceAreasJson: { contains: city } },
-            ],
-          },
-        ],
-      },
-    });
+    // Use the cached providers list — shares the same cache entry as the
+    // page body, so metadata + page body together do ONE DB query.
+    const providers = await fetchPluralCityProviders(industryId, city, cityName);
+    providerCount = providers.length;
   } catch (err) {
-    console.error('[plural-browse] generateMetadata tenant.count failed:', err);
+    console.error('[plural-browse] generateMetadata failed:', err);
     providerCount = 0;
   }
 
@@ -305,13 +288,10 @@ export default async function PluralBrowsePage({
   let cityLng: number | null = null;
   let isKnownCity = false;
   try {
-    const dirLoc = await db.directoryLocation.findFirst({
-      where: { citySlug: city, isActive: true },
-      select: { city: true, latitude: true, longitude: true },
-    });
+    const dirLoc = await fetchDirectoryLocationFull(city);
     if (dirLoc) {
       isKnownCity = true;
-      cityName = dirLoc.city;
+      if (dirLoc.city) cityName = dirLoc.city;
       cityLat = dirLoc.latitude ?? null;
       cityLng = dirLoc.longitude ?? null;
     }
@@ -366,42 +346,14 @@ export default async function PluralBrowsePage({
     serviceRadiusKm: number;
   }> = [];
   try {
-    // NOTE on `mode`: this codebase supports BOTH SQLite (local dev / sandbox)
-    // and PostgreSQL (Supabase prod). SQLite does NOT support
-    // `mode: 'insensitive'` (it's a no-op there because SQLite's LIKE is
-    // already case-insensitive for ASCII), but Prisma throws a validation
-    // error if you pass it on SQLite. So we omit it here. PostgreSQL users
-    // get case-insensitive matching from the default `contains` anyway when
-    // the column type is `text` + the collation is case-insensitive (which
-    // is the default on Supabase).
-    tenants = await db.tenant.findMany({
-      where: {
-        publicProfileEnabled: true,
-        marketplaceOptIn: true,
-        suspendedAt: null,
-        // Industry filter (OR-group): primary industry OR businessCategoriesJson contains
-        OR: [
-          { industry: { equals: industryId } },
-          { businessCategoriesJson: { contains: `"${industryId}"` } },
-        ],
-        // City filter (OR-group): city / state / serviceAreasJson contains the city name.
-        // We test against BOTH the human-readable cityName (e.g. 'London') AND the slug
-        // (e.g. 'london') so we match tenants whose address was set via the address
-        // autocomplete (uses real city name) OR via the directory seeding (uses slug).
-        OR: [
-          { city: { contains: cityName } },
-          { city: { contains: city } },
-          { state: { contains: cityName } },
-          { state: { contains: city } },
-          { serviceAreasJson: { contains: cityName } },
-          { serviceAreasJson: { contains: city } },
-        ],
-      },
-      orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }],
-      take: 100,
-    });
+    // Cached via sharedCacheWrap (Redis + in-memory fallback, 30s fresh / 5min stale).
+    // Also fixes a latent bug: the previous inline query had two top-level
+    // `OR:` keys (JS dedupes → only the second survived, filtering by city only).
+    // The cached helper correctly uses AND: [{OR...}, {OR...}].
+    const cached = await fetchPluralCityProviders(industryId, city, cityName);
+    tenants = cached as typeof tenants;
   } catch (err) {
-    console.error('[plural-browse] tenant.findMany failed:', err);
+    console.error('[plural-browse] fetchPluralCityProviders failed:', err);
   }
 
   // ── 4. Fetch featured-listing map (single source of truth) ─────────────

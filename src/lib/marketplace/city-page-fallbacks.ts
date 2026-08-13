@@ -21,6 +21,8 @@
 import { db } from '@/lib/db';
 import { slugifyCity, mapIndustryToUrlSlug } from '@/lib/seo/schemas';
 import { mapIndustryToPluralSlug } from '@/lib/seo/plural-industry-slugs';
+import { sharedCacheWrap } from '@/lib/shared-cache';
+import { rethrowIfCircuitOpen } from '@/lib/circuit-breaker';
 import type { ProviderListItem } from '@/components/marketplace/types';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -110,6 +112,35 @@ export async function fetchNearbyCitiesWithProviders(
   const maxDistanceKm = options?.maxDistanceKm ?? 200;
   const usePluralPath = options?.usePluralPath ?? true;
 
+  // Cache key includes all parameters that affect the result.
+  const cacheKey = `fieseros:fallbacks:nearby-cities:${industryId}:${citySlug}:${maxResults}:${maxDistanceKm}:${usePluralPath}`;
+
+  const result = await sharedCacheWrap<NearbyCityEntry[]>(
+    cacheKey,
+    60_000, // fresh: 60s
+    10 * 60_000, // stale: 10min
+    async () => fetchNearbyCitiesWithProvidersUncached(
+      industryId,
+      citySlug,
+      maxResults,
+      maxDistanceKm,
+      usePluralPath,
+    ),
+    // Don't cache empty results — could be transient Supabase failure.
+    (entries) => entries.length > 0,
+  );
+  return result.value;
+}
+
+/** Uncached implementation — the original query logic. */
+async function fetchNearbyCitiesWithProvidersUncached(
+  industryId: string,
+  citySlug: string,
+  maxResults: number,
+  maxDistanceKm: number,
+  usePluralPath: boolean,
+): Promise<NearbyCityEntry[]> {
+
   try {
     // 1. Resolve origin city coordinates
     const origin = await db.directoryLocation.findFirst({
@@ -184,6 +215,7 @@ export async function fetchNearbyCitiesWithProviders(
         ],
       },
       select: { city: true },
+      take: 5000, // bound the query (was unbounded — silently truncated at ~1000 by PostgREST)
     });
 
     const countByCity = new Map<string, number>();
@@ -229,6 +261,7 @@ export async function fetchNearbyCitiesWithProviders(
 
     return result;
   } catch (err) {
+    rethrowIfCircuitOpen(err); // let sharedCacheWrap serve stale
     console.error('[city-page-fallbacks] fetchNearbyCitiesWithProviders failed:', err);
     return [];
   }
@@ -271,6 +304,46 @@ export async function fetchServiceAreaProviders(
 ): Promise<ServiceAreaProvider[]> {
   const maxResults = options?.maxResults ?? 6;
   const maxDistanceKm = options?.maxDistanceKm ?? 150;
+
+  // Cache key includes industryId + citySlug + maxResults + maxDistanceKm.
+  // excludeCityNames is intentionally NOT in the key — the caller passes
+  // the providers already shown on the page, which varies. But the
+  // candidate pool (tenants matching industry with lat/lng) is the same
+  // regardless of excludeCityNames — we cache the raw pool and the caller
+  // re-applies the exclusion filter on the cached result.
+  //
+  // Actually, to keep the cache simple and correct, we include a hash of
+  // the sorted excludeCityNames. This means different pages with different
+  // provider lists get different cache entries — but the underlying DB
+  // query is the same, so we're caching the post-filter result.
+  const excludeKey = [...excludeCityNames].sort().join(',').slice(0, 200);
+  const cacheKey = `fieseros:fallbacks:service-area:${industryId}:${citySlug}:${maxResults}:${maxDistanceKm}:${excludeKey}`;
+
+  const result = await sharedCacheWrap<ServiceAreaProvider[]>(
+    cacheKey,
+    60_000, // fresh: 60s
+    10 * 60_000, // stale: 10min
+    async () => fetchServiceAreaProvidersUncached(
+      industryId,
+      citySlug,
+      excludeCityNames,
+      maxResults,
+      maxDistanceKm,
+    ),
+    // Don't cache empty results — could be transient.
+    (providers) => providers.length > 0,
+  );
+  return result.value;
+}
+
+/** Uncached implementation — the original query logic. */
+async function fetchServiceAreaProvidersUncached(
+  industryId: string,
+  citySlug: string,
+  excludeCityNames: string[],
+  maxResults: number,
+  maxDistanceKm: number,
+): Promise<ServiceAreaProvider[]> {
 
   try {
     // 1. Resolve origin city coordinates
@@ -423,6 +496,7 @@ export async function fetchServiceAreaProviders(
       return provider;
     });
   } catch (err) {
+    rethrowIfCircuitOpen(err); // let sharedCacheWrap serve stale
     console.error('[city-page-fallbacks] fetchServiceAreaProviders failed:', err);
     return [];
   }

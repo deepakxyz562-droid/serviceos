@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
+import {
+  fetchContractorCityProviders,
+  isKnownDirectoryCity,
+} from "@/lib/seo/contractor-cache";
 import { getIndustryByContractorsPath } from "@/lib/seo/industry-config";
 import { IndustryContractorsCityPage } from "@/components/seo/industry-contractors-page";
 import { slugifyCity } from "@/lib/seo/schemas";
@@ -83,36 +87,12 @@ export async function generateMetadata({
   //                         sufficient)
   let providerCount = 0;
   try {
-    providerCount = await db.tenant.count({
-      where: {
-        publicProfileEnabled: true,
-        marketplaceOptIn: true,
-        suspendedAt: null,
-        // Combine industry + city filter groups with AND so BOTH apply.
-        // (A bare top-level `OR` key would be silently overwritten by the
-        // next `OR` key in the object literal — JS dedupes duplicate keys.)
-        AND: [
-          {
-            OR: [
-              { industry: { equals: cfg.industryId } },
-              { businessCategoriesJson: { contains: `"${cfg.industryId}"` } },
-            ],
-          },
-          {
-            OR: [
-              { city: { contains: city } },
-              { city: { contains: citySlug } },
-              { state: { contains: city } },
-              { state: { contains: citySlug } },
-              { serviceAreasJson: { contains: city } },
-              { serviceAreasJson: { contains: citySlug } },
-            ],
-          },
-        ],
-      },
-    });
+    // Use the cached providers list — shares the same cache entry as the
+    // page body, so metadata + page body together do ONE DB query.
+    const providers = await fetchContractorCityProviders(cfg.industryId, citySlug, city);
+    providerCount = providers.length;
   } catch (err) {
-    console.error("[contractors-city] generateMetadata tenant.count failed:", err);
+    console.error("[contractors-city] generateMetadata failed:", err);
     providerCount = 0;
   }
 
@@ -176,38 +156,10 @@ export default async function Page({
     serviceRadiusKm: number;
   }> = [];
   try {
-    tenants = await db.tenant.findMany({
-      where: {
-        publicProfileEnabled: true,
-        marketplaceOptIn: true,
-        suspendedAt: null,
-        // Combine industry + city filter groups with AND so BOTH apply.
-        // (A bare top-level `OR` key would be silently overwritten by the
-        // next `OR` key in the object literal — JS dedupes duplicate keys.)
-        AND: [
-          {
-            OR: [
-              { industry: { equals: cfg.industryId } },
-              { businessCategoriesJson: { contains: `"${cfg.industryId}"` } },
-            ],
-          },
-          {
-            OR: [
-              { city: { contains: city } },
-              { city: { contains: citySlug } },
-              { state: { contains: city } },
-              { state: { contains: citySlug } },
-              { serviceAreasJson: { contains: city } },
-              { serviceAreasJson: { contains: citySlug } },
-            ],
-          },
-        ],
-      },
-      orderBy: [{ rating: "desc" }, { reviewCount: "desc" }],
-      take: 50,
-    });
+    const cached = await fetchContractorCityProviders(cfg.industryId, citySlug, city);
+    tenants = cached as typeof tenants;
   } catch (err) {
-    console.error("[contractors-city] tenant.findMany failed:", err);
+    console.error("[contractors-city] fetchContractorCityProviders failed:", err);
   }
 
   // Featured-listing map for card-type computation.
@@ -287,11 +239,7 @@ export default async function Page({
   // compute the precise tier to drive fallback rendering decisions.
   let isKnownCity = false;
   try {
-    const dirLoc = await db.directoryLocation.findFirst({
-      where: { citySlug, isActive: true },
-      select: { id: true },
-    });
-    isKnownCity = !!dirLoc;
+    isKnownCity = await isKnownDirectoryCity(citySlug);
   } catch {
     /* ignore — default false */
   }

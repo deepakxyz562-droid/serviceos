@@ -6,6 +6,7 @@ import {
   getSitemapIds,
   buildStaticSitemap,
   buildBusinessSitemap,
+  buildAndCacheAllSitemapXmlPages,
   BUSINESS_PER_FILE,
 } from '@/lib/sitemap-builder';
 
@@ -68,9 +69,12 @@ export const dynamic = 'force-dynamic';
 // conservatively so all ops fit within a 10s function window.
 export const maxDuration = 60;
 
-/** Per-operation timeout. Each warmer gets this long; if it exceeds, it's
- * abandoned (recorded in errors) but doesn't block the others. */
+/** Per-operation timeout for the Phase A warmers. */
 const PER_OP_TIMEOUT_MS = 7_000;
+
+/** Timeout for Phase B (XML pre-serialization). Generous since it processes
+ * ~37 pages sequentially, each needing slice + serialize + Redis SET. */
+const XML_PRECACHE_TIMEOUT_MS = 15_000;
 
 /** Read the token from env. Empty/undefined = endpoint disabled. */
 const WARM_TOKEN = process.env.SITEMAP_WARM_TOKEN;
@@ -85,6 +89,8 @@ let lastWarmResult: {
   sitemapCount?: number;
   staticUrlCount?: number;
   businessUrlCount?: number;
+  xmlPagesBuilt?: number;
+  xmlPagesFailed?: number;
   errors: string[];
 } | null = null;
 
@@ -127,15 +133,20 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 /**
  * The actual warming work — runs in the background via `after()`.
  *
- * Three independent warmers run in parallel:
- *   1. getSitemapIds()        → warms the "sitemap-ids" cache (count query)
- *   2. buildStaticSitemap()   → warms Prisma connection pool (result isn't
- *                               cached, but connection warming helps)
- *   3. buildBusinessSitemap(0) → warms the "all-business-urls" cache (the
- *                               expensive cursor-paginated list)
+ * Two phases:
+ *   Phase A — Warm the underlying data caches (parallel, fast):
+ *     1. getSitemapIds()         → warms the "sitemap-ids" cache (count query)
+ *     2. buildStaticSitemap()    → warms the "static-sitemap" cache
+ *     3. buildBusinessSitemap(0) → warms the "all-business-urls" cache
  *
- * Each has its own timeout (PER_OP_TIMEOUT_MS) so a slow op can't block the
- * others. Results are recorded in `lastWarmResult` for diagnostic visibility.
+ *   Phase B — Pre-serialize all sitemap pages' XML into Redis:
+ *     buildAndCacheAllSitemapXmlPages() iterates all sitemap IDs, builds
+ *     each page's XML, and stores it under `fieseros:sitemap:xml:{id}`.
+ *     This is the KEY fix: each page is stored as its own ~250KB key
+ *     (well under Upstash's 10MB limit), so the route handler can serve
+ *     any page with a single Redis GET (~50ms) instead of a 3-15s Supabase query.
+ *
+ * Each phase has its own timeout so a slow op can't block the others.
  */
 async function performWarm(): Promise<void> {
   warmingInProgress = true;
@@ -144,12 +155,14 @@ async function performWarm(): Promise<void> {
   let sitemapCount: number | undefined;
   let staticUrlCount: number | undefined;
   let businessUrlCount: number | undefined;
+  let xmlPagesBuilt: number | undefined;
+  let xmlPagesFailed: number | undefined;
 
   try {
     // Clear the in-memory cache so we regenerate fresh data.
     clearSitemapCache();
 
-    // Run the three warmers in parallel, each with its own timeout.
+    // ── Phase A: Warm the underlying data caches (parallel) ────────────
     const results = await Promise.allSettled([
       withTimeout(getSitemapIds(), PER_OP_TIMEOUT_MS),
       withTimeout(buildStaticSitemap(), PER_OP_TIMEOUT_MS),
@@ -179,6 +192,25 @@ async function performWarm(): Promise<void> {
         `buildBusinessSitemap: ${results[2].reason?.message ?? 'failed'}`,
       );
     }
+
+    // ── Phase B: Pre-serialize all sitemap pages' XML into Redis ────────
+    // This is the critical fix for the Upstash 10MB limit. Instead of
+    // storing one ~10MB blob of all URLs, we store each page's finished
+    // XML as its own key (~250KB each). The route handler then reads the
+    // pre-built XML directly — zero DB queries on cache hit.
+    //
+    // We use a generous timeout (XML_PRECACHE_TIMEOUT_MS) since this
+    // processes ~37 pages sequentially, each requiring a slice + serialize
+    // + Redis SET (~5ms each = ~200ms total, but allow headroom).
+    const xmlResult = await withTimeout(
+      buildAndCacheAllSitemapXmlPages(),
+      XML_PRECACHE_TIMEOUT_MS,
+    );
+    xmlPagesBuilt = xmlResult.pagesBuilt;
+    xmlPagesFailed = xmlResult.pagesFailed;
+    if (xmlResult.errors.length > 0) {
+      errors.push(...xmlResult.errors.slice(0, 5)); // cap error list
+    }
   } catch (err) {
     errors.push(err instanceof Error ? err.message : 'unknown error');
   } finally {
@@ -188,6 +220,8 @@ async function performWarm(): Promise<void> {
       sitemapCount,
       staticUrlCount,
       businessUrlCount,
+      xmlPagesBuilt,
+      xmlPagesFailed,
       errors,
     };
     warmingInProgress = false;
