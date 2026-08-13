@@ -43,8 +43,16 @@ import {
  * EXTERNAL CRON SETUP (e.g. cron-job.org):
  *   URL:      https://fieseros.com/api/sitemap-warm?token=YOUR_TOKEN
  *   Method:   GET (or POST — both supported)
- *   Schedule: every 50 minutes
+ *   Schedule: every 30 minutes
  *   Timeout:  any value works now (response is instant) — default is fine
+ *
+ * WHY 30 MINUTES (was 50):
+ *   The CDN cache TTL is 24h, but the in-memory cache TTL is 1h. If the cron
+ *   runs every 50 min, there's a 10-min window where the in-memory cache could
+ *   expire before the next warm — meaning the next Googlebot fetch after
+ *   expiry hits a cold in-memory cache and pays the full Supabase query cost.
+ *   At 30-min intervals, the in-memory cache is always fresh (well within the
+ *   1h TTL), so regeneration is always instant when the CDN revalidates.
  *
  * RESPONSE:
  *   200 — { ok, scheduledAt, previousWarm, message }

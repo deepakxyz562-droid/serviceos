@@ -318,12 +318,16 @@ export function MenuManagementSection() {
   const bulkMutation = useBulkUpdateMenuItems();
 
   // Optimistic local state — mirrors the server-side items but can be
-  // updated instantly on toggle for snappy UX. Reset whenever the server
-  // data changes (globalRaw / tenantRaw).
+  // updated instantly on toggle for snappy UX. Each override is cleared
+  // INDIVIDUALLY in the mutation's onSuccess callback (NOT via useEffect
+  // on globalRaw change — that caused a race where toggling A then B
+  // quickly would clear B's override when A's mutation completed, making
+  // B appear to 'un-toggle' until B's mutation also completed).
   const [optimisticOverrides, setOptimisticOverrides] = useState<Record<string, boolean>>({});
+  // Clear overrides ONLY when scope or tenant changes (not on every data refetch).
   useEffect(() => {
     setOptimisticOverrides({});
-  }, [globalRaw, tenantRaw, scope, effectiveTenantId]);
+  }, [scope, effectiveTenantId]);
 
   const serverItems: MenuItemDef[] = useMemo(() => {
     if (scope === 'global') return toMenuItems(globalRaw, 'global');
@@ -394,6 +398,14 @@ export function MenuManagementSection() {
       },
       {
         onSuccess: () => {
+          // Clear ONLY this item's override — the server data now reflects
+          // the change (react-query will refetch and show the correct state).
+          // Do NOT clear all overrides — other in-flight toggles would be lost.
+          setOptimisticOverrides((prev) => {
+            const next = { ...prev };
+            delete next[menuKey];
+            return next;
+          });
           toast.success(
             `${enabled ? 'Enabled' : 'Hidden'} "${menuKey}" ${scope === 'tenant' ? `for ${selectedTenant?.name || 'tenant'}` : 'globally'}`,
           );
@@ -427,7 +439,11 @@ export function MenuManagementSection() {
         items: payload,
       },
       {
-        onSuccess: () => toast.success('Reset to defaults — all items enabled'),
+        onSuccess: () => {
+          // Clear all overrides — server now reflects the full reset.
+          setOptimisticOverrides({});
+          toast.success('Reset to defaults — all items enabled');
+        },
         onError: (err: unknown) => {
           setOptimisticOverrides({});
           toast.error(err instanceof Error ? err.message : 'Failed to reset');
@@ -457,6 +473,10 @@ export function MenuManagementSection() {
         items: items.map((i) => ({ key: i.key, enabled: true })),
       },
       {
+        onSuccess: () => {
+          // Clear all overrides — server now reflects the bulk enable.
+          setOptimisticOverrides({});
+        },
         onError: (err: unknown) => {
           setOptimisticOverrides({});
           toast.error(err instanceof Error ? err.message : 'Failed to enable all');
@@ -486,6 +506,10 @@ export function MenuManagementSection() {
         items: items.map((i) => ({ key: i.key, enabled: false })),
       },
       {
+        onSuccess: () => {
+          // Clear all overrides — server now reflects the bulk hide.
+          setOptimisticOverrides({});
+        },
         onError: (err: unknown) => {
           setOptimisticOverrides({});
           toast.error(err instanceof Error ? err.message : 'Failed to hide all');

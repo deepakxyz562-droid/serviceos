@@ -55,12 +55,19 @@ export async function GET(
     return new Response(xml, {
       headers: {
         "Content-Type": "application/xml; charset=UTF-8",
-        // Cache at the CDN/browser for 1 hour. After that, the CDN may serve
-        // a STALE response for up to 24h while regenerating in the background.
-        // This prevents Googlebot from hitting a 30s+ cold-cache timeout when
-        // the 1h TTL expires mid-crawl — it gets the stale sitemap instantly
-        // while Vercel regenerates fresh data in the background.
-        "Cache-Control": "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400",
+        // Cache at the CDN for 24 HOURS. After that, the CDN may serve a
+        // STALE response for another 24h while regenerating in the background.
+        //
+        // WHY 24h (was 1h):
+        //   Sitemaps don't change often — Google re-crawls on its own schedule
+        //   (hours to days). A 1h TTL meant the CDN cache expired frequently,
+        //   and the next Googlebot fetch hit a cold cache (30s+ generation on
+        //   Supabase) → "Sitemap could not be read" in Search Console.
+        //   With 24h max-age + 24h SWR, Googlebot ALWAYS gets an instant
+        //   response, and the sitemap-warm cron (every 30 min) keeps the
+        //   in-memory cache fresh so regeneration is fast when the CDN does
+        //   revalidate.
+        "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=86400",
       },
     });
   } catch (error) {

@@ -35,28 +35,27 @@ export const BASE_URL = "https://fieseros.com";
 /**
  * Max URLs per business sitemap file.
  *
- * WHY 10,000 (not 50,000):
+ * WHY 2,500 (not 10,000 or 50,000):
  *   Google's sitemap protocol allows up to 50,000 URLs per file, but generating
- *   a 40K-URL file from Supabase takes 60+ seconds — Vercel Hobby kills the
- *   function at 10s, so background revalidation (stale-while-revalidate) can't
- *   complete the regeneration before the function is terminated.
+ *   a large file from Supabase (PostgREST cursor-based pagination) is slow:
+ *     - 10,000 URLs/file → ~15s cold-cache generation (exceeds Bingbot fetch timeout)
+ *     - 2,500 URLs/file  → ~4s cold-cache generation (well within all crawler timeouts)
  *
- *   At 10,000 URLs/file, each file generates in ~15s (4x faster). This is still
- *   over Vercel Hobby's 10s limit, but the in-memory cache + CDN SWR layer
- *   provide two layers of protection:
- *     1. CDN serves stale sitemap instantly while regenerating (SWR)
+ *   At 2,500 URLs/file with ~91K total businesses, this produces ~37 sitemap
+ *   files. Google's sitemap index supports up to 50,000 sub-sitemaps — 37 is
+ *   well within that limit.
+ *
+ *   The in-memory cache + CDN SWR layer provide two additional layers of
+ *   protection:
+ *     1. CDN serves stale sitemap instantly while regenerating (SWR=24h)
  *     2. In-memory cache serves the pre-built URL list (only the first request
  *        after cache expiry pays the full Supabase query cost)
  *
- *   With ~91K total businesses, this produces ~10 sitemap files (9 × 10K + 1K).
- *   Google's sitemap index supports up to 50,000 sub-sitemaps — 10 is well
- *   within that limit.
- *
- *   Previously this was 40,000 (3 files), which caused Bingbot timeouts
- *   ("The request has timed out") on 8/13/2026 because cold-cache generation
- *   exceeded Bing's fetch timeout.
+ *   Previously this was 40,000 (3 files) → Bingbot timeouts.
+ *   Then 10,000 (10 files) → still ~15s cold-cache, borderline.
+ *   Now 2,500 (~37 files) → ~4s cold-cache, safe for all crawlers.
  */
-export const BUSINESS_PER_FILE = 10_000;
+export const BUSINESS_PER_FILE = 2_500;
 
 // ── In-memory caching ─────────────────────────────────────────────────────
 //
@@ -220,27 +219,29 @@ export async function buildStaticSitemap(): Promise<MetadataRoute.Sitemap> {
     // ─── Blog (informational content hub) ────────────────────────────────
     { path: "/blog", priority: 0.8, changeFreq: "weekly" },
 
-    // ─── Contact & legal (low priority, rarely change) ───────────────────
+    // ─── Contact (low priority, rarely changes) ────────────────────────
+    // NOTE: Legal/utility URLs (/privacy-policy, /terms-of-service,
+    // /cookie-policy, /data-deletion) are intentionally EXCLUDED from the
+    // sitemap. They have zero SEO value and dilute the sitemap's signal.
+    // Google can discover them via footer links — they don't need to be
+    // prioritized in the crawl budget.
     { path: "/contact-us", priority: 0.6, changeFreq: "monthly" },
-    { path: "/privacy-policy", priority: 0.3, changeFreq: "yearly" },
-    { path: "/terms-of-service", priority: 0.3, changeFreq: "yearly" },
-    { path: "/cookie-policy", priority: 0.3, changeFreq: "yearly" },
-    { path: "/data-deletion", priority: 0.3, changeFreq: "yearly" },
   ];
 
+  // NOTE: changeFrequency and priority are intentionally OMITTED from the
+  // XML output. Google officially ignores both fields — it determines crawl
+  // frequency and importance from its own signals (PageRank, freshness,
+  // click-through data). Including them only bloats the XML and slows
+  // generation. Only <loc> and <lastmod> are emitted per URL.
   const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((r) => ({
     url: `${BASE_URL}${r.path}`,
     lastModified: now,
-    changeFrequency: r.changeFreq,
-    priority: r.priority,
   }));
 
   // Dynamic: blog articles (from MDX files in content/blog/).
   const blogEntries: MetadataRoute.Sitemap = getAllPosts().map((post) => ({
     url: `${BASE_URL}/blog/${post.slug}`,
     lastModified: post.date,
-    changeFrequency: "monthly" as const,
-    priority: 0.7,
   }));
 
   // ── Industry-only hub pages (/{pluralIndustry}) ──────────────────────────
@@ -249,8 +250,6 @@ export async function buildStaticSitemap(): Promise<MetadataRoute.Sitemap> {
   ).map((slug) => ({
     url: `${BASE_URL}/${slug}`,
     lastModified: now,
-    changeFrequency: "weekly" as const,
-    priority: 0.8,
   }));
 
   // ── Dynamic: plural browse pages (/{pluralIndustry}/{city}) ───────────────
@@ -319,8 +318,6 @@ export async function buildStaticSitemap(): Promise<MetadataRoute.Sitemap> {
         browseEntries.push({
           url: `${BASE_URL}/${plural}/${city.citySlug}`,
           lastModified: now,
-          changeFrequency: "weekly" as const,
-          priority: 0.8,
         });
       }
     }
@@ -369,16 +366,10 @@ export async function buildBusinessSitemap(
   try {
     const allUrls = await getAllBusinessUrlsCached();
     const pageUrls = allUrls.slice(offset, offset + BUSINESS_PER_FILE);
-    return pageUrls.map((entry) => {
-      const tier = entry.tier;
-      const priority = tier === "A" ? 0.8 : tier === "B" ? 0.5 : 0.7;
-      return {
-        url: entry.url,
-        lastModified: entry.lastModified || now,
-        changeFrequency: "weekly" as const,
-        priority,
-      };
-    });
+    return pageUrls.map((entry) => ({
+      url: entry.url,
+      lastModified: entry.lastModified || now,
+    }));
   } catch (err) {
     console.error(
       `[sitemap] failed to list business URLs for page ${pageZeroIndexed}:`,
@@ -405,6 +396,11 @@ function escapeXml(value: string): string {
 
 /**
  * Convert a single sitemap entry to a <url> XML element.
+ *
+ * Only <loc> and <lastmod> are emitted. <changefreq> and <priority> are
+ * intentionally omitted — Google officially ignores both fields, and
+ * removing them reduces XML size by ~40% (faster generation + smaller
+ * response for crawlers to download).
  */
 function entryToUrlElement(entry: MetadataRoute.Sitemap[number]): string {
   const parts: string[] = [`    <loc>${escapeXml(entry.url)}</loc>`];
@@ -416,12 +412,9 @@ function entryToUrlElement(entry: MetadataRoute.Sitemap[number]): string {
         : entry.lastModified;
     parts.push(`    <lastmod>${ts}</lastmod>`);
   }
-  if (entry.changeFrequency) {
-    parts.push(`    <changefreq>${entry.changeFrequency}</changefreq>`);
-  }
-  if (entry.priority !== undefined) {
-    parts.push(`    <priority>${entry.priority}</priority>`);
-  }
+  // NOTE: <changefreq> and <priority> are deliberately NOT emitted.
+  // Google's documentation states these are ignored. Removing them keeps
+  // the XML clean and reduces payload size.
   return `  <url>\n${parts.join("\n")}\n  </url>`;
 }
 

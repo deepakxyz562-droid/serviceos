@@ -126,8 +126,15 @@ export function SocialPublishingConfigSection() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/superadmin/social-publishing-config');
-      if (!res.ok) throw new Error('Failed to load');
+      const res = await fetch('/api/superadmin/social-publishing-config', {
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        const msg = errBody.error || `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
       const data = await res.json();
       setPlatforms(data.platforms || []);
       setSummary(data.summary || null);
@@ -143,8 +150,9 @@ export function SocialPublishingConfigSection() {
         };
       }
       setForms(nextForms);
-    } catch {
-      toast.error('Failed to load social publishing configuration');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Network error';
+      toast.error(`Failed to load social publishing configuration: ${msg}`);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -175,6 +183,7 @@ export function SocialPublishingConfigSection() {
     try {
       const res = await fetch('/api/superadmin/social-publishing-config', {
         method: 'PUT',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           platform: platform.key,
@@ -215,6 +224,7 @@ export function SocialPublishingConfigSection() {
       // in as a tenant user (still proves the route exists).
       const res = await fetch(`/api/oauth/${platform.key}`, {
         method: 'HEAD',
+        credentials: 'same-origin',
         redirect: 'manual', // don't follow the OAuth redirect
       });
       if (res.status === 0 || res.type === 'opaqueredirect') {
@@ -265,7 +275,7 @@ export function SocialPublishingConfigSection() {
     try {
       const res = await fetch(
         `/api/superadmin/social-publishing-config?platform=${encodeURIComponent(platform.key)}`,
-        { method: 'DELETE' },
+        { method: 'DELETE', credentials: 'same-origin' },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -285,6 +295,7 @@ export function SocialPublishingConfigSection() {
     try {
       const res = await fetch('/api/superadmin/social-publishing-config', {
         method: 'PUT',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           platform: platform.key,
@@ -310,6 +321,7 @@ export function SocialPublishingConfigSection() {
     try {
       const res = await fetch('/api/superadmin/social-publishing-config', {
         method: 'PUT',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           platform: platform.key,
