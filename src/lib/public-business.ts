@@ -1134,32 +1134,25 @@ export async function listAllIndexableBusinessUrls(): Promise<IndexableBusinessU
  */
 export async function countIndexableBusinessTenants(): Promise<number> {
   try {
-    // NOTE: Prisma `count` is NOT supported by the Supabase REST adapter
-    // (PostgREST `count` is returned via a `Prefer: count=exact` header +
-    // `Content-Range` response header, which the adapter doesn't implement).
-    // Fall back to paginating `findMany` with `select: { id: true }` and
-    // summing page lengths — cheap (single column) and reliable.
-    const PAGE_SIZE = 1000
-    let total = 0
-    let skip = 0
-    while (true) {
-      const page = await db.tenant.findMany({
-        where: {
-          publicProfileEnabled: true,
-          suspendedAt: null,
-          description: { not: null },
-        },
-        select: { id: true },
-        skip,
-        take: PAGE_SIZE,
-        orderBy: { id: 'asc' },
-      })
-      if (!page || page.length === 0) break
-      total += page.length
-      if (page.length < PAGE_SIZE) break
-      skip += page.length
-    }
-    return total
+    // The Supabase REST adapter DOES support `count()` (see supabase-db.ts
+    // `count()` method — it uses PostgREST's `select('*', { count: 'exact',
+    // head: true })` which issues a single head request returning only the
+    // count, no row data). A previous comment claimed count was unsupported
+    // and fell back to ~91 sequential offset-paginated `findMany` calls —
+    // that was the #1 cause of Supabase Free-tier CPU exhaustion during
+    // sitemap generation (O(n²) offset scans + ~91 HTTPS round-trips).
+    //
+    // We now use a single `count()` call. The `where` clause matches the one
+    // used by `listAllIndexableBusinessUrls()` (publicProfileEnabled + not
+    // suspended + description not null). `applyWhereFilters` correctly
+    // translates `description: { not: null }` → PostgREST `not.is.null`.
+    return await db.tenant.count({
+      where: {
+        publicProfileEnabled: true,
+        suspendedAt: null,
+        description: { not: null },
+      },
+    })
   } catch (err) {
     console.error('[public-business] countIndexableBusinessTenants error:', err)
     return 0

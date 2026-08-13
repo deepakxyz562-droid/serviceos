@@ -267,7 +267,13 @@ export async function buildStaticSitemap(): Promise<MetadataRoute.Sitemap> {
 
     const demandKeys = new Set<string>();
     const PAGE_SIZE = 1000;
-    let skip = 0;
+    // Cursor-based pagination (id > lastId) — O(n) total. The previous
+    // offset-based approach (skip += PAGE_SIZE) was O(n²) on PostgREST:
+    // each page re-scanned all previously-skipped rows, causing ~91
+    // increasingly-expensive round-trips that exhausted Supabase Free-tier
+    // CPU during sitemap generation. Cursor pagination uses an indexed PK
+    // seek so every page costs the same.
+    let lastId: string | undefined;
     while (true) {
       const page = await db.tenant.findMany({
         where: {
@@ -278,13 +284,14 @@ export async function buildStaticSitemap(): Promise<MetadataRoute.Sitemap> {
             { industry: { equals: industry } },
             { businessCategoriesJson: { contains: `"${industry}"` } },
           ]),
+          ...(lastId ? { id: { gt: lastId } } : {}),
         },
         select: {
+          id: true,
           industry: true,
           city: true,
           businessCategoriesJson: true,
         },
-        skip,
         take: PAGE_SIZE,
         orderBy: { id: "asc" },
       });
@@ -308,7 +315,7 @@ export async function buildStaticSitemap(): Promise<MetadataRoute.Sitemap> {
         }
       }
       if (page.length < PAGE_SIZE) break;
-      skip += page.length;
+      lastId = page[page.length - 1].id;
     }
 
     for (const city of cities) {
