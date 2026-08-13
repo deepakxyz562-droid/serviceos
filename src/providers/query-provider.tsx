@@ -9,22 +9,23 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // CRM list views (jobs, pipeline, inbox) should feel live. A 10s
-            // staleTime means React Query will refetch in the background when
-            // the user switches tabs / re-focuses the window, without
-            // hammering the server on every render. Combined with the
-            // no-store browser cache (src/lib/cache-headers.ts) and the SW v5
-            // no-store respect, this gives instant fresh data on tab switch.
-            staleTime: 10 * 1000,
+            // 60s staleTime — previously 10s, which meant data went stale
+            // almost immediately and every window focus / tab switch
+            // triggered a background refetch of ALL active queries. On the
+            // superadmin panel (7+ top-level useQuery hooks), this caused
+            // constant network activity. 60s keeps CRM data feeling live
+            // (users see fresh data within a minute) while reducing
+            // background refetches by 6x. Individual queries that need
+            // fresher data can override with a shorter staleTime.
+            staleTime: 60 * 1000,
             gcTime: 5 * 60 * 1000,
             retry: 1,
-            // Refetch on window focus so switching back to the dashboard tab
-            // pulls fresh CRM data. Previously this was `false`, which meant
-            // a user who edited a job in another tab and switched back saw
-            // stale data until they manually refreshed.
+            // Refetch on window focus — kept enabled so switching back to
+            // the dashboard pulls fresh CRM data. With the 60s staleTime
+            // above, this only triggers a refetch if the data is actually
+            // stale (>60s old), not on every alt-tab. Previously with 10s
+            // staleTime, every focus event refetched all queries.
             refetchOnWindowFocus: true,
-            // Refetch on reconnect too — if the user was offline, sync up
-            // the moment the network comes back.
             refetchOnReconnect: true,
           },
         },

@@ -450,18 +450,19 @@ export function useToggleFeatureFlag() {
   });
 }
 
-export function useMenuItems(tenantId?: string) {
+export function useMenuItems(tenantId?: string, enabled: boolean = true) {
   return useQuery({
     queryKey: tenantId ? queryKeys.menuItems(tenantId) : ['menuItems', 'all'],
     queryFn: () => apiFetch<any>(`/api/superadmin/menu-items${tenantId ? `?tenantId=${tenantId}` : '?scope=global'}`),
-    enabled: true,
+    enabled,
   });
 }
 
-export function useGlobalMenuItems() {
+export function useGlobalMenuItems(enabled: boolean = true) {
   return useQuery({
     queryKey: ['globalMenuItems'] as const,
     queryFn: () => apiFetch<any>(`/api/superadmin/menu-items?scope=global`),
+    enabled,
   });
 }
 

@@ -56,6 +56,7 @@ import { Progress } from '@/components/ui/progress';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { IntegrationsTab } from '@/components/views/superadmin-integrations-tab';
 import { ProvidersTab } from '@/components/views/superadmin-providers-tab';
+import { AuditLogsTab as AuditLogsTabSection } from '@/components/views/superadmin/sections/audit-logs-tab';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar, Cell,
@@ -661,27 +662,18 @@ export function SuperAdminView() {
   // Mobile sidebar drawer (slides in from the left below `lg:`).
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  // Bottom status bar — simulated live health data. Updates every 8s with
-  // small jittered values to feel alive. Real platform-health endpoints
-  // don't exist yet — this is a clearly-labeled demo indicator.
-  const [statusItems, setStatusItems] = useState<StatusBarItem[]>(INITIAL_STATUS);
-  const [lastSynced, setLastSynced] = useState<Date | null>(null);
-  useEffect(() => {
-    setLastSynced(new Date());
-    const id = setInterval(() => {
-      setStatusItems((prev) => prev.map((item) => {
-        // Light jitter on the value; status stays healthy (real warnings
-        // would come from a real /api/health endpoint).
-        if (item.key === 'api') return { ...item, value: `${8 + Math.floor(Math.random() * 8)}ms` };
-        if (item.key === 'db') return { ...item, value: `${2 + Math.floor(Math.random() * 4)}ms` };
-        if (item.key === 'queue') return { ...item, value: `${Math.floor(Math.random() * 6)}` };
-        if (item.key === 'storage') return { ...item, value: `${77 + Math.floor(Math.random() * 3)}%` };
-        return item;
-      }));
-      setLastSynced(new Date());
-    }, 8000);
-    return () => clearInterval(id);
-  }, []);
+  // Bottom status bar — static demo values. Previously this had a setInterval
+  // that jittered the values every 8s to "feel alive", but that forced
+  // SuperAdminView to re-render every 8s. Since the inner-function tabs
+  // (TenantsTab, AuditLogsTab, etc.) get re-created on every parent render,
+  // React unmounted+remounted the active tab every 8s — resetting internal
+  // state and re-firing fetch-on-mount effects (especially AuditLogsTab's
+  // /api/superadmin/audit-logs fetch). The interval was the #1 cause of the
+  // "network tab loading every time" complaint. Real platform-health
+  // endpoints don't exist yet; when they do, they should live in a dedicated
+  // child component with its own interval so the parent doesn't re-render.
+  const [statusItems] = useState<StatusBarItem[]>(INITIAL_STATUS);
+  const [lastSynced] = useState<Date | null>(new Date());
 
   // Guard: Only superadmin users can access this view
   const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin' || auth.user?.role === 'super_admin' || (auth.user?.role === 'admin' && !auth.user?.tenantId));
@@ -713,8 +705,17 @@ export function SuperAdminView() {
   // Menu items state
   const [selectedTenantForMenu, setSelectedTenantForMenu] = useState<string>('');
   const [menuScope, setMenuScope] = useState<'global' | 'tenant'>('global');
-  const { data: menuData, isLoading: menuLoading } = useMenuItems(selectedTenantForMenu);
-  const { data: globalMenuData, isLoading: globalMenuLoading } = useGlobalMenuItems();
+  // Only enable the hook that matches the current scope. Previously BOTH
+  // hooks fired on every mount — `useMenuItems('')` and `useGlobalMenuItems()`
+  // both hit `/api/superadmin/menu-items?scope=global`, a duplicate fetch.
+  const isTenantMenuScope = menuScope === 'tenant' && !!selectedTenantForMenu;
+  const { data: menuData, isLoading: menuLoading } = useMenuItems(
+    isTenantMenuScope ? selectedTenantForMenu : undefined,
+    isTenantMenuScope
+  );
+  const { data: globalMenuData, isLoading: globalMenuLoading } = useGlobalMenuItems(
+    !isTenantMenuScope
+  );
 
   // Derived data
   const tenants: Tenant[] = useMemo(() => {
@@ -781,39 +782,40 @@ export function SuperAdminView() {
     if (tenants.length === 0) return;
     setCreditsLoading(true);
     try {
-      const results: CreditInfo[] = [];
-      for (const tenant of tenants) {
-        try {
-          const res = await fetch(`/api/admin/credits?tenantId=${tenant.id}`);
-          if (res.ok) {
-            const data = await res.json();
-            const sub = data.subscription;
-            results.push({
-              tenantId: tenant.id,
-              tenantName: tenant.name,
-              plan: tenant.plan,
-              trialWhatsappCredits: sub?.trialWhatsappCredits ?? 10,
-              trialWhatsappUsed: sub?.trialWhatsappUsed ?? 0,
-              platformWhatsappEnabled: sub?.platformWhatsappEnabled ?? true,
-              ownWhatsappConnected: sub?.ownWhatsappConnected ?? false,
-              ownEmailProviderConnected: sub?.ownEmailProviderConnected ?? false,
-            });
-          } else {
-            results.push({
-              tenantId: tenant.id, tenantName: tenant.name, plan: tenant.plan,
-              trialWhatsappCredits: 10, trialWhatsappUsed: 0,
-              platformWhatsappEnabled: true, ownWhatsappConnected: false, ownEmailProviderConnected: false,
-            });
+      // Parallelize all tenant credit fetches with Promise.all instead of
+      // a sequential for...of loop. Previously, with N tenants this fired
+      // N sequential HTTP requests — each waiting for the previous to
+      // finish — blocking the network for N × latency. Now all N fire in
+      // parallel and resolve in ~1 × latency.
+      const fallback: CreditInfo = {
+        trialWhatsappCredits: 10, trialWhatsappUsed: 0,
+        platformWhatsappEnabled: true, ownWhatsappConnected: false, ownEmailProviderConnected: false,
+      };
+      const settled = await Promise.all(
+        tenants.map(async (tenant): Promise<CreditInfo> => {
+          try {
+            const res = await fetch(`/api/admin/credits?tenantId=${tenant.id}`);
+            if (res.ok) {
+              const data = await res.json();
+              const sub = data.subscription;
+              return {
+                tenantId: tenant.id,
+                tenantName: tenant.name,
+                plan: tenant.plan,
+                trialWhatsappCredits: sub?.trialWhatsappCredits ?? 10,
+                trialWhatsappUsed: sub?.trialWhatsappUsed ?? 0,
+                platformWhatsappEnabled: sub?.platformWhatsappEnabled ?? true,
+                ownWhatsappConnected: sub?.ownWhatsappConnected ?? false,
+                ownEmailProviderConnected: sub?.ownEmailProviderConnected ?? false,
+              };
+            }
+            return { ...fallback, tenantId: tenant.id, tenantName: tenant.name, plan: tenant.plan };
+          } catch {
+            return { ...fallback, tenantId: tenant.id, tenantName: tenant.name, plan: tenant.plan };
           }
-        } catch {
-          results.push({
-            tenantId: tenant.id, tenantName: tenant.name, plan: tenant.plan,
-            trialWhatsappCredits: 10, trialWhatsappUsed: 0,
-            platformWhatsappEnabled: true, ownWhatsappConnected: false, ownEmailProviderConnected: false,
-          });
-        }
-      }
-      setCreditsData(results);
+        })
+      );
+      setCreditsData(settled);
     } finally {
       setCreditsLoading(false);
     }
@@ -2505,96 +2507,13 @@ export function SuperAdminView() {
 
   // ═══════════════════════════════════════════════════════════════════════════
   // 6. AUDIT LOGS TAB
+  // Extracted to module-level component `AuditLogsTabSection` (imported at top).
+  // Previously this was an inner function — React re-created it on every parent
+  // render, causing unmount+remount of the active tab. Combined with the 8s
+  // setInterval (now removed), this re-fired /api/superadmin/audit-logs every
+  // 8s and reset all filter state. The module-level component is stable and
+  // only re-fetches when the user changes filters or clicks Refresh.
   // ═══════════════════════════════════════════════════════════════════════════
-
-  function AuditLogsTab() {
-    const [logs, setLogs] = useState<AuditLog[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [actionFilter, setActionFilter] = useState('');
-    const [tenantFilter, setTenantFilter] = useState('');
-
-    const fetchLogs = useCallback(async () => {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (actionFilter) params.set('action', actionFilter);
-        if (tenantFilter && tenantFilter !== 'all') params.set('tenantId', tenantFilter);
-        const res = await fetch(`/api/superadmin/audit-logs?${params.toString()}`);
-        if (res.ok) {
-          const data = await res.json();
-          setLogs(Array.isArray(data.auditLogs) ? data.auditLogs : []);
-        } else {
-          setLogs([]);
-        }
-      } catch {
-        setLogs([]);
-      } finally {
-        setLoading(false);
-      }
-    }, [actionFilter, tenantFilter]);
-
-    useEffect(() => { fetchLogs(); }, [fetchLogs]);
-
-    return (
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input className="pl-9" placeholder="Filter by action (e.g. login, update, delete)..." value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} />
-          </div>
-          <Select value={tenantFilter || 'all'} onValueChange={setTenantFilter}>
-            <SelectTrigger className="w-full sm:w-[200px]"><SelectValue placeholder="All Tenants" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Tenants</SelectItem>
-              {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="sm" onClick={fetchLogs} className="shrink-0">
-            <RefreshCw className="size-3.5 mr-1.5" /> Refresh
-          </Button>
-        </div>
-
-        {loading ? <TableSkeleton /> : logs.length === 0 ? (
-          <EmptyState icon={FileText} title="No audit logs found" subtitle="Audit logs will appear here as platform activity occurs." />
-        ) : (
-          <Card className="card-shadow">
-            <ScrollArea className="max-h-[calc(100vh-320px)]">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead>Action</TableHead>
-                    <TableHead>Resource</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Tenant</TableHead>
-                    <TableHead>IP</TableHead>
-                    <TableHead>When</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {logs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell>
-                        <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20">
-                          {log.action}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-foreground text-sm">
-                        {log.resourceType ? `${log.resourceType}${log.resourceId ? ` #${log.resourceId.slice(0, 8)}` : ''}` : '—'}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-xs font-mono">{log.userId ? log.userId.slice(0, 8) + '…' : '—'}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs font-mono">{log.tenantId ? log.tenantId.slice(0, 8) + '…' : '—'}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs font-mono">{log.ip || '—'}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{formatDateTime(log.createdAt)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          </Card>
-        )}
-      </div>
-    );
-  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // 7. CREDITS TAB
@@ -2807,7 +2726,7 @@ export function SuperAdminView() {
     if (activeTab === 'feature-flags') return <ModulesTab />;
     if (activeTab === 'integrations') return <IntegrationsTab />;
     if (activeTab === 'users') return <UsersTab />;
-    if (activeTab === 'audit-logs') return <AuditLogsTab />;
+    if (activeTab === 'audit-logs') return <AuditLogsTabSection tenants={tenants} />;
     if (activeTab === 'credits') return <CreditsTab />;
 
     // New lazy-loaded enterprise sections

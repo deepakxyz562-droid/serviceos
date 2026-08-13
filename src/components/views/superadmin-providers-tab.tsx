@@ -352,6 +352,29 @@ export function ProvidersTab() {
       toast.error('Name, From Name, and From Email are required');
       return;
     }
+
+    // Validate required config fields based on the selected provider type.
+    // Previously, the form only checked name/fromName/fromEmail — a user who
+    // picked "Resend" but forgot the API key would submit with configJson: {}
+    // and the provider would be created without credentials, causing email
+    // sending to fail silently later.
+    const providerConfig = EMAIL_PROVIDER_CONFIGS[emailForm.providerType];
+    if (providerConfig) {
+      const missingFields: string[] = [];
+      for (const field of providerConfig.fields) {
+        if (field.required) {
+          const value = emailForm.config[field.key];
+          if (!value || (typeof value === 'string' && !value.trim())) {
+            missingFields.push(field.label);
+          }
+        }
+      }
+      if (missingFields.length > 0) {
+        toast.error(`Required fields missing: ${missingFields.join(', ')}`);
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const payload = {
@@ -376,7 +399,13 @@ export function ProvidersTab() {
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          toast.error((err as { error?: string }).error || 'Failed to update');
+          const errorMsg = (err as { error?: string }).error || 'Failed to update';
+          // Distinguish validation errors (400) from server errors (500).
+          if (res.status === 400) {
+            toast.error(errorMsg);
+          } else {
+            toast.error(`${errorMsg} — please try again in a moment`);
+          }
           return;
         }
         toast.success('Email provider updated');
@@ -388,7 +417,15 @@ export function ProvidersTab() {
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          toast.error((err as { error?: string }).error || 'Failed to create');
+          const errorMsg = (err as { error?: string }).error || 'Failed to create';
+          // Distinguish validation errors (400) from server errors (500).
+          // Server errors are often transient (Supabase rate-limit, network
+          // blip) — the API already retried once before returning 500.
+          if (res.status === 400) {
+            toast.error(errorMsg);
+          } else {
+            toast.error(`${errorMsg} — the server may be busy, please try again in a moment`);
+          }
           return;
         }
         toast.success('Email provider created');
@@ -397,7 +434,7 @@ export function ProvidersTab() {
       resetEmailForm();
       fetchEmailProviders();
     } catch {
-      toast.error('Failed to save email provider');
+      toast.error('Failed to save email provider — check your network connection and try again');
     } finally {
       setSaving(false);
     }

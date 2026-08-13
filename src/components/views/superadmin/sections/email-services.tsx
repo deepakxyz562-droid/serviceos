@@ -6,6 +6,7 @@
 // `EmailServicesSection`, no props.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
@@ -80,6 +81,14 @@ const EMAIL_ERRORS: EmailErrorEvent[] = [
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function EmailServicesSection() {
+  // Lazy-mount the ProvidersTab — only render it when the user actually
+  // opens the <details> panel. Previously, <details> rendered its children
+  // in the DOM even when closed, so mounting the EmailServicesSection
+  // immediately fired /api/superadmin/providers/email-providers AND
+  // /api/superadmin/providers/communication-providers — 2 unnecessary API
+  // calls even if the user never expanded the configuration panel.
+  const [providerConfigOpen, setProviderConfigOpen] = useState(false);
+
   return (
     <section className="space-y-6">
       <SectionHeader
@@ -209,16 +218,19 @@ export function EmailServicesSection() {
         </Card>
       </div>
 
-      {/* Full provider configuration (collapsible) */}
+      {/* Full provider configuration (collapsible) — lazy-mounted */}
       <Card className="card-shadow">
         <CardContent className="p-4">
-          <details className="group">
+          <details
+            className="group"
+            onToggle={(e) => setProviderConfigOpen((e.target as HTMLDetailsElement).open)}
+          >
             <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary">
               <ChevronRight className="size-4 group-open:rotate-90 transition-transform" />
               Open full email provider configuration
             </summary>
             <div className="mt-4">
-              <ProvidersTab />
+              {providerConfigOpen && <ProvidersTab />}
             </div>
           </details>
         </CardContent>

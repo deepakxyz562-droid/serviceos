@@ -58,8 +58,21 @@ export async function GET(request: NextRequest) {
  * Create a new platform-level EmailProvider.
  * Body: { name, providerType, configJson, fromName, fromEmail, replyTo?,
  *         usageType, isDefaultTransactional?, isDefaultMarketing?, tenantId? }
- * Super admin can specify tenantId (defaults to 'platform').
+ * Super admin can specify tenantId (defaults to first tenant).
  * isPlatform is always true for super admin created providers.
+ *
+ * ATOMICITY NOTE (Supabase):
+ * PostgREST does not support real ACID transactions — db.$transaction is
+ * simulated as independent HTTP calls with NO rollback. Previously, the
+ * order was: (1) updateMany to clear old defaults, (2) create the new
+ * provider. If step 2 failed transiently (429, network blip, circuit
+ * breaker), step 1 had already committed — silently unsetting the previous
+ * default provider. Repeated failures could leave the tenant with NO
+ * default provider at all.
+ *
+ * FIX: Reversed the order — create FIRST, then clear old defaults. If
+ * create fails, existing defaults are untouched. We also added a single
+ * retry on the create call for transient PostgREST errors.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -101,8 +114,6 @@ export async function POST(request: NextRequest) {
     }
 
     // If no tenantId specified, attach to the first real tenant (not a fake 'platform' string).
-    // This ensures the provider is discoverable by resolveSmtpConfig when invoices,
-    // invitations, etc. look for providers belonging to a real tenantId.
     let finalTenantId = typeof tenantId === 'string' && tenantId.trim() ? tenantId.trim() : undefined;
     if (!finalTenantId) {
       const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
@@ -115,38 +126,74 @@ export async function POST(request: NextRequest) {
     const wantDefaultMarketing = Boolean(isDefaultMarketing);
     const configString = encodeProviderConfig(configJson);
 
-    const created = await db.$transaction(async (tx) => {
-      if (wantDefaultTransactional) {
-        await tx.emailProvider.updateMany({
-          where: { tenantId: finalTenantId, isDefaultTransactional: true },
-          data: { isDefaultTransactional: false },
-        });
-      }
-      if (wantDefaultMarketing) {
-        await tx.emailProvider.updateMany({
-          where: { tenantId: finalTenantId, isDefaultMarketing: true },
-          data: { isDefaultMarketing: false },
-        });
-      }
+    // STEP 1: Create the new provider FIRST (with 1 retry for transient errors).
+    // If this fails, existing defaults are untouched — no data corruption.
+    const createData = {
+      name: name.trim(),
+      providerType,
+      configJson: configString,
+      fromName: fromName.trim(),
+      fromEmail: fromEmail.trim(),
+      replyTo: typeof replyTo === 'string' && replyTo.trim() ? replyTo.trim() : null,
+      usageType: finalUsageType,
+      isDefaultTransactional: wantDefaultTransactional,
+      isDefaultMarketing: wantDefaultMarketing,
+      isPlatform: true,
+      status: (typeof reqStatus === 'string' && ['active', 'paused'].includes(reqStatus)) ? reqStatus : 'active',
+      tenantId: finalTenantId,
+      workspaceId: null,
+    };
 
-      return tx.emailProvider.create({
-        data: {
-          name: name.trim(),
-          providerType,
-          configJson: configString,
-          fromName: fromName.trim(),
-          fromEmail: fromEmail.trim(),
-          replyTo: typeof replyTo === 'string' && replyTo.trim() ? replyTo.trim() : null,
-          usageType: finalUsageType,
-          isDefaultTransactional: wantDefaultTransactional,
-          isDefaultMarketing: wantDefaultMarketing,
-          isPlatform: true,
-          status: (typeof reqStatus === 'string' && ['active', 'paused'].includes(reqStatus)) ? reqStatus : 'active',
+    let created;
+    try {
+      created = await db.emailProvider.create({ data: createData });
+    } catch (createError) {
+      // Retry once after 500ms for transient PostgREST errors (429 rate-limit,
+      // network blip, circuit breaker open, schema-cache invalidation).
+      // These are the root cause of the intermittent "Failed to create email
+      // provider" bug on Supabase production.
+      console.warn('[SuperAdmin] Email provider create failed, retrying in 500ms...', createError);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      try {
+        created = await db.emailProvider.create({ data: createData });
+      } catch (retryError) {
+        console.error('[SuperAdmin] Email provider create failed after retry:', retryError);
+        const errMsg = retryError instanceof Error ? retryError.message : 'Unknown error';
+        return NextResponse.json(
+          { error: `Failed to create email provider after retry: ${errMsg}` },
+          { status: 500 }
+        );
+      }
+    }
+
+    // STEP 2: Clear old defaults — ONLY if the create succeeded.
+    // On Supabase, these updateMany calls commit immediately (no rollback),
+    // but since the new provider already exists with the correct default flags,
+    // clearing the old ones is safe and correct.
+    if (wantDefaultTransactional) {
+      await db.emailProvider.updateMany({
+        where: {
           tenantId: finalTenantId,
-          workspaceId: null,
+          isDefaultTransactional: true,
+          id: { not: created.id },
         },
+        data: { isDefaultTransactional: false },
+      }).catch((err) => {
+        console.error('[SuperAdmin] Failed to clear old defaultTransactional:', err);
       });
-    });
+    }
+    if (wantDefaultMarketing) {
+      await db.emailProvider.updateMany({
+        where: {
+          tenantId: finalTenantId,
+          isDefaultMarketing: true,
+          id: { not: created.id },
+        },
+        data: { isDefaultMarketing: false },
+      }).catch((err) => {
+        console.error('[SuperAdmin] Failed to clear old defaultMarketing:', err);
+      });
+    }
 
     return NextResponse.json(
       {
@@ -158,8 +205,9 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('[SuperAdmin] Error creating email provider:', error);
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to create email provider' },
+      { error: `Failed to create email provider: ${errMsg}` },
       { status: 500 }
     );
   }
