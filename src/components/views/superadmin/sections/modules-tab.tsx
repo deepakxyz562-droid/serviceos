@@ -6,12 +6,32 @@
 //
 // Extracted from `superadmin-view.tsx` so it's a stable module-level component
 // — no more unmount/remount on parent re-render. All data + handlers arrive
-// via props. The `useQueryClient()` call is duplicated from the parent because
-// it's a context-bound singleton (cheap; same client). The toggle mutations
-// are passed in as props because they're tied to parent state.
+// via props.
+//
+// ─── ANTI-REVERT DESIGN (sticky-override + serialization queue) ──────────────
+// The original inner-function version had a naive pattern:
+//
+//     useEffect(() => { setLocalFlags(featureFlags); }, [featureFlags]);
+//
+// When the user toggled a flag/menu, the mutation's onSuccess called
+// invalidateQueries → a background refetch fired → featureFlags/menuItems
+// prop updated → the useEffect OVERWROTE the optimistic local state with
+// the (possibly still-stale) server data → the toggle visually REVERTED.
+//
+// On top of that, because the component was an inner function, any parent
+// re-render UNMOUNTED+REMOUNTED it, destroying localFlags state entirely.
+//
+// This version uses the SAME proven pattern as `MenuManagementSection`:
+//   1. STICKY OVERRIDES — when the user toggles, we set an override that
+//      STAYS until the refetched server data CONFIRMS the new value. We
+//      never overwrite the override from a useEffect — the override simply
+//      becomes a visual no-op once `serverItem.enabled === override`.
+//   2. SERIALIZATION QUEUE — toggles are chained onto a Promise queue so
+//      concurrent read-modify-writes on the same settingsJson blob can't
+//      clobber each other (Supabase $transaction is not atomic).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -69,101 +89,208 @@ export function ModulesTab({
   flagsLoading, menuLoading, globalMenuLoading,
 }: ModulesTabProps) {
   const [expandedModule, setExpandedModule] = useState<string | null>('CRM');
-  const [localFlags, setLocalFlags] = useState<FeatureFlagDef[]>([]);
-  const [localMenuItems, setLocalMenuItems] = useState<MenuItemDef[]>([]);
   const [moduleView, setModuleView] = useState<'features' | 'menu'>('features');
   const [saving, setSaving] = useState(false);
   const queryClient = useQueryClient();
 
-  useEffect(() => { setLocalFlags(featureFlags); }, [featureFlags]);
-  useEffect(() => { setLocalMenuItems(menuItems); }, [menuItems]);
+  const effectiveTenantId = moduleView === 'features'
+    ? selectedTenantForFlags
+    : (menuScope === 'tenant' ? selectedTenantForMenu : undefined);
 
-  const effectiveTenantId = moduleView === 'features' ? selectedTenantForFlags : (menuScope === 'tenant' ? selectedTenantForMenu : undefined);
+  // ─── Sticky overrides (anti-revert) ──────────────────────────────────────
+  // When the user toggles, we set an override keyed by item.key. The override
+  // STAYS until the refetched server data confirms the value (i.e.
+  // `serverItem.enabled === override`). We never clear overrides from a
+  // useEffect on data change — that was the revert bug. Stale confirmed
+  // overrides accumulate harmlessly and are cleared on scope/tenant change.
+  const [flagOverrides, setFlagOverrides] = useState<Record<string, boolean>>({});
+  const [menuOverrides, setMenuOverrides] = useState<Record<string, boolean>>({});
+
+  // Clear overrides ONLY when the selection context changes (not on every
+  // data refetch — clearing on refetch is what caused the revert).
+  // Same proven pattern as MenuManagementSection — see reports-view.tsx for
+  // the block-disable form this rule requires.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    setFlagOverrides({});
+  }, [selectedTenantForFlags]);
+  useEffect(() => {
+    setMenuOverrides({});
+  }, [menuScope, selectedTenantForMenu]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Apply overrides on top of server data. If server has caught up
+  // (serverItem.enabled === override), the override is a visual no-op.
+  const effectiveFlags: FeatureFlagDef[] = useMemo(() => {
+    if (Object.keys(flagOverrides).length === 0) return featureFlags;
+    return featureFlags.map((f) => {
+      const ov = flagOverrides[f.key];
+      if (ov === undefined) return f;
+      if (f.enabled === ov) return f; // server caught up
+      return { ...f, enabled: ov };
+    });
+  }, [featureFlags, flagOverrides]);
+
+  const effectiveMenuItems: MenuItemDef[] = useMemo(() => {
+    if (Object.keys(menuOverrides).length === 0) return menuItems;
+    return menuItems.map((m) => {
+      const ov = menuOverrides[m.key];
+      if (ov === undefined) return m;
+      if (m.enabled === ov) return m; // server caught up
+      return { ...m, enabled: ov };
+    });
+  }, [menuItems, menuOverrides]);
+
+  // ─── Serialization queue ─────────────────────────────────────────────────
+  // Feature flags use a separate table (FeatureFlag) with upsert — concurrent
+  // PUTs are safe. But menu items share one settingsJson blob per tenant, so
+  // concurrent read-modify-writes can clobber. Chain menu toggles onto a
+  // Promise queue so PUT-B only fires after PUT-A has committed. Feature flag
+  // toggles are NOT queued (they're independent rows).
+  const menuToggleQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const handleToggleFlag = (flagKey: string) => {
     if (!selectedTenantForFlags) { toast.error('Please select a tenant first'); return; }
-    const flag = localFlags.find((f) => f.key === flagKey);
+    const flag = effectiveFlags.find((f) => f.key === flagKey);
     if (!flag) return;
     const newEnabled = !flag.enabled;
-    setLocalFlags((prev) => prev.map((f) => f.key === flagKey ? { ...f, enabled: newEnabled } : f));
+
+    // Optimistic: set sticky override immediately.
+    setFlagOverrides((prev) => ({ ...prev, [flagKey]: newEnabled }));
+
     toggleFeatureFlagMutation.mutate(
       { tenantId: selectedTenantForFlags, flagKey, enabled: newEnabled },
       {
+        onSuccess: () => toast.success(`${flag.label} ${newEnabled ? 'enabled' : 'disabled'}`),
         onError: () => {
-          setLocalFlags((prev) => prev.map((f) => f.key === flagKey ? { ...f, enabled: !newEnabled } : f));
+          // Roll back the override — server rejected it.
+          setFlagOverrides((prev) => {
+            const next = { ...prev };
+            delete next[flagKey];
+            return next;
+          });
           toast.error('Failed to toggle feature');
         },
-        onSuccess: () => toast.success(`${flag.label} ${newEnabled ? 'enabled' : 'disabled'}`),
       },
     );
   };
 
   const handleToggleMenuItem = (itemKey: string) => {
-    const item = localMenuItems.find((i) => i.key === itemKey);
+    const item = effectiveMenuItems.find((i) => i.key === itemKey);
     if (!item) return;
     if (menuScope === 'tenant' && !selectedTenantForMenu) { toast.error('Please select a tenant first'); return; }
     const newEnabled = !item.enabled;
-    setLocalMenuItems((prev) => prev.map((i) => i.key === itemKey ? { ...i, enabled: newEnabled } : i));
-    toggleMenuItemMutation.mutate(
-      { tenantId: effectiveTenantId, menuKey: itemKey, enabled: newEnabled, scope: menuScope },
-      {
-        onError: () => {
-          setLocalMenuItems((prev) => prev.map((i) => i.key === itemKey ? { ...i, enabled: !newEnabled } : i));
-          toast.error('Failed to toggle menu item');
-        },
-        onSuccess: () => toast.success(`${item.label} ${newEnabled ? 'enabled' : 'disabled'} ${menuScope === 'global' ? 'globally' : 'for tenant'}`),
-      },
-    );
+
+    // Optimistic: set sticky override immediately.
+    setMenuOverrides((prev) => ({ ...prev, [itemKey]: newEnabled }));
+
+    // Chain onto the serialization queue so this PUT only fires after any
+    // previously-queued menu PUT has committed. Prevents the concurrent
+    // read-modify-write race on the shared settingsJson blob.
+    menuToggleQueueRef.current = menuToggleQueueRef.current.then(() => {
+      return new Promise<void>((resolve) => {
+        toggleMenuItemMutation.mutate(
+          { tenantId: effectiveTenantId, menuKey: itemKey, enabled: newEnabled, scope: menuScope },
+          {
+            onSuccess: () => {
+              toast.success(`${item.label} ${newEnabled ? 'enabled' : 'disabled'} ${menuScope === 'global' ? 'globally' : 'for tenant'}`);
+              resolve();
+            },
+            onError: () => {
+              // Roll back the override.
+              setMenuOverrides((prev) => {
+                const next = { ...prev };
+                delete next[itemKey];
+                return next;
+              });
+              toast.error('Failed to toggle menu item');
+              resolve();
+            },
+          },
+        );
+      });
+    });
   };
 
   const handleEnableAllFlags = () => {
     if (!selectedTenantForFlags) { toast.error('Please select a tenant first'); return; }
-    setLocalFlags((prev) => prev.map((f) => ({ ...f, enabled: true })));
+    // Optimistic: set ALL flags to enabled via overrides.
+    setFlagOverrides(() => {
+      const all: Record<string, boolean> = {};
+      effectiveFlags.forEach((f) => { all[f.key] = true; });
+      return all;
+    });
     setSaving(true);
     fetch('/api/superadmin/feature-flags', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tenantId: selectedTenantForFlags, flags: localFlags.map((f) => ({ key: f.key, enabled: true })) }),
-    }).then(() => { toast.success('All features enabled'); setSaving(false); }).catch(() => { toast.error('Failed'); setSaving(false); });
+      body: JSON.stringify({
+        tenantId: selectedTenantForFlags,
+        flags: effectiveFlags.map((f) => ({ key: f.key, enabled: true })),
+      }),
+    }).then(() => {
+      toast.success('All features enabled');
+      queryClient.invalidateQueries({ queryKey: ['featureFlags'] });
+      setSaving(false);
+    }).catch(() => {
+      // Roll back all overrides.
+      setFlagOverrides({});
+      toast.error('Failed');
+      setSaving(false);
+    });
   };
 
   const handleEnableAllMenu = () => {
     if (menuScope === 'tenant' && !selectedTenantForMenu) { toast.error('Please select a tenant first'); return; }
-    setLocalMenuItems((prev) => prev.map((i) => ({ ...i, enabled: true })));
+    // Optimistic: set ALL menu items to enabled via overrides.
+    setMenuOverrides(() => {
+      const all: Record<string, boolean> = {};
+      effectiveMenuItems.forEach((m) => { all[m.key] = true; });
+      return all;
+    });
     setSaving(true);
     fetch('/api/superadmin/menu-items', {
       method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tenantId: effectiveTenantId, scope: menuScope, items: localMenuItems.map((i) => ({ key: i.key, enabled: true })) }),
+      body: JSON.stringify({
+        tenantId: effectiveTenantId,
+        scope: menuScope,
+        items: effectiveMenuItems.map((i) => ({ key: i.key, enabled: true })),
+      }),
     }).then((res) => {
       if (!res.ok) return res.json().then((d: { error?: string }) => { throw new Error(d.error || 'Failed'); });
       toast.success('All menu items enabled');
       queryClient.invalidateQueries({ queryKey: ['globalMenuItems'] });
       queryClient.invalidateQueries({ queryKey: ['menuItems'] });
       setSaving(false);
-    }).catch((err: Error) => { toast.error(`Failed: ${err.message}`); setSaving(false); });
+    }).catch((err: Error) => {
+      // Roll back all overrides.
+      setMenuOverrides({});
+      toast.error(`Failed: ${err.message}`);
+      setSaving(false);
+    });
   };
 
   // Group features by module
   const featuresByModule = useMemo(() => {
     const map: Record<string, FeatureFlagDef[]> = {};
     MODULE_SECTIONS.forEach((s) => { map[s.key] = []; });
-    localFlags.forEach((f) => {
+    effectiveFlags.forEach((f) => {
       const moduleKey = FEATURE_MODULE_MAP[f.key] || 'Setup & Admin';
       if (!map[moduleKey]) map[moduleKey] = [];
       map[moduleKey].push(f);
     });
     return map;
-  }, [localFlags]);
+  }, [effectiveFlags]);
 
   const menuByModule = useMemo(() => {
     const map: Record<string, MenuItemDef[]> = {};
     MODULE_SECTIONS.forEach((s) => { map[s.key] = []; });
-    localMenuItems.forEach((item) => {
+    effectiveMenuItems.forEach((item) => {
       const sectionKey = item.section || 'Setup & Admin';
       if (!map[sectionKey]) map[sectionKey] = [];
       map[sectionKey].push(item);
     });
     return map;
-  }, [localMenuItems]);
+  }, [effectiveMenuItems]);
 
   return (
     <div className="space-y-4">
@@ -242,9 +369,9 @@ export function ModulesTab({
             <span>
               {moduleView === 'features' ? 'Features' : 'Menu items'} enabled:&nbsp;
               <span className="font-semibold text-foreground">
-                {moduleView === 'features' ? localFlags.filter(f => f.enabled).length : localMenuItems.filter(i => i.enabled).length}
+                {moduleView === 'features' ? effectiveFlags.filter(f => f.enabled).length : effectiveMenuItems.filter(i => i.enabled).length}
               </span>
-              /{moduleView === 'features' ? localFlags.length : localMenuItems.length}
+              /{moduleView === 'features' ? effectiveFlags.length : effectiveMenuItems.length}
             </span>
             {moduleView === 'menu' && menuScope === 'global' && (
               <Badge variant="outline" className="text-[10px] text-red-600 dark:text-red-400 border-red-500/20 bg-red-500/5">
