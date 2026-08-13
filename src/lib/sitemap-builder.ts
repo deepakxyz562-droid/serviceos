@@ -56,7 +56,7 @@ export const BASE_URL = "https://fieseros.com";
  *   ("The request has timed out") on 8/13/2026 because cold-cache generation
  *   exceeded Bing's fetch timeout.
  */
-export const BUSINESS_PER_FILE = 10_000;
+export const BUSINESS_PER_FILE = 5_000;
 
 // ── In-memory caching ─────────────────────────────────────────────────────
 //
