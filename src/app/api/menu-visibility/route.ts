@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { cachedJson } from '@/lib/cache-headers';
 import { sharedCacheGet, sharedCacheSet, sharedCacheDelete } from '@/lib/shared-cache';
+import { getGlobalConfigCarrierTenant } from '@/lib/global-config-carrier';
 
 const GLOBAL_CONFIG_KEY = 'globalMenuConfig';
 
@@ -67,11 +68,17 @@ export async function GET(request: NextRequest) {
 
     const disabledKeys = new Set<string>();
 
-    // 1. Fetch global disabled menus from the first tenant's settingsJson
+    // 1. Fetch global disabled menus from the SENTINEL carrier tenant's
+    //    settingsJson. Previously this used `findMany({ take: 1 })` with NO
+    //    orderBy — on Supabase (PostgREST) that returns arbitrary rows, so
+    //    the global config read could land on a DIFFERENT tenant than the one
+    //    the superadmin PUT wrote to, causing toggles to silently not apply.
+    //    The sentinel tenant is selected by NAME (deterministic across all
+    //    instances and requests).
     try {
-      const tenants = await db.tenant.findMany({ take: 1 });
-      if (tenants && tenants.length > 0) {
-        const settings = parseSettings(tenants[0].settingsJson);
+      const carrier = await getGlobalConfigCarrierTenant(db);
+      if (carrier) {
+        const settings = parseSettings(carrier.settingsJson);
         const globalConfig = settings[GLOBAL_CONFIG_KEY] as Array<{ key: string; enabled: boolean }> | undefined;
         if (globalConfig) {
           for (const item of globalConfig) {

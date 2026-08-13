@@ -34,12 +34,14 @@ export async function GET() {
     });
   } catch (error) {
     console.error("[sitemap.xml] Failed to generate sitemap index:", error);
+    // Return 503 so Googlebot retries. See sitemap/[id]/route.ts for rationale.
     return new Response(
       '<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n</sitemapindex>',
       {
-        status: 200,
+        status: 503,
         headers: {
           "Content-Type": "application/xml; charset=UTF-8",
+          "Retry-After": "300",
         },
       },
     );

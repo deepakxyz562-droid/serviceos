@@ -363,10 +363,11 @@ export function useAuditLogs(tenantId?: string) {
 
 // ─── Super Admin Hooks ──────────────────────────────────────────────────────
 
-export function useTenants() {
+export function useTenants(enabled: boolean = true) {
   return useQuery({
     queryKey: queryKeys.tenants(),
     queryFn: () => apiFetch<any>('/api/superadmin/tenants'),
+    enabled,
   });
 }
 
@@ -402,7 +403,7 @@ export function useDeleteTenant() {
   });
 }
 
-export function useSubscriptions() {
+export function useSubscriptions(enabled: boolean = true) {
   return useQuery({
     queryKey: queryKeys.subscriptions(),
     // Server-side paginated endpoint. The API now returns
@@ -415,6 +416,7 @@ export function useSubscriptions() {
     // SubscriptionsTab UI.
     queryFn: () => apiFetch<any>('/api/superadmin/subscriptions?page=1&limit=50'),
     select: (res: any) => (Array.isArray(res) ? res : (res?.data ?? [])),
+    enabled,
   });
 }
 
@@ -435,10 +437,11 @@ export function usePauseSubscription() {
   });
 }
 
-export function useFeatureFlags(tenantId?: string) {
+export function useFeatureFlags(tenantId?: string, enabled: boolean = true) {
   return useQuery({
     queryKey: queryKeys.featureFlags(tenantId),
     queryFn: () => apiFetch<any[]>(`/api/superadmin/feature-flags${tenantId ? `?tenantId=${tenantId}` : ''}`),
+    enabled,
   });
 }
 
@@ -492,7 +495,7 @@ export function useBulkUpdateMenuItems() {
   });
 }
 
-export function useUsers() {
+export function useUsers(enabled: boolean = true) {
   return useQuery({
     queryKey: queryKeys.users(),
     // Server-side paginated endpoint. The API now returns
@@ -504,6 +507,7 @@ export function useUsers() {
     // real pagination controls in the UsersTab UI.
     queryFn: () => apiFetch<any>('/api/admin/users?page=1&limit=50'),
     select: (res: any) => (Array.isArray(res) ? res : (res?.data ?? [])),
+    enabled,
   });
 }
 
@@ -514,9 +518,10 @@ export function useDashboardStats(tenantId?: string) {
   });
 }
 
-export function useSaasStats() {
+export function useSaasStats(enabled: boolean = true) {
   return useQuery({
     queryKey: queryKeys.saasStats(),
     queryFn: () => apiFetch<any>('/api/superadmin/stats'),
+    enabled,
   });
 }

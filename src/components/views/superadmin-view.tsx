@@ -698,14 +698,24 @@ export function SuperAdminView() {
   }
 
   // ─── Data Hooks ───────────────────────────────────────────────────────────
-  const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useSaasStats();
-  const { data: tenantsData, isLoading: tenantsLoading, refetch: refetchTenants } = useTenants();
-  const { data: subscriptionsData, isLoading: subsLoading } = useSubscriptions();
-  const { data: usersData, isLoading: usersLoading } = useUsers();
+  // Tab-scoped: each hook only fires when its data is needed by the active
+  // tab. Previously ALL hooks fired on every mount regardless of activeTab —
+  // e.g. visiting Menu Management triggered /api/subscriptions, /api/admin/users,
+  // /api/superadmin/stats, /api/superadmin/feature-flags, and N parallel
+  // /api/admin/credits calls, none of which the Menu Management tab needs.
+  // This was a major source of unnecessary Supabase load (especially on the
+  // free tier). TanStack Query dedupes by queryKey, so child components that
+  // call the same hook (e.g. MenuManagementSection calls useTenants) reuse
+  // the parent's cached data when the parent has already enabled it.
+  const tenantsNeeded = activeTab === 'tenants' || activeTab === 'feature-flags' || activeTab === 'audit-logs' || activeTab === 'credits';
+  const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useSaasStats(activeTab === 'dashboard');
+  const { data: tenantsData, isLoading: tenantsLoading, refetch: refetchTenants } = useTenants(tenantsNeeded);
+  const { data: subscriptionsData, isLoading: subsLoading } = useSubscriptions(activeTab === 'subscriptions');
+  const { data: usersData, isLoading: usersLoading } = useUsers(activeTab === 'users');
 
   // Feature flags state
   const [selectedTenantForFlags, setSelectedTenantForFlags] = useState<string>('');
-  const { data: flagsData, isLoading: flagsLoading } = useFeatureFlags(selectedTenantForFlags || undefined);
+  const { data: flagsData, isLoading: flagsLoading } = useFeatureFlags(selectedTenantForFlags || undefined, activeTab === 'feature-flags');
 
   // Menu items state
   const [selectedTenantForMenu, setSelectedTenantForMenu] = useState<string>('');
@@ -773,64 +783,71 @@ export function SuperAdminView() {
   } | null>(null);
 
   useEffect(() => {
+    // Only fetch storage status when the Storage tab is active — previously
+    // this fired on every superadmin mount regardless of which tab the user
+    // visited, wasting an API call on every other tab.
+    if (activeTab !== 'storage') return;
     fetch('/api/storage/status')
       .then((r) => r.json())
       .then((data) => setStorageStatus(data))
       .catch(() => {});
-  }, []);
+  }, [activeTab]);
 
   // ─── Credit Data ────────────────────────────────────────────────────────
   const [creditsData, setCreditsData] = useState<CreditInfo[]>([]);
   const [creditsLoading, setCreditsLoading] = useState(false);
 
   const fetchAllCredits = useCallback(async () => {
-    if (tenants.length === 0) return;
+    // BATCH FETCH: calls /api/admin/credits/all ONCE (3 DB queries total)
+    // instead of N parallel /api/admin/credits?tenantId=X calls (8 queries
+    // each = 64 queries for 8 tenants → ~10s on Supabase Free). The batch
+    // endpoint also filters to trial+active tenants only (not all 89K).
+    // Backend is Redis-cached for 30s, invalidated on PUT.
     setCreditsLoading(true);
     try {
-      // Parallelize all tenant credit fetches with Promise.all instead of
-      // a sequential for...of loop. Previously, with N tenants this fired
-      // N sequential HTTP requests — each waiting for the previous to
-      // finish — blocking the network for N × latency. Now all N fire in
-      // parallel and resolve in ~1 × latency.
       const fallback: CreditInfo = {
         trialWhatsappCredits: 10, trialWhatsappUsed: 0,
         platformWhatsappEnabled: true, ownWhatsappConnected: false, ownEmailProviderConnected: false,
       };
-      const settled = await Promise.all(
-        tenants.map(async (tenant): Promise<CreditInfo> => {
-          try {
-            const res = await fetch(`/api/admin/credits?tenantId=${tenant.id}`);
-            if (res.ok) {
-              const data = await res.json();
-              const sub = data.subscription;
-              return {
-                tenantId: tenant.id,
-                tenantName: tenant.name,
-                plan: tenant.plan,
-                trialWhatsappCredits: sub?.trialWhatsappCredits ?? 10,
-                trialWhatsappUsed: sub?.trialWhatsappUsed ?? 0,
-                platformWhatsappEnabled: sub?.platformWhatsappEnabled ?? true,
-                ownWhatsappConnected: sub?.ownWhatsappConnected ?? false,
-                ownEmailProviderConnected: sub?.ownEmailProviderConnected ?? false,
-              };
-            }
-            return { ...fallback, tenantId: tenant.id, tenantName: tenant.name, plan: tenant.plan };
-          } catch {
-            return { ...fallback, tenantId: tenant.id, tenantName: tenant.name, plan: tenant.plan };
-          }
-        })
-      );
-      setCreditsData(settled);
+      const res = await fetch('/api/admin/credits/all');
+      if (res.ok) {
+        const data = await res.json();
+        const entries: CreditInfo[] = (data.tenants || []).map((t: CreditInfo) => ({
+          tenantId: t.tenantId,
+          tenantName: t.tenantName,
+          plan: t.plan,
+          trialWhatsappCredits: t.trialWhatsappCredits ?? 10,
+          trialWhatsappUsed: t.trialWhatsappUsed ?? 0,
+          platformWhatsappEnabled: t.platformWhatsappEnabled ?? true,
+          ownWhatsappConnected: t.ownWhatsappConnected ?? false,
+          ownEmailProviderConnected: t.ownEmailProviderConnected ?? false,
+        }));
+        setCreditsData(entries);
+      } else {
+        // Fallback: empty list (don't fabricate fake credits)
+        setCreditsData([]);
+      }
+      void fallback; // kept for type stability if future code needs it
+    } catch {
+      setCreditsData([]);
     } finally {
       setCreditsLoading(false);
     }
-  }, [tenants]);
+  }, []);
 
   useEffect(() => {
-    if (tenants.length > 0 && creditsData.length === 0) {
+    // Only fetch credits when the Tenants or Credits tab is active — previously
+    // this fired N parallel /api/admin/credits calls as soon as tenants data
+    // resolved, regardless of which tab the user was on. On Menu Management
+    // (the most common superadmin tab), this was 8+ unnecessary 10-second
+    // API calls hitting Supabase. Now uses a single batch endpoint.
+    // No tenants.length check needed — the batch endpoint fetches its own
+    // filtered tenant list (trial + active only).
+    if (activeTab !== 'tenants' && activeTab !== 'credits') return;
+    if (creditsData.length === 0) {
       fetchAllCredits();
     }
-  }, [tenants.length, creditsData.length, fetchAllCredits]);
+  }, [activeTab, creditsData.length, fetchAllCredits]);
 
   useEffect(() => {
     if (tenants.length > 0 && !selectedTenantForFlags) {

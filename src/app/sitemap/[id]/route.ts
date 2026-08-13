@@ -115,12 +115,18 @@ export async function GET(
     });
   } catch (error) {
     console.error("[sitemap/[id]] Failed to generate sitemap:", error);
+    // Return 503 (not 200) so Googlebot retries instead of recording
+    // "Sitemap could not be read" as a permanent failure. A 200 with empty
+    // <urlset> was being interpreted as "sitemap exists but has no URLs" —
+    // Google dropped all discovered URLs. With 503 + Retry-After, Google
+    // will retry within hours.
     return new Response(
       '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n</urlset>',
       {
-        status: 200,
+        status: 503,
         headers: {
           "Content-Type": "application/xml; charset=UTF-8",
+          "Retry-After": "300",
         },
       },
     );

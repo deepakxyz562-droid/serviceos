@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { sharedCacheDelete, sharedCacheDeleteByPrefix } from '@/lib/shared-cache';
 import { MENU_CATALOG, getDefaultMenuItems } from '@/lib/menu-catalog';
+import { getGlobalConfigCarrierTenant } from '@/lib/global-config-carrier';
 
 const GLOBAL_CONFIG_KEY = 'globalMenuConfig';
 
@@ -63,20 +64,36 @@ function mergeWithCatalog(
   }));
 }
 
-// Get global menu config from the first tenant's settingsJson
+// Get global menu config from the SENTINEL carrier tenant's settingsJson.
+//
+// WHY SENTINEL (not "first tenant"):
+//   Previously this used `db.tenant.findMany({ take: 1 })` with NO orderBy.
+//   On Supabase (PostgREST), `LIMIT 1` without `ORDER BY` returns rows in
+//   arbitrary physical order — different across requests/instances. The PUT
+//   would write to Tenant A, the immediate GET would land on Tenant B (no
+//   config) → destructive auto-init wrote defaults (all enabled) to Tenant B
+//   → the user's toggle appeared to revert. Using a dedicated sentinel tenant
+//   selected by NAME makes the carrier deterministic.
+//
+// NO DESTRUCTIVE AUTO-INIT:
+//   Previously, a missing/empty `globalMenuConfig` triggered
+//   `saveGlobalMenuConfig(defaults)` — a WRITE inside a GET handler. This
+//   polluted whichever tenant happened to be read. Now we just return the
+//   in-memory defaults WITHOUT writing. The first explicit PUT/POST from the
+//   superadmin UI will persist the config to the sentinel tenant.
 async function getGlobalMenuConfig(): Promise<MenuItemEntry[]> {
   try {
-    const tenants = await db.tenant.findMany({ take: 1 });
-    if (!tenants || tenants.length === 0) return getDefaultItems();
+    const carrier = await getGlobalConfigCarrierTenant(db);
+    if (!carrier) return getDefaultItems();
 
-    const settings = parseSettings(tenants[0].settingsJson);
+    const settings = parseSettings(carrier.settingsJson);
     const rawConfig = settings[GLOBAL_CONFIG_KEY] as MenuItemEntry[] | undefined;
 
     if (!rawConfig || rawConfig.length === 0) {
-      // Initialize with defaults
-      const defaults = getDefaultItems();
-      await saveGlobalMenuConfig(defaults);
-      return defaults;
+      // Return in-memory defaults — do NOT write to DB (the old behavior
+      // polluted tenants via destructive auto-init). The first PUT/POST
+      // from the UI will persist the config to the sentinel.
+      return getDefaultItems();
     }
     return mergeWithCatalog(rawConfig);
   } catch (error) {
@@ -85,19 +102,17 @@ async function getGlobalMenuConfig(): Promise<MenuItemEntry[]> {
   }
 }
 
-// Save global menu config to the first tenant's settingsJson
+// Save global menu config to the SENTINEL carrier tenant's settingsJson.
 async function saveGlobalMenuConfig(items: MenuItemEntry[]): Promise<void> {
-  const tenants = await db.tenant.findMany({ take: 1 });
-  if (!tenants || tenants.length === 0) {
-    throw new Error('No tenants found — cannot save global menu config');
+  const carrier = await getGlobalConfigCarrierTenant(db);
+  if (!carrier) {
+    throw new Error('Could not get/create carrier tenant — cannot save global menu config');
   }
-
-  const tenantId = (tenants[0] as Record<string, unknown>).id as string;
-  const settings = parseSettings(tenants[0].settingsJson);
+  const settings = parseSettings(carrier.settingsJson);
   settings[GLOBAL_CONFIG_KEY] = items;
 
   await db.tenant.update({
-    where: { id: tenantId },
+    where: { id: carrier.id },
     data: { settingsJson: JSON.stringify(settings) },
   });
 }
@@ -196,15 +211,15 @@ export async function GET(request: NextRequest) {
     const items = await getTenantMenuConfig(tenantId);
     return NextResponse.json({ items: items.map((item) => ({ ...item, id: `tenant_${item.key}`, tenantId })) });
   } catch (error) {
+    // Return 503 (not 200) so the frontend can distinguish "DB unavailable"
+    // from "all menus enabled". Previously this returned 200 with all-enabled
+    // defaults, which masqueraded a DB error as success — the user saw every
+    // menu as enabled even though the read had failed.
     console.error('[SuperAdmin Menu Items GET] Error:', error);
-    return NextResponse.json({
-      items: MENU_CATALOG.map((item) => ({
-        ...item,
-        id: `default_${item.key}`,
-        enabled: true,
-        tenantId: null,
-      })),
-    });
+    return NextResponse.json(
+      { error: 'Failed to load menu items', items: [] },
+      { status: 503 }
+    );
   }
 }
 
@@ -234,12 +249,13 @@ export async function PUT(request: NextRequest) {
     // Atomic read-modify-write inside a transaction.
     await db.$transaction(async (tx) => {
       if (isGlobal) {
-        const tenants = await tx.tenant.findMany({ take: 1 });
-        if (!tenants || tenants.length === 0) {
-          throw new Error('No tenants found — cannot save global menu config');
+        // Use the SENTINEL carrier tenant (deterministic by name) — NOT
+        // `findMany({ take: 1 })` which returns arbitrary rows on Supabase.
+        const carrier = await getGlobalConfigCarrierTenant(tx);
+        if (!carrier) {
+          throw new Error('Could not get/create carrier tenant — cannot save global menu config');
         }
-        const tenantIdInner = (tenants[0] as Record<string, unknown>).id as string;
-        const settings = parseSettings(tenants[0].settingsJson);
+        const settings = parseSettings(carrier.settingsJson);
         const rawConfig = (settings[GLOBAL_CONFIG_KEY] as MenuItemEntry[] | undefined) || getDefaultItems();
         const merged = mergeWithCatalog(rawConfig);
         const updatedItems = merged.map((item) =>
@@ -247,7 +263,7 @@ export async function PUT(request: NextRequest) {
         );
         settings[GLOBAL_CONFIG_KEY] = updatedItems;
         await tx.tenant.update({
-          where: { id: tenantIdInner },
+          where: { id: carrier.id },
           data: { settingsJson: JSON.stringify(settings) },
         });
       } else {
@@ -270,12 +286,12 @@ export async function PUT(request: NextRequest) {
         // tenant inherits the global setting cleanly. This auto-cleans
         // stale entries over time as items are toggled.
 
-        // Read the global enabled state for this key (read-only, stays
-        // inside the transaction via tx).
-        const globalTenants = await tx.tenant.findMany({ take: 1 });
+        // Read the global enabled state for this key from the SENTINEL
+        // carrier tenant (deterministic by name).
+        const globalCarrier = await getGlobalConfigCarrierTenant(tx);
         let globalEnabled = true; // default: visible
-        if (globalTenants.length > 0) {
-          const gSettings = parseSettings(globalTenants[0].settingsJson);
+        if (globalCarrier) {
+          const gSettings = parseSettings(globalCarrier.settingsJson);
           const gConfig = gSettings[GLOBAL_CONFIG_KEY] as MenuItemEntry[] | undefined;
           if (gConfig) {
             const gEntry = gConfig.find((g) => g.key === menuKey);
@@ -354,12 +370,12 @@ export async function POST(request: NextRequest) {
 
     await db.$transaction(async (tx) => {
       if (isGlobal) {
-        const tenants = await tx.tenant.findMany({ take: 1 });
-        if (!tenants || tenants.length === 0) {
-          throw new Error('No tenants found — cannot save global menu config');
+        // Use the SENTINEL carrier tenant (deterministic by name).
+        const carrier = await getGlobalConfigCarrierTenant(tx);
+        if (!carrier) {
+          throw new Error('Could not get/create carrier tenant — cannot save global menu config');
         }
-        const tenantIdInner = (tenants[0] as Record<string, unknown>).id as string;
-        const settings = parseSettings(tenants[0].settingsJson);
+        const settings = parseSettings(carrier.settingsJson);
         const rawConfig = (settings[GLOBAL_CONFIG_KEY] as MenuItemEntry[] | undefined) || getDefaultItems();
         const currentItems = mergeWithCatalog(rawConfig);
         const updatedItems = currentItems.map((item) => {
@@ -368,7 +384,7 @@ export async function POST(request: NextRequest) {
         });
         settings[GLOBAL_CONFIG_KEY] = updatedItems;
         await tx.tenant.update({
-          where: { id: tenantIdInner },
+          where: { id: carrier.id },
           data: { settingsJson: JSON.stringify(settings) },
         });
       } else {
@@ -394,10 +410,10 @@ export async function POST(request: NextRequest) {
         // This also auto-cleans stale snapshots: any existing menuConfig
         // entries that now match global are dropped.
 
-        // Read the global config (read-only, stays inside the transaction).
-        const globalTenants = await tx.tenant.findMany({ take: 1 });
-        const globalConfig = globalTenants.length > 0
-          ? (parseSettings(globalTenants[0].settingsJson)[GLOBAL_CONFIG_KEY] as MenuItemEntry[] | undefined)
+        // Read the global config from the SENTINEL carrier tenant.
+        const globalCarrier = await getGlobalConfigCarrierTenant(tx);
+        const globalConfig = globalCarrier
+          ? (parseSettings(globalCarrier.settingsJson)[GLOBAL_CONFIG_KEY] as MenuItemEntry[] | undefined)
           : undefined;
         const globalEnabledByKey = new Map<string, boolean>();
         if (globalConfig) {

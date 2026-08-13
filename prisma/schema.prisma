@@ -319,6 +319,11 @@ model Subscription {
 
   @@index([tenantId])
   @@index([status])
+  // Composite index for the common query: WHERE tenantId = ? ORDER BY createdAt DESC
+  // (used by checkWhatsAppCredits, the batch credits endpoint, and many others).
+  // Without this, Postgres does an index scan on tenantId + sort; with it, the
+  // sort is free (index is already ordered).
+  @@index([tenantId, createdAt])
 }
 
 // Records each successful subscription payment (PayPal capture, manual, etc.)
@@ -1155,6 +1160,9 @@ model Credential {
   communicationProviders CommunicationProvider[]
 
   @@index([workspaceId])
+  // Index for type-based lookups (e.g. find WhatsApp credentials).
+  // Previously the `contains` query on name forced a full-table scan.
+  @@index([type])
 }
 
 model Execution {

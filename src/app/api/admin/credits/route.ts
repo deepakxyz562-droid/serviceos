@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isSuperAdminRequest } from '@/lib/admin-auth'
 import { updateTrialCredits, checkWhatsAppCredits } from '@/lib/credit-management'
 import { db } from '@/lib/db'
+import { sharedCacheDelete } from '@/lib/shared-cache'
 
 /**
  * GET /api/admin/credits?tenantId=xxx
@@ -75,6 +76,9 @@ export async function PUT(request: NextRequest) {
 
     // Return updated status
     const creditStatus = await checkWhatsAppCredits(tenantId)
+    // Invalidate the batch credits cache so the superadmin Credits/Tenants
+    // tabs see the updated values on their next fetch (within 30s).
+    await sharedCacheDelete('superadmin:credits:all').catch(() => {})
     return NextResponse.json({ success: true, creditStatus })
   } catch (error) {
     console.error('[Admin Credits] PUT error:', error)

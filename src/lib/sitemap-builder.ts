@@ -37,27 +37,34 @@ export const BASE_URL = "https://fieseros.com";
 /**
  * Max URLs per business sitemap file.
  *
- * WHY 2,500 (not 10,000 or 50,000):
+ * WHY 1,000 (not 10,000 or 50,000):
  *   Google's sitemap protocol allows up to 50,000 URLs per file, but generating
- *   a large file from Supabase (PostgREST cursor-based pagination) is slow:
+ *   a large file from Supabase (PostgREST cursor-based pagination) is slow,
+ *   and pre-serializing each page into its own Redis key must stay well under
+ *   Upstash Free tier's 10MB request size limit:
  *     - 10,000 URLs/file → ~15s cold-cache generation (exceeds Bingbot fetch timeout)
- *     - 2,500 URLs/file  → ~4s cold-cache generation (well within all crawler timeouts)
+ *     - 2,500 URLs/file  → ~4s cold-cache, ~250KB per-page XML (previous setting)
+ *     - 1,000 URLs/file  → ~2s cold-cache, ~100KB per-page XML (more Upstash headroom)
  *
- *   At 2,500 URLs/file with ~91K total businesses, this produces ~37 sitemap
- *   files. Google's sitemap index supports up to 50,000 sub-sitemaps — 37 is
+ *   At 1,000 URLs/file with ~91K total businesses, this produces ~91 sitemap
+ *   files. Google's sitemap index supports up to 50,000 sub-sitemaps — 91 is
  *   well within that limit.
  *
- *   The in-memory cache + CDN SWR layer provide two additional layers of
- *   protection:
+ *   The per-page pre-serialized XML cache (`fieseros:sitemap:xml:{id}`,
+ *   ~100KB each) + CDN SWR layer provide two additional layers of protection:
  *     1. CDN serves stale sitemap instantly while regenerating (SWR=24h)
- *     2. In-memory cache serves the pre-built URL list (only the first request
- *        after cache expiry pays the full Supabase query cost)
+ *     2. Pre-serialized XML in Redis serves the FINISHED XML string directly
+ *        (zero DB queries, zero JSON.parse — ~50ms response)
  *
  *   Previously this was 40,000 (3 files) → Bingbot timeouts.
  *   Then 10,000 (10 files) → still ~15s cold-cache, borderline.
- *   Now 2,500 (~37 files) → ~4s cold-cache, safe for all crawlers.
+ *   Then 2,500 (~37 files, ~250KB per page XML) → fine on Vercel/Upstash Paid,
+ *     but Upstash Free silently rejected the 10MB all-URLs blob cache.
+ *   Now 1,000 (~91 files, ~100KB per page XML) → safe for all crawlers + more
+ *     headroom on Upstash Free (each per-page XML key is ~100KB, 100x under
+ *     the 10MB limit).
  */
-export const BUSINESS_PER_FILE = 2_500;
+export const BUSINESS_PER_FILE = 1_000;
 
 /**
  * Stable lastmod timestamp for static / industry-hub / browse URLs.
@@ -89,9 +96,9 @@ const SITE_LASTMOD = new Date().toISOString();
  *
  *   Now each sitemap page's FINISHED XML string is stored as its own key:
  *     fieseros:sitemap:xml:0  → static sitemap XML  (~100 KB)
- *     fieseros:sitemap:xml:1  → business page 1 XML  (~250 KB)
- *     fieseros:sitemap:xml:2  → business page 2 XML  (~250 KB)
- *     ...up to ~37 pages
+ *     fieseros:sitemap:xml:1  → business page 1 XML  (~100 KB)
+ *     fieseros:sitemap:xml:2  → business page 2 XML  (~100 KB)
+ *     ...up to ~91 pages
  *
  *   Each key is well under the 10MB limit. The route handler reads the
  *   pre-built XML string directly — zero DB queries, zero JSON.parse,
@@ -423,45 +430,27 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
 }
 
 /**
- * Fetch ALL indexable business URLs (cached via shared cache with SWR).
+ * Fetch ALL indexable business URLs (UNCACHED — see note below).
  *
  * Uses `listAllIndexableBusinessUrls()` which does CURSOR-BASED pagination
  * (id > lastId) — O(n) total instead of the O(n²) offset-based approach
  * that was causing 30s+ timeouts on production (Supabase REST).
  *
- * Caching strategy (shared across all instances when Redis is configured):
- *   - freshTtl: 1 hour — serve instantly, no DB query
- *   - staleTtl: 24 hours — serve stale + background-refresh
- *   - grace: if Supabase is down (CircuitOpenError), serve stale past TTL
+ * NOTE: The full ~91K-URL list is NO LONGER cached as a single Redis blob.
+ * Previously this used sharedCacheWrap under key
+ * `fieseros:sitemap:all-business-urls`, but that blob was ~10MB and silently
+ * failed on Upstash Free tier (HTTP 413, treated as null by sharedCacheWrap).
+ * The per-page pre-serialized XML cache (`fieseros:sitemap:xml:{id}`,
+ * ~100KB each) is the cache layer — this function is just the uncached data
+ * fetcher used by buildBusinessSitemap() to slice into pages.
  *
- * Each sitemap page slices this cached list — no DB queries for subsequent
- * requests. The first request after cache expiry pays the full Supabase
- * query cost (~4s for 91K businesses via cursor pagination).
+ * The sitemap-warm cron (every 30 min) calls buildAndCacheAllSitemapXmlPages()
+ * which calls this function ONCE, slices it into ~91 pages, and stores each
+ * page's FINISHED XML as its own Redis key. So in steady state, this function
+ * only runs during warming — never on user-facing sitemap requests.
  */
 async function getAllBusinessUrlsCached() {
-  const cacheKey = "fieseros:sitemap:all-business-urls";
-  const result = await sharedCacheWrap<
-    Array<{ url: string; lastModified?: string; tier?: "A" | "B" }>
-  >(
-    cacheKey,
-    60 * 60 * 1000, // fresh: 1h
-    24 * 60 * 60 * 1000, // stale: 24h
-    async () => {
-      // listAllIndexableBusinessUrls has its own try/catch that returns []
-      // on error. We need CircuitOpenError to propagate so sharedCacheWrap
-      // can serve stale — so we call it and check the result. If the circuit
-      // is open, the adapter throws before listAllIndexableBusinessUrls'
-      // catch can swallow it... BUT that catch is inside the function.
-      // To be safe, we let the function handle it and only serve stale if
-      // the result is suspiciously empty AND we have a stale entry.
-      return listAllIndexableBusinessUrls();
-    },
-    // Don't cache empty results — could be a transient PostgREST failure
-    // (the circuit breaker catches repeated ones, but a single hiccup
-    // shouldn't poison the cache for 25h).
-    (urls) => urls.length > 0,
-  );
-  return result.value;
+  return listAllIndexableBusinessUrls();
 }
 
 /**
@@ -577,8 +566,8 @@ export function serializeSitemapIndex(ids: { id: number }[]): string {
 //
 // Now each sitemap page's FINISHED XML string is stored as its own Redis key:
 //   fieseros:sitemap:xml:0  → static sitemap XML  (~100 KB)
-//   fieseros:sitemap:xml:1  → business page 1 XML  (~250 KB)
-//   ...up to ~37 pages
+//   fieseros:sitemap:xml:1  → business page 1 XML  (~100 KB)
+//   ...up to ~91 pages
 //
 // Each key is well under 10MB. The route handler reads the pre-built XML
 // directly — zero DB queries, zero JSON.parse, zero serialization.
