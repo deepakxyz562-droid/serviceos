@@ -448,8 +448,16 @@ export default async function PublicBusinessHubPage({
   // the cleared city. The country is still auto-detected via GeoIP on mount
   // by MarketplaceBrowser, so country scoping is preserved.
   const marketplaceBackUrl = '/marketplace'
+  // SEO FIX (option b): correct breadcrumb hierarchy — Home → Marketplace →
+  // Industry → City → Business. Previously the first item was labeled "Home"
+  // but pointed to /marketplace, which was semantically wrong (and a UX
+  // mismatch with the rest of the site where "Home" = "/"). Now we render
+  // BOTH "Home" (/) and "Marketplace" (/marketplace) as distinct steps, so
+  // the trail matches Google's expectation of a strict page hierarchy and
+  // every `item` URL in the BreadcrumbList JSON-LD is distinct.
   const breadcrumbItems = [
-    { name: 'Home', url: marketplaceBackUrl },
+    { name: 'Home', url: '/' },
+    { name: 'Marketplace', url: marketplaceBackUrl },
     { name: business.industry || 'Service', url: industryBrowseUrl },
     { name: business.city || 'Area', url: cityBrowseUrl },
     { name: business.name, url: business.canonicalUrl },

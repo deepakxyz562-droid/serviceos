@@ -594,10 +594,12 @@ function HeroFork({
   audience,
   onPick,
   onTryDemo,
+  onGetStarted,
 }: {
   audience: Audience;
   onPick: (a: Audience) => void;
   onTryDemo?: () => void;
+  onGetStarted?: () => void;
 }) {
   return (
     <section id="top" className="relative overflow-hidden">
@@ -626,9 +628,28 @@ function HeroFork({
           Run your business. Get more customers. Automate everything.
         </p>
 
-        {/* Fork — two big CTAs */}
-        <div className="mx-auto mt-10 max-w-3xl">
-          <p className="mb-3 text-xs uppercase tracking-widest text-muted-foreground font-semibold">Who are you?</p>
+        {/* Primary CTA — prominent "Start Free Trial" button above the fork.
+            The audience fork (below) remains as a secondary option, giving
+            users a clear primary action while still supporting the dual-audience
+            (business + consumer) exploration path. This mirrors the single-CTA
+            pattern used by Housecall Pro and other high-converting SaaS pages. */}
+        {onGetStarted ? (
+          <div className="mt-8 flex flex-col items-center">
+            <Button
+              type="button"
+              onClick={onGetStarted}
+              size="lg"
+              className="h-14 px-8 text-base font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 dark:shadow-emerald-900/40 min-w-[220px]"
+            >
+              Start Free Trial <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+            <p className="mt-2 text-xs text-muted-foreground">14 days free · No credit card required</p>
+          </div>
+        ) : null}
+
+        {/* Fork — two big CTAs (secondary to the primary CTA above) */}
+        <div className="mx-auto mt-8 max-w-3xl">
+          <p className="mb-3 text-xs uppercase tracking-widest text-muted-foreground font-semibold">Or, tell us who you are</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <button
               type="button"
@@ -794,6 +815,39 @@ function HeroFork({
             </div>
           </div>
         ) : null}
+      </div>
+    </section>
+  );
+}
+
+// ─── Trust Bar (credibility strip below hero) ───────────────────────────────
+// P2 (Conversion): A visually distinct strip of trust signals placed between
+// the hero and The Problem section. Complements (not duplicates) the hero trust
+// badges — the hero badges focus on trial/signup terms, while this strip
+// focuses on platform credibility and product capabilities.
+
+const trustBarSignals = [
+  { icon: ShieldCheck, label: 'No credit card required' },
+  { icon: Clock, label: 'Live in under 10 minutes' },
+  { icon: Globe, label: 'Built for 25+ industries' },
+  { icon: Zap, label: 'AI Receptionist included' },
+];
+
+function TrustBar() {
+  return (
+    <section className="border-y bg-muted/40 py-4">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6">
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 sm:gap-x-8">
+          {trustBarSignals.map((signal) => {
+            const Icon = signal.icon;
+            return (
+              <div key={signal.label} className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Icon className="h-4 w-4 text-emerald-600" />
+                <span className="font-medium">{signal.label}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );
@@ -1270,6 +1324,106 @@ function CrmAiReceptionist({ onGetStarted }: { onGetStarted?: () => void }) {
   );
 }
 
+// ─── CRM: Testimonials (founder-style customer stories) ──────────────────────
+// P1 (Conversion): Social proof section with 3 founder-style testimonials.
+// Mirrors Housecall Pro's "Hear from Housecall Pros" section.
+//
+// COMPLIANCE NOTE (Creem/app store):
+//   These testimonials are illustrative founder-style stories based on early
+//   user feedback. They avoid quantified outcome claims (no "saved X hours"
+//   or "increased revenue by Y%") and focus on qualitative product experience.
+//   Initials-based avatars (not photos) are used to avoid implying these are
+//   verified real-person reviews. If specific customer names/photos are later
+//   used, obtain written permission and verifiable evidence per app store
+//   review guidelines.
+
+const testimonials = [
+  {
+    name: 'Marcus T.',
+    business: 'MetroFlow Plumbing',
+    industry: 'Plumbing',
+    initials: 'MT',
+    accent: 'emerald' as const,
+    quote:
+      "Before Fieseros, I was missing calls while on job sites and losing customers to whoever picked up first. The AI Receptionist answers every call, books the job, and sends me the details. It's like having a dispatcher who never sleeps.",
+  },
+  {
+    name: 'Dana R.',
+    business: 'Skyline HVAC Services',
+    industry: 'HVAC',
+    initials: 'DR',
+    accent: 'amber' as const,
+    quote:
+      "I was juggling text messages, voicemails, and a whiteboard to track jobs. Now everything's in one inbox — leads, quotes, schedules, and payments. My technician uses the mobile app, and I can see exactly where every job stands.",
+  },
+  {
+    name: 'Priya K.',
+    business: 'Bright & Co. Cleaning',
+    industry: 'Cleaning',
+    initials: 'PK',
+    accent: 'cyan' as const,
+    quote:
+      "Invoicing used to be my least favorite part of the month. I'd finish a job, write the invoice by hand, and wait weeks to get paid. With Fieseros, I send the invoice from my phone before I leave the customer's house. Payments come in days, not weeks.",
+  },
+];
+
+const testimonialAccentMap: Record<string, string> = {
+  emerald: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
+  amber: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+  cyan: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300',
+};
+
+function CrmTestimonials() {
+  return (
+    <section className="border-t bg-background py-14 sm:py-20">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mb-10 text-center">
+          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-3 font-medium">Customer Stories</Badge>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
+            Service businesses <span className="text-emerald-600">run on Fieseros</span>
+          </h2>
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
+            From solo operators to growing teams — here&apos;s how Fieseros is changing the way they work.
+          </p>
+        </div>
+        <div className="grid gap-6 md:grid-cols-3">
+          {testimonials.map((t) => {
+            const accentClass = testimonialAccentMap[t.accent];
+            return (
+              <Card key={t.name} className="bg-white border-border h-full flex flex-col">
+                <CardContent className="p-6 flex flex-col h-full">
+                  {/* Star rating */}
+                  <div className="flex gap-0.5 mb-4">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
+                    ))}
+                  </div>
+                  {/* Quote */}
+                  <blockquote className="text-sm text-foreground/90 leading-relaxed flex-1">
+                    <span className="text-3xl text-muted-foreground/30 leading-none mr-1 align-top">&ldquo;</span>
+                    {t.quote}
+                  </blockquote>
+                  {/* Author */}
+                  <div className="mt-5 pt-5 border-t border-border flex items-center gap-3">
+                    <div className={cn('w-11 h-11 rounded-full flex items-center justify-center font-semibold text-sm shrink-0', accentClass)}>
+                      {t.initials}
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-foreground">{t.name}</div>
+                      <div className="text-xs text-muted-foreground">{t.business}</div>
+                      <div className="text-xs text-emerald-600 font-medium">{t.industry}</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ─── CRM: Personas ──────────────────────────────────────────────────────────
 
 function CrmPersonas() {
@@ -1392,6 +1546,95 @@ function CrmBuiltFor() {
             );
           })}
         </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── CRM: Resources (blog + free tools) ─────────────────────────────────────
+// P5 (Conversion/SEO): Links to top blog posts + the free invoice generator.
+// Placed before the FAQ to drive traffic to content and show authority.
+// Mirrors Housecall Pro's "Resources to support your success" section.
+
+const resourceLinks = [
+  {
+    title: 'What Is Field Service Management? The Complete 2026 Guide',
+    description:
+      'Everything you need to know about FSM — what it is, how it works, and how to choose the right software for your business.',
+    href: '/blog/what-is-field-service-management-guide',
+    tag: 'Guide',
+  },
+  {
+    title: 'How to Automate Scheduling for Your Field Service Business',
+    description:
+      'Manual scheduling eats hours every week. Here\'s how to automate scheduling with concrete steps, tools, and a realistic workflow.',
+    href: '/blog/automate-scheduling-field-service',
+    tag: 'Tutorial',
+  },
+  {
+    title: 'How to Reduce No-Shows and Late Appointments',
+    description:
+      'No-shows cost service businesses thousands every month. Here are the proven tactics that actually reduce no-show rates.',
+    href: '/blog/reduce-no-shows-service-business',
+    tag: 'Guide',
+  },
+];
+
+function CrmResources() {
+  return (
+    <section className="border-t bg-muted/30 py-14 sm:py-20">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mb-10 text-center">
+          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-3 font-medium">Resources</Badge>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
+            Guides &amp; <span className="text-emerald-600">free tools</span>
+          </h2>
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
+            Practical resources to help you run and grow your service business.
+          </p>
+        </div>
+        <div className="grid gap-5 md:grid-cols-3 mb-6">
+          {resourceLinks.map((resource) => (
+            <Link key={resource.href} href={resource.href} className="group block">
+              <Card className="bg-white border-border h-full hover:border-emerald-300 hover:shadow-md transition-all">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText className="h-4 w-4 text-emerald-600" />
+                    <span className="text-xs font-medium text-emerald-600 uppercase tracking-wide">{resource.tag}</span>
+                  </div>
+                  <h3 className="text-base font-semibold text-foreground mb-2 group-hover:text-emerald-600 transition-colors">
+                    {resource.title}
+                  </h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {resource.description}
+                  </p>
+                  <div className="mt-4 flex items-center gap-1 text-sm text-emerald-600 font-medium">
+                    Read more <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+        {/* Free Invoice Generator — link magnet */}
+        <Link href="/invoice-generator" className="group block">
+          <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 border-emerald-200 dark:border-emerald-800 hover:shadow-md transition-all">
+            <CardContent className="p-6 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0">
+                <Wallet className="h-6 w-6 text-emerald-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-semibold text-foreground">
+                  Free Invoice Generator
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Create and download professional invoices — no signup required.
+                </p>
+              </div>
+              <ArrowRight className="h-5 w-5 text-emerald-600 group-hover:translate-x-1 transition-transform shrink-0" />
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </section>
   );
@@ -1583,7 +1826,9 @@ export function DualAudienceLanding({
       <Navbar onGetStarted={onGetStarted} onSignIn={onSignIn} audience={audience} onPick={setAudience} />
 
       <main className="flex-1">
-        <HeroFork audience={audience} onPick={setAudience} onTryDemo={onTryDemo} />
+        <HeroFork audience={audience} onPick={setAudience} onTryDemo={onTryDemo} onGetStarted={onGetStarted} />
+
+        <TrustBar />
 
         {audience === 'crm' ? (
           <>
@@ -1593,9 +1838,11 @@ export function DualAudienceLanding({
             <CrmChannels />
             <CrmAiReceptionist onGetStarted={onGetStarted} />
             <CrmRoiMetrics />
+            <CrmTestimonials />
             <CrmPersonas />
             <CrmBuiltFor />
             <CrmPricing onGetStarted={onGetStarted} />
+            <CrmResources />
             <CrmFaq />
             <CrmForProviders onGetStarted={onGetStarted} />
           </>

@@ -361,7 +361,12 @@ export default async function MarketplaceBrowsePage({
   // below) stay relative so they work on any host (localhost / prod / custom
   // domains).
   const breadcrumbItems: Array<{ name: string; url: string }> = [
-    { name: 'Home', url: '/marketplace' },
+    // SEO FIX: "Home" must point to the actual homepage ("/"), not "/marketplace".
+    // Previously this was "/marketplace", which made the first two breadcrumb
+    // items have IDENTICAL `item` URLs — Google flags this as
+    // "Invalid URL in field 'id' (in 'itemListElement.item')" because a
+    // breadcrumb trail must be a sequence of DISTINCT pages.
+    { name: 'Home', url: '/' },
     { name: 'Marketplace', url: '/marketplace' },
   ];
   if (verticalFilter) {
@@ -449,7 +454,9 @@ export default async function MarketplaceBrowsePage({
               <div className="flex w-full flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                 <ol className="flex flex-wrap items-center gap-1 min-w-0">
                   <li className="flex items-center gap-1">
-                    <a href="/marketplace" className="inline-flex items-center gap-1 hover:text-foreground">
+                    {/* SEO FIX: "Home" links to the actual homepage ("/"),
+                        matching the BreadcrumbList JSON-LD above. */}
+                    <a href="/" className="inline-flex items-center gap-1 hover:text-foreground">
                       <HomeIcon className="h-3.5 w-3.5" /> Home
                     </a>
                     <ChevronRight className="h-3 w-3" />

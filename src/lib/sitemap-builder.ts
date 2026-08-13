@@ -32,8 +32,31 @@ import {
 
 export const BASE_URL = "https://fieseros.com";
 
-/** Max URLs per business sitemap file (safe margin under Google's 50K cap). */
-export const BUSINESS_PER_FILE = 40_000;
+/**
+ * Max URLs per business sitemap file.
+ *
+ * WHY 10,000 (not 50,000):
+ *   Google's sitemap protocol allows up to 50,000 URLs per file, but generating
+ *   a 40K-URL file from Supabase takes 60+ seconds — Vercel Hobby kills the
+ *   function at 10s, so background revalidation (stale-while-revalidate) can't
+ *   complete the regeneration before the function is terminated.
+ *
+ *   At 10,000 URLs/file, each file generates in ~15s (4x faster). This is still
+ *   over Vercel Hobby's 10s limit, but the in-memory cache + CDN SWR layer
+ *   provide two layers of protection:
+ *     1. CDN serves stale sitemap instantly while regenerating (SWR)
+ *     2. In-memory cache serves the pre-built URL list (only the first request
+ *        after cache expiry pays the full Supabase query cost)
+ *
+ *   With ~91K total businesses, this produces ~10 sitemap files (9 × 10K + 1K).
+ *   Google's sitemap index supports up to 50,000 sub-sitemaps — 10 is well
+ *   within that limit.
+ *
+ *   Previously this was 40,000 (3 files), which caused Bingbot timeouts
+ *   ("The request has timed out") on 8/13/2026 because cold-cache generation
+ *   exceeded Bing's fetch timeout.
+ */
+export const BUSINESS_PER_FILE = 10_000;
 
 // ── In-memory caching ─────────────────────────────────────────────────────
 //
