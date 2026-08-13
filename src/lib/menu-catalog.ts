@@ -97,6 +97,17 @@ export const MENU_CATALOG: MenuCatalogItem[] = [
   { key: 'variables', label: 'Variables', icon: 'Variable', section: 'Inbox & Automation', sortOrder: 48 },
   { key: 'executions', label: 'Executions', icon: 'Activity', section: 'Inbox & Automation', sortOrder: 49 },
 
+  // ─── Social Publishing (moved here from a separate 'Content' section) ──
+  // Social Publishing (Engine 1) — unified multi-platform publishing
+  // infrastructure. The 6 platform adapters (FB, IG, GBP, LinkedIn,
+  // Pinterest, X) plug into a shared publisher orchestrator.
+  // MOVED into 'Inbox & Automation' so all customer-facing communication
+  // lives in one place. The old 'Content' section is now empty/removed.
+  { key: 'socialAccounts', label: 'Social Accounts', icon: 'Plug', section: 'Inbox & Automation', sortOrder: 50 },
+  { key: 'postComposer', label: 'Create Post', icon: 'PenSquare', section: 'Inbox & Automation', sortOrder: 51, minPlan: 'growth', upgradeDescription: 'Compose and publish posts to Facebook, Instagram, LinkedIn, Pinterest, X, and Google Business from one place.' },
+  { key: 'postsList', label: 'Posts', icon: 'FileText', section: 'Inbox & Automation', sortOrder: 52, minPlan: 'growth', upgradeDescription: 'View, schedule, and manage all your social posts across platforms.' },
+  { key: 'socialAnalytics', label: 'Social Analytics', icon: 'BarChart3', section: 'Inbox & Automation', sortOrder: 53, minPlan: 'growth', upgradeDescription: 'Unified engagement metrics across all your social platforms.' },
+
   // ─── AI Receptionist ─────────────────────────────────────────────────
   { key: 'aiReceptionist', label: 'AI Receptionist Dashboard', icon: 'PhoneCall', section: 'AI Receptionist', sortOrder: 50, minPlan: 'business', upgradeDescription: 'AI-powered receptionist dashboard for call management, analytics, and performance insights.' },
   { key: 'aiAgents', label: 'AI Agents', icon: 'Bot', section: 'AI Receptionist', sortOrder: 51, minPlan: 'business', upgradeDescription: 'Create and manage AI voice agents for automated call handling, scheduling, and customer support.' },
@@ -111,7 +122,9 @@ export const MENU_CATALOG: MenuCatalogItem[] = [
 
   // ─── Setup & Admin ───────────────────────────────────────────────────
   { key: 'settings', label: 'Settings', icon: 'Settings', section: 'Setup & Admin', sortOrder: 70 },
-  { key: 'brandBrain', label: 'Brand Brain', icon: 'Brain', section: 'Setup & Admin', sortOrder: 70.5 },
+  // NOTE: 'brandBrain' was moved into the Settings page as a settings
+  // section (business group). Removed from the sidebar — discoverability
+  // was poor because it lived inside the collapsed Setup & Admin section.
   { key: 'integrations', label: 'Integrations', icon: 'Plug', section: 'Setup & Admin', sortOrder: 71 },
   { key: 'channels', label: 'Channels & Credentials', icon: 'RadioTower', section: 'Setup & Admin', sortOrder: 72 },
   { key: 'credentials', label: 'Credentials', icon: 'KeyRound', section: 'Setup & Admin', sortOrder: 73 },
@@ -125,15 +138,6 @@ export const MENU_CATALOG: MenuCatalogItem[] = [
   { key: 'helpAdminKB', label: 'Knowledge Base', icon: 'BookOpen', section: 'Setup & Admin', sortOrder: 81 },
   { key: 'helpAdminCategories', label: 'Categories', icon: 'FolderTree', section: 'Setup & Admin', sortOrder: 82 },
   { key: 'helpAdminAnnouncements', label: 'Announcements', icon: 'Megaphone', section: 'Setup & Admin', sortOrder: 83 },
-
-  // ─── Content ─────────────────────────────────────────────────────────
-  // Social Publishing (Engine 1) — unified multi-platform publishing
-  // infrastructure. The 6 platform adapters (FB, IG, GBP, LinkedIn,
-  // Pinterest, X) plug into a shared publisher orchestrator.
-  { key: 'socialAccounts', label: 'Social Accounts', icon: 'Plug', section: 'Content', sortOrder: 90 },
-  { key: 'postComposer', label: 'Create Post', icon: 'PenSquare', section: 'Content', sortOrder: 91, minPlan: 'growth', upgradeDescription: 'Compose and publish posts to Facebook, Instagram, LinkedIn, Pinterest, X, and Google Business from one place.' },
-  { key: 'postsList', label: 'Posts', icon: 'FileText', section: 'Content', sortOrder: 92, minPlan: 'growth', upgradeDescription: 'View, schedule, and manage all your social posts across platforms.' },
-  { key: 'socialAnalytics', label: 'Social Analytics', icon: 'BarChart3', section: 'Content', sortOrder: 93, minPlan: 'growth', upgradeDescription: 'Unified engagement metrics across all your social platforms.' },
 ];
 
 /**

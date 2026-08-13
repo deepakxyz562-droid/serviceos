@@ -38,9 +38,15 @@ export async function POST(
       case 'send':
       case 'send_email':
       case 'send_whatsapp': {
+        // sendSms is explicitly set to false here because the user only
+        // asked for email (or email+whatsapp). Previously sendSms was left
+        // undefined, and sendInvoice's `sendSms !== false` check treated
+        // undefined as true — so SMS was dispatched on every "Send Email"
+        // click even though the user didn't want it.
         const opts = {
           sendEmail: action === 'send' || action === 'send_email',
           sendWhatsApp: action === 'send' || action === 'send_whatsapp',
+          sendSms: false,
         };
         const result = await sendInvoice(id, opts);
         // Aggregate per-channel results into the top-level success flag so

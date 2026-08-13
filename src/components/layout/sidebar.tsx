@@ -68,7 +68,6 @@ import {
   Store,
   CreditCard,
   Wrench as WrenchIcon,
-  Brain,
   PenSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -169,6 +168,12 @@ const ownerNavSections: NavSection[] = [
       { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
       { view: 'triggers', label: 'Triggers', icon: Zap },
       { view: 'variables', label: 'Variables', icon: Variable },
+      // Social Publishing moved here from the old 'Content' section so all
+      // customer-facing communication lives in one place.
+      { view: 'socialAccounts', label: 'Social Accounts', icon: Plug },
+      { view: 'postComposer', label: 'Create Post', icon: PenSquare },
+      { view: 'postsList', label: 'Posts', icon: FileText },
+      { view: 'socialAnalytics', label: 'Social Analytics', icon: BarChart3 },
     ],
   },
   {
@@ -192,22 +197,18 @@ const ownerNavSections: NavSection[] = [
       { view: 'claimBusiness', label: 'Claim Business', icon: ShieldCheck },
     ],
   },
-  {
-    title: 'Content',
-    items: [
-      { view: 'socialAccounts', label: 'Social Accounts', icon: Plug },
-      { view: 'postComposer', label: 'Create Post', icon: PenSquare },
-      { view: 'postsList', label: 'Posts', icon: FileText },
-      { view: 'socialAnalytics', label: 'Analytics', icon: BarChart3 },
-    ],
-  },
+  // The 'Content' section was removed — Social Accounts, Create Post,
+  // Posts, and Social Analytics have been moved into 'Inbox & Automation'
+  // above so all communication channels live together.
   {
     title: 'Setup & Admin',
     collapsible: true,
     defaultCollapsed: true,
     items: [
       { view: 'settings', label: 'Settings', icon: Settings },
-      { view: 'brandBrain', label: 'Brand Brain', icon: Brain },
+      // Brand Brain moved INTO the Settings page (as a settings section).
+      // It was previously hidden inside this collapsed section, making it
+      // hard to discover. Now accessible via Settings → Business → Brand Brain.
     ],
   },
 ];
@@ -347,7 +348,7 @@ const superadminNavSections: NavSection[] = [
     title: 'Setup & Admin',
     items: [
       { view: 'settings', label: 'Settings', icon: Settings },
-      { view: 'brandBrain', label: 'Brand Brain', icon: Brain },
+      // Brand Brain moved into the Settings page.
       { view: 'helpAdminTickets', label: 'Support Tickets', icon: Ticket },
       { view: 'helpAdminKB', label: 'Knowledge Base', icon: BookOpen },
       { view: 'helpAdminCategories', label: 'Categories', icon: FolderTree },

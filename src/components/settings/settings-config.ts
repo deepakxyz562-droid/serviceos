@@ -176,6 +176,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     keywords: ['google', 'business profile', 'leads', 'seo', 'local search', 'ranking'],
   },
   {
+    id: 'brand-brain',
+    label: 'Brand Brain',
+    icon: 'Brain',
+    description: 'Define your brand identity, voice, audience, and competitors — powers AI content generation',
+    group: 'business',
+    keywords: ['brand', 'voice', 'tone', 'audience', 'competitors', 'identity', 'ai', 'content', 'persona', 'messaging'],
+  },
+  {
     id: 'finance',
     label: 'Finance',
     icon: 'DollarSign',

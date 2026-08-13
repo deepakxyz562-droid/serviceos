@@ -46,6 +46,7 @@ import {
   LifeBuoy,
   Clock,
   Kanban,
+  Brain,
 } from 'lucide-react';
 
 export const SETTINGS_ICON_MAP: Record<string, LucideIcon> = {
@@ -87,6 +88,7 @@ export const SETTINGS_ICON_MAP: Record<string, LucideIcon> = {
   LifeBuoy,
   Clock,
   Kanban,
+  Brain,
 };
 
 export function getSettingsIcon(name: string): LucideIcon {

@@ -54,7 +54,7 @@ import {
 import { cn } from '@/lib/utils';
 import { SettingsSidebar } from '@/components/settings/settings-sidebar';
 import { SettingsSearch } from '@/components/settings/settings-search';
-import { getSettingsSection } from '@/components/settings/settings-config';
+import { getSettingsSection, SETTINGS_SECTIONS } from '@/components/settings/settings-config';
 import { getSettingsIcon } from '@/components/settings/settings-icons';
 
 import { CompanySettings } from '@/components/settings/sections/company-settings';
@@ -62,6 +62,7 @@ import { MarketplaceSettings } from '@/components/settings/sections/marketplace-
 import { CrmSettings } from '@/components/settings/sections/crm-settings';
 import { JobsSchedulingSettings } from '@/components/settings/sections/jobs-scheduling-settings';
 import { FinanceSettings } from '@/components/settings/sections/finance-settings';
+import { BrandBrainView } from '@/components/views/tenant/brand-brain-view';
 import { TeamSettings } from '@/components/settings/sections/team-settings';
 import { CustomersSettings } from '@/components/settings/sections/customers-settings';
 import { CommunicationSettings } from '@/components/settings/sections/communication-settings';
@@ -546,6 +547,8 @@ export function SettingsView() {
         return <BillingSettings />;
       case 'google-business-profile':
         return <GoogleBusinessProfileSettings />;
+      case 'brand-brain':
+        return <BrandBrainView />;
       case 'dedicated-phone':
         return <DedicatedPhoneSettings onNavigateSection={setActiveSection} />;
 
@@ -629,8 +632,17 @@ export function SettingsView() {
         </p>
       </header>
 
-      {/* Command-palette search — filters across all sections */}
-      <div className="mb-6">
+      {/* Command-palette search — filters across all sections.
+          Made prominent (card + heading + helper) so users notice it
+          instead of scrolling through 40+ sections to find what they need. */}
+      <div className="mb-6 rounded-xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/80 to-transparent dark:from-emerald-950/20 dark:border-emerald-900/40 p-4 sm:p-5">
+        <div className="flex items-center gap-2 mb-2">
+          <SearchIcon className="size-4 text-emerald-600 dark:text-emerald-400" />
+          <h2 className="text-sm font-semibold text-foreground">Find a setting</h2>
+          <span className="text-[11px] text-muted-foreground hidden sm:inline">
+            Search across all {SETTINGS_SECTIONS.length} sections by name, keyword, or description
+          </span>
+        </div>
         <SettingsSearch activeSectionId={activeSection} onSelect={setActiveSection} />
       </div>
 

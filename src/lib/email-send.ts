@@ -528,12 +528,21 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
   }
 
   if (!config) {
-    console.warn(`[Email SIMULATED] To: ${to}, Subject: ${subject} — no provider resolved (usageType=${usageType || 'none'}, tenantId=${tenantId || 'none'}). Add an email provider in SuperAdmin → Settings → Providers.`)
+    // No email provider configured — return a REAL failure instead of a
+    // fake "simulated" success. Previously this returned success:true,
+    // which caused invoices/quotes to be marked as "sent" even though no
+    // email was delivered — the user perceived "mail is not working".
+    // Now the caller sees a clear error and can surface it to the user.
+    console.error(
+      `[Email NO PROVIDER] To: ${to}, Subject: ${subject} — no email provider resolved ` +
+      `(usageType=${usageType || 'none'}, tenantId=${tenantId || 'none'}). ` +
+      `Add an email provider in SuperAdmin → Settings → Providers.`
+    )
     return {
-      success: true,
-      messageId: `sim_email_${Date.now()}`,
-      simulated: true,
-      providerUsed: 'simulated',
+      success: false,
+      error: 'NO_EMAIL_PROVIDER_CONFIGURED',
+      providerRequired: true,
+      providerUsed: 'none',
     }
   }
 
@@ -676,18 +685,20 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
       }
     }
 
-    // Transactional infrastructure errors fall back to simulated mode
+    // Transactional infrastructure errors used to fall back to a fake
+    // "simulated" success — but that hid real SMTP failures (wrong
+    // password, blocked port, expired API key) from the user. The invoice
+    // would be marked "sent" while no email was delivered. Now we surface
+    // the real error so the caller can show it.
     if (isInfrastructureError(err)) {
-      console.warn(
-        `[Email SIMULATED (SMTP fallback)] To: ${to}, Subject: ${subject}, ` +
+      console.error(
+        `[Email FAILED (SMTP infra)] To: ${to}, Subject: ${subject}, ` +
         `Provider: ${source}, Error: ${errMsg}`,
       )
       return {
-        success: true,
-        messageId: `sim_email_${Date.now()}`,
-        simulated: true,
+        success: false,
+        error: `SMTP error: ${errMsg}`,
         providerUsed: source,
-        error: `Simulated — SMTP provider error: ${errMsg}`,
       }
     }
 

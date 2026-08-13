@@ -659,13 +659,25 @@ function applyWhereFilters(
               query.or(`${notField}.is.null,${notField}.neq.${v}`);
             }
           } else if (op.in !== undefined) {
-            // NOT IN: include NULL rows, then exclude each value.
-            // We only need to add the `is.null` branch once; subsequent
-            // `.neq()` calls further restrict non-NULL rows.
-            query.or(`${notField}.is.null`);
-            for (const v of op.in as (string | number | boolean)[]) {
-              query.neq(notField, v);
+            // NOT IN: (field IS NULL OR field != v1 OR field != v2 OR ...)
+            //
+            // All conditions MUST go inside a SINGLE or=() group so PostgREST
+            // ORs them together. The previous implementation emitted
+            //   query.or('field.is.null')   // a standalone or=() group
+            //   query.neq(field, v1)        // a top-level AND filter
+            //   query.neq(field, v2)        // a top-level AND filter
+            // which PostgREST interpreted as
+            //   (field IS NULL) AND (field != v1) AND (field != v2)
+            // — a contradiction that dropped EVERY non-NULL row. This was the
+            // root cause of the production pipeline-kanban bug where active
+            // deals (stage NOT IN ['won','lost']) were all filtered out and
+            // the board appeared empty.
+            const values = op.in as (string | number | boolean)[];
+            const parts = [`${notField}.is.null`];
+            for (const v of values) {
+              parts.push(`${notField}.neq.${v}`);
             }
+            query.or(parts.join(','));
           } else if (op.contains !== undefined) {
             // NOT contains: NULL rows should be included (NULL doesn't contain anything).
             query.or(`${notField}.is.null,${notField}.not.ilike.%${op.contains}%`);

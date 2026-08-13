@@ -868,12 +868,20 @@ export function InvoicesView() {
       if (!res.ok || data.success === false) {
         // For send actions, build a helpful error message from the per-channel
         // results so the user knows WHY it failed (e.g. "Customer has no email
-        // address" / "Customer has no phone number") instead of a generic toast.
+        // address" / "no email provider configured") instead of a generic toast.
         if (action === 'send' || action === 'send_email' || action === 'send_whatsapp') {
           const result = (data as { result?: { email?: { success: boolean; error?: string }; whatsapp?: { success: boolean; error?: string } } }).result;
           const emailErr = result?.email?.success === false ? result.email.error : null;
           const waErr = result?.whatsapp?.success === false ? result.whatsapp.error : null;
-          const errors = [emailErr, waErr].filter(Boolean);
+          // Translate the NO_EMAIL_PROVIDER_CONFIGURED sentinel into a
+          // user-friendly message with guidance on where to fix it.
+          const friendlyErrors = [emailErr, waErr].filter(Boolean).map((e) => {
+            if (e === 'NO_EMAIL_PROVIDER_CONFIGURED') {
+              return 'No email provider configured. Ask your platform admin to add an SMTP/Resend/SendGrid provider in SuperAdmin → Settings → Providers.';
+            }
+            return e;
+          });
+          const errors = friendlyErrors;
           const msg = errors.length > 0
             ? `Send failed: ${errors.join('; ')}`
             : (data as { error?: string }).error || `Action "${action}" failed`;

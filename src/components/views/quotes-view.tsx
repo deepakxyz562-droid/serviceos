@@ -88,6 +88,7 @@ interface Quote {
   status: QuoteStatus;
   validUntil: string;
   whatsappSent: boolean;
+  emailSent: boolean;
   createdAt: string;
   currency?: string;       // Transaction currency
   exchangeRate?: number;   // Rate at creation
@@ -253,6 +254,7 @@ function normalizeQuote(raw: any, customers: Customer[]): Quote {
     status: (raw.status as QuoteStatus) || 'draft',
     validUntil: toDateStr(raw.validUntil),
     whatsappSent: !!raw.whatsappSent,
+    emailSent: !!raw.emailSent,
     createdAt: toDateStr(raw.createdAt),
     currency: raw.currency,
     exchangeRate: raw.exchangeRate !== undefined ? Number(raw.exchangeRate) : undefined,
@@ -741,6 +743,36 @@ export function QuotesView() {
       }
     } catch {
       toast.error('Network error sending quote via WhatsApp');
+    }
+  };
+
+  // Send the quote to the customer via email ONLY (no SMS, no WhatsApp).
+  // Uses the new /api/quotes/[id]/send-email endpoint. Surfaces real errors
+  // (e.g. NO_EMAIL_PROVIDER_CONFIGURED) instead of faking success.
+  const handleSendEmail = async (quote: Quote) => {
+    try {
+      const res = await authFetch(`/api/quotes/${quote.id}/send-email`, {
+        method: 'POST',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        // Translate the NO_EMAIL_PROVIDER_CONFIGURED sentinel into a
+        // user-friendly message with guidance on where to fix it.
+        let errMsg = data.error || data.email?.error || 'Failed to send quote via email';
+        if (errMsg === 'NO_EMAIL_PROVIDER_CONFIGURED') {
+          errMsg = 'No email provider configured. Ask your platform admin to add an SMTP/Resend/SendGrid provider in SuperAdmin → Settings → Providers.';
+        }
+        toast.error(errMsg, { duration: 8000 });
+        return;
+      }
+      // Success - flip local status and stamp emailSent.
+      setQuotes((prev) => prev.map((q) => q.id === quote.id ? { ...q, emailSent: true, status: q.status === 'draft' ? 'sent' : q.status } : q));
+      if (selectedQuote?.id === quote.id) {
+        setSelectedQuote((prev) => prev ? { ...prev, emailSent: true, status: prev.status === 'draft' ? 'sent' : prev.status } : prev);
+      }
+      toast.success(`Quote sent via email`);
+    } catch {
+      toast.error('Network error sending quote via email');
     }
   };
 
@@ -1756,6 +1788,9 @@ export function QuotesView() {
                             <DropdownMenuItem onClick={() => handleSendWhatsApp(quote)}>
                               <Send className="size-3.5 mr-2" /> Send via WhatsApp
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleSendEmail(quote)}>
+                              <Mail className="size-3.5 mr-2" /> Send via Email
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleDuplicateQuote(quote)}>
                               <Copy className="size-3.5 mr-2" /> Duplicate
                             </DropdownMenuItem>
@@ -1913,6 +1948,12 @@ export function QuotesView() {
                     onClick={() => handleSendWhatsApp(selectedQuote)}
                   >
                     <MessageCircle className="size-4 mr-1.5" /> Send WhatsApp
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleSendEmail(selectedQuote)}
+                  >
+                    <Mail className="size-4 mr-1.5" /> Send Email
                   </Button>
                   <Button
                     variant="outline"

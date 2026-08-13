@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
-import { cache } from '@/lib/cache';
+import { sharedCacheDelete, sharedCacheDeleteByPrefix } from '@/lib/shared-cache';
 import { MENU_CATALOG, getDefaultMenuItems } from '@/lib/menu-catalog';
 
 const GLOBAL_CONFIG_KEY = 'globalMenuConfig';
@@ -31,8 +31,7 @@ function parseSettings(raw: unknown): Record<string, unknown> {
  * Why this exists: the persisted snapshot (in Tenant.settingsJson) is a
  * point-in-time copy of the catalog. When new items are added to
  * MENU_CATALOG, they would NOT appear in the Menu Management UI until the
- * snapshot was manually re-seeded — which is exactly the bug "I can't see
- * all the menu in superadmin menu management".
+ * snapshot was manually re-seeded.
  *
  * The merge starts from the CURRENT catalog (so every catalog item is
  * present, defaulting to `enabled: true`) and then applies any persisted
@@ -40,10 +39,6 @@ function parseSettings(raw: unknown): Record<string, unknown> {
  * section, sortOrder) always wins over the persisted snapshot — so renaming
  * an item in the catalog is reflected immediately. Only the on/off toggle
  * state is preserved from the persisted snapshot.
- *
- * Returns the merged list, sorted by section then sortOrder. If the
- * persisted snapshot is empty/null, returns the defaults and (optionally)
- * seeds the DB so subsequent reads are fast.
  */
 function mergeWithCatalog(
   persisted: MenuItemEntry[] | undefined | null
@@ -53,7 +48,6 @@ function mergeWithCatalog(
     return defaults;
   }
 
-  // Build a lookup of persisted enabled-state by menuKey.
   const persistedEnabledByKey = new Map<string, boolean>();
   for (const entry of persisted) {
     if (entry && typeof entry.key === 'string') {
@@ -61,7 +55,6 @@ function mergeWithCatalog(
     }
   }
 
-  // Start from catalog defaults; overlay persisted enabled-state where present.
   return defaults.map((item) => ({
     ...item,
     enabled: persistedEnabledByKey.has(item.key)
@@ -85,9 +78,6 @@ async function getGlobalMenuConfig(): Promise<MenuItemEntry[]> {
       await saveGlobalMenuConfig(defaults);
       return defaults;
     }
-    // Merge persisted snapshot with the current catalog so newly-added
-    // catalog items appear immediately (defaulting to enabled: true) while
-    // preserving previously-saved enabled/disabled toggles.
     return mergeWithCatalog(rawConfig);
   } catch (error) {
     console.error('[getGlobalMenuConfig] Error:', error);
@@ -112,33 +102,45 @@ async function saveGlobalMenuConfig(items: MenuItemEntry[]): Promise<void> {
   });
 }
 
-// Get tenant-specific menu config from the tenant's settingsJson
+// Get tenant-specific menu config — returns the EFFECTIVE state (global
+// overlaid with tenant overrides). Previously this returned only the
+// tenant's raw config, which meant a globally-disabled item appeared as
+// ENABLED in the tenant view even though the tenant's sidebar was hiding
+// it. That mismatch caused "I toggled it off globally but it still shows
+// as on for the tenant" confusion.
 async function getTenantMenuConfig(tenantId: string): Promise<MenuItemEntry[]> {
+  // Start from the global config so the tenant view reflects global
+  // defaults (including global disables). This is the baseline the tenant
+  // inherits when they haven't set an override.
+  const globalConfig = await getGlobalMenuConfig();
+
   const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
-  if (!tenant) return getDefaultItems();
+  if (!tenant) return globalConfig;
 
   const settings = parseSettings(tenant.settingsJson);
   const rawConfig = settings.menuConfig as MenuItemEntry[] | undefined;
-  if (!rawConfig || rawConfig.length === 0) return getDefaultItems();
-  // Merge persisted snapshot with the current catalog so newly-added
-  // catalog items appear immediately for this tenant too.
-  return mergeWithCatalog(rawConfig);
-}
-
-// Save tenant-specific menu config to the tenant's settingsJson
-async function saveTenantMenuConfig(tenantId: string, items: MenuItemEntry[]): Promise<void> {
-  const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
-  if (!tenant) {
-    throw new Error(`Tenant ${tenantId} not found`);
+  if (!rawConfig || rawConfig.length === 0) {
+    // Tenant has no overrides — effective state == global state.
+    return globalConfig;
   }
 
-  const settings = parseSettings(tenant.settingsJson);
-  settings.menuConfig = items;
+  // Build a lookup of the tenant's persisted enabled-state by menuKey.
+  const tenantEnabledByKey = new Map<string, boolean>();
+  for (const entry of rawConfig) {
+    if (entry && typeof entry.key === 'string') {
+      tenantEnabledByKey.set(entry.key, !!entry.enabled);
+    }
+  }
 
-  await db.tenant.update({
-    where: { id: tenantId },
-    data: { settingsJson: JSON.stringify(settings) },
-  });
+  // Overlay tenant overrides on top of the global config: when the tenant
+  // has an explicit entry for a key, the tenant's value wins; otherwise the
+  // global value applies.
+  return globalConfig.map((item) => ({
+    ...item,
+    enabled: tenantEnabledByKey.has(item.key)
+      ? (tenantEnabledByKey.get(item.key) as boolean)
+      : item.enabled,
+  }));
 }
 
 function getDefaultItems(): MenuItemEntry[] {
@@ -176,7 +178,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // For tenant-specific, read from tenant settingsJson
+    // For tenant-specific, read the EFFECTIVE state (global + tenant overrides)
     const items = await getTenantMenuConfig(tenantId);
     return NextResponse.json({ items: items.map((item) => ({ ...item, id: `tenant_${item.key}`, tenantId })) });
   } catch (error) {
@@ -193,10 +195,7 @@ export async function GET(request: NextRequest) {
 }
 
 // PUT: Toggle a single menu item.
-// Wrapped in db.$transaction for true atomicity — even if two PUTs land
-// concurrently, each transaction sees a consistent snapshot and commits
-// atomically, preventing the lost-update race that previously caused
-// random subsets of toggles to persist.
+// Wrapped in db.$transaction for atomicity.
 export async function PUT(request: NextRequest) {
   try {
     const auth = await getAuthUser();
@@ -216,9 +215,11 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Enabled must be a boolean' }, { status: 400 });
     }
 
+    const isGlobal = scope === 'global' || !tenantId;
+
     // Atomic read-modify-write inside a transaction.
     await db.$transaction(async (tx) => {
-      if (scope === 'global' || !tenantId) {
+      if (isGlobal) {
         const tenants = await tx.tenant.findMany({ take: 1 });
         if (!tenants || tenants.length === 0) {
           throw new Error('No tenants found — cannot save global menu config');
@@ -241,12 +242,25 @@ export async function PUT(request: NextRequest) {
           throw new Error(`Tenant ${tenantId} not found`);
         }
         const settings = parseSettings(tenant.settingsJson);
-        const rawConfig = (settings.menuConfig as MenuItemEntry[] | undefined) || getDefaultItems();
-        const merged = mergeWithCatalog(rawConfig);
-        const updatedItems = merged.map((item) =>
-          item.key === menuKey ? { ...item, enabled } : item,
+
+        // SPARSE OVERRIDE storage: store ONLY the toggled item as a tenant
+        // override, NOT a full snapshot of the catalog. This is critical
+        // because getTenantMenuConfig() overlays tenant overrides on the
+        // GLOBAL config — if we wrote a full snapshot here, every catalog
+        // item would get a tenant value and the tenant would stop
+        // inheriting global changes. With sparse storage, only items the
+        // superadmin explicitly toggled for this tenant override global;
+        // everything else inherits the global setting.
+        const existingConfig = (settings.menuConfig as MenuItemEntry[] | undefined) || [];
+        // Drop any prior entry for this key so we don't accumulate dupes.
+        const filtered = existingConfig.filter(
+          (item) => item && typeof item.key === 'string' && item.key !== menuKey,
         );
-        settings.menuConfig = updatedItems;
+        const catalogItem = MENU_CATALOG.find((i) => i.key === menuKey);
+        if (!catalogItem) {
+          throw new Error(`Unknown menu key: ${menuKey}`);
+        }
+        settings.menuConfig = [...filtered, { ...catalogItem, enabled }];
         await tx.tenant.update({
           where: { id: tenantId },
           data: { settingsJson: JSON.stringify(settings) },
@@ -254,13 +268,19 @@ export async function PUT(request: NextRequest) {
       }
     });
 
-    // Cache invalidation outside the transaction.
-    if (scope === 'global' || !tenantId) {
-      cache.invalidateByPrefix('menu-visibility:');
+    // Cache invalidation — uses the SHARED Redis cache so ALL Vercel
+    // instances see the invalidation instantly. The old local
+    // `cache.invalidate()` only cleared the current instance, leaving
+    // other instances serving stale data for up to 5 minutes.
+    if (isGlobal) {
+      // Global change affects every tenant's effective menu-visibility.
+      // Delete all menu-visibility:* keys across all instances.
+      await sharedCacheDeleteByPrefix('menu-visibility:');
     } else {
-      cache.invalidate(`menu-visibility:${tenantId}`);
+      // Tenant-specific change — only that tenant's cache needs clearing.
+      await sharedCacheDelete(`menu-visibility:${tenantId}`);
     }
-    return NextResponse.json({ success: true, scope: scope === 'global' || !tenantId ? 'global' : 'tenant' });
+    return NextResponse.json({ success: true, scope: isGlobal ? 'global' : 'tenant' });
   } catch (error) {
     console.error('[SuperAdmin Menu Items PUT] Error:', error);
     const message = error instanceof Error ? error.message : 'Failed to toggle menu item';
@@ -269,9 +289,7 @@ export async function PUT(request: NextRequest) {
 }
 
 // POST: Save menu item configuration (bulk).
-// Wrapped in db.$transaction for true atomicity — the entire bulk update
-// commits as one unit, preventing partial writes if the process is
-// interrupted mid-loop.
+// Wrapped in db.$transaction for atomicity.
 export async function POST(request: NextRequest) {
   try {
     const auth = await getAuthUser();
@@ -288,8 +306,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Items must be an array' }, { status: 400 });
     }
 
+    const isGlobal = scope === 'global' || !tenantId;
+
     await db.$transaction(async (tx) => {
-      if (scope === 'global' || !tenantId) {
+      if (isGlobal) {
         const tenants = await tx.tenant.findMany({ take: 1 });
         if (!tenants || tenants.length === 0) {
           throw new Error('No tenants found — cannot save global menu config');
@@ -327,12 +347,13 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    if (scope === 'global' || !tenantId) {
-      cache.invalidateByPrefix('menu-visibility:');
+    // Shared cache invalidation (same rationale as PUT above).
+    if (isGlobal) {
+      await sharedCacheDeleteByPrefix('menu-visibility:');
     } else {
-      cache.invalidate(`menu-visibility:${tenantId}`);
+      await sharedCacheDelete(`menu-visibility:${tenantId}`);
     }
-    return NextResponse.json({ success: true, updated: items.length, scope: scope === 'global' || !tenantId ? 'global' : 'tenant' });
+    return NextResponse.json({ success: true, updated: items.length, scope: isGlobal ? 'global' : 'tenant' });
   } catch (error) {
     console.error('[SuperAdmin Menu Items POST] Error:', error);
     const message = error instanceof Error ? error.message : 'Failed to save menu items';
