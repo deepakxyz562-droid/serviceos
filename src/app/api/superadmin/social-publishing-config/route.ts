@@ -266,31 +266,48 @@ export async function GET(request: NextRequest) {
     orderBy: { provider: 'asc' },
   });
 
-  // 2. Count connected tenants per platform — distinct tenantId values
-  //    on SocialAccount where platform matches. (A tenant with 3 FB
-  //    pages counts as ONE connected tenant.)
-  const tenantCounts = await db.socialAccount.groupBy({
-    by: ['platform'],
-    _count: { _all: true },
-    // DISTINCT tenantId is approximated here — Prisma's groupBy doesn't
-    // support DISTINCT inside _count. We do a separate per-platform
-    // distinct-tenantId query below for the exact count.
-  });
-
-  // 3. For each platform, run a distinct-tenantId count (5 small queries).
+  // 2. Load ALL SocialAccount rows (just platform + tenantId) in ONE query,
+  //    then dedupe in-memory. Previously this used groupBy + N per-platform
+  //    distinct findMany queries — but groupBy THROWS when the SocialAccount
+  //    table doesn't exist in Supabase yet (the 7-engine tables haven't been
+  //    migrated), causing the entire endpoint to return HTTP 500.
+  //
+  //    Now: a single findMany, wrapped in try/catch so a missing table
+  //    degrades gracefully to zero counts instead of crashing the page.
   const connectedTenants: Record<string, number> = {};
-  await Promise.all(
-    SOCIAL_PUBLISHING_PLATFORMS.map(async (p) => {
-      const tenants = await db.socialAccount.findMany({
-        where: { platform: p.key },
-        select: { tenantId: true },
-        distinct: ['tenantId'],
-      });
-      connectedTenants[p.key] = tenants.length;
-    }),
-  );
+  const totalAccounts: Record<string, number> = {};
+  try {
+    const accounts = await db.socialAccount.findMany({
+      select: { platform: true, tenantId: true },
+    });
+    // Distinct (tenantId, platform) → count of unique tenants per platform.
+    const tenantsPerPlatform = new Map<string, Set<string>>();
+    for (const a of accounts) {
+      const platform = String(a.platform ?? '');
+      const tenantId = String(a.tenantId ?? '');
+      if (!platform || !tenantId) continue;
+      if (!tenantsPerPlatform.has(platform)) {
+        tenantsPerPlatform.set(platform, new Set());
+      }
+      tenantsPerPlatform.get(platform)!.add(tenantId);
+      totalAccounts[platform] = (totalAccounts[platform] || 0) + 1;
+    }
+    for (const [platform, tenants] of tenantsPerPlatform) {
+      connectedTenants[platform] = tenants.size;
+    }
+  } catch (err) {
+    // The SocialAccount table may not exist in Supabase yet (migration
+    // supabase-migration-social-publishing.sql not run). Degrade to zeros
+    // so the config page still loads — the superadmin can still register
+    // OAuth credentials; they just see 0 connected tenants until the
+    // migration is applied and tenants actually connect accounts.
+    console.warn(
+      '[social-publishing-config] Could not load SocialAccount counts (table may not exist yet):',
+      err instanceof Error ? err.message : err,
+    );
+  }
 
-  // 4. Assemble the response.
+  // 3. Assemble the response.
   const platforms = SOCIAL_PUBLISHING_PLATFORMS.map((def) => {
     const row = rows.find((r) => r.provider === def.key);
     const flags = parseFeatureFlags(row?.additionalConfigJson);
@@ -314,7 +331,7 @@ export async function GET(request: NextRequest) {
       scopesStored: row?.scopes || def.scopes.join(def.key === 'linkedin' || def.key === 'twitter' ? ' ' : ','),
       flags,
       connectedTenants: connectedTenants[def.key] || 0,
-      totalAccounts: tenantCounts.find((t) => t.platform === def.key)?._count._all || 0,
+      totalAccounts: totalAccounts[def.key] || 0,
       updatedAt: row?.updatedAt?.toISOString() || null,
     };
   });

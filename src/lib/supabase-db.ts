@@ -1131,7 +1131,7 @@ class SupabaseModel {
       return [];
     }
 
-    const { where, include, orderBy, skip, take, select } = options;
+    const { where, include, orderBy, skip, take, select, distinct } = options;
 
     // Build select string: use specific columns if `select` is provided,
     // otherwise '*'. This mirrors findFirst/findUnique behavior and keeps
@@ -1170,6 +1170,24 @@ class SupabaseModel {
     }
 
     let results = (data || []) as Record<string, unknown>[];
+
+    // Apply `distinct` — dedupe in JS by building a composite key from the
+    // specified columns. PostgREST has no native SELECT DISTINCT for
+    // arbitrary column sets; its `on()` header only works with range
+    // pagination. Prisma's `distinct: ['col']` returns the FIRST row for
+    // each unique combination of the listed columns, which is exactly
+    // what this filter does (results are already in query order, so the
+    // first occurrence wins). This enables e.g. "distinct tenantId per
+    // platform" without a separate groupBy call.
+    if (distinct && distinct.length > 0 && results.length > 1) {
+      const seen = new Set<string>();
+      results = results.filter((row) => {
+        const key = distinct.map((col) => String(row[col] ?? '\u0000')).join('\u0001');
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
 
     // Resolve includes with separate queries
     if (include) {

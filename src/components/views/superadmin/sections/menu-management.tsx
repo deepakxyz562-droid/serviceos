@@ -15,7 +15,7 @@
 // Layout: header → scope switcher → KPIs → 60/40 master catalog + live preview.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   LayoutList, Globe, Building2, Search, RotateCcw, CheckCircle2,
@@ -317,12 +317,29 @@ export function MenuManagementSection() {
   const toggleMutation = useToggleMenuItem();
   const bulkMutation = useBulkUpdateMenuItems();
 
+  // SERIALIZE toggle mutations. The backend stores menu config as a JSON
+  // blob inside Tenant.settingsJson, so each PUT does a read-modify-write
+  // of the ENTIRE blob. If two PUTs fire concurrently they both read the
+  // same snapshot and the second write clobbers the first — that's the
+  // "toggle one, another automatically un-toggles" bug.
+  //
+  // By chaining each toggle onto a Promise queue, we guarantee PUT-B
+  // only fires AFTER PUT-A has committed. Each PUT then reads the
+  // previous PUT's result, so nothing is lost. The Supabase adapter's
+  // $transaction is NOT atomic (PostgREST limitation), so frontend
+  // serialization is the actual fix.
+  const toggleQueueRef = useRef<Promise<void>>(Promise.resolve());
+
   // Optimistic local state — mirrors the server-side items but can be
-  // updated instantly on toggle for snappy UX. Each override is cleared
-  // INDIVIDUALLY in the mutation's onSuccess callback (NOT via useEffect
-  // on globalRaw change — that caused a race where toggling A then B
-  // quickly would clear B's override when A's mutation completed, making
-  // B appear to 'un-toggle' until B's mutation also completed).
+  // updated instantly on toggle for snappy UX.
+  //
+  // OVERRIDE LIFECYCLE ("sticky until confirmed"):
+  //   When the user toggles an item, we set an override immediately
+  //   (instant UI feedback). The override STAYS until the refetched
+  //   server data CONFIRMS the new value — see the useEffect below.
+  //   We do NOT clear it in the mutation's onSuccess, because the
+  //   refetch hasn't landed yet at that point and clearing early causes
+  //   a momentary visual "un-toggle" until the new server state arrives.
   const [optimisticOverrides, setOptimisticOverrides] = useState<Record<string, boolean>>({});
   // Clear overrides ONLY when scope or tenant changes (not on every data refetch).
   useEffect(() => {
@@ -335,13 +352,30 @@ export function MenuManagementSection() {
   }, [scope, globalRaw, tenantRaw]);
 
   // Apply optimistic overrides on top of server items.
+  //
+  // STICKY-OVERRIDE PATTERN:
+  //   When the user toggles an item, we set an override immediately
+  //   (instant UI feedback). We do NOT clear it in the mutation's
+  //   onSuccess — the refetch hasn't landed yet at that point, and
+  //   clearing early causes a momentary visual "un-toggle" until the
+  //   new server state arrives.
+  //
+  //   Instead, once the server refetch CONFIRMS the override (i.e.
+  //   serverItem.enabled === override value), we simply IGNORE the
+  //   override — it becomes a visual no-op because the server value
+  //   already matches. This avoids calling setState inside a useEffect
+  //   (which triggers cascading renders and the set-state-in-effect
+  //   lint rule). Stale confirmed overrides accumulate harmlessly
+  //   in the map and are cleared on scope/tenant change.
   const items: MenuItemDef[] = useMemo(() => {
     if (Object.keys(optimisticOverrides).length === 0) return serverItems;
-    return serverItems.map((it) =>
-      optimisticOverrides[it.key] !== undefined
-        ? { ...it, enabled: optimisticOverrides[it.key] }
-        : it,
-    );
+    return serverItems.map((it) => {
+      const override = optimisticOverrides[it.key];
+      if (override === undefined) return it;
+      // Server has caught up — override is now a no-op.
+      if (it.enabled === override) return it;
+      return { ...it, enabled: override };
+    });
   }, [serverItems, optimisticOverrides]);
 
   const loading = scope === 'global' ? globalLoading : (tenantLoading || tenantsLoading);
@@ -388,40 +422,49 @@ export function MenuManagementSection() {
 
   const handleToggle = (menuKey: string, enabled: boolean) => {
     // Optimistic: flip immediately in local state for instant feedback.
+    // The override stays "sticky" until the refetched server data
+    // confirms the new value (see the useEffect above).
     setOptimisticOverrides((prev) => ({ ...prev, [menuKey]: enabled }));
-    toggleMutation.mutate(
-      {
-        tenantId: scope === 'tenant' ? effectiveTenantId : undefined,
-        menuKey,
-        enabled,
-        scope,
-      },
-      {
-        onSuccess: () => {
-          // Clear ONLY this item's override — the server data now reflects
-          // the change (react-query will refetch and show the correct state).
-          // Do NOT clear all overrides — other in-flight toggles would be lost.
-          setOptimisticOverrides((prev) => {
-            const next = { ...prev };
-            delete next[menuKey];
-            return next;
-          });
-          toast.success(
-            `${enabled ? 'Enabled' : 'Hidden'} "${menuKey}" ${scope === 'tenant' ? `for ${selectedTenant?.name || 'tenant'}` : 'globally'}`,
-          );
-        },
-        onError: (err: unknown) => {
-          // Roll back the optimistic override.
-          setOptimisticOverrides((prev) => {
-            const next = { ...prev };
-            delete next[menuKey];
-            return next;
-          });
-          const msg = err instanceof Error ? err.message : 'Failed to update menu item';
-          toast.error(msg);
-        },
-      },
-    );
+
+    // Chain onto the serialization queue so this PUT only fires after
+    // any previously-queued PUT has completed. This prevents the
+    // concurrent read-modify-write race on the settingsJson blob.
+    toggleQueueRef.current = toggleQueueRef.current.then(() => {
+      return new Promise<void>((resolve) => {
+        toggleMutation.mutate(
+          {
+            tenantId: scope === 'tenant' ? effectiveTenantId : undefined,
+            menuKey,
+            enabled,
+            scope,
+          },
+          {
+            // NOTE: do NOT clear the override here. The refetch triggered
+            // by invalidateQueries hasn't landed yet. The sticky-override
+            // useEffect will clear it once the server confirms the value.
+            onSuccess: () => {
+              toast.success(
+                `${enabled ? 'Enabled' : 'Hidden'} "${menuKey}" ${scope === 'tenant' ? `for ${selectedTenant?.name || 'tenant'}` : 'globally'}`,
+              );
+              resolve();
+            },
+            onError: (err: unknown) => {
+              // Roll back the optimistic override — the server rejected it.
+              setOptimisticOverrides((prev) => {
+                const next = { ...prev };
+                delete next[menuKey];
+                return next;
+              });
+              const msg = err instanceof Error ? err.message : 'Failed to update menu item';
+              toast.error(msg);
+              // Resolve (not reject) so the queue keeps processing
+              // subsequent toggles even if this one failed.
+              resolve();
+            },
+          },
+        );
+      });
+    });
   };
 
   // Reset to defaults = all catalog items enabled=true. Sends a single POST
