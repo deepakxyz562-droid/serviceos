@@ -15,7 +15,7 @@
 // Layout: header → scope switcher → KPIs → 60/40 master catalog + live preview.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   LayoutList, Globe, Building2, Search, RotateCcw, CheckCircle2,
@@ -24,7 +24,7 @@ import {
 
 import { cn } from '@/lib/utils';
 import {
-  useTenants, useMenuItems, useGlobalMenuItems, useToggleMenuItem,
+  useTenants, useMenuItems, useGlobalMenuItems, useToggleMenuItem, useBulkUpdateMenuItems,
 } from '@/hooks/queries/use-supabase-queries';
 import {
   SectionHeader, DemoDataPill, KpiCard, EmptyState,
@@ -315,13 +315,33 @@ export function MenuManagementSection() {
     scope === 'tenant' ? effectiveTenantId || undefined : undefined,
   );
   const toggleMutation = useToggleMenuItem();
+  const bulkMutation = useBulkUpdateMenuItems();
 
-  const items: MenuItemDef[] = useMemo(() => {
+  // Optimistic local state — mirrors the server-side items but can be
+  // updated instantly on toggle for snappy UX. Reset whenever the server
+  // data changes (globalRaw / tenantRaw).
+  const [optimisticOverrides, setOptimisticOverrides] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    setOptimisticOverrides({});
+  }, [globalRaw, tenantRaw, scope, effectiveTenantId]);
+
+  const serverItems: MenuItemDef[] = useMemo(() => {
     if (scope === 'global') return toMenuItems(globalRaw, 'global');
     return toMenuItems(tenantRaw, 'tenant');
   }, [scope, globalRaw, tenantRaw]);
 
+  // Apply optimistic overrides on top of server items.
+  const items: MenuItemDef[] = useMemo(() => {
+    if (Object.keys(optimisticOverrides).length === 0) return serverItems;
+    return serverItems.map((it) =>
+      optimisticOverrides[it.key] !== undefined
+        ? { ...it, enabled: optimisticOverrides[it.key] }
+        : it,
+    );
+  }, [serverItems, optimisticOverrides]);
+
   const loading = scope === 'global' ? globalLoading : (tenantLoading || tenantsLoading);
+  const anyMutationPending = toggleMutation.isPending || bulkMutation.isPending;
 
   // Filtered + grouped view of the catalog for the master list.
   const filtered = useMemo(() => {
@@ -363,6 +383,8 @@ export function MenuManagementSection() {
   // ─── Actions ──────────────────────────────────────────────────────────────
 
   const handleToggle = (menuKey: string, enabled: boolean) => {
+    // Optimistic: flip immediately in local state for instant feedback.
+    setOptimisticOverrides((prev) => ({ ...prev, [menuKey]: enabled }));
     toggleMutation.mutate(
       {
         tenantId: scope === 'tenant' ? effectiveTenantId : undefined,
@@ -377,6 +399,12 @@ export function MenuManagementSection() {
           );
         },
         onError: (err: unknown) => {
+          // Roll back the optimistic override.
+          setOptimisticOverrides((prev) => {
+            const next = { ...prev };
+            delete next[menuKey];
+            return next;
+          });
           const msg = err instanceof Error ? err.message : 'Failed to update menu item';
           toast.error(msg);
         },
@@ -384,31 +412,86 @@ export function MenuManagementSection() {
     );
   };
 
+  // Reset to defaults = all catalog items enabled=true. Sends a single POST
+  // with the full items array (NOT N concurrent PUTs).
   const handleReset = () => {
-    toast.info('Reset to defaults — bulk reset is wired to POST /api/superadmin/menu-items');
-    // The API already supports POST with the full items array; for now we
-    // surface a confirmation toast so the action is discoverable. A bulk
-    // reset would call the POST endpoint with all defaults enabled=true.
+    const payload = DEFAULT_CATALOG.map((it) => ({ key: it.key, enabled: true }));
+    // Optimistic: set all to enabled.
+    const optimistic: Record<string, boolean> = {};
+    DEFAULT_CATALOG.forEach((it) => { optimistic[it.key] = true; });
+    setOptimisticOverrides(optimistic);
+    bulkMutation.mutate(
+      {
+        tenantId: scope === 'tenant' ? effectiveTenantId : undefined,
+        scope,
+        items: payload,
+      },
+      {
+        onSuccess: () => toast.success('Reset to defaults — all items enabled'),
+        onError: (err: unknown) => {
+          setOptimisticOverrides({});
+          toast.error(err instanceof Error ? err.message : 'Failed to reset');
+        },
+      },
+    );
   };
 
+  // Enable all — single POST with the full items array.
   const handleEnableAll = () => {
-    const disabled = items.filter((i) => !i.enabled).map((i) => i.key);
+    const disabled = items.filter((i) => !i.enabled);
     if (disabled.length === 0) {
       toast.info('All items are already enabled');
       return;
     }
+    // Optimistic: flip the disabled ones to enabled.
+    setOptimisticOverrides((prev) => {
+      const next = { ...prev };
+      disabled.forEach((it) => { next[it.key] = true; });
+      return next;
+    });
     toast.success(`Enabling ${disabled.length} item${disabled.length === 1 ? '' : 's'}…`);
-    disabled.forEach((key) => handleToggle(key, true));
+    bulkMutation.mutate(
+      {
+        tenantId: scope === 'tenant' ? effectiveTenantId : undefined,
+        scope,
+        items: items.map((i) => ({ key: i.key, enabled: true })),
+      },
+      {
+        onError: (err: unknown) => {
+          setOptimisticOverrides({});
+          toast.error(err instanceof Error ? err.message : 'Failed to enable all');
+        },
+      },
+    );
   };
 
+  // Hide all — single POST with the full items array.
   const handleDisableAll = () => {
-    const enabled = items.filter((i) => i.enabled).map((i) => i.key);
+    const enabled = items.filter((i) => i.enabled);
     if (enabled.length === 0) {
       toast.info('All items are already hidden');
       return;
     }
+    // Optimistic: flip the enabled ones to disabled.
+    setOptimisticOverrides((prev) => {
+      const next = { ...prev };
+      enabled.forEach((it) => { next[it.key] = false; });
+      return next;
+    });
     toast.success(`Hiding ${enabled.length} item${enabled.length === 1 ? '' : 's'}…`);
-    enabled.forEach((key) => handleToggle(key, false));
+    bulkMutation.mutate(
+      {
+        tenantId: scope === 'tenant' ? effectiveTenantId : undefined,
+        scope,
+        items: items.map((i) => ({ key: i.key, enabled: false })),
+      },
+      {
+        onError: (err: unknown) => {
+          setOptimisticOverrides({});
+          toast.error(err instanceof Error ? err.message : 'Failed to hide all');
+        },
+      },
+    );
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -421,7 +504,7 @@ export function MenuManagementSection() {
         icon={LayoutList}
         actions={
           <>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleReset}>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleReset} disabled={anyMutationPending}>
               <RotateCcw className="size-3.5" />
               Reset to defaults
             </Button>
@@ -524,11 +607,11 @@ export function MenuManagementSection() {
                       aria-label="Filter menu items"
                     />
                   </div>
-                  <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleEnableAll} disabled={loading}>
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleEnableAll} disabled={loading || anyMutationPending}>
                     <Eye className="size-3.5" />
                     Enable all
                   </Button>
-                  <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleDisableAll} disabled={loading}>
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleDisableAll} disabled={loading || anyMutationPending}>
                     <EyeOff className="size-3.5" />
                     Hide all
                   </Button>
@@ -575,7 +658,7 @@ export function MenuManagementSection() {
                               key={item.id || item.key}
                               item={item}
                               onToggle={handleToggle}
-                              disabled={toggleMutation.isPending}
+                              disabled={anyMutationPending}
                             />
                           ))}
                         </div>

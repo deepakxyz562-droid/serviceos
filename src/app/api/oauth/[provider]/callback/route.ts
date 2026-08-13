@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { OAUTH_PROVIDERS } from '@/lib/channel-meta'
+import { OAUTH_PROVIDERS, SOCIAL_PUBLISHING_PLATFORMS } from '@/lib/channel-meta'
 
 /**
  * GET /api/oauth/{provider}/callback
@@ -11,12 +11,25 @@ import { OAUTH_PROVIDERS } from '@/lib/channel-meta'
  *
  * State contains the tenantId + userId we set in /connect — we verify it to
  * prevent CSRF.
+ *
+ * SOCIAL-PUBLISHING PLATFORMS (linkedin, pinterest, twitter):
+ *   These have dedicated callback handlers at /api/oauth/{provider}/callback/route.ts
+ *   (NOT this generic route) because they store tokens into the SocialAccount
+ *   table for social publishing. We 302-redirect to the dedicated handler so
+ *   the existing UI's `/api/oauth/{provider}/callback` URL keeps working.
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ provider: string }> },
 ) {
   const { provider } = await params
+
+  // Social-publishing platforms delegate to their dedicated callback handler.
+  if (SOCIAL_PUBLISHING_PLATFORMS.has(provider)) {
+    const url = new URL(`/api/oauth/${provider}/callback`, request.url)
+    request.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v))
+    return NextResponse.redirect(url.toString())
+  }
 
   if (!OAUTH_PROVIDERS[provider]) {
     return renderErrorPage(`Unknown provider: ${provider}`)

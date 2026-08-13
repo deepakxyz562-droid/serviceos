@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
+import { getBrandContext } from '@/lib/brand-context'
 
 /**
  * POST /api/ai/template-generator
@@ -42,8 +43,13 @@ export async function POST(request: NextRequest) {
         ? `You are a professional email copywriter for service businesses. Generate a complete email template based on the user's request. Use {{variable}} merge tags (e.g. {{customer.name}}, {{company.name}}, {{invoice.number}}, {{booking.date}}) for dynamic values — never use placeholder names like "John". Return ONLY valid JSON with this shape: {"subject": "...", "htmlBody": "<p>...</p>", "variables": [{"key":"customer.name","label":"Customer Name","example":"John Smith"}]}. The htmlBody should be clean, professional HTML with <p>, <strong>, <a> tags. Keep it concise (3-4 short paragraphs max).${toneInstruction}`
         : `You are a professional WhatsApp message copywriter for service businesses. Generate a complete WhatsApp template based on the user's request. Use {{variable}} merge tags (e.g. {{customer.name}}, {{company.name}}, {{booking.date}}) for dynamic values — never use placeholder names. WhatsApp messages should be concise (max 1024 chars), conversational, and may include 1-2 emojis. Return ONLY valid JSON with this shape: {"headerText": "...", "content": "...", "footerText": "...", "buttons": [{"type":"quick_reply","text":"..."}], "variables": [{"key":"customer.name","label":"Customer Name","example":"John Smith"}]}. Button types: quick_reply, call, website, copy_coupon. Max 2 buttons.${toneInstruction}`
 
+    // Prepend the tenant's brand context (Brand Brain — Engine 4) as the
+    // first system message so the generated template is on-brand.
+    const brandContext = await getBrandContext(user.tenantId)
+
     const completion = await zai.chat.completions.create({
       messages: [
+        { role: 'system', content: brandContext },
         { role: 'assistant', content: systemPrompt },
         { role: 'user', content: prompt },
       ],

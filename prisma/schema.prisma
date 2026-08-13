@@ -217,6 +217,11 @@ model Tenant {
   claimRequests       ClaimRequest[]
   // Customers (tenant-scoped — mirrors Lead/Job/Invoice tenant scoping)
   customers           Customer[]
+  // Brand Brain — AI content context (brand voice, persona, USPs)
+  brandProfile        BrandProfile?
+  // Social Publishing — connected accounts + scheduled/published posts
+  socialAccounts      SocialAccount[]
+  socialPosts         SocialPost[]
 
   @@index([slug])
   @@index([plan])
@@ -6057,4 +6062,145 @@ model FeaturedLocation {
   location        DirectoryLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
 
   @@index([selectedAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Brand Brain — Engine 4
+// Captures the tenant's brand identity (voice, persona, audience, USPs) so
+// every AI-generated post/email/SMS is on-brand. One-to-one with Tenant.
+// ─────────────────────────────────────────────────────────────────────────────
+model BrandProfile {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+
+  // Identity
+  businessName    String
+  industry        String
+  website         String?
+  location        String?
+  serviceArea     String?
+
+  // Target audience
+  targetCustomer  String?
+  customerPainPoints String?
+
+  // Brand voice
+  tone            String?
+  voiceDescription String?
+  forbiddenPhrases String?  // JSON array of strings
+  defaultCta      String?
+
+  // Offering
+  services        String?  // JSON array
+  products        String?  // JSON array
+  usps            String?
+  currentOffers   String?
+
+  // Competitive
+  competitors     String?  // JSON array of URLs
+
+  // AI-generated synthesis (cached summary the AI uses as system prompt)
+  aiGeneratedSummary String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Social Publishing — Engine 1
+// SocialAccount = an OAuth-connected platform account (FB Page, IG Business,
+// GBP location, LinkedIn profile/page, Pinterest account, X account).
+// SocialPost = a post (draft/scheduled/published/failed) targeting one or
+// more SocialAccounts. publishTargets JSON stores per-platform results.
+// ─────────────────────────────────────────────────────────────────────────────
+model SocialAccount {
+  id              String   @id @default(cuid())
+  tenantId        String
+  platform        String   // "facebook" | "instagram" | "googlebusiness" | "linkedin" | "pinterest" | "twitter"
+  accountId       String   // platform-specific ID (FB page ID, IG business ID, etc.)
+  accountName     String   // display name
+  accessToken     String   // encrypted (AES-256-GCM via existing crypto helpers)
+  refreshToken    String?  // for platforms that support refresh (Google, LinkedIn, X)
+  tokenExpiry     DateTime?
+  scopes          String
+  metadata        String?  // JSON: platform-specific (pageId, igBusinessId, locationId, boardIds, urn, handle)
+  connectedById   String
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // NOTE: SocialPost → SocialAccount is NOT a direct FK. A single SocialPost
+  // can publish to multiple SocialAccounts (e.g. FB + IG + LinkedIn in one
+  // post). The per-account publish results are stored in SocialPost.publishTargets
+  // as a JSON array. This avoids a join table and keeps the publish flow simple.
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, platform, accountId])
+  @@index([tenantId, platform])
+  @@index([tenantId, isActive])
+}
+
+model SocialPost {
+  id              String   @id @default(cuid())
+  tenantId        String
+  status          String   @default("draft") // "draft" | "scheduled" | "publishing" | "published" | "failed" | "partial"
+  content         String   // caption/text
+  mediaUrls       String   @default("[]") // JSON array of image URLs
+  linkUrl         String?
+
+  // Per-platform publish results — JSON array of:
+  // { platform, socialAccountId, externalPostId, status, error, publishedAt }
+  publishTargets  String   @default("[]")
+
+  scheduledAt     DateTime?
+  publishedAt     DateTime?
+  failureReason   String?
+
+  // Platform-specific options
+  gbpPostType     String?  // "offer" | "event" | "whats_new" | "product"
+  gbpOfferData    String?  // JSON: { title, startDate, endDate, couponCode }
+  pinterestBoard  String?  // board ID
+
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  metrics         SocialPostMetric[]
+
+  @@index([tenantId, status])
+  @@index([scheduledAt])
+  @@index([tenantId, createdAt])
+}
+
+// Normalized metrics across platforms. One row per (post, platform, fetch).
+// Enables the Engagement Dashboard to show unified analytics.
+model SocialPostMetric {
+  id              String   @id @default(cuid())
+  tenantId        String
+  socialPostId    String
+  platform        String
+
+  // Normalized metrics — every platform maps into these common fields.
+  likes           Int      @default(0)  // likes OR saves (Pinterest)
+  comments        Int      @default(0)  // comments OR replies (X)
+  shares          Int      @default(0)  // shares OR retweets OR repins
+  impressions     Int      @default(0)  // total views
+  reach           Int      @default(0)  // unique viewers (if available)
+  clicks          Int      @default(0)  // link clicks (if available)
+
+  // Platform-specific extras (JSON): e.g. { reactions: {love: 12}, calls: 5, directionRequests: 2 }
+  extraMetrics    String?
+
+  fetchedAt       DateTime @default(now())
+
+  socialPost      SocialPost @relation(fields: [socialPostId], references: [id], onDelete: Cascade)
+
+  @@unique([socialPostId, platform, fetchedAt])
+  @@index([tenantId, platform])
+  @@index([socialPostId])
 }

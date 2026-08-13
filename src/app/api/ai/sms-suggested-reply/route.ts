@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { callOpenRouter, extractJson } from '@/lib/ai-client'
+import { getBrandContext } from '@/lib/brand-context'
 
 /**
  * AI Suggested Reply for SMS conversations (InboxView → SMS channel).
@@ -159,13 +160,21 @@ export async function POST(request: NextRequest) {
     // Note: SMS replies should be SHORT (160 chars per segment) and
     // action-oriented. We ask for 3 tones matching the task spec:
     // friendly, professional, urgent.
+    //
+    // Brand Brain (Engine 4): prepend the tenant's brand context so the
+    // suggested replies match their voice/CTA/forbidden phrases. The
+    // context is non-fatal — if it returns a generic fallback the route
+    // still works.
+    const brandContext = await getBrandContext(user.tenantId)
+
     const system =
       'You are an AI assistant helping a field-service agent reply to a customer SMS. ' +
       'Read the conversation history and suggest 3 short reply options with different tones: ' +
       'friendly, professional, urgent. ' +
       'Each reply MUST be under 300 characters (SMS-friendly), directly address the customer\'s ' +
       'last message, and be ready to send as-is (no placeholders, no quotes, no explanations). ' +
-      'Output ONLY a valid JSON object: `{"replies": [{"text": "...", "tone": "friendly"|"professional"|"urgent"}]}`'
+      'Output ONLY a valid JSON object: `{"replies": [{"text": "...", "tone": "friendly"|"professional"|"urgent"}]}`\n\n' +
+      'BRAND CONTEXT (stay on-brand):\n' + brandContext
 
     const userPrompt = contextLine
       ? `${contextLine}\n\nConversation:\n${conversationText}`

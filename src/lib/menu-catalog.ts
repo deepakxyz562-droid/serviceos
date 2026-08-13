@@ -111,6 +111,7 @@ export const MENU_CATALOG: MenuCatalogItem[] = [
 
   // ─── Setup & Admin ───────────────────────────────────────────────────
   { key: 'settings', label: 'Settings', icon: 'Settings', section: 'Setup & Admin', sortOrder: 70 },
+  { key: 'brandBrain', label: 'Brand Brain', icon: 'Brain', section: 'Setup & Admin', sortOrder: 70.5 },
   { key: 'integrations', label: 'Integrations', icon: 'Plug', section: 'Setup & Admin', sortOrder: 71 },
   { key: 'channels', label: 'Channels & Credentials', icon: 'RadioTower', section: 'Setup & Admin', sortOrder: 72 },
   { key: 'credentials', label: 'Credentials', icon: 'KeyRound', section: 'Setup & Admin', sortOrder: 73 },
@@ -124,6 +125,15 @@ export const MENU_CATALOG: MenuCatalogItem[] = [
   { key: 'helpAdminKB', label: 'Knowledge Base', icon: 'BookOpen', section: 'Setup & Admin', sortOrder: 81 },
   { key: 'helpAdminCategories', label: 'Categories', icon: 'FolderTree', section: 'Setup & Admin', sortOrder: 82 },
   { key: 'helpAdminAnnouncements', label: 'Announcements', icon: 'Megaphone', section: 'Setup & Admin', sortOrder: 83 },
+
+  // ─── Content ─────────────────────────────────────────────────────────
+  // Social Publishing (Engine 1) — unified multi-platform publishing
+  // infrastructure. The 6 platform adapters (FB, IG, GBP, LinkedIn,
+  // Pinterest, X) plug into a shared publisher orchestrator.
+  { key: 'socialAccounts', label: 'Social Accounts', icon: 'Plug', section: 'Content', sortOrder: 90 },
+  { key: 'postComposer', label: 'Create Post', icon: 'PenSquare', section: 'Content', sortOrder: 91, minPlan: 'growth', upgradeDescription: 'Compose and publish posts to Facebook, Instagram, LinkedIn, Pinterest, X, and Google Business from one place.' },
+  { key: 'postsList', label: 'Posts', icon: 'FileText', section: 'Content', sortOrder: 92, minPlan: 'growth', upgradeDescription: 'View, schedule, and manage all your social posts across platforms.' },
+  { key: 'socialAnalytics', label: 'Social Analytics', icon: 'BarChart3', section: 'Content', sortOrder: 93, minPlan: 'growth', upgradeDescription: 'Unified engagement metrics across all your social platforms.' },
 ];
 
 /**

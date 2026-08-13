@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
-import { OAUTH_PROVIDERS } from '@/lib/channel-meta'
+import { OAUTH_PROVIDERS, SOCIAL_PUBLISHING_PLATFORMS } from '@/lib/channel-meta'
 
 /**
  * GET /api/oauth/{provider}/connect
@@ -12,12 +12,27 @@ import { OAUTH_PROVIDERS } from '@/lib/channel-meta'
  *
  * After consent, the provider redirects back to /api/oauth/{provider}/callback
  * with a `code` query param, which is exchanged for an access token.
+ *
+ * SOCIAL-PUBLISHING PLATFORMS (linkedin, pinterest, twitter):
+ *   These have dedicated OAuth handlers at /api/oauth/{provider}/route.ts
+ *   (NOT this generic route) because they store tokens into the SocialAccount
+ *   table for social publishing instead of CommunicationProvider for
+ *   omnichannel messaging. We 302-redirect to the dedicated handler so the
+ *   existing UI's `/api/oauth/{provider}/connect` URL keeps working.
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ provider: string }> },
 ) {
   const { provider } = await params
+
+  // Social-publishing platforms delegate to their dedicated OAuth handler.
+  if (SOCIAL_PUBLISHING_PLATFORMS.has(provider)) {
+    const url = new URL(`/api/oauth/${provider}`, request.url)
+    // Preserve any query params (none currently, but be safe).
+    request.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v))
+    return NextResponse.redirect(url.toString())
+  }
 
   if (!OAUTH_PROVIDERS[provider]) {
     return NextResponse.json({ error: `Unknown OAuth provider: ${provider}` }, { status: 400 })

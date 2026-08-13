@@ -93,6 +93,7 @@ const SystemHealthSection = lazy(() => import('@/components/views/superadmin/sec
 const MenuManagementSection = lazy(() => import('@/components/views/superadmin/sections/menu-management').then(m => ({ default: m.MenuManagementSection })));
 const DirectoryListingsSection = lazy(() => import('@/components/views/superadmin/sections/directory-listings').then(m => ({ default: m.DirectoryListingsSection })));
 const BackupSection = lazy(() => import('@/components/views/superadmin/sections/backup').then(m => ({ default: m.BackupSection })));
+const SocialPublishingConfigSection = lazy(() => import('@/components/views/superadmin/sections/social-publishing-config').then(m => ({ default: m.SocialPublishingConfigSection })));
 
 // Lightweight Suspense fallback for lazy-loaded sections.
 function SectionLoader() {
@@ -367,7 +368,9 @@ type TabKey =
   | 'support-center' | 'knowledge-base' | 'announcements'
   // SYSTEM
   | 'feature-flags' | 'localization' | 'storage' | 'infrastructure' | 'system-health'
-  | 'backup';
+  | 'backup'
+  // SOCIAL PUBLISHING
+  | 'social-publishing-config';
 
 interface NavGroup {
   label: string;
@@ -401,6 +404,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'integrations', label: 'Integrations', icon: Plug },
       { key: 'ai-center', label: 'AI Center', icon: Sparkles },
       { key: 'menu-management', label: 'Menu Management', icon: LayoutList },
+      { key: 'social-publishing-config', label: 'Social Publishing', icon: Megaphone },
     ],
   },
   {
@@ -2836,6 +2840,7 @@ export function SuperAdminView() {
         {activeTab === 'infrastructure' && <InfrastructureSection />}
         {activeTab === 'system-health' && <SystemHealthSection />}
         {activeTab === 'backup' && <BackupSection />}
+        {activeTab === 'social-publishing-config' && <SocialPublishingConfigSection />}
       </Suspense>
     );
   };

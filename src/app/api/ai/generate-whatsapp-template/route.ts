@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ZAI from 'z-ai-web-dev-sdk';
+import { getAuthUser } from '@/lib/auth';
+import { getBrandContext } from '@/lib/brand-context';
 
 // ─── AI WhatsApp Template Generator ──────────────────────────────────────
 // Generates professional WhatsApp message templates for lead notifications
@@ -38,6 +40,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Type must be "owner" or "customer"' }, { status: 400 });
     }
 
+    // Resolve the tenant's brand context (Brand Brain — Engine 4) so the
+    // generated template matches their voice/CTA/forbidden phrases. The
+    // auth call is non-fatal — if no session, we fall back to the generic
+    // brand context (still produces a usable template).
+    const authUser = await getAuthUser();
+    const brandContext = await getBrandContext(authUser?.tenantId);
+
     const zai = await ZAI.create();
 
     const systemPrompt = type === 'owner' ? OWNER_SYSTEM_PROMPT : CUSTOMER_SYSTEM_PROMPT;
@@ -47,6 +56,7 @@ export async function POST(request: NextRequest) {
 
     const completion = await zai.chat.completions.create({
       messages: [
+        { role: 'system', content: brandContext },
         { role: 'assistant', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],

@@ -476,6 +476,21 @@ export function useToggleMenuItem() {
   });
 }
 
+// Bulk update — single POST carrying the full [{key, enabled}] array.
+// Use this for "Enable all" / "Hide all" / "Reset" instead of N concurrent
+// PUTs (which caused a lost-update race: only a random subset persisted).
+export function useBulkUpdateMenuItems() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { tenantId?: string; scope: 'global' | 'tenant'; items: { key: string; enabled: boolean }[] }) =>
+      apiFetch('/api/superadmin/menu-items', { method: 'POST', body: JSON.stringify(data) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['menuItems'] });
+      qc.invalidateQueries({ queryKey: ['globalMenuItems'] });
+    },
+  });
+}
+
 export function useUsers() {
   return useQuery({
     queryKey: queryKeys.users(),

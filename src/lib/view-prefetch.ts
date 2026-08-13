@@ -68,6 +68,7 @@ export function prefetchView(viewId: string): void {
     case 'credentials': void import('@/components/views/credentials-view'); break;
     case 'integrations': void import('@/components/views/integrations-view'); break;
     case 'settings': void import('@/components/views/settings-view'); break;
+    case 'brandBrain': void import('@/components/views/tenant/brand-brain-view'); break;
     case 'auditLogs': void import('@/components/views/reports-view'); break;
     case 'activityLogs': void import('@/components/views/history-view'); break;
     case 'reports': void import('@/components/views/reports-view'); break;
@@ -118,6 +119,11 @@ export function prefetchView(viewId: string): void {
     // Help & Support
     case 'helpCenter': void import('@/components/views/help-center-view'); break;
     case 'helpAdminTickets': void import('@/components/views/help-admin-view'); break;
+    // Social Publishing (Engine 1)
+    case 'socialAccounts': void import('@/components/views/tenant/social-accounts-view'); break;
+    case 'postComposer': void import('@/components/views/tenant/post-composer-view'); break;
+    case 'postsList': void import('@/components/views/tenant/posts-list-view'); break;
+    case 'socialAnalytics': void import('@/components/views/tenant/social-analytics-view'); break;
     default: break;
   }
 }

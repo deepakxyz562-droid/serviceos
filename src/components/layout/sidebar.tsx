@@ -68,6 +68,8 @@ import {
   Store,
   CreditCard,
   Wrench as WrenchIcon,
+  Brain,
+  PenSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -191,11 +193,21 @@ const ownerNavSections: NavSection[] = [
     ],
   },
   {
+    title: 'Content',
+    items: [
+      { view: 'socialAccounts', label: 'Social Accounts', icon: Plug },
+      { view: 'postComposer', label: 'Create Post', icon: PenSquare },
+      { view: 'postsList', label: 'Posts', icon: FileText },
+      { view: 'socialAnalytics', label: 'Analytics', icon: BarChart3 },
+    ],
+  },
+  {
     title: 'Setup & Admin',
     collapsible: true,
     defaultCollapsed: true,
     items: [
       { view: 'settings', label: 'Settings', icon: Settings },
+      { view: 'brandBrain', label: 'Brand Brain', icon: Brain },
     ],
   },
 ];
@@ -335,6 +347,7 @@ const superadminNavSections: NavSection[] = [
     title: 'Setup & Admin',
     items: [
       { view: 'settings', label: 'Settings', icon: Settings },
+      { view: 'brandBrain', label: 'Brand Brain', icon: Brain },
       { view: 'helpAdminTickets', label: 'Support Tickets', icon: Ticket },
       { view: 'helpAdminKB', label: 'Knowledge Base', icon: BookOpen },
       { view: 'helpAdminCategories', label: 'Categories', icon: FolderTree },

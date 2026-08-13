@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { logActivity } from '@/lib/activity-log';
+import { getBrandContext } from '@/lib/brand-context';
 
 /**
  * AI Suggested Reply (Fieseros V1.5)
@@ -196,6 +197,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: errMsg }, { status: 503 });
     }
 
+    // Brand Brain (Engine 4): prepend the tenant's brand context so the
+    // suggested replies stay on-brand (tone, CTA, forbidden phrases).
+    const brandContext = await getBrandContext(tenantId);
+
     const systemPrompt =
       'You are a friendly, professional customer-support assistant for a field-service company. ' +
       'Given the latest customer message and any conversation context, draft THREE different reply ' +
@@ -205,7 +210,8 @@ export async function POST(request: NextRequest) {
       'The JSON shape MUST be exactly: ' +
       '{"replies": [{"text": string, "tone": "friendly"|"professional"|"concise"}, ...]}. ' +
       'Provide exactly 3 replies, one of each tone. Keep SMS/WhatsApp replies under 300 characters. ' +
-      'Address the customer by name when known. Never invent prices, dates, or commitments the agent hasn\'t approved.';
+      'Address the customer by name when known. Never invent prices, dates, or commitments the agent hasn\'t approved.\n\n' +
+      'BRAND CONTEXT (stay on-brand):\n' + brandContext;
 
     const recentMsgs = ctx?.messages?.slice(-8) ?? [];
     const userPrompt = `LATEST INBOUND CUSTOMER MESSAGE:

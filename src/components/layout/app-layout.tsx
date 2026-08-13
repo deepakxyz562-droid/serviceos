@@ -71,6 +71,7 @@ const ExpensesView = lazy(() => import('@/components/views/expenses-view').then(
 const CredentialsView = lazy(() => import('@/components/views/credentials-view').then(m => ({ default: m.CredentialsView })));
 const IntegrationsView = lazy(() => import('@/components/views/integrations-view').then(m => ({ default: m.IntegrationsView })));
 const SettingsView = lazy(() => import('@/components/views/settings-view').then(m => ({ default: m.SettingsView })));
+const BrandBrainView = lazy(() => import('@/components/views/tenant/brand-brain-view').then(m => ({ default: m.BrandBrainView })));
 const ReportsView = lazy(() => import('@/components/views/reports-view').then(m => ({ default: m.ReportsView })));
 const ActivityLogsView = lazy(() => import('@/components/views/activity-logs-view').then(m => ({ default: m.ActivityLogsView })));
 const HistoryView = lazy(() => import('@/components/views/history-view').then(m => ({ default: m.HistoryView })));
@@ -134,6 +135,12 @@ const SuperAdminView = lazy(() => import('@/components/views/superadmin-view').t
 // Help & Support Center
 const HelpCenterView = lazy(() => import('@/components/views/help-center-view').then(m => ({ default: m.HelpCenterView })));
 const HelpAdminView = lazy(() => import('@/components/views/help-admin-view').then(m => ({ default: m.HelpAdminView })));
+
+// Social Publishing (Engine 1) — unified multi-platform publishing infrastructure
+const SocialAccountsView = lazy(() => import('@/components/views/tenant/social-accounts-view').then(m => ({ default: m.SocialAccountsView })));
+const PostComposerView = lazy(() => import('@/components/views/tenant/post-composer-view').then(m => ({ default: m.PostComposerView })));
+const PostsListView = lazy(() => import('@/components/views/tenant/posts-list-view').then(m => ({ default: m.PostsListView })));
+const SocialAnalyticsView = lazy(() => import('@/components/views/tenant/social-analytics-view').then(m => ({ default: m.SocialAnalyticsView })));
 
 // ─── Smart marketplace dashboard wrapper ────────────────────────────────────
 // Picks the right dashboard based on the tenant's signupMode:
@@ -206,6 +213,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   credentials: CredentialsView,
   integrations: IntegrationsView,
   settings: SettingsView,
+  brandBrain: BrandBrainView,
   auditLogs: ReportsView,
   activityLogs: HistoryView,
   reports: ReportsView,
@@ -263,6 +271,11 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   helpAdminKB: HelpAdminView,
   helpAdminCategories: HelpAdminView,
   helpAdminAnnouncements: HelpAdminView,
+  // Social Publishing (Engine 1)
+  socialAccounts: SocialAccountsView,
+  postComposer: PostComposerView,
+  postsList: PostsListView,
+  socialAnalytics: SocialAnalyticsView,
 };
 
 // ─── Loading fallback ────────────────────────────────────────────────────────

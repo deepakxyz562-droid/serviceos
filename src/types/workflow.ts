@@ -178,7 +178,7 @@ export type ViewType =
   // Finance
   | 'quotes' | 'invoices' | 'billing' | 'expenses'
   // System
-  | 'credentials' | 'settings' | 'auditLogs' | 'activityLogs' | 'reports' | 'notifications'
+  | 'credentials' | 'settings' | 'auditLogs' | 'activityLogs' | 'reports' | 'notifications' | 'brandBrain'
   // Portals
   | 'customerPortal' | 'employeePortal'
   // Integrations
@@ -197,5 +197,7 @@ export type ViewType =
   | 'emailProviders' | 'emailTemplates' | 'channels'
   // Help & Support Center
   | 'helpCenter' | 'helpTicketDetail' | 'helpAdminTickets' | 'helpAdminTicketDetail' | 'helpAdminKB' | 'helpAdminCategories' | 'helpAdminAnnouncements'
+  // Social Publishing (Engine 1)
+  | 'socialAccounts' | 'postComposer' | 'postsList' | 'socialAnalytics'
   // Super Admin
   | 'superadmin';

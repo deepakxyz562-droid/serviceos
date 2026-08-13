@@ -239,6 +239,14 @@ export const OAUTH_PROVIDERS: Record<
     docsUrl: string
   }
 > = {
+  facebook: {
+    authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
+    tokenUrl: 'https://graph.facebook.com/v18.0/oauth/access_token',
+    scopes:
+      'pages_manage_posts,pages_read_engagement,pages_show_list,pages_read_user_content,instagram_content_publish',
+    displayName: 'Facebook Pages (Publishing)',
+    docsUrl: 'https://developers.facebook.com/docs/pages-api',
+  },
   whatsapp: {
     authUrl: 'https://www.facebook.com/v19.0/dialog/oauth',
     tokenUrl: 'https://graph.facebook.com/v19.0/oauth/access_token',
@@ -281,4 +289,71 @@ export const OAUTH_PROVIDERS: Record<
     displayName: 'Slack',
     docsUrl: 'https://api.slack.com/docs',
   },
+  // ─── Social-publishing platforms ───────────────────────────────────────
+  // These have dedicated OAuth handlers at /api/oauth/{provider}/route.ts
+  // and /api/oauth/{provider}/callback/route.ts (NOT the generic
+  // [provider]/connect route) because they store tokens into the
+  // SocialAccount table (social publishing) instead of CommunicationProvider
+  // (omnichannel messaging). The generic [provider]/connect route 302-redirects
+  // to the dedicated handler for these providers so the existing UI's
+  // `/api/oauth/{provider}/connect` URL keeps working.
+  linkedin: {
+    authUrl: 'https://www.linkedin.com/oauth/v2/authorization',
+    tokenUrl: 'https://www.linkedin.com/oauth/v2/accessToken',
+    // LinkedIn scopes are SPACE-separated in the URL.
+    scopes: 'w_member_social rw_organization r_organization_social r_member_social',
+    displayName: 'LinkedIn',
+    docsUrl: 'https://learn.microsoft.com/linkedin/marketing/integrations/community-management/ugc-posts-api',
+  },
+  pinterest: {
+    authUrl: 'https://www.pinterest.com/oauth/',
+    tokenUrl: 'https://api.pinterest.com/v5/oauth/token',
+    // Pinterest scopes are COMMA-separated.
+    scopes: 'boards:read,pins:read,pins:write,user_accounts:read',
+    displayName: 'Pinterest',
+    docsUrl: 'https://developers.pinterest.com/docs/api/v5/',
+  },
+  twitter: {
+    authUrl: 'https://twitter.com/i/oauth2/authorize',
+    tokenUrl: 'https://api.twitter.com/2/oauth2/token',
+    // X (Twitter) OAuth 2.0 with PKCE — scopes are SPACE-separated.
+    scopes: 'tweet.read tweet.write users.read offline.access',
+    displayName: 'X (Twitter)',
+    docsUrl: 'https://developer.twitter.com/en/docs/twitter-api',
+  },
 }
+
+/**
+ * Platforms whose OAuth flow is handled by the dedicated social-publishing
+ * routes (`/api/oauth/{provider}` + `/api/oauth/{provider}/callback`) rather
+ * than the generic `/api/oauth/[provider]/connect` route (which stores into
+ * CommunicationProvider for omnichannel messaging).
+ *
+ * The generic [provider]/connect and [provider]/callback routes check this
+ * set and 302-redirect to the dedicated handler for these platforms, so the
+ * existing UI's `/api/oauth/{provider}/connect` URL keeps working without
+ * any client-side changes.
+ *
+ * NOTE: `instagram` is intentionally NOT in this set. Instagram has TWO
+ * OAuth flows sharing the same Meta App:
+ *   - Messaging (IG DM): /api/oauth/instagram/connect → generic dynamic
+ *     route → stores in CommunicationProvider. Scopes:
+ *     instagram_basic, instagram_manage_messages, pages_show_list.
+ *   - Publishing: /api/oauth/instagram → dedicated static route → stores
+ *     in SocialAccount. Scopes: instagram_basic, instagram_content_publish,
+ *     pages_show_list, pages_read_engagement.
+ *
+ * The two flows use different scopes and different storage, so they CANNOT
+ * share a connect URL. The Social Accounts UI calls `/api/oauth/instagram`
+ * directly (no /connect) for publishing; the Omnichannel Channels UI calls
+ * `/api/oauth/instagram/connect` for messaging. The Instagram callback at
+ * `/api/oauth/instagram/callback` is shadowed by the static publishing
+ * callback file — it detects non-publishing state and returns a clear
+ * error directing the user to the appropriate UI (graceful degradation).
+ */
+export const SOCIAL_PUBLISHING_PLATFORMS = new Set([
+  'facebook',
+  'linkedin',
+  'pinterest',
+  'twitter',
+])

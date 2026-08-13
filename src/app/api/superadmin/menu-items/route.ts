@@ -192,7 +192,11 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PUT: Toggle a single menu item
+// PUT: Toggle a single menu item.
+// Wrapped in db.$transaction for true atomicity — even if two PUTs land
+// concurrently, each transaction sees a consistent snapshot and commits
+// atomically, preventing the lost-update race that previously caused
+// random subsets of toggles to persist.
 export async function PUT(request: NextRequest) {
   try {
     const auth = await getAuthUser();
@@ -212,30 +216,51 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Enabled must be a boolean' }, { status: 400 });
     }
 
-    // For global scope (or no tenantId), update the global config in settingsJson
-    if (scope === 'global' || !tenantId) {
-      const items = await getGlobalMenuConfig();
-      const updatedItems = items.map((item) =>
-        item.key === menuKey ? { ...item, enabled } : item
-      );
-      await saveGlobalMenuConfig(updatedItems);
-      // Invalidate ALL tenant menu-visibility cache entries — a global
-      // toggle affects every tenant's sidebar/mobile-nav. Without this,
-      // tenants continue seeing the stale config for up to 5 minutes.
-      cache.invalidateByPrefix('menu-visibility:');
-      return NextResponse.json({ success: true, scope: 'global' });
-    }
+    // Atomic read-modify-write inside a transaction.
+    await db.$transaction(async (tx) => {
+      if (scope === 'global' || !tenantId) {
+        const tenants = await tx.tenant.findMany({ take: 1 });
+        if (!tenants || tenants.length === 0) {
+          throw new Error('No tenants found — cannot save global menu config');
+        }
+        const tenantIdInner = (tenants[0] as Record<string, unknown>).id as string;
+        const settings = parseSettings(tenants[0].settingsJson);
+        const rawConfig = (settings[GLOBAL_CONFIG_KEY] as MenuItemEntry[] | undefined) || getDefaultItems();
+        const merged = mergeWithCatalog(rawConfig);
+        const updatedItems = merged.map((item) =>
+          item.key === menuKey ? { ...item, enabled } : item,
+        );
+        settings[GLOBAL_CONFIG_KEY] = updatedItems;
+        await tx.tenant.update({
+          where: { id: tenantIdInner },
+          data: { settingsJson: JSON.stringify(settings) },
+        });
+      } else {
+        const tenant = await tx.tenant.findUnique({ where: { id: tenantId } });
+        if (!tenant) {
+          throw new Error(`Tenant ${tenantId} not found`);
+        }
+        const settings = parseSettings(tenant.settingsJson);
+        const rawConfig = (settings.menuConfig as MenuItemEntry[] | undefined) || getDefaultItems();
+        const merged = mergeWithCatalog(rawConfig);
+        const updatedItems = merged.map((item) =>
+          item.key === menuKey ? { ...item, enabled } : item,
+        );
+        settings.menuConfig = updatedItems;
+        await tx.tenant.update({
+          where: { id: tenantId },
+          data: { settingsJson: JSON.stringify(settings) },
+        });
+      }
+    });
 
-    // For tenant-specific, update the tenant's menuConfig in settingsJson
-    const items = await getTenantMenuConfig(tenantId);
-    const updatedItems = items.map((item) =>
-      item.key === menuKey ? { ...item, enabled } : item
-    );
-    await saveTenantMenuConfig(tenantId, updatedItems);
-    // Invalidate this tenant's menu-visibility cache so the change is
-    // visible immediately (without waiting for the 5-min TTL to expire).
-    cache.invalidate(`menu-visibility:${tenantId}`);
-    return NextResponse.json({ success: true, scope: 'tenant' });
+    // Cache invalidation outside the transaction.
+    if (scope === 'global' || !tenantId) {
+      cache.invalidateByPrefix('menu-visibility:');
+    } else {
+      cache.invalidate(`menu-visibility:${tenantId}`);
+    }
+    return NextResponse.json({ success: true, scope: scope === 'global' || !tenantId ? 'global' : 'tenant' });
   } catch (error) {
     console.error('[SuperAdmin Menu Items PUT] Error:', error);
     const message = error instanceof Error ? error.message : 'Failed to toggle menu item';
@@ -243,7 +268,10 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// POST: Save menu item configuration (bulk)
+// POST: Save menu item configuration (bulk).
+// Wrapped in db.$transaction for true atomicity — the entire bulk update
+// commits as one unit, preventing partial writes if the process is
+// interrupted mid-loop.
 export async function POST(request: NextRequest) {
   try {
     const auth = await getAuthUser();
@@ -260,29 +288,51 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Items must be an array' }, { status: 400 });
     }
 
-    // For global scope, update the global config
-    if (scope === 'global' || !tenantId) {
-      const currentItems = await getGlobalMenuConfig();
-      const updatedItems = currentItems.map((item) => {
-        const update = items.find((i: { key: string }) => i.key === item.key);
-        return update ? { ...item, enabled: update.enabled } : item;
-      });
-      await saveGlobalMenuConfig(updatedItems);
-      // Invalidate ALL tenant menu-visibility cache entries (bulk global update).
-      cache.invalidateByPrefix('menu-visibility:');
-      return NextResponse.json({ success: true, updated: items.length, scope: 'global' });
-    }
-
-    // For tenant-specific, update tenant settingsJson
-    const currentItems = await getTenantMenuConfig(tenantId);
-    const updatedItems = currentItems.map((item) => {
-      const update = items.find((i: { key: string }) => i.key === item.key);
-      return update ? { ...item, enabled: update.enabled } : item;
+    await db.$transaction(async (tx) => {
+      if (scope === 'global' || !tenantId) {
+        const tenants = await tx.tenant.findMany({ take: 1 });
+        if (!tenants || tenants.length === 0) {
+          throw new Error('No tenants found — cannot save global menu config');
+        }
+        const tenantIdInner = (tenants[0] as Record<string, unknown>).id as string;
+        const settings = parseSettings(tenants[0].settingsJson);
+        const rawConfig = (settings[GLOBAL_CONFIG_KEY] as MenuItemEntry[] | undefined) || getDefaultItems();
+        const currentItems = mergeWithCatalog(rawConfig);
+        const updatedItems = currentItems.map((item) => {
+          const update = items.find((i: { key: string }) => i.key === item.key);
+          return update ? { ...item, enabled: update.enabled } : item;
+        });
+        settings[GLOBAL_CONFIG_KEY] = updatedItems;
+        await tx.tenant.update({
+          where: { id: tenantIdInner },
+          data: { settingsJson: JSON.stringify(settings) },
+        });
+      } else {
+        const tenant = await tx.tenant.findUnique({ where: { id: tenantId } });
+        if (!tenant) {
+          throw new Error(`Tenant ${tenantId} not found`);
+        }
+        const settings = parseSettings(tenant.settingsJson);
+        const rawConfig = (settings.menuConfig as MenuItemEntry[] | undefined) || getDefaultItems();
+        const currentItems = mergeWithCatalog(rawConfig);
+        const updatedItems = currentItems.map((item) => {
+          const update = items.find((i: { key: string }) => i.key === item.key);
+          return update ? { ...item, enabled: update.enabled } : item;
+        });
+        settings.menuConfig = updatedItems;
+        await tx.tenant.update({
+          where: { id: tenantId },
+          data: { settingsJson: JSON.stringify(settings) },
+        });
+      }
     });
-    await saveTenantMenuConfig(tenantId, updatedItems);
-    // Invalidate this tenant's menu-visibility cache (bulk tenant update).
-    cache.invalidate(`menu-visibility:${tenantId}`);
-    return NextResponse.json({ success: true, updated: items.length, scope: 'tenant' });
+
+    if (scope === 'global' || !tenantId) {
+      cache.invalidateByPrefix('menu-visibility:');
+    } else {
+      cache.invalidate(`menu-visibility:${tenantId}`);
+    }
+    return NextResponse.json({ success: true, updated: items.length, scope: scope === 'global' || !tenantId ? 'global' : 'tenant' });
   } catch (error) {
     console.error('[SuperAdmin Menu Items POST] Error:', error);
     const message = error instanceof Error ? error.message : 'Failed to save menu items';
