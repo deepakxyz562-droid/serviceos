@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { unstable_cache } from 'next/cache';
 import { headers } from 'next/headers';
 import { INDUSTRY_CATALOG, VERTICALS, getIndustry } from '@/lib/industry-catalog';
 import { MarketplaceBrowser } from '@/components/marketplace/marketplace-browser';
@@ -21,6 +20,8 @@ import {
   type ProviderFilterOptions,
 } from '@/lib/marketplace-pagination';
 import { fetchFeaturedListingsMap } from '@/lib/marketplace-featured';
+import { sharedCacheWrap } from '@/lib/shared-cache';
+import { rethrowIfCircuitOpen } from '@/lib/circuit-breaker';
 import {
   Search,
   Home as HomeIcon,
@@ -79,24 +80,54 @@ interface SsrProviderPage {
   total: number;
 }
 
-const fetchProvidersCached = (filters: ProviderFilterOptions) =>
-  unstable_cache(
-    async (): Promise<SsrProviderPage> => {
-      return fetchProvidersUncached(filters);
+/**
+ * Marketplace page-1 fetch with shared cache + stale-while-revalidate.
+ *
+ * Replaces the previous `unstable_cache` wrapper (process-local — each
+ * Vercel instance paid the cold-cache cost independently). Now uses the
+ * shared cache (Redis when configured) so all instances share one entry
+ * per filter combination.
+ *
+ *   - freshTtl: 30s (matches the old unstable_cache revalidate)
+ *   - staleTtl: 5min (serve stale + background-refresh, then grace-serve
+ *                during Supabase outages)
+ *
+ * The `shouldCache` predicate skips caching empty page-1 results (could be
+ * a transient PostgREST error — same pattern as the ttlCacheWrap usage in
+ * the providers API route).
+ */
+async function fetchProvidersCached(filters: ProviderFilterOptions): Promise<SsrProviderPage> {
+  const cacheKey = [
+    'fieseros:marketplace:page1',
+    filters.country || 'all',
+    filters.search || '',
+    filters.city || '',
+    filters.vertical || '',
+    filters.industry || '',
+    String(filters.trustFullyVerified || false),
+    String(filters.trustRatingHigh || false),
+    String(filters.trustEmergency || false),
+  ].join(':');
+
+  const result = await sharedCacheWrap<SsrProviderPage>(
+    cacheKey,
+    30_000, // fresh: 30s
+    5 * 60_000, // stale: 5min
+    async () => {
+      try {
+        return await fetchProvidersUncached(filters);
+      } catch (err) {
+        // Let CircuitOpenError propagate so sharedCacheWrap serves stale.
+        // Other errors (bad filter, etc.) propagate normally.
+        rethrowIfCircuitOpen(err);
+        throw err;
+      }
     },
-    [
-      'marketplace-providers-page1',
-      filters.country || 'all',
-      filters.search || '',
-      filters.city || '',
-      filters.vertical || '',
-      filters.industry || '',
-      String(filters.trustFullyVerified || false),
-      String(filters.trustRatingHigh || false),
-      String(filters.trustEmergency || false),
-    ],
-    { revalidate: 30 }, // 30 seconds
-  )();
+    // Don't cache empty results — could be a transient PostgREST failure.
+    (page) => page.items.length > 0,
+  );
+  return result.value;
+}
 
 async function fetchProvidersUncached(filters: ProviderFilterOptions): Promise<SsrProviderPage> {
 

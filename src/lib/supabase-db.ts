@@ -11,6 +11,11 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { nanoid } from 'nanoid';
+import {
+  withCircuitBreaker,
+  CircuitOpenError,
+  isInfraFailure,
+} from './circuit-breaker';
 
 // ── Configuration ──────────────────────────────────────────────────────────
 
@@ -1153,7 +1158,12 @@ class SupabaseModel {
       query.range(from, to);
     }
 
-    const { data, error } = await query;
+    // Wrap the network call in the circuit breaker. If Supabase is
+    // overloaded/down (network errors, timeouts, 5xx), the breaker opens
+    // after 5 consecutive failures and fail-fasts subsequent reads with
+    // CircuitOpenError — which sharedCacheWrap catches to serve stale data.
+    // Application errors (4xx, missing column) do NOT trip the breaker.
+    const { data, error } = await withCircuitBreaker(this.tableName, () => query);
     if (error) {
       const whereStr = where ? JSON.stringify(where).substring(0, 200) : 'none';
       // Issue #1 Fix B: THROW instead of silently returning []. The previous
@@ -1220,10 +1230,13 @@ class SupabaseModel {
       }
     }
 
-    const { data, error } = await query.limit(1).single();
+    const { data, error } = await withCircuitBreaker(this.tableName, () =>
+      query.limit(1).single(),
+    );
     if (error) {
       // PGRST116 = "JSON object requested, 0 rows returned" — this is the
       // expected "no match" case for findUnique, NOT an error. Return null.
+      // (Does not trip the breaker — it's a valid "no row" result.)
       if (error.code === 'PGRST116') return null;
       // Issue #1 Fix B: THROW on real errors instead of silently returning null.
       console.error(`[SupabaseDB] findUnique error on ${this.tableName}:`, error.message);
@@ -1255,10 +1268,12 @@ class SupabaseModel {
     if (where) applyWhereFilters(query, where);
     if (orderBy) applyOrderBy(query, orderBy);
 
-    const { data, error } = await query.limit(1).single();
+    const { data, error } = await withCircuitBreaker(this.tableName, () =>
+      query.limit(1).single(),
+    );
     if (error) {
       // PGRST116 = no rows found — this is a legitimate "no match" case, NOT
-      // an error. Return null for that code only.
+      // an error. Return null for that code only. (Does not trip the breaker.)
       if (error.code === 'PGRST116') return null;
       // Issue #1 Fix B: THROW on real errors instead of silently returning null.
       // Log detailed error context for production debugging.
@@ -1691,7 +1706,7 @@ class SupabaseModel {
 
     if (where) applyWhereFilters(query, where);
 
-    const { count, error } = await query;
+    const { count, error } = await withCircuitBreaker(this.tableName, () => query);
     if (error) {
       console.error(`[SupabaseDB] count error on ${this.tableName}:`, error.message);
       return 0;

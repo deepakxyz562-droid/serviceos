@@ -20,6 +20,8 @@ import { mapIndustryToPluralSlug } from '@/lib/seo/plural-industry-slugs'
 import { getIndustryKit, durationToMinutes } from '@/lib/industry-kits'
 import { computeProfileTier, isIndexableByTier, type ProfileTier } from '@/lib/marketplace/profile-tier'
 import { isTemplatedDescription } from '@/lib/marketplace/industry-content'
+import { sharedCacheWrap, sharedCacheDeleteByPrefix } from '@/lib/shared-cache'
+import { rethrowIfCircuitOpen } from '@/lib/circuit-breaker'
 
 /**
  * Explicit column selection for the public-business tenant lookup.
@@ -236,7 +238,11 @@ async function _getPublicBusinessByUrl(
       },
       select: PUBLIC_TENANT_SELECT,
     })
-  } catch {
+  } catch (err) {
+    // Re-throw CircuitOpenError so the shared-cache layer can serve stale
+    // data during a Supabase outage. Other errors (bad filter, etc.) fall
+    // through to the null-return fallback below.
+    rethrowIfCircuitOpen(err)
     return { business: null, needsRedirect: false, canonicalUrl: null }
   }
 
@@ -278,11 +284,50 @@ async function _getPublicBusinessByUrl(
   return { business, needsRedirect: false, canonicalUrl }
 }
 
-export const getPublicBusinessByUrl = unstable_cache(
-  _getPublicBusinessByUrl,
-  ['public-business-by-url'],
-  { revalidate: 120, tags: ['public-business'] },
-)
+/**
+ * Cached public-business lookup with stale-while-revalidate + circuit grace.
+ *
+ * Replaces the previous `unstable_cache` wrapper (which was process-local
+ * — each Vercel instance paid the cold-cache cost independently). Now uses
+ * the shared cache (Redis when configured) so all instances share one cache.
+ *
+ *   - freshTtl: 2 minutes (matches the old unstable_cache revalidate)
+ *   - staleTtl: 1 hour (serve stale + background-refresh, then grace-serve
+ *                during Supabase outages)
+ *
+ * Cache invalidation: `revalidateTag('public-business')` still works for
+ * the old unstable_cache entries; for the shared cache, use
+ * `invalidatePublicBusinessCache()` below (called on tenant profile save).
+ */
+export async function getPublicBusinessByUrl(
+  industrySeg: string,
+  citySeg: string,
+  slugSeg: string,
+) {
+  const cacheKey = `fieseros:public-business:${slugSeg}`
+  const result = await sharedCacheWrap(
+    cacheKey,
+    2 * 60 * 1000, // fresh: 2min
+    60 * 60 * 1000, // stale: 1h
+    () => _getPublicBusinessByUrl(industrySeg, citySeg, slugSeg),
+    // Don't cache null results — a missing business might be a transient
+    // error, and caching null for 1h would hide a business that just needs
+    // a moment to propagate.
+    (r) => r.business !== null || r.needsRedirect,
+  )
+  return result.value
+}
+
+/**
+ * Invalidate all shared-cache entries for public-business lookups.
+ * Called when a tenant updates their profile (the existing
+ * `revalidateTag('public-business')` call handles the old unstable_cache;
+ * this handles the new shared cache across all instances).
+ */
+export async function invalidatePublicBusinessCache(): Promise<void> {
+  revalidateTag('public-business')
+  await sharedCacheDeleteByPrefix('fieseros:public-business:')
+}
 
 /**
  * Resolve a tenant by slug only (used by /b/[slug] short URL → redirect).
@@ -1114,6 +1159,10 @@ export async function listAllIndexableBusinessUrls(): Promise<IndexableBusinessU
     }
     return entries
   } catch (err) {
+    // Re-throw CircuitOpenError so the shared-cache layer (sitemap-builder's
+    // getAllBusinessUrlsCached → sharedCacheWrap) can serve stale data during
+    // a Supabase outage. Other errors fall through to the empty-return.
+    rethrowIfCircuitOpen(err)
     console.error('[public-business] listAllIndexableBusinessUrls error:', err)
     return []
   }

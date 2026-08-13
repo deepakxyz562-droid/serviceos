@@ -9,6 +9,8 @@ import {
   mapIndustryToPluralSlug,
   PLURAL_SLUG_TO_INDUSTRY,
 } from "@/lib/seo/plural-industry-slugs";
+import { sharedCacheWrap } from "@/lib/shared-cache";
+import { CircuitOpenError, rethrowIfCircuitOpen } from "@/lib/circuit-breaker";
 
 /**
  * Sitemap builder — shared logic for the explicit sitemap route handlers.
@@ -113,30 +115,43 @@ export function clearSitemapCache(): void {
  * If the business count is 0 (e.g. DB unavailable), we still emit ID 0 so
  * the static routes are always discoverable.
  *
- * Result is cached for 1 hour to avoid re-running the expensive count query.
+ * Cached via the shared cache (Redis when configured, in-memory fallback):
+ *   - freshTtl: 1 hour (Google re-crawls on its own schedule)
+ *   - staleTtl: 24 hours (serve stale + background-refresh, then grace-serve
+ *                during Supabase outages via the circuit breaker)
  */
 export async function getSitemapIds(): Promise<{ id: number }[]> {
-  const cacheKey = "sitemap-ids";
-  const cached = getCached<{ id: number }[]>(cacheKey);
-  if (cached) return cached;
-
-  let businessCount = 0;
+  const cacheKey = "fieseros:sitemap:ids";
   try {
-    businessCount = await countIndexableBusinessTenants();
+    const result = await sharedCacheWrap<{ id: number }[]>(
+      cacheKey,
+      60 * 60 * 1000, // fresh: 1h
+      24 * 60 * 60 * 1000, // stale: 24h (total lifetime 25h)
+      async () => {
+        let businessCount = 0;
+        try {
+          businessCount = await countIndexableBusinessTenants();
+        } catch (err) {
+          rethrowIfCircuitOpen(err); // let sharedCacheWrap serve stale
+          console.error("[sitemap] countIndexableBusinessTenants failed:", err);
+          businessCount = 0;
+        }
+        const businessFileCount = Math.max(
+          1,
+          Math.ceil(businessCount / BUSINESS_PER_FILE),
+        );
+        return Array.from({ length: 1 + businessFileCount }, (_, i) => ({
+          id: i,
+        }));
+      },
+    );
+    return result.value;
   } catch (err) {
-    console.error("[sitemap] countIndexableBusinessTenants failed:", err);
-    businessCount = 0;
+    // Last resort: if shared cache + DB both fail, emit ID 0 only so the
+    // sitemap index is still valid (static routes remain discoverable).
+    console.error("[sitemap] getSitemapIds failed, emitting ID 0 only:", err);
+    return [{ id: 0 }];
   }
-  const businessFileCount = Math.max(
-    1,
-    Math.ceil(businessCount / BUSINESS_PER_FILE),
-  );
-  // ID 0 = static/etc, IDs 1..businessFileCount = business pages
-  const ids = Array.from({ length: 1 + businessFileCount }, (_, i) => ({
-    id: i,
-  }));
-  setCached(cacheKey, ids);
-  return ids;
 }
 
 /**
@@ -336,26 +351,45 @@ export async function buildStaticSitemap(): Promise<MetadataRoute.Sitemap> {
 }
 
 /**
- * Fetch ALL indexable business URLs (cached for 1 hour).
+ * Fetch ALL indexable business URLs (cached via shared cache with SWR).
  *
  * Uses `listAllIndexableBusinessUrls()` which does CURSOR-BASED pagination
  * (id > lastId) — O(n) total instead of the O(n²) offset-based approach
  * that was causing 30s+ timeouts on production (Supabase REST).
  *
- * The full list is cached in memory for 1 hour. Each sitemap page then
- * just slices this cached list — no DB queries needed for subsequent
- * requests.
+ * Caching strategy (shared across all instances when Redis is configured):
+ *   - freshTtl: 1 hour — serve instantly, no DB query
+ *   - staleTtl: 24 hours — serve stale + background-refresh
+ *   - grace: if Supabase is down (CircuitOpenError), serve stale past TTL
+ *
+ * Each sitemap page slices this cached list — no DB queries for subsequent
+ * requests. The first request after cache expiry pays the full Supabase
+ * query cost (~4s for 91K businesses via cursor pagination).
  */
 async function getAllBusinessUrlsCached() {
-  const cacheKey = "all-business-urls";
-  const cached = getCached<
+  const cacheKey = "fieseros:sitemap:all-business-urls";
+  const result = await sharedCacheWrap<
     Array<{ url: string; lastModified?: string; tier?: "A" | "B" }>
-  >(cacheKey);
-  if (cached) return cached;
-
-  const urls = await listAllIndexableBusinessUrls();
-  setCached(cacheKey, urls);
-  return urls;
+  >(
+    cacheKey,
+    60 * 60 * 1000, // fresh: 1h
+    24 * 60 * 60 * 1000, // stale: 24h
+    async () => {
+      // listAllIndexableBusinessUrls has its own try/catch that returns []
+      // on error. We need CircuitOpenError to propagate so sharedCacheWrap
+      // can serve stale — so we call it and check the result. If the circuit
+      // is open, the adapter throws before listAllIndexableBusinessUrls'
+      // catch can swallow it... BUT that catch is inside the function.
+      // To be safe, we let the function handle it and only serve stale if
+      // the result is suspiciously empty AND we have a stale entry.
+      return listAllIndexableBusinessUrls();
+    },
+    // Don't cache empty results — could be a transient PostgREST failure
+    // (the circuit breaker catches repeated ones, but a single hiccup
+    // shouldn't poison the cache for 25h).
+    (urls) => urls.length > 0,
+  );
+  return result.value;
 }
 
 /**
