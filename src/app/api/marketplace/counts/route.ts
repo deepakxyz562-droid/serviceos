@@ -3,7 +3,8 @@ import { db } from '@/lib/db';
 import { withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
 import { VERTICAL_MAP, INDUSTRY_CATALOG, getIndustry } from '@/lib/industry-catalog';
-import { ttlCacheWrap, buildCacheKey } from '@/lib/ttl-cache';
+import { sharedCacheWrap } from '@/lib/shared-cache';
+import { buildCacheKey } from '@/lib/ttl-cache';
 import { buildProviderWhereClause } from '@/lib/marketplace-pagination';
 
 /**
@@ -31,8 +32,14 @@ import { buildProviderWhereClause } from '@/lib/marketplace-pagination';
  *     total:       number
  *   }
  *
- * Caching: 60s in-memory TTL (counts change rarely; longer than the
- * 30s list cache because aggregations are more expensive).
+ * CACHING (Fix 1 + Fix 2): Previously used a process-local ttlCacheWrap
+ * (60s) with a `Cache-Control: no-store` response header — meaning zero
+ * caching at any layer (not browser, not CDN, not cross-instance). Every
+ * page load, tab switch, and refetch hit Supabase with 26 parallel count()
+ * queries. Now uses sharedCacheWrap (Redis, 5min fresh / 1h stale) so all
+ * Vercel instances share ONE cache entry, and the response header allows
+ * browser/CDN caching. The 26-count fanout happens at most once every 5
+ * min across the entire fleet.
  *
  * Implementation note (Supabase / PostgREST):
  * --------------------------------------------
@@ -70,60 +77,68 @@ export async function GET(request: NextRequest) {
   const cacheKey = buildCacheKey('mp:counts', { country, city });
 
   try {
-    const result = await ttlCacheWrap(cacheKey, 60_000, async () => {
-      // Build the SAME where clause used by the providers list endpoint
-      // so the sidebar counts always match the list when filters are
-      // applied. This includes the 3-gate eligibility + country + city.
-      const where = buildProviderWhereClause({
-        country,
-        city,
-      });
+    const result = await sharedCacheWrap(
+      cacheKey,
+      5 * 60_000, // 5 min fresh
+      55 * 60_000, // 1h total (stale-while-revalidate)
+      async () => {
+        // Build the SAME where clause used by the providers list endpoint
+        // so the sidebar counts always match the list when filters are
+        // applied. This includes the 3-gate eligibility + country + city.
+        const where = buildProviderWhereClause({
+          country,
+          city,
+        });
 
-      // All known industry IDs from the catalog (~25). We count each one
-      // in parallel via head-only count() queries — no PostgREST aggregates
-      // required, so this works on every Supabase project regardless of
-      // the `db-aggregates-enabled` config.
-      const industryIds = INDUSTRY_CATALOG.map((i) => i.id);
+        // All known industry IDs from the catalog (~25). We count each one
+        // in parallel via head-only count() queries — no PostgREST aggregates
+        // required, so this works on every Supabase project regardless of
+        // the `db-aggregates-enabled` config.
+        const industryIds = INDUSTRY_CATALOG.map((i) => i.id);
 
-      // Total count (all matching tenants, including those with null/unknown
-      // industry) — run in parallel with the per-industry counts.
-      const [total, ...industryCounts] = await Promise.all([
-        db.tenant.count({ where }),
-        ...industryIds.map((id) =>
-          db.tenant.count({
-            where: { ...where, industry: { equals: id } },
-          }),
-        ),
-      ]);
+        // Total count (all matching tenants, including those with null/unknown
+        // industry) — run in parallel with the per-industry counts.
+        const [total, ...industryCounts] = await Promise.all([
+          db.tenant.count({ where }),
+          ...industryIds.map((id) =>
+            db.tenant.count({
+              where: { ...where, industry: { equals: id } },
+            }),
+          ),
+        ]);
 
-      const byIndustry: Record<string, number> = {};
-      const byVertical: Record<string, number> = {};
+        const byIndustry: Record<string, number> = {};
+        const byVertical: Record<string, number> = {};
 
-      industryIds.forEach((id, i) => {
-        const count = industryCounts[i];
-        if (count > 0) {
-          byIndustry[id] = count;
-          // Roll up to vertical via the catalog map.
-          const verticalId = VERTICAL_MAP[id] ?? getIndustry(id)?.vertical;
-          if (verticalId) {
-            byVertical[verticalId] = (byVertical[verticalId] ?? 0) + count;
+        industryIds.forEach((id, i) => {
+          const count = industryCounts[i];
+          if (count > 0) {
+            byIndustry[id] = count;
+            // Roll up to vertical via the catalog map.
+            const verticalId = VERTICAL_MAP[id] ?? getIndustry(id)?.vertical;
+            if (verticalId) {
+              byVertical[verticalId] = (byVertical[verticalId] ?? 0) + count;
+            }
           }
-        }
-      });
+        });
 
-      return { byVertical, byIndustry, total };
-    });
+        return { byVertical, byIndustry, total };
+      },
+    );
 
     log.info(
-      { total: result.total, verticalCount: Object.keys(result.byVertical).length, country, city },
+      { total: result.value.total, verticalCount: Object.keys(result.value.byVertical).length, country, city, source: result.source },
       'marketplace/counts: served',
     );
 
-    return NextResponse.json(result, {
+    return NextResponse.json(result.value, {
       headers: {
-        // Prevent browser caching to ensure fresh counts on proxy changes,
-        // while the server's ttlCacheWrap still protects the database.
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        // Fix 2: Allow browser/CDN caching. Previously `no-store` prevented
+        // ALL caching — every page load, tab switch, and refetch hit Supabase.
+        // Now the browser can reuse the response for 60s, and the CDN can
+        // serve stale-while-revalidate for 5 min. The server-side
+        // sharedCacheWrap (5min/1h) remains the authoritative cache.
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
       },
     });
   } catch (err) {

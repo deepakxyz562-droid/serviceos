@@ -45,6 +45,7 @@ import * as React from 'react';
 import { MapPin, Crosshair, ChevronDown, X, Loader2, Locate } from 'lucide-react';
 import { useUserLocation } from '@/hooks/use-user-location';
 import { useMarketplaceSearch } from './use-marketplace-search';
+import { useMarketplaceCities } from './use-marketplace-cities';
 import {
   getCitiesForCountry,
   type MarketplaceCity,
@@ -112,34 +113,18 @@ export function LocationChip() {
   const [countryCode, setCountryCode] = React.useState<string>(
     countryFilter ?? 'US'
   );
-  const [activeCities, setActiveCities] = React.useState<MarketplaceCity[]>([]);
-  const [loadingCities, setLoadingCities] = React.useState(false);
 
-  React.useEffect(() => {
-    let active = true;
-    async function fetchActiveCities() {
-      setLoadingCities(true);
-      try {
-        const res = await fetch(`/api/marketplace/cities?country=${encodeURIComponent(countryCode)}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (active) {
-            setActiveCities(data);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch active cities:', err);
-      } finally {
-        if (active) {
-          setLoadingCities(false);
-        }
-      }
-    }
-    fetchActiveCities();
-    return () => {
-      active = false;
-    };
-  }, [countryCode]);
+  // Fix 4: Use React Query instead of raw fetch. React Query deduplicates
+  // concurrent requests with the same query key — if two LocationChip
+  // components mount simultaneously (or the country changes rapidly),
+  // only ONE network request fires per country. Previously the raw
+  // fetch in a useEffect fired on every mount + every countryCode change,
+  // causing the duplicate cities calls seen in the HAR (cities?country=CA
+  // called TWICE, cities?country=US called TWICE).
+  const {
+    data: activeCities = [],
+    isLoading: loadingCities,
+  } = useMarketplaceCities(countryCode);
 
   // BUGFIX (static-catalogue fallback): The /api/marketplace/cities
   // endpoint returns [] for any country without seeded tenants (only US

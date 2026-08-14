@@ -71,12 +71,17 @@ export function useMarketplaceCounts(
       { country: country ?? 'all', city: normalizedCity ?? 'all' },
     ],
     queryFn: () => fetchCounts(country, normalizedCity),
-    // staleTime: 0 — counts must ALWAYS reflect the current city/country
-    // filter. When the user picks/clears a city, the sidebar count must
-    // update immediately, not show a stale 60s-cached value. The counts
-    // endpoint is a lightweight indexed COUNT query (~50ms), so refetching
-    // on every filter change is cheap.
-    staleTime: 0,
+    // Fix 3: staleTime 60s. Previously 0, which meant React Query ALWAYS
+    // refetched on mount, window focus, and every filter change — even
+    // though the API's sharedCacheWrap (5min/1h) already protects the DB.
+    // Combined with the API's old `Cache-Control: no-store` header, there
+    // was zero caching at any layer. Now: 60s client-side staleTime +
+    // server-side sharedCacheWrap + browser Cache-Control = 3 cache layers.
+    // When the user picks/clears a city, the queryKey changes (different
+    // city param), so React Query refetches immediately regardless of
+    // staleTime — the 60s only prevents refetching the SAME (country,city)
+    // key on remount/focus.
+    staleTime: 60_000,
     gcTime: 5 * 60_000, // 5 min — keep in memory for back navigation
     refetchOnWindowFocus: false,
     retry: 1,

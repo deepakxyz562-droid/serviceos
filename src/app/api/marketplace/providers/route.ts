@@ -21,7 +21,8 @@ import {
   mapTenantToProviderListItem,
   PROVIDER_SELECT,
 } from '@/lib/marketplace-pagination';
-import { ttlCacheWrap, buildCacheKey } from '@/lib/ttl-cache';
+import { sharedCacheWrap } from '@/lib/shared-cache';
+import { buildCacheKey } from '@/lib/ttl-cache';
 
 /**
  * Provider Profile — list (Fieseros V1.5 — P10-flows)
@@ -71,10 +72,11 @@ import { ttlCacheWrap, buildCacheKey } from '@/lib/ttl-cache';
  *   lng        number  user longitude
  *   radiusKm   number  bounding-box pre-filter radius (default 50 when lat+lng)
  *
- * CACHING: 30s in-memory TTL cache keyed on all filter params + cursor.
- * Identical requests within 30s return the cached JSON without hitting
- * the DB. The cache is process-local (not shared across instances) —
- * acceptable for read-heavy browse queries.
+ * CACHING (Fix 1): 30s fresh / 5min stale via sharedCacheWrap (Redis).
+ * Previously used process-local ttlCacheWrap (30s) — on Vercel serverless
+ * with N warm instances, each instance independently re-queried Supabase
+ * when its local cache expired. Now all instances share ONE Redis cache
+ * entry, and Redis failures fall back to the in-memory shadow cache.
  */
 
 interface RouteContext {
@@ -160,85 +162,91 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
     });
 
     try {
-      const result = await ttlCacheWrap(cacheKey, 30_000, async () => {
-        // Fetch the set of featured tenant IDs (needed for featured-first
-        // sorting on page 1 + to exclude them from non-featured pagination).
-        const featuredIds = featuredOnly
-          ? new Set<string>()
-          : await fetchFeaturedTenantIds();
+      const result = await sharedCacheWrap(
+        cacheKey,
+        30_000, // 30s fresh
+        4 * 60_000 + 30_000, // 5min total (stale-while-revalidate)
+        async () => {
+          // Fetch the set of featured tenant IDs (needed for featured-first
+          // sorting on page 1 + to exclude them from non-featured pagination).
+          const featuredIds = featuredOnly
+            ? new Set<string>()
+            : await fetchFeaturedTenantIds();
 
-        // If featuredOnly is set, we filter the featuredIds set down to
-        // those matching the other filters (search/city/etc.) by fetching
-        // the tenants and filtering in-app. This is a small bounded set.
-        if (featuredOnly) {
-          const where = buildProviderWhereClause({
-            country,
-            search,
-            city,
-            industry,
-            vertical,
-            trustFullyVerified,
-            trustRatingHigh,
-            trustEmergency,
-            minRating,
-            claimedFilter,
-            userLat,
-            userLng,
-            radiusKm,
-          });
-          const featuredTenants = await db.tenant.findMany({
-            where: { ...where, id: { in: Array.from(await fetchFeaturedTenantIds()) } },
-            select: { id: true },
-            take: 100,
-          });
-          const filteredIds = new Set(featuredTenants.map((t) => t.id));
-          const page = await fetchProviderPage({
+          // If featuredOnly is set, we filter the featuredIds set down to
+          // those matching the other filters (search/city/etc.) by fetching
+          // the tenants and filtering in-app. This is a small bounded set.
+          if (featuredOnly) {
+            const where = buildProviderWhereClause({
+              country,
+              search,
+              city,
+              industry,
+              vertical,
+              trustFullyVerified,
+              trustRatingHigh,
+              trustEmergency,
+              minRating,
+              claimedFilter,
+              userLat,
+              userLng,
+              radiusKm,
+            });
+            const featuredTenants = await db.tenant.findMany({
+              where: { ...where, id: { in: Array.from(await fetchFeaturedTenantIds()) } },
+              select: { id: true },
+              take: 100,
+            });
+            const filteredIds = new Set(featuredTenants.map((t) => t.id));
+            const page = await fetchProviderPage({
+              filters: { country, search, city, industry, vertical, trustFullyVerified, trustRatingHigh, trustEmergency, minRating, claimedFilter, userLat, userLng, radiusKm },
+              cursor,
+              pageSize,
+              featuredTenantIds: filteredIds,
+              mapItem: (t) => mapTenantToProviderListItem(t, new Map()),
+            });
+            // For featuredOnly, force all items to be treated as featured.
+            return {
+              ...page,
+              items: page.items.map((p) => ({ ...p, featured: 'featured' as const })),
+            };
+          }
+
+          // Standard cursor path: fetch featured IDs once, then the page.
+          // On page 1 (no cursor), also fetch the featuredMap (metadata for
+          // cardType computation). On subsequent pages, skip it — only
+          // non-featured items are fetched and their cardType doesn't depend
+          // on the featured map.
+          const featuredMap = cursor
+            ? new Map()
+            : await fetchFeaturedListingsMap(Array.from(featuredIds));
+
+          return fetchProviderPage({
             filters: { country, search, city, industry, vertical, trustFullyVerified, trustRatingHigh, trustEmergency, minRating, claimedFilter, userLat, userLng, radiusKm },
             cursor,
             pageSize,
-            featuredTenantIds: filteredIds,
-            mapItem: (t) => mapTenantToProviderListItem(t, new Map()),
+            featuredTenantIds: featuredIds,
+            mapItem: (t) => mapTenantToProviderListItem(t, featuredMap),
           });
-          // For featuredOnly, force all items to be treated as featured.
-          return {
-            ...page,
-            items: page.items.map((p) => ({ ...p, featured: 'featured' as const })),
-          };
-        }
-
-        // Standard cursor path: fetch featured IDs once, then the page.
-        // On page 1 (no cursor), also fetch the featuredMap (metadata for
-        // cardType computation). On subsequent pages, skip it — only
-        // non-featured items are fetched and their cardType doesn't depend
-        // on the featured map.
-        const featuredMap = cursor
-          ? new Map()
-          : await fetchFeaturedListingsMap(Array.from(featuredIds));
-
-        return fetchProviderPage({
-          filters: { country, search, city, industry, vertical, trustFullyVerified, trustRatingHigh, trustEmergency, minRating, claimedFilter, userLat, userLng, radiusKm },
-          cursor,
-          pageSize,
-          featuredTenantIds: featuredIds,
-          mapItem: (t) => mapTenantToProviderListItem(t, featuredMap),
-        });
-      }, (result) => {
-        // Issue #1 Fix E: don't cache empty page-2+ results.
-        // An empty result on page 1 (no cursor) is legitimate (no matching
-        // providers) and safe to cache. An empty result on page 2+ (cursor
-        // present) is suspicious — it could be a transient PostgREST error
-        // that was masked as an empty array (before Fix B made adapter
-        // errors throw). Skip caching so the next request retries fresh.
-        if (!cursor) return true; // page 1 — always cache (even if empty)
-        return result.items.length > 0; // page 2+ — only cache non-empty
-      });
+        },
+        (result) => {
+          // Issue #1 Fix E: don't cache empty page-2+ results.
+          // An empty result on page 1 (no cursor) is legitimate (no matching
+          // providers) and safe to cache. An empty result on page 2+ (cursor
+          // present) is suspicious — it could be a transient PostgREST error
+          // that was masked as an empty array (before Fix B made adapter
+          // errors throw). Skip caching so the next request retries fresh.
+          if (!cursor) return true; // page 1 — always cache (even if empty)
+          return result.items.length > 0; // page 2+ — only cache non-empty
+        },
+      );
 
       // Vertical filter is now applied at SQL level (buildProviderWhereClause
       // converts it to an `industry IN [...]` clause), so no post-fetch filter
       // is needed. This fixes the "short page" bug where the cursor path
       // fetched 24 rows by rating DESC then stripped non-matching ones down
       // to ~3 visible items.
-      let items = result.items;
+      let items = result.value.items;
 
       // Apply service filter post-fetch (would need a join to filter in SQL).
       if (serviceId) {
@@ -250,14 +258,14 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
       }
 
       log.info(
-        { returned: items.length, total: result.total, cursor: !!cursor, country, search, city, industry, vertical, pageSize },
+        { returned: items.length, total: result.value.total, cursor: !!cursor, country, search, city, industry, vertical, pageSize, source: result.source },
         'marketplace/providers: cursor list',
       );
 
       return NextResponse.json({
         items,
-        nextCursor: result.nextCursor,
-        total: result.total,
+        nextCursor: result.value.nextCursor,
+        total: result.value.total,
       }, {
         headers: {
           // Allow browser/CDN caching for 30s, with stale-while-revalidate
