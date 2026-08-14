@@ -99,3 +99,7 @@ Caddyfile
 # Downloads
 /download/
 tool-results/
+
+# sitemaps
+/public/sitemap.xml
+/public/sitemap/

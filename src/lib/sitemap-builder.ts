@@ -65,7 +65,7 @@ export const BASE_URL = "https://fieseros.com";
  *     headroom on Upstash Free (each per-page XML key is ~100KB, 100x under
  *     the 10MB limit).
  */
-export const BUSINESS_PER_FILE = 1_000;
+export const BUSINESS_PER_FILE = 40_000;
 
 /**
  * Stable lastmod timestamp for static / industry-hub / browse URLs.
@@ -576,56 +576,24 @@ async function getPageLastId(
 export async function buildBusinessSitemap(
   pageZeroIndexed: number,
 ): Promise<MetadataRoute.Sitemap> {
-  // Get the starting cursor (last ID of the previous page)
-  const startCursor =
-    pageZeroIndexed === 0
-      ? undefined
-      : await getPageLastId(pageZeroIndexed - 1);
-
-  // If page > 0 and the previous page has no entries, this page is out of range.
-  if (pageZeroIndexed > 0 && startCursor === undefined) {
-    throw new Error(
-      `Sitemap page ${pageZeroIndexed + 1} is out of range (previous page has no entries)`,
-    );
-  }
-
-  const rows = await db.tenant.findMany({
-    where: {
-      ...INDEXABLE_WHERE,
-      ...(startCursor ? { id: { gt: startCursor } } : {}),
-    },
-    select: {
-      id: true,
-      slug: true,
-      industry: true,
-      city: true,
-      updatedAt: true,
-    },
-    take: BUSINESS_PER_FILE,
-    orderBy: { id: "asc" },
-  });
-
-  if (rows.length === 0) {
-    throw new Error(
-      `Sitemap page ${pageZeroIndexed + 1} returned no rows from database`,
-    );
-  }
-
   const now = new Date().toISOString();
-  return rows.map((t) => {
-    const industrySlug = mapIndustryToPluralSlug(t.industry);
-    const citySlug = slugifyCity(t.city);
-    const lastModified =
-      t.updatedAt instanceof Date
-        ? t.updatedAt.toISOString()
-        : typeof t.updatedAt === "string"
-          ? new Date(t.updatedAt).toISOString()
-          : now;
-    return {
-      url: `${BASE_URL}/${industrySlug}/${citySlug}/${t.slug}`,
-      lastModified,
-    };
-  });
+  const offset = pageZeroIndexed * BUSINESS_PER_FILE;
+  try {
+    const allUrls = await getAllBusinessUrlsCached();
+    const pageUrls = allUrls.slice(offset, offset + BUSINESS_PER_FILE);
+    return pageUrls.map((entry) => {
+      return {
+        url: entry.url,
+        lastModified: entry.lastModified || now,
+      };
+    });
+  } catch (err) {
+    console.error(
+      `[sitemap] failed to list business URLs for page ${pageZeroIndexed}:`,
+      err,
+    );
+    return [];
+  }
 }
 
 // ── XML serialization helpers ──────────────────────────────────────────────
