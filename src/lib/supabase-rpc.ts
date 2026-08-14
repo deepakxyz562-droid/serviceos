@@ -100,6 +100,10 @@ interface RawMarketplaceCounts {
  */
 export async function getMarketplaceCities(country: string): Promise<MarketplaceCity[]> {
   const client = getAdminClient();
+  // The SQL function returns jsonb (not TABLE) to bypass PostgREST's
+  // PGRST_MAX_ROWS=1000 default limit. The US has ~2500 cities, so a TABLE
+  // return would be silently truncated. jsonb is treated as a scalar by
+  // PostgREST, so the full array is returned without row limits.
   const { data, error } = await client.rpc('get_marketplace_cities', {
     p_country: country,
   });
@@ -110,6 +114,8 @@ export async function getMarketplaceCities(country: string): Promise<Marketplace
     );
   }
 
+  // The function returns jsonb — PostgREST returns it as a parsed JSON value.
+  // `data` is the JSON array directly (not wrapped in a table response).
   if (!data || !Array.isArray(data)) return [];
 
   return (data as RawMarketplaceCity[]).map((row) => ({
