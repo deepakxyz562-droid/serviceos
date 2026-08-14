@@ -941,38 +941,26 @@ async function resolveIncludes(
   const client = getAdminClient();
   const modelRelations = RELATION_MAP[tableName] || {};
 
-  for (const [relName, relConfig] of Object.entries(include)) {
-    if (relName === '_count') continue; // handled separately
+  // PERFORMANCE: Previously, each relation was awaited sequentially inside a
+  // for...of loop — 3 includes = 3 sequential HTTP round-trips to PostgREST
+  // (each ~300ms = ~900ms total). Now we fetch ALL relations concurrently
+  // with Promise.all (3 includes = ~300ms total). Each relation writes to a
+  // distinct key (main[relName]) so there's no write contention.
+  const includeEntries = Object.entries(include).filter(([relName]) => relName !== '_count');
+
+  const tasks = includeEntries.map(async ([relName, relConfig]) => {
     if (!modelRelations[relName]) {
-      // Surface missing-relation bugs loudly instead of silently skipping.
-      // This is the most common cause of "include not working" in Supabase mode.
       console.warn(
         `[SupabaseDB] RELATION_MAP missing: ${tableName}.${relName} — include silently skipped. ` +
           `Add an entry to RELATION_MAP.${tableName} in src/lib/supabase-db.ts to fix.`
       );
-      continue;
+      return;
     }
 
     const rel = modelRelations[relName];
     const relInclude = relConfig as Record<string, unknown>;
     const relSelect = (relInclude?.select as Record<string, boolean>) || undefined;
 
-    // ── Determine the join key for this relation type ───────────────────
-    // The join key is the column on the TARGET table that we use to map
-    // fetched rows back to the main records:
-    //   - Forward relation (main.tenantId → Tenant.id): join key = 'id'
-    //   - Reverse relation (Target.tenantId → Tenant.id): join key = targetFkColumn
-    //   - One-to-many (Target.subscriptionId → Subscription.id): join key = targetFkColumn
-    //
-    // CRITICAL: When the caller uses a `select` clause (e.g.
-    //   include: { tenant: { select: { name: true, email: true } } })
-    // the select string would NOT include the join key. Without it, the
-    // Supabase response rows lack the field we need to map them back,
-    // causing EVERY relation lookup to return null → "Unknown" bug.
-    //
-    // Fix: auto-append the join key to the select string, then strip it
-    // from the results AFTER mapping so the output matches Prisma's
-    // select behavior exactly.
     const joinKey = rel.isMany
       ? rel.targetFkColumn!
       : (rel.targetFkColumn || 'id');
@@ -990,100 +978,90 @@ async function resolveIncludes(
       finalSelectStr = fields.join(',');
     }
 
-    // Determine the FK column direction
-    if (rel.isMany) {
-      // One-to-many: target table has FK pointing back to main table
-      const targetFkCol = rel.targetFkColumn!;
-      // Get all main record IDs
-      const mainIds = results.map(r => r.id).filter(Boolean) as string[];
-      if (mainIds.length === 0) continue;
+    try {
+      if (rel.isMany) {
+        const targetFkCol = rel.targetFkColumn!;
+        const mainIds = results.map(r => r.id).filter(Boolean) as string[];
+        if (mainIds.length === 0) return;
 
-      // Fetch all related records (join key is guaranteed present)
-      const { data: related, error } = await client
-        .from(rel.targetTable)
-        .select(finalSelectStr)
-        .in(targetFkCol, mainIds);
+        const { data: related, error } = await client
+          .from(rel.targetTable)
+          .select(finalSelectStr)
+          .in(targetFkCol, mainIds);
 
-      if (error || !related) continue;
+        if (error || !related) return;
 
-      // Group by FK value (join key is present in each row)
-      const grouped = new Map<string, unknown[]>();
-      for (const r of related) {
-        const fkVal = r[targetFkCol] as string;
-        if (!grouped.has(fkVal)) grouped.set(fkVal, []);
-        grouped.get(fkVal)!.push(r);
+        const grouped = new Map<string, unknown[]>();
+        for (const r of related) {
+          const fkVal = r[targetFkCol] as string;
+          if (!grouped.has(fkVal)) grouped.set(fkVal, []);
+          grouped.get(fkVal)!.push(r);
+        }
+
+        if (shouldStripJoinKey) {
+          for (const r of related) delete r[joinKey];
+        }
+
+        for (const main of results) {
+          main[relName] = grouped.get(main.id as string) || [];
+        }
+      } else if (rel.targetFkColumn) {
+        const mainIds = results.map(r => r.id).filter(Boolean) as string[];
+        if (mainIds.length === 0) return;
+
+        const { data: related, error } = await client
+          .from(rel.targetTable)
+          .select(finalSelectStr)
+          .in(rel.targetFkColumn, mainIds);
+
+        if (error || !related) return;
+
+        const relatedMap = new Map<string, unknown>();
+        for (const r of related) {
+          relatedMap.set(r[rel.targetFkColumn] as string, r);
+        }
+
+        if (shouldStripJoinKey) {
+          for (const r of related) delete r[joinKey];
+        }
+
+        for (const main of results) {
+          main[relName] = relatedMap.get(main.id as string) || null;
+        }
+      } else {
+        const fkColumn = rel.fkColumn;
+        const fkValues = [...new Set(results.map(r => r[fkColumn]).filter(Boolean))] as string[];
+        if (fkValues.length === 0) {
+          for (const main of results) { main[relName] = null; }
+          return;
+        }
+
+        const { data: related, error } = await client
+          .from(rel.targetTable)
+          .select(finalSelectStr)
+          .in('id', fkValues);
+
+        if (error || !related) return;
+
+        const relatedMap = new Map<string, unknown>();
+        for (const r of related) {
+          relatedMap.set(r.id as string, r);
+        }
+
+        if (shouldStripJoinKey) {
+          for (const r of related) delete r[joinKey];
+        }
+
+        for (const main of results) {
+          main[relName] = relatedMap.get(main[fkColumn] as string) || null;
+        }
       }
-
-      // Strip the join key if we added it (matches Prisma select behavior)
-      if (shouldStripJoinKey) {
-        for (const r of related) delete r[joinKey];
-      }
-
-      // Attach to main records
-      for (const main of results) {
-        main[relName] = grouped.get(main.id as string) || [];
-      }
-    } else if (rel.targetFkColumn) {
-      // Reverse relation: target table has FK pointing to main table (one-to-one reverse)
-      const mainIds = results.map(r => r.id).filter(Boolean) as string[];
-      if (mainIds.length === 0) continue;
-
-      const { data: related, error } = await client
-        .from(rel.targetTable)
-        .select(finalSelectStr)
-        .in(rel.targetFkColumn, mainIds);
-
-      if (error || !related) continue;
-
-      // Map by FK value (join key is present in each row)
-      const relatedMap = new Map<string, unknown>();
-      for (const r of related) {
-        relatedMap.set(r[rel.targetFkColumn] as string, r);
-      }
-
-      // Strip the join key if we added it
-      if (shouldStripJoinKey) {
-        for (const r of related) delete r[joinKey];
-      }
-
-      for (const main of results) {
-        main[relName] = relatedMap.get(main.id as string) || null;
-      }
-    } else {
-      // Forward relation: main table has FK pointing to target table
-      const fkColumn = rel.fkColumn;
-      // Collect FK values from main records
-      const fkValues = [...new Set(results.map(r => r[fkColumn]).filter(Boolean))] as string[];
-      if (fkValues.length === 0) {
-        for (const main of results) { main[relName] = null; }
-        continue;
-      }
-
-      // Fetch target records (join key 'id' is guaranteed present)
-      const { data: related, error } = await client
-        .from(rel.targetTable)
-        .select(finalSelectStr)
-        .in('id', fkValues);
-
-      if (error || !related) continue;
-
-      // Map by ID (join key 'id' is present in each row)
-      const relatedMap = new Map<string, unknown>();
-      for (const r of related) {
-        relatedMap.set(r.id as string, r);
-      }
-
-      // Strip the join key if we added it
-      if (shouldStripJoinKey) {
-        for (const r of related) delete r[joinKey];
-      }
-
-      // Attach to main records
-      for (const main of results) {
-        main[relName] = relatedMap.get(main[fkColumn] as string) || null;
-      }
+    } catch (err) {
+      console.warn(`[SupabaseDB] resolveIncludes: relation "${relName}" failed:`, (err as Error).message);
     }
-  }
+  });
+
+  await Promise.all(tasks);
 
   return results;
 }
@@ -1103,21 +1081,66 @@ async function resolveCounts(
 
   const countFields = Object.keys(countSelect).filter(k => countSelect[k]);
 
-  for (const main of results) {
-    const countObj: Record<string, number> = {};
-    for (const relField of countFields) {
-      try {
-        // Determine FK column name - the main model's ID in the target table
-        const targetTable = getTableName(relField);
-        const fkColumn = tableName.charAt(0).toLowerCase() + tableName.slice(1) + 'Id';
-        const { count } = await client
-          .from(targetTable)
-          .select('*', { count: 'exact', head: true })
-          .eq(fkColumn, main.id as string);
-        countObj[relField] = count || 0;
-      } catch {
-        countObj[relField] = 0;
+  // PERFORMANCE (CRITICAL N+1 FIX):
+  // Previously, this function ran ONE HTTP request PER ROW PER COUNT FIELD.
+  // A list of 50 rows × 2 count fields = 100 sequential HTTP round-trips to
+  // PostgREST, each ~300ms = ~30 SECONDS per API response. This was the #1
+  // cause of CRM portal slowness.
+  //
+  // Now: for each count field, we make a SINGLE batched query fetching just
+  // the FK column for ALL matching rows, then group-count in JS. 50 rows ×
+  // 2 fields = 2 HTTP requests (parallel via Promise.all) = ~300ms total.
+  //
+  // Note: PostgREST's `head: true` + `count: 'exact'` returns a SINGLE total
+  // count, not per-parent counts — so we can't use it for batched counting.
+  // Instead we fetch the FK column values and count in JS. This downloads
+  // more bytes but collapses N requests → 1, which is the dominant win on
+  // Supabase (where per-request latency dwarfs payload size).
+  const fkColumn = tableName.charAt(0).toLowerCase() + tableName.slice(1) + 'Id';
+  const mainIds = results.map(r => r.id).filter(Boolean) as string[];
+  if (mainIds.length === 0) return;
+
+  const countTasks = countFields.map(async (relField) => {
+    try {
+      const targetTable = getTableName(relField);
+      // Fetch only the FK column for ALL matching rows in one batched query.
+      // This returns rows like [{ [fkColumn]: 'tenantId1' }, { [fkColumn]: 'tenantId1' }, ...]
+      const { data: rows, error } = await client
+        .from(targetTable)
+        .select(fkColumn)
+        .in(fkColumn, mainIds);
+
+      if (error || !rows) {
+        // Fallback: if the batched query fails (e.g. FK column name mismatch),
+        // return a map of all zeros so the caller doesn't crash.
+        const zeroMap = new Map<string, number>();
+        for (const id of mainIds) zeroMap.set(id, 0);
+        return { relField, counts: zeroMap };
       }
+
+      // Group-count in JS
+      const counts = new Map<string, number>();
+      for (const id of mainIds) counts.set(id, 0); // init all to 0
+      for (const row of rows) {
+        const fkVal = row[fkColumn] as string;
+        if (fkVal) counts.set(fkVal, (counts.get(fkVal) || 0) + 1);
+      }
+      return { relField, counts };
+    } catch {
+      const zeroMap = new Map<string, number>();
+      for (const id of mainIds) zeroMap.set(id, 0);
+      return { relField, counts: zeroMap };
+    }
+  });
+
+  const countResults = await Promise.all(countTasks);
+
+  // Attach counts to each main record
+  for (const main of results) {
+    const id = main.id as string;
+    const countObj: Record<string, number> = {};
+    for (const { relField, counts } of countResults) {
+      countObj[relField] = counts.get(id) || 0;
     }
     main._count = countObj;
   }

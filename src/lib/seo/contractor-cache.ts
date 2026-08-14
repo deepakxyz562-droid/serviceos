@@ -21,15 +21,18 @@
  * Wrap each query in `sharedCacheWrap` (Redis when configured, in-memory
  * fallback). Cache key is parameterized by industryId + citySlug.
  *
- * TTL strategy (matches marketplace browse page pattern):
- *   - freshTtl: 30 seconds  — serve instantly, no DB query
- *   - staleTtl: 5 minutes   — serve stale + background-refresh
+ * TTL strategy (optimized for SEO directory pages):
+ *   - freshTtl: 5 minutes   — serve instantly, no DB query
+ *   - staleTtl: 1 hour      — serve stale + background-refresh
  *   - grace: if Supabase is down (CircuitOpenError), serve stale past TTL
  *
- * 30s fresh is short enough that newly-onboarded providers appear quickly
- * (matching the `force-dynamic` intent), but long enough that a Googlebot
- * crawl burst (multiple pages in sequence) hits the cache instead of
- * re-querying Supabase for every page.
+ * SEO directory data changes at most once per day (new tenants onboarding).
+ * The original 30s fresh TTL caused Googlebot crawl bursts to re-query
+ * Supabase on every page — a crawl of 100 pages = 100 full-table-scan
+ * queries in 30s. 5min fresh / 1h stale means a crawl burst hits cache
+ * 100% of the time, and even sustained traffic across a full hour only
+ * triggers ONE background refresh per page. Newly-onboarded providers
+ * appear within 5 minutes (acceptable for a directory).
  */
 
 import { db } from "@/lib/db";
@@ -60,7 +63,7 @@ export interface DirectoryLocationLookup {
  * ALL matching tenants (selecting only city+state) and groups them in JS.
  *
  * Cache key: `fieseros:contractors:hub:{industryId}:cities`
- * TTL: 30s fresh / 5min stale
+ * TTL: 5min fresh / 1h stale (city lists for directory pages change rarely)
  *
  * NOTE: The query has NO `take` limit — on Supabase (PostgREST) this is
  * silently capped at ~1000 rows by default. For industries with >1000
@@ -75,8 +78,8 @@ export async function fetchContractorHubCities(
   const cacheKey = `fieseros:contractors:hub:${industryId}:cities`;
   const result = await sharedCacheWrap<ContractorHubCity[]>(
     cacheKey,
-    30_000, // fresh: 30s
-    5 * 60_000, // stale: 5min
+    5 * 60_000, // fresh: 5min (was 30s — directory city lists change rarely)
+    60 * 60_000, // stale: 1h (was 5min)
     async () => {
       try {
         const tenants = await db.tenant.findMany({
@@ -131,12 +134,16 @@ export async function fetchContractorHubCities(
  * full tenant rows needed for ProviderCard rendering.
  *
  * Cache key: `fieseros:contractors:city:{industryId}:{citySlug}:providers`
- * TTL: 30s fresh / 5min stale
+ * TTL: 5min fresh / 1h stale
  *
  * The `contains` (LIKE) filter on city/state/serviceAreasJson is the most
  * expensive query in the codebase — it forces a full-table scan of ~91K
- * rows. Caching it for 30s eliminates 99%+ of these scans during normal
+ * rows. Caching it for 5min/1h eliminates 99%+ of these scans during normal
  * traffic and Googlebot crawls.
+ *
+ * SELECT projection: only fetches the columns ProviderCard actually renders
+ * (was `SELECT *` — ~50KB/row of JSON blobs → ~2KB/row). This cuts wire
+ * payload 25x and reduces Supabase memory pressure on large result sets.
  *
  * Returns the raw tenant array (caller does the ProviderListItem mapping).
  * We cache the raw DB rows (not the mapped objects) so the cache is
@@ -150,8 +157,8 @@ export async function fetchContractorCityProviders(
   const cacheKey = `fieseros:contractors:city:${industryId}:${citySlug}:providers`;
   const result = await sharedCacheWrap<unknown[]>(
     cacheKey,
-    30_000, // fresh: 30s
-    5 * 60_000, // stale: 5min
+    5 * 60_000, // fresh: 5min (was 30s — directory provider lists change rarely)
+    60 * 60_000, // stale: 1h (was 5min)
     async () => {
       try {
         const tenants = await db.tenant.findMany({
@@ -182,6 +189,29 @@ export async function fetchContractorCityProviders(
           },
           orderBy: [{ rating: "desc" }, { reviewCount: "desc" }],
           take: 50,
+          // SELECT projection — was `SELECT *` (~50KB/row with all JSON blobs).
+          // Only fetches columns ProviderCard actually renders. Matches the
+          // projection used by fetchIndustryHubTopProviders.
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            publicSlug: true,
+            tagline: true,
+            industry: true,
+            city: true,
+            state: true,
+            country: true,
+            rating: true,
+            reviewCount: true,
+            description: true,
+            coverImage: true,
+            claimed: true,
+            plan: true,
+            planStatus: true,
+            listingTier: true,
+            trialEndsAt: true,
+          },
         });
         return tenants as unknown[];
       } catch (err) {
@@ -257,7 +287,7 @@ export async function isKnownDirectoryCity(
  * Get top N providers for an industry (used by /{pluralIndustry} hub pages).
  *
  * Cache key: `fieseros:plural-hub:{industryId}:top12`
- * TTL: 30s fresh / 5min stale
+ * TTL: 5min fresh / 1h stale (was 30s/5min — top providers change rarely)
  *
  * Returns the raw tenant rows (select subset for ProviderCard). The caller
  * does the ProviderListItem mapping.
@@ -269,8 +299,8 @@ export async function fetchIndustryHubTopProviders(
   const cacheKey = `fieseros:plural-hub:${industryId}:top${take}`;
   const result = await sharedCacheWrap<unknown[]>(
     cacheKey,
-    30_000, // fresh: 30s
-    5 * 60_000, // stale: 5min
+    5 * 60_000, // fresh: 5min (was 30s)
+    60 * 60_000, // stale: 1h (was 5min)
     async () => {
       try {
         const tenants = await db.tenant.findMany({
@@ -362,7 +392,7 @@ export async function fetchTopDirectoryCities(
  * Get providers for a /{pluralIndustry}/{city} page (take: 100).
  *
  * Cache key: `fieseros:plural-city:{industryId}:{citySlug}:providers`
- * TTL: 30s fresh / 5min stale
+ * TTL: 5min fresh / 1h stale (was 30s/5min)
  *
  * This is the plural-slug equivalent of `fetchContractorCityProviders`.
  * Uses `take: 100` (vs 50 for contractor pages) to match the existing
@@ -381,8 +411,8 @@ export async function fetchPluralCityProviders(
   const cacheKey = `fieseros:plural-city:${industryId}:${citySlug}:providers`;
   const result = await sharedCacheWrap<unknown[]>(
     cacheKey,
-    30_000, // fresh: 30s
-    5 * 60_000, // stale: 5min
+    5 * 60_000, // fresh: 5min (was 30s — directory provider lists change rarely)
+    60 * 60_000, // stale: 1h (was 5min)
     async () => {
       try {
         const tenants = await db.tenant.findMany({
@@ -416,6 +446,29 @@ export async function fetchPluralCityProviders(
           },
           orderBy: [{ rating: "desc" }, { reviewCount: "desc" }],
           take: 100,
+          // SELECT projection — was `SELECT *` (~50KB/row with JSON blobs).
+          // Only fetches columns ProviderCard renders. Matches the projection
+          // used by fetchIndustryHubTopProviders.
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            publicSlug: true,
+            tagline: true,
+            industry: true,
+            city: true,
+            state: true,
+            country: true,
+            rating: true,
+            reviewCount: true,
+            description: true,
+            coverImage: true,
+            claimed: true,
+            plan: true,
+            planStatus: true,
+            listingTier: true,
+            trialEndsAt: true,
+          },
         });
         return tenants as unknown[];
       } catch (err) {

@@ -117,8 +117,8 @@ export async function fetchNearbyCitiesWithProviders(
 
   const result = await sharedCacheWrap<NearbyCityEntry[]>(
     cacheKey,
-    60_000, // fresh: 60s
-    10 * 60_000, // stale: 10min
+    5 * 60_000, // fresh: 5min (was 60s — nearby cities change rarely)
+    60 * 60_000, // stale: 1h (was 10min)
     async () => fetchNearbyCitiesWithProvidersUncached(
       industryId,
       citySlug,
@@ -321,8 +321,8 @@ export async function fetchServiceAreaProviders(
 
   const result = await sharedCacheWrap<ServiceAreaProvider[]>(
     cacheKey,
-    60_000, // fresh: 60s
-    10 * 60_000, // stale: 10min
+    5 * 60_000, // fresh: 5min (was 60s — service-area providers change rarely)
+    60 * 60_000, // stale: 1h (was 10min)
     async () => fetchServiceAreaProvidersUncached(
       industryId,
       citySlug,

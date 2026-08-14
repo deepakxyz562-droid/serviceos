@@ -468,8 +468,23 @@ function useEmployeeJobs(employeeId: string | null) {
   const [loading, setLoading] = useState(!!employeeId);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchJobs = useCallback(async () => {
+  // `silent` refetches skip flipping `loading` to true at the start so the
+  // cached jobs list keeps rendering underneath while a fresh fetch is in
+  // flight. Used by:
+  //   - The background tab-switch refetch in EmployeePortalLayout (so
+  //     switching from "My Jobs" to "Schedule" and back doesn't flash a
+  //     skeleton spinner over the existing list).
+  //   - The post-lifecycle-action refetch inside useJobDetailSheet (so
+  //     advancing a job's stage doesn't blank out the list behind the
+  //     JobDetailSheet).
+  // Non-silent refetches (initial mount via useEffect, manual retries from
+  // ErrorCard) flip loading=true at the start so the user sees a spinner.
+  const fetchJobs = useCallback(async (opts?: { silent?: boolean }) => {
     if (!employeeId) return;
+    const silent = opts?.silent === true;
+    if (!silent) {
+      setLoading(true);
+    }
     try {
       // V1.5 endpoint: GET /api/employee/jobs?filter=all returns an enriched
       // flat array (with lifecycleState, lifecycleTimestamps, _counts).
@@ -479,9 +494,9 @@ function useEmployeeJobs(employeeId: string | null) {
       const rows: EmployeeJobsApiResponseRow[] = Array.isArray(data) ? data : (data?.jobs ?? []);
       setJobs(rows.map(mapJobRow));
       setError(null);
-      setLoading(false);
     } catch (err: any) {
       setError(err.message || 'Failed to load jobs');
+    } finally {
       setLoading(false);
     }
   }, [employeeId]);
@@ -622,8 +637,15 @@ function useEmployeeProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refetch = useCallback(async () => {
-    setLoading(true);
+  const refetch = useCallback(async (opts?: { silent?: boolean }) => {
+    // `silent` skips flipping `loading` to true at the start so the form
+    // keeps rendering the existing values while the fresh profile is in
+    // flight. Used by the ProfileView's keep-alive activation effect —
+    // without it, every tab switch back to "Profile" would briefly flash
+    // the "Loading profile…" skeleton over the populated form.
+    if (!opts?.silent) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const res = await authFetch('/api/employee/profile?XTransformPort=3000');
@@ -709,7 +731,7 @@ function useJobDetailSheet({
   refetch,
 }: {
   jobs: Job[];
-  refetch: () => Promise<void> | void;
+  refetch: (opts?: { silent?: boolean }) => Promise<void> | void;
 }) {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -794,7 +816,10 @@ function useJobDetailSheet({
         // refetch() updates the `jobs` array; the sync effect above will
         // refresh `selectedJob` from the new data so the action buttons
         // advance.
-        await refetch();
+        // Silent: don't flip loading=true — otherwise the jobs list behind
+        // the JobDetailSheet would briefly flash a skeleton spinner between
+        // the lifecycle POST succeeding and the refetched list landing.
+        await refetch({ silent: true });
         // Auto-close the sheet once the job is completed.
         if (action === 'complete') {
           setSelectedJob(null);
@@ -1218,15 +1243,27 @@ function ErrorCard({ message, onRetry }: { message: string; onRetry?: () => void
 // ─── Sub-View: Home ─────────────────────────────────────────────────────────
 
 function HomeView({
-  employeeId,
   onViewChange,
+  jobs,
+  loading,
+  error,
+  refetch,
+  employee,
 }: {
-  employeeId: string;
   onViewChange?: (view: EmployeeSubView) => void;
+  // Hoisted from the parent EmployeePortalLayout so HomeView, MyJobsView and
+  // ScheduleView share a single /api/employee/jobs fetch (previously each view
+  // fired its own parallel request — 3x the load on the API + triple the
+  // latency for the user). `employee` is the same: hoisted from the parent's
+  // useEmployeeRecord call so HomeView doesn't re-fetch the record it already
+  // has access to.
+  jobs: Job[];
+  loading: boolean;
+  error: string | null;
+  refetch: (opts?: { silent?: boolean }) => Promise<void> | void;
+  employee: EmployeeRecord | null;
 }) {
   const { auth } = useAppStore();
-  const { jobs, loading, error, refetch } = useEmployeeJobs(employeeId);
-  const { employee } = useEmployeeRecord(employeeId);
   // Shared job-detail-sheet state machine — lets the employee tap a job in
   // "Today's Schedule" and open the full JobDetailSheet (with accept / start /
   // complete lifecycle actions) directly from the home screen, exactly like
@@ -1531,7 +1568,7 @@ function HomeView({
         onAction={handleLifecycleAction}
         onJobCompleted={async () => {
           toast.success('Job completed successfully');
-          await refetch();
+          await refetch({ silent: true });
           setSelectedJob(null);
         }}
         actionLoading={actionLoading}
@@ -2604,9 +2641,19 @@ function JobTimeEntriesSection({ jobId }: { jobId: string }) {
 
 // ─── Sub-View: My Jobs ──────────────────────────────────────────────────────
 
-function MyJobsView({ employeeId }: { employeeId: string }) {
+function MyJobsView({
+  jobs,
+  loading,
+  error,
+  refetch,
+}: {
+  // Hoisted from EmployeePortalLayout — see HomeView for the rationale.
+  jobs: Job[];
+  loading: boolean;
+  error: string | null;
+  refetch: (opts?: { silent?: boolean }) => Promise<void> | void;
+}) {
   const [filter, setFilter] = useState<string>('all');
-  const { jobs, loading, error, refetch } = useEmployeeJobs(employeeId);
   // Shared job-detail-sheet state machine (selectedJob + actionLoading +
   // handleLifecycleAction + the sync-from-jobs effect). Extracted so
   // HomeView can reuse the exact same behaviour.
@@ -2801,7 +2848,7 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
         onAction={handleLifecycleAction}
         onJobCompleted={async (jobId) => {
           toast.success('Job completed successfully');
-          await refetch();
+          await refetch({ silent: true });
           // Auto-close the detail sheet once the job is completed.
           setSelectedJob(null);
         }}
@@ -2813,8 +2860,18 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
 
 // ─── Sub-View: Schedule ─────────────────────────────────────────────────────
 
-function ScheduleView({ employeeId }: { employeeId: string }) {
-  const { jobs, loading, error, refetch } = useEmployeeJobs(employeeId);
+function ScheduleView({
+  jobs,
+  loading,
+  error,
+  refetch,
+}: {
+  // Hoisted from EmployeePortalLayout — see HomeView for the rationale.
+  jobs: Job[];
+  loading: boolean;
+  error: string | null;
+  refetch: (opts?: { silent?: boolean }) => Promise<void> | void;
+}) {
 
   // Build weekly schedule from real job data
   const now = new Date();
@@ -2966,7 +3023,18 @@ function ScheduleView({ employeeId }: { employeeId: string }) {
 
 // ─── Sub-View: Attendance ───────────────────────────────────────────────────
 
-function AttendanceView({ onShiftChange }: { onShiftChange?: (hasShift: boolean) => void }) {
+function AttendanceView({
+  onShiftChange,
+  isActive,
+}: {
+  onShiftChange?: (hasShift: boolean) => void;
+  // Driven by `activeView === 'attendance'` in EmployeePortalLayout. When
+  // this view transitions from hidden → visible, we silently refetch the
+  // shift + week history so an employee returning to the Attendance tab
+  // sees fresh data (e.g. a shift the admin just clocked them in for)
+  // without needing to tap the manual refresh button.
+  isActive?: boolean;
+}) {
   // ── Real shift state (V1.5) ──────────────────────────────────────────────
   // activeShift mirrors the EmployeeShift row from /api/employee/shift/today.
   // onShiftChange notifies the parent layout (EmployeePortalLayout) whenever
@@ -3096,6 +3164,34 @@ function AttendanceView({ onShiftChange }: { onShiftChange?: (hasShift: boolean)
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // ── Background refetch on activation (keep-alive support) ──────────────
+  // The portal keeps every visited sub-view mounted (visitedViews + the
+  // `hidden` class), so the mount-time `refresh()` above only fires ONCE
+  // per AttendanceView lifetime — the very first time the user opens the
+  // tab. Subsequent visits re-show the cached UI without re-fetching, so
+  // an employee who clocks in elsewhere (or whose admin just assigned a
+  // shift) would see stale state until they tapped the manual refresh
+  // button.
+  //
+  // This effect watches `isActive` (driven by activeView === 'attendance'
+  // in the parent) and silently calls `refresh()` on each false → true
+  // transition. `refresh()` does NOT flip `loading` to true at the start
+  // (only at the end on completion), so the existing UI keeps rendering
+  // underneath — no spinner flash. The first effect invocation is skipped
+  // (the mount-time refresh() above already covers the initial fetch).
+  const wasActiveRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const active = isActive !== false; // undefined → treat as active (mount)
+    if (wasActiveRef.current === null) {
+      wasActiveRef.current = active;
+      return;
+    }
+    if (active && !wasActiveRef.current) {
+      refresh();
+    }
+    wasActiveRef.current = active;
+  }, [isActive, refresh]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
   const handleClockIn = async () => {
@@ -3662,7 +3758,17 @@ function InboxView() {
 
 // ─── Sub-View: Profile ──────────────────────────────────────────────────────
 
-function ProfileView({ employeeId }: { employeeId: string }) {
+function ProfileView({
+  employeeId,
+  isActive,
+}: {
+  employeeId: string;
+  // Driven by `activeView === 'profile'` in EmployeePortalLayout. When this
+  // view transitions from hidden → visible, we silently refetch the profile
+  // so an employee returning to the Profile tab sees any admin-side updates
+  // (e.g. an admin changed their role / status) without re-tapping "Save".
+  isActive?: boolean;
+}) {
   const { auth } = useAppStore();
   // Profile fetch — returns the full self record including `location`,
   // `avatar`, and `whatsappId` (which holds the emergency-contact JSON).
@@ -3702,6 +3808,32 @@ function ProfileView({ employeeId }: { employeeId: string }) {
     setEmergencyAlternate(profile.emergency.alternate || '');
     setAvatarPreview(profile.avatar || null);
   }, [profile]);
+
+  // ── Background refetch on activation (keep-alive support) ──────────────
+  // Same pattern as AttendanceView: the keep-alive rendering keeps this
+  // view mounted after the first visit, so the mount-time fetch inside
+  // useEmployeeProfile only fires ONCE. Subsequent tab switches back to
+  // "Profile" would otherwise show stale data (e.g. an admin's role
+  // change, an avatar upload from another device). This effect watches
+  // `isActive` (driven by activeView === 'profile' in the parent) and
+  // silently refetches the profile on each false → true transition.
+  // `silent: true` skips `setLoading(true)` so the populated form keeps
+  // rendering underneath — no "Loading profile…" skeleton flash.
+  const profileWasActiveRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const active = isActive !== false; // undefined → treat as active (mount)
+    if (profileWasActiveRef.current === null) {
+      profileWasActiveRef.current = active;
+      return;
+    }
+    if (active && !profileWasActiveRef.current && profile) {
+      // Only refetch after the initial profile has landed — otherwise we'd
+      // race with the mount-time fetch and could double-fire on first
+      // activation if isActive flickers.
+      refetchProfile({ silent: true });
+    }
+    profileWasActiveRef.current = active;
+  }, [isActive, profile, refetchProfile]);
 
   // Derived header values (with JWT fallbacks while the profile loads).
   const employeeName = profile?.name || auth.user?.name || 'Employee';
@@ -4483,10 +4615,55 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
   const { auth } = useAppStore();
 
   const employeeId = auth.user?.employeeId ?? null;
+  // Hoisted shared data hooks — previously each of HomeView, MyJobsView and
+  // ScheduleView called useEmployeeJobs(employeeId) independently, firing 3
+  // parallel GET /api/employee/jobs requests on the first paint of every
+  // view (and again on every lifecycle refetch). HomeView also called
+  // useEmployeeRecord(employeeId) — a duplicate of the call below. By
+  // hoisting both hooks to the parent, all three views share a single
+  // request and stay in lock-step with the same cached `jobs` array
+  // (which the useJobDetailSheet sync effect relies on to advance
+  // `selectedJob` after a lifecycle action).
   const { employee } = useEmployeeRecord(employeeId);
+  const { jobs, loading: jobsLoading, error: jobsError, refetch: refetchJobs } =
+    useEmployeeJobs(employeeId);
 
   const employeeName = employee?.name || auth.user?.name || 'Employee';
   const employeeRole = employee?.role || 'Field Service Technician';
+
+  // ── Background silent refetch on tab switch (keep-alive support) ───────
+  // The portal keeps every visited sub-view mounted (visitedViews + the
+  // `hidden` class) so views don't unmount on navigation. That means the
+  // mount-time fetch inside useEmployeeJobs only fires ONCE per portal
+  // lifetime — switching from "My Jobs" to "Schedule" and back would show
+  // stale cached data until the user manually refreshed.
+  //
+  // This effect watches `activeView` and silently refetches the jobs list
+  // whenever it changes (skipping the initial mount — the mount-time fetch
+  // already covers it). `silent: true` skips `setLoading(true)` so the
+  // cached jobs list keeps rendering underneath — no skeleton spinner
+  // flash over the existing UI.
+  const previousActiveViewRef = useRef<EmployeeSubView | null>(null);
+  useEffect(() => {
+    if (previousActiveViewRef.current === null) {
+      // First render — the mount-time fetch inside useEmployeeJobs handles it.
+      previousActiveViewRef.current = activeView;
+      return;
+    }
+    if (previousActiveViewRef.current !== activeView) {
+      previousActiveViewRef.current = activeView;
+      // Silently refresh the jobs list on every tab switch so the employee
+      // sees fresh data without a spinner flash. Only the 3 jobs-backed
+      // views (home / my-jobs / schedule) actually consume the result, but
+      // a single background refetch is cheaper than refetching per-view and
+      // keeps the cached list warm for when the user navigates to one of
+      // them. AttendanceView and ProfileView refetch their own data on
+      // activation via their own `isActive`-driven effects (see below).
+      if (employeeId) {
+        refetchJobs({ silent: true });
+      }
+    }
+  }, [activeView, employeeId, refetchJobs]);
 
   // ── Auto-subscribe to Web Push on mount ────────────────────────────────
   // If the employee previously granted notification permission (e.g. on a
@@ -4753,22 +4930,42 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
             <>
               {visitedViews.home && (
                 <div className={cn(activeView !== 'home' && 'hidden')}>
-                  <HomeView employeeId={employeeId} onViewChange={handleViewChange} />
+                  <HomeView
+                    onViewChange={handleViewChange}
+                    jobs={jobs}
+                    loading={jobsLoading}
+                    error={jobsError}
+                    refetch={refetchJobs}
+                    employee={employee}
+                  />
                 </div>
               )}
               {visitedViews['my-jobs'] && (
                 <div className={cn(activeView !== 'my-jobs' && 'hidden')}>
-                  <MyJobsView employeeId={employeeId} />
+                  <MyJobsView
+                    jobs={jobs}
+                    loading={jobsLoading}
+                    error={jobsError}
+                    refetch={refetchJobs}
+                  />
                 </div>
               )}
               {visitedViews.schedule && (
                 <div className={cn(activeView !== 'schedule' && 'hidden')}>
-                  <ScheduleView employeeId={employeeId} />
+                  <ScheduleView
+                    jobs={jobs}
+                    loading={jobsLoading}
+                    error={jobsError}
+                    refetch={refetchJobs}
+                  />
                 </div>
               )}
               {visitedViews.attendance && (
                 <div className={cn(activeView !== 'attendance' && 'hidden')}>
-                  <AttendanceView onShiftChange={setHasActiveShift} />
+                  <AttendanceView
+                    onShiftChange={setHasActiveShift}
+                    isActive={activeView === 'attendance'}
+                  />
                 </div>
               )}
               {visitedViews.inbox && (
@@ -4778,7 +4975,10 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
               )}
               {visitedViews.profile && (
                 <div className={cn(activeView !== 'profile' && 'hidden')}>
-                  <ProfileView employeeId={employeeId} />
+                  <ProfileView
+                    employeeId={employeeId ?? ''}
+                    isActive={activeView === 'profile'}
+                  />
                 </div>
               )}
             </>

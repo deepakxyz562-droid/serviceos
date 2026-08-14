@@ -38,6 +38,60 @@
 
 import { ttlCacheGet, ttlCacheSet, ttlCacheDelete, ttlCacheWrap } from './ttl-cache';
 
+// ── In-memory shadow cache (CRITICAL for Redis failure resilience) ──────────
+//
+// PROBLEM: Previously, when Redis had a transient failure (timeout, network
+// blip, rate limit), `redisExec` returned null → treated as a cache MISS →
+// the request fell through to `compute()` → hit Supabase directly. With
+// 9,001 calls to the slowest query, even a 10% Redis failure rate meant
+// 900 full-table-scan queries hammering an already-overloaded Supabase.
+// This created a cascade failure: Redis hiccups → Supabase hammered →
+// Supabase slows → circuit breaker opens → more failures.
+//
+// SOLUTION: Maintain a process-local shadow copy of every value we write
+// to Redis. On a Redis GET failure (not a miss — an actual error/timeout),
+// fall back to the shadow copy instead of hitting Supabase. The shadow is
+// best-effort: it's per-instance (not shared), but it's FAR better than
+// a raw Supabase hit during a Redis outage.
+
+interface ShadowEntry {
+  v: unknown;
+  w: number; // writtenAt ms epoch
+  expiresAt: number; // ms epoch — shadow entries expire too (generous TTL)
+}
+
+const shadowCache = new Map<string, ShadowEntry>();
+const SHADOW_MAX_ENTRIES = 2000; // bound memory — ~2000 cached keys max
+
+function shadowSet<T>(key: string, value: T, totalTtlMs: number): void {
+  // Evict expired entries opportunistically (cheap, prevents unbounded growth)
+  if (shadowCache.size > SHADOW_MAX_ENTRIES) {
+    const now = Date.now();
+    for (const [k, e] of shadowCache) {
+      if (e.expiresAt < now) shadowCache.delete(k);
+    }
+  }
+  shadowCache.set(key, {
+    v: value,
+    w: Date.now(),
+    expiresAt: Date.now() + totalTtlMs,
+  });
+}
+
+function shadowGet<T>(key: string): { v: T; w: number } | undefined {
+  const entry = shadowCache.get(key);
+  if (!entry) return undefined;
+  if (entry.expiresAt < Date.now()) {
+    shadowCache.delete(key);
+    return undefined;
+  }
+  return { v: entry.v as T, w: entry.w };
+}
+
+function shadowDelete(key: string): void {
+  shadowCache.delete(key);
+}
+
 // ── Redis backend detection ────────────────────────────────────────────────
 
 const REDIS_URL =
@@ -51,6 +105,21 @@ const REDIS_TOKEN =
 
 export const hasSharedRedis = Boolean(REDIS_URL && REDIS_TOKEN);
 
+// ── Redis failure tracking ─────────────────────────────────────────────────
+// Tracks whether the LAST redisExec actually succeeded (vs returned null due
+// to an error). This distinguishes a genuine cache miss (key not in Redis)
+// from a Redis failure (couldn't reach Redis). redisGet uses this to decide
+// whether to throw RedisUnavailableError (→ fall back to shadow cache) or
+// return undefined (→ genuine miss, recompute).
+let lastRedisCallFailed = false;
+
+class RedisUnavailableError extends Error {
+  constructor() {
+    super('Redis unavailable');
+    this.name = 'RedisUnavailableError';
+  }
+}
+
 // ── Redis REST client (dependency-free) ────────────────────────────────────
 //
 // Uses the Upstash pipeline endpoint so large values (e.g. the full sitemap
@@ -60,6 +129,7 @@ export const hasSharedRedis = Boolean(REDIS_URL && REDIS_TOKEN);
 
 async function redisExec(args: string[]): Promise<unknown> {
   if (!hasSharedRedis) throw new Error('[shared-cache] Redis not configured');
+  lastRedisCallFailed = false; // reset before each call
   try {
     const res = await fetch(`${REDIS_URL}/pipeline`, {
       method: 'POST',
@@ -73,7 +143,10 @@ async function redisExec(args: string[]): Promise<unknown> {
       signal: AbortSignal.timeout(2000),
     });
     if (!res.ok) {
+      // HTTP error from Redis (e.g. 429 rate limit, 5xx) — mark as failed
+      // so the caller falls back to the shadow cache instead of Supabase.
       console.error(`[shared-cache] Redis HTTP ${res.status}: ${await res.text().catch(() => '')}`);
+      lastRedisCallFailed = true;
       return null;
     }
     const json = (await res.json()) as Array<{ result: unknown }>;
@@ -81,16 +154,27 @@ async function redisExec(args: string[]): Promise<unknown> {
     // command at a time, so index 0.
     return json[0]?.result ?? null;
   } catch (err) {
-    // Network error / timeout / bad URL — degrade to in-memory silently.
-    // Logging here would be noisy (every request when Redis is down).
-    console.error('[shared-cache] Redis exec failed, degrading to in-memory:', (err as Error).message);
+    // Network error / timeout / bad URL — mark as failed so the caller
+    // uses the shadow cache. This is the CASCADE-FAILURE FIX: previously
+    // every Redis hiccup resulted in a raw Supabase hit.
+    lastRedisCallFailed = true;
+    console.error('[shared-cache] Redis exec failed, falling back to shadow cache:', (err as Error).message);
     return null;
   }
 }
 
 async function redisGet<T>(key: string): Promise<T | undefined> {
   const raw = (await redisExec(['GET', key])) as string | null;
-  if (raw == null) return undefined;
+  // redisExec returns null on BOTH "key not found" AND "Redis error".
+  // We use the lastRedisCallFailed flag (declared above redisExec) to
+  // distinguish: if the underlying fetch threw/errored, redisExec returns
+  // null AND sets the flag. A true miss leaves the flag false.
+  if (raw == null) {
+    if (lastRedisCallFailed) {
+      throw new RedisUnavailableError();
+    }
+    return undefined;
+  }
   try {
     return JSON.parse(raw) as T;
   } catch {
@@ -146,23 +230,55 @@ export async function sharedCacheWrap<T>(
   shouldCache?: (value: T) => boolean,
 ): Promise<SharedCacheResult<T>> {
   const now = Date.now();
+  const totalTtlMs = freshTtlMs + staleTtlMs;
 
   // 1. Try shared (Redis) cache first — this is the cross-instance layer.
   if (hasSharedRedis) {
-    const entry = await redisGet<StoredEntry<T>>(key);
-    if (entry) {
-      const age = now - entry.w;
+    let redisEntry: StoredEntry<T> | undefined;
+    let redisFailed = false;
+    try {
+      redisEntry = await redisGet<StoredEntry<T>>(key);
+    } catch (err) {
+      // RedisUnavailableError — Redis is down. Fall back to shadow cache.
+      redisFailed = true;
+    }
+
+    if (redisEntry) {
+      const age = now - redisEntry.w;
       if (age < freshTtlMs) {
-        return { value: entry.v, source: 'fresh' };
+        // Mirror to shadow cache so future Redis failures can use it
+        shadowSet(key, redisEntry, totalTtlMs);
+        return { value: redisEntry.v, source: 'fresh' };
       }
       if (age < freshTtlMs + staleTtlMs) {
         // Stale but usable — serve immediately, refresh in background.
         // Fire-and-forget; errors are swallowed (the next request retries).
+        shadowSet(key, redisEntry, totalTtlMs);
         void backgroundRefresh(key, freshTtlMs, staleTtlMs, compute, shouldCache);
-        return { value: entry.v, source: 'stale' };
+        return { value: redisEntry.v, source: 'stale' };
       }
       // Past staleTtl — fall through to synchronous recompute, but keep the
       // expired entry around in case compute() fails (grace period below).
+    } else if (redisFailed) {
+      // CASCADE-FAILURE FIX: Redis is down — check the shadow cache BEFORE
+      // hitting Supabase. The shadow entry may be stale, but stale data is
+      // far better than hammering an overloaded Supabase with full-table-scan
+      // queries. Serve shadow if fresh or stale; only recompute if shadow
+      // is also missing (cold start during a Redis outage).
+      const shadow = shadowGet<T>(key);
+      if (shadow) {
+        const age = now - shadow.w;
+        if (age < freshTtlMs) {
+          return { value: shadow.v, source: 'fresh' };
+        }
+        // Serve stale from shadow + background refresh (will retry Redis)
+        if (age < totalTtlMs) {
+          void backgroundRefresh(key, freshTtlMs, staleTtlMs, compute, shouldCache);
+          return { value: shadow.v, source: 'stale' };
+        }
+      }
+      // Shadow also missing — fall through to synchronous recompute.
+      // This is the unavoidable cold path during a Redis outage.
     }
   } else {
     // 2. No Redis — use the in-memory ttlCache (process-local).
@@ -181,8 +297,10 @@ export async function sharedCacheWrap<T>(
     if (!shouldCache || shouldCache(fresh)) {
       const entry: StoredEntry<T> = { v: fresh, w: Date.now() };
       if (hasSharedRedis) {
-        const totalTtlSec = Math.ceil((freshTtlMs + staleTtlMs) / 1000);
+        const totalTtlSec = Math.ceil(totalTtlMs / 1000);
         await redisSet(key, entry, totalTtlSec);
+        // Mirror to shadow cache so Redis failures can fall back here
+        shadowSet(key, entry, totalTtlMs);
       } else {
         // In-memory: store with freshTtl (no SWR, but graceful degradation
         // still works via the CircuitOpenError catch below).
@@ -194,13 +312,27 @@ export async function sharedCacheWrap<T>(
     // GRACE PERIOD: if compute failed (esp. CircuitOpenError — Supabase is
     // down) AND we have a stale entry, serve it rather than erroring.
     if (hasSharedRedis) {
-      const entry = await redisGet<StoredEntry<T>>(key);
-      if (entry) {
+      let redisEntry: StoredEntry<T> | undefined;
+      try {
+        redisEntry = await redisGet<StoredEntry<T>>(key);
+      } catch {
+        // Redis also down — try shadow
+      }
+      if (redisEntry) {
         console.warn(
-          `[shared-cache] compute() failed for "${key}", serving stale (age=${Math.round((now - entry.w) / 1000)}s):`,
+          `[shared-cache] compute() failed for "${key}", serving stale (age=${Math.round((now - redisEntry.w) / 1000)}s):`,
           (err as Error).message,
         );
-        return { value: entry.v, source: 'stale-grace' };
+        return { value: redisEntry.v, source: 'stale-grace' };
+      }
+      // Redis failed too — try shadow cache as last resort
+      const shadow = shadowGet<T>(key);
+      if (shadow) {
+        console.warn(
+          `[shared-cache] compute() + Redis both failed for "${key}", serving shadow stale (age=${Math.round((now - shadow.w) / 1000)}s):`,
+          (err as Error).message,
+        );
+        return { value: shadow.v, source: 'stale-grace' };
       }
     }
     throw err;
@@ -225,6 +357,8 @@ async function backgroundRefresh<T>(
       if (hasSharedRedis) {
         const totalTtlSec = Math.ceil((freshTtlMs + staleTtlMs) / 1000);
         await redisSet(key, entry, totalTtlSec);
+        // Mirror to shadow cache
+        shadowSet(key, entry, freshTtlMs + staleTtlMs);
       } else {
         ttlCacheSet(key, fresh, freshTtlMs);
       }
@@ -274,8 +408,13 @@ export async function sharedCacheSet<T>(
  */
 export async function sharedCacheDelete(key: string): Promise<void> {
   if (hasSharedRedis) {
-    await redisDelete(key);
+    try {
+      await redisDelete(key);
+    } catch {
+      // Redis down — still invalidate shadow so stale data doesn't persist
+    }
   }
+  shadowDelete(key);
   ttlCacheDelete(key);
 }
 

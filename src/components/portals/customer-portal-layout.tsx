@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import {
   LayoutDashboard,
   CalendarCheck,
@@ -1128,13 +1128,24 @@ function formatINR(amount: number): string {
   return formatCurrency(amount);
 }
 
-function OrdersView({ customerEmail }: { customerEmail: string }) {
+function OrdersView({
+  customerEmail,
+  isActive = false,
+  dataNonce = 0,
+}: {
+  customerEmail: string;
+  isActive?: boolean;
+  dataNonce?: number;
+}) {
   const [orders, setOrders] = useState<EcommerceOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
+  // `silent=true` skips the loading spinner so background refetches (on tab
+  // re-activation or after a mutation) update data in place without flashing
+  // the UI. The initial fetch on mount is non-silent.
+  const fetchOrders = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await fetch(apiUrl(`/api/ecommerce/orders?search=${encodeURIComponent(customerEmail)}`), {
         credentials: 'include',
@@ -1146,7 +1157,7 @@ function OrdersView({ customerEmail }: { customerEmail: string }) {
     } catch {
       // silently fail
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [customerEmail]);
 
@@ -1155,6 +1166,19 @@ function OrdersView({ customerEmail }: { customerEmail: string }) {
       fetchOrders();
     }
   }, [customerEmail, fetchOrders]);
+
+  // Background refetch on tab re-activation + when dataNonce changes (mutation
+  // happened elsewhere). Skipped on the very first run — the initial-fetch
+  // effect above handles the first load with the loading spinner.
+  const hasMountedRef = useRef(false);
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    if (!isActive || !customerEmail) return;
+    fetchOrders(true);
+  }, [isActive, dataNonce, fetchOrders, customerEmail]);
 
   const toggleExpand = (orderId: string) => {
     setExpandedOrderId(prev => prev === orderId ? null : orderId);
@@ -1408,7 +1432,15 @@ function OrdersView({ customerEmail }: { customerEmail: string }) {
   );
 }
 
-function InvoicesView({ initialInvoiceId }: { initialInvoiceId?: string | null }) {
+function InvoicesView({
+  initialInvoiceId,
+  isActive = false,
+  dataNonce = 0,
+}: {
+  initialInvoiceId?: string | null;
+  isActive?: boolean;
+  dataNonce?: number;
+}) {
   const auth = useAppStore((s) => s.auth);
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1416,9 +1448,14 @@ function InvoicesView({ initialInvoiceId }: { initialInvoiceId?: string | null }
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const fetchInvoices = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // `silent=true` skips the loading spinner + error reset so background
+  // refetches (on tab re-activation or after a mutation) update data in place
+  // without flashing the UI. The initial fetch on mount is non-silent.
+  const fetchInvoices = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const customerId = getRealCustomerId(auth.user);
       // Build query — filter by customerId so the customer only sees their own invoices
@@ -1430,16 +1467,30 @@ function InvoicesView({ initialInvoiceId }: { initialInvoiceId?: string | null }
       if (!res.ok) throw new Error('Failed to load invoices');
       const data = await res.json();
       setInvoices(data.invoices || []);
+      setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load invoices');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [auth.user]);
 
   useEffect(() => {
     fetchInvoices();
   }, [fetchInvoices]);
+
+  // Background refetch on tab re-activation + when dataNonce changes (mutation
+  // happened elsewhere). Skipped on the very first run — the initial-fetch
+  // effect above handles the first load with the loading spinner.
+  const hasMountedRef = useRef(false);
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    if (!isActive) return;
+    fetchInvoices(true);
+  }, [isActive, dataNonce, fetchInvoices]);
 
   // Auto-expand the deep-linked invoice on first render (magic-link redirect)
   useEffect(() => {
@@ -2014,16 +2065,29 @@ function formatQuoteDate(dateStr: string | null | undefined): string {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function QuotesView({ initialQuoteId }: { initialQuoteId?: string | null }) {
+function QuotesView({
+  initialQuoteId,
+  isActive = false,
+  dataNonce = 0,
+}: {
+  initialQuoteId?: string | null;
+  isActive?: boolean;
+  dataNonce?: number;
+}) {
   const auth = useAppStore((s) => s.auth);
   const [quotes, setQuotes] = useState<QuoteItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
 
-  const fetchQuotes = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // `silent=true` skips the loading spinner + error reset so background
+  // refetches (on tab re-activation or after a mutation) update data in place
+  // without flashing the UI. The initial fetch on mount is non-silent.
+  const fetchQuotes = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const customerId = getRealCustomerId(auth.user);
       const params = new URLSearchParams({ limit: '100' });
@@ -2034,16 +2098,30 @@ function QuotesView({ initialQuoteId }: { initialQuoteId?: string | null }) {
       if (!res.ok) throw new Error('Failed to load quotes');
       const data = await res.json();
       setQuotes(Array.isArray(data) ? data : (data.quotes || []));
+      setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load quotes');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [auth.user]);
 
   useEffect(() => {
     fetchQuotes();
   }, [fetchQuotes]);
+
+  // Background refetch on tab re-activation + when dataNonce changes (mutation
+  // happened elsewhere). Skipped on the very first run — the initial-fetch
+  // effect above handles the first load with the loading spinner.
+  const hasMountedRef = useRef(false);
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    if (!isActive) return;
+    fetchQuotes(true);
+  }, [isActive, dataNonce, fetchQuotes]);
 
   // Auto-open the deep-linked quote on first render (magic-link redirect).
   useEffect(() => {
@@ -2302,7 +2380,13 @@ interface ConversationItem {
   messages?: ConversationMessage[];
 }
 
-function MessagesView() {
+function MessagesView({
+  isActive = false,
+  dataNonce = 0,
+}: {
+  isActive?: boolean;
+  dataNonce?: number;
+}) {
   const [newMessage, setNewMessage] = useState('');
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2311,9 +2395,14 @@ function MessagesView() {
   const auth = useAppStore((s) => s.auth);
   const companyName = auth.tenant?.name || 'Support';
 
-  const fetchConversations = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // `silent=true` skips the loading spinner + error reset so background
+  // refetches (on tab re-activation or after a mutation) update data in place
+  // without flashing the UI. The initial fetch on mount is non-silent.
+  const fetchConversations = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const customerId = getRealCustomerId(auth.user);
       const params = new URLSearchParams({ limit: '50' });
@@ -2329,16 +2418,38 @@ function MessagesView() {
       if (convos.length > 0 && !selectedConversationId) {
         setSelectedConversationId(convos[0].id);
       }
+      if (silent) setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load messages');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [auth.user, selectedConversationId]);
 
   useEffect(() => {
     fetchConversations();
   }, [auth.user]);
+
+  // Background refetch on tab re-activation + when dataNonce changes (mutation
+  // happened elsewhere). We use a ref to hold the latest fetchConversations so
+  // the effect's deps stay minimal — otherwise the effect would re-fire every
+  // time `selectedConversationId` changes (since fetchConversations depends on
+  // it). Skipped on the very first run — the initial-fetch effect above
+  // handles the first load with the loading spinner.
+  const fetchConversationsRef = useRef(fetchConversations);
+  useEffect(() => {
+    fetchConversationsRef.current = fetchConversations;
+  }, [fetchConversations]);
+
+  const hasMountedRef = useRef(false);
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    if (!isActive) return;
+    fetchConversationsRef.current(true);
+  }, [isActive, dataNonce]);
 
   // Parse messages from the selected conversation
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
@@ -2507,7 +2618,13 @@ interface ReviewItem {
   createdAt: string;
 }
 
-function ReviewsView() {
+function ReviewsView({
+  isActive = false,
+  dataNonce = 0,
+}: {
+  isActive?: boolean;
+  dataNonce?: number;
+}) {
   const auth = useAppStore((s) => s.auth);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2517,9 +2634,14 @@ function ReviewsView() {
   const [newReviewText, setNewReviewText] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
 
-  const fetchReviews = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // `silent=true` skips the loading spinner + error reset so background
+  // refetches (on tab re-activation or after a mutation) update data in place
+  // without flashing the UI. The initial fetch on mount is non-silent.
+  const fetchReviews = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const customerId = getRealCustomerId(auth.user);
       const params = new URLSearchParams({ limit: '100' });
@@ -2530,16 +2652,30 @@ function ReviewsView() {
       if (!res.ok) throw new Error('Failed to load reviews');
       const data = await res.json();
       setReviews(data.reviews || []);
+      setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load reviews');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [auth.user]);
 
   useEffect(() => {
     fetchReviews();
   }, [fetchReviews]);
+
+  // Background refetch on tab re-activation + when dataNonce changes (mutation
+  // happened elsewhere). Skipped on the very first run — the initial-fetch
+  // effect above handles the first load with the loading spinner.
+  const hasMountedRef = useRef(false);
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    if (!isActive) return;
+    fetchReviews(true);
+  }, [isActive, dataNonce, fetchReviews]);
 
   const handleSubmitReview = async () => {
     if (newRating === 0 || !newReviewText.trim() || submittingReview) return;
@@ -2711,7 +2847,13 @@ function ReviewsView() {
   );
 }
 
-function ProfileView() {
+function ProfileView({
+  isActive = false,
+  dataNonce = 0,
+}: {
+  isActive?: boolean;
+  dataNonce?: number;
+}) {
   const auth = useAppStore((s) => s.auth);
   const customerName = auth.user?.name || 'Customer';
   const customerEmail = auth.user?.email || '';
@@ -2728,13 +2870,35 @@ function ProfileView() {
   const [addressLoading, setAddressLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
 
-  useEffect(() => {
+  // `silent=true` skips the loading spinner so background refetches (on tab
+  // re-activation or after a mutation) update data in place without flashing
+  // the UI. The initial fetch on mount is non-silent.
+  const fetchProfile = useCallback(async (silent = false) => {
     if (!customerId) {
-      setAddressLoading(false);
+      if (!silent) setAddressLoading(false);
       return;
     }
+    if (!silent) setAddressLoading(true);
+    try {
+      const res = await fetch(apiUrl(`/api/customers/${customerId}`), { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      setAddress(data?.address || '');
+    } catch {
+      // leave address empty — user can still type & save
+    } finally {
+      if (!silent) setAddressLoading(false);
+    }
+  }, [customerId]);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (!customerId) {
+        if (!cancelled) setAddressLoading(false);
+        return;
+      }
+      if (!cancelled) setAddressLoading(true);
       try {
         const res = await fetch(apiUrl(`/api/customers/${customerId}`), { credentials: 'include' });
         if (!res.ok) return;
@@ -2748,6 +2912,19 @@ function ProfileView() {
     })();
     return () => { cancelled = true; };
   }, [customerId]);
+
+  // Background refetch on tab re-activation + when dataNonce changes (mutation
+  // happened elsewhere). Skipped on the very first run — the initial-fetch
+  // effect above handles the first load with the loading spinner.
+  const hasMountedRef = useRef(false);
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    if (!isActive) return;
+    fetchProfile(true);
+  }, [isActive, dataNonce, fetchProfile]);
 
   const handleSaveProfile = async () => {
     if (!customerId || savingProfile) return;
@@ -3003,6 +3180,16 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
   // dataNonce forces a re-fetch when incremented (after creating new data)
   const [dataNonce, setDataNonce] = useState(0);
 
+  // ── Keep-alive tab state ─────────────────────────────────────────────────
+  // Tracks which sub-views have been visited at least once. Once visited, a
+  // view stays mounted (just hidden via the `hidden` class) so its component
+  // state survives tab switches — no remounts, no loading-spinner flashes, no
+  // full re-fetches on every tab click. Matches the employee portal pattern.
+  const [visitedViews, setVisitedViews] = useState<Record<string, boolean>>({ dashboard: true });
+  useEffect(() => {
+    setVisitedViews(prev => ({ ...prev, [activeView]: true }));
+  }, [activeView]);
+
   const customerName = auth.user?.name || 'Customer';
   const customerEmail = auth.user?.email || '';
   const customerPhone = auth.user?.phone || '';
@@ -3109,10 +3296,18 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
     setActiveView('payments');
   };
 
-  const renderContent = () => {
-    switch (activeView) {
-      case 'dashboard':
-        return (
+  // ── Keep-alive render ────────────────────────────────────────────────────
+  // All visited views are mounted simultaneously; inactive ones are hidden
+  // via the `hidden` CSS class so their component state (scroll position,
+  // expanded rows, draft text, etc.) survives tab switches. Each view also
+  // receives an `isActive` flag so it can perform a silent background refetch
+  // when re-activated (handled inside each view via a `silent` fetch param).
+  // Bookings + payment methods are hoisted at the parent level (unchanged);
+  // their existing dataNonce effects drive refetches for those two.
+  const renderContent = () => (
+    <>
+      {visitedViews.dashboard && (
+        <div className={cn(activeView !== 'dashboard' && 'hidden')}>
           <DashboardView
             onNewBooking={handleNewBooking}
             customerName={customerName}
@@ -3120,9 +3315,11 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
             bookingsLoading={bookingsLoading}
             onViewInvoices={() => setActiveView('invoices')}
           />
-        );
-      case 'bookings':
-        return (
+        </div>
+      )}
+
+      {visitedViews.bookings && (
+        <div className={cn(activeView !== 'bookings' && 'hidden')}>
           <BookingsView
             bookings={bookings}
             loading={bookingsLoading}
@@ -3131,15 +3328,41 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
             onRetry={fetchBookings}
             initialBookingId={deepLinkBookingId}
           />
-        );
-      case 'orders':
-        return <OrdersView customerEmail={customerEmail} />;
-      case 'invoices':
-        return <InvoicesView initialInvoiceId={deepLinkInvoiceId} />;
-      case 'quotes':
-        return <QuotesView initialQuoteId={deepLinkQuoteId} />;
-      case 'payments':
-        return (
+        </div>
+      )}
+
+      {visitedViews.orders && (
+        <div className={cn(activeView !== 'orders' && 'hidden')}>
+          <OrdersView
+            customerEmail={customerEmail}
+            isActive={activeView === 'orders'}
+            dataNonce={dataNonce}
+          />
+        </div>
+      )}
+
+      {visitedViews.invoices && (
+        <div className={cn(activeView !== 'invoices' && 'hidden')}>
+          <InvoicesView
+            initialInvoiceId={deepLinkInvoiceId}
+            isActive={activeView === 'invoices'}
+            dataNonce={dataNonce}
+          />
+        </div>
+      )}
+
+      {visitedViews.quotes && (
+        <div className={cn(activeView !== 'quotes' && 'hidden')}>
+          <QuotesView
+            initialQuoteId={deepLinkQuoteId}
+            isActive={activeView === 'quotes'}
+            dataNonce={dataNonce}
+          />
+        </div>
+      )}
+
+      {visitedViews.payments && (
+        <div className={cn(activeView !== 'payments' && 'hidden')}>
           <PaymentsView
             paymentMethods={paymentMethods}
             loading={paymentsLoading}
@@ -3148,15 +3371,38 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
             onRetry={fetchPaymentMethods}
             onDataChange={fetchPaymentMethods}
           />
-        );
-      case 'messages':
-        return <MessagesView />;
-      case 'reviews':
-        return <ReviewsView />;
-      case 'profile':
-        return <ProfileView />;
-      case 'marketplace':
-        return (
+        </div>
+      )}
+
+      {visitedViews.messages && (
+        <div className={cn(activeView !== 'messages' && 'hidden')}>
+          <MessagesView
+            isActive={activeView === 'messages'}
+            dataNonce={dataNonce}
+          />
+        </div>
+      )}
+
+      {visitedViews.reviews && (
+        <div className={cn(activeView !== 'reviews' && 'hidden')}>
+          <ReviewsView
+            isActive={activeView === 'reviews'}
+            dataNonce={dataNonce}
+          />
+        </div>
+      )}
+
+      {visitedViews.profile && (
+        <div className={cn(activeView !== 'profile' && 'hidden')}>
+          <ProfileView
+            isActive={activeView === 'profile'}
+            dataNonce={dataNonce}
+          />
+        </div>
+      )}
+
+      {visitedViews.marketplace && (
+        <div className={cn(activeView !== 'marketplace' && 'hidden')}>
           <Card>
             <CardHeader>
               <CardTitle>Browse Marketplace</CardTitle>
@@ -3171,57 +3417,53 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
               </a>
             </CardContent>
           </Card>
-        );
-      case 'tracking': {
-        const activeBookings = bookings.filter(b =>
-          ['assigned', 'en_route', 'in_progress', 'started', 'on_the_way'].includes(b.status)
-        );
-        if (activeBookings.length === 0) {
-          return (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Navigation className="size-10 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground">No active jobs to track right now.</p>
-                <p className="text-xs text-muted-foreground/70 mt-1">
-                  When a technician is assigned to your job, you&apos;ll see live tracking here.
-                </p>
-              </CardContent>
-            </Card>
-          );
-        }
-        return (
-          <div className="space-y-4">
-            {activeBookings.map(booking => (
-              <Card key={booking.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">{booking.title}</CardTitle>
-                    <Badge>{booking.status}</Badge>
-                  </div>
-                  <CardDescription>Job #{booking.id.slice(0, 8)}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <a href={`/portal/${booking.id}`} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline" size="sm">Track Live →</Button>
-                  </a>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        );
-      }
-      default:
-        return (
-          <DashboardView
-            onNewBooking={handleNewBooking}
-            customerName={customerName}
-            bookings={bookings}
-            bookingsLoading={bookingsLoading}
-            onViewInvoices={() => setActiveView('invoices')}
-          />
-        );
-    }
-  };
+        </div>
+      )}
+
+      {visitedViews.tracking && (
+        <div className={cn(activeView !== 'tracking' && 'hidden')}>
+          {(() => {
+            const activeBookings = bookings.filter(b =>
+              ['assigned', 'en_route', 'in_progress', 'started', 'on_the_way'].includes(b.status)
+            );
+            if (activeBookings.length === 0) {
+              return (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <Navigation className="size-10 mx-auto text-muted-foreground/50 mb-3" />
+                    <p className="text-muted-foreground">No active jobs to track right now.</p>
+                    <p className="text-xs text-muted-foreground/70 mt-1">
+                      When a technician is assigned to your job, you&apos;ll see live tracking here.
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            }
+            return (
+              <div className="space-y-4">
+                {activeBookings.map(booking => (
+                  <Card key={booking.id}>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-base">{booking.title}</CardTitle>
+                        <Badge>{booking.status}</Badge>
+                      </div>
+                      <CardDescription>Job #{booking.id.slice(0, 8)}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <a href={`/portal/${booking.id}`} target="_blank" rel="noopener noreferrer">
+                        <Button variant="outline" size="sm">Track Live →</Button>
+                      </a>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+    </>
+  );
 
   return (
     <div
