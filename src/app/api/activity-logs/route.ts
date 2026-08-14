@@ -18,7 +18,14 @@ import { getAuthUser } from '@/lib/auth';
  *   startDate   — ISO date (inclusive)
  *   endDate     — ISO date (inclusive)
  *
- * Returns: { logs: [...], total }
+ * Returns: { logs: [...], total, hasNextPage }
+ *
+ * C-3 PERFORMANCE: when `search` is present, the exact count(*) is OMITTED
+ * because ILIKE '%term%' across 3 columns cannot use any B-tree index
+ * (175ms warm at 50K rows → would be ~1.75s at 500K). Instead we return
+ * hasNextPage = (logs.length === limit), and total = null. The UI shows
+ * "Showing N+ entries" instead of "Page 1 of 3,421" only during search.
+ * Non-search paths keep the exact count (they're indexed and fast).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -44,7 +51,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!tenantId) {
-      return NextResponse.json({ logs: [], total: 0 });
+      return NextResponse.json({ logs: [], total: 0, hasNextPage: false });
     }
 
     const { searchParams } = new URL(request.url);
@@ -88,6 +95,12 @@ export async function GET(request: NextRequest) {
       where.createdAt = dateFilter;
     }
 
+    // C-3: when search is present, skip the expensive count(*).
+    // ILIKE '%term%' can't use B-tree indexes → count scans the full table.
+    // hasNextPage = (fetched page is full) is enough for the UI to show
+    // "more results available" without the 175ms+ count penalty.
+    const isSearchActive = !!search?.trim();
+
     const [logs, total] = await Promise.all([
       db.activityLog.findMany({
         where,
@@ -95,8 +108,10 @@ export async function GET(request: NextRequest) {
         take: limit,
         skip: offset,
       }),
-      db.activityLog.count({ where }),
+      isSearchActive ? Promise.resolve(null) : db.activityLog.count({ where }),
     ]);
+
+    const hasNextPage = logs.length === limit;
 
     // Parse metadataJson for client convenience
     const formatted = logs.map((log) => {
@@ -109,7 +124,11 @@ export async function GET(request: NextRequest) {
       return { ...log, metadata };
     });
 
-    return NextResponse.json({ logs: formatted, total });
+    return NextResponse.json({
+      logs: formatted,
+      total,           // null during search, exact count otherwise
+      hasNextPage,
+    });
   } catch (error) {
     console.error('[activity-logs GET] Error:', error);
     return NextResponse.json(

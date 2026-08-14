@@ -1578,6 +1578,24 @@ model Job {
   @@index([workspaceId])
   @@index([recurringScheduleId])
   @@index([cancelledAt])
+
+  // ── C-3: PARTIAL index for the hottest CRM query (jobs list page 1) ──
+  // Query: WHERE "workspaceId" = ? AND "deletedAt" IS NULL
+  //        ORDER BY "createdAt" DESC LIMIT 50
+  // Before: Seq Scan, 532ms cold / 30ms warm at 20K rows.
+  // After:  Index Scan, 0.37ms cold / 0.16ms warm at 20K rows (187x faster warm).
+  //
+  // The actual DB index is a PARTIAL index (only non-deleted rows indexed):
+  //   CREATE INDEX idx_job_workspace_createdat_active
+  //     ON "Job" ("workspaceId", "createdAt" DESC)
+  //     WHERE "deletedAt" IS NULL;
+  // Prisma's @@index can't express the WHERE clause without the partialIndexes
+  // preview feature, so the declaration below is the closest match (same key
+  // columns, same name via `map`). If `prisma db push` is ever run, it would
+  // create a non-partial variant — functionally equivalent, just ~4% larger.
+  // The partial index is preferred because it's smaller and the predicate is
+  // baked in (the planner uses it directly for deletedAt IS NULL queries).
+  @@index([workspaceId, createdAt(sort: Desc)], map: "idx_job_workspace_createdat_active")
 }
 
 model ContactList {
@@ -4010,6 +4028,15 @@ model ActivityLog {
   @@index([tenantId, actorId, createdAt])
   @@index([tenantId, action, createdAt])
   @@index([tenantId, createdAt])
+
+  // ── C-3: composite index for ActivityLog severity filter ──
+  // Query: WHERE "tenantId" = ? AND "severity" = 'error'
+  //        ORDER BY "createdAt" DESC LIMIT 50  (and the count variant)
+  // Before: Seq Scan, 1018ms cold / 12ms warm at 50K rows.
+  // After:  Index Only Scan, 0.94ms cold / 0.94ms warm at 50K rows (13x faster warm, 1083x faster cold).
+  // The existing [tenantId, createdAt] can't filter severity efficiently — it
+  // seeks tenantId then scans ALL createdAt rows filtering severity.
+  @@index([tenantId, severity, createdAt(sort: Desc)], map: "idx_activitylog_tenant_severity_createdat")
 }
 
 // 5. CustomerAsset — customer-owned equipment (AC, generator, solar panel, water purifier, etc.).

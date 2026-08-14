@@ -4,6 +4,7 @@ import { withCrmTrace } from '@/lib/crm-perf-trace'
 import { getAuthUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activity-log'
 import { requireCrmTenant } from '@/lib/require-crm-tenant'
+import { CUSTOMER_PUBLIC_SELECT } from '@/lib/customer-select'
 
 // GET /api/customers — list customers for the authenticated user's tenant
 // Scopes results to the logged-in user's workspace/tenant so cross-tenant
@@ -50,9 +51,15 @@ async function _GET(request: NextRequest) {
       ]
     }
 
+    // C-2C payload hygiene: select only non-sensitive columns. Previously
+    // this had no `select`, which leaked passwordHash / activationToken /
+    // marketingConsentIp to the browser on every customer-list fetch.
+    // NOTE: this endpoint still returns ALL matching customers with no cap —
+    // pagination is deferred to C-2D (measure count behaviour first).
     const customers = await db.customer.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      select: CUSTOMER_PUBLIC_SELECT,
     })
 
     return NextResponse.json(customers)

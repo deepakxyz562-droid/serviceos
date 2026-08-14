@@ -94,7 +94,8 @@ interface ActivityLogEntry {
 
 interface ActivityLogsResponse {
   logs: ActivityLogEntry[];
-  total: number;
+  total: number | null;   // null during search (C-3: count omitted for ILIKE perf)
+  hasNextPage: boolean;
 }
 
 // ─── Style maps ─────────────────────────────────────────────────────────────
@@ -541,14 +542,19 @@ export function ActivityLogsView() {
   });
 
   const logs = data?.logs ?? [];
-  const total = data?.total ?? 0;
+  const total = data?.total ?? null;   // null during search
+  const hasNextPage = data?.hasNextPage ?? false;
 
-  // Stats — computed on the fetched window
+  // Stats — computed on the fetched window.
+  // During search, total is null (count omitted for perf) → show page count.
   const stats = useMemo(() => {
     const today = logs.filter((l) => isToday(l.createdAt)).length;
     const thisWeek = logs.filter((l) => isThisWeek(l.createdAt)).length;
     const critical = logs.filter((l) => l.severity === 'critical').length;
-    return { total, today, thisWeek, critical };
+    // During search, use the fetched-page count as the display total so the
+    // stat card shows something useful instead of 0/null.
+    const displayTotal = total ?? logs.length;
+    return { total: displayTotal, today, thisWeek, critical };
   }, [logs, total]);
 
   const hasActiveFilters =
@@ -744,7 +750,11 @@ export function ActivityLogsView() {
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-foreground">
-              {isLoading ? 'Loading…' : `${total} ${total === 1 ? 'entry' : 'entries'}`}
+              {isLoading
+              ? 'Loading…'
+              : total === null
+                ? `${logs.length}${hasNextPage ? '+' : ''} ${logs.length === 1 ? 'entry' : 'entries'}`
+                : `${total} ${total === 1 ? 'entry' : 'entries'}`}
             </span>
             {isFetching && !isLoading && (
               <RefreshCw className="size-3.5 animate-spin text-muted-foreground" />

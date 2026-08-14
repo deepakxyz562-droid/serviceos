@@ -7,6 +7,31 @@ import { notifyOwner } from '@/lib/owner-notifications';
 import { logActivity } from '@/lib/activity-log';
 import { requireCrmTenant } from '@/lib/require-crm-tenant';
 import { withCrmTrace } from '@/lib/crm-perf-trace';
+import { shouldUseSupabaseDB } from '@/lib/supabase-db';
+import { getLeads, RpcFunctionNotFoundError } from '@/lib/supabase-rpc';
+
+// ── C-2B.4: RPC availability cache ─────────────────────────────────────
+// When the get_leads RPC function hasn't been applied to the database
+// yet, each request would waste ~130-200ms on a failed .rpc() call before
+// falling through to the original Promise.all path. This cache remembers
+// the "not found" state for 5 minutes, so only the FIRST request after
+// server startup (or after the 5-minute window expires) pays the overhead.
+// Once the SQL is applied, the first successful RPC call sets
+// `rpcAvailable = 'available'` and all subsequent requests use the fast
+// RPC path (4 calls → 1, ~340ms → ~140-200ms).
+let rpcAvailability: 'unknown' | 'available' | 'not_found' = 'unknown';
+let rpcAvailabilityCheckedAt = 0;
+const RPC_AVAILABILITY_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function shouldTryLeadsRpc(): boolean {
+  if (!shouldUseSupabaseDB()) return false;
+  if (rpcAvailability === 'available') return true;
+  if (rpcAvailability === 'not_found') {
+    // Re-check periodically so the RPC is picked up after the SQL is applied.
+    return Date.now() - rpcAvailabilityCheckedAt > RPC_AVAILABILITY_TTL_MS;
+  }
+  return true; // 'unknown' — first request, try it
+}
 
 // GET /api/leads - List leads with optional status filter
 async function _GET(request: NextRequest) {
@@ -30,12 +55,18 @@ async function _GET(request: NextRequest) {
     // The caller's tenantId is the source of truth — NEVER show all leads.
     // Super-admins may pass ?tenantId= to scope to a specific tenant.
     // Authenticated users without a tenant get an empty list (not everyone's data).
+    let rpcTenantId: string | null = null;
     const where: Record<string, unknown> = {};
     if (authUser.isSuperAdmin) {
       const queryTenantId = searchParams.get('tenantId');
-      if (queryTenantId) where.tenantId = queryTenantId;
+      if (queryTenantId) {
+        where.tenantId = queryTenantId;
+        rpcTenantId = queryTenantId;
+      }
+      // Super-admin without ?tenantId= → rpcTenantId stays null → RPC shows all
     } else if (authUser.tenantId) {
       where.tenantId = authUser.tenantId;
+      rpcTenantId = authUser.tenantId;
     } else {
       // Authenticated user without a tenant — return empty rather than
       // accidentally leaking unscoped leads.
@@ -61,6 +92,48 @@ async function _GET(request: NextRequest) {
         { phone: { contains: search } },
         { description: { contains: search } },
       ];
+    }
+
+    // ── C-2B.4: Try the get_leads RPC first (4 → 1 call) ──────────────
+    // The SQL function (supabase-rpc-leads.sql) consolidates the lead list +
+    // count + Customer/Job/Employee JOINs into a single PostgREST round-trip.
+    // Expected: ~140-200ms (vs ~275-507ms with the 4-call fallback).
+    //
+    // rpcTenantId is null ONLY for super-admins viewing all tenants — the
+    // RPC handles NULL p_tenant_id as "no tenant filter" (shows all).
+    //
+    // AVAILABILITY CACHE: the first failed attempt caches "not_found" for
+    // 5 minutes (see shouldTryLeadsRpc above), so subsequent requests
+    // skip the failed RPC call and go straight to the fallback path.
+    if (shouldTryLeadsRpc()) {
+      try {
+        const result = await getLeads(
+          rpcTenantId,
+          status,
+          source,
+          priority,
+          search,
+          page,
+          limit,
+        );
+        // Success — cache the availability so future requests skip the check.
+        rpcAvailability = 'available';
+        rpcAvailabilityCheckedAt = Date.now();
+        return NextResponse.json(result);
+      } catch (err) {
+        if (err instanceof RpcFunctionNotFoundError) {
+          // Cache "not_found" so the next 5 minutes of requests skip the
+          // failed RPC call and go straight to the fallback path.
+          rpcAvailability = 'not_found';
+          rpcAvailabilityCheckedAt = Date.now();
+          console.warn(
+            '[leads] get_leads RPC not found — ' +
+              'using 4-call Promise.all fallback. Apply supabase-rpc-leads.sql to enable the RPC path.',
+          );
+        } else {
+          throw err;
+        }
+      }
     }
 
     const [leads, total] = await Promise.all([

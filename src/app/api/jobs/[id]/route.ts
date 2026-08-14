@@ -10,6 +10,30 @@ import { notifyCustomerVerificationPin } from '@/lib/whatsapp-notifications';
 import { autoCreateInvoiceFromJob } from '@/lib/invoice-automation';
 import { bustPipelineCaches } from '@/lib/pipeline-cache-bust';
 import { withCrmTrace } from '@/lib/crm-perf-trace';
+import { shouldUseSupabaseDB } from '@/lib/supabase-db';
+import { getJobDetail, RpcFunctionNotFoundError } from '@/lib/supabase-rpc';
+
+// ── C-2B.2: RPC availability cache ─────────────────────────────────────
+// When the get_job_detail RPC function hasn't been applied to the database
+// yet, each request would waste ~130-200ms on a failed .rpc() call before
+// falling through to the Promise.all path. This cache remembers the "not
+// found" state for 5 minutes, so only the FIRST request after server startup
+// (or after the 5-minute window expires) pays the overhead. Once the SQL is
+// applied, the first successful RPC call sets `rpcAvailable = true` and all
+// subsequent requests use the fast RPC path.
+let rpcAvailability: 'unknown' | 'available' | 'not_found' = 'unknown';
+let rpcAvailabilityCheckedAt = 0;
+const RPC_AVAILABILITY_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function shouldTryJobDetailRpc(): boolean {
+  if (!shouldUseSupabaseDB()) return false;
+  if (rpcAvailability === 'available') return true;
+  if (rpcAvailability === 'not_found') {
+    // Re-check periodically so the RPC is picked up after the SQL is applied.
+    return Date.now() - rpcAvailabilityCheckedAt > RPC_AVAILABILITY_TTL_MS;
+  }
+  return true; // 'unknown' — first request, try it
+}
 
 /**
  * fireAndForget — runs a promise in the background, logging any rejection.
@@ -30,33 +54,127 @@ async function _GET(
   try {
     const { id } = await params;
 
-    const job = await db.job.findUnique({
-      where: { id },
-      include: {
-        assignee: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            role: true,
-            status: true,
-            avatar: true,
-            rating: true,
-            completedJobs: true,
+    // ── C-2B.2: Try the get_job_detail RPC first (6 → 1 call) ──────
+    // The SQL function (supabase-rpc-job-detail.sql) consolidates the Job
+    // row + Customer JOIN + Employee JOIN + Resource LEFT JOIN + 3 COUNT
+    // subqueries into a single PostgREST round-trip. Expected: ~150-250ms
+    // (vs ~400ms with the Promise.all fallback below).
+    //
+    // The RPC is only available in production (shouldUseSupabaseDB) AND
+    // when the SQL function has been manually applied via Supabase SQL
+    // Editor. When the function doesn't exist, RpcFunctionNotFoundError is
+    // thrown and we fall through to the Promise.all path — zero downtime.
+    //
+    // AVAILABILITY CACHE: the first failed attempt caches "not_found" for
+    // 5 minutes (see shouldTryJobDetailRpc above), so subsequent requests
+    // skip the failed RPC call and go straight to the Promise.all path.
+    //
+    // lifecycleTimestamps + lifecycleState are CPU-only transformations on
+    // job.notificationLogJson — computed in TypeScript (same as the fallback
+    // path), NOT in the SQL function.
+    if (shouldTryJobDetailRpc()) {
+      try {
+        const rpcJob = await getJobDetail(id);
+        // Success — cache the availability so future requests skip the check.
+        rpcAvailability = 'available';
+        rpcAvailabilityCheckedAt = Date.now();
+        if (rpcJob === null) {
+          return NextResponse.json(
+            { error: 'Job not found' },
+            { status: 404 },
+          );
+        }
+        // Cast to the shape parseLifecycleTimestamps + deriveLifecycleState need.
+        // The RPC returns all Job columns as-is (jsonb via to_jsonb), so the
+        // field names match the Prisma model exactly (camelCase).
+        const jobForLifecycle = rpcJob as {
+          notificationLogJson: string | null;
+          status: string;
+          actualStartTime?: string | null;
+          completedAt?: string | null;
+          assignmentStatus?: string | null;
+        };
+        const lifecycleTimestamps = parseLifecycleTimestamps(
+          jobForLifecycle.notificationLogJson ?? '',
+        );
+        const lifecycleState = deriveLifecycleState(jobForLifecycle, lifecycleTimestamps);
+        return NextResponse.json({
+          job: {
+            ...rpcJob,
+            lifecycleTimestamps,
+            lifecycleState,
           },
-        },
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            email: true,
-            address: true,
+        });
+      } catch (err) {
+        if (err instanceof RpcFunctionNotFoundError) {
+          // Cache "not_found" so the next 5 minutes of requests skip the
+          // failed RPC call and go straight to the Promise.all path.
+          rpcAvailability = 'not_found';
+          rpcAvailabilityCheckedAt = Date.now();
+          console.warn(
+            '[jobs/[id]] get_job_detail RPC not found — ' +
+              'using 6-call Promise.all fallback. Apply supabase-rpc-job-detail.sql to enable the RPC path.',
+          );
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    // ── C-2B.2: Parallelize findUnique + 3 counts ──────────────────
+    // BEFORE (C-1 measured): `findUnique` (which explodes to 3 PostgREST
+    //   round-trips for Job + Customer + Employee via the Supabase adapter)
+    //   ran FIRST and FULLY completed, THEN the 3 counts started in a
+    //   separate Promise.all. Timeline:
+    //     t=0:   Job query (135ms)
+    //     t=135: Customer query (128ms)  [needs job.customerId]
+    //     t=263: Employee query (132ms)  [needs job.assigneeId]
+    //     t=395: findUnique resolves → 3 counts start (parallel)
+    //     t=798: all done (max count = 403ms)
+    //   Measured: api=514-920ms, db_sum=915-1315ms, dbCalls=6
+    //
+    // AFTER: all 4 Prisma calls run in ONE Promise.all. The 3 counts use
+    //   `id` (from the URL) — NOT `job.id` from the findUnique result — so
+    //   they have zero data dependency on findUnique and can start at t=0.
+    //   Expected: api ≈ max(findUnique chain, max count) ≈ 400ms (was 514-920ms)
+    //
+    // Trade-off: if the job doesn't exist, the 3 count queries still run
+    // (wasting 3 round-trips before the 404). This is rare — the user clicks
+    // a job they can see in the list — and the happy-path speedup far
+    // outweighs the rare waste. The counts on a non-existent jobId simply
+    // return 0 (no rows match), so there's no error.
+    const [job, photoCount, signatureCount, checklistCount] = await Promise.all([
+      db.job.findUnique({
+        where: { id },
+        include: {
+          assignee: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              role: true,
+              status: true,
+              avatar: true,
+              rating: true,
+              completedJobs: true,
+            },
           },
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              email: true,
+              address: true,
+            },
+          },
+          resource: true,
         },
-        resource: true,
-      },
-    });
+      }),
+      db.jobPhoto.count({ where: { jobId: id } }),
+      db.jobSignature.count({ where: { jobId: id } }),
+      db.jobChecklist.count({ where: { jobId: id } }),
+    ]);
 
     if (!job) {
       return NextResponse.json(
@@ -75,12 +193,6 @@ async function _GET(
     // (/api/employee/jobs) so both PWA and mobile receive the same data.
     const lifecycleTimestamps = parseLifecycleTimestamps(job.notificationLogJson);
     const lifecycleState = deriveLifecycleState(job, lifecycleTimestamps);
-
-    const [photoCount, signatureCount, checklistCount] = await Promise.all([
-      db.jobPhoto.count({ where: { jobId: job.id } }),
-      db.jobSignature.count({ where: { jobId: job.id } }),
-      db.jobChecklist.count({ where: { jobId: job.id } }),
-    ]);
 
     return NextResponse.json({
       job: {

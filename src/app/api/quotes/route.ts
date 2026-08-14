@@ -44,9 +44,12 @@ export async function GET(req: NextRequest) {
       where.dealId = dealIdParam;
     }
 
+    // C-2C: only name + phone are read from the linked customer (below), so
+    // select just those instead of `customer: true` which pulled every column
+    // — including passwordHash / activationToken — into server memory.
     const quotes = await db.quote.findMany({
       where,
-      include: { customer: true },
+      include: { customer: { select: { name: true, phone: true } } },
       orderBy: { createdAt: 'desc' },
     });
 

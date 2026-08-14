@@ -8,9 +8,34 @@ import { logActivity } from '@/lib/activity-log';
 import { EventBus } from '@/lib/event-bus';
 import { requireCrmTenant } from '@/lib/require-crm-tenant';
 import { withCrmTrace } from '@/lib/crm-perf-trace';
+import { shouldUseSupabaseDB } from '@/lib/supabase-db';
+import { getInvoices, RpcFunctionNotFoundError } from '@/lib/supabase-rpc';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+// ── C-2B.3: RPC availability cache ─────────────────────────────────────
+// When the get_invoices RPC function hasn't been applied to the database
+// yet, each request would waste ~130-200ms on a failed .rpc() call before
+// falling through to the original Promise.all path. This cache remembers
+// the "not found" state for 5 minutes, so only the FIRST request after
+// server startup (or after the 5-minute window expires) pays the overhead.
+// Once the SQL is applied, the first successful RPC call sets
+// `rpcAvailable = 'available'` and all subsequent requests use the fast
+// RPC path (5 calls → 1, ~340ms → ~150-220ms).
+let rpcAvailability: 'unknown' | 'available' | 'not_found' = 'unknown';
+let rpcAvailabilityCheckedAt = 0;
+const RPC_AVAILABILITY_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function shouldTryInvoicesRpc(): boolean {
+  if (!shouldUseSupabaseDB()) return false;
+  if (rpcAvailability === 'available') return true;
+  if (rpcAvailability === 'not_found') {
+    // Re-check periodically so the RPC is picked up after the SQL is applied.
+    return Date.now() - rpcAvailabilityCheckedAt > RPC_AVAILABILITY_TTL_MS;
+  }
+  return true; // 'unknown' — first request, try it
+}
 
 /**
  * Resolves a tenant ID from the auth user, falling back to the first tenant
@@ -60,6 +85,68 @@ async function _GET(request: NextRequest) {
     const status = searchParams.get('status');
     const search = searchParams.get('search');
     const customerIdParam = searchParams.get('customerId');
+
+    // ── C-2B.3: Try the get_invoices RPC first (5 → 1 call) ──────────────
+    // The SQL function (supabase-rpc-invoices.sql) consolidates the invoice
+    // list + count + Customer/Employee/Job JOINs into a single PostgREST
+    // round-trip. Expected: ~150-220ms (vs ~340ms with the 5-call fallback).
+    //
+    // The RPC unifies BOTH route branches via nullable params:
+    //   - Customer session → p_customer_id = authUser.id, p_tenant_id = null
+    //   - Admin/employee   → p_tenant_id = tenantId, p_customer_id = customerIdParam?
+    //
+    // AVAILABILITY CACHE: the first failed attempt caches "not_found" for
+    // 5 minutes (see shouldTryInvoicesRpc above), so subsequent requests
+    // skip the failed RPC call and go straight to the fallback path.
+    if (shouldTryInvoicesRpc()) {
+      try {
+        let rpcTenantId: string | null = null;
+        let rpcCustomerId: string | null = null;
+
+        if (authUser?.role === 'customer' && authUser.id) {
+          // Customer session: scope by customerId only (privacy safeguard —
+          // matches the original branch below).
+          rpcCustomerId = authUser.id;
+        } else {
+          // Admin/employee: resolve tenant, optional customerId filter.
+          rpcTenantId = await resolveTenantId(authUser);
+          if (!rpcTenantId) {
+            // No tenant found — short-circuit with empty (matches original).
+            return NextResponse.json({
+              invoices: [],
+              pagination: { page: 1, limit: 50, total: 0, totalPages: 0 },
+            });
+          }
+          if (customerIdParam) rpcCustomerId = customerIdParam;
+        }
+
+        const result = await getInvoices(
+          rpcTenantId,
+          rpcCustomerId,
+          status,
+          search,
+          page,
+          limit,
+        );
+        // Success — cache the availability so future requests skip the check.
+        rpcAvailability = 'available';
+        rpcAvailabilityCheckedAt = Date.now();
+        return NextResponse.json(result);
+      } catch (err) {
+        if (err instanceof RpcFunctionNotFoundError) {
+          // Cache "not_found" so the next 5 minutes of requests skip the
+          // failed RPC call and go straight to the fallback path.
+          rpcAvailability = 'not_found';
+          rpcAvailabilityCheckedAt = Date.now();
+          console.warn(
+            '[invoices] get_invoices RPC not found — ' +
+              'using 5-call Promise.all fallback. Apply supabase-rpc-invoices.sql to enable the RPC path.',
+          );
+        } else {
+          throw err;
+        }
+      }
+    }
 
     // ── Customer session: enforce customer-scoped access server-side ──────────
     // Ignore the customerId query param — the customer can ONLY ever see their

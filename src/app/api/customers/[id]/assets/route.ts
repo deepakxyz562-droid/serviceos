@@ -2,6 +2,31 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { withCrmTrace } from '@/lib/crm-perf-trace';
+import { shouldUseSupabaseDB } from '@/lib/supabase-db';
+import { getCustomerAssets, RpcFunctionNotFoundError } from '@/lib/supabase-rpc';
+
+// ── C-2B.5: RPC availability cache ─────────────────────────────────────
+// When the get_customer_assets RPC function hasn't been applied to the
+// database yet, each request would waste ~130-200ms on a failed .rpc() call
+// before falling through to the original 3-call path. This cache remembers
+// the "not found" state for 5 minutes, so only the FIRST request after
+// server startup (or after the 5-minute window expires) pays the overhead.
+// Once the SQL is applied, the first successful RPC call sets
+// `rpcAvailable = 'available'` and all subsequent requests use the fast
+// RPC path (3 calls → 1, ~400ms → ~130-150ms).
+let rpcAvailability: 'unknown' | 'available' | 'not_found' = 'unknown';
+let rpcAvailabilityCheckedAt = 0;
+const RPC_AVAILABILITY_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function shouldTryCustomerAssetsRpc(): boolean {
+  if (!shouldUseSupabaseDB()) return false;
+  if (rpcAvailability === 'available') return true;
+  if (rpcAvailability === 'not_found') {
+    // Re-check periodically so the RPC is picked up after the SQL is applied.
+    return Date.now() - rpcAvailabilityCheckedAt > RPC_AVAILABILITY_TTL_MS;
+  }
+  return true; // 'unknown' — first request, try it
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -52,6 +77,43 @@ async function _GET(
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
     const { id } = await params;
+
+    // ── C-2B.5: Try the get_customer_assets RPC first (3 → 1 call) ──────
+    // The SQL function (supabase-rpc-customer-assets.sql) consolidates:
+    //   1. Customer.findUnique (workspaceId)
+    //   2. Workspace.findUnique (tenantId)
+    //   3. CustomerAsset.findMany (the assets)
+    // into a single PostgREST round-trip. The tenant is resolved via a
+    // Customer→Workspace LEFT JOIN with fallback to p_user_tenant_id —
+    // exactly matching resolveTenantIdForCustomer() below.
+    //
+    // AVAILABILITY CACHE: the first failed attempt caches "not_found" for
+    // 5 minutes (see shouldTryCustomerAssetsRpc above), so subsequent
+    // requests skip the failed RPC call and go straight to the fallback.
+    if (shouldTryCustomerAssetsRpc()) {
+      try {
+        const result = await getCustomerAssets(id, user.tenantId);
+        // Success — cache the availability so future requests skip the check.
+        rpcAvailability = 'available';
+        rpcAvailabilityCheckedAt = Date.now();
+        // tenantResolved=false means no tenant could be resolved — return []
+        // (matches the original early-return path below).
+        return NextResponse.json({ assets: result.assets });
+      } catch (err) {
+        if (err instanceof RpcFunctionNotFoundError) {
+          // Cache "not_found" so the next 5 minutes of requests skip the
+          // failed RPC call and go straight to the fallback path.
+          rpcAvailability = 'not_found';
+          rpcAvailabilityCheckedAt = Date.now();
+          console.warn(
+            '[customers/[id]/assets] get_customer_assets RPC not found — ' +
+              'using 3-call fallback. Apply supabase-rpc-customer-assets.sql to enable the RPC path.',
+          );
+        } else {
+          throw err;
+        }
+      }
+    }
 
     const tenantId = await resolveTenantIdForCustomer(id, user.tenantId);
     if (!tenantId) {

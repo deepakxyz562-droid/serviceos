@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { withCrmTrace } from '@/lib/crm-perf-trace'
+import { CUSTOMER_PUBLIC_SELECT } from '@/lib/customer-select'
 
 async function _GET(
   request: NextRequest,
@@ -8,9 +9,15 @@ async function _GET(
 ) {
   try {
     const { id } = await params
+    // C-2C: use `select` (not `include`) so the top-level Customer row never
+    // returns passwordHash / activationToken / marketingConsentIp to the
+    // browser. Nested relations keep their existing take limits + the jobs
+    // assignee sub-select; full Job/Invoice/Lead/Conversation columns are
+    // preserved so the stats aggregation below stays correct.
     const customer = await db.customer.findUnique({
       where: { id },
-      include: {
+      select: {
+        ...CUSTOMER_PUBLIC_SELECT,
         jobs: {
           orderBy: { createdAt: 'desc' },
           take: 50,
