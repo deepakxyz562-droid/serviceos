@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { withCrmTrace } from '@/lib/crm-perf-trace'
 import { getAuthUser } from '@/lib/auth'
 import { cache } from '@/lib/cache'
 import { cachedJson } from '@/lib/cache-headers'
@@ -97,7 +98,7 @@ async function resolveWorkspaceId(
   }
 }
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   try {
     const crmGuard = await requireCrmTenant(request);
     if (crmGuard) return crmGuard;
@@ -115,19 +116,36 @@ export async function GET(request: NextRequest) {
     const customerId = searchParams.get('customerId')
     // History mode: only completed + soft-deleted jobs (used by the Job
     // History tab). When true, we use a lighter `select` (no relations) and
-    // a `take` limit for performance — the History list only needs summary
-    // fields, not full assignee/customer/resource records.
+    // a larger default pageSize for performance — the History list only needs
+    // summary fields, not full assignee/customer/resource records.
     const historyMode = searchParams.get('history') === 'true'
     // includeDeleted=false → exclude soft-deleted jobs from the result set.
     // includeDeleted=true (or unset) → return soft-deleted jobs too (backward
     // compat — most callers client-side filter them anyway).
     const excludeDeleted = searchParams.get('includeDeleted') === 'false'
 
+    // ── C-2A: Server-side pagination ──────────────────────────────────
+    // Default pageSize=50 for active mode, 200 for history mode (preserves
+    // the previous `take: 200` behavior). `limit` is honored as an alias
+    // for `pageSize` (calendar-view passes ?limit=200, expenses-view and
+    // whatsapp-dashboard pass ?limit=100). Hard cap: 100 for active, 200
+    // for history.
+    const maxPageSize = historyMode ? 200 : 100;
+    const defaultPageSize = historyMode ? 200 : 50;
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const pageSizeRaw = parseInt(
+      searchParams.get('pageSize') || searchParams.get('limit') || String(defaultPageSize),
+      10,
+    ) || defaultPageSize;
+    const pageSize = Math.min(Math.max(1, pageSizeRaw), maxPageSize);
+    const skip = (page - 1) * pageSize;
+
     // ── Cache lookup (skip for search queries — results are too dynamic) ──
-    // Cache key includes tenantId + all filter params so different views
-    // (Active vs History vs Dispatch) get separate cache entries.
+    // Cache key includes tenantId + all filter params + pagination so
+    // different views (Active vs History vs Dispatch) and pages get separate
+    // cache entries.
     if (!search && user.tenantId) {
-      const cacheKey = `jobs:${user.tenantId}:${status || ''}:${type || ''}:${priority || ''}:${assigneeId || ''}:${customerId || ''}:${historyMode ? 'h' : 'a'}:${excludeDeleted ? 'xd' : 'ad'}:${searchParams.get('tenantId') || ''}`;
+      const cacheKey = `jobs:${user.tenantId}:${status || ''}:${type || ''}:${priority || ''}:${assigneeId || ''}:${customerId || ''}:${historyMode ? 'h' : 'a'}:${excludeDeleted ? 'xd' : 'ad'}:${searchParams.get('tenantId') || ''}:p${page}:ps${pageSize}`;
       const cached = cache.get<unknown>(cacheKey);
       if (cached !== undefined) {
         return cachedJson(cached);
@@ -226,55 +244,127 @@ export async function GET(request: NextRequest) {
       ]
     }
 
-    // ── History mode: lighter query ───────────────────────────────────
-    // The History tab only renders summary cards (title, customer, assignee
-    // names, dates, amounts) — it doesn't need full relation records. Using
-    // `select` instead of `include` avoids fetching large text fields
-    // (description, metadataJson, lineItemsJson, etc.) and entire related
-    // rows, dramatically reducing payload size and query time.
-    if (historyMode) {
-      const historyJobs = await db.job.findMany({
-        where,
-        select: {
-          id: true,
-          jobNumber: true,
-          title: true,
-          status: true,
-          priority: true,
-          type: true,
-          paymentStatus: true,
-          paymentMethod: true,
-          amountCollected: true,
-          quotedAmount: true,
-          customerName: true,
-          assigneeName: true,
-          completedAt: true,
-          actualEndTime: true,
-          deletedAt: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 200,
-      })
-      const cacheKey = (request as unknown as { _jobsCacheKey?: string })._jobsCacheKey;
-      if (cacheKey) cache.set(cacheKey, historyJobs, JOBS_TTL);
-      return cachedJson(historyJobs)
-    }
+    // ── C-2A: Explicit field selection + pagination envelope ────────
+    //
+    // BEFORE (C-1 measured): `include: { assignee: true, customer: true,
+    //   resource: true }` + SELECT * on Job → 78KB for 17 jobs, 4 DB calls
+    //   (Workspace + Job + Customer + Employee), no pagination.
+    //
+    // AFTER: explicit `select` with only fields actually rendered by the UI
+    //   (41 scalar fields), NO relation includes (zero consumers read
+    //   job.assignee.* / job.customer.* / job.resource.* — they all use the
+    //   flat denormalized columns like assigneeName/customerName already on
+    //   the Job row), server-side pagination (default 50, max 100), and a
+    //   parallel count query for the pagination envelope.
+    //
+    // Response shape: { jobs: [...], pagination: { page, pageSize, total,
+    //   totalPages } } — see C-2A-DISCOVERY worklog entry for consumer
+    //   migration details.
+    //
+    // History mode keeps its lighter 17-field select (no JSON/detail fields)
+    // but now also returns the pagination envelope for shape consistency.
 
-    const jobs = await db.job.findMany({
-      where,
-      include: {
-        assignee: true,
-        customer: true,
-        resource: true,
+    // Fields shared by both modes (the history-mode-specific payment fields
+    // are only selected in history mode).
+    const activeSelect = {
+      id: true,
+      jobNumber: true,
+      title: true,
+      description: true,
+      status: true,
+      priority: true,
+      type: true,
+      address: true,
+      pickup: true,
+      dropoff: true,
+      scheduledAt: true,
+      scheduledTime: true,
+      estimatedDuration: true,
+      actualStartTime: true,
+      actualEndTime: true,
+      completedAt: true,
+      deletedAt: true,
+      cancelledAt: true,
+      quotedAmount: true,
+      customerId: true,
+      customerName: true,
+      customerPhone: true,
+      customerEmail: true,
+      assigneeId: true,
+      assigneeName: true,
+      assigneePhone: true,
+      serviceId: true,
+      resourceId: true,
+      notes: true,
+      visitInstructions: true,
+      checkInLat: true,
+      checkInLng: true,
+      checkOutLat: true,
+      checkOutLng: true,
+      customerRating: true,
+      whatsappMessageId: true,
+      whatsappSessionId: true,
+      assignmentStatus: true,
+      lineItemsJson: true,
+      customFieldsJson: true,
+      attachmentsJson: true,
+      linkedChecklistsJson: true,
+      linkToRelatedJson: true,
+      metadataJson: true,
+      notificationLogJson: true,
+      createdAt: true,
+      updatedAt: true,
+    } as const;
+
+    const historySelect = {
+      id: true,
+      jobNumber: true,
+      title: true,
+      status: true,
+      priority: true,
+      type: true,
+      paymentStatus: true,
+      paymentMethod: true,
+      amountCollected: true,
+      quotedAmount: true,
+      customerName: true,
+      assigneeName: true,
+      completedAt: true,
+      actualEndTime: true,
+      deletedAt: true,
+      createdAt: true,
+      updatedAt: true,
+    } as const;
+
+    // ── Fetch jobs + total count in parallel ─────────────────────────
+    // The count query is needed for the pagination envelope (total +
+    // totalPages). Running it in parallel with the findMany via Promise.all
+    // keeps the wall-clock time at ~max(findMany, count) instead of sum.
+    const [jobs, total] = await Promise.all([
+      db.job.findMany({
+        where,
+        select: historyMode ? historySelect : activeSelect,
+        orderBy: { createdAt: 'desc' },
+        take: pageSize,
+        skip,
+      }),
+      db.job.count({ where }),
+    ]);
+
+    const totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
+    const result = {
+      jobs,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages,
       },
-      orderBy: { createdAt: 'desc' },
-    })
+    };
 
     const cacheKey = (request as unknown as { _jobsCacheKey?: string })._jobsCacheKey;
-    if (cacheKey) cache.set(cacheKey, jobs, JOBS_TTL);
-    return cachedJson(jobs)
+    if (cacheKey) cache.set(cacheKey, result, JOBS_TTL);
+    return cachedJson(result)
   } catch (error) {
     console.error('Error fetching jobs:', error)
     return NextResponse.json({ error: 'Failed to fetch jobs' }, { status: 500 })
@@ -627,3 +717,6 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to update job' }, { status: 500 })
   }
 }
+
+// C-1 perf trace — wraps GET with observational instrumentation (no-op when CRM_PERF_TRACE != 'true')
+export const GET = withCrmTrace('GET /api/jobs', _GET);

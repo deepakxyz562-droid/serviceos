@@ -330,38 +330,64 @@ export function CrmView() {
     setAssets([]);
     setNotes('');
 
-    // Fetch timeline
+    // C-0 perf: fire all three independent detail requests in parallel.
+    // Previously these ran sequentially (timeline → jobs → assets), so the
+    // detail panel waited for the sum of three round-trips. All three depend
+    // only on `customer.id` (already known) and none consumes another's
+    // result, so they are safe to parallelize.
+    //
+    // Promise.allSettled is used (not Promise.all) so a failure in one
+    // section (e.g. assets 500) still populates the others — each section
+    // owns its own error handling and only clears its own state on failure.
+    // Loading flags are set up-front and cleared in a single finally block
+    // so an unexpected exception cannot leave any loading state stuck.
     setTimelineLoading(true);
-    try {
-      const res = await fetch(`/api/customers/${customer.id}/timeline`);
-      if (res.ok) {
-        const data = await res.json();
-        setTimeline(Array.isArray(data?.entries) ? data.entries : []);
-      }
-    } catch { /* ignore */ }
-    finally { setTimelineLoading(false); }
-
-    // Fetch jobs
     setJobsLoading(true);
-    try {
-      const res = await fetch(`/api/jobs?customerId=${customer.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setJobs(Array.isArray(data) ? data : data?.jobs || []);
-      }
-    } catch { /* ignore */ }
-    finally { setJobsLoading(false); }
-
-    // Fetch assets
     setAssetsLoading(true);
+
     try {
-      const res = await fetch(`/api/customers/${customer.id}/assets`);
-      if (res.ok) {
-        const data = await res.json();
-        setAssets(Array.isArray(data?.assets) ? data.assets : []);
+      const [timelineRes, jobsRes, assetsRes] = await Promise.allSettled([
+        fetch(`/api/customers/${customer.id}/timeline`).then((r) =>
+          r.ok ? r.json() : Promise.reject(new Error(`timeline ${r.status}`)),
+        ),
+        fetch(`/api/jobs?customerId=${customer.id}`).then((r) =>
+          r.ok ? r.json() : Promise.reject(new Error(`jobs ${r.status}`)),
+        ),
+        fetch(`/api/customers/${customer.id}/assets`).then((r) =>
+          r.ok ? r.json() : Promise.reject(new Error(`assets ${r.status}`)),
+        ),
+      ]);
+
+      // Timeline
+      if (timelineRes.status === 'fulfilled') {
+        const data = timelineRes.value;
+        setTimeline(Array.isArray(data?.entries) ? data.entries : []);
+      } else {
+        setTimeline([]);
       }
-    } catch { /* ignore */ }
-    finally { setAssetsLoading(false); }
+
+      // Jobs
+      if (jobsRes.status === 'fulfilled') {
+        const data = jobsRes.value;
+        setJobs(Array.isArray(data) ? data : data?.jobs || []);
+      } else {
+        setJobs([]);
+      }
+
+      // Assets
+      if (assetsRes.status === 'fulfilled') {
+        const data = assetsRes.value;
+        setAssets(Array.isArray(data?.assets) ? data.assets : []);
+      } else {
+        setAssets([]);
+      }
+    } finally {
+      // Single finally guarantees every loading flag is cleared even if the
+      // Promise.allSettled itself threw (it shouldn't, but defensive).
+      setTimelineLoading(false);
+      setJobsLoading(false);
+      setAssetsLoading(false);
+    }
   }, []);
 
   const closeCustomerDetail = () => {

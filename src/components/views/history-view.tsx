@@ -110,7 +110,7 @@ export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) =
       const res = await fetch('/api/jobs?includeDeleted=true&history=true');
       if (res.ok) {
         const data = await res.json();
-        const all = Array.isArray(data) ? data : [];
+        const all = data.jobs ?? (Array.isArray(data) ? data : []);
         const now = new Date();
         // SAME-DAY GRACE: show soft-deleted jobs OR completed jobs that were
         // NOT completed today (UTC). Completed-today jobs stay in Active.

@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { EventBus } from '@/lib/event-bus';
+import { withCrmTrace } from '@/lib/crm-perf-trace';
 
 // GET /api/leads/[id] - Get lead by ID
-export async function GET(
+async function _GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -422,3 +423,6 @@ export async function DELETE(
     );
   }
 }
+
+// C-1 perf trace — wraps GET with observational instrumentation (no-op when CRM_PERF_TRACE != 'true')
+export const GET = withCrmTrace('GET /api/leads/[id]', _GET);

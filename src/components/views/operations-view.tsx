@@ -201,7 +201,7 @@ export function OperationsView() {
       const res = await fetch(`/api/jobs?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setJobs(Array.isArray(data) ? data : []);
+        setJobs(data.jobs ?? (Array.isArray(data) ? data : []));
       }
     } catch {
       setJobs([]);

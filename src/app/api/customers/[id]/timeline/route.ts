@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { addTimelineEntry } from '@/lib/customer-timeline';
+import { withCrmTrace } from '@/lib/crm-perf-trace';
+import { shouldUseSupabaseDB } from '@/lib/supabase-db';
+import { getCustomerTimeline, RpcFunctionNotFoundError } from '@/lib/supabase-rpc';
 
 /**
  * GET /api/customers/[id]/timeline
@@ -19,7 +22,7 @@ import { addTimelineEntry } from '@/lib/customer-timeline';
  *
  * Returns: { entries: [...], total, sources: { leads, jobs, invoices, photos, signatures, manual } }
  */
-export async function GET(
+async function _GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -55,6 +58,66 @@ export async function GET(
       );
     }
 
+    const entryTypeFilter = searchParams.get('entryType');
+    const isInternalParam = searchParams.get('isInternal');
+    const includeInternal =
+      isInternalParam === 'true' || isInternalParam === '1';
+    const limit = Math.min(
+      parseInt(searchParams.get('limit') || '100', 10) || 100,
+      500,
+    );
+    const offset = Math.max(
+      parseInt(searchParams.get('offset') || '0', 10) || 0,
+      0,
+    );
+
+    // ─── C-2B.1: RPC path (7 calls → 1) ────────────────────────────────
+    // Try the RPC FIRST, before any Prisma calls. The get_customer_timeline
+    // SQL function does customer verification + all 6 source fetches +
+    // merge/dedup/filter/sort/paginate in a single PostgREST call.
+    //
+    // This makes the RPC path exactly 1 DB call (the RPC itself). The
+    // route-level customer.findFirst below is ONLY needed for the fallback
+    // path (when the RPC function hasn't been applied yet).
+    //
+    // See supabase-rpc-timeline.sql for the function definition and
+    // supabase-rpc.ts for the caller.
+    if (shouldUseSupabaseDB()) {
+      try {
+        const rpcResult = await getCustomerTimeline(
+          customerId,
+          unrestricted ? null : callerTenantId,
+          entryTypeFilter && entryTypeFilter !== 'all' ? entryTypeFilter : null,
+          includeInternal,
+          limit,
+          offset,
+        );
+        if (rpcResult === null) {
+          return NextResponse.json(
+            { error: 'Customer not found' },
+            { status: 404 },
+          );
+        }
+        return NextResponse.json(rpcResult);
+      } catch (err) {
+        if (err instanceof RpcFunctionNotFoundError) {
+          // RPC function not applied yet — fall through to the original
+          // 7-call path below. Log once so it's visible in dev.log.
+          console.warn(
+            '[customer timeline] get_customer_timeline RPC not found — ' +
+              'using 7-call fallback. Apply supabase-rpc-timeline.sql to enable the RPC path.',
+          );
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    // ─── Original 7-call path (fallback) ───────────────────────────────
+    // Only reached when shouldUseSupabaseDB() is false OR the RPC function
+    // doesn't exist yet. This path needs customer.findFirst for verification
+    // + workspaceId resolution (the RPC handles both internally).
+
     // Verify the customer exists AND belongs to the caller's tenant.
     // (For superadmins without ?tenantId=, skip the tenant filter entirely.)
     const customer = await db.customer.findFirst({
@@ -85,19 +148,6 @@ export async function GET(
         // ignore
       }
     }
-
-    const entryTypeFilter = searchParams.get('entryType');
-    const isInternalParam = searchParams.get('isInternal');
-    const includeInternal =
-      isInternalParam === 'true' || isInternalParam === '1';
-    const limit = Math.min(
-      parseInt(searchParams.get('limit') || '100', 10) || 100,
-      500,
-    );
-    const offset = Math.max(
-      parseInt(searchParams.get('offset') || '0', 10) || 0,
-      0,
-    );
 
     // 1. Fetch explicit CustomerTimelineEntry rows
     const timelineWhere: Record<string, unknown> = { customerId };
@@ -548,3 +598,6 @@ export async function POST(
     );
   }
 }
+
+// C-1 perf trace — wraps GET with observational instrumentation (no-op when CRM_PERF_TRACE != 'true')
+export const GET = withCrmTrace('GET /api/customers/[id]/timeline', _GET);

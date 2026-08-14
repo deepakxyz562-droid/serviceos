@@ -9,6 +9,7 @@ import { reopenDealOnJobCancel } from '@/lib/deal-archive';
 import { notifyCustomerVerificationPin } from '@/lib/whatsapp-notifications';
 import { autoCreateInvoiceFromJob } from '@/lib/invoice-automation';
 import { bustPipelineCaches } from '@/lib/pipeline-cache-bust';
+import { withCrmTrace } from '@/lib/crm-perf-trace';
 
 /**
  * fireAndForget — runs a promise in the background, logging any rejection.
@@ -22,7 +23,7 @@ function fireAndForget<T>(
   p.catch((err) => console.error(`[JobsRoute] ${label} failed:`, err));
 }
 
-export async function GET(
+async function _GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -598,3 +599,6 @@ export async function DELETE(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+// C-1 perf trace — wraps GET with observational instrumentation (no-op when CRM_PERF_TRACE != 'true')
+export const GET = withCrmTrace('GET /api/jobs/[id]', _GET);

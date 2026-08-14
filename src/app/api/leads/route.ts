@@ -6,9 +6,10 @@ import { sendEmail } from '@/lib/email-send';
 import { notifyOwner } from '@/lib/owner-notifications';
 import { logActivity } from '@/lib/activity-log';
 import { requireCrmTenant } from '@/lib/require-crm-tenant';
+import { withCrmTrace } from '@/lib/crm-perf-trace';
 
 // GET /api/leads - List leads with optional status filter
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   try {
     const crmGuard = await requireCrmTenant(request);
     if (crmGuard) return crmGuard;
@@ -454,3 +455,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// C-1 perf trace — wraps GET with observational instrumentation (no-op when CRM_PERF_TRACE != 'true')
+export const GET = withCrmTrace('GET /api/leads', _GET);

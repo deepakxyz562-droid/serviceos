@@ -57,6 +57,7 @@ import {
 } from 'recharts';
 
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
 // NOTE: SalesPipelineView import removed — the Leads page now hosts its own
 // drag-and-drop Kanban board inline (List tab → "Board" toggle). The separate
@@ -1194,6 +1195,10 @@ export function LeadsView() {
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
+  // Debounce the search input so typing "john" doesn't fire 4 HTTP requests
+  // (j, jo, joh, john). `searchQuery` stays reactive for the input field;
+  // fetchLeads + the page-reset effect depend on `debouncedSearchQuery`.
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
   const [statusFilter, setStatusFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
   const [page, setPage] = useState(1);
@@ -1349,7 +1354,7 @@ export function LeadsView() {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (sourceFilter !== 'all') params.set('source', sourceFilter);
-      if (searchQuery) params.set('search', searchQuery);
+      if (debouncedSearchQuery) params.set('search', debouncedSearchQuery);
       params.set('page', String(page));
       params.set('limit', String(pageSize));
       // Exclude soft-deleted leads (shown in Lead History instead)
@@ -1371,16 +1376,17 @@ export function LeadsView() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, sourceFilter, searchQuery, page]);
+  }, [statusFilter, sourceFilter, debouncedSearchQuery, page]);
 
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
 
-  // Reset page when filters change
+  // Reset page when filters change (uses debounced search so a single
+  // "stop typing" event resets page once, not once per keystroke)
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, sourceFilter, searchQuery]);
+  }, [statusFilter, sourceFilter, debouncedSearchQuery]);
 
   // ============================================================
   // Sorted leads (table view)

@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { withCrmTrace } from '@/lib/crm-perf-trace';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -41,7 +42,7 @@ async function resolveTenantIdForCustomer(
 
 // ─── GET /api/customers/[id]/assets ────────────────────────────────────────
 // List all assets for a customer.
-export async function GET(
+async function _GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -160,3 +161,6 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to create asset' }, { status: 500 });
   }
 }
+
+// C-1 perf trace — wraps GET with observational instrumentation (no-op when CRM_PERF_TRACE != 'true')
+export const GET = withCrmTrace('GET /api/customers/[id]/assets', _GET);

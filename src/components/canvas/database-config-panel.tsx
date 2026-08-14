@@ -233,7 +233,7 @@ export function DatabaseConfigPanel({ node }: DatabaseConfigPanelProps) {
       }
       const result = await response.json();
       setTestResult({ success: true, data: result });
-      toast.success(`Found ${Array.isArray(result) ? result.length : (result.data?.length || 0)} records`);
+      toast.success(`Found ${Array.isArray(result) ? result.length : (result.jobs?.length ?? result.data?.length ?? 0)} records`);
     } catch (error: any) {
       setTestResult({ success: false, data: null, error: error.message });
       toast.error(`Query failed: ${error.message}`);

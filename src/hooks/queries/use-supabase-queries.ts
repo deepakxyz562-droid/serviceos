@@ -164,7 +164,7 @@ export function useCustomer360(customerId: string) {
       return {
         customer: customer.status === 'fulfilled' ? customer.value : null,
         jobs: jobs.status === 'fulfilled'
-          ? (Array.isArray(jobs.value) ? jobs.value : [])
+          ? (jobs.value?.jobs ?? (Array.isArray(jobs.value) ? jobs.value : []))
           : [],
         invoices: invoices.status === 'fulfilled'
           ? (Array.isArray(invoices.value) ? invoices.value : invoices.value?.invoices || [])

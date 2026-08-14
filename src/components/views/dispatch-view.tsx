@@ -296,7 +296,7 @@ export function DispatchView() {
       const res = await fetch(`/api/jobs?XTransformPort=3000&${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setJobs(Array.isArray(data) ? data : []);
+        setJobs(data.jobs ?? (Array.isArray(data) ? data : []));
       }
     } catch { setJobs([]); }
   }, []);
@@ -317,9 +317,14 @@ export function DispatchView() {
     setIsRefreshing(false);
   }, [fetchJobs, fetchEmployees]);
 
-  // Auto-refresh every 15 seconds
+  // Auto-refresh every 15 seconds.
+  // C-0 perf: skip the fetch when the tab is hidden — there's no point
+  // polling a dispatch board nobody is looking at, and it avoids stacking
+  // requests on a backgrounded mobile browser. The next time the tab becomes
+  // visible the interval fires normally within 15s.
   useEffect(() => {
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       fetchJobs();
     }, 15000);
     return () => clearInterval(interval);

@@ -322,7 +322,8 @@ export function CalendarView() {
       }
 
       if (jobsRes.ok) {
-        const jobs: Job[] = await jobsRes.json();
+        const jobsData = await jobsRes.json();
+        const jobs: Job[] = jobsData.jobs ?? (Array.isArray(jobsData) ? jobsData : []);
         for (const j of jobs) {
           if (j.scheduledAt) {
             calendarEvents.push({

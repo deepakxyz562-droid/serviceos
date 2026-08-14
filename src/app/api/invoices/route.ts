@@ -7,6 +7,7 @@ import { generateInvoiceNumber } from '@/lib/invoice-automation';
 import { logActivity } from '@/lib/activity-log';
 import { EventBus } from '@/lib/event-bus';
 import { requireCrmTenant } from '@/lib/require-crm-tenant';
+import { withCrmTrace } from '@/lib/crm-perf-trace';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -47,7 +48,7 @@ async function resolveTenantId(authUser: Awaited<ReturnType<typeof getAuthUser>>
  * Admin/employee sessions: scoped by tenantId (resolved from auth or first
  * tenant fallback) plus optional customerId filter from the query string.
  */
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   try {
     const crmGuard = await requireCrmTenant(request);
     if (crmGuard) return crmGuard;
@@ -302,3 +303,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// C-1 perf trace — wraps GET with observational instrumentation (no-op when CRM_PERF_TRACE != 'true')
+export const GET = withCrmTrace('GET /api/invoices', _GET);

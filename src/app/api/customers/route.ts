@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { withCrmTrace } from '@/lib/crm-perf-trace'
 import { getAuthUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activity-log'
 import { requireCrmTenant } from '@/lib/require-crm-tenant'
@@ -7,7 +8,7 @@ import { requireCrmTenant } from '@/lib/require-crm-tenant'
 // GET /api/customers — list customers for the authenticated user's tenant
 // Scopes results to the logged-in user's workspace/tenant so cross-tenant
 // data never leaks. Supports optional ?search= query.
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   try {
     const crmGuard = await requireCrmTenant(request);
     if (crmGuard) return crmGuard;
@@ -223,3 +224,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to delete customer' }, { status: 500 })
   }
 }
+
+// C-1 perf trace — wraps GET with observational instrumentation (no-op when CRM_PERF_TRACE != 'true')
+export const GET = withCrmTrace('GET /api/customers', _GET);

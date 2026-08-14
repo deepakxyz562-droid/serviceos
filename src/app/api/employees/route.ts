@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { withCrmTrace } from '@/lib/crm-perf-trace'
 import { getAuthUser } from '@/lib/auth'
 import { cache } from '@/lib/cache'
 import { cachedJson } from '@/lib/cache-headers'
@@ -9,7 +10,7 @@ import { cachedJson } from '@/lib/cache-headers'
 // tenant/workspace scope gets its own entry.
 const EMPLOYEE_LIST_CACHE_TTL = 60_000
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const role = searchParams.get('role')
@@ -404,3 +405,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to delete employee' }, { status: 500 })
   }
 }
+
+// C-1 perf trace — wraps GET with observational instrumentation (no-op when CRM_PERF_TRACE != 'true')
+export const GET = withCrmTrace('GET /api/employees', _GET);

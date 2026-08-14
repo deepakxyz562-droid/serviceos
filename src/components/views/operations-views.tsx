@@ -192,7 +192,7 @@ export function JobsView() {
       const res = await fetch(`/api/jobs?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch jobs');
       const data = await res.json();
-      setJobs(Array.isArray(data) ? data : []);
+      setJobs(data.jobs ?? (Array.isArray(data) ? data : []));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally { setLoading(false); }

@@ -204,3 +204,143 @@ export async function getMarketplaceCounts(
 
   return { byVertical, byIndustry, total };
 }
+
+// ── Customer Timeline RPC ──────────────────────────────────────────────────
+
+/**
+ * Unified timeline entry shape — matches the original route's UnifiedEntry.
+ */
+export interface TimelineEntry {
+  id: string;
+  entryType: string;
+  title: string;
+  description: string | null;
+  sourceType: string | null;
+  sourceId: string | null;
+  metadata: Record<string, unknown>;
+  actorId: string | null;
+  actorName: string | null;
+  actorType: string;
+  eventDate: string;
+  isInternal: boolean;
+  isPinned: boolean;
+  isExplicit: boolean;
+}
+
+export interface CustomerTimelineResult {
+  entries: TimelineEntry[];
+  total: number;
+  sources: {
+    leads: number;
+    jobs: number;
+    invoices: number;
+    photos: number;
+    signatures: number;
+    manual: number;
+  };
+}
+
+interface RawTimelineResult {
+  entries: unknown[] | null;
+  total: number | string | null;
+  sources: Record<string, number | string | null> | null;
+  error?: string;
+}
+
+/**
+ * Error thrown when the get_customer_timeline RPC function does not exist in
+ * the database yet. Callers should catch this and fall back to the original
+ * multi-call path.
+ */
+export class RpcFunctionNotFoundError extends Error {
+  constructor(functionName: string) {
+    super(`RPC function "${functionName}" not found in database schema cache`);
+    this.name = 'RpcFunctionNotFoundError';
+  }
+}
+
+/**
+ * getCustomerTimeline — fetch the unified customer timeline in a single RPC.
+ *
+ * Replaces 7 sequential Supabase/PostgREST round-trips in the timeline route
+ * with one call to the `get_customer_timeline(p_customer_id, p_tenant_id,
+ * p_entry_type, p_include_internal, p_limit, p_offset)` SQL function.
+ *
+ * BEHAVIORAL EQUIVALENCE: the SQL function replicates the exact merge/dedup/
+ * filter/sort/paginate logic from the original route handler. See
+ * `supabase-rpc-timeline.sql` for the full implementation and the
+ * preservation notes.
+ *
+ * @returns The timeline result, or throws RpcFunctionNotFoundError if the
+ *          SQL function hasn't been applied to the database yet.
+ */
+export async function getCustomerTimeline(
+  customerId: string,
+  tenantId: string | null,
+  entryType: string | null,
+  includeInternal: boolean,
+  limit: number,
+  offset: number,
+): Promise<CustomerTimelineResult | null> {
+  const client = getAdminClient();
+  const { data, error } = await client.rpc('get_customer_timeline', {
+    p_customer_id: customerId,
+    p_tenant_id: tenantId,
+    p_entry_type: entryType,
+    p_include_internal: includeInternal,
+    p_limit: limit,
+    p_offset: offset,
+  });
+
+  if (error) {
+    // PostgREST returns error code PGRST202 when a function doesn't
+    // exist in the schema cache. This is the expected error before the SQL
+    // has been applied — callers should fall back to the original path.
+    const msg = error.message || '';
+    if (
+      error.code === 'PGRST202' ||
+      msg.includes('Could not find the function') ||
+      (msg.includes('function') && msg.includes('does not exist'))
+    ) {
+      throw new RpcFunctionNotFoundError('get_customer_timeline');
+    }
+    throw new Error(
+      `[supabase-rpc] get_customer_timeline failed: ${msg} (code: ${error.code ?? 'n/a'})`,
+    );
+  }
+
+  // PostgREST returns RPC results as either a single object or an array
+  // with one element, depending on the function's return type.
+  const row: RawTimelineResult | undefined = Array.isArray(data)
+    ? (data[0] as RawTimelineResult | undefined)
+    : (data as RawTimelineResult | undefined);
+
+  if (!row) {
+    throw new RpcFunctionNotFoundError('get_customer_timeline');
+  }
+
+  // The function returns { error: 'not_found' } when the customer doesn't
+  // exist or doesn't belong to the caller's tenant. Return null so the
+  // route handler can respond with 404.
+  if (row.error === 'not_found') {
+    return null;
+  }
+
+  const entries: TimelineEntry[] = Array.isArray(row.entries)
+    ? (row.entries as TimelineEntry[])
+    : [];
+
+  const sources = row.sources ?? {};
+  return {
+    entries,
+    total: Number(row.total) || 0,
+    sources: {
+      leads: Number(sources.leads) || 0,
+      jobs: Number(sources.jobs) || 0,
+      invoices: Number(sources.invoices) || 0,
+      photos: Number(sources.photos) || 0,
+      signatures: Number(sources.signatures) || 0,
+      manual: Number(sources.manual) || 0,
+    },
+  };
+}

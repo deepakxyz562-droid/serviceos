@@ -1,7 +1,8 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { withCrmTrace } from '@/lib/crm-perf-trace'
 
-export async function GET(
+async function _GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -116,3 +117,6 @@ export async function DELETE(
     return NextResponse.json({ error: 'Failed to delete customer' }, { status: 500 })
   }
 }
+
+// C-1 perf trace — wraps GET with observational instrumentation (no-op when CRM_PERF_TRACE != 'true')
+export const GET = withCrmTrace('GET /api/customers/[id]', _GET);

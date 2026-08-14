@@ -57,6 +57,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useCurrentUser, isOwnerOrAdmin } from '@/hooks/use-current-user';
 import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
 import { useAppStore, type JobPrefillData } from '@/store/app-store';
@@ -1011,6 +1012,10 @@ export function JobsView() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
+  // Debounce search input so we don't fire an HTTP request on every keystroke.
+  // `search` stays immediately reactive for the input field; fetchJobs depends
+  // on `debouncedSearch` so the request only fires after typing pauses (250ms).
+  const debouncedSearch = useDebouncedValue(search, 250);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   // Top-level view tab: 'active' = active jobs (pending → in_progress),
   // 'history' = completed/archived jobs (rendered via JobHistoryTab).
@@ -1281,7 +1286,7 @@ export function JobsView() {
     try {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
-      if (search) params.set('search', search);
+      if (debouncedSearch) params.set('search', debouncedSearch);
       // Exclude soft-deleted jobs (shown in Job History instead)
       params.set('includeDeleted', 'false');
       const res = await fetch(`/api/jobs?${params.toString()}`);
@@ -1298,7 +1303,7 @@ export function JobsView() {
         // comparison so the grace window is consistent regardless of the
         // user's local timezone (matching how the server stores timestamps).
         const now = new Date();
-        const allJobs = Array.isArray(data) ? data : [];
+        const allJobs = data.jobs ?? (Array.isArray(data) ? data : []);
         setJobs(
           allJobs.filter((j: Job) => {
             if (j.deletedAt) return false;
@@ -1320,7 +1325,7 @@ export function JobsView() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, search]);
+  }, [statusFilter, debouncedSearch]);
 
   const fetchEmployees = useCallback(async () => {
     try {
