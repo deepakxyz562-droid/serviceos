@@ -5,6 +5,7 @@ import { getExchangeRate, convertCurrency } from '@/lib/currency';
 import { getAuthUser } from '@/lib/auth';
 import { EventBus } from '@/lib/event-bus';
 import { requireCrmTenant } from '@/lib/require-crm-tenant';
+import { resolveFallbackTenantCurrency } from '@/lib/tenant-resolver';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -153,12 +154,8 @@ export async function POST(req: NextRequest) {
     const tax = afterDiscount * ((taxRate || 0) / 100);
     const total = afterDiscount + tax;
 
-    // Resolve base currency from tenant
-    let baseCurrency = 'USD';
-    try {
-      const tenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
-      if (tenant?.currency) baseCurrency = tenant.currency;
-    } catch { /* fallback */ }
+    // Resolve base currency from tenant (C-2C + cache: uses shared cached helper)
+    const baseCurrency = await resolveFallbackTenantCurrency();
 
     // Prefer the caller-supplied currency; fall back to the Deal's
     // currency (when a Deal is linked); finally fall back to the

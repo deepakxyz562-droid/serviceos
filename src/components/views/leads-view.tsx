@@ -1251,7 +1251,7 @@ export function LeadsView() {
     fetch('/api/customers?limit=200')
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
-        const list = Array.isArray(data) ? data : [];
+        const list = data.customers ?? (Array.isArray(data) ? data : []);
         setCustomers(list);
       })
       .catch(() => setCustomers([]));

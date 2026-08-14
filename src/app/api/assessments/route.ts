@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { withRequestId } from '@/lib/logger';
+import { resolveFallbackTenantId } from '@/lib/tenant-resolver';
 
 /**
  * Assessments API
@@ -23,23 +24,7 @@ const VALID_TYPES = [
 
 const VALID_STATUSES = ['scheduled', 'in_progress', 'completed', 'cancelled'] as const;
 
-/**
- * Resolve a tenant id from the auth user, with a graceful fallback to the
- * first tenant for demo / cookieless sessions. Mirrors the helper used by
- * /api/jobs/[id]/visits.
- */
-async function resolveTenantId(
-  authUser: Awaited<ReturnType<typeof getAuthUser>>,
-): Promise<string | null> {
-  if (authUser?.tenantId) return authUser.tenantId;
-  try {
-    const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
-    if (firstTenant) return firstTenant.id;
-  } catch {
-    // ignore — caller will handle null
-  }
-  return null;
-}
+
 
 /**
  * GET /api/assessments
@@ -116,7 +101,7 @@ export async function POST(request: NextRequest) {
     if (!authUser) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-    const tenantId = await resolveTenantId(authUser);
+    const tenantId = await resolveFallbackTenantId(authUser);
     if (!tenantId) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 400 });
     }

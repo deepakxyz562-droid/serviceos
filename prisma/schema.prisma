@@ -250,6 +250,20 @@ model Tenant {
   @@index([country, city])
   @@index([country, industry])
   @@index([country, rating, reviewCount, id])
+  // ── C-2C: createdAt index for tenant fallback lookups ──────────────────
+  // 15+ API routes do db.tenant.findFirst({ orderBy: { createdAt: 'asc' },
+  // select: { id: true } }) as a fallback for super-admin / demo sessions
+  // with no tenantId on their JWT. Without this index, Postgres does a
+  // Seq Scan + Sort over the full Tenant table (~91K rows from Google
+  // Places marketplace seeding) → consistently exceeds Supabase's
+  // statement_timeout (~8-10s) → error 57014 on every cold request.
+  //
+  // With this index: Index Scan + LIMIT 1, sub-millisecond, lock-insensitive.
+  //
+  // NOTE: the SQL migration (scripts/crm-perf/apply-c2c-tenant-createdat-index.sql)
+  // must be run manually in Supabase SQL Editor — `prisma db push` won't
+  // apply it because the datasource is sqlite.
+  @@index([createdAt], map: "idx_tenant_created_at")
 }
 
 model Subscription {
@@ -763,6 +777,17 @@ model Invoice {
   @@index([bookingId])
   @@index([recurrenceId])
   @@index([parentInvoiceId])
+
+  // ── C-3 (E1): composite index for invoices list page 1 ──────────────────
+  // Query: WHERE "tenantId" = ? ORDER BY "createdAt" DESC LIMIT 200
+  // Before: Seq Scan, 153.81ms cold / 5.05ms warm at 5K rows.
+  // After:  Index Scan expected (~1-2ms warm, ~10ms cold).
+  // The existing single-column [tenantId] index can seek the tenant but
+  // cannot help with the ORDER BY createdAt DESC — Postgres must sort all
+  // matched rows. A composite [tenantId, createdAt DESC] lets the planner
+  // seek the tenant AND read rows in already-sorted order (no sort step).
+  // Covers: E1 (list), E2 (count — Index Only Scan via the same index).
+  @@index([tenantId, createdAt(sort: Desc)], map: "idx_invoice_tenant_createdat_desc")
 }
 
 // Recurring invoice schedule (AMC / subscriptions / monthly maintenance contracts)

@@ -609,6 +609,13 @@ export function MarketplaceBrowser({
   // height before we attempt to restore scroll position. A single rAF
   // fires before the browser has laid out the new content; the second
   // rAF fires after layout, so `container.scrollTop = scrollY` sticks.
+  //
+  // MKT-10b FIX: If the saved scrollY exceeds the current container
+  // height (React Query cache expired, only 24 SSR items re-rendered),
+  // the initial restore caps at the bottom of the short list. The
+  // follow-up effect below (3. RE-APPLY after fetchNextPage) handles
+  // re-applying scrollY as more pages load until the container is tall
+  // enough.
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     const saved = sessionStorage.getItem('marketplace-scroll-y');
@@ -630,10 +637,14 @@ export function MarketplaceBrowser({
 
   // 2. SAVE on unmount — capture the container reference at effect-run
   // time (on mount) so the cleanup can read `scrollTop` even after React
-  // has detached the ref during the unmount commit. The DOM node itself
-  // is still valid (just detached from the document); reading `.scrollTop`
-  // returns the last rendered scroll position.
-  React.useEffect(() => {
+  // has detached the ref during the unmount commit.
+  //
+  // MKT-10a FIX: useLayoutEffect instead of useEffect. In React 18,
+  // useEffect cleanups run AFTER DOM detach, so `container.scrollTop`
+  // may read 0 on a detached node (Safari is known to reset this).
+  // useLayoutEffect cleanups run synchronously BEFORE detach, so the
+  // node is still attached and scrollTop returns the correct value.
+  React.useLayoutEffect(() => {
     const container = scrollContainerRef.current;
     return () => {
       if (container) {
@@ -643,6 +654,45 @@ export function MarketplaceBrowser({
       }
     };
   }, []);
+
+  // 3. RE-APPLY scroll after fetchNextPage (MKT-10b FIX) ──────────────────
+  // When the user returns from the detail page and the React Query cache
+  // has expired (>30min), only the initial 24 SSR items re-render. The
+  // saved scrollY may exceed the container height, so the initial restore
+  // (effect 1) caps at the bottom of the short list. As fetchNextPage
+  // loads more pages, the container grows — but the scroll position isn't
+  // re-applied. This effect re-applies the saved scrollY after each page
+  // loads until the container is tall enough to accommodate it, then
+  // clears the sessionStorage entry so it doesn't interfere with future
+  // scroll saving.
+  const savedScrollYRef = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    // Read the saved scrollY once on mount.
+    if (savedScrollYRef.current === null) {
+      const saved = sessionStorage.getItem('marketplace-scroll-y');
+      const parsed = saved ? parseInt(saved, 10) : NaN;
+      savedScrollYRef.current = isNaN(parsed) ? 0 : parsed;
+    }
+    const targetY = savedScrollYRef.current;
+    if (targetY <= 0) return;
+
+    // Only re-apply when a page fetch has just completed (not while
+    // fetching — that would fight the user's scroll).
+    if (isFetchingNextPage) return;
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    // If the container is tall enough, apply the scroll and clear the ref
+    // so we stop re-applying on future fetches.
+    if (container.scrollHeight - container.clientHeight >= targetY) {
+      container.scrollTop = targetY;
+      savedScrollYRef.current = 0; // done — stop re-applying
+    }
+    // If not tall enough yet, do nothing — the next fetchNextPage will
+    // trigger this effect again and re-check.
+  }, [loadedProviders.length, isFetchingNextPage]);
 
   // Geocode the city filter text automatically to get its lat/lng coordinates
   React.useEffect(() => {
@@ -1196,6 +1246,29 @@ export function MarketplaceBrowser({
           </span>
         </div>
       ) : null}
+
+      {/* ── MKT-9 FIX: Filtering loader banner ───────────────────────────────
+          When `filtering` is true (category click, search, city, sort, etc.),
+          show a non-blocking spinner banner above the grid so the user gets
+          immediate visual feedback that their filter is being applied.
+
+          Previously the grid had `opacity-50 + pointer-events-none` dimming
+          during filtering, but it was removed due to flicker. The replacement
+          (`filteringBanner`) was referenced in a comment but never actually
+          built — so the user saw old providers with no feedback until the new
+          results arrived. With `keepPreviousData` enabled in the query hook,
+          old providers stay visible (no height collapse), and this banner sits
+          above them as a clear "updating" signal. */}
+      {filtering && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
+        >
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          Updating results…
+        </div>
+      )}
 
       {/* ── Grid ────────────────────────────────────────────────────────────
           IMPORTANT (Fix A): We NO LONGER unmount the real card grid to show a

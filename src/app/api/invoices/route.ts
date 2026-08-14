@@ -10,6 +10,7 @@ import { requireCrmTenant } from '@/lib/require-crm-tenant';
 import { withCrmTrace } from '@/lib/crm-perf-trace';
 import { shouldUseSupabaseDB } from '@/lib/supabase-db';
 import { getInvoices, RpcFunctionNotFoundError } from '@/lib/supabase-rpc';
+import { resolveFallbackTenantId } from '@/lib/tenant-resolver';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -37,26 +38,11 @@ function shouldTryInvoicesRpc(): boolean {
   return true; // 'unknown' — first request, try it
 }
 
-/**
- * Resolves a tenant ID from the auth user, falling back to the first tenant
- * for demo / cookieless sessions.
- */
-async function resolveTenantId(authUser: Awaited<ReturnType<typeof getAuthUser>>): Promise<string | null> {
-  if (authUser?.tenantId) {
-    return authUser.tenantId;
-  }
-
-  try {
-    const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
-    if (firstTenant) {
-      return firstTenant.id;
-    }
-  } catch {
-    // DB lookup failed
-  }
-
-  return null;
-}
+// resolveTenantId is now imported from @/lib/tenant-resolver (C-2C + cache fix).
+// The old local copy queried db.tenant.findFirst on EVERY request, which
+// timed out at ~10s (Supabase 57014) under load. The shared helper caches
+// the first-tenant ID for 60s (success) / 5s (failure) so only the first
+// request pays the DB cost.
 
 /**
  * GET /api/invoices
@@ -109,7 +95,7 @@ async function _GET(request: NextRequest) {
           rpcCustomerId = authUser.id;
         } else {
           // Admin/employee: resolve tenant, optional customerId filter.
-          rpcTenantId = await resolveTenantId(authUser);
+          rpcTenantId = await resolveFallbackTenantId(authUser);
           if (!rpcTenantId) {
             // No tenant found — short-circuit with empty (matches original).
             return NextResponse.json({
@@ -192,7 +178,7 @@ async function _GET(request: NextRequest) {
     }
 
     // ── Admin / employee session (existing flow) ──────────────────────────────
-    const tenantId = await resolveTenantId(authUser);
+    const tenantId = await resolveFallbackTenantId(authUser);
 
     if (!tenantId) {
       return NextResponse.json({ invoices: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 0 } });
@@ -269,7 +255,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'At least one line item is required' }, { status: 400 });
     }
 
-    const tenantId = await resolveTenantId(authUser);
+    const tenantId = await resolveFallbackTenantId(authUser);
     if (!tenantId) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 400 });
     }

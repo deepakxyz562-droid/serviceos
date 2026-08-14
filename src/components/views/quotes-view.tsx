@@ -346,7 +346,7 @@ export function QuotesView() {
         let customersList: Customer[] = [];
         if (customersRes.ok) {
           const data = await customersRes.json();
-          if (Array.isArray(data)) customersList = data;
+          customersList = data.customers ?? (Array.isArray(data) ? data : []);
         } else {
           toast.error('Failed to load customers');
         }

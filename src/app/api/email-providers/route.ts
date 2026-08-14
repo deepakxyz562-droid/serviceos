@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { maskedConfigFromString, encodeProviderConfig } from '@/lib/email-providers';
+import { resolveFallbackTenantId } from '@/lib/tenant-resolver';
 
 /**
  * GET /api/email-providers
@@ -121,8 +122,8 @@ export async function POST(request: NextRequest) {
       // Super admin creating a provider — if isPlatform, attach to first tenant;
       // otherwise require the tenant to be specified in the body or use first tenant.
       // Never use 'default' as a fake tenantId — it breaks provider resolution.
-      const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
-      tenantId = firstTenant?.id || 'platform';
+      // C-2C + cache: use shared cached helper to avoid 10s timeout on every request.
+      tenantId = (await resolveFallbackTenantId(user)) || 'platform';
     }
 
     const body = await request.json();

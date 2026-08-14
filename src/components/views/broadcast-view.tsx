@@ -394,7 +394,7 @@ export function BroadcastView() {
       const res = await authFetch('/api/customers?limit=500');
       if (res.ok) {
         const result = await res.json();
-        const list = (result.data || result) as CustomerOption[];
+        const list = (result.customers ?? result.data ?? (Array.isArray(result) ? result : [])) as CustomerOption[];
         setCustomers(list);
       }
     } catch {

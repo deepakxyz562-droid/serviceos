@@ -340,6 +340,16 @@ async function _GET(request: NextRequest) {
     // The count query is needed for the pagination envelope (total +
     // totalPages). Running it in parallel with the findMany via Promise.all
     // keeps the wall-clock time at ~max(findMany, count) instead of sum.
+    //
+    // C-3 (A6b): when `search` is present, the exact count(*) is OMITTED
+    // because ILIKE '%term%' across 5 columns (title, description,
+    // customerName, assigneeName, address) cannot use any B-tree index
+    // (29ms warm Seq Scan at 20K rows → would be ~290ms at 200K). Instead
+    // we return hasNextPage = (jobs.length === pageSize) and total = null.
+    // This mirrors the ActivityLog B7b fix. Non-search paths keep the exact
+    // count (they're indexed and fast — A2 count is 3.9ms warm).
+    const isSearchActive = !!search?.trim();
+
     const [jobs, total] = await Promise.all([
       db.job.findMany({
         where,
@@ -348,17 +358,19 @@ async function _GET(request: NextRequest) {
         take: pageSize,
         skip,
       }),
-      db.job.count({ where }),
+      isSearchActive ? Promise.resolve(null) : db.job.count({ where }),
     ]);
 
-    const totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
+    const hasNextPage = jobs.length === pageSize;
+    const totalPages = total === null ? null : (total === 0 ? 0 : Math.ceil(total / pageSize));
     const result = {
       jobs,
       pagination: {
         page,
         pageSize,
-        total,
-        totalPages,
+        total,           // null during search, exact count otherwise
+        totalPages,      // null during search, exact count otherwise
+        hasNextPage,     // true when the fetched page is full (more results likely)
       },
     };
 

@@ -1,4 +1,5 @@
 import { db } from '@/lib/db'
+import { resolveFallbackTenantId } from '@/lib/tenant-resolver'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -97,12 +98,10 @@ export async function resolveTenantId(tenantId: string | null): Promise<string |
       // ignore — fall through
     }
   }
-  try {
-    const first = await db.tenant.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } })
-    return first?.id || null
-  } catch {
-    return null
-  }
+  // Fallback: first tenant by createdAt asc — delegated to the shared cached
+  // helper (C-2C) so the 10s statement_timeout on Tenant.findFirst is paid
+  // only once per 60s window, not on every super-admin request.
+  return resolveFallbackTenantId(null)
 }
 
 // ─── Main resolver ─────────────────────────────────────────────────────────

@@ -24,6 +24,17 @@ export const INDUSTRY_TO_PLURAL_SLUG: Record<string, string> = {
   roofing: 'roofers',
   painting: 'painters',
   'pest-control': 'pest-control',
+  // ── MKT-8 FIX: flooring was missing from the map ──────────────────────
+  // Without this entry, mapIndustryToPluralSlug('flooring') fell through to
+  // the fallback (slugify + 's' → 'floorings'), but 'floorings' was NOT in
+  // the reverse map (PLURAL_SLUG_TO_INDUSTRY). So resolveIndustryFromAnySlug
+  // returned null → the page-level early redirect was skipped →
+  // getPublicBusinessByUrl was called directly → cache collision → infinite
+  // redirect loop. Adding the canonical mapping fixes both directions.
+  flooring: 'flooring-contractors',
+  'floor-covering': 'flooring-contractors',
+  'window-cleaning': 'window-cleaners',
+  'window-washing': 'window-cleaners',
   movers: 'movers',
   moving: 'movers',
   'auto-repair': 'auto-repair',
@@ -82,6 +93,9 @@ export function mapIndustryToPluralSlug(industry?: string | null): string {
   if (i.includes('landscape') || i.includes('lawn') || i.includes('garden')) return 'landscapers';
   if (i.includes('roof')) return 'roofers';
   if (i.includes('paint')) return 'painters';
+  // ── MKT-8 FIX: add floor + window substring matches ───────────────────
+  if (i.includes('floor')) return 'flooring-contractors';
+  if (i.includes('window')) return 'window-cleaners';
   if (i.includes('auto') || i.includes('car') || i.includes('mechanic')) return 'auto-repair';
   if (i.includes('salon') || i.includes('spa') || i.includes('beauty')) return 'salons';
   if (i.includes('pet') || i.includes('vet') || i.includes('groom')) return 'pet-care';

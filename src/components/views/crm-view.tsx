@@ -146,6 +146,10 @@ export function CrmView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(true);
   const [customerSearch, setCustomerSearch] = useState('');
+  const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState('');
+  // C-1: server-side pagination total (null during search). Used for the
+  // "Total" stat so it shows the real count, not just the fetched page.
+  const [customersTotal, setCustomersTotal] = useState<number | null>(null);
   const [showAddCustomer, setShowAddCustomer] = useState(pendingCreate === 'customer');
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [customerForm, setCustomerForm] = useState({ name: '', phone: '', email: '', address: '' });
@@ -184,24 +188,37 @@ export function CrmView() {
   const [notesLoading, setNotesLoading] = useState(false);
 
   // ─── Fetch Customers ────────────────────────────────────────────────────
-  const fetchCustomers = useCallback(async () => {
+  // C-1: server-side search + pagination. Previously fetched ALL customers
+  // and filtered client-side — at 10K rows this was 221ms cold + full payload
+  // transfer. Now fetches page 1 (100 rows) with server-side ILIKE search.
+  const fetchCustomers = useCallback(async (search: string) => {
     setCustomersLoading(true);
     try {
-      const res = await fetch('/api/customers');
+      const params = new URLSearchParams({ page: '1', pageSize: '100' });
+      if (search.trim()) params.set('search', search.trim());
+      const res = await fetch(`/api/customers?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setCustomers(Array.isArray(data) ? data : data.customers || []);
+        setCustomers(data.customers ?? (Array.isArray(data) ? data : []));
+        setCustomersTotal(data.pagination?.total ?? null);
       }
     } catch {
       setCustomers([]);
+      setCustomersTotal(null);
     } finally {
       setCustomersLoading(false);
     }
   }, []);
 
+  // Debounce search — 350ms matches the contacts-view pattern.
   useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
+    const t = setTimeout(() => setDebouncedCustomerSearch(customerSearch), 350);
+    return () => clearTimeout(t);
+  }, [customerSearch]);
+
+  useEffect(() => {
+    fetchCustomers(debouncedCustomerSearch);
+  }, [fetchCustomers, debouncedCustomerSearch]);
 
   // ─── Customer CRUD ──────────────────────────────────────────────────────
   const handleSaveCustomer = async () => {
@@ -223,7 +240,7 @@ export function CrmView() {
         setShowAddCustomer(false);
         setEditingCustomer(null);
         setCustomerForm({ name: '', phone: '', email: '', address: '' });
-        fetchCustomers();
+        fetchCustomers(debouncedCustomerSearch);
       } else {
         toast.error(`Failed to ${isEditing ? 'update' : 'create'} customer`);
       }
@@ -237,7 +254,7 @@ export function CrmView() {
       const res = await fetch(`/api/customers?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Customer deleted');
-        fetchCustomers();
+        fetchCustomers(debouncedCustomerSearch);
         if (selectedCustomer?.id === id) {
           setFormMode('list');
           setSelectedCustomer(null);
@@ -268,7 +285,7 @@ export function CrmView() {
       if (res.ok && data.success && data.activationUrl) {
         setInviteUrl(data.activationUrl);
         toast.success(`Invitation link generated for ${customer.name}`);
-        fetchCustomers();
+        fetchCustomers(debouncedCustomerSearch);
       } else {
         toast.error(data.error || 'Failed to generate invitation link');
       }
@@ -287,7 +304,7 @@ export function CrmView() {
       );
       if (res.ok) {
         toast.success(`Portal access disabled for ${customer.name}`);
-        fetchCustomers();
+        fetchCustomers(debouncedCustomerSearch);
       } else {
         const data = await res.json().catch(() => ({}));
         toast.error(data.error || 'Failed to disable portal access');
@@ -460,12 +477,9 @@ export function CrmView() {
   };
 
   // ─── Filtered / Sorted Lists ────────────────────────────────────────────
+  // C-1: search is now server-side — no client-side filter needed here.
+  // Sort is still client-side (fine for 100 rows on a page).
   const filteredCustomers = customers
-    .filter(c =>
-      c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-      c.phone.includes(customerSearch) ||
-      (c.email && c.email.toLowerCase().includes(customerSearch.toLowerCase()))
-    )
     .sort((a, b) => {
       const dir = customerSortDir === 'asc' ? 1 : -1;
       if (customerSort === 'name') return a.name.localeCompare(b.name) * dir;
@@ -474,7 +488,9 @@ export function CrmView() {
 
   // ─── Stats ──────────────────────────────────────────────────────────────
   const customerStats = {
-    total: customers.length,
+    // C-1: total uses the server-side count (pagination.total) when available;
+    // the other stats are approximations on the fetched page (100 rows).
+    total: customersTotal ?? customers.length,
     withEmail: customers.filter(c => c.email).length,
     withWhatsApp: customers.filter(c => c.whatsappId).length,
     recent: customers.filter(c => {

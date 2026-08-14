@@ -4,25 +4,9 @@ import { getAuthUser } from '@/lib/auth';
 import { logActivity } from '@/lib/activity-log';
 import { requireCrmTenant } from '@/lib/require-crm-tenant';
 import { normalizeExpenseCategory } from '@/lib/job-taxonomy';
+import { resolveFallbackTenantId } from '@/lib/tenant-resolver';
 
-/**
- * Resolves a tenant ID from the auth user, falling back to the first tenant
- * for demo / cookieless sessions.
- */
-async function resolveTenantId(authUser: Awaited<ReturnType<typeof getAuthUser>>): Promise<string | null> {
-  if (authUser?.tenantId) {
-    return authUser.tenantId;
-  }
-  try {
-    const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
-    if (firstTenant) {
-      return firstTenant.id;
-    }
-  } catch {
-    // DB lookup failed
-  }
-  return null;
-}
+
 
 /**
  * Generate a unique expense number: EXP-0001, EXP-0002, ...
@@ -145,7 +129,7 @@ export async function GET(request: NextRequest) {
     }
 
     // ── Owner / admin ───────────────────────────────────────────────────────
-    const tenantId = await resolveTenantId(authUser);
+    const tenantId = await resolveFallbackTenantId(authUser);
 
     if (!tenantId) {
       return NextResponse.json({ expenses: [], pagination: { total: 0 } });
@@ -217,7 +201,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'A valid amount is required' }, { status: 400 });
     }
 
-    const tenantId = await resolveTenantId(authUser);
+    const tenantId = await resolveFallbackTenantId(authUser);
     const { employeeId, employeeName } = await resolveEmployee(authUser);
 
     // Resolve the tenant's base currency so expense entries default to the

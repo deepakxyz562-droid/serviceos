@@ -1344,7 +1344,7 @@ export function JobsView() {
       const res = await fetch('/api/customers?limit=500');
       if (res.ok) {
         const data = await res.json();
-        setCustomers(Array.isArray(data) ? data : []);
+        setCustomers(data.customers ?? (Array.isArray(data) ? data : []));
       }
     } catch {
       setCustomers([]);

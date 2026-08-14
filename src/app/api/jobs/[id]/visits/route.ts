@@ -2,25 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { logActivity } from '@/lib/activity-log';
-
-/**
- * Resolves a tenant ID from the auth user, falling back to the first tenant
- * for demo / cookieless sessions.
- */
-async function resolveTenantId(authUser: Awaited<ReturnType<typeof getAuthUser>>): Promise<string | null> {
-  if (authUser?.tenantId) {
-    return authUser.tenantId;
-  }
-  try {
-    const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
-    if (firstTenant) {
-      return firstTenant.id;
-    }
-  } catch {
-    // DB lookup failed
-  }
-  return null;
-}
+import { resolveFallbackTenantId } from '@/lib/tenant-resolver';
 
 /**
  * Compute the next sequential visit number for a job (1, 2, 3 ...).
@@ -214,7 +196,7 @@ export async function POST(
       return NextResponse.json({ error: 'scheduledDate is required (or set scheduleLater)' }, { status: 400 });
     }
 
-    const tenantId = await resolveTenantId(authUser);
+    const tenantId = await resolveFallbackTenantId(authUser);
     if (!tenantId) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 400 });
     }

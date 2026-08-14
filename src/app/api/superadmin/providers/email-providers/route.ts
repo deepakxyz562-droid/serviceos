@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { maskedConfigFromString, encodeProviderConfig } from '@/lib/email-providers';
+import { resolveFallbackTenantId } from '@/lib/tenant-resolver';
 
 /**
  * GET /api/superadmin/providers/email-providers
@@ -114,10 +115,10 @@ export async function POST(request: NextRequest) {
     }
 
     // If no tenantId specified, attach to the first real tenant (not a fake 'platform' string).
+    // C-2C + cache: use shared cached helper to avoid 10s timeout on every request.
     let finalTenantId = typeof tenantId === 'string' && tenantId.trim() ? tenantId.trim() : undefined;
     if (!finalTenantId) {
-      const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
-      finalTenantId = firstTenant?.id || 'platform';
+      finalTenantId = (await resolveFallbackTenantId(null)) || 'platform';
     }
     const finalUsageType = typeof usageType === 'string' && ['transactional', 'marketing', 'both'].includes(usageType)
       ? usageType

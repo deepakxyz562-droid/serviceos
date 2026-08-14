@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { withRequestId } from '@/lib/logger';
+import { resolveFallbackTenantId } from '@/lib/tenant-resolver';
 
 /**
  * Quality Inspections API
@@ -15,22 +16,7 @@ import { withRequestId } from '@/lib/logger';
 
 const VALID_STATUSES = ['pending', 'passed', 'failed', 'needs_rework'] as const;
 
-/**
- * Resolve a tenant id from the auth user, with a graceful fallback to the
- * first tenant for demo / cookieless sessions.
- */
-async function resolveTenantId(
-  authUser: Awaited<ReturnType<typeof getAuthUser>>,
-): Promise<string | null> {
-  if (authUser?.tenantId) return authUser.tenantId;
-  try {
-    const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
-    if (firstTenant) return firstTenant.id;
-  } catch {
-    // ignore
-  }
-  return null;
-}
+
 
 /**
  * GET /api/quality-inspections
@@ -106,7 +92,7 @@ export async function POST(request: NextRequest) {
     if (!authUser) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-    const tenantId = await resolveTenantId(authUser);
+    const tenantId = await resolveFallbackTenantId(authUser);
     if (!tenantId) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 400 });
     }

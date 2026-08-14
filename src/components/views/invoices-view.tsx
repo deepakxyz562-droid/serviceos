@@ -489,7 +489,7 @@ export function InvoicesView() {
         throw new Error('Failed to fetch customers');
       }
       const data = await res.json();
-      const list: Customer[] = Array.isArray(data) ? data : [];
+      const list: Customer[] = data.customers ?? (Array.isArray(data) ? data : []);
       setCustomers(list);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load customers');

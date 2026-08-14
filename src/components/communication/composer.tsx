@@ -265,6 +265,10 @@ export function CommunicationComposer(props: ComposerProps) {
       : `/api/customers?limit=20`;
     fetch(url)
       .then((r) => (r.ok ? r.json() : []))
+      .then((raw) => {
+        const data: CustomerOption[] = raw.customers ?? (Array.isArray(raw) ? raw : []);
+        return data;
+      })
       .then((data: CustomerOption[]) => {
         if (cancelled) return;
         // The API returns an array.

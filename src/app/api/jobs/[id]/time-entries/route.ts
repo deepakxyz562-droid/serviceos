@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { logActivity } from '@/lib/activity-log';
+import { resolveFallbackTenantId } from '@/lib/tenant-resolver';
 
 /**
  * Job Time Entries (Labor section)
@@ -14,15 +15,7 @@ import { logActivity } from '@/lib/activity-log';
  * owners/admins can manually create entries (employees use the live timer).
  */
 
-async function resolveTenantId(authUser: Awaited<ReturnType<typeof getAuthUser>>): Promise<string | null> {
-  if (authUser?.tenantId) return authUser.tenantId;
-  try {
-    const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
-    return firstTenant?.id ?? null;
-  } catch {
-    return null;
-  }
-}
+
 
 function computeMinutes(start: Date, end: Date): number {
   return Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
@@ -123,7 +116,7 @@ export async function POST(
       );
     }
 
-    const tenantId = await resolveTenantId(authUser);
+    const tenantId = await resolveFallbackTenantId(authUser);
     if (!tenantId) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 400 });
     }

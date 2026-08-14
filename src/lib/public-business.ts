@@ -304,7 +304,19 @@ export async function getPublicBusinessByUrl(
   citySeg: string,
   slugSeg: string,
 ) {
-  const cacheKey = `fieseros:public-business:${slugSeg}`
+  // ── MKT-8 FIX: Cache key MUST include all 3 URL segments ──────────────
+  // Previously the key was `fieseros:public-business:${slugSeg}` — keyed by
+  // slug ONLY. This caused a cache collision: when a non-canonical URL
+  // (e.g. /flooring/city/slug) produced a redirect signal, that signal was
+  // cached under the slug key. When the browser followed the redirect to
+  // the canonical URL (/floorings/city/slug), it hit the SAME cache entry
+  // → same redirect signal → infinite redirect loop → "profile couldn't load".
+  //
+  // Including industrySeg + citySeg in the key ensures each URL variant
+  // gets its own cache entry. The canonical URL's entry stores the business
+  // object; non-canonical URLs' entries store redirect signals (though we
+  // no longer cache redirect signals — see shouldCache below).
+  const cacheKey = `fieseros:public-business:${industrySeg}:${citySeg}:${slugSeg}`
   const result = await sharedCacheWrap(
     cacheKey,
     2 * 60 * 1000, // fresh: 2min
@@ -313,7 +325,14 @@ export async function getPublicBusinessByUrl(
     // Don't cache null results — a missing business might be a transient
     // error, and caching null for 1h would hide a business that just needs
     // a moment to propagate.
-    (r) => r.business !== null || r.needsRedirect,
+    //
+    // ── MKT-8 FIX: Also DON'T cache redirect signals ──────────────────
+    // A redirect signal means "this specific URL is non-canonical." If
+    // cached, a subsequent visit to a different URL variant with the same
+    // slug could hit the cached redirect and loop. Redirect signals are
+    // cheap to recompute (one findFirst + string comparison) and transient
+    // by nature — they should never be cached.
+    (r) => r.business !== null,
   )
   return result.value
 }

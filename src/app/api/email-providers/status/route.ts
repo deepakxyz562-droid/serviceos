@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { getProviderStatus } from '@/lib/email-send';
+import { resolveFallbackTenantId } from '@/lib/tenant-resolver';
 
 /**
  * GET /api/email-providers/status
@@ -30,10 +31,9 @@ export async function GET() {
     // Super admins without a tenantId should see the first tenant's status
     let tenantId = user.tenantId;
     if (!tenantId) {
-      // For super admins, use the first tenant so getProviderStatus can find real providers
-      const { db } = await import('@/lib/db');
-      const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
-      tenantId = firstTenant?.id || 'default';
+      // For super admins, use the first tenant so getProviderStatus can find real providers.
+      // C-2C + cache: use shared cached helper to avoid 10s timeout on every request.
+      tenantId = await resolveFallbackTenantId(user) || 'default';
     }
     const status = await getProviderStatus(tenantId);
     return NextResponse.json(status);

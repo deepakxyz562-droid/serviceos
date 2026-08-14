@@ -14,6 +14,7 @@
  */
 
 import { db } from '@/lib/db'
+import { resolveFallbackTenantId } from '@/lib/tenant-resolver'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 import { sendEmail } from '@/lib/email-send'
 import { sendSmsMessage } from '@/lib/sms-send'
@@ -87,12 +88,12 @@ export async function resolveTenantId(maybeWorkspaceOrTenantId: string | null | 
     const ws = await db.workspace.findUnique({ where: { id: maybeWorkspaceOrTenantId }, select: { tenantId: true } })
     if (ws?.tenantId) return ws.tenantId
   } catch { /* ignore */ }
-  // Last resort: first tenant
-  try {
-    const t = await db.tenant.findFirst({ select: { id: true } })
-    return t?.id || null
-  } catch { /* ignore */ }
-  return null
+  // Last resort: first tenant by createdAt asc — delegated to the shared
+  // cached helper (C-2C) so the 10s statement_timeout on Tenant.findFirst
+  // is paid only once per 60s window, not on every super-admin request.
+  // NOTE: the helper adds `orderBy: { createdAt: 'asc' }` for deterministic
+  // ordering — an improvement over the previous unordered findFirst.
+  return resolveFallbackTenantId(null)
 }
 
 /**

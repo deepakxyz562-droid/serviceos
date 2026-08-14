@@ -8,7 +8,24 @@ import { CUSTOMER_PUBLIC_SELECT } from '@/lib/customer-select'
 
 // GET /api/customers — list customers for the authenticated user's tenant
 // Scopes results to the logged-in user's workspace/tenant so cross-tenant
-// data never leaks. Supports optional ?search= query.
+// data never leaks.
+//
+// Query params:
+//   search    — ILIKE search across name/phone/email/address
+//   page      — default 1
+//   pageSize  — default 50, max 500 (alias: `limit` for backward compat)
+//
+// Returns: { customers: [...], pagination: { page, pageSize, total, totalPages, hasNextPage } }
+//
+// C-1 (C1): previously returned ALL matching customers with no cap —
+// Seq Scan, 221ms cold / 11ms warm at 10K rows, plus the full payload
+// transferred over the wire. Now uses server-side pagination (default 50).
+//
+// C-3 (C3b): when `search` is present, the exact count(*) is OMITTED
+// because ILIKE '%term%' across 4 columns cannot use any B-tree index
+// (23ms warm Seq Scan at 10K rows). Instead we return hasNextPage and
+// total = null. Non-search paths keep the exact count (C2 count is
+// 1.74ms warm, indexed).
 async function _GET(request: NextRequest) {
   try {
     const crmGuard = await requireCrmTenant(request);
@@ -20,6 +37,17 @@ async function _GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
+
+    // ── C-1: Server-side pagination ──────────────────────────────────
+    // `limit` is honored as an alias for `pageSize` (backward compat for
+    // dropdown consumers that pass ?limit=200 or ?limit=500). Hard cap: 500.
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const pageSizeRaw = parseInt(
+      searchParams.get('pageSize') || searchParams.get('limit') || '50',
+      10,
+    ) || 50;
+    const pageSize = Math.min(Math.max(1, pageSizeRaw), 500);
+    const skip = (page - 1) * pageSize;
 
     // Scope to the user's workspace. If the user has no direct workspaceId
     // (e.g. super-admin / admin@fieseros.com), resolve via their tenantId →
@@ -38,7 +66,7 @@ async function _GET(request: NextRequest) {
       if (fallbackWorkspace) {
         where.workspaceId = fallbackWorkspace.id
       } else {
-        return NextResponse.json([])
+        return NextResponse.json({ customers: [], pagination: { page, pageSize, total: 0, totalPages: 0, hasNextPage: false } })
       }
     }
 
@@ -54,15 +82,35 @@ async function _GET(request: NextRequest) {
     // C-2C payload hygiene: select only non-sensitive columns. Previously
     // this had no `select`, which leaked passwordHash / activationToken /
     // marketingConsentIp to the browser on every customer-list fetch.
-    // NOTE: this endpoint still returns ALL matching customers with no cap —
-    // pagination is deferred to C-2D (measure count behaviour first).
-    const customers = await db.customer.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      select: CUSTOMER_PUBLIC_SELECT,
-    })
 
-    return NextResponse.json(customers)
+    // C-3 (C3b): when search is present, skip the expensive count(*).
+    // ILIKE '%term%' can't use B-tree indexes → count scans the full table.
+    const isSearchActive = !!search?.trim();
+
+    const [customers, total] = await Promise.all([
+      db.customer.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        select: CUSTOMER_PUBLIC_SELECT,
+        take: pageSize,
+        skip,
+      }),
+      isSearchActive ? Promise.resolve(null) : db.customer.count({ where }),
+    ]);
+
+    const hasNextPage = customers.length === pageSize;
+    const totalPages = total === null ? null : (total === 0 ? 0 : Math.ceil(total / pageSize));
+
+    return NextResponse.json({
+      customers,
+      pagination: {
+        page,
+        pageSize,
+        total,           // null during search, exact count otherwise
+        totalPages,      // null during search, exact count otherwise
+        hasNextPage,
+      },
+    })
   } catch (error) {
     console.error('Error fetching customers:', error)
     return NextResponse.json({ error: 'Failed to fetch customers' }, { status: 500 })
