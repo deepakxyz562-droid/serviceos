@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { shouldUseSupabaseDB } from '@/lib/supabase-db';
+import { getMarketplaceCities } from '@/lib/supabase-rpc';
 import { withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
 import { sharedCacheWrap } from '@/lib/shared-cache';
@@ -33,18 +35,23 @@ import { buildCacheKey } from '@/lib/ttl-cache';
  * The payload per page is tiny (4 small columns × 1000 rows ≈ 60KB), so
  * 21 parallel requests complete in ~1-2s.
  *
- * CACHING (Fix 1 + Fix 5): Previously used a process-local ttlCacheWrap
- * (60s) — on Vercel serverless with N warm instances, each instance
- * independently re-queried Supabase when its local cache expired. Now
- * uses sharedCacheWrap (Redis, 5min fresh / 1h stale) so ALL instances
- * share ONE cache entry. The 21K-row fetch happens at most once every
- * 5 min across the entire fleet, and Redis failures fall back to the
+ * IMPLEMENTATION (Phase A — RPC migration):
+ * --------------------------------------------
+ * Production (USE_SUPABASE_DB=true): calls `get_marketplace_cities(p_country)`
+ * via a single PostgREST RPC. The SQL function does `GROUP BY` server-side,
+ * deduplicating cities in Postgres instead of fetching 21K rows and
+ * deduplicating in JS. This replaces 22 HTTP round-trips with 1.
+ *
+ * Local dev (SQLite via Prisma): falls back to the original paged findMany
+ * + JS dedup path. The RPC functions only exist in Supabase Postgres.
+ *
+ * CACHING: sharedCacheWrap (Redis, 5min fresh / 1h stale) so ALL Vercel
+ * instances share ONE cache entry. Redis failures fall back to the
  * in-memory shadow cache (never cascade to Supabase).
  *
- * NOTE on `distinct`: The Supabase adapter's `distinct` option only
- * dedupes in JS AFTER fetching all rows (PostgREST has no SELECT
- * DISTINCT). So the shared cache is the primary optimization — the
- * query runs rarely, and when it does, it pages in parallel.
+ * NOTE: `.rpc()` goes through PostgREST's HTTP layer — it is NOT a direct
+ * Postgres connection. The win is consolidating 22 HTTP round-trips into 1,
+ * not eliminating HTTP overhead.
  */
 export async function GET(request: NextRequest) {
   const log = withRequestId(request);
@@ -69,6 +76,16 @@ export async function GET(request: NextRequest) {
       5 * 60_000, // 5 min fresh
       55 * 60_000, // 1h total (stale-while-revalidate)
       async () => {
+        // ── Production path: Supabase RPC (1 HTTP call) ──────────────────
+        // The SQL function does GROUP BY + DISTINCT server-side, replacing
+        // the 22-HTTP-call paged fetch + JS dedup.
+        if (shouldUseSupabaseDB()) {
+          return getMarketplaceCities(country);
+        }
+
+        // ── Local dev fallback: Prisma + SQLite (paged fetch + JS dedup) ──
+        // The RPC functions only exist in Supabase Postgres. In local dev
+        // (DATABASE_URL=file:...), we fall back to the original approach.
         const baseWhere = {
           publicProfileEnabled: true,
           marketplaceOptIn: true,

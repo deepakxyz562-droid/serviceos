@@ -24,7 +24,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 let _adminClient: SupabaseClient | null = null;
 
-function getAdminClient(): SupabaseClient {
+export function getAdminClient(): SupabaseClient {
   if (!_adminClient) {
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('[SupabaseDB] Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');

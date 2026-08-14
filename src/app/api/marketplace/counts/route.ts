@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { shouldUseSupabaseDB } from '@/lib/supabase-db';
+import { getMarketplaceCounts } from '@/lib/supabase-rpc';
 import { withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
 import { VERTICAL_MAP, INDUSTRY_CATALOG, getIndustry } from '@/lib/industry-catalog';
@@ -32,35 +34,30 @@ import { buildProviderWhereClause } from '@/lib/marketplace-pagination';
  *     total:       number
  *   }
  *
- * CACHING (Fix 1 + Fix 2): Previously used a process-local ttlCacheWrap
- * (60s) with a `Cache-Control: no-store` response header — meaning zero
- * caching at any layer (not browser, not CDN, not cross-instance). Every
- * page load, tab switch, and refetch hit Supabase with 26 parallel count()
- * queries. Now uses sharedCacheWrap (Redis, 5min fresh / 1h stale) so all
- * Vercel instances share ONE cache entry, and the response header allows
- * browser/CDN caching. The 26-count fanout happens at most once every 5
- * min across the entire fleet.
- *
- * Implementation note (Supabase / PostgREST):
+ * IMPLEMENTATION (Phase A — RPC migration):
  * --------------------------------------------
- * The original implementation used `db.tenant.groupBy({ by: ['industry'] })`.
- * On Supabase projects where PostgREST aggregates are DISABLED
- * (`db-aggregates-enabled=false`, error PGRST123), the adapter's groupBy
- * falls back to a paged-distinct + per-value-count strategy that pages
- * through ALL matching rows to collect distinct industries — wasteful when
- * the set of valid industries is already known from the catalog.
+ * Production (USE_SUPABASE_DB=true): calls `get_marketplace_counts(p_country, p_city)`
+ * via a single PostgREST RPC. The SQL function does `GROUP BY industry`
+ * server-side and returns a JSON aggregate, replacing the 26-HTTP-call
+ * parallel count() fanout with 1 call.
  *
- * We now iterate the ~25 known industry IDs from INDUSTRY_CATALOG and issue
- * one `count()` per industry (head + Prefer: count=exact — no aggregates
- * needed) in parallel, plus one `count()` for the total. This is:
- *   - 26 parallel count() queries (all head-only, ~50ms each)
- *   - 0 groupBy calls
- *   - 0 paged row fetches
+ * ARCHITECTURE BOUNDARY:
+ *   The SQL function returns raw `{ industry_counts, total }`. The vertical
+ *   rollup (industry → vertical via VERTICAL_MAP) is done in JS inside the
+ *   `getMarketplaceCounts` helper — this keeps the DB decoupled from the
+ *   app-specific catalog (adding/removing a vertical doesn't require a SQL
+ *   migration).
  *
- * Tenants whose `industry` is null, empty, or not in the catalog are still
- * counted in `total` (via the unfiltered count query) but won't appear in
- * any `byIndustry`/`byVertical` bucket — which is correct because the
- * sidebar only renders catalog categories.
+ * Local dev (SQLite via Prisma): falls back to the original 26-count fanout.
+ * The RPC functions only exist in Supabase Postgres.
+ *
+ * CACHING: sharedCacheWrap (Redis, 5min fresh / 1h stale) so ALL Vercel
+ * instances share ONE cache entry. The 26-count fanout (or 1 RPC) happens
+ * at most once every 5 min across the entire fleet.
+ *
+ * NOTE: `.rpc()` goes through PostgREST's HTTP layer — it is NOT a direct
+ * Postgres connection. The win is consolidating 26 HTTP round-trips into 1,
+ * not eliminating HTTP overhead.
  */
 export async function GET(request: NextRequest) {
   const log = withRequestId(request);
@@ -82,22 +79,25 @@ export async function GET(request: NextRequest) {
       5 * 60_000, // 5 min fresh
       55 * 60_000, // 1h total (stale-while-revalidate)
       async () => {
-        // Build the SAME where clause used by the providers list endpoint
-        // so the sidebar counts always match the list when filters are
-        // applied. This includes the 3-gate eligibility + country + city.
+        // ── Production path: Supabase RPC (1 HTTP call) ──────────────────
+        // The SQL function does GROUP BY industry server-side and returns
+        // { industry_counts, total }. The getMarketplaceCounts helper does
+        // the vertical rollup in JS. Replaces 26 parallel count() calls.
+        if (shouldUseSupabaseDB()) {
+          return getMarketplaceCounts(country, city);
+        }
+
+        // ── Local dev fallback: Prisma + SQLite (26-count fanout) ─────────
+        // The RPC functions only exist in Supabase Postgres. In local dev
+        // (DATABASE_URL=file:...), we fall back to the original approach:
+        // iterate ~26 catalog industry IDs + 1 total count in parallel.
         const where = buildProviderWhereClause({
           country,
           city,
         });
 
-        // All known industry IDs from the catalog (~25). We count each one
-        // in parallel via head-only count() queries — no PostgREST aggregates
-        // required, so this works on every Supabase project regardless of
-        // the `db-aggregates-enabled` config.
         const industryIds = INDUSTRY_CATALOG.map((i) => i.id);
 
-        // Total count (all matching tenants, including those with null/unknown
-        // industry) — run in parallel with the per-industry counts.
         const [total, ...industryCounts] = await Promise.all([
           db.tenant.count({ where }),
           ...industryIds.map((id) =>
@@ -114,7 +114,6 @@ export async function GET(request: NextRequest) {
           const count = industryCounts[i];
           if (count > 0) {
             byIndustry[id] = count;
-            // Roll up to vertical via the catalog map.
             const verticalId = VERTICAL_MAP[id] ?? getIndustry(id)?.vertical;
             if (verticalId) {
               byVertical[verticalId] = (byVertical[verticalId] ?? 0) + count;
