@@ -27,6 +27,14 @@ export const CUSTOMER_PUBLIC_SELECT = {
   createdAt: true,
   updatedAt: true,
 
+  // ── ISSUE-3: structured customer fields from the redesigned form ──
+  title: true,
+  firstName: true,
+  lastName: true,
+  companyName: true,
+  leadSource: true,
+  notificationSettingsJson: true,
+
   // ── Portal access (non-secret status only) ──
   activatedAt: true,
   lastLoginAt: true,
@@ -38,6 +46,14 @@ export const CUSTOMER_PUBLIC_SELECT = {
   marketingConsent: true,
   marketingConsentAt: true,
   unsubscribedAt: true,
+
+  // ── ISSUE-3: nested repeating collections (loaded with relations) ──
+  properties: {
+    include: {
+      contacts: true,
+    },
+  },
+  additionalContacts: true,
 
   // EXCLUDED (secrets / PII — never return to browser):
   //   passwordHash, activationToken, activationTokenExpiresAt,
@@ -60,6 +76,13 @@ export type CustomerPublicRow = {
   tenantId: string | null;
   createdAt: Date;
   updatedAt: Date;
+  // ── ISSUE-3: structured customer fields ──
+  title: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  companyName: string | null;
+  leadSource: string | null;
+  notificationSettingsJson: string;
   activatedAt: Date | null;
   lastLoginAt: Date | null;
   invitationSentAt: Date | null;
@@ -68,4 +91,39 @@ export type CustomerPublicRow = {
   marketingConsent: boolean | null;
   marketingConsentAt: Date | null;
   unsubscribedAt: Date | null;
+  // ── ISSUE-3: nested relations ──
+  properties: Array<{
+    id: string;
+    customerId: string;
+    label: string | null;
+    street1: string;
+    street2: string | null;
+    city: string | null;
+    province: string | null;
+    postalCode: string | null;
+    country: string | null;
+    isPrimary: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+    contacts: Array<{
+      id: string;
+      propertyId: string;
+      name: string;
+      phone: string | null;
+      email: string | null;
+      role: string | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }>;
+  }>;
+  additionalContacts: Array<{
+    id: string;
+    customerId: string;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    role: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }>;
 };
