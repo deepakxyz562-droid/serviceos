@@ -466,20 +466,6 @@ export function DispatchView() {
 
   const getActiveJobCount = (empId: string) => activeJobsByEmployee.get(empId)?.length ?? 0;
 
-  // ─── Computed: KPI bar ──────────────────────────────────────────────
-  const kpis = useMemo(() => {
-    const total = employees.length;
-    const onDuty = employees.filter((e) => e.status !== 'offline' && !isOfflineEmp(e)).length;
-    const enRoute = employees.filter((e) => ['en_route', 'traveling'].includes(e.status)).length;
-    const onJob = employees.filter((e) => ['busy', 'on_job', 'in_progress'].includes(e.status)).length + 
-      employees.filter((e) => getActiveJobCount(e.id) > 0).length - 
-      employees.filter((e) => getActiveJobCount(e.id) > 0 && ['busy', 'on_job', 'in_progress'].includes(e.status)).length;
-    const available = employees.filter((e) => e.status === 'available').length;
-    const unassigned = jobs.filter((j) => j.status === 'pending').length;
-    const attention = attentionItems.length;
-    return { total, onDuty, enRoute, onJob: Math.max(0, onJob), available, unassigned, attention };
-  }, [employees, jobs, activeJobsByEmployee]);
-
   // ─── Computed: Attention items ──────────────────────────────────────
   const attentionItems = useMemo<AttentionItem[]>(() => {
     const items: AttentionItem[] = [];
@@ -538,6 +524,20 @@ export function DispatchView() {
     }
     return items;
   }, [employees, jobs]);
+
+  // ─── Computed: KPI bar ──────────────────────────────────────────────
+  const kpis = useMemo(() => {
+    const total = employees.length;
+    const onDuty = employees.filter((e) => e.status !== 'offline' && !isOfflineEmp(e)).length;
+    const enRoute = employees.filter((e) => ['en_route', 'traveling'].includes(e.status)).length;
+    const onJob = employees.filter((e) => ['busy', 'on_job', 'in_progress'].includes(e.status)).length + 
+      employees.filter((e) => getActiveJobCount(e.id) > 0).length - 
+      employees.filter((e) => getActiveJobCount(e.id) > 0 && ['busy', 'on_job', 'in_progress'].includes(e.status)).length;
+    const available = employees.filter((e) => e.status === 'available').length;
+    const unassigned = jobs.filter((j) => j.status === 'pending').length;
+    const attention = attentionItems.length;
+    return { total, onDuty, enRoute, onJob: Math.max(0, onJob), available, unassigned, attention };
+  }, [employees, jobs, activeJobsByEmployee, attentionItems]);
 
   // ─── Computed: filtered employees ───────────────────────────────────
   const filteredEmployees = useMemo(() => {
