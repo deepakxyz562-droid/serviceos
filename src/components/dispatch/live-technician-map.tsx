@@ -685,6 +685,13 @@ export default function LiveTechnicianMap({
   const jobsRef = useRef(jobs);
   const selectedTechIdRef = useRef<string | null>(selectedTechnicianId);
   const onTechnicianSelectRef = useRef(onTechnicianSelect);
+  // Tracks jobIds for which we have already auto-framed the map (Uber-style
+  // zoom to start → tech → destination) once. Prevents re-framing on every
+  // 5s poll, which would fight the user's manual pan/zoom. A job is framed
+  // once when it first appears with status 'travelling' + a valid route, and
+  // again if it transitions back to travelling after being completed/cancelled
+  // (entry removed on lifecycle change).
+  const autoFramedJobIdsRef = useRef<Set<string>>(new Set());
 
   // ── Easing (ease-out-cubic) for natural deceleration ──
   const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -1515,6 +1522,111 @@ export default function LiveTechnicianMap({
         fetchRouteHistory(j.id, false);
       }
     });
+  }, [jobs]);
+
+  // ─── Live route-history polling + Uber-style auto-frame ─────────────────
+  //
+  // Two responsibilities, both critical for live tracking on Vercel (where
+  // the socket.io realtime bridge cannot run):
+  //
+  // 1. BREADCRUMB GROWTH: Re-fetch route history for every job with
+  //    status 'travelling' every 5s (force=true bypasses the 15s throttle
+  //    inside fetchRouteHistory). Without this the emerald breadcrumb
+  //    polyline freezes at whatever was loaded on mount — the dispatcher
+  //    can't see the tech's actual driven path growing as they move. This
+  //    is the polling equivalent of the `handleGpsPing` route refresh
+  //    (which only fires when a realtime socket event arrives — never on
+  //    Vercel).
+  //
+  // 2. AUTO-FRAME (Uber-style zoom): When a travelling job's route history
+  //    first arrives (start point known), frame the map to show the start
+  //    point → technician's current position → job destination in a single
+  //    `flyToBounds` call. This gives the "zoomed in, showing both ends"
+  //    view the user expects (like Uber), WITHOUT requiring a manual click
+  //    on the technician. Only fires once per job (tracked in
+  //    autoFramedJobIdsRef) so it doesn't fight the user's manual pan/zoom.
+  useEffect(() => {
+    const pollTravellingRoutes = () => {
+      const map = mapRef.current;
+      if (!map) return;
+      if (typeof document !== 'undefined' && document.hidden) return;
+
+      const travellingJobs = jobsRef.current.filter(
+        (j) => j.status === 'travelling' && j.assigneeId,
+      );
+
+      for (const job of travellingJobs) {
+        // Force-refresh so the breadcrumb grows live.
+        fetchRouteHistory(job.id, true);
+
+        // Auto-frame once per travelling job when we first have a start point.
+        if (autoFramedJobIdsRef.current.has(job.id)) continue;
+        const entry = routeCacheRef.current.get(job.id);
+        if (!entry) continue;
+        if (
+          entry.activeStartLat == null ||
+          entry.activeStartLng == null ||
+          !isValidCoord(entry.activeStartLat, entry.activeStartLng)
+        ) {
+          continue;
+        }
+        if (!isValidCoord(job.latitude, job.longitude)) continue;
+
+        // Find the technician's current position (live marker if present,
+        // else the employee record).
+        const tech = employeesRef.current.find(
+          (t) => t.id === job.assigneeId || t.currentJobId === job.id,
+        );
+        const liveMarker = tech ? techMarkersRef.current.get(tech.id) : undefined;
+        let techLat: number | null = null;
+        let techLng: number | null = null;
+        if (liveMarker) {
+          const ll = liveMarker.getLatLng();
+          techLat = ll.lat;
+          techLng = ll.lng;
+        } else if (tech && isValidCoord(tech.latitude, tech.longitude)) {
+          techLat = tech.latitude;
+          techLng = tech.longitude as number;
+        }
+
+        // Build bounds: start point + destination (always), plus tech
+        // position if available. This frames the whole trip like Uber.
+        const points: [number, number][] = [
+          [entry.activeStartLat, entry.activeStartLng],
+          [job.latitude, job.longitude],
+        ];
+        if (techLat != null && techLng != null) {
+          points.push([techLat, techLng]);
+        }
+
+        try {
+          map.flyToBounds(L.latLngBounds(points), {
+            padding: [80, 80],
+            maxZoom: 16,
+            duration: 1.4,
+          });
+          autoFramedJobIdsRef.current.add(job.id);
+        } catch {
+          // ignore bounds errors (e.g. identical points)
+        }
+      }
+
+      // Clean up the auto-frame set for jobs that are no longer travelling
+      // (so if a job restarts travel later, it re-frames).
+      const travellingIds = new Set(travellingJobs.map((j) => j.id));
+      for (const id of Array.from(autoFramedJobIdsRef.current)) {
+        if (!travellingIds.has(id)) {
+          autoFramedJobIdsRef.current.delete(id);
+        }
+      }
+    };
+
+    // Run once immediately, then every 5s.
+    pollTravellingRoutes();
+    const interval = setInterval(pollTravellingRoutes, 5000);
+    return () => {
+      clearInterval(interval);
+    };
   }, [jobs]);
 
   // ─── Imperative controller ─────────────────────────────────────────────

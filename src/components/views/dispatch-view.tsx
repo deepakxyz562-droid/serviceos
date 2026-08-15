@@ -448,6 +448,95 @@ export function DispatchView() {
     return () => clearInterval(interval);
   }, [fetchJobs]);
 
+  // ─── Live position polling (Vercel-compatible realtime replacement) ──
+  //
+  // The socket.io realtime mini-service cannot run on Vercel serverless, so
+  // `useRealtime`'s `onGpsPing` callback never fires in production. Without
+  // this poll, the technician marker on the Live Dispatch map freezes at
+  // whatever position was loaded on page mount — even though the employee's
+  // PWA is actively transmitting GPS pings to Supabase every few seconds.
+  //
+  // This polls the lightweight `/api/employees/positions` endpoint (no cache,
+  // 6 scalar fields, no joins) every 5s. For every employee whose lat/lng
+  // changed since the last poll, it feeds the new position into the map
+  // controller's `handleGpsPing(...)` — which triggers the existing glide
+  // animation, giving an Uber-like "vehicle moving" feel. It also updates
+  // `lastSeenAt` / `status` / `currentJobId` so presence badges refresh.
+  //
+  // 5s is the sweet spot: fast enough to feel live (a vehicle at 40 km/h
+  // moves ~55m in 5s — clearly visible), slow enough to stay well within
+  // Vercel free-tier limits for a small fleet. Skipped when the tab is
+  // hidden to avoid wasting serverless invocations.
+  useEffect(() => {
+    let active = true;
+
+    const pollPositions = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      try {
+        const res = await fetch('/api/employees/positions?XTransformPort=3000');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!active || !Array.isArray(data)) return;
+
+        // Snapshot the current positions so we can detect movement without
+        // depending on stale closure state.
+        setEmployees((prev) => {
+          const byId = new Map(prev.map((e) => [e.id, e]));
+          for (const p of data) {
+            const id = p?.id;
+            if (typeof id !== 'string') continue;
+            const existing = byId.get(id);
+            const newLat = typeof p.latitude === 'number' ? p.latitude : null;
+            const newLng = typeof p.longitude === 'number' ? p.longitude : null;
+            const newLast = p.lastSeenAt ?? null;
+
+            // Feed moved positions into the map controller for glide animation.
+            // Only fire when we actually have coords AND they differ from the
+            // last known position (avoids spurious re-renders for stationary
+            // technicians).
+            if (
+              newLat != null &&
+              newLng != null &&
+              (existing?.latitude !== newLat || existing?.longitude !== newLng)
+            ) {
+              mapControllerRef.current?.handleGpsPing({
+                employeeId: id,
+                latitude: newLat,
+                longitude: newLng,
+                accuracy: null,
+                heading: null,
+                speed: null,
+                batteryLevel: null,
+                capturedAt: newLast ?? new Date().toISOString(),
+              });
+            }
+
+            if (existing) {
+              byId.set(id, {
+                ...existing,
+                latitude: newLat ?? existing.latitude,
+                longitude: newLng ?? existing.longitude,
+                lastSeenAt: newLast ?? existing.lastSeenAt,
+                status: typeof p.status === 'string' ? p.status : existing.status,
+                currentJobId: p.currentJobId ?? existing.currentJobId ?? null,
+              });
+            }
+          }
+          return Array.from(byId.values());
+        });
+      } catch {
+        // Non-fatal — the next tick will retry.
+      }
+    };
+
+    pollPositions();
+    const interval = setInterval(pollPositions, 5000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   useEffect(() => {
     setJobsLoading(true);
     setEmployeesLoading(true);
