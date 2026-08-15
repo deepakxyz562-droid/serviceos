@@ -4424,120 +4424,130 @@ export function JobsView() {
               >
                 <Checkbox checked={selectedJobIds.has(job.id)} />
               </div>
-              <CardContent className="p-4 space-y-3 pt-7">
-                {/* ── Phase 2: Prominent #JOB-XXXX badge + status + overdue pill ── */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                      <Badge variant="outline" className="font-mono text-[11px] h-5 px-2 bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900">
-                        #{job.jobNumber || job.id.slice(0, 8).toUpperCase()}
+              <CardContent className="p-4 space-y-3 pt-8 transition-all">
+                {/* ── Top Header Row: Job # Badge · Priority · Type · Status Pill ── */}
+                <div className="flex items-center justify-between gap-2 flex-wrap pb-1 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge variant="outline" className="font-mono text-[11px] h-5 px-2 bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 font-semibold shadow-xs">
+                      #{job.jobNumber || job.id.slice(0, 8).toUpperCase()}
+                    </Badge>
+                    <Badge variant="secondary" className="text-[10px] h-5 font-medium px-2">
+                      {getJobTypeLabel(job.type)}
+                    </Badge>
+                    {job.priority === 'urgent' && (
+                      <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-950/40 dark:text-red-300 font-bold uppercase tracking-wider animate-pulse">
+                        <Zap className="size-2.5 mr-0.5" /> Urgent
                       </Badge>
-                      {job.priority === 'urgent' && (
-                        <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50 uppercase font-bold tracking-wide animate-pulse">
-                          <Zap className="size-2.5 mr-0.5" /> Urgent
-                        </Badge>
-                      )}
-                      {isJobOverdue(job) && (
-                        <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-red-600 text-white border-red-600 uppercase font-bold tracking-wide">
-                          <AlertCircle className="size-2.5 mr-0.5" /> Overdue
-                        </Badge>
-                      )}
-                    </div>
-                    <h4 className="font-semibold text-sm leading-tight line-clamp-2">{job.title}</h4>
+                    )}
+                    {isJobOverdue(job) && (
+                      <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-red-600 text-white border-red-600 uppercase font-bold tracking-wider">
+                        <AlertCircle className="size-2.5 mr-0.5" /> Overdue
+                      </Badge>
+                    )}
                   </div>
-                  <Badge variant="outline" className={`${getStatusColor(job.status)} shrink-0 text-[10px]`}>
-                    <span className="mr-1">{getStatusIcon(job.status)}</span>{job.status.replace('_', ' ')}
+                  <Badge variant="outline" className={cn('shrink-0 text-xs px-2.5 py-0.5 font-semibold capitalize shadow-2xs', getStatusColor(job.status))}>
+                    <span className="mr-1.5">{getStatusIcon(job.status)}</span>{job.status.replace('_', ' ')}
                   </Badge>
                 </div>
 
-                {/* ── Customer name ── */}
-                {job.customerName && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <User className="size-3 shrink-0" /><span className="truncate">{job.customerName}</span>
-                  </div>
-                )}
-
-                {/* ── Type + priority (non-urgent) badges ── */}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <Badge variant="secondary" className="text-[10px] h-5">{getJobTypeLabel(job.type)}</Badge>
-                  {job.priority !== 'urgent' && (
-                    <Badge variant="outline" className={`${getPriorityColor(job.priority)} text-[10px] h-5 capitalize`}>{job.priority}</Badge>
+                {/* ── Title & Priority Row ── */}
+                <div className="space-y-1">
+                  <h4 className="font-bold text-base text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 hover:text-emerald-600 transition-colors">
+                    {job.title}
+                  </h4>
+                  {job.customerName && (
+                    <div className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 pt-0.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <User className="size-3.5 shrink-0 text-slate-400" />
+                        <span className="truncate font-semibold text-slate-800 dark:text-slate-200">{job.customerName}</span>
+                      </div>
+                      {job.customerPhone && (
+                        <div className="flex items-center gap-1 shrink-0 ml-auto" onClick={(e) => e.stopPropagation()}>
+                          <a
+                            href={`tel:${job.customerPhone}`}
+                            className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
+                            title="Call customer"
+                          >
+                            <Phone className="size-3.5" />
+                          </a>
+                          <a
+                            href={`https://wa.me/${job.customerPhone.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
+                            title="WhatsApp customer"
+                          >
+                            <MessageSquare className="size-3.5" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
 
-                {/* ── Phase 2: Schedule window pill (Today, 2:00 PM – 4:00 PM) ── */}
-                {(() => {
-                  const pill = formatSchedulePill(job.scheduledAt, job.scheduledTime, job.estimatedDuration);
-                  if (!pill) return null;
-                  return (
-                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 text-[11px] font-medium text-blue-700 dark:text-blue-300 w-fit">
-                      <Calendar className="size-3 shrink-0" />
-                      <span>{pill}</span>
-                    </div>
-                  );
-                })()}
+                {/* ── Schedule Window & Address Badges ── */}
+                <div className="space-y-1.5 pt-1">
+                  {(() => {
+                    const pill = formatSchedulePill(job.scheduledAt, job.scheduledTime, job.estimatedDuration);
+                    if (!pill) return null;
+                    return (
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50/80 dark:bg-blue-950/50 border border-blue-200/80 dark:border-blue-900/60 text-xs font-medium text-blue-700 dark:text-blue-300 w-fit">
+                        <Calendar className="size-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
+                        <span>{pill}</span>
+                      </div>
+                    );
+                  })()}
 
-                {/* ── Address ── */}
-                {job.address && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <MapPin className="size-3 shrink-0" /><span className="truncate">{job.address}</span>
-                  </div>
-                )}
+                  {job.address && (
+                    <div className="flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400 leading-tight">
+                      <MapPin className="size-3.5 shrink-0 text-slate-400 mt-0.5" />
+                      <span className="line-clamp-2">{job.address}</span>
+                    </div>
+                  )}
+                </div>
 
-                {/* ── Phase 2: Technician avatar with colored status dot ── */}
-                {/* Status dot color: green=available, amber=busy, red=offline, grey=on_leave.
-                    We don't have the assignee's status on the Job object directly, so we
-                    infer from job.status: assigned/in_progress = busy (tech is working it),
-                    completed = available (done), other = unknown (grey). This is a best-
-                    effort visual hint — the dispatch view shows the real employee.status. */}
-                {job.assigneeName ? (
-                  <div className="flex items-center gap-2 pt-2 border-t">
-                    <div className="relative">
-                      <Avatar className="size-7">
-                        <AvatarFallback className="bg-emerald-100 text-emerald-700 text-[10px] font-medium">
-                          {job.assigneeName.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                        </AvatarFallback>
-                      </Avatar>
-                      {/* Status dot — positioned bottom-right of the avatar */}
-                      <span
-                        className={cn(
-                          'absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background',
-                          job.status === 'in_progress' ? 'bg-emerald-500' :      // actively working → green
-                          job.status === 'assigned' ? 'bg-amber-500' :           // assigned but not started → amber (busy)
-                          job.status === 'completed' ? 'bg-slate-400' :          // done → grey
-                          job.status === 'travelling' || job.status === 'arrived' ? 'bg-blue-500' :  // en route → blue
-                          'bg-slate-400',                                          // unknown
-                        )}
-                        title={
-                          job.status === 'in_progress' ? 'Working now' :
-                          job.status === 'assigned' ? 'Assigned (not started)' :
-                          job.status === 'completed' ? 'Completed' :
-                          job.status === 'travelling' ? 'En route' :
-                          job.status === 'arrived' ? 'On site' :
-                          'Status unknown'
-                        }
-                      />
+                {/* ── Bottom Assignee & Action Buttons Row ── */}
+                <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  {job.assigneeName ? (
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="relative shrink-0">
+                        <Avatar className="size-8 ring-2 ring-emerald-100 dark:ring-emerald-950">
+                          <AvatarFallback className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-xs font-bold">
+                            {job.assigneeName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span
+                          className={cn(
+                            'absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-background shadow-2xs',
+                            job.status === 'in_progress' ? 'bg-emerald-500' :
+                            job.status === 'assigned' || job.status === 'accepted' ? 'bg-blue-500' :
+                            job.status === 'travelling' || job.status === 'arrived' ? 'bg-amber-500' :
+                            job.status === 'completed' ? 'bg-slate-400' :
+                            'bg-slate-400',
+                          )}
+                          title={job.status}
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{job.assigneeName}</p>
+                        <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                          {job.status === 'in_progress' ? '🟢 Working now' :
+                           job.status === 'travelling' ? '🚗 En route' :
+                           job.status === 'arrived' ? '📍 On site' :
+                           job.status === 'completed' ? '✅ Completed' :
+                           '🔵 Assigned'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium truncate">{job.assigneeName}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {job.status === 'in_progress' ? 'Working now' :
-                         job.status === 'assigned' ? 'Assigned' :
-                         job.status === 'travelling' ? 'En route' :
-                         job.status === 'arrived' ? 'On site' :
-                         job.status === 'completed' ? 'Completed' :
-                         'Assigned'}
-                      </p>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-xs font-medium text-amber-700 dark:text-amber-300">
+                      <AlertCircle className="size-3.5 shrink-0" />
+                      <span>Unassigned</span>
                     </div>
-                  </div>
-                ) : (
-                  <div className="pt-2 border-t">
-                    <span className="text-xs text-amber-600 flex items-center gap-1">
-                      <AlertCircle className="size-3" /> Unassigned
-                    </span>
-                  </div>
-                )}
-                <div className="pt-1 border-t">{getActionButtons(job)}</div>
+                  )}
+
+                  <div className="ml-auto shrink-0">{getActionButtons(job)}</div>
+                </div>
               </CardContent>
             </Card>
           ))}
