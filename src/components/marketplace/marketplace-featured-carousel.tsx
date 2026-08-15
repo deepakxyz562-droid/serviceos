@@ -33,7 +33,8 @@ import * as React from 'react';
 import { ChevronLeft, ChevronRight, Crown } from 'lucide-react';
 import { ProviderCard } from './provider-card';
 import type { ProviderListItem } from './types';
-import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
+import { slugifyCity } from '@/lib/seo/schemas';
+import { mapIndustryToPluralSlug } from '@/lib/seo/plural-industry-slugs';
 
 interface MarketplaceFeaturedCarouselProps {
   providers: ProviderListItem[];
@@ -114,8 +115,11 @@ export function MarketplaceFeaturedCarousel({
       >
         {providers.map((p) => {
           const slug = p.slug || p.publicSlug;
+          // PLURAL industry segment → canonical URL. Avoids a singular→plural
+          // 301 redirect on the detail route (which causes a blank white page
+          // during client-side navigation before loading.tsx can mount).
           const canonicalHref = slug
-            ? `/${mapIndustryToUrlSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
+            ? `/${mapIndustryToPluralSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
             : undefined;
           return (
             <div

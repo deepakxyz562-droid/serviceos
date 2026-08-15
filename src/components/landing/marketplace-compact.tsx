@@ -34,7 +34,8 @@ import {
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
+import { slugifyCity } from '@/lib/seo/schemas';
+import { mapIndustryToPluralSlug } from '@/lib/seo/plural-industry-slugs';
 import {
   mpUrl,
   type ProviderListItem,
@@ -158,9 +159,11 @@ export function MarketplaceCompact({
   function handleProviderClick(p: ProviderListItem) {
     const slug = p.slug || p.publicSlug;
     if (slug && typeof window !== 'undefined') {
-      // Navigate to the canonical /{industry}/{city}/{slug} public hub URL
-      // (the old /marketplace/[slug] route now 301-redirects there).
-      window.location.href = `/${mapIndustryToUrlSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`;
+      // Navigate to the canonical /{pluralIndustry}/{city}/{slug} public hub
+      // URL. PLURAL segment avoids a singular→plural 301 redirect on the
+      // detail route (which causes a blank white page before loading.tsx
+      // mounts during client-side navigation).
+      window.location.href = `/${mapIndustryToPluralSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`;
     }
   }
 
@@ -230,10 +233,11 @@ export function MarketplaceCompact({
             <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0">
               {featured.map((p) => {
                 const slug = p.slug || p.publicSlug;
-                // Canonical /{industry}/{city}/{slug} URL — links directly to
-                // the unified public business hub.
+                // Canonical /{pluralIndustry}/{city}/{slug} URL — links
+                // directly to the unified public business hub. PLURAL segment
+                // avoids a singular→plural 301 redirect (blank white page).
                 const canonicalHref = slug
-                  ? `/${mapIndustryToUrlSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
+                  ? `/${mapIndustryToPluralSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
                   : undefined;
                 return (
                   <div key={p.id} className="w-72 shrink-0">

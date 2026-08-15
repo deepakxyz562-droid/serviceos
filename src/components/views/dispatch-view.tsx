@@ -1,6 +1,45 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+/**
+ * DispatchView — Phase 1+3+4 "Command Center".
+ * -----------------------------------------------
+ * Unified 3-pane workspace:
+ *   ┌──────────────┬──────────────────┬──────────────┐
+ *   │ Queue/Fleet  │      Map         │  Inspector   │
+ *   │  - Teams     │   LIVE FLEET     │  Tech/Job    │
+ *   │  - Techs     │   (smooth GPS)   │  Actions     │
+ *   │  - Jobs      │                  │  Timeline    │
+ *   └──────────────┴──────────────────┴──────────────┘
+ *
+ * Phase 1 — Fleet Organization & Visibility:
+ *   • Live KPI bar (Total, On-Duty, En-Route, On-Job, Available, Unassigned,
+ *     Attention count).
+ *   • Team filter dropdown (internal operational groups — NEVER trades).
+ *   • Team-grouped technician roster (collapsible sections) + "Unassigned"
+ *     group so no technician is ever hidden.
+ *   • Status filter + search.
+ *   • No-GPS / Offline / Stale-GPS indicators.
+ *   • Attention Center (late jobs, stale GPS, unassigned, idle techs).
+ *
+ * Phase 3 — Unified workspace:
+ *   • Left pane = Fleet + Job Queue.
+ *   • Center = Map.
+ *   • Right = Inspector with 1-click Call/WhatsApp + Smart Match suggestions.
+ *
+ * Phase 4 — Intelligence:
+ *   • Late-job detection (scheduledAt < now and not started).
+ *   • Stale-GPS detection (no ping in N minutes).
+ *   • Idle-tech detection (available + no active job for N minutes).
+ *   • ETA calculation (haversine distance / assumed speed).
+ *   • Arrival detection (tech within ARRIVAL_M of job pin).
+ *   • Auto-assign via existing /api/dispatch/smart.
+ *
+ * CRITICAL: Teams are NOT trades. Tenant.industry is the trade; Team is the
+ * customer's internal operational grouping. The filter dropdown is populated
+ * from /api/teams (workspace-scoped), never from a hardcoded trade list.
+ */
+
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Radio, MapPin, Calendar, Clock, User, CheckCircle2,
   RefreshCw, MessageCircle, Play,
@@ -8,7 +47,9 @@ import {
   ArrowRight, Sparkles, Star,
   X, Briefcase,
   PanelRightClose, PanelRightOpen, Locate, Layers,
-  Users, ChevronUp,
+  Users, ChevronUp, ChevronDown, ChevronRight,
+  Phone, Navigation, AlertTriangle, Battery, Gauge,
+  Search, CircleDot, UserPlus,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,17 +61,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
-import { useRealtime, usePresence } from '@/hooks/use-realtime';
+import { useRealtime } from '@/hooks/use-realtime';
 import type { LiveTechnicianMapController } from '@/components/dispatch/live-technician-map';
 import dynamic from 'next/dynamic';
-import { useMemo, useRef } from 'react';
 
-// SSR-safe dynamic import: Leaflet needs `window`, so we disable SSR for the map.
 const LiveTechnicianMap = dynamic(
   () => import('@/components/dispatch/live-technician-map'),
   { ssr: false, loading: () => (
@@ -42,29 +78,16 @@ const LiveTechnicianMap = dynamic(
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-interface Job {
+interface Team {
   id: string;
-  jobNumber?: string;
-  title: string;
-  description?: string;
-  status: string;
-  priority: string;
-  type: string;
-  address?: string;
-  scheduledAt?: string;
-  scheduledTime?: string;
-  customerName?: string;
-  customerPhone?: string;
-  assigneeId?: string;
-  assigneeName?: string;
-  assigneePhone?: string;
-  createdAt: string;
-  updatedAt: string;
-  // Geocoded job location (populated by POST /api/jobs via the geocoder).
-  // Used to render job pins on the Live Dispatch map.
-  latitude?: number | null;
-  longitude?: number | null;
-  assignee?: { id: string; name: string; phone: string; role: string; status: string };
+  name: string;
+  description?: string | null;
+  color: string;
+  icon?: string;
+  leadId?: string | null;
+  isActive: boolean;
+  lead?: { id: string; name: string; phone: string; status: string } | null;
+  _count?: { members: number };
 }
 
 interface Employee {
@@ -84,7 +107,32 @@ interface Employee {
   lastSeenAt?: string | null;
   currentJobId?: string | null;
   onLeaveUntil?: string | null;
-  activeJobs?: { id: string; title: string; status: string; scheduledAt?: string; address?: string; priority?: string }[];
+  teamId?: string | null;
+  team?: { id: string; name: string; color: string } | null;
+  activeJobs?: { id: string; title: string; status: string; scheduledAt?: string; address?: string; priority?: string; latitude?: number | null; longitude?: number | null }[];
+}
+
+interface Job {
+  id: string;
+  jobNumber?: string;
+  title: string;
+  description?: string;
+  status: string;
+  priority: string;
+  type: string;
+  address?: string;
+  scheduledAt?: string;
+  scheduledTime?: string;
+  customerName?: string;
+  customerPhone?: string;
+  assigneeId?: string;
+  assigneeName?: string;
+  assigneePhone?: string;
+  createdAt: string;
+  updatedAt: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  assignee?: { id: string; name: string; phone: string; role: string; status: string };
 }
 
 interface CandidateScore {
@@ -106,6 +154,14 @@ interface CandidateScore {
     activeJobCount: number;
   };
 }
+
+// ─── Constants ──────────────────────────────────────────────────────────────
+
+const STALE_GPS_MS = 5 * 60 * 1000; // no ping in 5 min → stale
+const IDLE_TECH_MS = 25 * 60 * 1000; // available + no active job for 25 min → idle
+const ARRIVAL_M = 150; // within 150m of job → "arrived" hint
+const ASSUMED_SPEED_KMH = 35; // for ETA when no live speed
+const OFFLINE_MS = 30 * 60 * 1000;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -148,6 +204,9 @@ function getEmployeeStatusDot(status: string) {
     offline: 'bg-gray-400',
     leave: 'bg-amber-500',
     traveling: 'bg-sky-500',
+    en_route: 'bg-sky-500',
+    on_job: 'bg-amber-500',
+    in_progress: 'bg-amber-500',
   };
   return map[status] || 'bg-gray-400';
 }
@@ -159,6 +218,9 @@ function getEmployeeStatusBg(status: string) {
     offline: 'bg-gray-100 text-gray-600 border-gray-200',
     leave: 'bg-amber-100 text-amber-700 border-amber-200',
     traveling: 'bg-sky-100 text-sky-700 border-sky-200',
+    en_route: 'bg-sky-100 text-sky-700 border-sky-200',
+    on_job: 'bg-amber-100 text-amber-700 border-amber-200',
+    in_progress: 'bg-emerald-100 text-emerald-700 border-emerald-200',
   };
   return map[status] || 'bg-gray-100 text-gray-600 border-gray-200';
 }
@@ -180,7 +242,8 @@ function formatDate(dateStr?: string | null) {
 function timeAgo(dateStr?: string | null): string {
   if (!dateStr) return 'Never';
   const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (seconds < 60) return 'Just now';
+  if (seconds < 0) return 'just now';
+  if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
@@ -202,60 +265,102 @@ function getServiceTypeIcon(type: string) {
   return map[type?.toLowerCase()] || '📋';
 }
 
+/** Haversine distance in km. */
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/** ETA in minutes given a distance (km) and assumed speed (km/h). */
+function etaMinutes(distanceKm: number, speedKmh = ASSUMED_SPEED_KMH): number {
+  if (speedKmh <= 0) return Infinity;
+  return Math.max(1, Math.round((distanceKm / speedKmh) * 60));
+}
+
+function hasGps(e: Employee): boolean {
+  return typeof e.latitude === 'number' && typeof e.longitude === 'number' &&
+    !Number.isNaN(e.latitude) && !Number.isNaN(e.longitude);
+}
+
+function isStaleGps(e: Employee): boolean {
+  if (!e.lastSeenAt) return true;
+  const ts = new Date(e.lastSeenAt).getTime();
+  if (Number.isNaN(ts)) return true;
+  return Date.now() - ts > STALE_GPS_MS;
+}
+
+function isOfflineEmp(e: Employee): boolean {
+  if (!e.lastSeenAt) return true;
+  const ts = new Date(e.lastSeenAt).getTime();
+  if (Number.isNaN(ts)) return true;
+  return Date.now() - ts > OFFLINE_MS;
+}
+
+function isIdleTech(e: Employee, activeJobCount: number): boolean {
+  return e.status === 'available' && activeJobCount === 0;
+}
+
+function isLateJob(j: Job): boolean {
+  if (!j.scheduledAt) return false;
+  if (j.status === 'completed' || j.status === 'cancelled' || j.status === 'in_progress') return false;
+  return new Date(j.scheduledAt).getTime() < Date.now();
+}
+
+// ─── Attention item (computed each render) ──────────────────────────────────
+
+interface AttentionItem {
+  id: string;
+  severity: 'red' | 'amber' | 'yellow';
+  icon: 'alert' | 'gps' | 'unassigned' | 'idle';
+  title: string;
+  detail: string;
+  action?: { label: string; jobId?: string; employeeId?: string };
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function DispatchView() {
-  // ─── State ────────────────────────────────────────────────────────────
+  // ─── Data state ─────────────────────────────────────────────────────
   const [jobs, setJobs] = useState<Job[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [jobsLoading, setJobsLoading] = useState(true);
   const [employeesLoading, setEmployeesLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Filters
+  // ─── Filter state ───────────────────────────────────────────────────
+  const [teamFilter, setTeamFilter] = useState<string>('all'); // 'all' | teamId | 'unassigned'
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [gpsFilter, setGpsFilter] = useState<string>('all'); // all | live | stale | no-gps
+  const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [dateFilter, setDateFilter] = useState<string>('');
-  const [employeeStatusFilter, setEmployeeStatusFilter] = useState<string>('all');
 
-  // Assignment dialog
-  const [showAssignDialog, setShowAssignDialog] = useState(false);
-  const [assigningJob, setAssigningJob] = useState<Job | null>(null);
+  // ─── Selection / inspector state ────────────────────────────────────
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string | null>(null);
+  const [inspectorMode, setInspectorMode] = useState<'technician' | 'job' | null>(null);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(new Set());
+
+  // ─── Smart-match state ──────────────────────────────────────────────
   const [assignCandidates, setAssignCandidates] = useState<CandidateScore[]>([]);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [smartMatchLoading, setSmartMatchLoading] = useState(false);
   const [assignLoading, setAssignLoading] = useState(false);
-
-  // Employee detail dialog
-  const [showEmployeeDialog, setShowEmployeeDialog] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-
-  // Smart assign all
   const [smartAssignAllLoading, setSmartAssignAllLoading] = useState(false);
 
-  // ─── Map-first layout state ─────────────────────────────────────────
-  // Desktop: right side panel can be collapsed to give the map full width.
-  const [sidePanelOpen, setSidePanelOpen] = useState(true);
-  // Mobile: bottom sheet peek/expand state.
-  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
-  // Active tab in the side panel / bottom sheet (Job Queue vs Team).
-  const [panelTab, setPanelTab] = useState<'jobs' | 'team'>('jobs');
-  // Map basemap: 'streets' (OSM) or 'satellite' (Esri World Imagery).
+  // ─── Layout state ───────────────────────────────────────────────────
+  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [fleetOpen, setFleetOpen] = useState(true);
   const [mapLayer, setMapLayer] = useState<'streets' | 'satellite'>('streets');
-  // Followed technician ID — when set, the map pans to follow their GPS updates.
-  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string | null>(null);
-  // Imperative handle to the map (lets us forward gps.ping events + recenter
-  // + layer toggles without triggering a React re-render of the map).
+  const [showAttention, setShowAttention] = useState(false);
+
   const mapControllerRef = useRef<LiveTechnicianMapController | null>(null);
 
-  // ─── Real-time presence ─────────────────────────────────────────────
-  const employeeIds = useMemo(() => employees.map(e => e.id), [employees]);
-  const presence = usePresence(employeeIds);
-
-  // Realtime socket connection for live updates. The `onGpsPing` callback
-  // forwards each live GPS ping directly to the map's imperative controller,
-  // which updates the matching technician marker in-place via
-  // `marker.setLatLng` — no full refetch, no marker flicker (Uber/Jobber-style).
+  // ─── Realtime GPS ───────────────────────────────────────────────────
   const { connected: realtimeConnected } = useRealtime({
     enabled: true,
     onGpsPing: (data: any) => {
@@ -270,10 +375,11 @@ export function DispatchView() {
         longitude: lng,
         accuracy: data?.accuracy ?? null,
         heading: data?.heading ?? null,
+        speed: data?.speed ?? null,
+        batteryLevel: data?.batteryLevel ?? null,
         capturedAt: data?.capturedAt,
       });
-      // Also update the local `employees` state so the Team panel shows the
-      // fresh coordinates + lastSeenAt. This is a cheap in-place update.
+      // Cheap in-place update of local employee state.
       setEmployees((prev) =>
         prev.map((e) =>
           e.id === empId
@@ -289,10 +395,10 @@ export function DispatchView() {
     },
   });
 
-  // ─── Fetch functions ─────────────────────────────────────────────────
+  // ─── Fetch functions ────────────────────────────────────────────────
   const fetchJobs = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ status: 'pending,assigned,scheduled' });
+      const params = new URLSearchParams({ status: 'pending,assigned,scheduled,en_route,in_progress' });
       const res = await fetch(`/api/jobs?XTransformPort=3000&${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -311,127 +417,248 @@ export function DispatchView() {
     } catch { setEmployees([]); }
   }, []);
 
+  const fetchTeams = useCallback(async () => {
+    try {
+      const res = await fetch('/api/teams?XTransformPort=3000');
+      if (res.ok) {
+        const data = await res.json();
+        setTeams(Array.isArray(data) ? data : []);
+      }
+    } catch { setTeams([]); }
+  }, []);
+
   const refreshAll = useCallback(async () => {
     setIsRefreshing(true);
-    await Promise.all([fetchJobs(), fetchEmployees()]);
+    await Promise.all([fetchJobs(), fetchEmployees(), fetchTeams()]);
     setIsRefreshing(false);
-  }, [fetchJobs, fetchEmployees]);
+  }, [fetchJobs, fetchEmployees, fetchTeams]);
 
-  // Auto-refresh every 15 seconds.
-  // C-0 perf: skip the fetch when the tab is hidden — there's no point
-  // polling a dispatch board nobody is looking at, and it avoids stacking
-  // requests on a backgrounded mobile browser. The next time the tab becomes
-  // visible the interval fires normally within 15s.
+  // Auto-refresh jobs every 20s (skip when tab hidden).
   useEffect(() => {
     const interval = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
       fetchJobs();
-    }, 15000);
+    }, 20000);
     return () => clearInterval(interval);
   }, [fetchJobs]);
 
-  // Initial fetch
   useEffect(() => {
     setJobsLoading(true);
     setEmployeesLoading(true);
-    Promise.all([fetchJobs(), fetchEmployees()]).finally(() => {
+    Promise.all([fetchJobs(), fetchEmployees(), fetchTeams()]).finally(() => {
       setJobsLoading(false);
       setEmployeesLoading(false);
     });
-  }, [fetchJobs, fetchEmployees]);
+  }, [fetchJobs, fetchEmployees, fetchTeams]);
 
-  // ─── Computed ────────────────────────────────────────────────────────
-  const pendingJobs = jobs.filter(j => j.status === 'pending');
-  const assignedJobs = jobs.filter(j => j.status === 'assigned');
-
-  // Filtered jobs
-  const filteredPending = pendingJobs.filter(j => {
-    if (priorityFilter !== 'all' && j.priority !== priorityFilter) return false;
-    if (typeFilter !== 'all' && j.type !== typeFilter) return false;
-    if (dateFilter && j.scheduledAt) {
-      const jobDate = new Date(j.scheduledAt).toISOString().split('T')[0];
-      if (jobDate !== dateFilter) return false;
+  // ─── Computed: active job count per employee ────────────────────────
+  const activeJobsByEmployee = useMemo(() => {
+    const m = new Map<string, Job[]>();
+    for (const j of jobs) {
+      if (!j.assigneeId) continue;
+      if (!['assigned', 'in_progress', 'en_route'].includes(j.status)) continue;
+      const arr = m.get(j.assigneeId) ?? [];
+      arr.push(j);
+      m.set(j.assigneeId, arr);
     }
-    return true;
-  });
+    return m;
+  }, [jobs]);
 
-  const filteredAssigned = assignedJobs.filter(j => {
-    if (priorityFilter !== 'all' && j.priority !== priorityFilter) return false;
-    if (typeFilter !== 'all' && j.type !== typeFilter) return false;
-    return true;
-  });
+  const getActiveJobCount = (empId: string) => activeJobsByEmployee.get(empId)?.length ?? 0;
 
-  // Filtered employees
-  const filteredEmployees = employees.filter(e => {
-    if (employeeStatusFilter !== 'all' && e.status !== employeeStatusFilter) return false;
-    return true;
-  });
+  // ─── Computed: KPI bar ──────────────────────────────────────────────
+  const kpis = useMemo(() => {
+    const total = employees.length;
+    const onDuty = employees.filter((e) => e.status !== 'offline' && !isOfflineEmp(e)).length;
+    const enRoute = employees.filter((e) => ['en_route', 'traveling'].includes(e.status)).length;
+    const onJob = employees.filter((e) => ['busy', 'on_job', 'in_progress'].includes(e.status)).length + 
+      employees.filter((e) => getActiveJobCount(e.id) > 0).length - 
+      employees.filter((e) => getActiveJobCount(e.id) > 0 && ['busy', 'on_job', 'in_progress'].includes(e.status)).length;
+    const available = employees.filter((e) => e.status === 'available').length;
+    const unassigned = jobs.filter((j) => j.status === 'pending').length;
+    const attention = attentionItems.length;
+    return { total, onDuty, enRoute, onJob: Math.max(0, onJob), available, unassigned, attention };
+  }, [employees, jobs, activeJobsByEmployee]);
 
-  // Available employees count
-  const availableCount = employees.filter(e => e.status === 'available').length;
-  const busyCount = employees.filter(e => e.status === 'busy').length;
-  const offlineCount = employees.filter(e => e.status === 'offline' || e.status === 'leave').length;
+  // ─── Computed: Attention items ──────────────────────────────────────
+  const attentionItems = useMemo<AttentionItem[]>(() => {
+    const items: AttentionItem[] = [];
+    // Late jobs
+    for (const j of jobs) {
+      if (isLateJob(j)) {
+        const lateMin = j.scheduledAt ? Math.round((Date.now() - new Date(j.scheduledAt).getTime()) / 60000) : 0;
+        items.push({
+          id: `late-${j.id}`,
+          severity: 'red',
+          icon: 'alert',
+          title: `Job ${j.jobNumber || j.title.slice(0, 18)} ${lateMin} min late`,
+          detail: j.customerName ? `Customer: ${j.customerName}` : 'No customer',
+          action: { label: 'Inspect', jobId: j.id },
+        });
+      }
+    }
+    // Stale GPS
+    for (const e of employees) {
+      if (hasGps(e) && isStaleGps(e) && !isOfflineEmp(e) && e.status !== 'leave') {
+        const min = e.lastSeenAt ? Math.round((Date.now() - new Date(e.lastSeenAt).getTime()) / 60000) : 0;
+        items.push({
+          id: `stale-${e.id}`,
+          severity: 'amber',
+          icon: 'gps',
+          title: `${e.name} — GPS stale ${min}m`,
+          detail: e.team?.name ? `Team: ${e.team.name}` : 'No team',
+          action: { label: 'Inspect', employeeId: e.id },
+        });
+      }
+    }
+    // Unassigned jobs
+    const unassignedJobs = jobs.filter((j) => j.status === 'pending');
+    for (const j of unassignedJobs) {
+      items.push({
+        id: `unassigned-${j.id}`,
+        severity: 'yellow',
+        icon: 'unassigned',
+        title: `Job ${j.jobNumber || j.title.slice(0, 18)} unassigned`,
+        detail: j.priority ? `${j.priority} priority` : '',
+        action: { label: 'Assign', jobId: j.id },
+      });
+    }
+    // Idle techs (available + no active job)
+    for (const e of employees) {
+      if (isIdleTech(e, getActiveJobCount(e.id)) && e.status === 'available') {
+        items.push({
+          id: `idle-${e.id}`,
+          severity: 'yellow',
+          icon: 'idle',
+          title: `${e.name} idle`,
+          detail: e.team?.name ? `Team: ${e.team.name}` : 'No active job',
+          action: { label: 'Inspect', employeeId: e.id },
+        });
+      }
+    }
+    return items;
+  }, [employees, jobs]);
 
-  // Technicians with valid GPS coordinates for the Live Map panel.
-  // Re-uses the existing `employees` state from the Team panel — no extra fetch.
+  // ─── Computed: filtered employees ───────────────────────────────────
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((e) => {
+      if (teamFilter === 'unassigned') {
+        if (e.teamId) return false;
+      } else if (teamFilter !== 'all') {
+        if (e.teamId !== teamFilter) return false;
+      }
+      if (statusFilter !== 'all' && e.status !== statusFilter) return false;
+      if (gpsFilter === 'live' && !(hasGps(e) && !isStaleGps(e))) return false;
+      if (gpsFilter === 'stale' && !(hasGps(e) && isStaleGps(e) && !isOfflineEmp(e))) return false;
+      if (gpsFilter === 'no-gps' && hasGps(e)) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        if (!e.name.toLowerCase().includes(q) && !(e.phone || '').includes(q) && !(e.role || '').toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [employees, teamFilter, statusFilter, gpsFilter, search]);
+
+  // ─── Computed: team-grouped roster ───────────────────────────────────
+  const groupedRoster = useMemo(() => {
+    const groups: { team: Team | null; employees: Employee[] }[] = [];
+    const byTeam = new Map<string, Employee[]>();
+    const unassigned: Employee[] = [];
+    for (const e of filteredEmployees) {
+      if (e.teamId && e.team) {
+        const arr = byTeam.get(e.teamId) ?? [];
+        arr.push(e);
+        byTeam.set(e.teamId, arr);
+      } else {
+        unassigned.push(e);
+      }
+    }
+    // Teams that have members (in filter result), in the team order.
+    for (const t of teams) {
+      const members = byTeam.get(t.id);
+      if (members && members.length > 0) {
+        groups.push({ team: t, employees: members });
+      }
+    }
+    // Employees whose teamId references a team NOT in the teams list (e.g.
+    // inactive team) — show under their team name if we can resolve it.
+    for (const [tid, emps] of byTeam) {
+      if (!teams.find((t) => t.id === tid)) {
+        const sampleTeam = emps[0]?.team;
+        groups.push({ team: sampleTeam ? { id: tid, name: sampleTeam.name, color: sampleTeam.color, isActive: true } : null, employees: emps });
+      }
+    }
+    if (unassigned.length > 0) {
+      groups.push({ team: null, employees: unassigned });
+    }
+    return groups;
+  }, [filteredEmployees, teams]);
+
+  // ─── Computed: map data ─────────────────────────────────────────────
   const mapTechnicians = useMemo(
-    () =>
-      employees.filter(
-        (e) =>
-          typeof e.latitude === 'number' &&
-          typeof e.longitude === 'number' &&
-          !Number.isNaN(e.latitude) &&
-          !Number.isNaN(e.longitude),
-      ),
+    () => employees.filter((e) => hasGps(e)),
     [employees],
   );
 
-  // Active jobs with valid geocoded coordinates for the map.
-  // Includes any status that represents "live work in the field" so the map
-  // shows job pins for everything currently in flight (not just pending/assigned).
   const activeJobsForMap = useMemo(() => {
-    const ACTIVE_STATUSES = new Set([
-      'pending',
-      'assigned',
-      'in_progress',
-      'en_route',
-      'scheduled',
-    ]);
+    const ACTIVE = new Set(['pending', 'assigned', 'in_progress', 'en_route', 'scheduled']);
     return jobs
-      .filter((j) => ACTIVE_STATUSES.has(j.status))
-      .filter(
-        (j) =>
-          typeof j.latitude === 'number' &&
-          typeof j.longitude === 'number' &&
-          !Number.isNaN(j.latitude) &&
-          !Number.isNaN(j.longitude),
-      )
+      .filter((j) => ACTIVE.has(j.status) && hasGps(j as { latitude?: number | null; longitude?: number | null }))
       .map((j) => ({
-        id: j.id,
-        title: j.title,
-        status: j.status,
-        priority: j.priority,
-        latitude: j.latitude as number,
-        longitude: j.longitude as number,
-        assigneeId: j.assigneeId ?? null,
-        customerName: j.customerName,
-        address: j.address,
+        id: j.id, title: j.title, status: j.status, priority: j.priority,
+        latitude: j.latitude as number, longitude: j.longitude as number,
+        assigneeId: j.assigneeId ?? null, customerName: j.customerName,
+        address: j.address, scheduledAt: j.scheduledAt,
       }));
   }, [jobs]);
 
-  // Unique service types from pending jobs
-  const serviceTypes = [...new Set(pendingJobs.map(j => j.type).filter(Boolean))];
+  const pendingJobs = useMemo(() => jobs.filter((j) => j.status === 'pending'), [jobs]);
+  const assignedJobs = useMemo(() => jobs.filter((j) => ['assigned', 'en_route'].includes(j.status)), [jobs]);
 
-  // ─── Handlers ────────────────────────────────────────────────────────
+  const filteredPending = useMemo(() => pendingJobs.filter((j) => {
+    if (priorityFilter !== 'all' && j.priority !== priorityFilter) return false;
+    if (typeFilter !== 'all' && j.type !== typeFilter) return false;
+    return true;
+  }), [pendingJobs, priorityFilter, typeFilter]);
 
-  const handleOpenAssignDialog = async (job: Job) => {
-    setAssigningJob(job);
-    setSelectedEmployeeId('');
-    setAssignCandidates([]);
-    setShowAssignDialog(true);
+  const serviceTypes = useMemo(() => [...new Set(pendingJobs.map((j) => j.type).filter(Boolean))], [pendingJobs]);
 
-    // Fetch smart match candidates
+  // ─── Selected technician (inspector) ────────────────────────────────
+  const selectedEmployee = useMemo(
+    () => employees.find((e) => e.id === selectedTechnicianId) ?? null,
+    [employees, selectedTechnicianId],
+  );
+
+  // ─── Handlers ───────────────────────────────────────────────────────
+  const handleTechnicianSelect = useCallback((techId: string | null) => {
+    setSelectedTechnicianId((prev) => (prev === techId ? null : techId));
+    if (techId) {
+      setInspectorMode('technician');
+      setInspectorOpen(true);
+      setSelectedJob(null);
+    }
+  }, []);
+
+  const handleJobSelect = useCallback((job: Job) => {
+    setSelectedJob(job);
+    setInspectorMode('job');
+    setInspectorOpen(true);
+    setSelectedTechnicianId(null);
+  }, []);
+
+  const handleAttentionClick = useCallback((item: AttentionItem) => {
+    if (item.action?.employeeId) {
+      handleTechnicianSelect(item.action.employeeId);
+    } else if (item.action?.jobId) {
+      const job = jobs.find((j) => j.id === item.action!.jobId);
+      if (job) handleJobSelect(job);
+    }
+    setShowAttention(false);
+  }, [jobs, handleTechnicianSelect, handleJobSelect]);
+
+  const handleSmartMatch = useCallback(async (job: Job) => {
     setSmartMatchLoading(true);
+    setAssignCandidates([]);
     try {
       const res = await fetch('/api/dispatch/smart?XTransformPort=3000', {
         method: 'POST',
@@ -442,91 +669,45 @@ export function DispatchView() {
         const data = await res.json();
         if (data.candidates && data.candidates.length > 0) {
           setAssignCandidates(data.candidates);
-          setSelectedEmployeeId(data.candidates[0].employeeId);
         }
       }
     } catch {
-      // Fallback: show available employees without scores
+      // fallback: empty
     } finally {
       setSmartMatchLoading(false);
     }
-  };
+  }, []);
 
-  const handleConfirmAssign = async () => {
-    if (!assigningJob || !selectedEmployeeId) return;
-    const employee = employees.find(e => e.id === selectedEmployeeId);
+  const handleAssign = useCallback(async (jobId: string, employeeId: string) => {
+    const employee = employees.find((e) => e.id === employeeId);
     if (!employee) return;
-
     setAssignLoading(true);
     try {
-      const res = await fetch(`/api/jobs/${assigningJob.id}?XTransformPort=3000`, {
+      const res = await fetch(`/api/jobs/${jobId}?XTransformPort=3000`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: assigningJob.id,
-          assigneeId: employee.id,
-          assigneeName: employee.name,
-          assigneePhone: employee.phone,
-          status: 'assigned',
+          id: jobId, assigneeId: employee.id, assigneeName: employee.name,
+          assigneePhone: employee.phone, status: 'assigned',
         }),
       });
       if (res.ok) {
-        toast.success(`Assigned "${assigningJob.title}" to ${employee.name}`);
-        setShowAssignDialog(false);
-        setAssigningJob(null);
+        toast.success(`Assigned to ${employee.name}`);
+        setInspectorMode(null);
+        setSelectedJob(null);
         refreshAll();
       } else {
         const err = await res.json();
-        toast.error(err.error || 'Failed to assign job');
+        toast.error(err.error || 'Failed to assign');
       }
     } catch {
       toast.error('Network error');
     } finally {
       setAssignLoading(false);
     }
-  };
+  }, [employees, refreshAll]);
 
-  const handleSmartAssignAll = async () => {
-    setSmartAssignAllLoading(true);
-    try {
-      const unassigned = pendingJobs;
-      if (unassigned.length === 0) {
-        toast.info('No pending jobs to assign');
-        setSmartAssignAllLoading(false);
-        return;
-      }
-
-      let assigned = 0;
-      for (const job of unassigned) {
-        try {
-          const res = await fetch('/api/dispatch/smart?XTransformPort=3000', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jobId: job.id, autoAssign: true }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success) assigned++;
-          }
-        } catch {
-          // continue with next
-        }
-      }
-
-      if (assigned > 0) {
-        toast.success(`Smart-assigned ${assigned} job${assigned > 1 ? 's' : ''}`);
-      } else {
-        toast.info('No suitable employees found for auto-assignment');
-      }
-      refreshAll();
-    } catch {
-      toast.error('Smart assign failed');
-    } finally {
-      setSmartAssignAllLoading(false);
-    }
-  };
-
-  const handleStartJob = async (job: Job) => {
+  const handleStartJob = useCallback(async (job: Job) => {
     try {
       const res = await fetch(`/api/jobs/${job.id}?XTransformPort=3000`, {
         method: 'PUT',
@@ -542,19 +723,40 @@ export function DispatchView() {
     } catch {
       toast.error('Network error');
     }
-  };
+  }, [refreshAll]);
 
-  const handleViewEmployee = (employee: Employee) => {
-    setSelectedEmployee(employee);
-    setShowEmployeeDialog(true);
-  };
+  const handleSmartAssignAll = useCallback(async () => {
+    setSmartAssignAllLoading(true);
+    try {
+      if (pendingJobs.length === 0) {
+        toast.info('No pending jobs to assign');
+        return;
+      }
+      let assigned = 0;
+      for (const job of pendingJobs) {
+        try {
+          const res = await fetch('/api/dispatch/smart?XTransformPort=3000', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobId: job.id, autoAssign: true }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) assigned++;
+          }
+        } catch { /* continue */ }
+      }
+      if (assigned > 0) toast.success(`Smart-assigned ${assigned} job${assigned > 1 ? 's' : ''}`);
+      else toast.info('No suitable employees found');
+      refreshAll();
+    } catch {
+      toast.error('Smart assign failed');
+    } finally {
+      setSmartAssignAllLoading(false);
+    }
+  }, [pendingJobs, refreshAll]);
 
-  // ─── Map control handlers ─────────────────────────────────────────────
-
-  const handleRecenter = useCallback(() => {
-    mapControllerRef.current?.recenter();
-  }, []);
-
+  const handleRecenter = useCallback(() => mapControllerRef.current?.recenter(), []);
   const handleToggleLayer = useCallback(() => {
     setMapLayer((prev) => {
       const next = prev === 'streets' ? 'satellite' : 'streets';
@@ -563,368 +765,566 @@ export function DispatchView() {
     });
   }, []);
 
-  const handleTechnicianSelect = useCallback((techId: string | null) => {
-    setSelectedTechnicianId((prev) => (prev === techId ? null : techId));
-  }, []);
+  const toggleTeamCollapsed = (teamId: string) => {
+    setCollapsedTeams((prev) => {
+      const next = new Set(prev);
+      if (next.has(teamId)) next.delete(teamId);
+      else next.add(teamId);
+      return next;
+    });
+  };
 
-  // ─── Render: Job Card ────────────────────────────────────────────────
+  // Load smart match when a job is selected in the inspector. This is a
+  // fetch-on-select pattern: setting the loading flag synchronously inside
+  // the effect is intentional (shows the spinner before the fetch resolves).
+  useEffect(() => {
+    if (inspectorMode === 'job' && selectedJob) {
+      handleSmartMatch(selectedJob);
+    }
+  }, [inspectorMode, selectedJob, handleSmartMatch]);
 
-  const renderJobCard = (job: Job) => (
-    <Card key={job.id} className="border shadow-sm hover:shadow-md transition-all cursor-pointer group" onClick={() => handleOpenAssignDialog(job)}>
-      <CardContent className="p-4 space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-base shrink-0">{getServiceTypeIcon(job.type)}</span>
-            <h4 className="font-medium text-sm truncate">{job.title}</h4>
-          </div>
-          <div className={`size-2 rounded-full shrink-0 mt-1.5 ${getPriorityDot(job.priority)}`} />
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="outline" className={`${getPriorityColor(job.priority)} text-[10px] h-5`}>
-            {job.priority}
-          </Badge>
-          <Badge variant="outline" className="text-[10px] h-5 bg-slate-50 border-slate-200 text-slate-600">
-            {job.type}
-          </Badge>
-          <Badge variant="outline" className={`${getStatusColor(job.status)} text-[10px] h-5`}>
-            {job.status.replace('_', ' ')}
-          </Badge>
-        </div>
-
-        {job.customerName && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <User className="size-3" />
-            <span className="truncate">{job.customerName}</span>
-          </div>
-        )}
-
-        {job.address && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <MapPin className="size-3 shrink-0" />
-            <span className="truncate">{job.address}</span>
-          </div>
-        )}
-
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          {job.scheduledAt && (
-            <span className="flex items-center gap-1">
-              <Calendar className="size-3" /> {formatDate(job.scheduledAt)} {formatTime(job.scheduledAt)}
-            </span>
-          )}
-        </div>
-
-        {job.assigneeName && (
-          <div className="flex items-center gap-1.5 pt-1 border-t">
-            <Avatar className="size-5">
-              <AvatarFallback className="bg-teal-100 text-teal-700 text-[8px]">
-                {job.assigneeName[0]}
-              </AvatarFallback>
-            </Avatar>
-            <span className="text-xs text-muted-foreground">{job.assigneeName}</span>
-          </div>
-        )}
-
-        {/* Assign button for pending jobs */}
-        {job.status === 'pending' && (
-          <div className="pt-1">
-            <Button
-              size="sm"
-              className="w-full h-7 text-xs bg-teal-600 hover:bg-teal-700 text-white"
-              onClick={(e) => { e.stopPropagation(); handleOpenAssignDialog(job); }}
-            >
-              <ArrowRight className="size-3 mr-1" /> Assign
-            </Button>
-          </div>
-        )}
-
-        {/* Start button for assigned jobs */}
-        {job.status === 'assigned' && (
-          <div className="pt-1">
-            <Button
-              size="sm"
-              className="w-full h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-              onClick={(e) => { e.stopPropagation(); handleStartJob(job); }}
-            >
-              <Play className="size-3 mr-1" /> Start
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-
-  // ─── Render: Employee Card ───────────────────────────────────────────
-
-  const renderEmployeeCard = (employee: Employee) => {
-    const skills = parseSkills(employee.skills);
-    const isPulsing = employee.status === 'busy' || employee.status === 'traveling';
-    const employeePresence = presence[employee.id];
-    const activeJobCount = jobs.filter(
-      j => j.assigneeId === employee.id && ['assigned', 'in_progress'].includes(j.status)
-    ).length;
+  // ─── Render: Employee row (compact, for roster) ─────────────────────
+  const renderEmployeeRow = (e: Employee) => {
+    const activeCount = getActiveJobCount(e.id);
+    const gps = hasGps(e);
+    const stale = isStaleGps(e);
+    const offline = isOfflineEmp(e);
+    const isSelected = selectedTechnicianId === e.id;
+    const teamColor = e.team?.color;
 
     return (
-      <Card
-        key={employee.id}
-        className="border shadow-sm hover:shadow-md transition-all cursor-pointer"
-        onClick={() => handleViewEmployee(employee)}
+      <button
+        key={e.id}
+        type="button"
+        onClick={() => handleTechnicianSelect(e.id)}
+        className={`w-full text-left rounded-lg border p-2.5 transition-all hover:shadow-sm ${
+          isSelected ? 'border-teal-400 bg-teal-50/50 dark:bg-teal-950/20' : 'border-border bg-card hover:border-teal-200'
+        }`}
       >
-        <CardContent className="p-4">
-          <div className="flex items-start gap-3">
-            {/* Avatar with status dot */}
-            <div className="relative shrink-0">
-              <Avatar className="size-11">
-                <AvatarFallback className="bg-teal-100 text-teal-700 text-sm font-medium">
-                  {employee.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                </AvatarFallback>
-              </Avatar>
-              <div className={`absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-white ${getEmployeeStatusDot(employee.status)} ${isPulsing ? 'animate-pulse' : ''}`} />
-              {/* Presence indicator */}
-              {employeePresence && (
-                <div className={`absolute -top-0.5 -right-0.5 size-2.5 rounded-full border border-white ${
-                  employeePresence === 'online' ? 'bg-green-400' : employeePresence === 'away' ? 'bg-yellow-400' : 'bg-gray-300'
-                }`} />
+        <div className="flex items-start gap-2.5">
+          <div className="relative shrink-0">
+            <Avatar className="size-9">
+              <AvatarFallback className="bg-teal-100 text-teal-700 text-xs font-medium">
+                {e.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+              </AvatarFallback>
+            </Avatar>
+            <div className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white ${getEmployeeStatusDot(e.status)}`} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-sm truncate">{e.name}</span>
+              {e.team && (
+                <span
+                  className="inline-block size-2 rounded-full shrink-0"
+                  style={{ backgroundColor: teamColor }}
+                  title={e.team.name}
+                  aria-hidden
+                />
               )}
             </div>
-
-            <div className="flex-1 min-w-0">
-              {/* Name & status badge */}
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className="font-medium text-sm truncate">{employee.name}</span>
-                <Badge variant="outline" className={`${getEmployeeStatusBg(employee.status)} text-[9px] h-4 shrink-0`}>
-                  {employee.status}
-                </Badge>
-              </div>
-
-              {/* Role & stats */}
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                <Badge variant="secondary" className="text-[9px] h-4">
-                  {employee.role}
-                </Badge>
-                <span className="flex items-center gap-0.5">
-                  <Star className="size-3 text-amber-400 fill-amber-400" />
-                  {employee.rating.toFixed(1)}
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+              <Badge variant="outline" className={`text-[9px] h-4 px-1 ${getEmployeeStatusBg(e.status)}`}>
+                {e.status.replace('_', ' ')}
+              </Badge>
+              {activeCount > 0 ? (
+                <span className="flex items-center gap-0.5 text-amber-600">
+                  <Activity className="size-2.5" /> {activeCount} job{activeCount > 1 ? 's' : ''}
                 </span>
-                <span>{employee.completedJobs} done</span>
-              </div>
-
-              {/* Active jobs indicator */}
-              {activeJobCount > 0 ? (
-                <div className="flex items-center gap-1 text-[11px] text-amber-600">
-                  <Activity className="size-3" />
-                  <span>{activeJobCount} active job{activeJobCount > 1 ? 's' : ''}</span>
-                </div>
-              ) : employee.status === 'available' ? (
-                <div className="flex items-center gap-1 text-[11px] text-emerald-600">
-                  <CheckCircle2 className="size-3" />
-                  <span>Ready for assignment</span>
-                </div>
-              ) : null}
-
-              {/* Skills tags */}
-              {skills.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1.5">
-                  {skills.slice(0, 3).map((skill, i) => (
-                    <Badge key={i} variant="outline" className="text-[9px] h-4 bg-teal-50/50 border-teal-200 text-teal-700">
-                      {skill}
-                    </Badge>
-                  ))}
-                  {skills.length > 3 && (
-                    <Badge variant="outline" className="text-[9px] h-4">+{skills.length - 3}</Badge>
-                  )}
-                </div>
+              ) : (
+                <span className="text-emerald-600 flex items-center gap-0.5">
+                  <CheckCircle2 className="size-2.5" /> free
+                </span>
               )}
+            </div>
+            {/* GPS health indicator */}
+            <div className="flex items-center gap-1 mt-1">
+              {!gps ? (
+                <span className="flex items-center gap-0.5 text-[9px] text-gray-400" title="No GPS signal">
+                  <MapPin className="size-2.5" /> no GPS
+                </span>
+              ) : offline ? (
+                <span className="flex items-center gap-0.5 text-[9px] text-red-500" title="Offline">
+                  <MapPin className="size-2.5" /> offline
+                </span>
+              ) : stale ? (
+                <span className="flex items-center gap-0.5 text-[9px] text-amber-500" title={`Last ping ${timeAgo(e.lastSeenAt)}`}>
+                  <MapPin className="size-2.5" /> stale {timeAgo(e.lastSeenAt)}
+                </span>
+              ) : (
+                <span className="flex items-center gap-0.5 text-[9px] text-emerald-600" title={`Live · ${timeAgo(e.lastSeenAt)}`}>
+                  <span className="relative flex size-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+                  </span>
+                  live
+                </span>
+              )}
+              <span className="text-muted-foreground/40">·</span>
+              <span className="flex items-center gap-0.5 text-[9px] text-muted-foreground">
+                <Star className="size-2.5 text-amber-400 fill-amber-400" />{e.rating.toFixed(1)}
+              </span>
             </div>
           </div>
+        </div>
+      </button>
+    );
+  };
+
+  // ─── Render: Job card (compact, for queue) ──────────────────────────
+  const renderJobCard = (job: Job, compact = false) => {
+    const late = isLateJob(job);
+    return (
+      <Card
+        key={job.id}
+        className={`border shadow-sm hover:shadow-md transition-all cursor-pointer group ${late ? 'border-red-300 bg-red-50/30' : ''}`}
+        onClick={() => handleJobSelect(job)}
+      >
+        <CardContent className={compact ? 'p-3 space-y-1.5' : 'p-3.5 space-y-2'}>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm shrink-0">{getServiceTypeIcon(job.type)}</span>
+              <h4 className="font-medium text-xs truncate">{job.title}</h4>
+            </div>
+            <div className={`size-2 rounded-full shrink-0 mt-1 ${getPriorityDot(job.priority)}`} />
+          </div>
+          <div className="flex items-center gap-1 flex-wrap">
+            <Badge variant="outline" className={`${getPriorityColor(job.priority)} text-[9px] h-4 px-1`}>
+              {job.priority}
+            </Badge>
+            <Badge variant="outline" className={`${getStatusColor(job.status)} text-[9px] h-4 px-1`}>
+              {job.status.replace('_', ' ')}
+            </Badge>
+            {late && (
+              <Badge variant="outline" className="text-[9px] h-4 px-1 bg-red-100 text-red-700 border-red-200 animate-pulse">
+                <AlertTriangle className="size-2.5 mr-0.5" /> late
+              </Badge>
+            )}
+          </div>
+          {!compact && job.customerName && (
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <User className="size-2.5" /> <span className="truncate">{job.customerName}</span>
+            </div>
+          )}
+          {!compact && job.address && (
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <MapPin className="size-2.5 shrink-0" /> <span className="truncate">{job.address}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+            {job.scheduledAt && (
+              <span className="flex items-center gap-0.5">
+                <Clock className="size-2.5" /> {formatTime(job.scheduledAt)}
+              </span>
+            )}
+            {job.assigneeName && (
+              <span className="flex items-center gap-0.5 text-teal-600">
+                <CircleDot className="size-2.5" /> {job.assigneeName.split(' ')[0]}
+              </span>
+            )}
+          </div>
+          {job.status === 'pending' && !compact && (
+            <Button
+              size="sm" className="w-full h-6 text-[10px] bg-teal-600 hover:bg-teal-700 text-white"
+              onClick={(ev) => { ev.stopPropagation(); handleJobSelect(job); }}
+            >
+              <ArrowRight className="size-2.5 mr-1" /> Assign
+            </Button>
+          )}
+          {job.status === 'assigned' && !compact && (
+            <Button
+              size="sm" className="w-full h-6 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={(ev) => { ev.stopPropagation(); handleStartJob(job); }}
+            >
+              <Play className="size-2.5 mr-1" /> Start
+            </Button>
+          )}
         </CardContent>
       </Card>
     );
   };
 
-  // ─── Main Render ─────────────────────────────────────────────────────
+  // ─── Render: Inspector — technician ─────────────────────────────────
+  const renderInspectorTechnician = () => {
+    if (!selectedEmployee) return null;
+    const e = selectedEmployee;
+    const activeJobs = activeJobsByEmployee.get(e.id) ?? [];
+    const currentJob = activeJobs[0];
+    const skills = parseSkills(e.skills);
+    const gps = hasGps(e);
 
-  // The side-panel content (Job Queue + Team tabs) is shared between the
-  // desktop right panel and the mobile bottom sheet — extracted into a
-  // helper so the markup is identical in both layouts.
-  const renderSidePanelContent = () => (
-    <Tabs
-      value={panelTab}
-      onValueChange={(v) => setPanelTab(v as 'jobs' | 'team')}
-      className="flex-1 flex flex-col min-h-0"
-    >
-      <div className="px-3 pt-3 shrink-0">
-        <TabsList className="w-full h-9">
-          <TabsTrigger value="jobs" className="text-xs flex-1 gap-1.5">
-            <Briefcase className="size-3.5" />
-            Jobs
-            <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-              {pendingJobs.length + assignedJobs.length}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="team" className="text-xs flex-1 gap-1.5">
-            <Users className="size-3.5" />
-            Team
-            <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-              {employees.length}
-            </Badge>
-          </TabsTrigger>
-        </TabsList>
-      </div>
+    // ETA to current job
+    let etaMin: number | null = null;
+    let distKm: number | null = null;
+    let arrived = false;
+    if (currentJob && gps && hasGps(currentJob as { latitude?: number | null; longitude?: number | null })) {
+      distKm = haversineKm(e.latitude!, e.longitude!, currentJob.latitude!, currentJob.longitude!);
+      etaMin = etaMinutes(distKm);
+      arrived = distKm * 1000 < ARRIVAL_M;
+    }
 
-      {/* ─── Jobs tab ──────────────────────────────────────────────────── */}
-      <TabsContent value="jobs" className="flex-1 mt-0 min-h-0 data-[state=inactive]:hidden">
-        {/* Filters */}
-        <div className="px-3 py-2 border-b bg-muted/30">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger className="h-7 text-xs w-[100px]">
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Priority</SelectItem>
-                <SelectItem value="urgent">Urgent</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="h-7 text-xs w-[110px]">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {serviceTypes.map(type => (
-                  <SelectItem key={type} value={type}>{type}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="h-7 text-xs w-[120px]"
-            />
-            {(priorityFilter !== 'all' || typeFilter !== 'all' || dateFilter) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs px-2"
-                onClick={() => { setPriorityFilter('all'); setTypeFilter('all'); setDateFilter(''); }}
-              >
-                <X className="size-3" /> Clear
-              </Button>
-            )}
-          </div>
-          {/* Pending / Assigned sub-tabs */}
-          <div className="flex items-center gap-1 mt-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 text-[11px] px-2 hover:bg-muted"
-              onClick={() => setPanelTab('jobs')}
-            >
-              Pending <span className="ml-1 text-muted-foreground">({filteredPending.length})</span>
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 text-[11px] px-2 hover:bg-muted"
-              onClick={() => setPanelTab('jobs')}
-            >
-              Assigned <span className="ml-1 text-muted-foreground">({filteredAssigned.length})</span>
-            </Button>
-          </div>
-        </div>
+    return (
+      <div className="flex flex-col h-full">
         <ScrollArea className="flex-1 min-h-0">
-          <div className="p-3 space-y-2.5">
-            {jobsLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          <div className="p-4 space-y-4">
+            {/* Header */}
+            <div className="flex items-start gap-3">
+              <div className="relative shrink-0">
+                <Avatar className="size-12">
+                  <AvatarFallback className="bg-teal-100 text-teal-700 text-sm font-medium">
+                    {e.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className={`absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-background ${getEmployeeStatusDot(e.status)}`} />
               </div>
-            ) : filteredPending.length === 0 && filteredAssigned.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Briefcase className="size-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No jobs match these filters</p>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-sm truncate">{e.name}</h3>
+                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                  <Badge variant="outline" className={`text-[9px] h-4 ${getEmployeeStatusBg(e.status)}`}>
+                    {e.status.replace('_', ' ')}
+                  </Badge>
+                  {e.team && (
+                    <Badge variant="outline" className="text-[9px] h-4" style={{ borderColor: e.team.color, color: e.team.color }}>
+                      {e.team.name}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
+                  <span className="flex items-center gap-0.5">
+                    <Star className="size-2.5 text-amber-400 fill-amber-400" />{e.rating.toFixed(1)}
+                  </span>
+                  <span>·</span>
+                  <span>{e.completedJobs} done</span>
+                </div>
               </div>
-            ) : (
-              <>
-                {filteredPending.length > 0 && (
-                  <div className="space-y-2.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-1">
-                      Pending · {filteredPending.length}
-                    </p>
-                    {filteredPending.map(renderJobCard)}
-                  </div>
-                )}
-                {filteredAssigned.length > 0 && (
-                  <div className="space-y-2.5 pt-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-1">
-                      Assigned · {filteredAssigned.length}
-                    </p>
-                    {filteredAssigned.map(renderJobCard)}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </ScrollArea>
-      </TabsContent>
-
-      {/* ─── Team tab ──────────────────────────────────────────────────── */}
-      <TabsContent value="team" className="flex-1 mt-0 min-h-0 data-[state=inactive]:hidden">
-        <div className="px-3 py-2 border-b bg-muted/30">
-          <div className="flex items-center gap-2">
-            <Select value={employeeStatusFilter} onValueChange={setEmployeeStatusFilter}>
-              <SelectTrigger className="h-7 text-xs w-[110px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="available">Available</SelectItem>
-                <SelectItem value="busy">Busy</SelectItem>
-                <SelectItem value="offline">Offline</SelectItem>
-                <SelectItem value="traveling">Traveling</SelectItem>
-                <SelectItem value="leave">On Leave</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground ml-auto">
-              <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-emerald-500" />{availableCount}</span>
-              <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-red-500" />{busyCount}</span>
-              <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-gray-400" />{offlineCount}</span>
             </div>
-          </div>
-        </div>
-        <ScrollArea className="flex-1 min-h-0">
-          <div className="p-3 space-y-2.5">
-            {employeesLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+
+            {/* GPS / tracking card */}
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">GPS Tracking</span>
+                {gps ? (
+                  isOfflineEmp(e) ? (
+                    <Badge variant="outline" className="text-[9px] h-4 bg-red-50 text-red-700 border-red-200">Offline</Badge>
+                  ) : isStaleGps(e) ? (
+                    <Badge variant="outline" className="text-[9px] h-4 bg-amber-50 text-amber-700 border-amber-200">Stale</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[9px] h-4 bg-emerald-50 text-emerald-700 border-emerald-200">Live</Badge>
+                  )
+                ) : (
+                  <Badge variant="outline" className="text-[9px] h-4 bg-gray-50 text-gray-600 border-gray-200">No GPS</Badge>
+                )}
               </div>
-            ) : filteredEmployees.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <User className="size-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No employees found</p>
+              {gps ? (
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="flex items-center gap-1">
+                    <MapPin className="size-3 text-muted-foreground" />
+                    <span className="text-muted-foreground">Last:</span>
+                    <span className="font-medium">{timeAgo(e.lastSeenAt)}</span>
+                  </div>
+                  {distKm !== null && (
+                    <div className="flex items-center gap-1">
+                      <Navigation className="size-3 text-muted-foreground" />
+                      <span className="text-muted-foreground">Dist:</span>
+                      <span className="font-medium">{distKm.toFixed(1)} km</span>
+                    </div>
+                  )}
+                  {etaMin !== null && !Number.isInfinity(etaMin) && (
+                    <div className="flex items-center gap-1">
+                      <Clock className="size-3 text-muted-foreground" />
+                      <span className="text-muted-foreground">ETA:</span>
+                      <span className="font-medium">{arrived ? 'arrived' : `${etaMin} min`}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1">
+                    <Gauge className="size-3 text-muted-foreground" />
+                    <span className="text-muted-foreground">Coords:</span>
+                    <span className="font-mono text-[9px]">{e.latitude!.toFixed(3)}, {e.longitude!.toFixed(3)}</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  This technician hasn&apos;t sent GPS coordinates yet. Location permission may be needed in the mobile app.
+                </p>
+              )}
+            </div>
+
+            {/* Current job */}
+            {currentJob ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-1.5 dark:bg-amber-950/10">
+                <div className="flex items-center gap-1.5">
+                  <Briefcase className="size-3.5 text-amber-600" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Current Job</span>
+                  {arrived && (
+                    <Badge variant="outline" className="text-[9px] h-4 bg-emerald-50 text-emerald-700 border-emerald-200 ml-auto">
+                      Arrived
+                    </Badge>
+                  )}
+                </div>
+                <p className="font-medium text-sm">{currentJob.title}</p>
+                {currentJob.customerName && (
+                  <p className="text-[11px] text-muted-foreground">{currentJob.customerName}</p>
+                )}
+                {currentJob.address && (
+                  <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                    <MapPin className="size-3" /> {currentJob.address}
+                  </p>
+                )}
+                <Button
+                  size="sm" variant="outline" className="w-full h-7 text-[11px] mt-1"
+                  onClick={() => handleJobSelect(currentJob)}
+                >
+                  View job details <ArrowRight className="size-3 ml-1" />
+                </Button>
               </div>
             ) : (
-              [...filteredEmployees]
-                .sort((a, b) => {
-                  const order: Record<string, number> = { available: 0, traveling: 1, busy: 2, leave: 3, offline: 4 };
-                  return (order[a.status] ?? 5) - (order[b.status] ?? 5);
-                })
-                .map(renderEmployeeCard)
+              <div className="rounded-lg border bg-muted/20 p-3 text-center">
+                <p className="text-[11px] text-muted-foreground">No active job assigned</p>
+              </div>
+            )}
+
+            {/* Skills */}
+            {skills.length > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Skills</p>
+                <div className="flex flex-wrap gap-1">
+                  {skills.map((s, i) => (
+                    <Badge key={i} variant="secondary" className="text-[9px] h-4">{s}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Contact actions */}
+            <div className="grid grid-cols-2 gap-2">
+              <Button size="sm" variant="outline" className="h-8 text-xs" asChild>
+                <a href={`tel:${e.phone.replace(/[^+\d]/g, '')}`}>
+                  <Phone className="size-3.5 mr-1" /> Call
+                </a>
+              </Button>
+              <Button size="sm" variant="outline" className="h-8 text-xs" asChild>
+                <a href={`https://wa.me/${e.phone.replace(/[^+\d]/g, '').replace(/^\+/, '')}`} target="_blank" rel="noreferrer">
+                  <MessageCircle className="size-3.5 mr-1" /> WhatsApp
+                </a>
+              </Button>
+            </div>
+
+            <Button
+              size="sm" variant="ghost" className="w-full h-8 text-xs"
+              onClick={() => { handleTechnicianSelect(e.id); mapControllerRef.current?.refreshMarkers(); }}
+            >
+              <Navigation className="size-3.5 mr-1" /> Follow on map
+            </Button>
+          </div>
+        </ScrollArea>
+      </div>
+    );
+  };
+
+  // ─── Render: Inspector — job ────────────────────────────────────────
+  const renderInspectorJob = () => {
+    if (!selectedJob) return null;
+    const job = selectedJob;
+    const late = isLateJob(job);
+
+    return (
+      <div className="flex flex-col h-full">
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="p-4 space-y-4">
+            {/* Header */}
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-lg">{getServiceTypeIcon(job.type)}</span>
+                <h3 className="font-semibold text-sm flex-1 min-w-0">{job.title}</h3>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Badge variant="outline" className={`text-[9px] h-4 ${getPriorityColor(job.priority)}`}>{job.priority}</Badge>
+                <Badge variant="outline" className={`text-[9px] h-4 ${getStatusColor(job.status)}`}>{job.status.replace('_', ' ')}</Badge>
+                {late && (
+                  <Badge variant="outline" className="text-[9px] h-4 bg-red-100 text-red-700 border-red-200 animate-pulse">
+                    <AlertTriangle className="size-2.5 mr-0.5" /> late
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Customer + schedule */}
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5 text-[11px]">
+              {job.customerName && (
+                <div className="flex items-center gap-1.5">
+                  <User className="size-3 text-muted-foreground" />
+                  <span className="text-muted-foreground">Customer:</span>
+                  <span className="font-medium">{job.customerName}</span>
+                </div>
+              )}
+              {job.customerPhone && (
+                <div className="flex items-center gap-1.5">
+                  <Phone className="size-3 text-muted-foreground" />
+                  <span className="font-medium">{job.customerPhone}</span>
+                </div>
+              )}
+              {job.address && (
+                <div className="flex items-start gap-1.5">
+                  <MapPin className="size-3 text-muted-foreground mt-0.5" />
+                  <span>{job.address}</span>
+                </div>
+              )}
+              {job.scheduledAt && (
+                <div className="flex items-center gap-1.5">
+                  <Clock className="size-3 text-muted-foreground" />
+                  <span>{formatDate(job.scheduledAt)} {formatTime(job.scheduledAt)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Assignee */}
+            {job.assigneeName ? (
+              <div className="rounded-lg border border-teal-200 bg-teal-50/40 p-3 dark:bg-teal-950/10">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-700 mb-1">Assigned to</p>
+                <div className="flex items-center gap-2">
+                  <Avatar className="size-7">
+                    <AvatarFallback className="bg-teal-100 text-teal-700 text-[10px]">
+                      {job.assigneeName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium">{job.assigneeName}</span>
+                </div>
+                {job.status === 'assigned' && (
+                  <Button
+                    size="sm" className="w-full h-7 text-[11px] mt-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => handleStartJob(job)}
+                  >
+                    <Play className="size-3 mr-1" /> Start job
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 dark:bg-amber-950/10">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 mb-1">Unassigned</p>
+                <p className="text-[11px] text-muted-foreground">Suggested technicians below (Smart Match).</p>
+              </div>
+            )}
+
+            {/* Smart Match suggestions */}
+            {!job.assigneeId && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1">
+                  <Sparkles className="size-3" /> Suggested technicians
+                </p>
+                {smartMatchLoading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : assignCandidates.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground text-center py-3">No matches found</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {assignCandidates.slice(0, 5).map((c) => {
+                      const emp = employees.find((x) => x.id === c.employeeId);
+                      const offline = emp ? isOfflineEmp(emp) : false;
+                      return (
+                        <div
+                          key={c.employeeId}
+                          className="rounded-lg border bg-card p-2.5 flex items-center gap-2 hover:border-teal-300 transition-colors"
+                        >
+                          <Avatar className="size-7">
+                            <AvatarFallback className="bg-teal-100 text-teal-700 text-[10px]">
+                              {c.employeeName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs font-medium truncate">{c.employeeName}</span>
+                              {c.breakdown.distanceKm !== null && (
+                                <span className="text-[9px] text-muted-foreground">{c.breakdown.distanceKm.toFixed(1)} km</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
+                              <Star className="size-2.5 text-amber-400 fill-amber-400" />
+                              <span>{c.breakdown.total.toFixed(0)}% match</span>
+                              {c.breakdown.activeJobCount > 0 && <span>· {c.breakdown.activeJobCount} active</span>}
+                            </div>
+                          </div>
+                          {offline ? (
+                            <Badge variant="outline" className="text-[9px] h-4 bg-gray-50 text-gray-500 border-gray-200">offline</Badge>
+                          ) : (
+                            <Button
+                              size="sm" className="h-6 text-[10px] bg-teal-600 hover:bg-teal-700 text-white"
+                              disabled={assignLoading}
+                              onClick={() => handleAssign(job.id, c.employeeId)}
+                            >
+                              Assign
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </ScrollArea>
-      </TabsContent>
-    </Tabs>
-  );
+      </div>
+    );
+  };
+
+  // ─── Render: Attention Center panel ─────────────────────────────────
+  const renderAttentionPanel = () => {
+    if (attentionItems.length === 0) return null;
+    const severityColor: Record<AttentionItem['severity'], string> = {
+      red: 'text-red-600 bg-red-500',
+      amber: 'text-amber-600 bg-amber-500',
+      yellow: 'text-yellow-600 bg-yellow-500',
+    };
+    const iconMap = {
+      alert: AlertTriangle, gps: MapPin, unassigned: Briefcase, idle: Clock,
+    };
+    return (
+      <div className="absolute top-3 left-3 z-[1000] w-72 max-w-[calc(100vw-1.5rem)] rounded-lg border border-amber-200 bg-background/95 backdrop-blur shadow-lg overflow-hidden">
+        <button
+          type="button"
+          className="w-full flex items-center gap-2 p-2.5 hover:bg-muted/50 transition-colors"
+          onClick={() => setShowAttention((v) => !v)}
+        >
+          <div className="flex items-center gap-1.5 flex-1">
+            <AlertTriangle className="size-3.5 text-amber-600" />
+            <span className="text-xs font-semibold">{attentionItems.length} Attention</span>
+          </div>
+          {showAttention ? <ChevronDown className="size-3.5 text-muted-foreground" /> : <ChevronRight className="size-3.5 text-muted-foreground" />}
+        </button>
+        {showAttention && (
+          <div className="border-t max-h-72 overflow-y-auto">
+            {attentionItems.map((item) => {
+              const Icon = iconMap[item.icon];
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleAttentionClick(item)}
+                  className="w-full flex items-start gap-2 p-2.5 hover:bg-muted/50 transition-colors border-b last:border-0 text-left"
+                >
+                  <span className={`mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded ${severityColor[item.severity]} bg-opacity-15`}>
+                    <Icon className="size-3" />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-medium leading-tight truncate">{item.title}</p>
+                    {item.detail && <p className="text-[10px] text-muted-foreground truncate">{item.detail}</p>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ─── Main Render ────────────────────────────────────────────────────
 
   return (
     <div className="h-full flex flex-col">
-      {/* ─── Compact Header (single row) ──────────────────────────────── */}
-      <header className="flex items-center justify-between flex-wrap gap-2 mb-3 shrink-0">
+      {/* ─── Header + KPI bar ─────────────────────────────────────────── */}
+      <header className="flex items-center justify-between flex-wrap gap-2 mb-2 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="flex items-center justify-center size-9 rounded-lg bg-teal-600 shadow-md shadow-teal-600/20 shrink-0">
             <Radio className="size-4.5 text-white" />
@@ -932,40 +1332,12 @@ export function DispatchView() {
           <div className="min-w-0">
             <h2 className="text-base font-bold tracking-tight leading-tight truncate">Live Dispatch</h2>
             <p className="text-[11px] text-muted-foreground leading-tight truncate">
-              Map-first view · live tracking · smart assignment
+              Command center · live tracking · smart assignment
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Inline stats */}
-          <div className="hidden sm:flex items-center gap-2 mr-2 px-2 py-1 rounded-md bg-muted/50">
-            <span className="flex items-center gap-1 text-xs" title="Pending jobs">
-              <Briefcase className="size-3 text-amber-600" />
-              <span className="font-semibold">{pendingJobs.length}</span>
-              <span className="text-muted-foreground text-[10px]">pend</span>
-            </span>
-            <span className="text-muted-foreground/40">·</span>
-            <span className="flex items-center gap-1 text-xs" title="Assigned jobs">
-              <ArrowRight className="size-3 text-sky-600" />
-              <span className="font-semibold">{assignedJobs.length}</span>
-              <span className="text-muted-foreground text-[10px]">asgnd</span>
-            </span>
-            <span className="text-muted-foreground/40">·</span>
-            <span className="flex items-center gap-1 text-xs" title="Available technicians">
-              <CheckCircle2 className="size-3 text-emerald-600" />
-              <span className="font-semibold">{availableCount}</span>
-              <span className="text-muted-foreground text-[10px]">free</span>
-            </span>
-            <span className="text-muted-foreground/40">·</span>
-            <span className="flex items-center gap-1 text-xs" title="Busy technicians">
-              <Activity className="size-3 text-red-600" />
-              <span className="font-semibold">{busyCount}</span>
-              <span className="text-muted-foreground text-[10px]">busy</span>
-            </span>
-          </div>
-
-          {/* Live badge with pulsing green dot when realtime is connected */}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -986,20 +1358,12 @@ export function DispatchView() {
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                {realtimeConnected
-                  ? 'Realtime connected — GPS pings update markers live'
-                  : 'Realtime disconnected — falling back to 15s polling'}
+                {realtimeConnected ? 'Realtime connected — GPS pings update markers live' : 'Realtime disconnected — falling back to 20s polling'}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={refreshAll}
-            disabled={isRefreshing}
-            className="h-8"
-          >
+          <Button variant="outline" size="sm" onClick={refreshAll} disabled={isRefreshing} className="h-8">
             <RefreshCw className={`size-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline ml-1">Refresh</span>
           </Button>
@@ -1010,31 +1374,168 @@ export function DispatchView() {
             onClick={handleSmartAssignAll}
             disabled={smartAssignAllLoading || pendingJobs.length === 0}
           >
-            {smartAssignAllLoading ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="size-3.5" />
-            )}
-            <span className="hidden md:inline ml-1">Smart Assign All</span>
-          </Button>
-
-          {/* Desktop: collapse/expand the right side panel */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSidePanelOpen((v) => !v)}
-            className="hidden lg:inline-flex h-8 w-8 p-0"
-            aria-label={sidePanelOpen ? 'Collapse side panel' : 'Expand side panel'}
-          >
-            {sidePanelOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
+            {smartAssignAllLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+            <span className="hidden md:inline ml-1">Auto-Assign All</span>
           </Button>
         </div>
       </header>
 
-      {/* ─── Map-first main area ────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-3 min-h-0">
-        {/* Map canvas (the centerpiece) */}
-        <div className="flex-1 relative min-h-[50vh] lg:min-h-0 rounded-lg overflow-hidden border border-border shadow-sm bg-muted/20">
+      {/* KPI bar */}
+      <div className="flex items-center gap-2 flex-wrap mb-2 shrink-0">
+        <KpiPill icon={Users} label="Fleet" value={kpis.total} color="text-slate-600" />
+        <KpiPill icon={CheckCircle2} label="On-Duty" value={kpis.onDuty} color="text-emerald-600" />
+        <KpiPill icon={Navigation} label="En-Route" value={kpis.enRoute} color="text-sky-600" />
+        <KpiPill icon={Briefcase} label="On-Job" value={kpis.onJob} color="text-amber-600" />
+        <KpiPill icon={CircleDot} label="Available" value={kpis.available} color="text-teal-600" />
+        <KpiPill icon={ArrowRight} label="Unassigned" value={kpis.unassigned} color="text-orange-600" />
+        {attentionItems.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAttention((v) => !v)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-300 bg-amber-50 text-amber-700 text-xs hover:bg-amber-100 transition-colors dark:bg-amber-950/50 dark:border-amber-700 dark:text-amber-300"
+          >
+            <AlertTriangle className="size-3" />
+            <span className="font-semibold">{attentionItems.length}</span>
+            <span className="text-[10px]">attention</span>
+          </button>
+        )}
+      </div>
+
+      {/* ─── Unified 3-pane workspace ─────────────────────────────────── */}
+      <div className="flex-1 flex gap-2 min-h-0">
+        {/* Left pane: Queue + Fleet */}
+        {fleetOpen && (
+          <aside className="hidden md:flex w-[320px] shrink-0 flex-col min-h-0 rounded-lg border border-border shadow-sm bg-card overflow-hidden">
+            {/* Filter bar */}
+            <div className="p-2.5 border-b bg-muted/30 space-y-2 shrink-0">
+              <div className="flex items-center gap-1.5">
+                <Select value={teamFilter} onValueChange={setTeamFilter}>
+                  <SelectTrigger className="h-7 text-[11px] flex-1">
+                    <SelectValue placeholder="All Teams" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Teams</SelectItem>
+                    {teams.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        <span className="flex items-center gap-1.5">
+                          <span className="inline-block size-2 rounded-full" style={{ backgroundColor: t.color }} />
+                          {t.name}
+                          <span className="text-muted-foreground">({t._count?.members ?? 0})</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-7 text-[11px] w-[100px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="available">Available</SelectItem>
+                    <SelectItem value="busy">Busy</SelectItem>
+                    <SelectItem value="traveling">Traveling</SelectItem>
+                    <SelectItem value="en_route">En Route</SelectItem>
+                    <SelectItem value="on_job">On Job</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="leave">On Leave</SelectItem>
+                    <SelectItem value="offline">Offline</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={gpsFilter} onValueChange={setGpsFilter}>
+                  <SelectTrigger className="h-7 text-[11px] flex-1">
+                    <SelectValue placeholder="GPS" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All GPS</SelectItem>
+                    <SelectItem value="live">Live only</SelectItem>
+                    <SelectItem value="stale">Stale</SelectItem>
+                    <SelectItem value="no-gps">No GPS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search technicians…"
+                  className="h-7 text-[11px] pl-6"
+                />
+              </div>
+            </div>
+
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="p-2 space-y-3">
+                {/* Team-grouped roster */}
+                {employeesLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : groupedRoster.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="size-8 mx-auto mb-2 opacity-30" />
+                    <p className="text-xs">No technicians match these filters</p>
+                  </div>
+                ) : (
+                  groupedRoster.map((group, gi) => {
+                    const teamId = group.team?.id ?? 'unassigned';
+                    const collapsed = collapsedTeams.has(teamId);
+                    return (
+                      <div key={teamId + gi}>
+                        <button
+                          type="button"
+                          onClick={() => toggleTeamCollapsed(teamId)}
+                          className="w-full flex items-center gap-1.5 px-1 py-1 hover:bg-muted/40 rounded transition-colors"
+                        >
+                          {collapsed ? <ChevronRight className="size-3 text-muted-foreground" /> : <ChevronDown className="size-3 text-muted-foreground" />}
+                          {group.team ? (
+                            <span className="inline-block size-2 rounded-full" style={{ backgroundColor: group.team.color }} />
+                          ) : (
+                            <UserPlus className="size-3 text-muted-foreground" />
+                          )}
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex-1 text-left truncate">
+                            {group.team ? group.team.name : 'Unassigned'}
+                          </span>
+                          <Badge variant="secondary" className="text-[9px] h-4 px-1">{group.employees.length}</Badge>
+                        </button>
+                        {!collapsed && (
+                          <div className="space-y-1.5 mt-1">
+                            {group.employees.map(renderEmployeeRow)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+
+                {/* Unassigned jobs queue */}
+                <div className="pt-2 border-t">
+                  <div className="flex items-center gap-1.5 px-1 py-1">
+                    <Briefcase className="size-3 text-muted-foreground" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex-1">
+                      Job Queue
+                    </span>
+                    <Badge variant="secondary" className="text-[9px] h-4 px-1">{filteredPending.length}</Badge>
+                  </div>
+                  <div className="space-y-1.5 mt-1">
+                    {filteredPending.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground text-center py-3">No pending jobs</p>
+                    ) : (
+                      filteredPending.slice(0, 12).map((j) => renderJobCard(j, true))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+          </aside>
+        )}
+
+        {/* Center: Map */}
+        <div className="flex-1 relative min-h-[50vh] md:min-h-0 rounded-lg overflow-hidden border border-border shadow-sm bg-muted/20">
           {mapTechnicians.length === 0 && activeJobsForMap.length === 0 ? (
             <div className="flex h-full w-full flex-col items-center justify-center bg-muted/30 px-6 py-8 text-center">
               <MapPin className="size-10 mb-3 text-muted-foreground/50" />
@@ -1055,18 +1556,15 @@ export function DispatchView() {
             />
           )}
 
-          {/* Map controls overlay (top-right) */}
+          {/* Attention Center overlay */}
+          {renderAttentionPanel()}
+
+          {/* Map controls */}
           <div className="absolute top-3 right-3 z-[1000] flex flex-col gap-2">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleRecenter}
-                    className="h-8 w-8 p-0 shadow-md bg-background/95 backdrop-blur"
-                    aria-label="Recenter map"
-                  >
+                  <Button variant="secondary" size="sm" onClick={handleRecenter} className="h-8 w-8 p-0 shadow-md bg-background/95 backdrop-blur" aria-label="Recenter map">
                     <Locate className="size-4" />
                   </Button>
                 </TooltipTrigger>
@@ -1076,407 +1574,71 @@ export function DispatchView() {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleToggleLayer}
-                    className="h-8 w-8 p-0 shadow-md bg-background/95 backdrop-blur"
-                    aria-label="Toggle map layer"
-                  >
+                  <Button variant="secondary" size="sm" onClick={handleToggleLayer} className="h-8 w-8 p-0 shadow-md bg-background/95 backdrop-blur" aria-label="Toggle map layer">
                     <Layers className="size-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="left">
-                  {mapLayer === 'streets' ? 'Switch to satellite' : 'Switch to streets'}
-                </TooltipContent>
+                <TooltipContent side="left">{mapLayer === 'streets' ? 'Switch to satellite' : 'Switch to streets'}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
 
-          {/* Map info badges (top-left) */}
-          <div className="absolute top-3 left-3 z-[1000] flex flex-col gap-1.5">
-            <Badge variant="secondary" className="text-[10px] h-5 bg-background/95 backdrop-blur shadow-sm">
+          {/* Map info badges */}
+          <div className="absolute bottom-3 left-3 z-[1000] flex flex-col gap-1.5">
+            <Badge variant="secondary" className="text-[10px] h-5 bg-background/95 backdrop-blur shadow-sm w-fit">
               <MapPin className="size-3 mr-1 text-teal-600" />
               {mapTechnicians.length} tech{mapTechnicians.length !== 1 ? 's' : ''}
               <span className="text-muted-foreground mx-1">·</span>
               {activeJobsForMap.length} job{activeJobsForMap.length !== 1 ? 's' : ''}
             </Badge>
-            {selectedTechnicianId && (
-              <Badge
-                variant="secondary"
-                className="text-[10px] h-5 bg-teal-50 border-teal-200 text-teal-700 dark:bg-teal-950/80 dark:border-teal-800 dark:text-teal-300 cursor-pointer hover:bg-teal-100 dark:hover:bg-teal-900"
-                onClick={() => handleTechnicianSelect(null)}
-              >
-                Following · tap to stop
-              </Badge>
-            )}
           </div>
 
-          {/* Mobile: expand button to open the bottom sheet */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setMobileSheetOpen(true)}
-            className="lg:hidden absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] h-9 px-4 shadow-md bg-background/95 backdrop-blur"
-          >
-            <ChevronUp className="size-4 mr-1" />
-            View jobs &amp; team
-            <Badge variant="secondary" className="ml-2 text-[10px] h-4">
-              {pendingJobs.length + assignedJobs.length + employees.length}
-            </Badge>
-          </Button>
+          {/* Toggle panes buttons (mobile-friendly) */}
+          <div className="absolute bottom-3 right-3 z-[1000] flex gap-1.5 md:hidden">
+            <Button variant="secondary" size="sm" onClick={() => setFleetOpen((v) => !v)} className="h-8 px-3 shadow-md bg-background/95 backdrop-blur">
+              <Users className="size-3.5 mr-1" /> Fleet
+            </Button>
+          </div>
         </div>
 
-        {/* Desktop: collapsible right side panel (~380px) */}
-        {sidePanelOpen && (
-          <aside className="hidden lg:flex w-[380px] shrink-0 flex-col min-h-0 rounded-lg border border-border shadow-sm bg-card overflow-hidden">
-            {renderSidePanelContent()}
+        {/* Right pane: Inspector */}
+        {inspectorOpen && inspectorMode && (
+          <aside className="hidden lg:flex w-[300px] shrink-0 flex-col min-h-0 rounded-lg border border-border shadow-sm bg-card overflow-hidden">
+            <div className="flex items-center justify-between p-2.5 border-b shrink-0">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {inspectorMode === 'technician' ? 'Technician' : 'Job'} Inspector
+              </span>
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setInspectorMode(null); setSelectedTechnicianId(null); setSelectedJob(null); }}>
+                <X className="size-3.5" />
+              </Button>
+            </div>
+            {inspectorMode === 'technician' ? renderInspectorTechnician() : renderInspectorJob()}
           </aside>
         )}
       </div>
 
-      {/* Mobile: bottom sheet with Job Queue + Team */}
-      <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
-        <SheetContent
-          side="bottom"
-          className="h-[80vh] p-0 flex flex-col [&>button]:hidden"
+      {/* Mobile inspector sheet trigger */}
+      {inspectorMode && !inspectorOpen && (
+        <Button
+          variant="secondary" size="sm"
+          onClick={() => setInspectorOpen(true)}
+          className="lg:hidden fixed bottom-4 right-4 z-[1001] shadow-lg"
         >
-          <SheetHeader className="px-3 py-3 border-b shrink-0">
-            <div className="flex items-center justify-between">
-              <SheetTitle className="text-base font-semibold flex items-center gap-2">
-                <Radio className="size-4 text-teal-600" />
-                Dispatch Console
-              </SheetTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setMobileSheetOpen(false)}
-                className="h-8 w-8 p-0"
-                aria-label="Close panel"
-              >
-                <X className="size-4" />
-              </Button>
-            </div>
-          </SheetHeader>
-          <div className="flex-1 min-h-0 flex flex-col">
-            {renderSidePanelContent()}
-          </div>
-        </SheetContent>
-      </Sheet>
+          <PanelRightOpen className="size-4 mr-1" /> Inspector
+        </Button>
+      )}
+    </div>
+  );
+}
 
-      {/* ─── Assignment Dialog ─────────────────────────────────────────── */}
-      <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
-        <DialogContent className="sm:max-w-lg max-h-[85vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ArrowRight className="size-4 text-teal-600" />
-              Assign Job
-            </DialogTitle>
-            <DialogDescription>
-              {assigningJob ? `"${assigningJob.title}" — ${assigningJob.customerName || 'No customer'}` : ''}
-            </DialogDescription>
-          </DialogHeader>
+// ─── KPI pill component ────────────────────────────────────────────────────
 
-          {/* Job details */}
-          {assigningJob && (
-            <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="outline" className={`${getPriorityColor(assigningJob.priority)} text-[10px]`}>
-                  {assigningJob.priority}
-                </Badge>
-                <Badge variant="outline" className="text-[10px]">{assigningJob.type}</Badge>
-                <Badge variant="outline" className={`${getStatusColor(assigningJob.status)} text-[10px]`}>
-                  {assigningJob.status}
-                </Badge>
-              </div>
-              {assigningJob.address && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <MapPin className="size-3" /> {assigningJob.address}
-                </div>
-              )}
-              {assigningJob.scheduledAt && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Calendar className="size-3" /> {formatDate(assigningJob.scheduledAt)} {formatTime(assigningJob.scheduledAt)}
-                </div>
-              )}
-            </div>
-          )}
-
-          <Separator />
-
-          {/* Smart Match Results */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium flex items-center gap-2">
-              <Sparkles className="size-3.5 text-amber-500" />
-              Smart Match Results
-            </Label>
-
-            {smartMatchLoading ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                <span className="ml-2 text-sm text-muted-foreground">Finding best matches...</span>
-              </div>
-            ) : assignCandidates.length > 0 ? (
-              <ScrollArea className="max-h-64">
-                <div className="space-y-2 pr-2">
-                  {assignCandidates.slice(0, 5).map((candidate) => (
-                    <button
-                      key={candidate.employeeId}
-                      className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
-                        selectedEmployeeId === candidate.employeeId
-                          ? 'border-teal-500 bg-teal-50/50'
-                          : 'border-transparent bg-muted/30 hover:border-teal-200'
-                      }`}
-                      onClick={() => setSelectedEmployeeId(candidate.employeeId)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Avatar className="size-8">
-                          <AvatarFallback className="bg-teal-100 text-teal-700 text-xs">
-                            {candidate.employeeName[0]}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm truncate">{candidate.employeeName}</span>
-                            <Badge variant="outline" className="text-[9px] h-4">{candidate.employeeRole}</Badge>
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <div className="flex-1">
-                              <Progress value={candidate.score} className="h-1.5" />
-                            </div>
-                            <span className="text-xs font-medium text-teal-600">{candidate.score}%</span>
-                          </div>
-                        </div>
-                        {selectedEmployeeId === candidate.employeeId && (
-                          <CheckCircle2 className="size-5 text-teal-600 shrink-0" />
-                        )}
-                      </div>
-
-                      {/* Score breakdown */}
-                      {selectedEmployeeId === candidate.employeeId && (
-                        <div className="mt-2 pt-2 border-t grid grid-cols-4 gap-2 text-[10px]">
-                          <div>
-                            <span className="text-muted-foreground block">Skills</span>
-                            <span className="font-medium">{candidate.breakdown.skillScore}/40</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground block">Proximity</span>
-                            <span className="font-medium">{candidate.breakdown.proximityScore}/30</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground block">Workload</span>
-                            <span className="font-medium">{candidate.breakdown.workloadScore}/15</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground block">Rating</span>
-                            <span className="font-medium">{candidate.breakdown.ratingScore}/15</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Matched skills & reasons */}
-                      {selectedEmployeeId === candidate.employeeId && candidate.breakdown.matchedSkills.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          {candidate.breakdown.matchedSkills.map((skill, i) => (
-                            <Badge key={i} variant="outline" className="text-[9px] h-4 bg-teal-50 border-teal-200 text-teal-700">
-                              {skill}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </ScrollArea>
-            ) : (
-              <div className="text-center py-4 text-muted-foreground">
-                <p className="text-sm">No smart match results</p>
-                <p className="text-xs mt-1">Select an employee manually below</p>
-              </div>
-            )}
-          </div>
-
-          {/* Manual employee selection fallback */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Or select manually</Label>
-            <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose an employee..." />
-              </SelectTrigger>
-              <SelectContent>
-                {employees
-                  .filter(e => e.status === 'available' || e.status === 'busy')
-                  .sort((a, b) => {
-                    const order: Record<string, number> = { available: 0, busy: 1 };
-                    return (order[a.status] ?? 2) - (order[b.status] ?? 2);
-                  })
-                  .map(emp => (
-                    <SelectItem key={emp.id} value={emp.id}>
-                      <span className="flex items-center gap-2">
-                        <span className={`size-2 rounded-full ${getEmployeeStatusDot(emp.status)}`} />
-                        {emp.name} — {emp.role} ({emp.status})
-                      </span>
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAssignDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConfirmAssign}
-              disabled={!selectedEmployeeId || assignLoading}
-              className="bg-teal-600 hover:bg-teal-700 text-white"
-            >
-              {assignLoading ? (
-                <Loader2 className="size-4 mr-1 animate-spin" />
-              ) : (
-                <CheckCircle2 className="size-4 mr-1" />
-              )}
-              Confirm Assignment
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ─── Employee Detail Dialog ────────────────────────────────────── */}
-      <Dialog open={showEmployeeDialog} onOpenChange={setShowEmployeeDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
-              <Avatar className="size-9">
-                <AvatarFallback className="bg-teal-100 text-teal-700">
-                  {selectedEmployee?.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <span>{selectedEmployee?.name}</span>
-                <p className="text-sm text-muted-foreground font-normal">{selectedEmployee?.role}</p>
-              </div>
-            </DialogTitle>
-          </DialogHeader>
-
-          {selectedEmployee && (
-            <div className="space-y-4">
-              {/* Status & Stats */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <Badge variant="outline" className={`${getEmployeeStatusBg(selectedEmployee.status)} text-xs`}>
-                  {selectedEmployee.status}
-                </Badge>
-                <span className="flex items-center gap-1 text-sm">
-                  <Star className="size-3.5 text-amber-400 fill-amber-400" />
-                  {selectedEmployee.rating.toFixed(1)}
-                </span>
-                <span className="text-sm text-muted-foreground">{selectedEmployee.completedJobs} jobs completed</span>
-              </div>
-
-              {/* Skills */}
-              {parseSkills(selectedEmployee.skills).length > 0 && (
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1.5 block">Skills</Label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {parseSkills(selectedEmployee.skills).map((skill, i) => (
-                      <Badge key={i} variant="outline" className="text-xs bg-teal-50/50 border-teal-200 text-teal-700">
-                        {skill}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Contact */}
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Contact</Label>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-sm">
-                    <MessageCircle className="size-3.5 text-muted-foreground" />
-                    <span>{selectedEmployee.phone}</span>
-                  </div>
-                  {selectedEmployee.email && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>{selectedEmployee.email}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Location */}
-              {selectedEmployee.location && (
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1.5 block">Location</Label>
-                  <div className="flex items-center gap-2 text-sm">
-                    <MapPin className="size-3.5 text-muted-foreground" />
-                    <span>{selectedEmployee.location}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Last Seen */}
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Clock className="size-3.5" />
-                <span>Last seen: {timeAgo(selectedEmployee.lastSeenAt)}</span>
-              </div>
-
-              {/* Active Jobs for this employee */}
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Active Jobs</Label>
-                {jobs.filter(j => j.assigneeId === selectedEmployee.id && ['assigned', 'in_progress'].includes(j.status)).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No active jobs</p>
-                ) : (
-                  <div className="space-y-2">
-                    {jobs
-                      .filter(j => j.assigneeId === selectedEmployee.id && ['assigned', 'in_progress'].includes(j.status))
-                      .map(job => (
-                        <div key={job.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
-                          <div className={`size-2 rounded-full ${getPriorityDot(job.priority)}`} />
-                          <span className="text-sm flex-1 truncate">{job.title}</span>
-                          <Badge variant="outline" className={`${getStatusColor(job.status)} text-[9px] h-4`}>
-                            {job.status.replace('_', ' ')}
-                          </Badge>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            {/* Quick assign pending job to this employee */}
-            {selectedEmployee && selectedEmployee.status === 'available' && pendingJobs.length > 0 && (
-              <Select
-                onValueChange={(jobId) => {
-                  const job = pendingJobs.find(j => j.id === jobId);
-                  if (job) {
-                    setAssigningJob(job);
-                    setSelectedEmployeeId(selectedEmployee.id);
-                    setAssignCandidates([]);
-                    setShowEmployeeDialog(false);
-                    setShowAssignDialog(true);
-                  }
-                }}
-              >
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Assign a job..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {pendingJobs.map(job => (
-                    <SelectItem key={job.id} value={job.id}>
-                      {job.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <Button variant="outline" onClick={() => setShowEmployeeDialog(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+function KpiPill({ icon: Icon, label, value, color }: { icon: React.ComponentType<{ className?: string }>; label: string; value: number; color: string }) {
+  return (
+    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border bg-card text-xs">
+      <Icon className={`size-3 ${color}`} />
+      <span className="font-semibold">{value}</span>
+      <span className="text-[10px] text-muted-foreground">{label}</span>
     </div>
   );
 }

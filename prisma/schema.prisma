@@ -1091,6 +1091,7 @@ model Workspace {
   credentials   Credential[]
   variables     Variable[]
   employees     Employee[]
+  teams         Team[]
   customers     Customer[]
   resources     Resource[]
   jobs          Job[]
@@ -1311,6 +1312,52 @@ model Template {
 // BUSINESS OPERATIONS
 // ==========================================
 
+// ==========================================
+// TEAMS — Internal operational groups (NOT trades)
+// ==========================================
+// A Team is an INTERNAL operational grouping within a single workspace
+// (e.g. "Installation", "Service & Repair", "Maintenance", "Emergency
+// Response"). This is distinct from Tenant.industry / Workspace.industry
+// which represent the business's TRADE (HVAC, plumbing, cleaning, etc.).
+//
+// Dispatch filtering/grouping is done by Team, NEVER by trade — a single
+// HVAC company may have Installation + Service + Maintenance teams.
+//
+// Tenant-scoped via workspaceId → Workspace.tenantId, plus a denormalized
+// tenantId for fast tenant-wide queries. An employee belongs to at most
+// ONE primary team (teamId) — sufficient for SMB field-service. Multi-team
+// membership can be added later via a TeamMember join table if needed.
+model Team {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  // Hex color used for the team badge / roster section accent in the UI.
+  color           String   @default("#0d9488")
+  // Icon name (lucide) shown next to the team in filter dropdowns.
+  icon            String   @default("Users")
+  // Team lead (an Employee). Null until one is assigned. The lead is a
+  // display/permission hint only — it does NOT change dispatch logic.
+  // @unique because the Team→lead relation is 1:1 (an employee leads at
+  // most one team).
+  leadId          String?   @unique
+  // Whether the team is active (soft-delete). Inactive teams are hidden
+  // from the dispatch filter dropdown and roster grouping.
+  isActive        Boolean  @default(true)
+  tenantId        String
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace       Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  lead            Employee?  @relation("TeamLead", fields: [leadId], references: [id], onDelete: SetNull)
+  members         Employee[] @relation("TeamMembers")
+
+  @@unique([workspaceId, name])
+  @@index([tenantId])
+  @@index([workspaceId])
+  @@index([isActive])
+}
+
 model Employee {
   id              String    @id @default(cuid())
   name            String
@@ -1327,6 +1374,10 @@ model Employee {
   latitude        Float?
   longitude       Float?
   workspaceId     String?
+  // ── Team membership (primary team) ──
+  // Null = unassigned / "no team". Dispatch shows these under an
+  // "Unassigned" group so no technician is ever hidden.
+  teamId          String?
   lastSeenAt      DateTime?
   currentJobId    String?   @unique
   userId          String?   @unique
@@ -1337,6 +1388,8 @@ model Employee {
   updatedAt       DateTime  @updatedAt
 
   workspace       Workspace?              @relation(fields: [workspaceId], references: [id])
+  team            Team?                   @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
+  ledTeam         Team?                   @relation("TeamLead")
   assignedJobs    Job[]                   @relation("JobAssignee")
   leads           Lead[]
   invoices        Invoice[]
@@ -1354,6 +1407,7 @@ model Employee {
   @@index([role])
   @@index([status])
   @@index([workspaceId])
+  @@index([teamId])
   @@index([lastSeenAt])
   @@index([currentJobId])
   @@index([userId])

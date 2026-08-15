@@ -48,7 +48,8 @@ import { useMarketplaceProviders } from './use-marketplace-providers';
 import { ReloadButton } from './reload-button';
 import type { ProviderListItem } from './types';
 import { getIndustry, VERTICALS } from '@/lib/industry-catalog';
-import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
+import { slugifyCity } from '@/lib/seo/schemas';
+import { mapIndustryToPluralSlug } from '@/lib/seo/plural-industry-slugs';
 import { rankProviders, haversineKm } from '@/lib/marketplace-ranking';
 import { cn } from '@/lib/utils';
 import { useSearchParams } from 'next/navigation';
@@ -101,8 +102,10 @@ export function MarketplaceBrowser({
     if (typeof window === 'undefined') return;
     if (providers.length === 0) return;
     // Fire-and-forget — caching is best-effort and doesn't block rendering.
-    // mapIndustryToUrlSlug/slugifyCity are already imported at the top of
+    // mapIndustryToPluralSlug/slugifyCity are already imported at the top of
     // this file (static import is fine — they're pure functions, no Dexie).
+    // We store the PLURAL slug so offline-rebuilt URLs match the canonical
+    // plural route and never trigger a singular→plural 301 redirect.
     import('@/lib/offline-db')
       .then(({ cacheProviders }) => {
         const cached = providers.map((p) => ({
@@ -110,7 +113,7 @@ export function MarketplaceBrowser({
           slug: p.slug || p.publicSlug || p.id,
           name: p.name,
           industry: p.industry ?? null,
-          industryUrlSlug: mapIndustryToUrlSlug(p.industry),
+          industryUrlSlug: mapIndustryToPluralSlug(p.industry),
           city: p.city ?? null,
           cityUrlSlug: slugifyCity(p.city),
           state: p.state ?? null,
@@ -1495,8 +1498,13 @@ export function MarketplaceBrowser({
         >
           {visible.map((p) => {
             const slug = p.slug || p.publicSlug;
+            // PLURAL industry segment → canonical /{pluralIndustry}/{city}/{slug}
+            // URL. Linking directly to the plural form avoids a singular→plural
+            // 301 permanentRedirect() on the detail route, which during
+            // client-side navigation wipes the DOM (blank white page) before
+            // loading.tsx can mount.
             const canonicalHref = slug
-              ? `/${mapIndustryToUrlSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
+              ? `/${mapIndustryToPluralSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
               : undefined;
             return (
               <ProviderCard

@@ -1,42 +1,44 @@
 'use client';
 
 /**
- * LiveTechnicianMap
- * -----------------
- * A Jobber/Uber-style Leaflet map shown in the Dispatch view.
+ * LiveTechnicianMap — Phase 2 "Uber-style" real-time tracking.
+ * -------------------------------------------------------------
+ * Pure Leaflet (no react-leaflet) for React 19 compatibility.
+ * SSR-safe: dynamically imported with `next/dynamic` + `ssr:false`.
  *
- * - Pure Leaflet (no react-leaflet) for React 19 compatibility.
- * - SSR-safe: this component is dynamically imported with `next/dynamic` and
- *   `ssr: false` from `dispatch-view.tsx`, so the Leaflet constructor (which
- *   needs `window`) never runs on the server.
+ * Tracking principles (per the approved plan):
+ *   • Smooth gliding — each `gps.ping` is interpolated to the new position
+ *     via requestAnimationFrame. The interpolation window is driven by the
+ *     Δtime between the previous and the incoming ping timestamps (NOT a
+ *     hardcoded 1000ms), clamped to [600ms, 2500ms] to avoid jank on stale
+ *     or erratic pings.
+ *   • Stale ping — if the capturedAt timestamp is older than STALE_MS
+ *     (60s) OR more than STALE_GAP_FACTOR× the previous interval, the
+ *     marker SNAPS instead of gliding (we don't pretend the tech is moving
+ *     normally when we haven't heard from them).
+ *   • Huge GPS jump — if the new position is > JUMP_KM from the previous,
+ *     treat it as a GPS correction: snap immediately, don't glide.
+ *   • Stationary — if the tech has moved < STATIONARY_M, don't rotate the
+ *     heading arrow (noisy heading at low speed produces spin).
+ *   • Heading arrow — the marker icon rotates by `heading` degrees so it
+ *     points in the direction of travel (like Uber's car icon).
  *
- * Features:
- *   - Technician markers with pulsing circles (color by status).
- *   - Job location pins (color by priority) with popups.
- *   - Dashed route lines from each technician to their assigned job.
- *   - "Follow technician" mode: clicking a tech pans the map to follow them.
- *   - Live GPS position updates via the `controllerRef` (no full refetch,
- *     no marker flicker — uses `marker.setLatLng`).
- *   - Simple job-pin clustering when >20 pins are on screen.
- *   - Map controls: zoom (top-left, default), recenter (top-right), and a
- *     streets/satellite layer toggle.
+ * Marker badges (compact by default; full metrics on hover/select):
+ *   • Speed (km/h)        — from gps.ping.speed (m/s → km/h)
+ *   • Battery %           — from gps.ping.batteryLevel (0..1)
+ *   • GPS freshness       — "live · 8s" / "stale · 9m"
+ *   • Accuracy halo       — a translucent circle of radius `accuracy` (m)
+ *
+ * Other features preserved from the previous version:
+ *   • Job location pins (color by priority) with popups + clustering.
+ *   • Dashed route lines from tech → assigned job (animated dashes).
+ *   • Follow-technician mode (click a tech to follow).
+ *   • Streets / satellite basemap toggle.
  *
  * Data sources:
- *   - `employees` → technician markers (from `/api/employees`)
- *   - `jobs`      → job location pins (from `/api/jobs`, geocoded on create)
- *
- * Marker colour legend (technicians):
- *   - Available            → green  (#10b981)
- *   - Busy / on_job        → amber  (#f59e0b)
- *   - On leave / away      → gray   (#94a3b8)
- *   - Offline (>30 min)    → red    (#ef4444)
- *   - Default / unknown    → blue   (#3b82f6)
- *
- * Pin colour legend (jobs):
- *   - urgent               → red    (#ef4444)
- *   - high                 → amber  (#f59e0b)
- *   - medium               → blue   (#3b82f6)
- *   - low / unknown        → gray   (#94a3b8)
+ *   • employees (with lat/lng/lastSeenAt/team) → tech markers
+ *   • jobs (geocoded) → job pins
+ *   • gps.ping realtime events → in-place marker updates (no refetch)
  */
 
 import { useEffect, useRef } from 'react';
@@ -55,6 +57,7 @@ export interface MapTechnician {
   rating?: number;
   currentJobId?: string | null;
   lastSeenAt?: string | null;
+  team?: { id: string; name: string; color: string } | null;
 }
 
 export interface MapJob {
@@ -67,15 +70,26 @@ export interface MapJob {
   assigneeId?: string | null;
   customerName?: string;
   address?: string;
+  scheduledAt?: string;
+}
+
+/** Live telemetry for a technician, fed by gps.ping realtime events. */
+export interface TechTelemetry {
+  latitude: number;
+  longitude: number;
+  accuracy?: number | null;
+  heading?: number | null;
+  speed?: number | null;
+  batteryLevel?: number | null;
+  capturedAt: string;
 }
 
 /** Imperative API exposed to the parent via `controllerRef`. */
 export interface LiveTechnicianMapController {
   /**
-   * Update a single technician marker's position in-place. Called when a
-   * `gps.ping` realtime event arrives. Does NOT remove/re-add the marker
-   * — uses `marker.setLatLng` to avoid flicker. If the followed technician
-   * moves, the map pans to follow them.
+   * Handle an incoming gps.ping. Interpolates the marker from its current
+   * position to the new one over a timestamp-derived window, updates the
+   * heading arrow, speed/battery/freshness badges, and accuracy halo.
    */
   handleGpsPing: (ping: {
     employeeId: string;
@@ -83,39 +97,44 @@ export interface LiveTechnicianMapController {
     longitude: number;
     accuracy?: number | null;
     heading?: number | null;
+    speed?: number | null;
+    batteryLevel?: number | null;
     capturedAt?: string;
   }) => void;
   /** Recenter the map on all technicians (and job pins if present). */
   recenter: () => void;
   /** Toggle between streets and satellite basemap. */
   setLayer: (layer: 'streets' | 'satellite') => void;
+  /** Force a refresh of all marker icons (used when selection changes). */
+  refreshMarkers: () => void;
 }
 
 interface LiveTechnicianMapProps {
   employees: MapTechnician[];
-  /** Active jobs to render as pins. Only those with lat/lng are shown. */
   jobs?: MapJob[];
-  /** When set, the map pans to follow this technician's GPS updates. */
   selectedTechnicianId?: string | null;
-  /** Called when a technician marker is clicked (or null when deselected). */
   onTechnicianSelect?: (techId: string | null) => void;
-  /**
-   * Parent-provided ref that the map populates with its imperative API.
-   * Lets the parent forward live `gps.ping` events without triggering a
-   * React re-render (which would re-create all markers and cause flicker).
-   */
   controllerRef?: React.MutableRefObject<LiveTechnicianMapController | null>;
-  /** Optional className applied to the map container wrapper. */
   className?: string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
-const DEFAULT_CENTER: [number, number] = [22.5937, 78.9629]; // center of India
+const DEFAULT_CENTER: [number, number] = [22.5937, 78.9629];
 const DEFAULT_ZOOM = 12;
-const OFFLINE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
-const CLUSTER_THRESHOLD_PX = 50; // merge job pins within this screen distance
-const CLUSTER_PIN_MIN_COUNT = 20; // only cluster when there are this many pins
+const OFFLINE_THRESHOLD_MS = 30 * 60 * 1000;
+const CLUSTER_THRESHOLD_PX = 50;
+const CLUSTER_PIN_MIN_COUNT = 20;
+
+// ── Phase 2 interpolation constants ──
+const ANIM_MIN_MS = 600; // floor for the glide window
+const ANIM_MAX_MS = 2500; // ceiling for the glide window
+const STALE_MS = 60_000; // ping older than this → snap, don't glide
+const STALE_GAP_FACTOR = 3; // interval > 3× previous → treat as stale
+const JUMP_KM = 2.5; // > this distance from prev → GPS correction, snap
+const STATIONARY_M = 8; // < this movement → don't rotate heading (noisy)
+const FRESH_LIVE_MS = 30_000; // "live" badge while < 30s old
+const LOW_BATTERY_PCT = 0.15; // battery below this → red badge
 
 const COLOR_AVAILABLE = '#10b981';
 const COLOR_BUSY = '#f59e0b';
@@ -140,7 +159,6 @@ const TILE_ATTRIBUTION_SATELLITE =
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-/** Compute the technician's "online" status — true if GPS pinged within 30 min. */
 function isOffline(lastSeenAt?: string | null): boolean {
   if (!lastSeenAt) return true;
   const ts = new Date(lastSeenAt).getTime();
@@ -148,19 +166,17 @@ function isOffline(lastSeenAt?: string | null): boolean {
   return Date.now() - ts > OFFLINE_THRESHOLD_MS;
 }
 
-/** Resolve the marker colour for a technician based on status + GPS freshness. */
 function getMarkerColor(tech: MapTechnician): string {
   const status = (tech.status || '').toLowerCase();
   if (status === 'offline' || isOffline(tech.lastSeenAt)) return COLOR_OFFLINE;
   if (status === 'available') return COLOR_AVAILABLE;
-  if (status === 'busy' || status === 'on_job' || status === 'in_progress') {
+  if (status === 'busy' || status === 'on_job' || status === 'in_progress' || status === 'en_route' || status === 'traveling') {
     return COLOR_BUSY;
   }
   if (status === 'leave' || status === 'away' || status === 'on_leave') return COLOR_LEAVE;
   return COLOR_DEFAULT;
 }
 
-/** Resolve the job-pin colour by priority. */
 function getJobColor(priority: string): string {
   const p = (priority || '').toLowerCase();
   if (p === 'urgent') return COLOR_JOB_URGENT;
@@ -169,7 +185,18 @@ function getJobColor(priority: string): string {
   return COLOR_JOB_LOW;
 }
 
-/** "5m ago" / "2h ago" / "Never" — matches the rest of the dispatch view. */
+/** Haversine distance in meters between two lat/lng points. */
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 function formatLastSeen(lastSeenAt?: string | null): string {
   if (!lastSeenAt) return 'Never';
   const ts = new Date(lastSeenAt).getTime();
@@ -184,12 +211,24 @@ function formatLastSeen(lastSeenAt?: string | null): string {
   return `${days} d ago`;
 }
 
-/** Build a small HTML badge style string for the popup. */
+/** Freshness label for a telemetry ping: "live · 8s" or "stale · 9m". */
+function freshnessLabel(capturedAt?: string | null): string {
+  if (!capturedAt) return 'unknown';
+  const ts = new Date(capturedAt).getTime();
+  if (Number.isNaN(ts)) return 'unknown';
+  const seconds = Math.floor((Date.now() - ts) / 1000);
+  if (seconds < 0) return 'live';
+  if (seconds < FRESH_LIVE_MS / 1000) return `live · ${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `stale · ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  return `stale · ${hours}h`;
+}
+
 function statusBadgeStyle(color: string): string {
   return `display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:600;color:${color};background:${color}1a;border:1px solid ${color}40;`;
 }
 
-/** Escape any user-provided text before injecting into the popup HTML. */
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -199,9 +238,16 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-/** Build the popup HTML for a technician. */
-function buildTechPopupHtml(tech: MapTechnician, color: string): string {
+/** Build the popup HTML for a technician (with live telemetry if available). */
+function buildTechPopupHtml(
+  tech: MapTechnician,
+  color: string,
+  telemetry?: TechTelemetry | null,
+): string {
   const role = tech.role ? tech.role : 'Technician';
+  const teamHtml = tech.team
+    ? `<div style="font-size:10px;color:#64748b;margin-top:2px;">Team: <span style="font-weight:600;color:${escapeHtml(tech.team.color)};">${escapeHtml(tech.team.name)}</span></div>`
+    : '';
   const ratingHtml =
     typeof tech.rating === 'number' && tech.rating > 0
       ? `<div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#64748b;">
@@ -213,13 +259,40 @@ function buildTechPopupHtml(tech: MapTechnician, color: string): string {
     ? `<div style="font-size:10px;color:#f59e0b;margin-top:4px;">● On active job</div>`
     : '';
 
+  // Live telemetry block (speed / battery / freshness)
+  let telemetryHtml = '';
+  if (telemetry) {
+    const speedKmh =
+      typeof telemetry.speed === 'number' && telemetry.speed >= 0
+        ? Math.round(telemetry.speed * 3.6)
+        : null;
+    const batteryPct =
+      typeof telemetry.batteryLevel === 'number' && telemetry.batteryLevel >= 0
+        ? Math.round(telemetry.batteryLevel * 100)
+        : null;
+    const batteryColor = batteryPct !== null && batteryPct <= LOW_BATTERY_PCT * 100 ? '#ef4444' : '#10b981';
+    const rows: string[] = [];
+    if (speedKmh !== null) {
+      rows.push(`<span style="color:#94a3b8;">Speed</span><span style="font-weight:600;color:#0f172a;">${speedKmh} km/h</span>`);
+    }
+    if (batteryPct !== null) {
+      rows.push(`<span style="color:#94a3b8;">Battery</span><span style="font-weight:600;color:${batteryColor};">${batteryPct}%</span>`);
+    }
+    rows.push(`<span style="color:#94a3b8;">GPS</span><span style="font-weight:600;color:#0f172a;">${freshnessLabel(telemetry.capturedAt)}</span>`);
+    telemetryHtml = `
+      <div style="margin-top:6px;border-top:1px solid #e2e8f0;padding-top:6px;display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:11px;">
+        ${rows.map((r) => `<div style="display:contents;">${r}</div>`).join('')}
+      </div>`;
+  }
+
   return `
-    <div style="min-width:180px;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">
+    <div style="min-width:200px;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">
       <div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:2px;">
         ${escapeHtml(tech.name)}
       </div>
       <div style="font-size:11px;color:#64748b;margin-bottom:6px;">${escapeHtml(role)}</div>
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+      ${teamHtml}
+      <div style="display:flex;align-items:center;gap:6px;margin:6px 0;">
         <span style="${statusBadgeStyle(color)}">
           <span style="display:inline-block;width:6px;height:6px;border-radius:9999px;background:${color};"></span>
           ${escapeHtml(tech.status || 'unknown')}
@@ -230,6 +303,7 @@ function buildTechPopupHtml(tech: MapTechnician, color: string): string {
         Last seen: <span style="font-weight:500;color:#334155;">${formatLastSeen(tech.lastSeenAt)}</span>
       </div>
       ${currentJobHtml}
+      ${telemetryHtml}
       <div style="font-size:10px;color:#94a3b8;margin-top:6px;border-top:1px solid #e2e8f0;padding-top:6px;">
         Click to follow this technician
       </div>
@@ -237,7 +311,6 @@ function buildTechPopupHtml(tech: MapTechnician, color: string): string {
   `;
 }
 
-/** Build the popup HTML for a job pin. */
 function buildJobPopupHtml(job: MapJob, color: string): string {
   const statusLabel = (job.status || 'unknown').replace(/_/g, ' ');
   return `
@@ -268,15 +341,61 @@ function buildJobPopupHtml(job: MapJob, color: string): string {
   `;
 }
 
-/** Build a Leaflet divIcon for a technician (coloured pulsing circle + initial). */
-function buildTechDivIcon(tech: MapTechnician, color: string, isFollowed: boolean): L.DivIcon {
+/**
+ * Build a Leaflet divIcon for a technician: a circular badge with the
+ * technician's initial, an optional heading arrow (rotated by bearing), and
+ * a small speed badge beneath. The heading arrow only renders when the tech
+ * is moving (non-stationary) and a heading is available.
+ */
+function buildTechDivIcon(
+  tech: MapTechnician,
+  color: string,
+  isFollowed: boolean,
+  telemetry?: TechTelemetry | null,
+): L.DivIcon {
   const initial = (tech.name || '?').trim().charAt(0).toUpperCase() || '?';
   const isOfflineMarker = color === COLOR_OFFLINE;
   const ringStyle = isFollowed
     ? `box-shadow:0 0 0 3px ${color}, 0 0 0 6px #ffffff, 0 1px 6px rgba(0,0,0,0.4);`
     : `box-shadow:0 1px 4px rgba(0,0,0,0.35);`;
+
+  // Heading arrow — only when we have telemetry + a real heading + movement.
+  const speedKmh =
+    telemetry && typeof telemetry.speed === 'number' && telemetry.speed >= 0
+      ? telemetry.speed * 3.6
+      : null;
+  const hasHeading =
+    telemetry &&
+    typeof telemetry.heading === 'number' &&
+    !Number.isNaN(telemetry.heading) &&
+    telemetry.heading >= 0 &&
+    telemetry.heading <= 360 &&
+    (speedKmh === null || speedKmh > 2); // don't show arrow when essentially stationary
+
+  // If we have telemetry distance to the previous point but it's tiny, treat
+  // as stationary (caller already avoids feeding tiny moves, but double-guard).
+  const arrowHtml = hasHeading
+    ? `<span style="
+        position:absolute;top:-12px;left:50%;transform:translateX(-50%) rotate(${telemetry!.heading}deg);
+        width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;
+        border-bottom:8px solid ${color};filter:drop-shadow(0 1px 1px rgba(0,0,0,0.3));
+      "></span>`
+    : '';
+
+  // Speed badge beneath the marker (only when actually moving).
+  const speedBadgeHtml =
+    hasHeading && speedKmh !== null && speedKmh > 2
+      ? `<span style="
+          position:absolute;bottom:-13px;left:50%;transform:translateX(-50%);
+          background:#0f172a;color:#fff;font-size:8px;font-weight:700;
+          padding:1px 4px;border-radius:4px;white-space:nowrap;line-height:1.1;
+          font-family:ui-sans-serif,system-ui,sans-serif;
+        ">${Math.round(speedKmh)}</span>`
+      : '';
+
   const html = `
     <div style="position:relative;width:28px;height:28px;">
+      ${arrowHtml}
       ${
         !isOfflineMarker
           ? `<span style="position:absolute;inset:-4px;border-radius:9999px;background:${color};opacity:0.25;animation:fieseros-tech-pulse 2s ease-out infinite;"></span>`
@@ -292,6 +411,7 @@ function buildTechDivIcon(tech: MapTechnician, color: string, isFollowed: boolea
         font-size:11px;font-weight:700;font-family:ui-sans-serif,system-ui,sans-serif;
         line-height:1;text-transform:uppercase;
       ">${escapeHtml(initial)}</span>
+      ${speedBadgeHtml}
     </div>
   `;
   return L.divIcon({
@@ -303,10 +423,7 @@ function buildTechDivIcon(tech: MapTechnician, color: string, isFollowed: boolea
   });
 }
 
-/** Build a Leaflet divIcon for a job location pin (teardrop shape, colored). */
 function buildJobDivIcon(job: MapJob, color: string): L.DivIcon {
-  // 26px tall teardrop pin with a white center dot — clearly distinct from
-  // the circular technician markers.
   const html = `
     <div style="position:relative;width:24px;height:30px;">
       <svg width="24" height="30" viewBox="0 0 24 30" xmlns="http://www.w3.org/2000/svg" style="display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.4));">
@@ -324,7 +441,6 @@ function buildJobDivIcon(job: MapJob, color: string): L.DivIcon {
   });
 }
 
-/** Build a cluster divIcon showing the count of merged pins. */
 function buildClusterDivIcon(count: number): L.DivIcon {
   const size = count > 99 ? 44 : count > 9 ? 38 : 32;
   const html = `
@@ -347,7 +463,6 @@ function buildClusterDivIcon(count: number): L.DivIcon {
   });
 }
 
-/** Average of technician coordinates, or the default center if none. */
 function computeCenter(techs: MapTechnician[]): [number, number] {
   const points = techs.filter(
     (t) =>
@@ -364,7 +479,6 @@ function computeCenter(techs: MapTechnician[]): [number, number] {
   return [sumLat / points.length, sumLng / points.length];
 }
 
-/** Returns true if the value is a finite number within lat/lng bounds. */
 function isValidCoord(lat: unknown, lng: unknown): lat is number {
   return (
     typeof lat === 'number' &&
@@ -374,6 +488,24 @@ function isValidCoord(lat: unknown, lng: unknown): lat is number {
     Math.abs(lat) <= 90 &&
     Math.abs(lng) <= 180
   );
+}
+
+// ─── Per-marker animation state ───────────────────────────────────────────
+// Stored on a single ref Map keyed by employeeId. Each entry tracks the
+// marker's "displayed" (interpolated) position, the last ping, the previous
+// interval, and the active rAF handle so we can cancel superseded glides.
+
+interface AnimState {
+  fromLat: number;
+  fromLng: number;
+  toLat: number;
+  toLng: number;
+  startAt: number; // epoch ms when the current glide started
+  duration: number; // glide duration in ms
+  rafId: number | null;
+  lastPingAt: number | null; // epoch ms of the previous ping
+  prevInterval: number | null; // ms between the previous two pings
+  telemetry: TechTelemetry | null;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────
@@ -388,38 +520,173 @@ export default function LiveTechnicianMap({
 }: LiveTechnicianMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
-  // techMarkersRef: employeeId → marker. Used for in-place live updates.
   const techMarkersRef = useRef<Map<string, L.Marker>>(new Map());
-  // jobMarkersRef: jobId → marker. Used for cleanup on jobs prop change.
   const jobMarkersRef = useRef<Map<string, L.Marker>>(new Map());
-  // routeLinesRef: array of polyline instances (one per assigned job+tech pair).
   const routeLinesRef = useRef<L.Polyline[]>([]);
-  // tileLayersRef: [streetsLayer, satelliteLayer]. Toggle visibility via layer.
+  const accuracyCirclesRef = useRef<Map<string, L.Circle>>(new Map());
+  const animStateRef = useRef<Map<string, AnimState>>(new Map());
   const tileLayersRef = useRef<{ streets: L.TileLayer | null; satellite: L.TileLayer | null }>({
     streets: null,
     satellite: null,
   });
-  // Keep latest employees + jobs + selection in refs so the init effect can
-  // stay stable (no re-create on every prop change).
+
   const employeesRef = useRef(employees);
   const jobsRef = useRef(jobs);
   const selectedTechIdRef = useRef<string | null>(selectedTechnicianId);
   const onTechnicianSelectRef = useRef(onTechnicianSelect);
 
-  // ─── Render functions (defined as consts so they're available to effects below) ──
-  // These read from refs (not props/state), so they don't need to be in
-  // any effect's dep array — they always see the latest data via the refs.
+  // ── Easing (ease-out-cubic) for natural deceleration ──
+  const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+  /**
+   * Start a smooth glide from the marker's current displayed position to the
+   * new target, using requestAnimationFrame. Handles the stale / jump /
+   * stationary rules from the approved plan.
+   */
+  const startGlide = (employeeId: string, targetLat: number, targetLng: number, ping: TechTelemetry) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const marker = techMarkersRef.current.get(employeeId);
+    if (!marker) return;
+
+    const state = animStateRef.current.get(employeeId);
+    const now = Date.now();
+    const pingTime = new Date(ping.capturedAt).getTime();
+
+    // Current displayed position (start of the glide).
+    const cur = marker.getLatLng();
+    const fromLat = cur.lat;
+    const fromLng = cur.lng;
+
+    const distM = haversineMeters(fromLat, fromLng, targetLat, targetLng);
+
+    // Rule: huge GPS jump → snap, don't glide.
+    if (distM > JUMP_KM * 1000) {
+      marker.setLatLng([targetLat, targetLng]);
+      if (state) {
+        if (state.rafId !== null) cancelAnimationFrame(state.rafId);
+        state.fromLat = targetLat;
+        state.fromLng = targetLng;
+        state.toLat = targetLat;
+        state.toLng = targetLng;
+        state.rafId = null;
+        state.telemetry = ping;
+        state.lastPingAt = pingTime;
+      }
+      return;
+    }
+
+    // Rule: stationary → snap (no glide for tiny moves).
+    if (distM < STATIONARY_M) {
+      marker.setLatLng([targetLat, targetLng]);
+      if (state) {
+        if (state.rafId !== null) cancelAnimationFrame(state.rafId);
+        state.fromLat = targetLat;
+        state.fromLng = targetLng;
+        state.toLat = targetLat;
+        state.toLng = targetLng;
+        state.rafId = null;
+        state.telemetry = ping;
+        state.lastPingAt = pingTime;
+      }
+      return;
+    }
+
+    // Determine the interpolation window from the Δtime between pings.
+    let duration = ANIM_MIN_MS;
+    if (state && state.lastPingAt !== null) {
+      const interval = Math.max(0, pingTime - state.lastPingAt);
+      // Rule: stale ping (too old, or interval far exceeds the previous) → snap.
+      const ageMs = now - pingTime;
+      const isStale = ageMs > STALE_MS || (state.prevInterval !== null && interval > state.prevInterval * STALE_GAP_FACTOR);
+      if (isStale) {
+        marker.setLatLng([targetLat, targetLng]);
+        if (state.rafId !== null) cancelAnimationFrame(state.rafId);
+        state.fromLat = targetLat;
+        state.fromLng = targetLng;
+        state.toLat = targetLat;
+        state.toLng = targetLng;
+        state.rafId = null;
+        state.telemetry = ping;
+        state.prevInterval = interval;
+        state.lastPingAt = pingTime;
+        return;
+      }
+      // Clamp the glide window to [ANIM_MIN_MS, ANIM_MAX_MS].
+      duration = Math.min(ANIM_MAX_MS, Math.max(ANIM_MIN_MS, interval));
+    }
+
+    // Cancel any in-flight glide for this marker.
+    if (state && state.rafId !== null) {
+      cancelAnimationFrame(state.rafId);
+    }
+
+    const startAt = performance.now();
+    const st: AnimState = {
+      fromLat,
+      fromLng,
+      toLat: targetLat,
+      toLng: targetLng,
+      startAt,
+      duration,
+      rafId: null,
+      lastPingAt: pingTime,
+      prevInterval: state?.prevInterval ?? null,
+      telemetry: ping,
+    };
+    animStateRef.current.set(employeeId, st);
+
+    const tick = (t: number) => {
+      const s = animStateRef.current.get(employeeId);
+      if (!s || s.rafId === null) return;
+      const elapsed = t - startAt;
+      const progress = Math.min(1, elapsed / s.duration);
+      const eased = easeOutCubic(progress);
+      const lat = s.fromLat + (s.toLat - s.fromLat) * eased;
+      const lng = s.fromLng + (s.toLng - s.fromLng) * eased;
+      const m = techMarkersRef.current.get(employeeId);
+      if (m) m.setLatLng([lat, lng]);
+      if (progress < 1) {
+        s.rafId = requestAnimationFrame(tick);
+      } else {
+        s.rafId = null;
+        // Record the interval for the next ping's staleness check.
+        if (s.lastPingAt !== null) {
+          s.prevInterval = Math.max(0, pingTime - s.lastPingAt);
+        }
+        s.lastPingAt = pingTime;
+      }
+    };
+    st.rafId = requestAnimationFrame(tick);
+  };
+
+  // ── Render functions (read from refs so effect deps stay stable) ──
+
+  const updateTechMarkerIcon = (tech: MapTechnician, color: string, isFollowed: boolean, telemetry?: TechTelemetry | null) => {
+    const marker = techMarkersRef.current.get(tech.id);
+    if (!marker) return;
+    marker.setIcon(buildTechDivIcon(tech, color, isFollowed, telemetry));
+    marker.setPopupContent(buildTechPopupHtml(tech, color, telemetry));
+    marker.setZIndexOffset(color === COLOR_AVAILABLE || isFollowed ? 500 : 0);
+  };
 
   const rerenderTechMarkers = () => {
     const map = mapRef.current;
     if (!map) return;
 
-    // Remove markers for technicians that are no longer in the list.
     const currentIds = new Set(employeesRef.current.map((t) => t.id));
     techMarkersRef.current.forEach((marker, id) => {
       if (!currentIds.has(id)) {
         marker.remove();
         techMarkersRef.current.delete(id);
+        const circle = accuracyCirclesRef.current.get(id);
+        if (circle) {
+          circle.remove();
+          accuracyCirclesRef.current.delete(id);
+        }
+        const st = animStateRef.current.get(id);
+        if (st && st.rafId !== null) cancelAnimationFrame(st.rafId);
+        animStateRef.current.delete(id);
       }
     });
 
@@ -430,35 +697,45 @@ export default function LiveTechnicianMap({
     techsWithCoords.forEach((tech) => {
       const color = getMarkerColor(tech);
       const isFollowed = selectedTechIdRef.current === tech.id;
-      const icon = buildTechDivIcon(tech, color, isFollowed);
+      const existingState = animStateRef.current.get(tech.id);
+      const icon = buildTechDivIcon(tech, color, isFollowed, existingState?.telemetry ?? null);
       const existing = techMarkersRef.current.get(tech.id);
       if (existing) {
-        // Update position + icon + popup content in place.
         existing.setLatLng([tech.latitude as number, tech.longitude as number]);
         existing.setIcon(icon);
-        existing.setPopupContent(buildTechPopupHtml(tech, color));
+        existing.setPopupContent(buildTechPopupHtml(tech, color, existingState?.telemetry ?? null));
         existing.setZIndexOffset(color === COLOR_AVAILABLE || isFollowed ? 500 : 0);
       } else {
         const marker = L.marker([tech.latitude as number, tech.longitude as number], {
           icon,
           zIndexOffset: color === COLOR_AVAILABLE || isFollowed ? 500 : 0,
         });
-        marker.bindPopup(buildTechPopupHtml(tech, color), {
+        marker.bindPopup(buildTechPopupHtml(tech, color, existingState?.telemetry ?? null), {
           closeButton: true,
           autoPan: true,
           maxWidth: 280,
         });
         marker.on('click', () => {
-          const newSel =
-            selectedTechIdRef.current === tech.id ? null : tech.id;
+          const newSel = selectedTechIdRef.current === tech.id ? null : tech.id;
           onTechnicianSelectRef.current?.(newSel);
         });
         marker.addTo(map);
         techMarkersRef.current.set(tech.id, marker);
+        animStateRef.current.set(tech.id, {
+          fromLat: tech.latitude as number,
+          fromLng: tech.longitude as number,
+          toLat: tech.latitude as number,
+          toLng: tech.longitude as number,
+          startAt: 0,
+          duration: ANIM_MIN_MS,
+          rafId: null,
+          lastPingAt: null,
+          prevInterval: null,
+          telemetry: null,
+        });
       }
     });
 
-    // On the very first render, fit bounds to show all markers.
     if (techMarkersRef.current.size > 0 && routeLinesRef.current.length === 0) {
       const bounds: L.LatLngExpression[] = techsWithCoords.map(
         (t) => [t.latitude, t.longitude] as [number, number],
@@ -479,20 +756,12 @@ export default function LiveTechnicianMap({
     const map = mapRef.current;
     if (!map) return;
 
-    // Remove all existing job markers, then re-create. Job pins are cheap
-    // (a handful per tenant usually) and the data changes infrequently.
     jobMarkersRef.current.forEach((m) => m.remove());
     jobMarkersRef.current.clear();
 
-    const jobsWithCoords = jobsRef.current.filter((j) =>
-      isValidCoord(j.latitude, j.longitude),
-    );
+    const jobsWithCoords = jobsRef.current.filter((j) => isValidCoord(j.latitude, j.longitude));
     if (jobsWithCoords.length === 0) return;
 
-    // Simple clustering: if there are > CLUSTER_PIN_MIN_COUNT pins, group
-    // any that are within CLUSTER_THRESHOLD_PX of each other at the current
-    // zoom level. A cluster is represented as a single circle marker with
-    // the merged pin count.
     const shouldCluster = jobsWithCoords.length > CLUSTER_PIN_MIN_COUNT;
     const zoom = map.getZoom();
     const clusters: { lat: number; lng: number; jobs: MapJob[] }[] = [];
@@ -515,18 +784,15 @@ export default function LiveTechnicianMap({
           }
         });
         if (group.length > 1) {
-          // Centroid of the group.
           const lat = group.reduce((a, j) => a + j.latitude, 0) / group.length;
           const lng = group.reduce((a, j) => a + j.longitude, 0) / group.length;
           clusters.push({ lat, lng, jobs: group });
         } else {
-          // Single pin — render normally below.
           assigned.delete(job.id);
         }
       });
     }
 
-    // Render single (non-clustered) pins.
     jobsWithCoords.forEach((job) => {
       if (assigned.has(job.id)) return;
       const color = getJobColor(job.priority);
@@ -541,7 +807,6 @@ export default function LiveTechnicianMap({
       jobMarkersRef.current.set(job.id, marker);
     });
 
-    // Render clusters.
     clusters.forEach((cluster, idx) => {
       const count = cluster.jobs.length;
       const icon = buildClusterDivIcon(count);
@@ -566,7 +831,6 @@ export default function LiveTechnicianMap({
         { closeButton: true, autoPan: true, maxWidth: 280 },
       );
       marker.on('click', () => {
-        // Zoom in on the cluster so individual pins appear.
         map.setView([cluster.lat, cluster.lng], Math.min(zoom + 2, 17), { animate: true });
       });
       marker.addTo(map);
@@ -577,12 +841,9 @@ export default function LiveTechnicianMap({
   const drawRouteLines = () => {
     const map = mapRef.current;
     if (!map) return;
-    // Clear existing route lines.
     routeLinesRef.current.forEach((l) => l.remove());
     routeLinesRef.current = [];
 
-    // For each job that has an assignee, find the technician's current
-    // position and draw a dashed line from tech → job.
     const techById = new Map(
       employeesRef.current
         .filter((t) => isValidCoord(t.latitude, t.longitude))
@@ -622,8 +883,6 @@ export default function LiveTechnicianMap({
   }, [jobs]);
   useEffect(() => {
     selectedTechIdRef.current = selectedTechnicianId;
-    // If selection changed, refresh tech marker icons so the "followed"
-    // ring updates, and pan to the selected technician if they exist.
     const sel = selectedTechnicianId;
     if (sel) {
       const tech = employeesRef.current.find((t) => t.id === sel);
@@ -635,7 +894,6 @@ export default function LiveTechnicianMap({
         }
       }
     }
-    // Re-render tech markers so the "followed" ring style updates.
     rerenderTechMarkers();
   }, [selectedTechnicianId]);
   useEffect(() => {
@@ -656,14 +914,12 @@ export default function LiveTechnicianMap({
       preferCanvas: true,
     });
 
-    // Default basemap: OpenStreetMap streets.
     const streetsLayer = L.tileLayer(TILE_URL_STREETS, {
       attribution: TILE_ATTRIBUTION_STREETS,
       maxZoom: 19,
     }).addTo(map);
     tileLayersRef.current.streets = streetsLayer;
 
-    // Pre-load satellite layer (not added to map until toggled on).
     const satelliteLayer = L.tileLayer(TILE_URL_SATELLITE, {
       attribution: TILE_ATTRIBUTION_SATELLITE,
       maxZoom: 19,
@@ -672,7 +928,6 @@ export default function LiveTechnicianMap({
 
     mapRef.current = map;
 
-    // Inject pulse keyframes + custom marker styles once.
     if (typeof document !== 'undefined' && !document.getElementById('fieseros-tech-marker-style')) {
       const styleEl = document.createElement('style');
       styleEl.id = 'fieseros-tech-marker-style';
@@ -692,30 +947,33 @@ export default function LiveTechnicianMap({
       document.head.appendChild(styleEl);
     }
 
-    // Clicking empty map area deselects the followed technician.
     map.on('click', () => {
       if (selectedTechIdRef.current && onTechnicianSelectRef.current) {
         onTechnicianSelectRef.current(null);
       }
     });
 
-    // Force a re-layout once the container is visible (Leaflet sometimes
-    // mis-measures tiles when mounted inside a flex/grid panel).
     const invalidateTimer = setTimeout(() => {
       if (mapRef.current) mapRef.current.invalidateSize();
     }, 100);
 
-    // Initial render of tech + job markers (deferred so the refs are set).
     rerenderTechMarkers();
     rerenderJobMarkers();
     drawRouteLines();
 
     return () => {
       clearTimeout(invalidateTimer);
+      // Cancel any in-flight animations.
+      animStateRef.current.forEach((s) => {
+        if (s.rafId !== null) cancelAnimationFrame(s.rafId);
+      });
+      animStateRef.current.clear();
       techMarkersRef.current.forEach((m) => m.remove());
       techMarkersRef.current.clear();
       jobMarkersRef.current.forEach((m) => m.remove());
       jobMarkersRef.current.clear();
+      accuracyCirclesRef.current.forEach((c) => c.remove());
+      accuracyCirclesRef.current.clear();
       routeLinesRef.current.forEach((l) => l.remove());
       routeLinesRef.current = [];
       map.remove();
@@ -723,20 +981,17 @@ export default function LiveTechnicianMap({
     };
   }, []);
 
-  // ─── Re-render technician markers when employees list changes ──────────
   useEffect(() => {
     rerenderTechMarkers();
-    // Routes depend on technician positions too — redraw them.
     drawRouteLines();
   }, [employees]);
 
-  // ─── Re-render job pins when jobs list changes ────────────────────────
   useEffect(() => {
     rerenderJobMarkers();
     drawRouteLines();
   }, [jobs]);
 
-  // ─── Imperative controller (for live GPS updates + recenter) ──────────
+  // ─── Imperative controller ─────────────────────────────────────────────
   useEffect(() => {
     if (!controllerRef) return;
     controllerRef.current = {
@@ -746,38 +1001,91 @@ export default function LiveTechnicianMap({
         const { employeeId, latitude, longitude } = ping;
         if (!isValidCoord(latitude, longitude)) return;
 
+        const telemetry: TechTelemetry = {
+          latitude,
+          longitude,
+          accuracy: ping.accuracy ?? null,
+          heading: ping.heading ?? null,
+          speed: ping.speed ?? null,
+          batteryLevel: ping.batteryLevel ?? null,
+          capturedAt: ping.capturedAt ?? new Date().toISOString(),
+        };
+
         let marker = techMarkersRef.current.get(employeeId);
-        if (marker) {
-          // In-place update — no flicker.
-          marker.setLatLng([latitude, longitude]);
-        } else {
-          // Technician not yet on the map — create a new marker for them.
-          const tech: MapTechnician = {
+        let tech: MapTechnician;
+        if (!marker) {
+          // Technician not yet on the map — create a marker for them.
+          tech = {
             id: employeeId,
             name: `Tech ${employeeId.slice(-4)}`,
             latitude,
             longitude,
             status: 'online',
-            lastSeenAt: ping.capturedAt ?? new Date().toISOString(),
+            lastSeenAt: telemetry.capturedAt,
           };
           const color = getMarkerColor(tech);
-          const icon = buildTechDivIcon(tech, color, selectedTechIdRef.current === employeeId);
+          const icon = buildTechDivIcon(tech, color, selectedTechIdRef.current === employeeId, telemetry);
           marker = L.marker([latitude, longitude], { icon, zIndexOffset: 500 });
-          marker.bindPopup(buildTechPopupHtml(tech, color), {
+          marker.bindPopup(buildTechPopupHtml(tech, color, telemetry), {
             closeButton: true,
             autoPan: true,
             maxWidth: 280,
           });
           marker.on('click', () => {
-            const newSel =
-              selectedTechIdRef.current === employeeId ? null : employeeId;
+            const newSel = selectedTechIdRef.current === employeeId ? null : employeeId;
             onTechnicianSelectRef.current?.(newSel);
           });
           marker.addTo(map);
           techMarkersRef.current.set(employeeId, marker);
+          animStateRef.current.set(employeeId, {
+            fromLat: latitude,
+            fromLng: longitude,
+            toLat: latitude,
+            toLng: longitude,
+            startAt: 0,
+            duration: ANIM_MIN_MS,
+            rafId: null,
+            lastPingAt: null,
+            prevInterval: null,
+            telemetry,
+          });
+        } else {
+          // Existing marker — glide to the new position + refresh icon.
+          tech =
+            employeesRef.current.find((t) => t.id === employeeId) ?? {
+              id: employeeId,
+              name: `Tech ${employeeId.slice(-4)}`,
+              latitude,
+              longitude,
+              status: 'online',
+              lastSeenAt: telemetry.capturedAt,
+            };
+          startGlide(employeeId, latitude, longitude, telemetry);
+          const color = getMarkerColor(tech);
+          updateTechMarkerIcon(tech, color, selectedTechIdRef.current === employeeId, telemetry);
         }
 
-        // If this technician is the followed one, pan the map to follow.
+        // Accuracy halo — a translucent circle of radius `accuracy` (m).
+        if (typeof telemetry.accuracy === 'number' && telemetry.accuracy > 0 && telemetry.accuracy < 500) {
+          let circle = accuracyCirclesRef.current.get(employeeId);
+          if (!circle) {
+            circle = L.circle([latitude, longitude], {
+              radius: telemetry.accuracy,
+              color: '#3b82f6',
+              fillColor: '#3b82f6',
+              fillOpacity: 0.08,
+              weight: 1,
+              opacity: 0.3,
+              interactive: false,
+            });
+            circle.addTo(map);
+            accuracyCirclesRef.current.set(employeeId, circle);
+          } else {
+            circle.setLatLng([latitude, longitude]);
+            circle.setRadius(telemetry.accuracy);
+          }
+        }
+
         if (selectedTechIdRef.current === employeeId) {
           try {
             map.panTo([latitude, longitude], { animate: true });
@@ -786,18 +1094,13 @@ export default function LiveTechnicianMap({
           }
         }
 
-        // Redraw route lines in case the tech's position affects them.
         drawRouteLines();
       },
       recenter: () => {
         const map = mapRef.current;
         if (!map) return;
-        const techsWithCoords = employeesRef.current.filter((t) =>
-          isValidCoord(t.latitude, t.longitude),
-        );
-        const jobsWithCoords = jobsRef.current.filter((j) =>
-          isValidCoord(j.latitude, j.longitude),
-        );
+        const techsWithCoords = employeesRef.current.filter((t) => isValidCoord(t.latitude, t.longitude));
+        const jobsWithCoords = jobsRef.current.filter((j) => isValidCoord(j.latitude, j.longitude));
         const points: L.LatLngExpression[] = [
           ...techsWithCoords.map((t) => [t.latitude, t.longitude] as [number, number]),
           ...jobsWithCoords.map((j) => [j.latitude, j.longitude] as [number, number]),
@@ -825,6 +1128,9 @@ export default function LiveTechnicianMap({
           if (satellite && map.hasLayer(satellite)) map.removeLayer(satellite);
           if (streets && !map.hasLayer(streets)) streets.addTo(map);
         }
+      },
+      refreshMarkers: () => {
+        rerenderTechMarkers();
       },
     };
     return () => {

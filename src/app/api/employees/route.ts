@@ -18,6 +18,7 @@ async function _GET(request: NextRequest) {
     const search = searchParams.get('search')
     const workspaceIdParam = searchParams.get('workspaceId')
     const userId = searchParams.get('userId')
+    const teamId = searchParams.get('teamId')
 
     const authUser = await getAuthUser()
 
@@ -60,6 +61,7 @@ async function _GET(request: NextRequest) {
     if (role) where.role = role
     if (status) where.status = status
     if (userId) where.userId = userId
+    if (teamId) where.teamId = teamId
     if (search) {
       where.OR = [
         { name: { contains: search } },
@@ -88,6 +90,8 @@ async function _GET(request: NextRequest) {
       latitude: true,
       longitude: true,
       workspaceId: true,
+      teamId: true,
+      team: { select: { id: true, name: true, color: true } },
       lastSeenAt: true,
       currentJobId: true,
       userId: true,
@@ -99,8 +103,8 @@ async function _GET(request: NextRequest) {
 
     // Only use cache for the "default" fetch (no search, no userId filter)
     // — those are the high-frequency polls from the dashboard.
-    const isCacheable = !search && !userId
-    const cacheKey = `employees:${authUser.id}:${authUser.tenantId || 'sa'}:${workspaceIdParam || ''}:${role || ''}:${status || ''}`
+    const isCacheable = !search && !userId && !teamId
+    const cacheKey = `employees:${authUser.id}:${authUser.tenantId || 'sa'}:${workspaceIdParam || ''}:${role || ''}:${status || ''}:${teamId || ''}`
 
     if (isCacheable) {
       const cached = cache.get<unknown[]>(cacheKey)
@@ -143,6 +147,7 @@ export async function POST(request: NextRequest) {
       completedJobs,
       location,
       workspaceId,
+      teamId,
       lastSeenAt,
       currentJobId,
       userId,
@@ -172,6 +177,7 @@ export async function POST(request: NextRequest) {
         latitude,
         longitude,
         workspaceId,
+        teamId: teamId || null,
         lastSeenAt: lastSeenAt ? new Date(lastSeenAt) : null,
         currentJobId: currentJobId || null,
         userId: userId || null,
@@ -281,6 +287,7 @@ export async function PUT(request: NextRequest) {
       latitude,
       longitude,
       workspaceId,
+      teamId,
     } = body
 
     // If the email is being changed, verify the NEW email isn't already taken
@@ -337,6 +344,7 @@ export async function PUT(request: NextRequest) {
         ...(latitude !== undefined && { latitude }),
         ...(longitude !== undefined && { longitude }),
         ...(workspaceId !== undefined && { workspaceId }),
+        ...(teamId !== undefined && { teamId: teamId || null }),
         ...(lastSeenAt !== undefined && { lastSeenAt: lastSeenAt ? new Date(lastSeenAt) : null }),
         ...(currentJobId !== undefined && { currentJobId: currentJobId || null }),
         ...(userId !== undefined && { userId: userId || null }),
