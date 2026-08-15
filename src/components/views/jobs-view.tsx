@@ -4401,157 +4401,148 @@ export function JobsView() {
             /* ─── Card View ────────────────────────────────────────────── */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {jobs.map((job) => (
-            <Card
-              key={job.id}
-              className={cn(
-                "cursor-pointer hover:shadow-md transition-all border-l-4 relative",
-                selectedJobIds.has(job.id) && "ring-2 ring-emerald-400"
-              )}
-              style={{
-                borderLeftColor:
-                  job.status === 'pending' ? '#f59e0b' :
-                  job.status === 'assigned' ? '#3b82f6' :
-                  job.status === 'in_progress' ? '#10b981' :
-                  job.status === 'completed' ? '#22c55e' :
-                  job.status === 'cancelled' ? '#ef4444' : '#94a3b8',
-              }}
-              onClick={() => openJobDetail(job)}
-            >
-              {/* Bulk-select checkbox (top-left corner) */}
-              <div
-                className="absolute top-2 left-2 z-10"
-                onClick={(e) => { e.stopPropagation(); toggleJobSelect(job.id); }}
-              >
-                <Checkbox checked={selectedJobIds.has(job.id)} />
-              </div>
-              <CardContent className="p-4 space-y-3 pt-8 transition-all">
-                {/* ── Top Header Row: Job # Badge · Priority · Type · Status Pill ── */}
-                <div className="flex items-center justify-between gap-2 flex-wrap pb-1 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <Badge variant="outline" className="font-mono text-[11px] h-5 px-2 bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 font-semibold shadow-xs">
-                      #{job.jobNumber || job.id.slice(0, 8).toUpperCase()}
-                    </Badge>
-                    <Badge variant="secondary" className="text-[10px] h-5 font-medium px-2">
-                      {getJobTypeLabel(job.type)}
-                    </Badge>
-                    {job.priority === 'urgent' && (
-                      <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-950/40 dark:text-red-300 font-bold uppercase tracking-wider animate-pulse">
-                        <Zap className="size-2.5 mr-0.5" /> Urgent
-                      </Badge>
-                    )}
-                    {isJobOverdue(job) && (
-                      <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-red-600 text-white border-red-600 uppercase font-bold tracking-wider">
-                        <AlertCircle className="size-2.5 mr-0.5" /> Overdue
-                      </Badge>
-                    )}
-                  </div>
-                  <Badge variant="outline" className={cn('shrink-0 text-xs px-2.5 py-0.5 font-semibold capitalize shadow-2xs', getStatusColor(job.status))}>
-                    <span className="mr-1.5">{getStatusIcon(job.status)}</span>{job.status.replace('_', ' ')}
-                  </Badge>
-                </div>
-
-                {/* ── Title & Priority Row ── */}
-                <div className="space-y-1">
-                  <h4 className="font-bold text-base text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 hover:text-emerald-600 transition-colors">
-                    {job.title}
-                  </h4>
-                  {job.customerName && (
-                    <div className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 pt-0.5">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <User className="size-3.5 shrink-0 text-slate-400" />
-                        <span className="truncate font-semibold text-slate-800 dark:text-slate-200">{job.customerName}</span>
+                <div
+                  key={job.id}
+                  className={cn(
+                    'group relative rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 shadow-2xs hover:border-emerald-500/50 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between space-y-3',
+                    selectedJobIds.has(job.id) && 'ring-2 ring-emerald-500 border-emerald-500 bg-emerald-50/10'
+                  )}
+                  onClick={() => openJobDetail(job)}
+                >
+                  <div className="space-y-3">
+                    {/* ── Top Header: Inline Checkbox · Job # · Type · Priority · Status Badge ── */}
+                    <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        {/* Checkbox cleanly inline */}
+                        <div
+                          className="shrink-0"
+                          onClick={(e) => { e.stopPropagation(); toggleJobSelect(job.id); }}
+                        >
+                          <Checkbox checked={selectedJobIds.has(job.id)} />
+                        </div>
+                        <Badge variant="outline" className="font-mono text-[11px] h-5 px-2 bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 font-bold shadow-2xs">
+                          #{job.jobNumber || job.id.slice(0, 8).toUpperCase()}
+                        </Badge>
+                        <Badge variant="secondary" className="text-[10px] h-5 font-medium px-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                          {getJobTypeLabel(job.type)}
+                        </Badge>
+                        {job.priority === 'urgent' && (
+                          <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-950/40 font-bold uppercase tracking-wider animate-pulse">
+                            <Zap className="size-2.5 mr-0.5" /> Urgent
+                          </Badge>
+                        )}
+                        {isJobOverdue(job) && (
+                          <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-red-600 text-white border-red-600 font-bold uppercase tracking-wider">
+                            <AlertCircle className="size-2.5 mr-0.5" /> Overdue
+                          </Badge>
+                        )}
                       </div>
-                      {job.customerPhone && (
-                        <div className="flex items-center gap-1 shrink-0 ml-auto" onClick={(e) => e.stopPropagation()}>
-                          <a
-                            href={`tel:${job.customerPhone}`}
-                            className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
-                            title="Call customer"
-                          >
-                            <Phone className="size-3.5" />
-                          </a>
-                          <a
-                            href={`https://wa.me/${job.customerPhone.replace(/\D/g, '')}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
-                            title="WhatsApp customer"
-                          >
-                            <MessageSquare className="size-3.5" />
-                          </a>
+                      <Badge variant="outline" className={cn('shrink-0 text-[10px] px-2.5 py-0.5 font-bold uppercase tracking-wide shadow-2xs', getStatusColor(job.status))}>
+                        <span className="mr-1">{getStatusIcon(job.status)}</span>{job.status.replace('_', ' ')}
+                      </Badge>
+                    </div>
+
+                    {/* ── Title & Customer Contact ── */}
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-base text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 group-hover:text-emerald-600 transition-colors">
+                        {job.title}
+                      </h4>
+                      {job.customerName && (
+                        <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 pt-0.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <User className="size-3.5 shrink-0 text-slate-400" />
+                            <span className="truncate font-semibold text-slate-800 dark:text-slate-200">{job.customerName}</span>
+                          </div>
+                          {job.customerPhone && (
+                            <div className="flex items-center gap-1 shrink-0 ml-auto" onClick={(e) => e.stopPropagation()}>
+                              <a
+                                href={`tel:${job.customerPhone}`}
+                                className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
+                                title="Call customer"
+                              >
+                                <Phone className="size-3.5" />
+                              </a>
+                              <a
+                                href={`https://wa.me/${job.customerPhone.replace(/\D/g, '')}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
+                                title="WhatsApp customer"
+                              >
+                                <MessageSquare className="size-3.5" />
+                              </a>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
 
-                {/* ── Schedule Window & Address Badges ── */}
-                <div className="space-y-1.5 pt-1">
-                  {(() => {
-                    const pill = formatSchedulePill(job.scheduledAt, job.scheduledTime, job.estimatedDuration);
-                    if (!pill) return null;
-                    return (
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50/80 dark:bg-blue-950/50 border border-blue-200/80 dark:border-blue-900/60 text-xs font-medium text-blue-700 dark:text-blue-300 w-fit">
-                        <Calendar className="size-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
-                        <span>{pill}</span>
-                      </div>
-                    );
-                  })()}
+                    {/* ── Schedule Window & Address Badges ── */}
+                    <div className="space-y-1.5 pt-1">
+                      {(() => {
+                        const pill = formatSchedulePill(job.scheduledAt, job.scheduledTime, job.estimatedDuration);
+                        if (!pill) return null;
+                        return (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50/80 dark:bg-blue-950/50 border border-blue-200/80 dark:border-blue-900/60 text-xs font-semibold text-blue-700 dark:text-blue-300 w-fit">
+                            <Calendar className="size-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
+                            <span>{pill}</span>
+                          </div>
+                        );
+                      })()}
 
-                  {job.address && (
-                    <div className="flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400 leading-tight">
-                      <MapPin className="size-3.5 shrink-0 text-slate-400 mt-0.5" />
-                      <span className="line-clamp-2">{job.address}</span>
+                      {job.address && (
+                        <div className="flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400 leading-tight">
+                          <MapPin className="size-3.5 shrink-0 text-slate-400 mt-0.5" />
+                          <span className="line-clamp-2">{job.address}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  </div>
 
-                {/* ── Bottom Assignee & Action Buttons Row ── */}
-                <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                  {job.assigneeName ? (
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="relative shrink-0">
-                        <Avatar className="size-8 ring-2 ring-emerald-100 dark:ring-emerald-950">
-                          <AvatarFallback className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-xs font-bold">
-                            {job.assigneeName.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span
-                          className={cn(
-                            'absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-background shadow-2xs',
-                            job.status === 'in_progress' ? 'bg-emerald-500' :
-                            job.status === 'assigned' || job.status === 'accepted' ? 'bg-blue-500' :
-                            job.status === 'travelling' || job.status === 'arrived' ? 'bg-amber-500' :
-                            job.status === 'completed' ? 'bg-slate-400' :
-                            'bg-slate-400',
-                          )}
-                          title={job.status}
-                        />
+                  {/* ── Bottom Assignee & Action Buttons Row ── */}
+                  <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    {job.assigneeName ? (
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="relative shrink-0">
+                          <Avatar className="size-8 ring-2 ring-emerald-100 dark:ring-emerald-950">
+                            <AvatarFallback className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-xs font-bold">
+                              {job.assigneeName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span
+                            className={cn(
+                              'absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-background shadow-2xs',
+                              job.status === 'in_progress' ? 'bg-emerald-500' :
+                              job.status === 'assigned' || job.status === 'accepted' ? 'bg-blue-500' :
+                              job.status === 'travelling' || job.status === 'arrived' ? 'bg-amber-500' :
+                              job.status === 'completed' ? 'bg-slate-400' : 'bg-slate-400',
+                            )}
+                            title={job.status}
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{job.assigneeName}</p>
+                          <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                            {job.status === 'in_progress' ? '🟢 Working now' :
+                             job.status === 'travelling' ? '🚗 En route' :
+                             job.status === 'arrived' ? '📍 On site' :
+                             job.status === 'completed' ? '✅ Completed' :
+                             '🔵 Assigned'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{job.assigneeName}</p>
-                        <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                          {job.status === 'in_progress' ? '🟢 Working now' :
-                           job.status === 'travelling' ? '🚗 En route' :
-                           job.status === 'arrived' ? '📍 On site' :
-                           job.status === 'completed' ? '✅ Completed' :
-                           '🔵 Assigned'}
-                        </p>
+                    ) : (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-xs font-medium text-amber-700 dark:text-amber-300">
+                        <AlertCircle className="size-3.5 shrink-0" />
+                        <span>Unassigned</span>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-xs font-medium text-amber-700 dark:text-amber-300">
-                      <AlertCircle className="size-3.5 shrink-0" />
-                      <span>Unassigned</span>
-                    </div>
-                  )}
+                    )}
 
-                  <div className="ml-auto shrink-0">{getActionButtons(job)}</div>
+                    <div className="ml-auto shrink-0">{getActionButtons(job)}</div>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              ))}
+            </div>
       ) : (
         /* ─── Table View ───────────────────────────────────────────── */
         <Card className="border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
