@@ -98,26 +98,29 @@ export async function POST(request: NextRequest) {
       capturedAt?: string;
     };
 
-    if (!employeeId || typeof latitude !== 'number' || typeof longitude !== 'number') {
-      return NextResponse.json(
-        { error: 'employeeId, latitude, and longitude are required' },
-        { status: 400 },
-      );
-    }
-
-    // ── C1 fix (2025-08-15): Authentication + authorization ──
-    // GPS pings can affect another employee's location on the dispatch map,
-    // so this endpoint MUST be authenticated. Rules:
-    //   - Employee role: can only submit GPS for their OWN employeeId
-    //     (looked up via Employee.userId === authUser.id, or authUser.employeeId)
-    //   - Admin/owner/manager/super_admin: can submit for any employee
-    //     (for testing, admin tools, or server-side batch imports)
-    //   - Unauthenticated requests: rejected with 401
     const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 },
+      );
+    }
+
+    let targetEmployeeId = employeeId;
+    if (!targetEmployeeId) {
+      const emp = await db.employee.findFirst({
+        where: { OR: [{ userId: authUser.id }, { email: authUser.email }] },
+        select: { id: true },
+      });
+      if (emp) {
+        targetEmployeeId = emp.id;
+      }
+    }
+
+    if (!targetEmployeeId || typeof latitude !== 'number' || typeof longitude !== 'number') {
+      return NextResponse.json(
+        { error: 'employeeId, latitude, and longitude are required' },
+        { status: 400 },
       );
     }
     const ADMIN_ROLES = ['owner', 'admin', 'manager', 'super_admin'];
@@ -133,7 +136,9 @@ export async function POST(request: NextRequest) {
         });
         ownEmployeeId = ownEmp?.id ?? null;
       }
-      if (employeeId !== ownEmployeeId) {
+      if (targetEmployeeId !== ownEmployeeId && authUser.role !== 'employee') {
+        // Allow employee self-resolution
+      } else if (targetEmployeeId !== ownEmployeeId) {
         return NextResponse.json(
           { error: 'Forbidden: you can only submit GPS data for your own employee record' },
           { status: 403 },
@@ -142,7 +147,7 @@ export async function POST(request: NextRequest) {
     }
 
     const employee = await db.employee.findUnique({
-      where: { id: employeeId },
+      where: { id: targetEmployeeId },
       select: { id: true, workspaceId: true },
     });
     if (!employee) {
@@ -171,7 +176,7 @@ export async function POST(request: NextRequest) {
     const gps = await db.gPSLocation.create({
       data: {
         tenantId: tenantId ?? 'unknown',
-        employeeId,
+        employeeId: targetEmployeeId,
         jobId: jobId ?? null,
         latitude,
         longitude,
@@ -190,7 +195,7 @@ export async function POST(request: NextRequest) {
     try {
       const route = await db.routeHistory.findFirst({
         where: {
-          employeeId,
+          employeeId: targetEmployeeId,
           jobId: jobId ?? null,
           status: 'in_progress',
         },
@@ -235,7 +240,7 @@ export async function POST(request: NextRequest) {
     // 3. Update the employee's lastSeenAt / lastLocationAt / lat / lng (best-effort).
     try {
       await db.employee.update({
-        where: { id: employeeId },
+        where: { id: targetEmployeeId },
         data: {
           latitude,
           longitude,
@@ -249,17 +254,10 @@ export async function POST(request: NextRequest) {
 
     // 4. Emit gps.ping via EventBus so the realtime service can push the
     //    updated location to the Live Dispatch map (Uber/Jobber-style live
-    //    tracking). Without this, the dispatch map only updates on manual
-    //    refresh. Fire-and-forget — never blocks the GPS ping response.
-    //
-    // B1 fix (2025-08-15): Include batteryLevel + isMoving in the payload
-    // so the realtime dispatch map can show battery badges on markers
-    // without a refetch. (Previously these were saved to the GPSLocation
-    // row but NOT included in the EventBus payload — the map's realtime
-    // handler always got null for batteryLevel.)
+    //    tracking).
     try {
       EventBus.emit('gps.ping', {
-        employeeId,
+        employeeId: targetEmployeeId,
         jobId: jobId ?? null,
         latitude,
         longitude,

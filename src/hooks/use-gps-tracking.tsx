@@ -267,7 +267,6 @@ export function GpsTrackingProvider({
   // the admin preview UI shows the simulated "live" state.
   const sendPing = useCallback(
     (latitude: number, longitude: number, accuracy?: number, heading?: number | null, speed?: number | null, altitude?: number | null) => {
-      if (!employeeId) return;
       const now = Date.now();
       if (now - lastPingRef.current < 5000) return; // throttle: min 5s between pings
       lastPingRef.current = now;
@@ -289,7 +288,7 @@ export function GpsTrackingProvider({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          employeeId,
+          employeeId: employeeId || undefined,
           jobId: tagJobId ?? undefined,
           latitude,
           longitude,
@@ -302,8 +301,7 @@ export function GpsTrackingProvider({
           capturedAt,
         }),
       }).catch(() => {
-        // Silent — offline pings are lost (acceptable for V1.5).
-        // Future: queue in IndexedDB for backfill when back online.
+        // Silent — offline pings are lost
       });
     },
     [employeeId],
@@ -346,7 +344,7 @@ export function GpsTrackingProvider({
   // (e.g., device sleeps). Pings are throttled to max 1 per 5s in sendPing.
   const startTracking = useCallback(
     (jobId?: string) => {
-      if (!employeeId || !gpsSupported) return;
+      if (!gpsSupported) return;
       // Stop any existing tracking first.
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
