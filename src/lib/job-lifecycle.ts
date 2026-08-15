@@ -166,7 +166,11 @@ export function getNextStage(currentStatus: string): LifecycleStageKey | null {
  */
 const VALID_TRANSITIONS: Record<string, string[]> = {
   pending: ['assign'],
-  assigned: ['accept', 'cancel'],
+  // Phase 1: allow 'assign' from 'assigned' to support reassignment.
+  // The lifecycle route detects reassignment (previousAssigneeId !== new emp.id)
+  // and requires a reason. Without this, dispatchers can't reassign a job
+  // that's already been assigned but not yet accepted.
+  assigned: ['accept', 'assign', 'cancel'],
   accepted: ['start_travel', 'cancel'],
   travelling: ['arrive', 'cancel'],
   traveling: ['arrive', 'cancel'],

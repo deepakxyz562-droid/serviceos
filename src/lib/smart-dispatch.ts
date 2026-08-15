@@ -103,6 +103,217 @@ export interface CandidateScore {
   employeeStatus: string
   score: number
   breakdown: DispatchScore
+  /**
+   * Schedule + travel conflict info for this candidate vs the job being
+   * assigned. Null when no conflict was detected (or when the candidate is
+   * 'available' with no overlapping jobs). Set only by findBestMatch() —
+   * scoreEmployee() itself does NOT compute conflicts (it stays pure-scoring
+   * so it can be called from contexts where conflict detection isn't needed).
+   */
+  conflict: ConflictInfo | null
+}
+
+// ─── Conflict Detection (Phase 1: Smart Assign/Reassign Workspace) ────────────
+
+/**
+ * Conflict type for a candidate vs the job being assigned.
+ * - 'none'     → no conflict, candidate is fully available
+ * - 'schedule' → candidate has another job whose time window overlaps this job's window
+ * - 'travel'   → candidate has a job ending just before this one starts, with
+ *                insufficient travel time between the two job sites
+ * - 'status'   → candidate is on leave / offline (cannot be assigned normally)
+ */
+export type ConflictType = 'none' | 'schedule' | 'travel' | 'status'
+
+export type ConflictRiskLevel = 'low' | 'medium' | 'high'
+
+export interface ConflictInfo {
+  type: ConflictType
+  riskLevel: ConflictRiskLevel
+  /** Present only when type='schedule' — the conflicting job */
+  conflictingJob?: {
+    id: string
+    jobNumber?: string | null
+    title: string
+    scheduledAt: Date | null
+    scheduledTime?: string | null
+    estimatedDuration?: number | null
+    address?: string | null
+  }
+  /** Overlap in minutes (schedule conflict) or required travel minutes (travel conflict) */
+  overlapMinutes?: number
+  /** Travel distance in km between the two job sites (travel conflict only) */
+  travelDistanceKm?: number
+  /** Human-readable explanation suitable for showing in the UI */
+  message: string
+}
+
+/** Urban travel speed assumption (km/h) for travel-time estimates */
+const URBAN_TRAVEL_SPEED_KMH = 30
+/** Buffer (minutes) added to estimated travel time before flagging HIGH risk */
+const TRAVEL_BUFFER_MINUTES = 10
+
+/**
+ * Detect schedule and travel conflicts for an employee against a new job.
+ *
+ * Schedule conflict: another active job whose [scheduledAt, scheduledAt +
+ * estimatedDuration] window overlaps the new job's window.
+ *
+ * Travel conflict: a job ending just before the new job starts, where the
+ * Haversine travel time between the two job sites exceeds the gap.
+ *
+ * @param employeeId - The candidate employee ID
+ * @param newJob     - The job being assigned (needs scheduledAt, estimatedDuration, latitude, longitude)
+ * @returns ConflictInfo — type='none' if no conflict found
+ */
+export async function detectConflicts(
+  employeeId: string,
+  newJob: {
+    id: string
+    title: string
+    scheduledAt?: Date | null
+    scheduledTime?: string | null
+    estimatedDuration?: number | null
+    latitude?: number | null
+    longitude?: number | null
+    address?: string | null
+  }
+): Promise<ConflictInfo> {
+  // ── 0. Resolve the new job's time window ──────────────────────────────
+  // scheduledAt is the date+time the job is booked for. If null, we can't
+  // do time-based conflict detection — return 'none' (UI will still show
+  // the candidate; conflict detection simply isn't applicable).
+  if (!newJob.scheduledAt) {
+    return { type: 'none', riskLevel: 'low', message: 'No schedule to check against' }
+  }
+
+  const newStart = new Date(newJob.scheduledAt)
+  const durationMin = newJob.estimatedDuration && newJob.estimatedDuration > 0
+    ? newJob.estimatedDuration
+    : 60 // default 1h if unknown
+  const newEnd = new Date(newStart.getTime() + durationMin * 60_000)
+
+  // ── 1. Fetch the employee's other active jobs ────────────────────────
+  // Active = assigned/accepted/travelling/arrived/working/paused, AND not
+  // the job we're currently assigning.
+  const otherJobs = await db.job.findMany({
+    where: {
+      assigneeId: employeeId,
+      id: { not: newJob.id },
+      status: { in: ['assigned', 'accepted', 'travelling', 'arrived', 'working', 'paused'] },
+    },
+    select: {
+      id: true,
+      jobNumber: true,
+      title: true,
+      scheduledAt: true,
+      scheduledTime: true,
+      estimatedDuration: true,
+      address: true,
+      latitude: true,
+      longitude: true,
+    },
+  })
+
+  // ── 2. Check for schedule overlap ────────────────────────────────────
+  for (const other of otherJobs) {
+    if (!other.scheduledAt) continue
+    const otherStart = new Date(other.scheduledAt)
+    const otherDur = other.estimatedDuration && other.estimatedDuration > 0
+      ? other.estimatedDuration
+      : 60
+    const otherEnd = new Date(otherStart.getTime() + otherDur * 60_000)
+
+    // Time-window overlap: max(startA, startB) < min(endA, endB)
+    const overlapStart = newStart > otherStart ? newStart : otherStart
+    const overlapEnd = newEnd < otherEnd ? newEnd : otherEnd
+    const overlapMs = overlapEnd.getTime() - overlapStart.getTime()
+
+    if (overlapMs > 0) {
+      const overlapMinutes = Math.round(overlapMs / 60_000)
+      const risk: ConflictRiskLevel = overlapMinutes >= 60 ? 'high' : overlapMinutes >= 30 ? 'medium' : 'low'
+      return {
+        type: 'schedule',
+        riskLevel: risk,
+        conflictingJob: {
+          id: other.id,
+          jobNumber: other.jobNumber,
+          title: other.title,
+          scheduledAt: other.scheduledAt,
+          scheduledTime: other.scheduledTime,
+          estimatedDuration: other.estimatedDuration,
+          address: other.address,
+        },
+        overlapMinutes,
+        message: `Overlaps with ${other.jobNumber || other.title} by ${overlapMinutes} min`,
+      }
+    }
+  }
+
+  // ── 3. Check for travel conflict ─────────────────────────────────────
+  // Find the closest preceding job (ends before newStart) and check if
+  // travel time between sites exceeds the gap.
+  if (newJob.latitude != null && newJob.longitude != null) {
+    let travelConflict: ConflictInfo | null = null
+
+    for (const other of otherJobs) {
+      if (!other.scheduledAt) continue
+      if (other.latitude == null || other.longitude == null) continue
+
+      const otherStart = new Date(other.scheduledAt)
+      const otherDur = other.estimatedDuration && other.estimatedDuration > 0
+        ? other.estimatedDuration
+        : 60
+      const otherEnd = new Date(otherStart.getTime() + otherDur * 60_000)
+
+      // Only consider jobs that END before the new job STARTS
+      if (otherEnd >= newStart) continue
+
+      const gapMinutes = (newStart.getTime() - otherEnd.getTime()) / 60_000
+      // Only flag if gap is small enough that travel might be tight (< 90 min)
+      if (gapMinutes > 90) continue
+
+      const distanceKm = calculateDistance(
+        other.latitude,
+        other.longitude,
+        newJob.latitude!,
+        newJob.longitude!,
+      )
+      const travelMinutes = (distanceKm / URBAN_TRAVEL_SPEED_KMH) * 60
+
+      // Risk if travel time + buffer exceeds the available gap
+      if (travelMinutes + TRAVEL_BUFFER_MINUTES > gapMinutes) {
+        const risk: ConflictRiskLevel =
+          travelMinutes > gapMinutes ? 'high' :
+          travelMinutes + TRAVEL_BUFFER_MINUTES * 2 > gapMinutes ? 'medium' : 'low'
+
+        // Keep the highest-risk conflict
+        if (!travelConflict || risk === 'high' || (risk === 'medium' && travelConflict.riskLevel === 'low')) {
+          travelConflict = {
+            type: 'travel',
+            riskLevel: risk,
+            conflictingJob: {
+              id: other.id,
+              jobNumber: other.jobNumber,
+              title: other.title,
+              scheduledAt: other.scheduledAt,
+              scheduledTime: other.scheduledTime,
+              estimatedDuration: other.estimatedDuration,
+              address: other.address,
+            },
+            overlapMinutes: Math.round(travelMinutes),
+            travelDistanceKm: Math.round(distanceKm * 10) / 10,
+            message: `Previous job ${other.jobNumber || ''} ends ${Math.round(gapMinutes)} min before — travel needs ~${Math.round(travelMinutes)} min`,
+          }
+        }
+      }
+    }
+
+    if (travelConflict) return travelConflict
+  }
+
+  // ── 4. No conflict found ─────────────────────────────────────────────
+  return { type: 'none', riskLevel: 'low', message: 'No schedule conflict' }
 }
 
 /** Result of auto-assigning a job */
@@ -478,6 +689,30 @@ export async function findAvailableEmployees(
   return availableEmployees
 }
 
+/**
+ * Find ALL employees for the dispatch workspace — including busy, offline,
+ * and on-leave staff. Used by findBestMatch() so the dispatcher can see the
+ * full roster with conflict warnings (Phase 1: Smart Assign/Reassign
+ * Workspace). On-leave employees are surfaced so the UI can show them as
+ * disabled rather than hiding them entirely.
+ */
+export async function findAllEmployeesForDispatch(
+  workspaceId?: string
+): Promise<EmployeeRecord[]> {
+  const where: Record<string, any> = {
+    // All operational statuses — no filter on availability. On-leave is
+    // surfaced (and flagged later via detectConflicts 'status' type) so
+    // the UI can disable it explicitly.
+    status: { in: ['available', 'busy', 'offline', 'on_leave'] },
+  }
+
+  if (workspaceId) {
+    where.workspaceId = workspaceId
+  }
+
+  return await db.employee.findMany({ where }) as EmployeeRecord[]
+}
+
 // ─── Score Employee ────────────────────────────────────────────────────────────
 
 /**
@@ -703,9 +938,13 @@ export async function findBestMatch(
   const workspaceId = options?.workspaceId || job.workspaceId || undefined
   const tenantId = options?.tenantId || job.workspace?.tenantId || undefined
 
-  // ── 3. Find available employees ──
+  // ── 3. Find candidate employees ──
+  // Phase 1: we surface ALL employees (available + busy + offline + on-leave)
+  // so the dispatcher can see the full roster with conflict warnings, instead
+  // of hiding non-available staff. The conflict detection above will flag
+  // on-leave/offline with a 'status' conflict so the UI can disable them.
   const requiredSkills = options?.requiredSkills || extractRequiredSkills(job)
-  const employees = await findAvailableEmployees(workspaceId, undefined)
+  const employees = await findAllEmployeesForDispatch(workspaceId)
 
   if (employees.length === 0) {
     return {
@@ -769,6 +1008,44 @@ export async function findBestMatch(
         return null
       }
 
+      // ── Conflict detection (Phase 1) ──────────────────────────────────
+      // Detect schedule + travel conflicts for this candidate vs the job
+      // being assigned. Non-fatal — if it throws, we just attach null and
+      // the candidate is still surfaced (UI shows "conflict unknown").
+      let conflict: ConflictInfo | null = null
+      try {
+        conflict = await detectConflicts(employee.id, {
+          id: job.id,
+          title: job.title,
+          scheduledAt: job.scheduledAt,
+          scheduledTime: job.scheduledTime,
+          estimatedDuration: job.estimatedDuration,
+          latitude: job.latitude,
+          longitude: job.longitude,
+          address: job.address,
+        })
+      } catch (e) {
+        console.error('[SmartDispatch] detectConflicts failed for', employee.id, e)
+      }
+
+      // ── Status-based conflict (on-leave / offline) ────────────────────
+      // findAvailableEmployees() already filters out on-leave employees,
+      // but if excludeOnLeave=false they may slip through. We surface a
+      // 'status' conflict so the UI can show the appropriate warning.
+      if (employee.status === 'on_leave' || (employee.onLeaveUntil && employee.onLeaveUntil > new Date())) {
+        conflict = {
+          type: 'status',
+          riskLevel: 'high',
+          message: 'On leave — cannot be assigned',
+        }
+      } else if (employee.status === 'offline') {
+        conflict = conflict || {
+          type: 'status',
+          riskLevel: 'medium',
+          message: 'Offline — no recent GPS signal',
+        }
+      }
+
       return {
         employeeId: employee.id,
         employeeName: employee.name,
@@ -777,6 +1054,7 @@ export async function findBestMatch(
         employeeStatus: employee.status,
         score: score.total,
         breakdown: score,
+        conflict,
       }
     }
   )

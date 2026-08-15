@@ -386,13 +386,17 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
-    const { action, latitude, longitude, notes, resourceId, pin } = (body ?? {}) as {
+    const { action, latitude, longitude, notes, resourceId, pin, reason, reassignmentNote } = (body ?? {}) as {
       action?: string;
       latitude?: number;
       longitude?: number;
       notes?: string;
       resourceId?: string;
       pin?: string;
+      /** Phase 1: mandatory on reassignment — Schedule Conflict | Technician Unavailable | Technician Illness | Customer Request | Proximity | Skill Requirement | Emergency | Other */
+      reason?: string;
+      /** Phase 1: optional free-text note explaining the reassignment */
+      reassignmentNote?: string;
     };
 
     if (!action) {
@@ -543,6 +547,17 @@ export async function POST(
       const isReassignment =
         previousAssigneeId && previousAssigneeId !== emp.id;
 
+      // ── Phase 1: Reassignment reason validation ──────────────────────
+      // When reassigning (previous assignee exists and is different from
+      // the new one), a reason is REQUIRED. This feeds audit history and
+      // operational analytics. Initial assignment needs no reason.
+      if (isReassignment && !reason) {
+        return NextResponse.json(
+          { error: 'A reason is required when reassigning a job (Schedule Conflict, Technician Unavailable, Technician Illness, Customer Request, Proximity, Skill Requirement, Emergency, or Other)' },
+          { status: 400 },
+        );
+      }
+
       if (isReassignment) {
         try {
           const prevEmp = await db.employee.findUnique({
@@ -657,25 +672,49 @@ export async function POST(
       });
     }
 
-    // Activity log — common to every transition
+    // Activity log — common to every transition.
+    // Phase 1: For reassignment, we log with action='reassign' (instead of
+    // 'assign') and include structured metadata: previousAssigneeId,
+    // newAssigneeId, reason, note. This reuses the existing ActivityLog
+    // table — no new schema, no migration. The 'reassign' action value is
+    // a free-form string (ActivityLog.action is a String, not an enum),
+    // so no DB change is needed.
+    const isReassignmentLog =
+      effectiveAction === 'assign' &&
+      job.assigneeId &&
+      updatedJob.assigneeId &&
+      job.assigneeId !== updatedJob.assigneeId;
+
+    const logAction = isReassignmentLog ? 'reassign' : effectiveAction;
+    const logDescription = isReassignmentLog
+      ? `Job '${job.title}' reassigned from ${job.assigneeName || 'previous technician'} to ${updatedJob.assigneeName || 'new technician'}. Reason: ${reason || 'not specified'}.`
+      : `Job '${job.title}' moved to '${newStatus}' via '${effectiveAction}'.`;
+
     fireAndForget('activity.log', () =>
       safeLogActivity({
         tenantId,
         actorId,
         actorName,
-        action: effectiveAction,
+        action: logAction,
         entityType: 'job',
         entityId: job.id,
         entityName: job.title,
-        description: `Job '${job.title}' moved to '${newStatus}' via '${effectiveAction}'.`,
+        description: logDescription,
         metadataJson: {
           from: job.status,
           to: newStatus,
-          action: effectiveAction,
+          action: logAction,
           jobId: job.id,
           notes: notes ?? null,
+          // Phase 1: reassignment audit fields (null for non-reassignment actions)
+          previousAssigneeId: isReassignmentLog ? job.assigneeId : null,
+          newAssigneeId: isReassignmentLog ? updatedJob.assigneeId : null,
+          previousAssigneeName: isReassignmentLog ? job.assigneeName : null,
+          newAssigneeName: isReassignmentLog ? updatedJob.assigneeName : null,
+          reason: isReassignmentLog ? (reason || null) : null,
+          reassignmentNote: isReassignmentLog ? (reassignmentNote || null) : null,
         },
-        severity: 'info',
+        severity: isReassignmentLog ? 'warning' : 'info',
       }),
     );
 

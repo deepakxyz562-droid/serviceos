@@ -13,6 +13,8 @@ import {
   UserCheck, Check, Navigation, Wrench, Pause, Route as RouteIcon,
   Timer, PlayCircle, PauseCircle, StopCircle, ExternalLink, MapPinned,
   Archive,
+  // Phase 1: Smart Assign/Reassign Workspace icons
+  MessageSquare, ShieldAlert, Clock3,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -208,7 +210,36 @@ interface SmartCandidate {
     distanceKm: number | null;
     activeJobCount: number;
   };
+  /** Phase 1: conflict info from detectConflicts() — null when no conflict */
+  conflict?: {
+    type: 'none' | 'schedule' | 'travel' | 'status';
+    riskLevel: 'low' | 'medium' | 'high';
+    conflictingJob?: {
+      id: string;
+      jobNumber?: string | null;
+      title: string;
+      scheduledAt: string | null;
+      scheduledTime?: string | null;
+      estimatedDuration?: number | null;
+      address?: string | null;
+    };
+    overlapMinutes?: number;
+    travelDistanceKm?: number;
+    message: string;
+  } | null;
 }
+
+// Phase 1: Reassignment reason options — must match the server-side validation
+const REASSIGNMENT_REASONS = [
+  'Schedule Conflict',
+  'Technician Unavailable',
+  'Technician Illness',
+  'Customer Request',
+  'Proximity / Route Optimization',
+  'Skill Requirement',
+  'Emergency Reassignment',
+  'Other',
+] as const;
 
 // V1.5: Lightweight customer-asset shape used by the job form's Equipment
 // selector and the job detail sidebar.
@@ -1083,6 +1114,14 @@ export function JobsView() {
   const [smartCandidates, setSmartCandidates] = useState<SmartCandidate[]>([]);
   const [loadingSmart, setLoadingSmart] = useState(false);
   const [smartError, setSmartError] = useState(false);
+  // Phase 1: Reassignment reason/note state. Required when reassigning
+  // (job already has an assignee). The server returns 400 if reason is
+  // missing on reassignment, so we gate the Assign button on this.
+  const [reassignReason, setReassignReason] = useState<string>('');
+  const [reassignNote, setReassignNote] = useState<string>('');
+  // Phase 1: which candidate card the user expanded (for showing the
+  // Call/WhatsApp overflow actions inline instead of cluttering every card).
+  const [expandedCandidateId, setExpandedCandidateId] = useState<string | null>(null);
 
   // V1.5: Job completion dialog (photos + signatures + notes)
   const [completionJob, setCompletionJob] = useState<Job | null>(null);
@@ -1927,15 +1966,27 @@ export function JobsView() {
 
   // ─── Lifecycle / detail / assign / cancel / delete ──────────────────────
 
-  const handleLifecycleAction = async (action: string, jobId: string, resourceId?: string) => {
+  const handleLifecycleAction = async (
+    action: string,
+    jobId: string,
+    resourceId?: string,
+    // Phase 1: optional reason + note for reassignment. The server requires
+    // `reason` when the job already has an assignee (reassignment). We pass
+    // them through as `reason` / `reassignmentNote` body fields.
+    phase1Extras?: { reason?: string; reassignmentNote?: string },
+  ) => {
     setLifecycleLoading(true);
     setLoadingJobId(jobId);
     setLoadingAction(action);
     try {
+      const body: Record<string, unknown> = { action, jobId, resourceId };
+      if (phase1Extras?.reason) body.reason = phase1Extras.reason;
+      if (phase1Extras?.reassignmentNote) body.reassignmentNote = phase1Extras.reassignmentNote;
+
       const res = await fetch('/api/jobs/lifecycle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, jobId, resourceId }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         toast.success(`Job ${action} successfully`);
@@ -2149,11 +2200,17 @@ export function JobsView() {
     setSmartCandidates([]);
     setSmartError(false);
     setLoadingSmart(true);
+    // Phase 1: reset reassignment reason/note + expanded card on each open.
+    setReassignReason('');
+    setReassignNote('');
+    setExpandedCandidateId(null);
     setShowAssignDialog(true);
 
     // Fetch ranked smart-match candidates (autoAssign=false — we only want
     // the scored list, the user still picks one). On any failure we just
     // flip smartError and the dialog falls back to the manual list.
+    // Phase 1: candidates now include conflict info (schedule + travel +
+    // status) so the UI can show warnings instead of hiding busy staff.
     fetch('/api/dispatch/smart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3672,6 +3729,236 @@ export function JobsView() {
   };
 
   // ============================================================
+  // Phase 1: renderCandidateCard — Smart Assign/Reassign candidate card
+  // ============================================================
+  // Renders a single technician card inside the Smart Assign dialog. Used
+  // for both the BEST MATCH and OTHER TECHNICIANS sections. Behavior:
+  //  - Available + no conflict → green "Assign" button
+  //  - Busy + schedule/travel conflict → amber "Assign with warning" button + conflict card
+  //  - Offline + no conflict → amber "Assign" button + GPS warning
+  //  - On leave → DISABLED (cannot assign)
+  // The Call/WhatsApp quick-contact actions live in an expandable section
+  // toggled by the [⋯] button — keeps the card focused on the assign
+  // decision rather than cluttering every card with contact buttons.
+  const renderCandidateCard = (
+    candidate: SmartCandidate,
+    isBestMatch: boolean,
+    canAssign: boolean,
+    isReassignment: boolean,
+    doAssign: (employeeId: string) => void,
+    expandedId: string | null,
+    setExpandedId: (id: string | null) => void,
+  ) => {
+    const conflict = candidate.conflict;
+    const isOnLeave = candidate.employeeStatus === 'on_leave' || conflict?.type === 'status' && conflict?.message?.toLowerCase().includes('leave');
+    const isOffline = candidate.employeeStatus === 'offline';
+    const hasHighRiskConflict = conflict && conflict.type !== 'none' && conflict.riskLevel === 'high';
+    const isExpanded = expandedId === candidate.employeeId;
+
+    // Status badge styling
+    const statusBadgeClass =
+      candidate.employeeStatus === 'available' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' :
+      candidate.employeeStatus === 'busy' ? 'text-amber-700 bg-amber-50 border-amber-200' :
+      candidate.employeeStatus === 'offline' ? 'text-slate-600 bg-slate-50 border-slate-200' :
+      'text-red-700 bg-red-50 border-red-200';
+
+    // Assign button styling
+    const assignButtonClass = isOnLeave
+      ? 'bg-slate-300 text-slate-500 hover:bg-slate-300'
+      : hasHighRiskConflict
+        ? 'bg-red-600 hover:bg-red-700 text-white'
+        : conflict && conflict.type !== 'none'
+          ? 'bg-amber-600 hover:bg-amber-700 text-white'
+          : 'bg-emerald-600 hover:bg-emerald-700 text-white';
+
+    const assignButtonLabel = isOnLeave
+      ? 'On Leave'
+      : isReassignment
+        ? (hasHighRiskConflict ? 'Reassign Anyway' : 'Reassign')
+        : (hasHighRiskConflict ? 'Assign Anyway' : 'Assign');
+
+    // Format conflicting job time for display
+    const formatConflictTime = (c: typeof conflict) => {
+      if (!c?.conflictingJob?.scheduledAt) return '';
+      const d = new Date(c.conflictingJob.scheduledAt);
+      const time = c.conflictingJob.scheduledTime || d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} · ${time}`;
+    };
+
+    return (
+      <div
+        key={candidate.employeeId}
+        className={cn(
+          'relative rounded-lg border transition-colors',
+          isBestMatch ? 'border-emerald-300 bg-emerald-50/30 ring-1 ring-emerald-200' : 'border-border bg-card',
+          hasHighRiskConflict && 'border-red-200 bg-red-50/20',
+        )}
+      >
+        <div className="p-3 space-y-2">
+          {/* ── Header row: avatar · name · status · score ── */}
+          <div className="flex items-center gap-3">
+            <Avatar className="size-10 shrink-0">
+              <AvatarFallback className={cn('text-sm font-medium', isBestMatch ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700')}>
+                {candidate.employeeName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm truncate">{candidate.employeeName}</span>
+                <Badge variant="outline" className={cn('text-[10px] h-4 capitalize', statusBadgeClass)}>
+                  {candidate.employeeStatus.replace('_', ' ')}
+                </Badge>
+                {candidate.breakdown.distanceKm !== null && (
+                  <Badge variant="outline" className="text-[10px] h-4 text-blue-700 bg-blue-50 border-blue-200">
+                    <MapPin className="size-2.5 mr-0.5" />{candidate.breakdown.distanceKm.toFixed(1)} km
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <Progress value={candidate.score} className="h-1.5 flex-1" />
+                <span className="text-xs font-medium text-emerald-600 shrink-0">{candidate.score}/100</span>
+              </div>
+            </div>
+            {/* Assign button */}
+            <Button
+              size="sm"
+              className={cn('h-8 text-xs shrink-0 min-h-[36px]', assignButtonClass)}
+              disabled={lifecycleLoading || isOnLeave || !canAssign}
+              onClick={() => doAssign(candidate.employeeId)}
+            >
+              {lifecycleLoading ? <Loader2 className="size-3 mr-1 animate-spin" /> : null}
+              {assignButtonLabel}
+            </Button>
+          </div>
+
+          {/* ── Match reasons (compact checkmark list) ── */}
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+            {candidate.breakdown.matchedSkills.length > 0 && (
+              <span className="text-emerald-700 flex items-center gap-0.5">
+                <Check className="size-3" /> Skill match ({candidate.breakdown.matchedSkills.length})
+              </span>
+            )}
+            {candidate.breakdown.distanceKm !== null && (
+              <span className="text-blue-700 flex items-center gap-0.5">
+                <Check className="size-3" /> {candidate.breakdown.distanceKm.toFixed(1)} km away
+              </span>
+            )}
+            {!conflict || conflict.type === 'none' ? (
+              <span className="text-emerald-700 flex items-center gap-0.5">
+                <Check className="size-3" /> No schedule conflict
+              </span>
+            ) : null}
+            {candidate.breakdown.activeJobCount === 0 ? (
+              <span className="text-emerald-700 flex items-center gap-0.5">
+                <Check className="size-3" /> Fully available
+              </span>
+            ) : (
+              <span className="text-amber-700 flex items-center gap-0.5">
+                <Clock3 className="size-3" /> {candidate.breakdown.activeJobCount} active job{candidate.breakdown.activeJobCount > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+
+          {/* ── Conflict card (when present) ── */}
+          {conflict && conflict.type !== 'none' && (
+            <div className={cn(
+              'mt-2 p-2 rounded-md border text-xs space-y-1',
+              conflict.riskLevel === 'high' ? 'border-red-200 bg-red-50 text-red-800' :
+              conflict.riskLevel === 'medium' ? 'border-amber-200 bg-amber-50 text-amber-800' :
+              'border-slate-200 bg-slate-50 text-slate-700',
+            )}>
+              <div className="flex items-center gap-1.5 font-medium">
+                {conflict.type === 'schedule' && <><Clock3 className="size-3.5" /> Schedule Conflict</>}
+                {conflict.type === 'travel' && <><Navigation className="size-3.5" /> Travel Conflict</>}
+                {conflict.type === 'status' && <><ShieldAlert className="size-3.5" /> Status Conflict</>}
+                <Badge variant="outline" className={cn(
+                  'ml-auto text-[9px] h-4 capitalize',
+                  conflict.riskLevel === 'high' ? 'border-red-300 text-red-700 bg-red-100' :
+                  conflict.riskLevel === 'medium' ? 'border-amber-300 text-amber-700 bg-amber-100' :
+                  'border-slate-300 text-slate-700 bg-slate-100',
+                )}>
+                  {conflict.riskLevel} risk
+                </Badge>
+              </div>
+              {conflict.conflictingJob && (
+                <div className="pl-5 space-y-0.5 text-[11px]">
+                  <div className="font-medium">
+                    {conflict.conflictingJob.jobNumber ? `#${conflict.conflictingJob.jobNumber}` : ''} {conflict.conflictingJob.title}
+                  </div>
+                  <div className="text-muted-foreground">{formatConflictTime(conflict)}</div>
+                  {conflict.conflictingJob.address && (
+                    <div className="text-muted-foreground flex items-center gap-1">
+                      <MapPin className="size-2.5" /> {conflict.conflictingJob.address}
+                    </div>
+                  )}
+                </div>
+              )}
+              {conflict.type === 'schedule' && conflict.overlapMinutes != null && (
+                <div className="pl-5 text-[11px]">
+                  <span className="font-medium text-red-700">Overlap: {conflict.overlapMinutes} min</span>
+                </div>
+              )}
+              {conflict.type === 'travel' && (
+                <div className="pl-5 text-[11px] space-y-0.5">
+                  {conflict.travelDistanceKm != null && <div>Travel distance: ~{conflict.travelDistanceKm} km</div>}
+                  {conflict.overlapMinutes != null && <div>Estimated travel: ~{conflict.overlapMinutes} min</div>}
+                </div>
+              )}
+              {conflict.message && !conflict.conflictingJob && (
+                <div className="pl-5 text-[11px]">{conflict.message}</div>
+              )}
+            </div>
+          )}
+
+          {/* ── Expanded contact actions (toggled by ⋯ button) ── */}
+          {isExpanded && (
+            <div className="pt-2 border-t flex items-center gap-2">
+              {candidate.employeePhone && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => window.location.href = `tel:${candidate.employeePhone}`}
+                  >
+                    <Phone className="size-3 mr-1" /> Call
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => window.open(`https://wa.me/${candidate.employeePhone.replace(/[^0-9]/g, '')}`, '_blank')}
+                  >
+                    <MessageSquare className="size-3 mr-1" /> WhatsApp
+                  </Button>
+                </>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs ml-auto"
+                onClick={() => setExpandedId(null)}
+              >
+                Close
+              </Button>
+            </div>
+          )}
+        </div>
+        {/* ┋ overflow button to expand contact actions */}
+        {!isExpanded && candidate.employeePhone && (
+          <button
+            className="absolute top-2 right-2 p-1 rounded hover:bg-muted text-muted-foreground"
+            onClick={(e) => { e.stopPropagation(); setExpandedId(candidate.employeeId); }}
+            title="Quick contact"
+          >
+            <MoreHorizontal className="size-3.5" />
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  // ============================================================
   // Main Render
   // ============================================================
 
@@ -4007,155 +4294,197 @@ export function JobsView() {
         </>
       )}
 
-      {/* ─── Assign Employee Dialog ────────────────────────────────────── */}
+      {/* ─── Smart Assign/Reassign Workspace (Phase 1) ─────────────────── */}
+      {/* Replaces the old "Assign Employee" dialog with a dispatch-decision
+          workspace: BEST MATCH section (top recommendation with full reasoning)
+          + OTHER TECHNICIANS section (everyone else, including busy/offline/
+          on-leave with appropriate warnings). Reassignments require a reason. */}
       <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
-        <DialogContent className="max-w-lg max-h-[90dvh] flex flex-col">
+        <DialogContent className="max-w-2xl max-h-[92dvh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Assign Employee</DialogTitle>
-            <DialogDescription>{assigningJob ? `Select an employee for: ${assigningJob.title}` : 'Select an employee'}</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              {assigningJob?.assigneeId ? (
+                <><RefreshCw className="size-4 text-amber-600" /> Reassign Job</>
+              ) : (
+                <><UserCheck className="size-4 text-emerald-600" /> Assign Job</>
+              )}
+              {assigningJob?.jobNumber && (
+                <Badge variant="outline" className="ml-1 font-mono text-[10px]">#{assigningJob.jobNumber}</Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {assigningJob ? `${assigningJob.title}${assigningJob.customerName ? ` · ${assigningJob.customerName}` : ''}` : 'Select a technician'}
+            </DialogDescription>
           </DialogHeader>
-          {assigningJob && (
-            <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
-              <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">{assigningJob.title}</span>
-                  <Badge variant="outline" className={getStatusColor(assigningJob.status)}>{assigningJob.status.replace('_', ' ')}</Badge>
+          {assigningJob && (() => {
+            const isReassignment = !!assigningJob.assigneeId;
+            const canAssign = !isReassignment || !!reassignReason.trim();
+            // Build the "assign" handler that injects reason/note for reassignment
+            const doAssign = (employeeId: string) => {
+              if (isReassignment) {
+                handleLifecycleAction('assign', assigningJob.id, employeeId, {
+                  reason: reassignReason.trim(),
+                  reassignmentNote: reassignNote.trim() || undefined,
+                });
+              } else {
+                handleLifecycleAction('assign', assigningJob.id, employeeId);
+              }
+            };
+            // Split candidates: best match (top score, no high-risk conflict) vs others
+            const sortedCandidates = [...smartCandidates].sort((a, b) => b.score - a.score);
+            const bestMatch = sortedCandidates.find(c => !c.conflict || c.conflict.type === 'none' || c.conflict.riskLevel !== 'high');
+            const others = sortedCandidates.filter(c => c !== bestMatch);
+            return (
+              <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
+                {/* ── Job context card ─────────────────────────────────── */}
+                <div className="p-3 rounded-lg bg-muted/50 space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm">{assigningJob.title}</span>
+                    <Badge variant="outline" className={getStatusColor(assigningJob.status)}>{assigningJob.status.replace('_', ' ')}</Badge>
+                    {assigningJob.priority && (
+                      <Badge variant="outline" className={getPriorityColor(assigningJob.priority)}>{assigningJob.priority}</Badge>
+                    )}
+                  </div>
+                  {assigningJob.address && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> {assigningJob.address}</p>
+                  )}
+                  {assigningJob.scheduledAt && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Calendar className="size-3" /> {formatDate(assigningJob.scheduledAt)}
+                      {assigningJob.scheduledTime && <span className="ml-1">· {assigningJob.scheduledTime}</span>}
+                    </p>
+                  )}
                 </div>
-                {assigningJob.address && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> {assigningJob.address}</p>}
-              </div>
-              <Separator />
-              {/* ── Recommended Technicians (smart-match) ─────────────────── */}
-              {/* Fetched on dialog open from POST /api/dispatch/smart with
-                  autoAssign=false. Each candidate is a ranked employee with
-                  a score breakdown. Clicking a candidate runs the existing
-                  handleLifecycleAction('assign', ...) flow — same path as
-                  the manual list below. */}
-              <div className="space-y-2">
-                <p className="text-sm font-medium flex items-center gap-1.5">
-                  <Sparkles className="size-3.5 text-amber-500" />
-                  Recommended Technicians
-                </p>
+
+                {/* ── Reassignment reason (mandatory) ──────────────────── */}
+                {isReassignment && (
+                  <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/50 space-y-3">
+                    <div className="flex items-center gap-2 text-amber-800">
+                      <ShieldAlert className="size-4" />
+                      <span className="text-sm font-medium">Reassignment Details</span>
+                    </div>
+                    <p className="text-xs text-amber-700">
+                      Currently assigned to: <span className="font-medium">{assigningJob.assigneeName || 'Previous technician'}</span>
+                    </p>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-amber-800">Reason for reassignment <span className="text-red-600">*</span></Label>
+                      <Select value={reassignReason} onValueChange={setReassignReason}>
+                        <SelectTrigger className="h-9 bg-white">
+                          <SelectValue placeholder="Select a reason…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {REASSIGNMENT_REASONS.map((r) => (
+                            <SelectItem key={r} value={r}>{r}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-amber-800">Note (optional)</Label>
+                      <Textarea
+                        value={reassignNote}
+                        onChange={(e) => setReassignNote(e.target.value)}
+                        placeholder="e.g. Customer requested earlier arrival"
+                        className="min-h-[60px] text-sm bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <Separator />
+
+                {/* ── BEST MATCH section ──────────────────────────────── */}
                 {loadingSmart ? (
-                  <div className="flex items-center justify-center py-6">
+                  <div className="flex items-center justify-center py-8">
                     <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                    <span className="ml-2 text-sm text-muted-foreground">Finding best matches...</span>
+                    <span className="ml-2 text-sm text-muted-foreground">Finding best matches…</span>
                   </div>
                 ) : smartError ? (
-                  <div className="flex items-center gap-2 py-2 px-3 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-xs">
+                  <div className="flex items-center gap-2 py-3 px-3 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-xs">
+                    <AlertCircle className="size-4 shrink-0" />
+                    <span>Smart match unavailable. Showing full roster below — pick manually.</span>
+                  </div>
+                ) : (
+                  <>
+                    {bestMatch && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 flex items-center gap-1.5">
+                          <Sparkles className="size-3.5 text-amber-500" /> Best Match
+                        </p>
+                        {renderCandidateCard(bestMatch, true, canAssign, isReassignment, doAssign, expandedCandidateId, setExpandedCandidateId)}
+                      </div>
+                    )}
+
+                    {/* ── OTHER TECHNICIANS section ──────────────────── */}
+                    {others.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Other Technicians ({others.length})
+                        </p>
+                        <div className="space-y-2">
+                          {others.map((c) => renderCandidateCard(c, false, canAssign, isReassignment, doAssign, expandedCandidateId, setExpandedCandidateId))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Manual roster fallback (employees not in smart candidates) ── */}
+                    {smartCandidates.length === 0 && employees.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">All Technicians</p>
+                        <div className="space-y-2">
+                          {employees.map((emp) => {
+                            const isOnLeave = emp.status === 'on_leave' || (emp as { onLeaveUntil?: string | null }).onLeaveUntil;
+                            let skills: string[] = [];
+                            try { skills = JSON.parse(emp.skills || '[]'); } catch { /* empty */ }
+                            return (
+                              <div key={emp.id} className="p-3 rounded-lg border flex items-center gap-3">
+                                <Avatar className="size-9 shrink-0">
+                                  <AvatarFallback className="bg-slate-100 text-slate-700 text-sm font-medium">
+                                    {emp.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-medium text-sm">{emp.name}</span>
+                                    <Badge variant="outline" className="text-[10px] h-4">{emp.role}</Badge>
+                                    <Badge variant="outline" className={cn('text-[10px] h-4', emp.status === 'available' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : emp.status === 'busy' ? 'text-amber-700 bg-amber-50 border-amber-200' : emp.status === 'offline' ? 'text-slate-600 bg-slate-50 border-slate-200' : 'text-red-700 bg-red-50 border-red-200')}>
+                                      {emp.status.replace('_', ' ')}
+                                    </Badge>
+                                  </div>
+                                  {skills.length > 0 && (
+                                    <div className="flex gap-1 mt-1">{skills.slice(0, 3).map((s, i) => (<Badge key={i} variant="secondary" className="text-[9px] h-4">{s}</Badge>))}</div>
+                                  )}
+                                </div>
+                                <Button
+                                  size="sm"
+                                  className={cn('h-8 text-xs', isOnLeave ? 'bg-slate-300 text-slate-500 hover:bg-slate-300' : 'bg-emerald-600 hover:bg-emerald-700')}
+                                  disabled={lifecycleLoading || isOnLeave}
+                                  onClick={() => doAssign(emp.id)}
+                                >
+                                  {isOnLeave ? 'On Leave' : 'Assign'}
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {smartCandidates.length === 0 && employees.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground text-sm">No technicians found in your workspace.</div>
+                    )}
+                  </>
+                )}
+
+                {isReassignment && !reassignReason.trim() && (
+                  <div className="flex items-center gap-2 py-2 px-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
                     <AlertCircle className="size-3.5 shrink-0" />
-                    <span>Smart match unavailable — pick manually below.</span>
+                    <span>Select a reason for reassignment to enable assigning.</span>
                   </div>
-                ) : smartCandidates.length === 0 ? (
-                  <div className="text-center py-3 text-muted-foreground text-xs">
-                    No smart matches — pick manually below.
-                  </div>
-                ) : (
-                  <ScrollArea className="max-h-64">
-                    <div className="space-y-2 pr-2">
-                      {smartCandidates.slice(0, 5).map((candidate) => (
-                        <button
-                          key={candidate.employeeId}
-                          className="w-full text-left p-3 rounded-lg border hover:border-emerald-300 hover:bg-emerald-50/40 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                          onClick={() => handleLifecycleAction('assign', assigningJob.id, candidate.employeeId)}
-                          disabled={lifecycleLoading}
-                        >
-                          {/* Header: avatar · name · role · total score bar */}
-                          <div className="flex items-center gap-3">
-                            <Avatar className="size-9 shrink-0">
-                              <AvatarFallback className="bg-emerald-100 text-emerald-700 text-sm font-medium">
-                                {candidate.employeeName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium text-sm truncate">{candidate.employeeName}</span>
-                                <Badge variant="outline" className="text-[10px] h-4">{candidate.employeeRole}</Badge>
-                              </div>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Progress value={candidate.score} className="h-1.5 flex-1" />
-                                <span className="text-xs font-medium text-emerald-600 shrink-0">{candidate.score}/100</span>
-                              </div>
-                            </div>
-                          </div>
-                          {/* Score breakdown: Skills/40 · Proximity/30 · Workload/15 · Rating/15 */}
-                          <div className="mt-2 pt-2 border-t grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
-                            <div>
-                              <span className="text-muted-foreground block">Skills</span>
-                              <span className="font-medium">{candidate.breakdown.skillScore}/40</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground block">Proximity</span>
-                              <span className="font-medium">{candidate.breakdown.proximityScore}/30</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground block">Workload</span>
-                              <span className="font-medium">{candidate.breakdown.workloadScore}/15</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground block">Rating</span>
-                              <span className="font-medium">{candidate.breakdown.ratingScore}/15</span>
-                            </div>
-                          </div>
-                          {/* Matched skills badges */}
-                          {candidate.breakdown.matchedSkills.length > 0 && (
-                            <div className="mt-1.5 flex flex-wrap gap-1">
-                              {candidate.breakdown.matchedSkills.map((skill, i) => (
-                                <Badge key={i} variant="outline" className="text-[9px] h-4 bg-emerald-50 border-emerald-200 text-emerald-700">
-                                  {skill}
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </ScrollArea>
                 )}
               </div>
-              <Separator />
-              <div>
-                <p className="text-sm font-medium mb-2">All Available Technicians</p>
-                {employees.filter((e) => e.status === 'available').length === 0 ? (
-                  <div className="text-center py-6 text-muted-foreground text-sm">No available employees</div>
-                ) : (
-                  <ScrollArea className="max-h-[50dvh]">
-                    <div className="space-y-2">
-                      {employees.filter((e) => e.status === 'available').map((emp) => {
-                        let skills: string[] = [];
-                        try { skills = JSON.parse(emp.skills || '[]'); } catch { /* empty */ }
-                        return (
-                          <button
-                            key={emp.id}
-                            className="w-full flex items-center gap-3 p-3 rounded-lg border hover:bg-emerald-50 hover:border-emerald-200 transition-colors text-left"
-                            onClick={() => handleLifecycleAction('assign', assigningJob.id, emp.id)}
-                            disabled={lifecycleLoading}
-                          >
-                            <Avatar className="size-9 shrink-0">
-                              <AvatarFallback className="bg-emerald-100 text-emerald-700 text-sm font-medium">{emp.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}</AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-sm">{emp.name}</span>
-                                <Badge variant="outline" className="text-[10px] h-4">{emp.role}</Badge>
-                              </div>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground"><Phone className="size-3" /> {emp.phone}</div>
-                              {skills.length > 0 && (
-                                <div className="flex gap-1 mt-1">{skills.slice(0, 3).map((s, i) => (<Badge key={i} variant="secondary" className="text-[9px] h-4">{s}</Badge>))}</div>
-                              )}
-                            </div>
-                            <div className="text-right shrink-0">
-                              <div className="flex items-center gap-0.5 text-xs"><span className="text-yellow-500">★</span><span>{emp.rating.toFixed(1)}</span></div>
-                              <span className="text-[10px] text-muted-foreground">{emp.completedJobs} jobs</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
-                )}
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
