@@ -1453,6 +1453,7 @@ export function LeadsView() {
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
   const [statusFilter, setStatusFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
+  const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
@@ -2087,6 +2088,146 @@ export function LeadsView() {
   // is now the single source of truth for the sales pipeline. The Leads
   // page renders the table view only — see renderTableView() below.
 
+  const renderGridView = () => {
+    if (loading) {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Card key={i} className="p-4 space-y-3">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-6 w-full" />
+            </Card>
+          ))}
+        </div>
+      );
+    }
+
+    if (sortedLeads.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+          <Target className="size-12 mb-3 opacity-20" />
+          <p className="font-medium">No leads found</p>
+          <p className="text-sm mt-1">Try adjusting your filters or add a new lead</p>
+          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700 font-semibold" onClick={openAddLead}>
+            <Plus className="size-4 mr-1" /> Add Lead
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {sortedLeads.map((lead) => {
+          const isWonOrLost = ['won', 'lost'].includes(lead.status);
+          return (
+            <Card
+              key={lead.id}
+              className="group relative p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-card hover:border-emerald-500/40 hover:shadow-md transition-all cursor-pointer space-y-3 flex flex-col justify-between"
+              onClick={() => openLeadDetail(lead)}
+            >
+              <div className="space-y-3">
+                {/* Header: Priority Dot + Source + Status Badge */}
+                <div className="flex items-center justify-between gap-2 pb-1 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className={cn('size-2 rounded-full shrink-0', PRIORITY_CONFIG[lead.priority]?.dotColor || 'bg-gray-400')} />
+                    {renderSourceBadge(lead.source)}
+                  </div>
+                  <div className="shrink-0">
+                    {renderStatusBadge(lead.status)}
+                  </div>
+                </div>
+
+                {/* Title & Customer Name */}
+                <div className="space-y-1">
+                  <h4 className="font-bold text-base text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 group-hover:text-emerald-600 transition-colors">
+                    {lead.title || lead.name}
+                  </h4>
+                  <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 pt-0.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <User className="size-3.5 shrink-0 text-slate-400" />
+                      <span className="truncate font-semibold text-slate-800 dark:text-slate-200">{lead.name}</span>
+                    </div>
+                    {/* Quick WhatsApp / Call icons */}
+                    <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {lead.phone && (
+                        <>
+                          <a
+                            href={`tel:${lead.phone}`}
+                            className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
+                            title="Call customer"
+                          >
+                            <Phone className="size-3.5" />
+                          </a>
+                          <a
+                            href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
+                            title="WhatsApp customer"
+                          >
+                            <MessageSquare className="size-3.5" />
+                          </a>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Service Type & Deal Value Badges */}
+                <div className="flex items-center justify-between gap-2 text-xs pt-1">
+                  {lead.serviceType ? (
+                    <Badge variant="secondary" className="text-[10px] h-5 font-medium px-2 bg-slate-100 dark:bg-slate-800">
+                      <Briefcase className="size-2.5 mr-1" />
+                      {getServiceTypeLabel(lead.serviceType)}
+                    </Badge>
+                  ) : <span />}
+
+                  {lead.value > 0 && (
+                    <span className="font-bold text-sm text-emerald-700 dark:text-emerald-400">
+                      {formatCompact(lead.value)}
+                    </span>
+                  )}
+                </div>
+
+                {lead.address && (
+                  <div className="flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
+                    <MapPin className="size-3.5 shrink-0 text-slate-400 mt-0.5" />
+                    <span className="truncate">{lead.address}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Action Bar */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+                <span className="text-[11px] text-slate-400">{formatDateShort(lead.createdAt)}</span>
+
+                {!isWonOrLost ? (
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-8 text-xs shadow-xs"
+                    onClick={() => openConvertDialog(lead)}
+                  >
+                    <ArrowRight className="size-3.5 mr-1" /> Convert to Job
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => openLeadDetail(lead)}
+                  >
+                    <Eye className="size-3.5 mr-1" /> View Details
+                  </Button>
+                )}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  };
+
   // ============================================================
   // Render: Table view
   // ============================================================
@@ -2150,7 +2291,7 @@ export function LeadsView() {
                     <TableHead className="cursor-pointer select-none hidden lg:table-cell" onClick={() => handleSort('createdAt')}>
                       <span className="flex items-center">Date <SortIcon field="createdAt" /></span>
                     </TableHead>
-                    <TableHead className="w-[60px]">Actions</TableHead>
+                    <TableHead className="w-[120px] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2164,51 +2305,73 @@ export function LeadsView() {
                         <div className="flex items-center gap-1.5">
                           <span className={`size-2 rounded-full shrink-0 ${PRIORITY_CONFIG[lead.priority]?.dotColor || 'bg-gray-400'}`} />
                           <div className="min-w-0">
-                            <div className="truncate">{lead.name}</div>
+                            <div className="truncate font-semibold text-slate-900 dark:text-slate-100">{lead.name}</div>
                             {lead.title && (
-                              <div className="text-xs text-emerald-700 truncate">{lead.title}</div>
+                              <div className="text-xs text-emerald-700 dark:text-emerald-400 truncate">{lead.title}</div>
                             )}
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{lead.phone}</TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
+                        <div className="flex items-center gap-1">
+                          <span>{lead.phone}</span>
+                          {lead.phone && (
+                            <a
+                              href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1 text-slate-400 hover:text-emerald-600 transition-colors"
+                              title="WhatsApp"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MessageSquare className="size-3" />
+                            </a>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">{lead.email || '—'}</TableCell>
                       <TableCell>{renderSourceBadge(lead.source)}</TableCell>
                       <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
                         {lead.serviceType ? getServiceTypeLabel(lead.serviceType) : '—'}
                       </TableCell>
                       <TableCell>{renderStatusBadge(lead.status)}</TableCell>
-                      <TableCell className="hidden md:table-cell font-medium text-sm">
+                      <TableCell className="hidden md:table-cell font-bold text-sm text-emerald-700 dark:text-emerald-400">
                         {lead.value > 0 ? formatCompact(lead.value) : '—'}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                         {formatDateShort(lead.createdAt)}
                       </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <MoreHorizontal className="size-3.5" />
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          {!['won', 'lost'].includes(lead.status) && (
+                            <Button
+                              size="sm"
+                              className="h-7 text-[11px] px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                              onClick={() => openConvertDialog(lead)}
+                            >
+                              Convert
                             </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                            <DropdownMenuItem onClick={() => openLeadDetail(lead)}>
-                              <Eye className="size-3.5 mr-2" /> View
-                            </DropdownMenuItem>
-                            {!['won', 'lost'].includes(lead.status) && (
-                              <DropdownMenuItem onClick={() => openConvertDialog(lead)}>
-                                <ArrowRight className="size-3.5 mr-2" /> Convert to Job
+                          )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <MoreHorizontal className="size-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openLeadDetail(lead)}>
+                                <Eye className="size-3.5 mr-2" /> View
                               </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem onClick={() => openEditLead(lead)}>
-                              <Pencil className="size-3.5 mr-2" /> Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem variant="destructive" onClick={() => openDeleteDialog(lead)}>
-                              <Trash2 className="size-3.5 mr-2" /> Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                              <DropdownMenuItem onClick={() => openEditLead(lead)}>
+                                <Pencil className="size-3.5 mr-2" /> Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem variant="destructive" onClick={() => openDeleteDialog(lead)}>
+                                <Trash2 className="size-3.5 mr-2" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -3869,48 +4032,44 @@ export function LeadsView() {
           </TabsList>
         </div>
 
-        {/* ─── List Tab (existing lead list functionality) ─────── */}
+        {/* ─── List Tab (Interactive Filter Chips + Grid/Table Toggle) ─────── */}
         <TabsContent value="list" className="mt-6 space-y-6 outline-none">
-          {/* Stats */}
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+          {/* Interactive Status Filter Chips */}
+          <div className="flex flex-wrap gap-2">
             {[
-              { label: 'Total Leads', value: totalLeads, icon: Target, color: 'text-foreground' },
-              { label: 'Pipeline Value', value: formatCompact(leads.reduce((s, l) => s + (l.value || 0), 0)), icon: DollarSign, color: 'text-emerald-600' },
-              { label: 'Won', value: leads.filter(l => l.status === 'won').length, icon: CheckCircle2, color: 'text-green-600' },
-              { label: 'Conversion Rate', value: leads.length > 0 ? `${Math.round(leads.filter(l => l.status === 'won').length / leads.length * 100)}%` : '0%', icon: TrendingUp, color: 'text-purple-600' },
-            ].map(stat => {
-              const Icon = stat.icon;
+              { key: 'all', label: 'All Leads', count: totalLeads, color: 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700', activeColor: 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900', icon: Target },
+              { key: 'new', label: 'New', count: leads.filter(l => l.status === 'new').length, color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/50', activeColor: 'bg-blue-600 text-white border-blue-600', icon: Clock },
+              { key: 'contacted', label: 'Contacted', count: leads.filter(l => l.status === 'contacted').length, color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-900/50', activeColor: 'bg-purple-600 text-white border-purple-600', icon: UserCheck },
+              { key: 'qualified', label: 'Qualified', count: leads.filter(l => l.status === 'qualified').length, color: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/50', activeColor: 'bg-amber-500 text-white border-amber-500', icon: CheckCircle2 },
+              { key: 'won', label: 'Won / Converted', count: leads.filter(l => l.status === 'won').length, color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50', activeColor: 'bg-emerald-600 text-white border-emerald-600', icon: CheckCircle2 },
+              { key: 'lost', label: 'Lost', count: leads.filter(l => l.status === 'lost').length, color: 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100 dark:bg-zinc-900/40 dark:text-zinc-400 dark:border-zinc-800', activeColor: 'bg-zinc-700 text-white border-zinc-700', icon: XCircle },
+            ].map((chip) => {
+              const Icon = chip.icon;
+              const isActive = statusFilter === chip.key;
               return (
-                <Card key={stat.label} className="p-4">
-                  <div className="flex items-center gap-2">
-                    <Icon className={`size-4 ${stat.color}`} />
-                    <div>
-                      <p className="text-xs text-muted-foreground">{stat.label}</p>
-                      <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
-                    </div>
-                  </div>
-                </Card>
+                <button
+                  key={chip.key}
+                  onClick={() => setStatusFilter(isActive ? 'all' : chip.key)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all min-h-[36px] shadow-2xs',
+                    isActive ? chip.activeColor : chip.color
+                  )}
+                >
+                  <Icon className="size-3.5" />
+                  <span>{chip.label}</span>
+                  <span className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold bg-background/80 text-foreground">
+                    {chip.count}
+                  </span>
+                </button>
               );
             })}
           </div>
 
-          {/* Filters + Kanban/Table toggle */}
+          {/* Filters Bar + Layout Switcher Toggle (Grid Cards vs Table) */}
           <div className="flex flex-wrap gap-3 items-center justify-between">
             <div className="flex flex-wrap gap-3 items-center flex-1">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-40">
-                  <Filter className="size-3.5 mr-1.5 text-muted-foreground" />
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  {ALL_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
               <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-44 h-9 text-xs">
                   <SelectValue placeholder="Source" />
                 </SelectTrigger>
                 <SelectContent>
@@ -3920,28 +4079,50 @@ export function LeadsView() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="sm" onClick={() => fetchLeads()}>
+              <Button variant="outline" size="sm" className="h-9 text-xs" onClick={() => fetchLeads()}>
                 <RefreshCw className="size-3.5 mr-1" /> Refresh
               </Button>
             </div>
-            {/* View toggle (Kanban / Table) — REMOVED.
-                The inline Kanban was removed in favour of the Deal-based
-                SalesPipelineView (sidebar → CRM → Pipeline). The Leads page
-                is table view only — see renderTableView() below. A "Pipeline"
-                shortcut button takes the user to the dedicated Pipeline view. */}
+
+            {/* Layout Toggle: Grid vs Table */}
+            <div className="flex items-center gap-1 bg-muted p-1 rounded-lg border border-border">
+              <button
+                type="button"
+                onClick={() => setViewLayout('grid')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all',
+                  viewLayout === 'grid' ? 'bg-background text-emerald-700 shadow-2xs' : 'text-muted-foreground hover:text-foreground'
+                )}
+                title="Grid Cards View"
+              >
+                <LayoutGrid className="size-3.5" /> Cards
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewLayout('table')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all',
+                  viewLayout === 'table' ? 'bg-background text-emerald-700 shadow-2xs' : 'text-muted-foreground hover:text-foreground'
+                )}
+                title="Table View"
+              >
+                <List className="size-3.5" /> Table
+              </button>
+            </div>
+
             <Button
               variant="outline"
               size="sm"
-              className="h-8 px-3 text-xs gap-1.5"
+              className="h-9 px-3 text-xs gap-1.5 font-medium"
               onClick={() => setGlobalView('salesPipeline')}
               title="Open the Sales Pipeline board"
             >
-              <BarChart3 className="size-3.5" /> Open Pipeline
+              <BarChart3 className="size-3.5 text-emerald-600" /> Open Pipeline
             </Button>
           </div>
 
-          {/* View Content — table view only (Kanban moved to Pipeline page) */}
-          {renderTableView()}
+          {/* View Content — Grid Cards or Table View */}
+          {viewLayout === 'grid' ? renderGridView() : renderTableView()}
         </TabsContent>
 
         {/* ─── Analytics Tab (stat cards + charts) ──────────────── */}
