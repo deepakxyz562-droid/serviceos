@@ -29,6 +29,10 @@ export const STORAGE_KEYS = {
   THEME: 'fieseros_theme',
   LAST_COMPANY_SLUG: 'fieseros_last_company_slug',
   LAST_COMPANY_DATA: 'fieseros_last_company_data',
+  // Active job context for the background GPS task (employeeId + jobId).
+  // Written by useLiveTracking when tracking starts; read by the module-level
+  // TaskManager task to know which employee/job a background ping belongs to.
+  LIVE_TRACKING_CTX: 'fieseros_live_tracking_ctx',
 } as const;
 
 /**
