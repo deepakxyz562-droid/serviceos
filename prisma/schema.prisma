@@ -1571,6 +1571,15 @@ model Job {
   assigneePhone      String?
   resourceId         String?
   serviceId          String?
+  // ── Geocoded customer address coordinates (M1 migration 2025-08-15) ──
+  // Populated async by geocodeAddress() in src/app/api/jobs/route.ts after
+  // job creation. Nullable: jobs without an address or with geocoding
+  // failure remain null (dispatch map shows "⚠ Location unavailable").
+  // NOTE: checkInLat/checkInLng (below) are set on technician ARRIVAL —
+  // they are NOT the customer address. latitude/longitude = destination;
+  // checkIn* = where the tech actually arrived (may differ slightly).
+  latitude           Float?
+  longitude          Float?
   checkInLat         Float?
   checkInLng         Float?
   checkOutLat        Float?

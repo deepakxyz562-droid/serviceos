@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { EventBus } from '@/lib/event-bus';
+import { getAuthUser } from '@/lib/auth';
 
 /**
  * GPS Tracking
@@ -78,6 +79,11 @@ export async function POST(request: NextRequest) {
       altitude,
       batteryLevel,
       isMoving,
+      // B2 fix (2025-08-15): Accept capturedAt from the client so offline
+      // pings can be backdated. If not provided, server stamps now (legacy
+      // behavior). Validated below to prevent future-dated or absurdly old
+      // pings.
+      capturedAt,
     } = (body ?? {}) as {
       employeeId?: string;
       jobId?: string;
@@ -89,6 +95,7 @@ export async function POST(request: NextRequest) {
       altitude?: number;
       batteryLevel?: number;
       isMoving?: boolean;
+      capturedAt?: string;
     };
 
     if (!employeeId || typeof latitude !== 'number' || typeof longitude !== 'number') {
@@ -96,6 +103,42 @@ export async function POST(request: NextRequest) {
         { error: 'employeeId, latitude, and longitude are required' },
         { status: 400 },
       );
+    }
+
+    // ── C1 fix (2025-08-15): Authentication + authorization ──
+    // GPS pings can affect another employee's location on the dispatch map,
+    // so this endpoint MUST be authenticated. Rules:
+    //   - Employee role: can only submit GPS for their OWN employeeId
+    //     (looked up via Employee.userId === authUser.id, or authUser.employeeId)
+    //   - Admin/owner/manager/super_admin: can submit for any employee
+    //     (for testing, admin tools, or server-side batch imports)
+    //   - Unauthenticated requests: rejected with 401
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 },
+      );
+    }
+    const ADMIN_ROLES = ['owner', 'admin', 'manager', 'super_admin'];
+    if (!ADMIN_ROLES.includes(authUser.role)) {
+      // Employee: verify the employeeId belongs to them.
+      // authUser.employeeId is set during login if the user has an Employee record.
+      // Fallback: look up Employee by userId (handles older sessions).
+      let ownEmployeeId = authUser.employeeId;
+      if (!ownEmployeeId) {
+        const ownEmp = await db.employee.findFirst({
+          where: { userId: authUser.id },
+          select: { id: true },
+        });
+        ownEmployeeId = ownEmp?.id ?? null;
+      }
+      if (employeeId !== ownEmployeeId) {
+        return NextResponse.json(
+          { error: 'Forbidden: you can only submit GPS data for your own employee record' },
+          { status: 403 },
+        );
+      }
     }
 
     const employee = await db.employee.findUnique({
@@ -107,7 +150,22 @@ export async function POST(request: NextRequest) {
     }
 
     const tenantId = await resolveTenantId(employee.workspaceId);
-    const now = new Date();
+    // B2 fix (2025-08-15): Use client-provided capturedAt if valid, else now.
+    // Validates: must parse to a Date, not more than 5 minutes in the future,
+    // not older than 24 hours (stale offline pings beyond 24h are dropped to
+    // prevent route history pollution).
+    let now = new Date();
+    if (capturedAt) {
+      const clientTime = new Date(capturedAt);
+      if (!isNaN(clientTime.getTime())) {
+        const fiveMinFromNow = Date.now() + 5 * 60 * 1000;
+        const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+        if (clientTime.getTime() <= fiveMinFromNow && clientTime.getTime() >= twentyFourHoursAgo) {
+          now = clientTime;
+        }
+        // If the client time is out of range, fall back to server now.
+      }
+    }
 
     // 1. Create the GPSLocation record.
     const gps = await db.gPSLocation.create({
@@ -193,6 +251,12 @@ export async function POST(request: NextRequest) {
     //    updated location to the Live Dispatch map (Uber/Jobber-style live
     //    tracking). Without this, the dispatch map only updates on manual
     //    refresh. Fire-and-forget — never blocks the GPS ping response.
+    //
+    // B1 fix (2025-08-15): Include batteryLevel + isMoving in the payload
+    // so the realtime dispatch map can show battery badges on markers
+    // without a refetch. (Previously these were saved to the GPSLocation
+    // row but NOT included in the EventBus payload — the map's realtime
+    // handler always got null for batteryLevel.)
     try {
       EventBus.emit('gps.ping', {
         employeeId,
@@ -202,6 +266,8 @@ export async function POST(request: NextRequest) {
         accuracy: accuracy ?? null,
         heading: heading ?? null,
         speed: speed ?? null,
+        batteryLevel: batteryLevel ?? null,
+        isMoving: isMoving ?? false,
         capturedAt: now.toISOString(),
         tenantId: tenantId ?? undefined,
         workspaceId: employee.workspaceId ?? undefined,
@@ -219,14 +285,40 @@ export async function POST(request: NextRequest) {
 }
 
 // ─── GET — latest GPS location for an employee ──────────────────────────────
+// C1 fix (2025-08-15): Auth required. Employees can only query their own
+// location; admins can query any employee.
 
 export async function GET(request: NextRequest) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const employeeId = searchParams.get('employeeId');
 
     if (!employeeId) {
       return NextResponse.json({ error: 'employeeId is required' }, { status: 400 });
+    }
+
+    // Authorization: employees can only query their own location.
+    const ADMIN_ROLES = ['owner', 'admin', 'manager', 'super_admin'];
+    if (!ADMIN_ROLES.includes(authUser.role)) {
+      let ownEmployeeId = authUser.employeeId;
+      if (!ownEmployeeId) {
+        const ownEmp = await db.employee.findFirst({
+          where: { userId: authUser.id },
+          select: { id: true },
+        });
+        ownEmployeeId = ownEmp?.id ?? null;
+      }
+      if (employeeId !== ownEmployeeId) {
+        return NextResponse.json(
+          { error: 'Forbidden: you can only query your own GPS location' },
+          { status: 403 },
+        );
+      }
     }
 
     const latest = await db.gPSLocation.findFirst({

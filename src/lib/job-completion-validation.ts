@@ -20,7 +20,6 @@ import { db } from '@/lib/db';
  *   - /api/jobs/lifecycle                 (action=complete, legacy/bulk)
  *   - /api/jobs/[id]/complete-proof
  *   - /api/jobs/[id]                      (PUT with status=completed)
- *   - /api/jobs/[id]/transition           (toState=completed)
  *
  * Returns:
  *   - `{ ok: true, missing: [] }` if all proof is present

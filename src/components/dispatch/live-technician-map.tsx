@@ -362,6 +362,7 @@ function buildTechDivIcon(
   color: string,
   isFollowed: boolean,
   telemetry?: TechTelemetry | null,
+  etaMinutes?: number | null,
 ): L.DivIcon {
   const initial = (tech.name || '?').trim().charAt(0).toUpperCase() || '?';
   const isOfflineMarker = color === COLOR_OFFLINE;
@@ -403,6 +404,43 @@ function buildTechDivIcon(
         ">${Math.round(speedKmh)}</span>`
       : '';
 
+  // B3 fix (2025-08-15): Battery badge to the right of the marker.
+  // Shows battery % with color: green > 50%, amber 20-50%, red < 20%.
+  // Only shown when batteryLevel telemetry is available.
+  const batteryPct =
+    telemetry && typeof telemetry.batteryLevel === 'number' && telemetry.batteryLevel >= 0 && telemetry.batteryLevel <= 1
+      ? Math.round(telemetry.batteryLevel * 100)
+      : null;
+  const batteryColor =
+    batteryPct === null ? '#64748b'
+      : batteryPct > 50 ? '#16a34a'
+      : batteryPct >= 20 ? '#f59e0b'
+      : '#dc2626';
+  const batteryBadgeHtml =
+    batteryPct !== null
+      ? `<span style="
+          position:absolute;top:50%;right:-18px;transform:translateY(-50%);
+          background:${batteryColor};color:#fff;font-size:7px;font-weight:700;
+          padding:1px 3px;border-radius:3px;white-space:nowrap;line-height:1.1;
+          font-family:ui-sans-serif,system-ui,sans-serif;
+          box-shadow:0 1px 2px rgba(0,0,0,0.3);
+        ">${batteryPct}%</span>`
+      : '';
+
+  // B3 fix (2025-08-15): ETA badge to the left of the marker.
+  // Shows estimated minutes to arrival. Only shown when the tech has an
+  // active job with a destination and ETA is finite.
+  const etaBadgeHtml =
+    etaMinutes != null && etaMinutes !== Infinity && etaMinutes < 999
+      ? `<span style="
+          position:absolute;top:50%;left:-20px;transform:translateY(-50%);
+          background:#0d9488;color:#fff;font-size:7px;font-weight:700;
+          padding:1px 3px;border-radius:3px;white-space:nowrap;line-height:1.1;
+          font-family:ui-sans-serif,system-ui,sans-serif;
+          box-shadow:0 1px 2px rgba(0,0,0,0.3);
+        ">${etaMinutes}m</span>`
+      : '';
+
   // Vehicle Van SVG icon for the map marker
   const vehicleSvg = `
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
@@ -432,6 +470,8 @@ function buildTechDivIcon(
         ${vehicleSvg}
       </span>
       ${speedBadgeHtml}
+      ${batteryBadgeHtml}
+      ${etaBadgeHtml}
     </div>
   `;
   return L.divIcon({
@@ -508,6 +548,27 @@ function isValidCoord(lat: unknown, lng: unknown): lat is number {
     Math.abs(lat) <= 90 &&
     Math.abs(lng) <= 180
   );
+}
+
+// B3 fix (2025-08-15): Compute ETA in minutes from a tech's current position
+// to their assigned job destination. Returns null if the tech has no active
+// job or the job has no coordinates. Uses haversine distance + an assumed
+// average speed of 35 km/h (matching dispatch-view.tsx's ASSUMED_SPEED_KMH).
+const ASSUMED_SPEED_KMH = 35;
+function computeEtaMinutes(
+  techLat: number,
+  techLng: number,
+  jobs: MapJob[],
+  currentJobId?: string | null,
+): number | null {
+  if (!currentJobId) return null;
+  const job = jobs.find((j) => j.id === currentJobId);
+  if (!job || !isValidCoord(job.latitude, job.longitude)) return null;
+  const distM = haversineMeters(techLat, techLng, job.latitude, job.longitude);
+  const distKm = distM / 1000;
+  if (distKm < 0.15) return 0; // arrived (within 150m)
+  const eta = Math.max(1, Math.round((distKm / ASSUMED_SPEED_KMH) * 60));
+  return eta;
 }
 
 // ─── Per-marker animation state ───────────────────────────────────────────
@@ -685,7 +746,13 @@ export default function LiveTechnicianMap({
   const updateTechMarkerIcon = (tech: MapTechnician, color: string, isFollowed: boolean, telemetry?: TechTelemetry | null) => {
     const marker = techMarkersRef.current.get(tech.id);
     if (!marker) return;
-    marker.setIcon(buildTechDivIcon(tech, color, isFollowed, telemetry));
+    // B3: compute ETA from current displayed position + assigned job.
+    const dispLat = telemetry?.latitude ?? tech.latitude;
+    const dispLng = telemetry?.longitude ?? tech.longitude;
+    const eta = isValidCoord(dispLat, dispLng)
+      ? computeEtaMinutes(dispLat, dispLng, jobsRef.current, tech.currentJobId)
+      : null;
+    marker.setIcon(buildTechDivIcon(tech, color, isFollowed, telemetry, eta));
     marker.setPopupContent(buildTechPopupHtml(tech, color, telemetry));
     marker.setZIndexOffset(color === COLOR_AVAILABLE || isFollowed ? 500 : 0);
   };
@@ -718,7 +785,16 @@ export default function LiveTechnicianMap({
       const color = getMarkerColor(tech);
       const isFollowed = selectedTechIdRef.current === tech.id;
       const existingState = animStateRef.current.get(tech.id);
-      const icon = buildTechDivIcon(tech, color, isFollowed, existingState?.telemetry ?? null);
+      const icon = buildTechDivIcon(
+        tech,
+        color,
+        isFollowed,
+        existingState?.telemetry ?? null,
+        // B3: compute ETA from tech's current position + assigned job.
+        isValidCoord(tech.latitude, tech.longitude)
+          ? computeEtaMinutes(tech.latitude as number, tech.longitude as number, jobsRef.current, tech.currentJobId)
+          : null,
+      );
       const existing = techMarkersRef.current.get(tech.id);
       if (existing) {
         existing.setLatLng([tech.latitude as number, tech.longitude as number]);
@@ -1054,7 +1130,14 @@ export default function LiveTechnicianMap({
             lastSeenAt: telemetry.capturedAt,
           };
           const color = getMarkerColor(tech);
-          const icon = buildTechDivIcon(tech, color, selectedTechIdRef.current === employeeId, telemetry);
+          const icon = buildTechDivIcon(
+            tech,
+            color,
+            selectedTechIdRef.current === employeeId,
+            telemetry,
+            // B3: compute ETA from the new telemetry position + assigned job.
+            computeEtaMinutes(latitude, longitude, jobsRef.current, tech.currentJobId),
+          );
           marker = L.marker([latitude, longitude], { icon, zIndexOffset: 500 });
           marker.bindPopup(buildTechPopupHtml(tech, color, telemetry), {
             closeButton: true,

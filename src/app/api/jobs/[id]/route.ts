@@ -12,6 +12,42 @@ import { bustPipelineCaches } from '@/lib/pipeline-cache-bust';
 import { withCrmTrace } from '@/lib/crm-perf-trace';
 import { shouldUseSupabaseDB } from '@/lib/supabase-db';
 import { getJobDetail, RpcFunctionNotFoundError } from '@/lib/supabase-rpc';
+import { canTransition } from '@/lib/job-lifecycle';
+
+// ── A3 fix (2025-08-15): State machine enforcement for PATCH /api/jobs/[id] ──
+// Maps a target Job.status to the lifecycle action that would produce it.
+// Used to validate that a PATCH `body.status` change is a legal transition
+// per the state machine in src/lib/job-lifecycle.ts. This prevents callers
+// from bypassing the lifecycle endpoint (e.g. jumping from 'pending' →
+// 'completed' directly, skipping Accept/Start Travel/Arrive/Start Work/PIN
+// verification/completion-proof validation).
+const STATUS_TO_ACTION: Record<string, string> = {
+  assigned: 'assign',
+  accepted: 'accept',
+  travelling: 'start_travel',
+  traveling: 'start_travel',
+  en_route: 'start_travel',
+  arrived: 'arrive',
+  working: 'start_work',
+  in_progress: 'start_work',
+  paused: 'pause',
+  on_hold: 'pause',
+  completed: 'complete',
+  cancelled: 'cancel',
+  invoice_generated: 'generate_invoice',
+  invoiced: 'generate_invoice',
+};
+
+// Canonical active statuses — used for "does this employee have other active
+// jobs?" checks. Includes all non-terminal lifecycle stages.
+const ACTIVE_JOB_STATUSES = [
+  'assigned',
+  'accepted',
+  'travelling',
+  'arrived',
+  'working',
+  'paused',
+];
 
 // ── C-2B.2: RPC availability cache ─────────────────────────────────────
 // When the get_job_detail RPC function hasn't been applied to the database
@@ -308,6 +344,41 @@ export async function PUT(
       );
     }
 
+    // ── A3 fix (2025-08-15): Enforce the lifecycle state machine ──
+    // If body.status is provided AND differs from the current status, validate
+    // that the transition is legal per src/lib/job-lifecycle.ts. This prevents
+    // callers from bypassing the /lifecycle endpoint to jump across states
+    // (e.g. 'pending' → 'completed', skipping Accept/Start Travel/Arrive/
+    // Start Work/PIN verification/completion-proof validation).
+    //
+    // Same-status PATCHes (no-op) and PATCHes that don't touch status are
+    // always allowed (they're just field updates like title/notes/address).
+    //
+    // If a caller needs a lifecycle transition, they MUST use:
+    //   POST /api/jobs/[id]/lifecycle  { action: 'accept' | 'start_travel' | ... }
+    if (body.status !== undefined && body.status !== existingJob.status) {
+      const action = STATUS_TO_ACTION[body.status];
+      if (!action) {
+        return NextResponse.json(
+          {
+            error: `Unknown target status '${body.status}'. Use POST /api/jobs/[id]/lifecycle with a valid action.`,
+          },
+          { status: 400 },
+        );
+      }
+      if (!canTransition(existingJob.status, action)) {
+        return NextResponse.json(
+          {
+            error: `Illegal status transition: '${existingJob.status}' → '${body.status}'. Use POST /api/jobs/[id]/lifecycle with action '${action}' (if allowed from the current state).`,
+            currentStatus: existingJob.status,
+            attemptedStatus: body.status,
+            hint: 'Use the lifecycle endpoint for state transitions.',
+          },
+          { status: 400 },
+        );
+      }
+    }
+
     const updateData: any = {};
 
     if (body.title !== undefined) updateData.title = body.title;
@@ -370,12 +441,72 @@ export async function PUT(
       updateData.metadataJson = JSON.stringify(md);
     }
 
-    // If status is being changed to 'assigned' and assigneeId is provided, update employee status
-    if (body.status === 'assigned' && body.assigneeId) {
-      await db.employee.update({
-        where: { id: body.assigneeId },
-        data: { status: 'busy' },
-      });
+    // ── A2 fix (2025-08-15): Transactional reassignment + currentJobId ──
+    // When a job is assigned (or reassigned to a different employee), we must:
+    //   1. Conditionally clear the PREVIOUS employee's currentJobId — but ONLY
+    //      if it still points at THIS job. (If they've already moved on to a
+    //      different job, leave them untouched.)
+    //   2. Set the NEW employee's currentJobId = job.id + status = 'busy'.
+    //
+    // Per the approved model:
+    //   currentJobId = "current active assignment" (set on assign, cleared on
+    //   complete/cancel/reassign). NOT "currently traveling to."
+    //   Employee.status stays in {available, busy, offline, on_leave}.
+    //   Job.status = 'travelling' is what activates live GPS tracking.
+    const isAssignAction =
+      body.status === 'assigned' && existingJob.status !== 'assigned';
+    const isReassignment =
+      body.assigneeId !== undefined &&
+      body.assigneeId !== existingJob.assigneeId;
+
+    if (isAssignAction || isReassignment) {
+      const newAssigneeId = body.assigneeId ?? existingJob.assigneeId;
+
+      // 1. Conditionally clear the previous employee's currentJobId.
+      if (isReassignment && existingJob.assigneeId) {
+        try {
+          const prevEmp = await db.employee.findUnique({
+            where: { id: existingJob.assigneeId },
+            select: { id: true, currentJobId: true, status: true },
+          });
+          if (prevEmp && prevEmp.currentJobId === id) {
+            // Previous employee's active job IS this job → clear it.
+            // Restore status to 'available' only if no other active jobs.
+            const otherActiveJobs = await db.job.count({
+              where: {
+                assigneeId: prevEmp.id,
+                id: { not: id },
+                status: { in: ACTIVE_JOB_STATUSES },
+              },
+            });
+            await db.employee.update({
+              where: { id: prevEmp.id },
+              data: {
+                currentJobId: null,
+                status: otherActiveJobs > 0 ? 'busy' : 'available',
+              },
+            });
+          }
+          // If prevEmp.currentJobId !== id, the previous employee has
+          // already moved on — leave them untouched.
+        } catch (e) {
+          console.error('[JobsUpdate] Failed to clear previous employee on reassign:', e);
+          // Non-fatal: the job update itself still proceeds.
+        }
+      }
+
+      // 2. Set the new employee's currentJobId + status='busy'.
+      if (newAssigneeId) {
+        try {
+          await db.employee.update({
+            where: { id: newAssigneeId },
+            data: { status: 'busy', currentJobId: id },
+          });
+        } catch (e) {
+          console.error('[JobsUpdate] Failed to set new employee currentJobId:', e);
+          // Non-fatal: the job is still assigned (updateData.assigneeId is set).
+        }
+      }
     }
 
     // ── Job Verification PIN: generate on FIRST assignment if missing ──
@@ -407,6 +538,10 @@ export async function PUT(
     // to 'completed'. Guard with `existingJob.status !== 'completed'` so that
     // editing a completed job (e.g. fixing a line item) does NOT overwrite
     // the original completion timestamp or double-count completedJobs.
+    //
+    // A2 fix (2025-08-15): Also clear currentJobId (was missing before —
+    // completed jobs left a dangling currentJobId on the employee). Uses
+    // canonical ACTIVE_JOB_STATUSES for the "other active jobs" check.
     if (body.status === 'completed' && existingJob.status !== 'completed') {
       updateData.actualEndTime = new Date();
       updateData.completedAt = new Date();
@@ -416,14 +551,20 @@ export async function PUT(
           where: {
             assigneeId: existingJob.assigneeId,
             id: { not: id },
-            status: { in: ['assigned', 'in_progress', 'en_route'] },
+            status: { in: ACTIVE_JOB_STATUSES },
           },
+        });
+        // Only clear currentJobId if it still points at THIS job.
+        const emp = await db.employee.findUnique({
+          where: { id: existingJob.assigneeId },
+          select: { currentJobId: true },
         });
         await db.employee.update({
           where: { id: existingJob.assigneeId },
           data: {
             status: otherActiveJobs > 0 ? 'busy' : 'available',
             completedJobs: { increment: 1 },
+            currentJobId: emp?.currentJobId === id ? null : undefined,
           },
         });
       }
@@ -437,11 +578,29 @@ export async function PUT(
       updateData.completedAt = null;
     }
 
-    // If status is being changed to 'cancelled', free up the assignee
+    // ── A2 fix (2025-08-15): Cancel — clear currentJobId + conditional restore ──
+    // Was: blindly set status='available' (wrong if employee has other active
+    // jobs) and never cleared currentJobId (left a dangling pointer).
+    // Now: conditionally clear currentJobId (only if it points at THIS job)
+    // and restore status to 'available' only if no other active jobs remain.
     if (body.status === 'cancelled' && existingJob.assigneeId) {
+      const otherActiveJobs = await db.job.count({
+        where: {
+          assigneeId: existingJob.assigneeId,
+          id: { not: id },
+          status: { in: ACTIVE_JOB_STATUSES },
+        },
+      });
+      const emp = await db.employee.findUnique({
+        where: { id: existingJob.assigneeId },
+        select: { currentJobId: true },
+      });
       await db.employee.update({
         where: { id: existingJob.assigneeId },
-        data: { status: 'available' },
+        data: {
+          status: otherActiveJobs > 0 ? 'busy' : 'available',
+          currentJobId: emp?.currentJobId === id ? null : undefined,
+        },
       });
     }
 

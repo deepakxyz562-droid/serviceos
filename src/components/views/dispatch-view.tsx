@@ -398,7 +398,13 @@ export function DispatchView() {
   // ─── Fetch functions ────────────────────────────────────────────────
   const fetchJobs = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ status: 'pending,assigned,scheduled,en_route,in_progress' });
+      // A6 fix (2025-08-15): Use canonical lifecycle statuses.
+      // Was: 'pending,assigned,scheduled,en_route,in_progress'
+      // 'scheduled' and 'en_route' are NOT canonical — they were dead filter
+      // clauses that matched nothing. The canonical statuses from
+      // src/lib/job-lifecycle.ts are: pending, assigned, accepted, travelling,
+      // arrived, working, paused.
+      const params = new URLSearchParams({ status: 'pending,assigned,accepted,travelling,arrived,working,paused' });
       const res = await fetch(`/api/jobs?XTransformPort=3000&${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -454,9 +460,11 @@ export function DispatchView() {
   // ─── Computed: active job count per employee ────────────────────────
   const activeJobsByEmployee = useMemo(() => {
     const m = new Map<string, Job[]>();
+    // A5 fix (2025-08-15): Use canonical active statuses.
+    const ACTIVE = new Set(['assigned', 'accepted', 'travelling', 'arrived', 'working', 'paused']);
     for (const j of jobs) {
       if (!j.assigneeId) continue;
-      if (!['assigned', 'in_progress', 'en_route'].includes(j.status)) continue;
+      if (!ACTIVE.has(j.status)) continue;
       const arr = m.get(j.assigneeId) ?? [];
       arr.push(j);
       m.set(j.assigneeId, arr);
@@ -526,18 +534,30 @@ export function DispatchView() {
   }, [employees, jobs]);
 
   // ─── Computed: KPI bar ──────────────────────────────────────────────
+  // A5 fix (2025-08-15): Derive En-Route and On-Job from currentJobId +
+  // Job.status (per the approved model), NOT from Employee.status.
+  // Employee.status stays in {available, busy, offline, on_leave} — it
+  // never becomes 'traveling' or 'en_route'. The dispatch KPIs are:
+  //   En Route = employee.currentJobId != null AND that job's status = 'travelling'
+  //   On Job   = employee.currentJobId != null AND that job's status in ['arrived', 'working']
   const kpis = useMemo(() => {
     const total = employees.length;
     const onDuty = employees.filter((e) => e.status !== 'offline' && !isOfflineEmp(e)).length;
-    const enRoute = employees.filter((e) => ['en_route', 'traveling'].includes(e.status)).length;
-    const onJob = employees.filter((e) => ['busy', 'on_job', 'in_progress'].includes(e.status)).length + 
-      employees.filter((e) => getActiveJobCount(e.id) > 0).length - 
-      employees.filter((e) => getActiveJobCount(e.id) > 0 && ['busy', 'on_job', 'in_progress'].includes(e.status)).length;
+    const enRoute = employees.filter((e) => {
+      if (!e.currentJobId) return false;
+      const cj = jobs.find((j) => j.id === e.currentJobId);
+      return cj?.status === 'travelling';
+    }).length;
+    const onJob = employees.filter((e) => {
+      if (!e.currentJobId) return false;
+      const cj = jobs.find((j) => j.id === e.currentJobId);
+      return cj ? ['arrived', 'working'].includes(cj.status) : false;
+    }).length;
     const available = employees.filter((e) => e.status === 'available').length;
     const unassigned = jobs.filter((j) => j.status === 'pending').length;
     const attention = attentionItems.length;
-    return { total, onDuty, enRoute, onJob: Math.max(0, onJob), available, unassigned, attention };
-  }, [employees, jobs, activeJobsByEmployee, attentionItems]);
+    return { total, onDuty, enRoute, onJob, available, unassigned, attention };
+  }, [employees, jobs, attentionItems]);
 
   // ─── Computed: filtered employees ───────────────────────────────────
   const filteredEmployees = useMemo(() => {
@@ -601,7 +621,8 @@ export function DispatchView() {
   );
 
   const activeJobsForMap = useMemo(() => {
-    const ACTIVE = new Set(['pending', 'assigned', 'in_progress', 'en_route', 'scheduled']);
+    // A5 fix (2025-08-15): Use canonical active statuses.
+    const ACTIVE = new Set(['pending', 'assigned', 'accepted', 'travelling', 'arrived', 'working', 'paused']);
     return jobs
       .filter((j) => ACTIVE.has(j.status) && hasGps(j as { latitude?: number | null; longitude?: number | null }))
       .map((j) => ({
@@ -613,7 +634,11 @@ export function DispatchView() {
   }, [jobs]);
 
   const pendingJobs = useMemo(() => jobs.filter((j) => j.status === 'pending'), [jobs]);
-  const assignedJobs = useMemo(() => jobs.filter((j) => ['assigned', 'en_route'].includes(j.status)), [jobs]);
+  // A5 fix (2025-08-15): Assigned-but-not-yet-working jobs (shows in the
+  // dispatcher's "assigned queue"). Includes 'accepted' and 'travelling'
+  // so the dispatcher can see jobs that are accepted/en-route but not yet
+  // arrived/working.
+  const assignedJobs = useMemo(() => jobs.filter((j) => ['assigned', 'accepted', 'travelling'].includes(j.status)), [jobs]);
 
   const filteredPending = useMemo(() => pendingJobs.filter((j) => {
     if (priorityFilter !== 'all' && j.priority !== priorityFilter) return false;

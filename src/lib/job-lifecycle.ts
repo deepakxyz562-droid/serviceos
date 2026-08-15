@@ -218,6 +218,8 @@ export function applyTransition(from: string, action: string): string | null {
       return 'working';
     case 'complete':
       return 'completed';
+    case 'cancel':
+      return 'cancelled';
     case 'generate_invoice':
       return 'invoice_generated';
     default:

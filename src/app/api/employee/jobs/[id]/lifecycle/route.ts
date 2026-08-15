@@ -105,10 +105,15 @@ export async function POST(
     let updatedJob;
     switch (action) {
       case 'accept': {
+        // A4 fix (2025-08-15): Write canonical status 'accepted' (was 'assigned').
+        // The old code wrote status='assigned' + assignmentStatus='accepted',
+        // which was inconsistent with the admin lifecycle route and the
+        // state machine in src/lib/job-lifecycle.ts. Now both routes write
+        // the same canonical status.
         updatedJob = await db.job.update({
           where: { id: jobId },
           data: {
-            status: 'assigned',
+            status: 'accepted',
             assignmentStatus: 'accepted',
             notificationLogJson: logJson,
             metadataJson: setLifecycleTimestamp(job.metadataJson, 'accepted', now),
@@ -286,7 +291,8 @@ export async function POST(
         updatedJob = await db.job.update({
           where: { id: jobId },
           data: {
-            status: 'in_progress',
+            // A4 fix (2025-08-15): Write canonical status 'working' (was 'in_progress').
+            status: 'working',
             notificationLogJson: logJson,
             metadataJson: setLifecycleTimestamp(job.metadataJson, 'workStarted', now),
           },
@@ -380,7 +386,8 @@ export async function POST(
         updatedJob = await db.job.update({
           where: { id: jobId },
           data: {
-            status: 'in_progress',
+            // A4 fix (2025-08-15): Write canonical status 'working' (was 'in_progress').
+            status: 'working',
             notificationLogJson: logJson,
             metadataJson: setLifecycleTimestamp(job.metadataJson, 'resumed', now),
           },
@@ -536,11 +543,12 @@ export async function POST(
         }
 
         // Increment employee completedJobs + set status back to available if no other active jobs
+        // A4 fix (2025-08-15): Use canonical ACTIVE_JOB_STATUSES (was ['assigned', 'in_progress']).
         const otherActiveJobs = await db.job.count({
           where: {
             assigneeId: employee.id,
             id: { not: job.id },
-            status: { in: ['assigned', 'in_progress'] },
+            status: { in: ['assigned', 'accepted', 'travelling', 'arrived', 'working', 'paused'] },
           },
         });
         await db.employee.update({

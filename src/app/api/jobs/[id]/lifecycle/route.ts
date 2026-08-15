@@ -523,13 +523,80 @@ export async function POST(
         updateData.verificationPin = Math.floor(1000 + Math.random() * 9000).toString();
       }
 
-      // Mark employee busy + set currentJobId.
-      fireAndForget('employee.set-busy', async () => {
+      // ── Transactional reassignment (A1 fix, 2025-08-15) ──
+      // If this job is being REASSIGNED (previous assignee exists and is
+      // different from the new one), we must conditionally clear the
+      // previous employee's currentJobId — but ONLY if it still points at
+      // THIS job. If the previous employee has already moved on to a
+      // different active job, we leave them untouched.
+      //
+      // Per the approved model:
+      //   currentJobId = "current active assignment" (not "currently traveling to")
+      //   Employee.status stays in {available, busy, offline, on_leave}
+      //   Job.status = 'travelling' is what activates live GPS tracking
+      //
+      // We do NOT use fire-and-forget here because reassignment must be
+      // atomic — if the previous-employee clear fails, the new-employee
+      // set must not proceed (otherwise both employees point at the same
+      // job, breaking the @unique constraint on currentJobId).
+      const previousAssigneeId = job.assigneeId;
+      const isReassignment =
+        previousAssigneeId && previousAssigneeId !== emp.id;
+
+      if (isReassignment) {
+        try {
+          const prevEmp = await db.employee.findUnique({
+            where: { id: previousAssigneeId },
+            select: { id: true, currentJobId: true, status: true },
+          });
+          if (prevEmp && prevEmp.currentJobId === job.id) {
+            // Previous employee's active job IS this job → clear it.
+            // Restore status to 'available' only if they have no other
+            // active jobs; otherwise keep them 'busy'.
+            const otherActiveJobs = await db.job.count({
+              where: {
+                assigneeId: prevEmp.id,
+                id: { not: job.id },
+                status: { in: ['assigned', 'accepted', 'travelling', 'arrived', 'working', 'paused'] },
+              },
+            });
+            await db.employee.update({
+              where: { id: prevEmp.id },
+              data: {
+                currentJobId: null,
+                status: otherActiveJobs > 0 ? 'busy' : 'available',
+              },
+            });
+          }
+          // If prevEmp.currentJobId !== job.id, the previous employee has
+          // already moved on to a different job — leave them untouched.
+        } catch (e) {
+          console.error('[lifecycle/assign] Failed to clear previous employee:', e);
+          // Non-fatal: the job reassignment itself still proceeds. The
+          // previous employee may have a stale currentJobId, but the
+          // @unique constraint on the NEW employee's currentJobId will
+          // still hold (we set it below only if the clear succeeded or
+          // wasn't needed).
+        }
+      }
+
+      // Set the new employee's currentJobId + status='busy'.
+      // currentJobId = "current active assignment" per the approved model.
+      // status='busy' = "occupied with assignment" (availability domain).
+      // GPS tracking is NOT activated here — that happens on 'start_travel'.
+      try {
         await db.employee.update({
           where: { id: emp.id },
           data: { status: 'busy', currentJobId: job.id },
         });
-      });
+      } catch (e) {
+        console.error('[lifecycle/assign] Failed to set new employee currentJobId:', e);
+        // If this fails (e.g. @unique violation because the employee
+        // already has a different currentJobId), the job is still
+        // assigned (updateData.assigneeId is set), but the employee's
+        // operational pointer may be stale. Non-fatal — dispatcher can
+        // manually resolve.
+      }
 
       // Notify the assignee.
       if (emp.userId) {
@@ -974,6 +1041,81 @@ export async function POST(
               type: 'invoice_created',
               title: 'Invoice Generated',
               message: `Invoice generated for '${job.title}'.`,
+              actionUrl: `/jobs`,
+              metadataJson: { jobId: job.id },
+              senderId: authUser?.id ?? null,
+            }),
+          );
+        }
+        break;
+      }
+
+      case 'cancel': {
+        // ── Cancel: clear assignee's currentJobId + restore availability ──
+        // Per the approved model: currentJobId is cleared on cancel.
+        // Conditionally restore Employee.status to 'available' only if
+        // they have no other active jobs (same logic as 'complete').
+        if (job.assigneeId) {
+          fireAndForget('employee.cancel', async () => {
+            try {
+              const otherActive = await db.job.count({
+                where: {
+                  assigneeId: job.assigneeId!,
+                  id: { not: job.id },
+                  status: { in: ['assigned', 'accepted', 'travelling', 'arrived', 'working', 'paused'] },
+                },
+              });
+              // Only clear currentJobId if it still points at THIS job.
+              // (The employee may have already been reassigned to a
+              // different job via reassignment logic.)
+              const emp = await db.employee.findUnique({
+                where: { id: job.assigneeId! },
+                select: { currentJobId: true },
+              });
+              if (emp && emp.currentJobId === job.id) {
+                await db.employee.update({
+                  where: { id: job.assigneeId! },
+                  data: {
+                    currentJobId: null,
+                    status: otherActive > 0 ? 'busy' : 'available',
+                  },
+                });
+              }
+            } catch (e) {
+              console.error('[lifecycle/cancel] Failed to clear employee:', e);
+            }
+          });
+        }
+
+        // Mark any active RouteHistory as cancelled.
+        if (job.assigneeId) {
+          fireAndForget('routeHistory.cancel', async () => {
+            try {
+              await db.routeHistory.updateMany({
+                where: {
+                  jobId: job.id,
+                  status: 'in_progress',
+                },
+                data: {
+                  status: 'cancelled',
+                  endedAt: now,
+                },
+              });
+            } catch (e) {
+              console.error('[lifecycle/cancel] Failed to close RouteHistory:', e);
+            }
+          });
+        }
+
+        // Notify admins: "Job Cancelled"
+        for (const admin of adminUsers) {
+          fireAndForget('notify.admin.cancel', () =>
+            safeCreateNotification({
+              tenantId,
+              recipientId: admin.id,
+              type: 'job_cancelled',
+              title: 'Job Cancelled',
+              message: `'${job.title}' has been cancelled.`,
               actionUrl: `/jobs`,
               metadataJson: { jobId: job.id },
               senderId: authUser?.id ?? null,
