@@ -163,6 +163,20 @@ export async function POST(
           include: { assignee: true, customer: true },
         });
 
+        // Update employee status to en_route, set currentJobId, and refresh lastSeenAt
+        await db.employee.update({
+          where: { id: employee.id },
+          data: {
+            status: 'en_route',
+            currentJobId: job.id,
+            lastSeenAt: now,
+            lastLocationAt: typeof latitude === 'number' ? now : undefined,
+            ...(typeof latitude === 'number' && typeof longitude === 'number'
+              ? { latitude, longitude }
+              : {}),
+          },
+        });
+
         // Create a new RouteHistory row for this trip
         await db.routeHistory.create({
           data: {
