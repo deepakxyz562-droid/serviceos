@@ -174,11 +174,15 @@ const ROUTE_REFRESH_COMPLETED_MS = 60_000; // 60s throttle for completed routes
 // noisy GPS ping (which can jitter ±10-20m even when stationary).
 const OSRM_REFETCH_DISTANCE_M = 100;
 
-const TILE_URL_STREETS = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+// CartoDB Voyager tiles render labels in English globally (the default
+// OSM tiles render labels in the local language of each region, which for
+// India shows Hindi/Devanagari — confusing for English-speaking dispatchers).
+const TILE_URL_STREETS =
+  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 const TILE_URL_SATELLITE =
   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const TILE_ATTRIBUTION_STREETS =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 const TILE_ATTRIBUTION_SATELLITE =
   'Imagery &copy; <a href="https://www.esri.com/">Esri</a>, Maxar, Earthstar Geographics';
 
@@ -329,8 +333,12 @@ function buildTechPopupHtml(
       </div>
       ${currentJobHtml}
       ${telemetryHtml}
-      <div style="font-size:10px;color:#94a3b8;margin-top:6px;border-top:1px solid #e2e8f0;padding-top:6px;">
-        Click to follow this technician
+      <div style="margin-top:6px;border-top:1px solid #e2e8f0;padding-top:6px;">
+        <button data-follow-tech-id="${escapeHtml(tech.id)}" style="
+          width:100%;padding:6px 10px;border:none;border-radius:6px;
+          background:#3b82f6;color:#fff;font-size:11px;font-weight:600;
+          cursor:pointer;font-family:inherit;
+        ">Follow this technician</button>
       </div>
     </div>
   `;
@@ -599,6 +607,10 @@ interface PathPoint {
 interface RouteCacheEntry {
   activePath: PathPoint[];       // breadcrumb from the in_progress RouteHistory
   completedPaths: PathPoint[][]; // breadcrumbs from completed routes (max 5)
+  // Start coordinates of the active (in_progress) route — from RouteHistory.startLat/startLng.
+  // Used to draw a distinct "start" marker so dispatchers can see where the tech began.
+  activeStartLat: number | null;
+  activeStartLng: number | null;
   fetchedAt: number;
   status: 'in_progress' | 'completed' | 'none';
 }
@@ -661,6 +673,8 @@ export default function LiveTechnicianMap({
   // can fire many times per second during a marker glide.
   const osrmFetchInFlightRef = useRef<Set<string>>(new Set());
   const accuracyCirclesRef = useRef<Map<string, L.Circle>>(new Map());
+  // Start-point markers for active routes, keyed by jobId. Cleared on redraw.
+  const routeStartMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const animStateRef = useRef<Map<string, AnimState>>(new Map());
   const tileLayersRef = useRef<{ streets: L.TileLayer | null; satellite: L.TileLayer | null }>({
     streets: null,
@@ -1054,6 +1068,48 @@ export default function LiveTechnicianMap({
 
     const newLines: L.Polyline[] = [];
 
+    // 0. Start-point marker — a distinct pin showing where the tech began
+    //    travelling. Drawn from RouteHistory.startLat/startLng (captured at
+    //    the moment `start_travel` was called). Without this, dispatchers
+    //    only see the tech's CURRENT position + the job destination — they
+    //    can't tell where the tech started from.
+    const oldStartMarker = routeStartMarkersRef.current.get(jobId);
+    if (oldStartMarker) {
+      oldStartMarker.remove();
+      routeStartMarkersRef.current.delete(jobId);
+    }
+    if (
+      entry.activeStartLat != null &&
+      entry.activeStartLng != null &&
+      isValidCoord(entry.activeStartLat, entry.activeStartLng)
+    ) {
+      const startIcon = L.divIcon({
+        className: 'fieseros-route-start-marker',
+        html: `<div style="
+          width:28px;height:28px;border-radius:50% 50% 50% 0;
+          background:#10b981;border:3px solid #fff;
+          transform:rotate(-45deg);
+          box-shadow:0 2px 6px rgba(0,0,0,0.35);
+          display:flex;align-items:center;justify-content:center;
+        "><span style="transform:rotate(45deg);font-size:14px;color:#fff;font-weight:700;">A</span></div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 28],
+      });
+      const startMarker = L.marker(
+        [entry.activeStartLat, entry.activeStartLng],
+        { icon: startIcon },
+      );
+      startMarker.bindPopup(
+        `<div style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:12px;">
+          <strong style="color:#10b981;">Start point</strong><br/>
+          <span style="color:#64748b;">Where the technician began travelling</span>
+        </div>`,
+        { closeButton: true },
+      );
+      startMarker.addTo(map);
+      routeStartMarkersRef.current.set(jobId, startMarker);
+    }
+
     // 1. Completed breadcrumb (solid emerald) — the path the tech has actually driven.
     if (entry.activePath.length >= 2) {
       const pts = entry.activePath.map((p) => [p.lat, p.lng] as [number, number]);
@@ -1253,9 +1309,17 @@ export default function LiveTechnicianMap({
         : completedPaths.length > 0
           ? 'completed'
           : 'none';
+      // Capture the active route's start coordinates so we can draw a
+      // distinct "start" marker (the tech's original position when travel began).
+      const activeStartLat =
+        typeof active?.startLat === 'number' ? active.startLat : null;
+      const activeStartLng =
+        typeof active?.startLng === 'number' ? active.startLng : null;
       routeCacheRef.current.set(jobId, {
         activePath,
         completedPaths,
+        activeStartLat,
+        activeStartLng,
         fetchedAt: Date.now(),
         status,
       });
@@ -1375,6 +1439,28 @@ export default function LiveTechnicianMap({
       }
     });
 
+    // Wire the "Follow this technician" button inside tech popups.
+    // Leaflet renders popup HTML as inert DOM — buttons inside popups don't
+    // fire React onClick handlers. We listen for `popupopen`, find the
+    // `[data-follow-tech-id]` button inside the just-opened popup, and attach
+    // a real DOM click listener that selects the tech (same as clicking the
+    // marker icon). Without this the button was a dead label.
+    map.on('popupopen', (e: L.LeafletEvent) => {
+      const popup = (e as unknown as { popup: L.Popup }).popup;
+      const el = popup?.getElement?.();
+      if (!el) return;
+      const btn = el.querySelector('[data-follow-tech-id]') as HTMLButtonElement | null;
+      if (!btn) return;
+      const techId = btn.getAttribute('data-follow-tech-id');
+      if (!techId) return;
+      btn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        onTechnicianSelectRef.current?.(techId);
+        map.closePopup();
+      });
+    });
+
     const invalidateTimer = setTimeout(() => {
       if (mapRef.current) mapRef.current.invalidateSize();
     }, 100);
@@ -1399,6 +1485,8 @@ export default function LiveTechnicianMap({
       // Phase 3.2: tear down per-job route polylines + cache.
       routeLinesByJobRef.current.forEach((lines) => lines.forEach((l) => l.remove()));
       routeLinesByJobRef.current.clear();
+      routeStartMarkersRef.current.forEach((m) => m.remove());
+      routeStartMarkersRef.current.clear();
       routeCacheRef.current.clear();
       osrmRouteCacheRef.current.clear();
       osrmFetchInFlightRef.current.clear();

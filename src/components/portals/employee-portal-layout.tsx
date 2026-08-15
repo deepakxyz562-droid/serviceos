@@ -729,9 +729,16 @@ function useEmployeeProfile() {
 function useJobDetailSheet({
   jobs,
   refetch,
+  hasActiveShift = false,
 }: {
   jobs: Job[];
   refetch: (opts?: { silent?: boolean }) => Promise<void> | void;
+  // True when the employee has an active (non-completed) shift. When `complete`
+  // fires, we stop job-tagged GPS tracking but restart shift-level tracking
+  // (no jobId) so the dispatcher still sees the tech as "online" + pinging.
+  // Without this, completing a job killed ALL tracking and the tech showed as
+  // "Offline" on the dispatch map until they started another job.
+  hasActiveShift?: boolean;
 }) {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -810,11 +817,20 @@ function useJobDetailSheet({
         //  - arrive: KEEP tracking — GPS stays live through arrival + working
         //    so dispatch can see the technician on-site and during the job.
         //  - start_work: no-op (tracking already running from start_travel)
-        //  - complete: stop tracking + release Wake Lock
+        //  - complete: stop JOB-tagged tracking. If the employee is still
+        //    clocked in (hasActiveShift), restart shift-level tracking (no
+        //    jobId) so dispatch continues to see them as online + pinging.
+        //    Previously `stopTracking()` killed ALL tracking — the tech showed
+        //    as "Offline" on the dispatch map the moment they completed a job,
+        //    even though they were still on the clock.
         if (action === 'start_travel') {
           startTracking(jobId);
         } else if (action === 'complete') {
           stopTracking();
+          if (hasActiveShift) {
+            // Brief delay so the stop clears the watch before we restart.
+            setTimeout(() => startTracking(), 200);
+          }
         }
         // Note: `arrive` and `start_work` deliberately do NOT stopTracking().
         // refetch() updates the `jobs` array; the sync effect above will
@@ -1330,6 +1346,7 @@ function HomeView({
   error,
   refetch,
   employee,
+  hasActiveShift,
 }: {
   onViewChange?: (view: EmployeeSubView) => void;
   // Hoisted from the parent EmployeePortalLayout so HomeView, MyJobsView and
@@ -1343,6 +1360,9 @@ function HomeView({
   error: string | null;
   refetch: (opts?: { silent?: boolean }) => Promise<void> | void;
   employee: EmployeeRecord | null;
+  // True when the employee has an active shift — passed to useJobDetailSheet
+  // so `complete` can restart shift-level tracking after stopping job tracking.
+  hasActiveShift: boolean;
 }) {
   const { auth } = useAppStore();
   // Shared job-detail-sheet state machine — lets the employee tap a job in
@@ -1353,7 +1373,7 @@ function HomeView({
   // home screen (the natural first action after login) did nothing on iOS,
   // Android, and desktop alike.
   const { selectedJob, setSelectedJob, actionLoading, handleLifecycleAction } =
-    useJobDetailSheet({ jobs, refetch });
+    useJobDetailSheet({ jobs, refetch, hasActiveShift });
 
   const employeeName = employee?.name || auth.user?.name || auth.user?.email || 'Employee';
   const firstName = employeeName.split(' ')[0] || 'Employee';
@@ -2727,19 +2747,22 @@ function MyJobsView({
   loading,
   error,
   refetch,
+  hasActiveShift,
 }: {
   // Hoisted from EmployeePortalLayout — see HomeView for the rationale.
   jobs: Job[];
   loading: boolean;
   error: string | null;
   refetch: (opts?: { silent?: boolean }) => Promise<void> | void;
+  // True when the employee has an active shift — passed to useJobDetailSheet.
+  hasActiveShift: boolean;
 }) {
   const [filter, setFilter] = useState<string>('all');
   // Shared job-detail-sheet state machine (selectedJob + actionLoading +
   // handleLifecycleAction + the sync-from-jobs effect). Extracted so
   // HomeView can reuse the exact same behaviour.
   const { selectedJob, setSelectedJob, actionLoading, handleLifecycleAction } =
-    useJobDetailSheet({ jobs, refetch });
+    useJobDetailSheet({ jobs, refetch, hasActiveShift });
 
   const filteredJobs = filter === 'all'
     ? jobs
@@ -5114,6 +5137,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
                     error={jobsError}
                     refetch={refetchJobs}
                     employee={employee}
+                    hasActiveShift={hasActiveShift}
                   />
                 </div>
               )}
@@ -5124,6 +5148,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
                     loading={jobsLoading}
                     error={jobsError}
                     refetch={refetchJobs}
+                    hasActiveShift={hasActiveShift}
                   />
                 </div>
               )}

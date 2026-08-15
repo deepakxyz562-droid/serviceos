@@ -50,14 +50,43 @@ function haversineMeters(
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-async function resolveTenantId(workspaceId: string | null): Promise<string | null> {
+/**
+ * Resolve the tenantId for a GPS ping.
+ *
+ * Priority:
+ *   1. The employee's workspace.tenantId (most accurate — the workspace owns
+ *      the employee).
+ *   2. The User record linked to this employee (authUser.tenantId / user.tenantId).
+ *      Handles employees whose workspaceId is null or whose workspace has no
+ *      tenantId (schema drift on legacy Supabase deployments).
+ *   3. null — the caller must NOT write 'unknown' to the DB (that creates fake
+ *      tenant scoping and breaks the realtime gps.ping fanout because the
+ *      dispatch viewer is joined to room `tenant:<viewerTenantId>`, not
+ *      `tenant:unknown`).
+ */
+async function resolveTenantId(
+  workspaceId: string | null,
+  userId?: string | null,
+): Promise<string | null> {
   try {
     if (workspaceId) {
-      const ws = await db.workspace.findUnique({ where: { id: workspaceId }, select: { tenantId: true } });
+      const ws = await db.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { tenantId: true },
+      });
       if (ws?.tenantId) return ws.tenantId;
     }
-    const anyWs = await db.workspace.findFirst({ select: { tenantId: true } });
-    return anyWs?.tenantId ?? null;
+    // Fallback: look up the tenantId on the linked User record. This is the
+    // correct source of truth when the Employee row has no workspaceId or the
+    // workspace row is missing its tenantId (schema drift).
+    if (userId) {
+      const u = await db.user.findUnique({
+        where: { id: userId },
+        select: { tenantId: true },
+      });
+      if (u?.tenantId) return u.tenantId;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -148,13 +177,21 @@ export async function POST(request: NextRequest) {
 
     const employee = await db.employee.findUnique({
       where: { id: targetEmployeeId },
-      select: { id: true, workspaceId: true },
+      select: { id: true, workspaceId: true, userId: true },
     });
     if (!employee) {
       return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
     }
 
-    const tenantId = await resolveTenantId(employee.workspaceId);
+    // Resolve tenantId from workspace → User fallback (see resolveTenantId docs).
+    // If both are null, fall back to the authenticated user's tenantId (from
+    // the JWT). We do NOT write 'unknown' to the DB — that would pollute the
+    // GPSLocation.tenantId column with a value that matches no real tenant and
+    // break downstream queries + the realtime gps.ping fanout.
+    let tenantId = await resolveTenantId(employee.workspaceId, employee.userId);
+    if (!tenantId && authUser.tenantId) {
+      tenantId = authUser.tenantId;
+    }
     // B2 fix (2025-08-15): Use client-provided capturedAt if valid, else now.
     // Validates: must parse to a Date, not more than 5 minutes in the future,
     // not older than 24 hours (stale offline pings beyond 24h are dropped to
@@ -173,9 +210,12 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Create the GPSLocation record.
+    //    If tenantId is null, we still write the row (the GPS data is valuable
+    //    for the employee's own route history) but set tenantId to null. The
+    //    realtime fanout will skip this ping (no tenant room).
     const gps = await db.gPSLocation.create({
       data: {
-        tenantId: tenantId ?? 'unknown',
+        tenantId: tenantId,
         employeeId: targetEmployeeId,
         jobId: jobId ?? null,
         latitude,
