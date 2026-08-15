@@ -11,6 +11,11 @@ import {
   CalendarDays, Briefcase, AlertCircle, User, UserPlus,
   Loader2, ArrowLeft, ImagePlus, Link2, Paperclip, Camera,
   FileText, ImageIcon, ClipboardList, Truck, Info,
+  // ── Icons added by the Grid View + Filter Chips update (commit 39807a50).
+  // These were referenced in the new JSX but missing from the import —
+  // causing a ReferenceError at render time that the ViewErrorBoundary
+  // caught as "Something went wrong. This section failed to load."
+  LayoutGrid, MessageSquare, UserCheck, XCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -492,7 +497,7 @@ export function ImageUploader({
         formData.append('file', file);
         formData.append('bucket', bucket);
         formData.append('folder', 'leads');
-        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const res = await authFetch('/api/upload', { method: 'POST', body: formData });
         if (res.ok) {
           const data = await res.json();
           if (data.url) urls.push(data.url);
@@ -590,7 +595,7 @@ export function CreateServiceDialog({
     }
     setSaving(true);
     try {
-      const res = await fetch('/api/services', {
+      const res = await authFetch('/api/services', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -774,7 +779,7 @@ export function CreateCustomerDialog({
         }
       ] : undefined;
 
-      const res = await fetch('/api/customers', {
+      const res = await authFetch('/api/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1487,7 +1492,7 @@ export function LeadsView() {
     { id: string; name: string; category: string; basePrice: number; duration: number }[]
   >([]);
   useEffect(() => {
-    fetch('/api/services?active=true&limit=200')
+    authFetch('/api/services?active=true&limit=200')
       .then((r) => (r.ok ? r.json() : { services: [] }))
       .then((data) => {
         const list = Array.isArray(data) ? data : data?.services ?? [];
@@ -1501,7 +1506,7 @@ export function LeadsView() {
   // and auto-fill the contact info section when a customer is picked.
   const [customers, setCustomers] = useState<{ id: string; name: string; phone: string; email?: string | null; address?: string | null }[]>([]);
   useEffect(() => {
-    fetch('/api/customers?limit=200')
+    authFetch('/api/customers?limit=200')
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
         const list = data.customers ?? (Array.isArray(data) ? data : []);
@@ -1613,7 +1618,7 @@ export function LeadsView() {
       // Exclude soft-deleted leads (shown in Lead History instead)
       params.set('deleted', 'false');
 
-      const res = await fetch(`/api/leads?${params.toString()}`);
+      const res = await authFetch(`/api/leads?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         // Client-side filter: hide soft-deleted leads
@@ -1777,7 +1782,7 @@ export function LeadsView() {
         body.notesJson = notesJsonToSend;
       }
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -1806,7 +1811,7 @@ export function LeadsView() {
     try {
       // Soft-delete: sets deletedAt = now(). Lead is hidden from active list
       // but kept in Lead History for audit/permanent-delete.
-      const res = await fetch(`/api/leads/${deletingLead.id}`, {
+      const res = await authFetch(`/api/leads/${deletingLead.id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ softDelete: true }),
@@ -1838,7 +1843,7 @@ export function LeadsView() {
     if (!convertingLead) return;
     setConverting(true);
     try {
-      const res = await fetch('/api/leads/convert', {
+      const res = await authFetch('/api/leads/convert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ leadId: convertingLead.id }),
@@ -1870,7 +1875,7 @@ export function LeadsView() {
   const handleStatusChange = async (leadId: string, newStatus: string) => {
     setStatusLoadingId(leadId);
     try {
-      const res = await fetch(`/api/leads/${leadId}`, {
+      const res = await authFetch(`/api/leads/${leadId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
@@ -2020,7 +2025,7 @@ export function LeadsView() {
         try { return JSON.parse(selectedLead.notesJson || '[]'); } catch { return []; }
       })();
       const updatedNotes = [...existingNotes, { text: newNote.trim(), createdAt: new Date().toISOString() }];
-      const res = await fetch(`/api/leads/${selectedLead.id}`, {
+      const res = await authFetch(`/api/leads/${selectedLead.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notesJson: JSON.stringify(updatedNotes) }),

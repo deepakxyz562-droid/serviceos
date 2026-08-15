@@ -5,6 +5,17 @@ import { recordUserActivity } from '@/lib/presence';
 import { getCookieDomain } from '@/lib/brand';
 import { db } from '@/lib/db';
 
+// ── Presence throttle (Supabase production safety) ─────────────────────────
+// Per-employee in-memory timestamp of the last lastSeenAt write fired from
+// getAuthUser(). Prevents a write storm on the Employee table: without this,
+// EVERY authenticated API call (fetch jobs, poll, upload, etc.) issued a
+// PATCH via PostgREST, which under load exhausted the Supabase PgBouncer
+// pool and contended with the real GPS-ping PATCHes from /api/gps/track.
+// 60s window matches the dedicated heartbeat interval, so presence stays
+// accurate without redundant writes. Map is unbounded in theory but in
+// practice bounded by the number of active employees per server instance.
+const LAST_SEEN_WRITE_TS = new Map<string, number>();
+
 // JWT secret resolution.
 // NOTE: We intentionally do NOT throw at module-load time. During `next build`,
 // Next.js evaluates route modules (e.g. /api/activity-logs/[id]) to collect
@@ -154,18 +165,34 @@ export async function getAuthUser(): Promise<AuthUser | null> {
       // NOTE: Only refresh if the user is linked to an Employee record (role
       // 'employee' or has an employeeId). Admins/agents without an Employee
       // row are skipped (db.employee.update would throw P2025).
+      //
+      // PRODUCTION THROTTLE (Supabase):
+      // The original comment claimed a 60s throttle but the code did NOT
+      // throttle — it fired a PATCH on EVERY request. Against Supabase
+      // (PostgREST + PgBouncer pool) this caused a write storm on the
+      // Employee table: every fetch/poll/upload triggered a network
+      // round-trip, creating contention with the GPS ping PATCHes from
+      // /api/gps/track and exhausting the connection pool under load.
+      // We now keep a per-employee in-memory "last write" timestamp and
+      // skip the PATCH if we wrote within the last 60 seconds. This is
+      // safe because the dedicated /api/employees/heartbeat endpoint
+      // (called every 60s by the PWA + every 60s by the mobile app) is
+      // the source of truth for presence — this auth.ts write is only a
+      // safety net for employees who never trigger start_travel.
       if (normalized.role === 'employee' || normalized.employeeId) {
-        try {
-          // Throttle: only update if lastSeenAt is older than 60s to avoid
-          // hammering the DB on every single API call.
-          // We do this unconditionally here — the update is cheap (single row)
-          // and the cost of a stale "Offline" status is high (user confusion).
-          void db.employee.updateMany({
-            where: { id: normalized.employeeId || normalized.id },
-            data: { lastSeenAt: new Date() },
-          });
-        } catch {
-          // Swallow — never let presence break auth.
+        const empId = normalized.employeeId || normalized.id;
+        const now = Date.now();
+        const lastWrite = LAST_SEEN_WRITE_TS.get(empId) ?? 0;
+        if (now - lastWrite >= 60_000) {
+          LAST_SEEN_WRITE_TS.set(empId, now);
+          try {
+            void db.employee.updateMany({
+              where: { id: empId },
+              data: { lastSeenAt: new Date() },
+            });
+          } catch {
+            // Swallow — never let presence break auth.
+          }
         }
       }
     }

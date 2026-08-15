@@ -37,6 +37,7 @@ import {
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { CustomerFormSheet } from '@/components/customer/customer-form-sheet';
+import { authFetch } from '@/lib/api';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -201,7 +202,7 @@ export function CrmView() {
     try {
       const params = new URLSearchParams({ page: '1', pageSize: '100' });
       if (search.trim()) params.set('search', search.trim());
-      const res = await fetch(`/api/customers?${params.toString()}`);
+      const res = await authFetch(`/api/customers?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setCustomers(data.customers ?? (Array.isArray(data) ? data : []));
@@ -231,7 +232,7 @@ export function CrmView() {
   // fetchCustomers) on success. Deletion + portal invitations still live here.
   const handleDeleteCustomer = async (id: string) => {
     try {
-      const res = await fetch(`/api/customers?id=${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/customers?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Customer deleted');
         fetchCustomers(debouncedCustomerSearch);
@@ -248,7 +249,7 @@ export function CrmView() {
   };
 
   // ─── Customer Portal Invitation Handlers ────────────────────────────────
-  const API_SUFFIX = '?XTransformPort=3000';
+  // NOTE: XTransformPort is auto-appended by authFetch() — no manual suffix needed.
 
   const handleSendInvite = async (customer: Customer) => {
     setInviteCustomer(customer);
@@ -258,9 +259,9 @@ export function CrmView() {
     try {
       const endpoint =
         customer.invitationStatus === 'pending'
-          ? `/api/customers/${customer.id}/portal/resend${API_SUFFIX}`
-          : `/api/customers/${customer.id}/portal/enable${API_SUFFIX}`;
-      const res = await fetch(endpoint, { method: 'POST' });
+          ? `/api/customers/${customer.id}/portal/resend`
+          : `/api/customers/${customer.id}/portal/enable`;
+      const res = await authFetch(endpoint, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success && data.activationUrl) {
         setInviteUrl(data.activationUrl);
@@ -278,8 +279,8 @@ export function CrmView() {
 
   const handleDisablePortal = async (customer: Customer) => {
     try {
-      const res = await fetch(
-        `/api/customers/${customer.id}/portal/disable${API_SUFFIX}`,
+      const res = await authFetch(
+        `/api/customers/${customer.id}/portal/disable`,
         { method: 'POST' }
       );
       if (res.ok) {
@@ -342,13 +343,13 @@ export function CrmView() {
 
     try {
       const [timelineRes, jobsRes, assetsRes] = await Promise.allSettled([
-        fetch(`/api/customers/${customer.id}/timeline`).then((r) =>
+        authFetch(`/api/customers/${customer.id}/timeline`).then((r) =>
           r.ok ? r.json() : Promise.reject(new Error(`timeline ${r.status}`)),
         ),
-        fetch(`/api/jobs?customerId=${customer.id}`).then((r) =>
+        authFetch(`/api/jobs?customerId=${customer.id}`).then((r) =>
           r.ok ? r.json() : Promise.reject(new Error(`jobs ${r.status}`)),
         ),
-        fetch(`/api/customers/${customer.id}/assets`).then((r) =>
+        authFetch(`/api/customers/${customer.id}/assets`).then((r) =>
           r.ok ? r.json() : Promise.reject(new Error(`assets ${r.status}`)),
         ),
       ]);
@@ -395,7 +396,7 @@ export function CrmView() {
     if (!selectedCustomer || !notes.trim()) return;
     setNotesLoading(true);
     try {
-      const res = await fetch(`/api/customers/${selectedCustomer.id}/timeline`, {
+      const res = await authFetch(`/api/customers/${selectedCustomer.id}/timeline`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -408,7 +409,7 @@ export function CrmView() {
         toast.success('Note saved');
         setNotes('');
         // Refresh timeline
-        const tRes = await fetch(`/api/customers/${selectedCustomer.id}/timeline`);
+        const tRes = await authFetch(`/api/customers/${selectedCustomer.id}/timeline`);
         if (tRes.ok) {
           const data = await tRes.json();
           setTimeline(Array.isArray(data?.entries) ? data.entries : []);

@@ -66,6 +66,14 @@ const TABLE_MAP: Record<string, string> = {
   employee: 'Employee',
   employeeStatusLog: 'EmployeeStatusLog',
   notificationLog: 'NotificationLog',
+  // ── Live Dispatch / GPS tracking (Wave 3) ──
+  // These MUST be explicitly mapped so the PostgREST adapter targets the
+  // correct table names. Without this, db.gPSLocation.* silently falls
+  // through to a capitalized-name guess which may not match the actual
+  // Supabase table (Prisma migrations create mixed-case quoted identifiers
+  // on Postgres, and the casing must match exactly).
+  gPSLocation: 'GPSLocation',
+  routeHistory: 'RouteHistory',
   customer: 'Customer',
   resource: 'Resource',
   job: 'Job',
@@ -236,6 +244,14 @@ const TABLES_WITHOUT_UPDATED_AT = new Set<string>([
   // triggers a retry round-trip to strip it. Listing it here skips the
   // wasted round-trip on every hourly cron tick.
   'FeaturedLocation',
+  // ── Live Dispatch (Wave 3) ──
+  // GPSLocation is an append-only log: schema declares createdAt + capturedAt
+  // but NO updatedAt. Without this entry, every GPS ping insert auto-adds
+  // updatedAt → PostgREST 400 ("column updatedAt of relation GPSLocation
+  // does not exist") → the resilient retry loop strips it and retries, but
+  // that doubles the latency of every single 15-second ping and floods the
+  // logs. Listing it here makes inserts single-round-trip.
+  'GPSLocation',
 ]);
 
 // ── Relation Mapping ───────────────────────────────────────────────────────

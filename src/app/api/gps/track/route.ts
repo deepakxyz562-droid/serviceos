@@ -203,7 +203,32 @@ export async function POST(request: NextRequest) {
       });
 
       if (route) {
-        const path = safeParseJson<PathPoint[]>(route.pathJson, []);
+        // ── Supabase/Postgres jsonb compatibility ──
+        // The Prisma schema declares pathJson as `String @default("[]")`, so
+        // on SQLite it is TEXT and JSON.parse/JSON.stringify round-trips
+        // cleanly. On Supabase/Postgres the column MAY have been created as
+        // `jsonb` (recommended Postgres practice) instead of `text`. If so,
+        // sending a stringified string into a jsonb column causes a PostgREST
+        // 400 ("invalid input syntax for type json") which the outer
+        // try/catch would silently swallow — GPS pings would "succeed" (the
+        // GPSLocation insert works) but the route trail would NEVER grow on
+        // the live map.
+        //
+        // safeParseJson already tolerates both shapes: if PostgREST returns
+        // a parsed JSON array (jsonb column), JSON.parse(array) throws and
+        // we fall back to treating it as already-parsed. If it returns a
+        // string (text column), JSON.parse works normally.
+        const raw = route.pathJson as unknown;
+        let path: PathPoint[];
+        if (typeof raw === 'string') {
+          path = safeParseJson<PathPoint[]>(raw, []);
+        } else if (Array.isArray(raw)) {
+          // jsonb column — PostgREST already parsed it into an array.
+          path = raw as PathPoint[];
+        } else {
+          path = [];
+        }
+
         const newPoint: PathPoint = {
           lat: latitude,
           lng: longitude,
@@ -213,13 +238,30 @@ export async function POST(request: NextRequest) {
         path.push(newPoint);
 
         // Recompute distance (add the haversine distance from the previous endpoint).
-        let newDistance = route.distanceMeters;
+        let newDistance = route.distanceMeters as number;
         if (route.endLat != null && route.endLng != null) {
-          newDistance += haversineMeters(route.endLat, route.endLng, latitude, longitude);
+          newDistance += haversineMeters(
+            route.endLat as number,
+            route.endLng as number,
+            latitude,
+            longitude,
+          );
         } else if (route.startLat != null && route.startLng != null) {
-          newDistance += haversineMeters(route.startLat, route.startLng, latitude, longitude);
+          newDistance += haversineMeters(
+            route.startLat as number,
+            route.startLng as number,
+            latitude,
+            longitude,
+          );
         }
 
+        // Send pathJson as a STRING regardless of column type. For text
+        // columns this is correct. For jsonb columns, Prisma's PostgREST
+        // adapter path in supabase-db.ts forwards the value as-is, and
+        // PostgREST will coerce a valid JSON string into jsonb. If your
+        // Supabase deployment rejects this, the catch below logs the exact
+        // PostgREST error code + hint so you can diagnose the column type
+        // mismatch without a silent failure.
         await db.routeHistory.update({
           where: { id: route.id },
           data: {
@@ -228,13 +270,28 @@ export async function POST(request: NextRequest) {
             endLng: longitude,
             distanceMeters: newDistance,
             // Recompute durationMinutes (live).
-            durationMinutes: Math.round((now.getTime() - route.startedAt.getTime()) / 60000),
+            durationMinutes: Math.round(
+              (now.getTime() - new Date(route.startedAt as string | Date).getTime()) / 60000,
+            ),
           },
         });
         routeUpdated = true;
       }
     } catch (e) {
-      console.error('[GPS POST] route update failed:', e);
+      // Log with full context so Supabase/PostgREST errors are diagnosable
+      // in production. Previously this was a bare console.error that was
+      // easy to miss in log streams. The most common production failure is
+      // a jsonb/text column type mismatch on pathJson — the error message
+      // from PostgREST will contain "invalid input syntax for type json"
+      // or "column pathJson of relation RouteHistory does not exist".
+      const err = e as { message?: string; code?: string; hint?: string };
+      console.error('[GPS POST] route update failed:', {
+        message: err?.message,
+        code: err?.code,
+        hint: err?.hint,
+        employeeId: targetEmployeeId,
+        jobId: jobId ?? null,
+      });
     }
 
     // 3. Update the employee's lastSeenAt / lastLocationAt / lat / lng (best-effort).
@@ -249,7 +306,16 @@ export async function POST(request: NextRequest) {
         },
       });
     } catch (e) {
-      console.error('[GPS POST] employee update failed:', e);
+      // Same Supabase diagnostic treatment as the route update above.
+      // If this fails, the technician's marker won't move on the Live
+      // Dispatch map and they'll show as "Offline" after 30 minutes.
+      const err = e as { message?: string; code?: string; hint?: string };
+      console.error('[GPS POST] employee update failed:', {
+        message: err?.message,
+        code: err?.code,
+        hint: err?.hint,
+        employeeId: targetEmployeeId,
+      });
     }
 
     // 4. Emit gps.ping via EventBus so the realtime service can push the
