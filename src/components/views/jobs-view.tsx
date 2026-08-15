@@ -372,6 +372,66 @@ function formatDate(dateStr?: string | null) {
   }
 }
 
+/**
+ * Phase 2: Format a job's scheduled window as a compact pill label.
+ * Returns strings like:
+ *   "Today, 2:00 PM"              — single time, no duration known
+ *   "Today, 2:00 PM – 4:00 PM"    — start + computed end
+ *   "Tomorrow, 9:00 AM – 11:30 AM"
+ *   "Aug 16, 2:00 PM – 4:00 PM"   — further out
+ *   null — no scheduledAt
+ *
+ * @param scheduledAt   ISO string of the job start
+ * @param scheduledTime Optional explicit time string ("14:00") — overrides the time portion
+ * @param estimatedDuration Minutes (optional). Used to compute the end time.
+ */
+function formatSchedulePill(
+  scheduledAt?: string | null,
+  scheduledTime?: string | null,
+  estimatedDuration?: number | null,
+): string | null {
+  if (!scheduledAt) return null;
+  try {
+    const start = new Date(scheduledAt);
+    const now = new Date();
+    // Day label: Today / Tomorrow / short date
+    const isSameDay = (a: Date, b: Date) =>
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+    const dayLabel = isSameDay(start, now) ? 'Today'
+      : isSameDay(start, tomorrow) ? 'Tomorrow'
+      : start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    // Start time — prefer explicit scheduledTime, else derive from scheduledAt
+    const startTime = scheduledTime
+      ? scheduledTime
+      : start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+    // End time — only if we have a duration
+    if (estimatedDuration && estimatedDuration > 0) {
+      const end = new Date(start.getTime() + estimatedDuration * 60_000);
+      const endTime = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      return `${dayLabel}, ${startTime} – ${endTime}`;
+    }
+    return `${dayLabel}, ${startTime}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Phase 2: Determine if a job is overdue (past scheduled end, not terminal).
+ * Used to show a red "Overdue" pill on the card.
+ */
+function isJobOverdue(job: { scheduledAt?: string | null; estimatedDuration?: number | null; status: string }): boolean {
+  if (!job.scheduledAt || job.status === 'completed' || job.status === 'cancelled') return false;
+  const endMs = new Date(job.scheduledAt).getTime() + ((job.estimatedDuration || 60) * 60_000);
+  return endMs < Date.now();
+}
+
 function formatDateTime(dateStr?: string | null) {
   if (!dateStr) return '--';
   try {
@@ -1324,7 +1384,15 @@ export function JobsView() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.set('status', statusFilter);
+      // Phase 2: 'overdue' is a client-side pseudo-filter (jobs past their
+      // scheduled end time AND not terminal). We don't send it to the API —
+      // instead we fetch ALL non-terminal jobs and filter client-side. This
+      // avoids needing a server-side overdue query (which would require
+      // comparing scheduledAt + estimatedDuration to NOW — not supported by
+      // the Supabase REST adapter).
+      if (statusFilter !== 'all' && statusFilter !== 'overdue') {
+        params.set('status', statusFilter);
+      }
       if (debouncedSearch) params.set('search', debouncedSearch);
       // Exclude soft-deleted jobs (shown in Job History instead)
       params.set('includeDeleted', 'false');
@@ -1342,10 +1410,19 @@ export function JobsView() {
         // comparison so the grace window is consistent regardless of the
         // user's local timezone (matching how the server stores timestamps).
         const now = new Date();
+        const nowMs = now.getTime();
         const allJobs = data.jobs ?? (Array.isArray(data) ? data : []);
         setJobs(
           allJobs.filter((j: Job) => {
             if (j.deletedAt) return false;
+            // Phase 2: 'overdue' filter — keep only jobs past their
+            // scheduled end time that aren't in a terminal state.
+            if (statusFilter === 'overdue') {
+              if (!j.scheduledAt || j.status === 'completed' || j.status === 'cancelled') return false;
+              const endMs = new Date(j.scheduledAt).getTime() + ((j.estimatedDuration || 60) * 60_000);
+              if (endMs >= nowMs) return false;
+              // fall through to the same-day-grace check below
+            }
             if (j.status !== 'completed') return true;
             // Completed job — keep only if completed today (UTC same-day).
             const completedAt = j.completedAt || j.actualEndTime;
@@ -1545,6 +1622,14 @@ export function JobsView() {
     inProgress: jobs.filter(j => j.status === 'in_progress').length,
     completed: jobs.filter(j => j.status === 'completed').length,
     cancelled: jobs.filter(j => j.status === 'cancelled').length,
+    // Phase 2: Overdue = job past its scheduled end time AND not in a
+    // terminal state (completed/cancelled). Uses scheduledAt +
+    // estimatedDuration (default 60 min if unknown).
+    overdue: jobs.filter(j => {
+      if (!j.scheduledAt || j.status === 'completed' || j.status === 'cancelled') return false;
+      const end = new Date(j.scheduledAt).getTime() + ((j.estimatedDuration || 60) * 60_000);
+      return end < Date.now();
+    }).length,
   };
 
   // ─── Customer picker helpers ───────────────────────────────────────────
@@ -4044,64 +4129,68 @@ export function JobsView() {
       ) : (
         <>
 
-      {/* ─── Stats ───────────────────────────────────────────────── */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-        {[
-          { label: 'Total', value: stats.total, color: 'text-foreground', icon: Briefcase },
-          { label: 'Pending', value: stats.pending, color: 'text-amber-600', icon: Clock },
-          { label: 'Assigned', value: stats.assigned, color: 'text-blue-600', icon: User },
-          { label: 'In Progress', value: stats.inProgress, color: 'text-emerald-600', icon: Activity },
-          { label: 'Cancelled', value: stats.cancelled, color: 'text-red-600', icon: XCircle },
-        ].map((stat) => {
-          const Icon = stat.icon;
+      {/* ─── Phase 2: Clickable Status Filter Chips (replaces static stat cards) ── */}
+      {/* Each chip shows the count AND acts as a filter button. Clicking
+          sets the active statusFilter (same state the old Tabs used), so
+          the chips are both display + control. Overdue is a special case:
+          it filters by overdue jobs (scheduledAt + duration < now AND not
+          terminal) using a pseudo-status value 'overdue' that the fetch
+          logic doesn't send to the API — we filter client-side instead. */}
+      <div className="flex flex-wrap gap-2">
+        {([
+          { key: 'all',        label: 'All',         value: stats.total,      color: 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',          activeColor: 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900',  icon: Briefcase },
+          { key: 'pending',    label: 'Pending',     value: stats.pending,    color: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/50',   activeColor: 'bg-amber-500 text-white border-amber-500',                                          icon: Clock },
+          { key: 'assigned',   label: 'Assigned',    value: stats.assigned,   color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/50',       activeColor: 'bg-blue-600 text-white border-blue-600',                                            icon: User },
+          { key: 'in_progress',label: 'In Progress', value: stats.inProgress, color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50', activeColor: 'bg-emerald-600 text-white border-emerald-600',                              icon: Activity },
+          { key: 'completed',  label: 'Completed',   value: stats.completed,  color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100 dark:bg-green-950/40 dark:text-green-300 dark:border-green-900/50', activeColor: 'bg-green-600 text-white border-green-600',                                          icon: CheckCircle2 },
+          { key: 'overdue',    label: 'Overdue',     value: stats.overdue,    color: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50',             activeColor: 'bg-red-600 text-white border-red-600',                                              icon: AlertCircle },
+          { key: 'cancelled',  label: 'Cancelled',   value: stats.cancelled,  color: 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100 dark:bg-zinc-900/40 dark:text-zinc-400 dark:border-zinc-800',          activeColor: 'bg-zinc-700 text-white border-zinc-700',                                            icon: XCircle },
+        ] as const).map((chip) => {
+          const Icon = chip.icon;
+          const isActive = statusFilter === chip.key;
+          const isOverdueChip = chip.key === 'overdue';
           return (
-            <Card key={stat.label} className="p-3">
-              <div className="flex items-center gap-2">
-                <Icon className={`size-4 ${stat.color.replace('text-', 'text-').includes('foreground') ? 'text-muted-foreground' : stat.color}`} />
-                <div>
-                  <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
-                </div>
-              </div>
-            </Card>
+            <button
+              key={chip.key}
+              onClick={() => setStatusFilter(isActive ? 'all' : chip.key)}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors min-h-[36px]',
+                isActive ? chip.activeColor : chip.color,
+                isOverdueChip && chip.value > 0 && !isActive && 'ring-1 ring-red-300 animate-pulse',
+              )}
+              title={isOverdueChip && chip.value > 0 ? `${chip.value} job(s) past their scheduled end time` : `Filter: ${chip.label}`}
+            >
+              <Icon className="size-3.5" />
+              <span>{chip.label}</span>
+              <span className={cn(
+                'ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold',
+                isActive ? 'bg-white/25' : 'bg-black/5 dark:bg-white/10',
+              )}>
+                {chip.value}
+              </span>
+            </button>
           );
         })}
       </div>
 
-      {/* ─── Status Filter Tabs + Search ─────────────────────────── */}
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0 flex-1 min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto">
-              <TabsList className="h-11">
-                <TabsTrigger value="all" className="text-xs min-h-[44px]">All</TabsTrigger>
-                <TabsTrigger value="pending" className="text-xs min-h-[44px]">Pending</TabsTrigger>
-                <TabsTrigger value="assigned" className="text-xs min-h-[44px]">Assigned</TabsTrigger>
-                <TabsTrigger value="in_progress" className="text-xs min-h-[44px]">In Progress</TabsTrigger>
-                <TabsTrigger value="cancelled" className="text-xs min-h-[44px]">Cancelled</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
+      {/* ─── Search + View Toggle ─────────────────────────────────── */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            placeholder="Search jobs by title, customer, address..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
         </div>
-
-        <div className="flex flex-wrap gap-3 items-center">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input
-              placeholder="Search jobs by title, customer, address..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <div className="hidden sm:flex gap-1 border rounded-md p-0.5">
-            <Button size="sm" variant={viewMode === 'cards' ? 'default' : 'ghost'} className="h-9 text-xs px-2 min-h-[44px]" onClick={() => setViewMode('cards')}>Cards</Button>
-            <Button size="sm" variant={viewMode === 'table' ? 'default' : 'ghost'} className="h-9 text-xs px-2 min-h-[44px]" onClick={() => setViewMode('table')}>Table</Button>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => fetchJobs()}>
-            <RefreshCw className="size-3.5 mr-1" /> Refresh
-          </Button>
+        <div className="hidden sm:flex gap-1 border rounded-md p-0.5">
+          <Button size="sm" variant={viewMode === 'cards' ? 'default' : 'ghost'} className="h-9 text-xs px-2 min-h-[44px]" onClick={() => setViewMode('cards')}>Cards</Button>
+          <Button size="sm" variant={viewMode === 'table' ? 'default' : 'ghost'} className="h-9 text-xs px-2 min-h-[44px]" onClick={() => setViewMode('table')}>Table</Button>
         </div>
+        <Button variant="outline" size="sm" onClick={() => fetchJobs()}>
+          <RefreshCw className="size-3.5 mr-1" /> Refresh
+        </Button>
       </div>
 
       {/* ─── Jobs Content ────────────────────────────────────────── */}
@@ -4203,44 +4292,117 @@ export function JobsView() {
                 <Checkbox checked={selectedJobIds.has(job.id)} />
               </div>
               <CardContent className="p-4 space-y-3 pt-7">
+                {/* ── Phase 2: Prominent #JOB-XXXX badge + status + overdue pill ── */}
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] text-muted-foreground font-mono">{job.jobNumber || job.id.slice(0, 8).toUpperCase()}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                      <Badge variant="outline" className="font-mono text-[11px] h-5 px-2 bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900">
+                        #{job.jobNumber || job.id.slice(0, 8).toUpperCase()}
+                      </Badge>
+                      {job.priority === 'urgent' && (
+                        <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50 uppercase font-bold tracking-wide animate-pulse">
+                          <Zap className="size-2.5 mr-0.5" /> Urgent
+                        </Badge>
+                      )}
+                      {isJobOverdue(job) && (
+                        <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-red-600 text-white border-red-600 uppercase font-bold tracking-wide">
+                          <AlertCircle className="size-2.5 mr-0.5" /> Overdue
+                        </Badge>
+                      )}
                     </div>
-                    <h4 className="font-semibold text-sm leading-tight truncate">{job.title}</h4>
+                    <h4 className="font-semibold text-sm leading-tight line-clamp-2">{job.title}</h4>
                   </div>
                   <Badge variant="outline" className={`${getStatusColor(job.status)} shrink-0 text-[10px]`}>
                     <span className="mr-1">{getStatusIcon(job.status)}</span>{job.status.replace('_', ' ')}
                   </Badge>
                 </div>
+
+                {/* ── Customer name ── */}
                 {job.customerName && (
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <User className="size-3 shrink-0" /><span className="truncate">{job.customerName}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2 flex-wrap">
+
+                {/* ── Type + priority (non-urgent) badges ── */}
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <Badge variant="secondary" className="text-[10px] h-5">{getJobTypeLabel(job.type)}</Badge>
-                  <Badge variant="outline" className={`${getPriorityColor(job.priority)} text-[10px] h-5`}>{job.priority}</Badge>
+                  {job.priority !== 'urgent' && (
+                    <Badge variant="outline" className={`${getPriorityColor(job.priority)} text-[10px] h-5 capitalize`}>{job.priority}</Badge>
+                  )}
                 </div>
+
+                {/* ── Phase 2: Schedule window pill (Today, 2:00 PM – 4:00 PM) ── */}
+                {(() => {
+                  const pill = formatSchedulePill(job.scheduledAt, job.scheduledTime, job.estimatedDuration);
+                  if (!pill) return null;
+                  return (
+                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 text-[11px] font-medium text-blue-700 dark:text-blue-300 w-fit">
+                      <Calendar className="size-3 shrink-0" />
+                      <span>{pill}</span>
+                    </div>
+                  );
+                })()}
+
+                {/* ── Address ── */}
                 {job.address && (
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <MapPin className="size-3 shrink-0" /><span className="truncate">{job.address}</span>
                   </div>
                 )}
-                {job.scheduledAt && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Calendar className="size-3 shrink-0" /><span>{formatDate(job.scheduledAt)}</span>
-                    {job.scheduledTime && <span className="ml-1">{job.scheduledTime}</span>}
-                  </div>
-                )}
+
+                {/* ── Phase 2: Technician avatar with colored status dot ── */}
+                {/* Status dot color: green=available, amber=busy, red=offline, grey=on_leave.
+                    We don't have the assignee's status on the Job object directly, so we
+                    infer from job.status: assigned/in_progress = busy (tech is working it),
+                    completed = available (done), other = unknown (grey). This is a best-
+                    effort visual hint — the dispatch view shows the real employee.status. */}
                 {job.assigneeName ? (
-                  <div className="flex items-center gap-2 pt-1 border-t">
-                    <Avatar className="size-6"><AvatarFallback className="bg-emerald-100 text-emerald-700 text-[10px]">{job.assigneeName[0]}</AvatarFallback></Avatar>
-                    <span className="text-xs text-muted-foreground">{job.assigneeName}</span>
+                  <div className="flex items-center gap-2 pt-2 border-t">
+                    <div className="relative">
+                      <Avatar className="size-7">
+                        <AvatarFallback className="bg-emerald-100 text-emerald-700 text-[10px] font-medium">
+                          {job.assigneeName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
+                      {/* Status dot — positioned bottom-right of the avatar */}
+                      <span
+                        className={cn(
+                          'absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background',
+                          job.status === 'in_progress' ? 'bg-emerald-500' :      // actively working → green
+                          job.status === 'assigned' ? 'bg-amber-500' :           // assigned but not started → amber (busy)
+                          job.status === 'completed' ? 'bg-slate-400' :          // done → grey
+                          job.status === 'travelling' || job.status === 'arrived' ? 'bg-blue-500' :  // en route → blue
+                          'bg-slate-400',                                          // unknown
+                        )}
+                        title={
+                          job.status === 'in_progress' ? 'Working now' :
+                          job.status === 'assigned' ? 'Assigned (not started)' :
+                          job.status === 'completed' ? 'Completed' :
+                          job.status === 'travelling' ? 'En route' :
+                          job.status === 'arrived' ? 'On site' :
+                          'Status unknown'
+                        }
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate">{job.assigneeName}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {job.status === 'in_progress' ? 'Working now' :
+                         job.status === 'assigned' ? 'Assigned' :
+                         job.status === 'travelling' ? 'En route' :
+                         job.status === 'arrived' ? 'On site' :
+                         job.status === 'completed' ? 'Completed' :
+                         'Assigned'}
+                      </p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="pt-1 border-t"><span className="text-xs text-amber-600 flex items-center gap-1"><AlertCircle className="size-3" /> Unassigned</span></div>
+                  <div className="pt-2 border-t">
+                    <span className="text-xs text-amber-600 flex items-center gap-1">
+                      <AlertCircle className="size-3" /> Unassigned
+                    </span>
+                  </div>
                 )}
                 <div className="pt-1 border-t">{getActionButtons(job)}</div>
               </CardContent>
