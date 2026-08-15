@@ -206,6 +206,25 @@ async function _GET(
             },
           },
           resource: true,
+          // ── Billing lifecycle split: include the job's invoices so the ──
+          // frontend Billing badge can read the ACTUAL Invoice.status + total
+          // instead of guessing from Job.status (which lied for any job past
+          // 'completed'). Most jobs have 0 or 1 invoice; the rare multi-invoice
+          // case (milestone splits) is handled by picking the latest by createdAt.
+          invoices: {
+            select: {
+              id: true,
+              number: true,
+              status: true,
+              total: true,
+              currency: true,
+              sentAt: true,
+              paidAt: true,
+              dueDate: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          },
         },
       }),
       db.jobPhoto.count({ where: { jobId: id } }),

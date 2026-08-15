@@ -1,21 +1,41 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { generateInvoiceNumber } from '@/lib/invoice-automation'
+import { autoCreateInvoiceFromJob } from '@/lib/invoice-automation'
 import { getAuthUser } from '@/lib/auth'
 
-// POST /api/jobs/generate-invoice — Generate invoice from a completed job
+// POST /api/jobs/generate-invoice — Generate invoice from a job
 //
-// Auth: optional. This endpoint is hit both interactively (owner/admin clicking
-// "Generate Invoice" in the UI — authenticated) AND by the fire-and-forget
-// auto-invoice flow on job completion (autoCreateInvoiceFromJob — may run
-// without a session cookie, e.g. when a job is completed via a system trigger).
-// We therefore call getAuthUser() but tolerate `null` — tenantId is resolved
-// from the job's workspace chain first, falling back to the auth user only
-// when present.
+// REWRITE (Billing lifecycle split Phase): previously this endpoint inlined
+// invoice creation with HARDCODED pricing (`estimatedDuration * 5` or `$1500`
+// flat) and ignored the customer's quoted amount, lead value, and service
+// base price. It was also a THIRD parallel code path (alongside
+// `autoCreateInvoiceFromJob` and `POST /api/invoices`) with subtly different
+// pricing logic, which produced invoices whose totals did not match what the
+// customer was actually quoted.
+//
+// Now this endpoint delegates to `autoCreateInvoiceFromJob(jobId, { force: true })`,
+// which:
+//   - Uses `resolveJobAmount()` (quotedAmount → amountCollected → Service.basePrice
+//     → Lead.value → estimatedDuration × rate) — single source of pricing truth.
+//   - Honors tenant defaultTaxPercent, defaultDueDays, and creationMethod
+//     (draft vs pending_approval vs paid-for-COD).
+//   - Auto-sends email/WhatsApp if the tenant has those toggles on (still
+//     respects them — `force` only bypasses the autoCreateOnJobComplete toggle,
+//     NOT the auto-send toggles, since the user explicitly asked for an invoice).
+//   - Is idempotent (returns the existing invoice if one already exists for
+//     the job).
+//
+// Response shape: `{ invoice: Invoice, created: boolean }` so the UI can show
+// "Invoice created" vs "Invoice already exists" toasts accurately.
+//
+// Auth: optional. The endpoint is hit both interactively (owner/admin clicking
+// "Create Invoice" in the UI — authenticated) AND potentially by automation
+// (rare, but possible). We call getAuthUser() but tolerate `null` — tenantId
+// is resolved inside `autoCreateInvoiceFromJob` from the job's workspace chain.
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { jobId, taxRate, discountType, discountValue, dueDays } = body
+    const { jobId } = body
 
     if (!jobId) {
       return NextResponse.json({ error: 'jobId is required' }, { status: 400 })
@@ -23,104 +43,93 @@ export async function POST(request: NextRequest) {
 
     const job = await db.job.findUnique({
       where: { id: jobId },
-      include: { customer: true, assignee: true },
+      select: { id: true, title: true, jobNumber: true },
     })
 
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
 
-    // Check if invoice already exists for this job (make idempotent — return 200 OK with existing invoice)
-    const existingInvoice = await db.invoice.findFirst({ where: { jobId } })
-    if (existingInvoice) {
-      return NextResponse.json(existingInvoice, { status: 200 })
+    // Call the canonical invoice-creation helper with `force: true` so it
+    // bypasses the autoCreateOnJobComplete toggle (the user is explicitly
+    // asking for an invoice here, not relying on auto-completion behavior).
+    const result = await autoCreateInvoiceFromJob(jobId, { force: true })
+
+    // If an invoice already existed (idempotent skip), `result.skipped` is
+    // true and `result.invoiceId` points at the existing one. Treat that as
+    // success-with-existing rather than an error.
+    const invoiceId = result.invoiceId
+    if (!invoiceId) {
+      // Genuine failure (e.g. "No tenant for job", "Job has no customer to
+      // invoice"). Return 400 so the UI can surface the reason.
+      return NextResponse.json(
+        { error: result.error || result.reason || 'Failed to generate invoice' },
+        { status: 400 },
+      )
     }
 
-    // Resolve the calling user (optional — auto-invoice flow may be anonymous).
-    const authUser = await getAuthUser().catch(() => null)
-
-    // Generate a globally-unique invoice number with robust tenantId fallback.
-    // Resolution order:
-    //   1. job.workspaceId → Workspace.tenantId
-    //   2. authUser.tenantId (when the caller is authenticated)
-    //   3. null (generateInvoiceNumber handles null by using a global counter)
-    let invoiceTenantId: string | undefined = undefined
-    if (job.workspaceId) {
-      const ws = await db.workspace.findUnique({
-        where: { id: job.workspaceId },
-        select: { tenantId: true },
-      })
-      invoiceTenantId = ws?.tenantId || undefined
-    }
-    if (!invoiceTenantId && authUser?.tenantId) {
-      invoiceTenantId = authUser.tenantId
-    }
-    const invoiceNumber = await generateInvoiceNumber(invoiceTenantId || null)
-
-    // Build line items from job
-    const unitPrice = job.estimatedDuration ? Math.round(job.estimatedDuration * 5) : 1500
-    const items = [
-      {
-        description: job.title,
-        quantity: 1,
-        unitPrice,
-        amount: unitPrice,
-      },
-    ]
-
-    const subtotal = items.reduce((sum, item) => sum + item.amount, 0)
-    const taxPct = taxRate ?? 18
-    const taxAmount = subtotal * (taxPct / 100)
-    const discountVal = discountValue ?? 0
-    let discountAmount = 0
-    if (discountType === 'percentage' && discountVal > 0) discountAmount = subtotal * (discountVal / 100)
-    else if (discountType === 'fixed' && discountVal > 0) discountAmount = discountVal
-    const total = subtotal + taxAmount - discountAmount
-
-    const dueDate = new Date()
-    dueDate.setDate(dueDate.getDate() + (dueDays || 7))
-
-    // Persist breakdown details in itemsJson so the Invoice model stays clean
-    const breakdown = {
-      subtotal,
-      taxRate: taxPct,
-      taxAmount,
-      discountType: discountType ?? null,
-      discountValue: discountVal,
-      discountAmount,
-      currency: 'USD',
-      customerSnapshot: {
-        name: job.customerName,
-        email: job.customer?.email,
-        phone: job.customerPhone,
-      },
-    }
-
-    const invoice = await db.invoice.create({
-      data: {
-        number: invoiceNumber,
-        status: 'draft',
-        customerId: job.customerId,
-        jobId: job.id,
-        employeeId: job.assigneeId,
-        // Invoice model uses amount/tax/discount/total (not subtotal/taxRate/etc.)
-        amount: subtotal,
-        tax: taxAmount,
-        discount: discountAmount,
-        total,
-        currency: 'USD',
-        itemsJson: JSON.stringify({ items, breakdown }),
-        dueDate,
-        notes: `Invoice for ${job.title} (${job.jobNumber || job.id.slice(0, 8)})`,
-        tenantId: invoiceTenantId,
-      },
+    // Fetch the full invoice row (with relations the UI needs) so the response
+    // matches the shape returned by `POST /api/invoices` for consistency.
+    const invoice = await db.invoice.findUnique({
+      where: { id: invoiceId },
       include: {
-        customer: { select: { id: true, name: true, phone: true } },
+        customer: { select: { id: true, name: true, phone: true, email: true } },
         job: { select: { id: true, title: true, jobNumber: true } },
       },
     })
 
-    return NextResponse.json(invoice, { status: 201 })
+    if (!invoice) {
+      return NextResponse.json(
+        { error: 'Invoice was created but could not be re-fetched' },
+        { status: 500 },
+      )
+    }
+
+    // `created` distinguishes "we made a new invoice" from "one already existed".
+    // The UI uses this to choose the right toast message.
+    const created = !result.skipped
+
+    // Best-effort audit log: who triggered the invoice creation. Mirrors the
+    // pattern in /api/invoices/route.ts but inline because we don't want to
+    // import the full ActivityLog helper from the lifecycle route. Never
+    // blocks the response — audit logging is best-effort.
+    try {
+      const authUser = await getAuthUser().catch(() => null)
+      const tenantId = invoice.tenantId
+      if (tenantId) {
+        Promise.resolve(db.activityLog.create({
+          data: {
+            tenantId,
+            actorId: authUser?.id ?? null,
+            actorName: authUser?.name ?? null,
+            actorType: authUser ? 'user' : 'system',
+            action: created ? 'create_invoice_from_job' : 'invoice_already_exists',
+            entityType: 'invoice',
+            entityId: invoice.id,
+            entityName: invoice.number,
+            description: created
+              ? `Invoice #${invoice.number} created for job '${job.title}' (${Number(invoice.total).toFixed(2)} ${invoice.currency}).`
+              : `Invoice #${invoice.number} already existed for job '${job.title}' — returned existing.`,
+            metadataJson: JSON.stringify({
+              jobId: job.id,
+              jobTitle: job.title,
+              jobNumber: job.jobNumber ?? null,
+              invoiceId: invoice.id,
+              invoiceNumber: invoice.number,
+              total: Number(invoice.total),
+              currency: invoice.currency,
+              status: invoice.status,
+              created,
+            }),
+            severity: 'info',
+          },
+        })).catch((err) => console.error('[generate-invoice] ActivityLog write failed:', err))
+      }
+    } catch (auditErr) {
+      console.error('[generate-invoice] ActivityLog setup failed:', auditErr)
+    }
+
+    return NextResponse.json({ invoice, created }, { status: created ? 201 : 200 })
   } catch (error) {
     console.error('Failed to generate invoice:', error)
     return NextResponse.json({ error: 'Failed to generate invoice' }, { status: 500 })

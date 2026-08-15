@@ -28,6 +28,55 @@ import { getExchangeRate, convertCurrency } from '@/lib/currency'
 import { notifyOwner } from '@/lib/owner-notifications'
 import { issueCustomerMagicLink } from '@/lib/customer-magic-link'
 
+// ─── ActivityLog helper (BILLING-C Step 5) ──────────────────────────────────
+//
+// Mirror of the `safeLogActivity` pattern used by the V1.5 job lifecycle route
+// (src/app/api/jobs/[id]/lifecycle/route.ts lines 172-200). Audit logging MUST
+// NEVER break the main operation — every call is wrapped in try/catch and
+// failures are logged to the server console only.
+//
+// Why we log INSIDE the lib functions (in addition to the per-API logging in
+// /api/invoices/[id]/actions/route.ts): callers like the trigger-engine and
+// auto-invoice-on-complete fire-and-forget don't go through the actions API,
+// so without lib-level logging those code paths leave NO audit trail. The
+// action names (`invoice_mark_paid`, `invoice_send`, `invoice_reminder`,
+// `invoice_approve`) are namespaced with the `invoice_` prefix so they're
+// distinguishable from the API-level logs (`mark_paid`, `send_invoice`, …)
+// when both fire on the same request.
+async function safeLogInvoiceActivity(params: {
+  tenantId: string | null | undefined
+  actorId?: string | null
+  actorName?: string | null
+  action: string
+  entityType?: string
+  entityId?: string | null
+  entityName?: string | null
+  description: string
+  metadataJson?: Record<string, unknown>
+  severity?: string
+}): Promise<void> {
+  if (!params.tenantId) return
+  try {
+    await db.activityLog.create({
+      data: {
+        tenantId: params.tenantId,
+        actorId: params.actorId ?? null,
+        actorName: params.actorName ?? null,
+        actorType: params.actorId ? 'user' : 'system',
+        action: params.action,
+        entityType: params.entityType ?? 'invoice',
+        entityId: params.entityId ?? null,
+        entityName: params.entityName ?? null,
+        description: params.description,
+        metadataJson: JSON.stringify(params.metadataJson ?? {}),
+        severity: params.severity ?? 'info',
+      },
+    })
+  } catch (err) {
+    console.error('[InvoiceAutomation] ActivityLog write failed:', err)
+  }
+}
+
 // ─── Settings ────────────────────────────────────────────────────────────────
 
 export interface InvoiceAutomationSettings {
@@ -293,8 +342,18 @@ export async function resolveJobAmount(job: {
  *   (quotedAmount → amountCollected → Service.basePrice → Lead.value →
  *    estimatedDuration × rate) instead of a hard-coded $50/hr.
  * - Honors the tenant's defaultTaxPercent and defaultDueDays.
+ *
+ * `opts.force` (default false) bypasses the `autoCreateOnJobComplete` toggle
+ * check below. Use this when the user EXPLICITLY requested invoice creation
+ * (e.g. clicking "Create Invoice" in the Billing section) — they want an
+ * invoice regardless of whether auto-create-on-completion is enabled.
+ * Auto-send (email/WhatsApp) is still governed by its own toggles and is NOT
+ * affected by `force`.
  */
-export async function autoCreateInvoiceFromJob(jobId: string): Promise<AutoInvoiceResult> {
+export async function autoCreateInvoiceFromJob(
+  jobId: string,
+  opts?: { force?: boolean },
+): Promise<AutoInvoiceResult> {
   return withJobInvoiceLock(jobId, async () => {
     try {
       const job = await db.job.findUnique({
@@ -329,8 +388,14 @@ export async function autoCreateInvoiceFromJob(jobId: string): Promise<AutoInvoi
       // ── Respect the "Auto Create Invoice on Job Completion" toggle ──
       // The settings dialog exposes this switch; without this check, invoices were
       // being created on EVERY job completion regardless of the toggle value.
-      if (!settings.autoCreateOnJobComplete) {
-        return { success: false, skipped: true, reason: 'autoCreateOnJobComplete is disabled' }
+      //
+      // `opts.force` bypasses this check: callers responding to an EXPLICIT user
+      // action (e.g. clicking "Create Invoice" in the Billing section, or the
+      // lifecycle `generate_invoice` action) want an invoice created regardless
+      // of the toggle. The toggle's purpose is to suppress the AUTO creation on
+      // job completion — not to block manual creation.
+      if (!opts?.force && !settings.autoCreateOnJobComplete) {
+        return { success: false, skipped: true, reason: 'autoCreateOnJobComplete is disabled (use force to bypass)' }
       }
 
       // Idempotency: skip if an invoice already exists for this job (re-check
@@ -451,14 +516,50 @@ export async function autoCreateInvoiceFromJob(jobId: string): Promise<AutoInvoi
       // → estimatedDuration × rate, instead of a hard-coded $50/hr.
       const { amount: resolvedAmount, source: amountSource } = await resolveJobAmount(job)
 
-      // Build a single line item for the job
-      const lineItem = {
-        description: job.title || `Job #${job.jobNumber || job.id.slice(-6)}`,
-        quantity: 1,
-        rate: resolvedAmount,
-        notes: job.description || '',
+      // ── BILLING-C Step 1: prefer the Job's actual line items ─────────
+      // Previously this built a SINGLE summary line item with rate=resolvedAmount
+      // (the quotedAmount / lead value / etc.), discarding the detailed line
+      // items the user entered on the job form. That meant the invoice PDF and
+      // the customer-facing email listed only "Service × 1 = $X" even when the
+      // job had 5 negotiated line items.
+      //
+      // Now: parse `job.lineItemsJson` and use those line items when they exist
+      // AND have at least one with a non-zero unitPrice. Otherwise fall back to
+      // the single summary line item so behaviour is preserved for quick-create
+      // jobs that only set a quotedAmount.
+      interface JobLineItemShape {
+        name?: string | null
+        description?: string | null
+        quantity?: number | string | null
+        unitPrice?: number | string | null
       }
-      const items = [lineItem]
+      const parsedJobLineItems = safeParse(job.lineItemsJson, []) as unknown
+      const jobLineItems: JobLineItemShape[] = Array.isArray(parsedJobLineItems)
+        ? (parsedJobLineItems as JobLineItemShape[]).filter((it) => it && typeof it === 'object')
+        : []
+      const validJobLineItems = jobLineItems.filter(
+        (it) => (it.name || it.description) && Number(it.unitPrice) > 0,
+      )
+
+      let items: Array<{ description: string; quantity: number; rate: number; notes: string }>
+      let amountSourceForNote = amountSource
+      if (validJobLineItems.length > 0) {
+        items = validJobLineItems.map((it) => ({
+          description: String(it.name || it.description || 'Service'),
+          quantity: Number(it.quantity) || 1,
+          rate: Number(it.unitPrice) || 0,
+          notes: String(it.description || ''),
+        }))
+        amountSourceForNote = `${amountSource}+line_items`
+      } else {
+        // Fall back to single summary line item using resolved amount
+        items = [{
+          description: job.title || `Job #${job.jobNumber || job.id.slice(-6)}`,
+          quantity: 1,
+          rate: resolvedAmount,
+          notes: job.description || '',
+        }]
+      }
       const subtotal = items.reduce((s, it) => s + it.quantity * it.rate, 0)
       const tax = subtotal * (taxPercent / 100)
       const total = subtotal + tax
@@ -500,7 +601,7 @@ export async function autoCreateInvoiceFromJob(jobId: string): Promise<AutoInvoi
           dueDate,
           paidAt: isCodPaid ? new Date() : null,
           itemsJson: JSON.stringify(items),
-          notes: `Auto-created from completed job #${job.jobNumber || job.id.slice(-6)} (amount source: ${amountSource})`,
+          notes: `Auto-created from completed job #${job.jobNumber || job.id.slice(-6)} (amount source: ${amountSourceForNote})`,
         },
       })
 
@@ -857,7 +958,8 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
   // ALL channels (email + WhatsApp + SMS) after they have all run.
   const anyChannelSuccess =
     (result.email?.success === true) || (result.whatsapp?.success === true) || (result.sms?.success === true)
-  if (anyChannelSuccess && invoice.status === 'draft') {
+  const wasDraft = invoice.status === 'draft'
+  if (anyChannelSuccess && wasDraft) {
     try {
       await db.invoice.update({ where: { id: invoiceId }, data: { status: 'sent', sentAt: new Date() } })
     } catch (err) {
@@ -865,29 +967,219 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
     }
   }
 
+  // ─── BILLING-C Step 4: sync the linked Job's status ──────────────
+  // When an invoice transitions draft → sent, the linked job (if any) should
+  // reflect that it has been invoiced. The job lifecycle stores this as the
+  // 'invoice_generated' Job.status (terminal lifecycle stage — see
+  // src/lib/job-lifecycle.ts JOB_LIFECYCLE_STAGES).
+  //
+  // We ONLY promote from 'completed' → 'invoice_generated'. Other statuses
+  // are left untouched:
+  //   - 'invoice_generated' / 'invoiced': already in the right state.
+  //   - 'cancelled': don't touch — cancelled jobs shouldn't be re-activated.
+  //   - 'pending' / 'assigned' / 'working' / etc.: the job hasn't been
+  //     completed yet; sending an invoice early doesn't change its lifecycle
+  //     stage (the dispatcher may still need to complete it).
+  //
+  // This is a ONE-WAY sync (Invoice → Job) — the Job never writes back to
+  // the Invoice here, so there's no loop risk. The V1.5 lifecycle
+  // `generate_invoice` action also flips Job.status to 'invoice_generated',
+  // but that's a separate code path that runs when the user explicitly clicks
+  // "Generate Invoice" in the UI (not when sendInvoice is called from a
+  // workflow or auto-create-on-complete flow).
+  if (anyChannelSuccess && wasDraft && invoice.jobId) {
+    try {
+      // Re-fetch the job's current status — don't trust the invoice.job
+      // snapshot (it may be stale if the job was completed after the invoice
+      // was loaded into memory).
+      const linkedJob = await db.job.findUnique({
+        where: { id: invoice.jobId },
+        select: { id: true, status: true, title: true },
+      })
+      if (linkedJob && linkedJob.status === 'completed') {
+        await db.job.update({
+          where: { id: linkedJob.id },
+          data: { status: 'invoice_generated' },
+        })
+      }
+    } catch (jobSyncErr) {
+      // Non-fatal — the Invoice itself is already sent; the Job sync is a
+      // best-effort mirror.
+      console.error(
+        `[InvoiceAutomation] sendInvoice(${invoice.number}): failed to promote Job ${invoice.jobId} completed→invoice_generated:`,
+        jobSyncErr,
+      )
+    }
+  }
+
+  // ─── BILLING-C Step 5: ActivityLog entry ──────────────────────────
+  // Logs regardless of channel success so admins can see retry history.
+  // Channel-specific results are captured in metadataJson.
+  await safeLogInvoiceActivity({
+    tenantId: invoice.tenantId,
+    action: 'invoice_send',
+    entityType: 'invoice',
+    entityId: invoice.id,
+    entityName: invoice.number,
+    description: `Invoice #${invoice.number} sent via ${[opts.sendEmail && 'email', opts.sendWhatsApp && 'whatsapp', opts.sendSms && 'sms'].filter(Boolean).join('+') || 'no channel'}${anyChannelSuccess ? '' : ' (failed)'}.`,
+    metadataJson: {
+      invoiceNumber: invoice.number,
+      sentTo: recipientEmail || recipientPhone || null,
+      email: recipientEmail || null,
+      phone: recipientPhone || null,
+      channels: {
+        email: opts.sendEmail ? result.email : undefined,
+        whatsapp: opts.sendWhatsApp ? result.whatsapp : undefined,
+        sms: opts.sendSms !== false ? result.sms : undefined,
+      },
+      anyChannelSuccess,
+      fromStatus: invoice.status,
+      toStatus: anyChannelSuccess && wasDraft ? 'sent' : invoice.status,
+      total: Number(invoice.total),
+      currency: invoice.currency,
+      customerId: invoice.customerId ?? null,
+      jobId: invoice.jobId ?? null,
+    },
+    severity: anyChannelSuccess ? 'info' : 'warning',
+  })
+
   return result
 }
 
 // ─── Core: mark invoice paid ─────────────────────────────────────────────────
 
-export async function markInvoicePaid(invoiceId: string): Promise<{ success: boolean; error?: string }> {
+export interface MarkInvoicePaidOptions {
+  /**
+   * Payment method used to settle the invoice (e.g. 'cash', 'card',
+   * 'bank_transfer', 'upi', 'online'). Stored on the linked Job's
+   * `paymentMethod` field (the Invoice model itself has no paymentMethod
+   * column — we sync it to the Job side) and recorded in the ActivityLog
+   * metadata for audit.
+   */
+  paymentMethod?: string
+  /** Auth user who triggered the payment (for ActivityLog). Null/undefined = system. */
+  actorId?: string | null
+  actorName?: string | null
+}
+
+/**
+ * BILLING-C Step 6: field-name verification + signature extension.
+ *
+ * Verified against the actual `Invoice` Prisma model
+ * (prisma/schema.prisma lines 737-791):
+ *   - `status`    String   @default("draft")  // draft, sent, paid, pending_approval, cancelled
+ *   - `paidAt`    DateTime?
+ *   - `total`     Float
+ *   - `amount`    Float     (subtotal)
+ *   - `tax`       Float
+ *   - `discount`  Float
+ *
+ * The previous implementation already used `status: 'paid'` + `paidAt: new Date()`
+ * — both correct. There is NO `paidAmount` / `paidDate` / `paymentMethod` field
+ * on the Invoice model, so we don't try to set them on the Invoice row itself.
+ *
+ * The "paid amount" is implicitly `invoice.total` (the field that already holds
+ * the grand total). When the invoice is marked paid, we additionally sync the
+ * linked Job's payment fields (`amountCollected`, `paymentStatus`,
+ * `paymentMethod`, `collectedAt`, `collectedById`) so the dispatch board, job
+ * detail page, and reports all see a consistent "paid" state — that's Step 4.
+ *
+ * The optional `paymentMethod` is now accepted and forwarded to the Job sync
+ * and ActivityLog metadata (Step 6 requirement: "Optionally record the payment
+ * method if provided").
+ */
+export async function markInvoicePaid(
+  invoiceId: string,
+  opts?: MarkInvoicePaidOptions,
+): Promise<{ success: boolean; error?: string }> {
   try {
     const invoice = await db.invoice.findUnique({
       where: { id: invoiceId },
       include: { customer: true, tenant: true },
     })
     if (!invoice) return { success: false, error: 'Invoice not found' }
-    await db.invoice.update({
-      where: { id: invoiceId },
-      data: { status: 'paid', paidAt: new Date() },
-    })
+
+    // Skip if already paid (idempotent — the actions API can be double-clicked,
+    // and the trigger-engine can re-fire on workflow retries).
+    const wasAlreadyPaid = invoice.status === 'paid'
+
+    if (!wasAlreadyPaid) {
+      await db.invoice.update({
+        where: { id: invoiceId },
+        data: { status: 'paid', paidAt: new Date() },
+      })
+    }
+
+    // ─── BILLING-C Step 4: sync the linked Job's payment fields ───────
+    // The Invoice model has no paymentMethod column, so we sync the payment
+    // info to the linked Job (which DOES have paymentMethod/paymentStatus/
+    // amountCollected/collectedAt/collectedById). This is a ONE-WAY sync
+    // (Invoice → Job) — the Job never writes back to the Invoice here, so
+    // there's no loop risk.
+    //
+    // We do NOT change Job.status — the job lifecycle (assigned → … →
+    // completed → invoice_generated) is orthogonal to payment state. The
+    // Job.paymentStatus field tracks payment state separately, which is
+    // exactly what we update here.
+    if (invoice.jobId && !wasAlreadyPaid) {
+      try {
+        const jobUpdate: Record<string, unknown> = {
+          paymentStatus: 'paid',
+          amountCollected: Number(invoice.total),
+          collectedAt: new Date(),
+        }
+        if (opts?.paymentMethod) {
+          jobUpdate.paymentMethod = opts.paymentMethod
+        }
+        if (opts?.actorId) {
+          jobUpdate.collectedById = opts.actorId
+        }
+        await db.job.update({
+          where: { id: invoice.jobId },
+          data: jobUpdate,
+        })
+      } catch (jobSyncErr) {
+        // Non-fatal — the Invoice itself is already paid; the Job sync is a
+        // best-effort mirror. Logged so admins can spot drift.
+        console.error(
+          `[InvoiceAutomation] markInvoicePaid: failed to sync Job ${invoice.jobId} payment fields:`,
+          jobSyncErr,
+        )
+      }
+    }
+
+    // ─── BILLING-C Step 5: ActivityLog entry ──────────────────────────
+    // Action name `invoice_mark_paid` (namespaced with `invoice_` prefix) so
+    // it's distinguishable from the API-level `mark_paid` log written by
+    // /api/invoices/[id]/actions/route.ts when both fire on the same request.
+    if (!wasAlreadyPaid) {
+      await safeLogInvoiceActivity({
+        tenantId: invoice.tenantId,
+        actorId: opts?.actorId,
+        actorName: opts?.actorName,
+        action: 'invoice_mark_paid',
+        entityType: 'invoice',
+        entityId: invoice.id,
+        entityName: invoice.number,
+        description: `Invoice #${invoice.number} marked as paid (${Number(invoice.total).toFixed(2)} ${invoice.currency})${opts?.paymentMethod ? ` via ${opts.paymentMethod}` : ''}.`,
+        metadataJson: {
+          invoiceNumber: invoice.number,
+          amount: Number(invoice.total),
+          currency: invoice.currency,
+          paymentMethod: opts?.paymentMethod ?? null,
+          customerId: invoice.customerId ?? null,
+          jobId: invoice.jobId ?? null,
+        },
+        severity: 'info',
+      })
+    }
 
     // ─── Send WhatsApp payment confirmation to customer ──────────
     try {
-      const customerPhone = invoice.customer?.phone || invoice.customerPhone
+      const customerPhone = invoice.customer?.phone
       if (customerPhone) {
         const { sendJobNotification } = await import('@/lib/whatsapp-notifications')
-        const invoiceNumber = invoice.invoiceNumber || invoice.id.slice(-8).toUpperCase()
+        const invoiceNumber = invoice.number
         const total = `${invoice.currency || 'USD'} ${Number(invoice.total).toFixed(2)}`
         const message = [
           '✅ Payment Confirmed',
@@ -918,7 +1210,7 @@ export async function markInvoicePaid(invoiceId: string): Promise<{ success: boo
       const { EventBus } = await import('@/lib/event-bus')
       await EventBus.emit('payment.received', {
         invoiceId: invoice.id,
-        invoiceNumber: invoice.invoiceNumber,
+        invoiceNumber: invoice.number,
         amount: Number(invoice.total),
         currency: invoice.currency,
         customerId: invoice.customerId,
@@ -1049,6 +1341,35 @@ export async function sendInvoiceReminder(invoiceId: string): Promise<{ success:
     }
   }
 
+  // ─── BILLING-C Step 5: ActivityLog entry ──────────────────────────
+  // `daysOverdue` is computed from the invoice's dueDate so the audit log
+  // captures how late the reminder was. Negative/zero values mean the
+  // reminder fired before or on the due date (preventative nudge).
+  const reminderDaysOverdue = invoice.dueDate
+    ? Math.floor((Date.now() - new Date(invoice.dueDate).getTime()) / (1000 * 60 * 60 * 24))
+    : 0
+  await safeLogInvoiceActivity({
+    tenantId: invoice.tenantId,
+    action: 'invoice_reminder',
+    entityType: 'invoice',
+    entityId: invoice.id,
+    entityName: invoice.number,
+    description: `Payment reminder sent for invoice #${invoice.number}${emailSent || whatsappSent || smsSent ? '' : ' (all channels failed)'} — email: ${emailSent ? 'yes' : 'no'}, whatsapp: ${whatsappSent ? 'yes' : 'no'}, sms: ${smsSent ? 'yes' : 'no'}.`,
+    metadataJson: {
+      invoiceNumber: invoice.number,
+      daysOverdue: reminderDaysOverdue,
+      dueDate: invoice.dueDate ? new Date(invoice.dueDate).toISOString() : null,
+      emailSent,
+      whatsappSent,
+      smsSent,
+      total: Number(invoice.total),
+      currency: invoice.currency,
+      customerId: invoice.customerId ?? null,
+      jobId: invoice.jobId ?? null,
+    },
+    severity: emailSent || whatsappSent || smsSent ? 'info' : 'warning',
+  })
+
   return { success: emailSent || whatsappSent || smsSent, email: emailSent, whatsapp: whatsappSent, sms: smsSent }
 }
 
@@ -1057,7 +1378,10 @@ export async function sendInvoiceReminder(invoiceId: string): Promise<{ success:
 // pending_approval invoice and approves it, which flips it to "sent" and
 // emails + WhatsApps the customer.
 
-export async function approveInvoice(invoiceId: string): Promise<{ success: boolean; error?: string; invoiceId?: string; number?: string; sendResult?: { email?: { success: boolean; simulated?: boolean; error?: string }; whatsapp?: { success: boolean; simulated?: boolean; error?: string } } }> {
+export async function approveInvoice(
+  invoiceId: string,
+  opts?: { actorId?: string | null; actorName?: string | null },
+): Promise<{ success: boolean; error?: string; invoiceId?: string; number?: string; sendResult?: { email?: { success: boolean; simulated?: boolean; error?: string }; whatsapp?: { success: boolean; simulated?: boolean; error?: string } } }> {
   try {
     const invoice = await db.invoice.findUnique({ where: { id: invoiceId } })
     if (!invoice) return { success: false, error: 'Invoice not found' }
@@ -1079,6 +1403,35 @@ export async function approveInvoice(invoiceId: string): Promise<{ success: bool
     } catch (sendErr) {
       console.error('[InvoiceAutomation] approveInvoice send error:', sendErr)
     }
+
+    // ─── BILLING-C Step 5: ActivityLog entry ──────────────────────────
+    // Records WHO approved the invoice (actorId/actorName) so the audit trail
+    // can answer "who released this pending-approval invoice?". `approvedBy`
+    // in metadata mirrors the task spec naming.
+    await safeLogInvoiceActivity({
+      tenantId: invoice.tenantId,
+      actorId: opts?.actorId,
+      actorName: opts?.actorName,
+      action: 'invoice_approve',
+      entityType: 'invoice',
+      entityId: invoice.id,
+      entityName: invoice.number,
+      description: `Invoice #${invoice.number} approved and sent to customer${opts?.actorName ? ` by ${opts.actorName}` : ''}.`,
+      metadataJson: {
+        invoiceNumber: invoice.number,
+        approvedBy: opts?.actorId ?? null,
+        approvedByName: opts?.actorName ?? null,
+        fromStatus: 'pending_approval',
+        toStatus: 'sent',
+        sendResult: sendResult ?? null,
+        total: Number(invoice.total),
+        currency: invoice.currency,
+        customerId: invoice.customerId ?? null,
+        jobId: invoice.jobId ?? null,
+      },
+      severity: 'info',
+    })
+
     return { success: true, invoiceId, number: invoice.number, sendResult }
   } catch (err) {
     console.error('[InvoiceAutomation] approveInvoice error:', err)

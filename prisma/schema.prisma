@@ -1470,6 +1470,15 @@ model Customer {
   address            String?
   whatsappId         String?
   preferredCurrency  String   @default("USD")  // Customer's preferred display currency
+  // ── ISSUE-3: New structured customer fields (redesigned "New Customer" form) ──
+  // `name` is kept as a derived field for backward compat (auto-filled on save
+  // from firstName + " " + lastName, falling back to companyName).
+  title                      String?  // e.g. "Mr", "Mrs", "Ms", "Dr"
+  firstName                  String?
+  lastName                   String?
+  companyName                String?
+  leadSource                 String?  // free-text/enum string (mirrors Lead.source)
+  notificationSettingsJson   String   @default("{}")  // { quotes, jobs, invoices, visitReminders }
   workspaceId        String?
   // tenantId is the canonical tenant scope for Customer (mirrors Lead/Job/Invoice).
   // workspaceId is kept for back-compat (Customer → Workspace → Tenant indirection).
@@ -1511,6 +1520,10 @@ model Customer {
   invitations          Invitation[]
   recurringJobSchedules RecurringJobSchedule[] @relation("CustomerRecurringJobs")
   scheduledMessages   ScheduledMessage[] @relation("CustomerScheduledMessages")
+
+  // ── ISSUE-3: Nested repeating collections for the redesigned customer form ──
+  properties           Property[]
+  additionalContacts   CustomerContact[]
 
   @@index([phone])
   @@index([email])
@@ -6328,4 +6341,59 @@ model SocialPostMetric {
   @@unique([socialPostId, platform, fetchedAt])
   @@index([tenantId, platform])
   @@index([socialPostId])
+}
+
+// ─── ISSUE-3: Property (service address) + nested PropertyContact ───────────
+// A `Property` is the customer's physical service address — NOT the
+// real-estate Property concept. A single customer may have many service
+// addresses (e.g. "Home", "Office", "Rental Property").
+model Property {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  label       String?  // e.g. "Home", "Office", "Rental Property"
+  street1     String
+  street2     String?
+  city        String?
+  province    String?
+  postalCode  String?
+  country     String?  // ISO alpha-2 code
+  isPrimary   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  contacts    PropertyContact[]
+
+  @@index([customerId])
+}
+
+// A contact associated with a specific Property (e.g. tenant, property
+// manager, caretaker). Cascade-deleted with the parent Property.
+model PropertyContact {
+  id          String   @id @default(cuid())
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name        String
+  phone       String?
+  email       String?
+  role        String?  // e.g. "Tenant", "Property Manager", "Caretaker"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([propertyId])
+}
+
+// Additional/secondary contacts at the customer level (not tied to a
+// specific property). E.g. spouse, assistant, decision maker.
+model CustomerContact {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  name        String
+  phone       String?
+  email       String?
+  role        String?  // e.g. "Spouse", "Assistant", "Decision Maker"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([customerId])
 }

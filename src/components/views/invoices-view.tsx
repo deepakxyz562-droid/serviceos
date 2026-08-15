@@ -2377,7 +2377,11 @@ export function InvoicesView() {
                               >
                                 <Copy className="size-3.5 mr-2" /> Duplicate
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => toast.info('PDF download coming soon')}>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  window.open(`/api/invoices/${invoice.id}/print`, '_blank', 'noopener,noreferrer')
+                                }
+                              >
                                 <Download className="size-3.5 mr-2" /> Download PDF
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
@@ -2638,13 +2642,19 @@ export function InvoicesView() {
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => toast.info('PDF download coming soon')}
+                    onClick={() =>
+                      selectedInvoice &&
+                      window.open(`/api/invoices/${selectedInvoice.id}/print`, '_blank', 'noopener,noreferrer')
+                    }
                   >
                     <Download className="size-4 mr-1.5" /> PDF
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => toast.info('Print preview coming soon')}
+                    onClick={() =>
+                      selectedInvoice &&
+                      window.open(`/api/invoices/${selectedInvoice.id}/print`, '_blank', 'noopener,noreferrer')
+                    }
                   >
                     <Printer className="size-4 mr-1.5" /> Print
                   </Button>

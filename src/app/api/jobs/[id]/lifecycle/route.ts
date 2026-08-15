@@ -1071,7 +1071,135 @@ export async function POST(
       }
 
       case 'generate_invoice': {
-        // Notify admins.
+        // ── Billing lifecycle split: actually generate the invoice ──────────
+        // Previously this case was a NO-OP for invoices — it only flipped
+        // Job.status to 'invoice_generated' and notified admins, without
+        // creating or updating any Invoice row. That left Job.status and
+        // Invoice.status permanently out of sync: a job could be
+        // 'invoice_generated' while its Invoice was still 'draft' (or worse,
+        // no Invoice existed at all if autoCreateOnJobComplete was off).
+        //
+        // Now this action:
+        //   1. Ensures an Invoice row exists for the job (creates one with
+        //      `force: true` if none exists yet — bypasses the
+        //      autoCreateOnJobComplete toggle because the user is explicitly
+        //      requesting invoice generation here).
+        //   2. Promotes an existing 'draft' Invoice to 'sent' (the semantic
+        //      meaning of "generate invoice" is to issue it to the customer,
+        //      not leave it as an internal draft). 'sent' / 'paid' invoices
+        //      are left untouched.
+        //   3. Logs the outcome to ActivityLog so admins can audit what
+        //      actually happened (created vs promoted vs already-sent).
+        //
+        // This runs as fire-and-forget so the lifecycle response isn't
+        // blocked by invoice creation + email/WhatsApp dispatch latency.
+        fireAndForget('generate-invoice on lifecycle', async () => {
+          try {
+            const { autoCreateInvoiceFromJob } = await import('@/lib/invoice-automation');
+            // Try to create the invoice (idempotent — returns skipped+invoiceId
+            // if one already exists). `force: true` bypasses the
+            // autoCreateOnJobComplete toggle because this is an explicit user
+            // action, not an auto-completion side effect.
+            const createResult = await autoCreateInvoiceFromJob(job.id, { force: true });
+
+            // Re-fetch the invoice (whether newly created or pre-existing) so
+            // we can decide whether to promote draft → sent.
+            const invoice = createResult.invoiceId
+              ? await db.invoice.findUnique({
+                  where: { id: createResult.invoiceId },
+                  select: { id: true, number: true, status: true, total: true, currency: true, customerId: true, sentAt: true },
+                })
+              : await db.invoice.findFirst({
+                  where: { jobId: job.id },
+                  select: { id: true, number: true, status: true, total: true, currency: true, customerId: true, sentAt: true },
+                });
+
+            if (!invoice) {
+              // Invoice creation was skipped and no existing invoice was found.
+              // This happens when the job has no customer to invoice — log a
+              // warning so the admin can see why "Generate Invoice" did nothing.
+              console.warn(
+                `[lifecycle/generate_invoice] No invoice could be created for job ${job.id}:`,
+                createResult.error || createResult.reason,
+              );
+              safeLogActivity({
+                tenantId,
+                actorId,
+                actorName,
+                action: 'generate_invoice',
+                entityType: 'invoice',
+                entityId: null,
+                entityName: null,
+                description: `Attempted to generate invoice for job '${job.title}' but no invoice could be created: ${createResult.reason || createResult.error || 'unknown reason'}.`,
+                metadataJson: {
+                  jobId: job.id,
+                  jobTitle: job.title,
+                  outcome: 'failed',
+                  reason: createResult.reason || createResult.error || null,
+                },
+                severity: 'warning',
+              });
+              return;
+            }
+
+            // Promote draft → sent. The semantic of "Generate Invoice" is to
+            // ISSUE the invoice, not leave it as an internal draft. 'sent' and
+            // 'paid' invoices are left untouched (already issued / settled).
+            // 'pending_approval' and 'cancelled' are also left untouched —
+            // those require explicit admin action to change.
+            let promotedToSent = false;
+            if (invoice.status === 'draft') {
+              try {
+                await db.invoice.update({
+                  where: { id: invoice.id },
+                  data: { status: 'sent', sentAt: new Date() },
+                });
+                promotedToSent = true;
+              } catch (err) {
+                console.error(
+                  `[lifecycle/generate_invoice] Failed to promote invoice ${invoice.id} draft→sent:`,
+                  err,
+                );
+              }
+            }
+
+            // Determine the audit-log outcome description.
+            const outcome = createResult.skipped
+              ? (promotedToSent ? 'promoted_draft_to_sent' : 'already_issued')
+              : 'created';
+
+            safeLogActivity({
+              tenantId,
+              actorId,
+              actorName,
+              action: 'generate_invoice',
+              entityType: 'invoice',
+              entityId: invoice.id,
+              entityName: invoice.number,
+              description: promotedToSent
+                ? `Invoice #${invoice.number} for job '${job.title}' promoted from draft to sent.`
+                : createResult.skipped
+                  ? `Invoice #${invoice.number} for job '${job.title}' already existed (status: ${invoice.status}).`
+                  : `Invoice #${invoice.number} created for job '${job.title}' (${Number(invoice.total).toFixed(2)} ${invoice.currency}).`,
+              metadataJson: {
+                jobId: job.id,
+                jobTitle: job.title,
+                invoiceId: invoice.id,
+                invoiceNumber: invoice.number,
+                invoiceStatus: promotedToSent ? 'sent' : invoice.status,
+                outcome,
+                total: Number(invoice.total),
+                currency: invoice.currency,
+                customerId: invoice.customerId ?? null,
+              },
+              severity: 'info',
+            });
+          } catch (err) {
+            console.error('[lifecycle/generate_invoice] failed:', err);
+          }
+        });
+
+        // Notify admins (existing behavior — preserve).
         for (const admin of adminUsers) {
           fireAndForget('notify.admin.invoice', () =>
             safeCreateNotification({

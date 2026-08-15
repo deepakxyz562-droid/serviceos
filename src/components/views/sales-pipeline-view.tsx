@@ -325,6 +325,13 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
 
   // ─── View navigation (used by "View Lead" button in deal detail) ───────
   const setCurrentView = useAppStore((s) => s.setCurrentView);
+  // ─── Cross-view "New Lead" trigger ────────────────────────────────────
+  // Reuses the same signal the sidebar uses: setting pendingCreate='lead'
+  // and switching to the 'leads' view causes leads-view.tsx to auto-open
+  // its full 14-field New Lead form. This replaces the old inline 5-field
+  // Dialog so the Pipeline "New Lead" button opens the SAME form as the
+  // Leads view (single source of truth for lead creation).
+  const setPendingCreate = useAppStore((s) => s.setPendingCreate);
 
   // ─── Cross-view Reports tab + filter (Phase 6) ────────────────────────
   // Used by the Won / Lost 30-day summary boxes' onClick handlers — sets
@@ -1480,7 +1487,7 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
             </Button>
             {/* ── Phase 4: View Switcher ── */}
             <ViewSwitcher />
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { setPendingCreate('lead'); setCurrentView('leads'); }}>
               <Plus className="size-4 mr-1.5" /> New Lead
             </Button>
           </div>
@@ -1504,7 +1511,7 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
             <RefreshCw className={cn('size-4 mr-1.5', loading && 'animate-spin')} />
             Refresh
           </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" size="sm" onClick={() => setShowCreateDialog(true)}>
+          <Button className="bg-emerald-600 hover:bg-emerald-700" size="sm" onClick={() => { setPendingCreate('lead'); setCurrentView('leads'); }}>
             <Plus className="size-4 mr-1.5" /> New Lead
           </Button>
         </div>

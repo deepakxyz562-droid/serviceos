@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
+import { CustomerFormSheet } from '@/components/customer/customer-form-sheet';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -151,17 +152,18 @@ export function CrmView() {
   // "Total" stat so it shows the real count, not just the fetched page.
   const [customersTotal, setCustomersTotal] = useState<number | null>(null);
   const [showAddCustomer, setShowAddCustomer] = useState(pendingCreate === 'customer');
+  // ISSUE-3: the inline customer form state (name/phone/email/address) and
+  // handleSaveCustomer have moved to the dedicated <CustomerFormSheet />
+  // component. `editingCustomer` is kept for future edit support but is no
+  // longer read by an inline Dialog.
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [customerForm, setCustomerForm] = useState({ name: '', phone: '', email: '', address: '' });
 
   // Consume the cross-view "New Customer" signal — when the sidebar's "+ Create"
   // dropdown or a dashboard quick action sets pendingCreate to 'customer',
-  // we reset the form + open the add-customer dialog, then clear the signal
-  // (mirrors the existing "New Customer" button onClick).
+  // we open the add-customer sheet, then clear the signal.
   useEffect(() => {
     if (pendingCreate === 'customer') {
       setEditingCustomer(null);
-      setCustomerForm({ name: '', phone: '', email: '', address: '' });
       setShowAddCustomer(true);
       setPendingCreate(null);
     }
@@ -221,34 +223,9 @@ export function CrmView() {
   }, [fetchCustomers, debouncedCustomerSearch]);
 
   // ─── Customer CRUD ──────────────────────────────────────────────────────
-  const handleSaveCustomer = async () => {
-    if (!customerForm.name || !customerForm.phone) {
-      toast.error('Name and phone are required');
-      return;
-    }
-    try {
-      const isEditing = !!editingCustomer;
-      const url = isEditing ? `/api/customers?id=${editingCustomer.id}` : '/api/customers';
-      const method = isEditing ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(customerForm),
-      });
-      if (res.ok) {
-        toast.success(`Customer ${isEditing ? 'updated' : 'created'} successfully`);
-        setShowAddCustomer(false);
-        setEditingCustomer(null);
-        setCustomerForm({ name: '', phone: '', email: '', address: '' });
-        fetchCustomers(debouncedCustomerSearch);
-      } else {
-        toast.error(`Failed to ${isEditing ? 'update' : 'create'} customer`);
-      }
-    } catch {
-      toast.error('Network error');
-    }
-  };
-
+  // ISSUE-3: customer create/edit is now handled by <CustomerFormSheet />.
+  // The sheet POSTs to /api/customers and calls onSaved() (which re-runs
+  // fetchCustomers) on success. Deletion + portal invitations still live here.
   const handleDeleteCustomer = async (id: string) => {
     try {
       const res = await fetch(`/api/customers?id=${id}`, { method: 'DELETE' });
@@ -327,13 +304,11 @@ export function CrmView() {
   };
 
   const openEditCustomer = (customer: Customer) => {
+    // ISSUE-3: edit support for the new multi-section CustomerFormSheet is
+    // not wired up yet — for now we just open the sheet in create mode
+    // and toast that edit is coming. The full customer object is preserved
+    // in `editingCustomer` for when edit support is added.
     setEditingCustomer(customer);
-    setCustomerForm({
-      name: customer.name,
-      phone: customer.phone,
-      email: customer.email || '',
-      address: customer.address || '',
-    });
     setShowAddCustomer(true);
   };
 
@@ -925,41 +900,12 @@ export function CrmView() {
           </TabsContent>
         </Tabs>
 
-        {/* Add/Edit Customer Dialog (shared) */}
-        <Dialog open={showAddCustomer} onOpenChange={setShowAddCustomer}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editingCustomer ? 'Edit Customer' : 'Add Customer'}</DialogTitle>
-              <DialogDescription>
-                {editingCustomer ? 'Update customer information' : 'Add a new customer to your CRM'}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-2">
-              <div className="space-y-2">
-                <Label>Name *</Label>
-                <Input placeholder="Full name" value={customerForm.name} onChange={e => setCustomerForm({ ...customerForm, name: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Phone *</Label>
-                <Input placeholder="+1 555 123 4567" value={customerForm.phone} onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input placeholder="email@example.com" type="email" value={customerForm.email} onChange={e => setCustomerForm({ ...customerForm, email: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Address</Label>
-                <Textarea placeholder="Full address" value={customerForm.address} onChange={e => setCustomerForm({ ...customerForm, address: e.target.value })} rows={2} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowAddCustomer(false)}>Cancel</Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveCustomer} disabled={!customerForm.name || !customerForm.phone}>
-                {editingCustomer ? 'Update' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* Add/Edit Customer Sheet (ISSUE-3 — replaces the inline 4-field Dialog) */}
+        <CustomerFormSheet
+          open={showAddCustomer}
+          onOpenChange={setShowAddCustomer}
+          onSaved={() => fetchCustomers(debouncedCustomerSearch)}
+        />
       </div>
     );
   }
@@ -1027,7 +973,6 @@ export function CrmView() {
                 className="bg-emerald-600 hover:bg-emerald-700"
                 onClick={() => {
                   setEditingCustomer(null);
-                  setCustomerForm({ name: '', phone: '', email: '', address: '' });
                   setShowAddCustomer(true);
                 }}
               >
@@ -1288,41 +1233,12 @@ export function CrmView() {
         </TabsContent>
       </Tabs>
 
-      {/* ─── Add/Edit Customer Dialog ─────────────────────────────────────── */}
-      <Dialog open={showAddCustomer} onOpenChange={setShowAddCustomer}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editingCustomer ? 'Edit Customer' : 'Add Customer'}</DialogTitle>
-            <DialogDescription>
-              {editingCustomer ? 'Update customer information' : 'Add a new customer to your CRM'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Name *</Label>
-              <Input placeholder="Full name" value={customerForm.name} onChange={e => setCustomerForm({ ...customerForm, name: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Phone *</Label>
-              <Input placeholder="+1 555 123 4567" value={customerForm.phone} onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input placeholder="email@example.com" type="email" value={customerForm.email} onChange={e => setCustomerForm({ ...customerForm, email: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Address</Label>
-              <Textarea placeholder="Full address" value={customerForm.address} onChange={e => setCustomerForm({ ...customerForm, address: e.target.value })} rows={2} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddCustomer(false)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveCustomer} disabled={!customerForm.name || !customerForm.phone}>
-              {editingCustomer ? 'Update' : 'Create'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ─── Add/Edit Customer Sheet (ISSUE-3 — replaces the inline 4-field Dialog) ── */}
+      <CustomerFormSheet
+        open={showAddCustomer}
+        onOpenChange={setShowAddCustomer}
+        onSaved={() => fetchCustomers(debouncedCustomerSearch)}
+      />
 
       {/* ─── Customer Portal Invitation Dialog ────────────────────────────── */}
       <Dialog

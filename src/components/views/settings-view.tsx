@@ -78,6 +78,7 @@ import { WorkSettings } from '@/components/settings/sections/work-settings';
 import { TimesheetSettings } from '@/components/settings/sections/timesheet-settings';
 import { AiAutoReplySettings } from '@/components/settings/sections/ai-auto-reply-settings';
 import { PaymentIntegrationsSettings } from '@/components/settings/sections/payment-integrations-settings';
+import { BusinessProfileSettings } from '@/components/settings/sections/business-profile-section';
 import { GenericPlaceholder } from '@/components/settings/sections/generic-placeholder';
 
 // Embed full developed views inside Settings (single source of truth pattern).
@@ -134,18 +135,6 @@ const PLACEHOLDER_CONFIGS: Record<string, {
   accent?: 'emerald' | 'amber' | 'sky' | 'rose' | 'violet' | 'slate';
   items: Array<{ label: string; hint?: string }>;
 }> = {
-  'business-profile': {
-    title: 'Business Profile',
-    description: 'Public business profile, logo, tagline, public contact details',
-    icon: Building2,
-    accent: 'emerald',
-    items: [
-      { label: 'Business Logo', hint: 'Upload your logo for invoices, portal, marketplace' },
-      { label: 'Tagline & Description', hint: 'Public-facing business description' },
-      { label: 'Public Contact Details', hint: 'Phone, email, website shown to customers' },
-      { label: 'Business Hours', hint: 'Public operating hours for portal & marketplace' },
-    ],
-  },
   'products-services': {
     title: 'Products & Services',
     description: 'Service catalog, product catalog, pricing tiers, service categories',
@@ -598,6 +587,10 @@ export function SettingsView() {
         return <AiAutoReplySettings />;
       case 'payment-integrations':
         return <PaymentIntegrationsSettings />;
+
+      // ─── Business Profile (real UI — was a placeholder until ISSUE-4) ──
+      case 'business-profile':
+        return <BusinessProfileSettings onSaved={refreshTenant} />;
 
       // ─── Placeholder sections (Coming Soon) ─────────────────────────────
       default: {

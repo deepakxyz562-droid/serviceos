@@ -87,6 +87,24 @@ export async function GET(request: NextRequest) {
         assignee: true,
         customer: true,
         resource: true,
+        // ── Billing lifecycle split: include invoices so the Jobs view ──
+        // Billing badge (which uses this endpoint via openJobDetail) can
+        // read the ACTUAL Invoice.status instead of guessing from Job.status.
+        // Mirrors the include added to GET /api/jobs/[id].
+        invoices: {
+          select: {
+            id: true,
+            number: true,
+            status: true,
+            total: true,
+            currency: true,
+            sentAt: true,
+            paidAt: true,
+            dueDate: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     })
 
@@ -163,10 +181,17 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Employee/Resource not found' }, { status: 404 })
         }
 
-        // Check availability
-        if (employee && employee.status !== 'available' && employee.status !== 'busy') {
-          return NextResponse.json({ error: `Employee is not available (current status: ${employee.status})` }, { status: 400 })
-        }
+        // NOTE: We intentionally do NOT hard-block assignment based on the
+        // employee's CURRENT status (en_route / offline / on_leave / etc.).
+        // Employee.status reflects what they are doing RIGHT NOW, not whether
+        // they can be assigned FUTURE work. A job scheduled for "tomorrow 8pm"
+        // must be assignable even if the tech is currently driving (en_route).
+        // The newer V1.5 lifecycle endpoint (/api/jobs/[id]/lifecycle) already
+        // omits this check — keeping it here caused Bug: "Employee is not
+        // available (current status: en_route)" when assigning future jobs.
+        // Conflict detection (schedule overlap) is handled separately by
+        // detectConflicts() in src/lib/smart-dispatch.ts and surfaced as
+        // warnings in the Assign dialog, not as hard blocks.
         if (resource && resource.status !== 'available') {
           return NextResponse.json({ error: 'Resource is not available' }, { status: 400 })
         }

@@ -158,6 +158,22 @@ interface Job {
   updatedAt: string;
   assignee?: { id: string; name: string; phone: string; role: string };
   customer?: { id: string; name: string; phone: string; email?: string };
+  // ── Billing lifecycle split: invoices joined from GET /api/jobs/[id] ──
+  // The array is ordered by createdAt DESC, so index 0 is the most recent.
+  // Used by the Billing FormSectionCard badge to read the ACTUAL Invoice
+  // status instead of guessing from Job.status (which lied for any job past
+  // 'completed' — see billing badge comment below).
+  invoices?: Array<{
+    id: string;
+    number: string;
+    status: string;
+    total: number;
+    currency: string;
+    sentAt?: string | null;
+    paidAt?: string | null;
+    dueDate?: string | null;
+    createdAt: string;
+  }>;
 }
 
 // ── "#job" Customize: user-defined label+value pairs ──
@@ -2372,13 +2388,34 @@ export function JobsView() {
       });
       const data = await res.json();
       if (!res.ok) {
-        if (res.status === 409 && data.invoice) {
-          toast.success('Invoice already exists — opening Invoices', { id: 'gen-invoice' });
-        } else {
-          throw new Error(data.error || 'Failed to generate invoice');
-        }
+        throw new Error(data.error || 'Failed to generate invoice');
+      }
+      // Billing lifecycle split: endpoint now returns `{ invoice, created }`.
+      // `created` is true when a new invoice was generated, false when an
+      // existing one was returned (idempotent skip). Surface this to the user
+      // so they know whether to expect a fresh draft or the prior invoice.
+      const invoiceNumber = data.invoice?.number || '';
+      const invoiceTotal = typeof data.invoice?.total === 'number'
+        ? `${data.invoice.currency || 'USD'} ${Number(data.invoice.total).toFixed(2)}`
+        : '';
+      if (data.created === false) {
+        toast.success(`Invoice ${invoiceNumber} already exists (${invoiceTotal}) — opening Invoices`, { id: 'gen-invoice' });
       } else {
-        toast.success(`Invoice ${data.invoice?.number || ''} created`, { id: 'gen-invoice' });
+        toast.success(`Invoice ${invoiceNumber} created (${invoiceTotal})`, { id: 'gen-invoice' });
+      }
+      // Refresh the job detail so the Billing badge immediately reflects the
+      // new invoice status (no manual reload needed).
+      try {
+        const detailRes = await fetch(`/api/jobs/${job.id}`);
+        if (detailRes.ok) {
+          const detailData = await detailRes.json();
+          if (detailData.job) {
+            setJobs((prev) => prev.map((j) => (j.id === job.id ? detailData.job : j)));
+            setSelectedJob(detailData.job);
+          }
+        }
+      } catch (refreshErr) {
+        console.error('[handleCreateInvoice] failed to refresh job detail:', refreshErr);
       }
       // Navigate to the Invoices view so the user can see the result.
       setActiveView('invoices');
@@ -3472,22 +3509,95 @@ export function JobsView() {
               </FormSectionCard>
             )}
 
-            {/* Billing */}
+            {/* Billing — Billing lifecycle split: read ACTUAL Invoice.status
+                from the joined `job.invoices` array (latest first) instead of
+                the previous hardcoded `job.status === 'completed' ? 'Paid' : 'Pending'`
+                check which lied for any job past 'completed' (e.g. a job moved
+                to 'invoice_generated' showed 'Pending' even though the invoice
+                was sent or paid). The amount shown is now the real
+                Invoice.total, not the UI-computed `totalPrice` sum of
+                lineItemsJson. */}
             <FormSectionCard icon={FileText} title="Billing">
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">Reminders · When the job is marked closed</p>
-                <div className="rounded-md border border-border/60 px-3 py-2.5 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">Invoice {job.jobNumber ? `#${job.jobNumber}` : ''}</p>
-                    <p className="text-xs text-muted-foreground">{job.status === 'completed' ? 'Paid' : 'Pending'} · {symbol}{totalPrice.toFixed(2)}</p>
-                  </div>
-                  <Badge variant="outline" className={cn('shrink-0', job.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200')}>
-                    {job.status === 'completed' ? 'Paid' : 'Pending'}
-                  </Badge>
-                </div>
-                <button onClick={() => handleCreateInvoice(job)} className="text-sm font-medium text-emerald-700 hover:text-emerald-800 inline-flex items-center gap-1">
-                  <Plus className="size-3.5" /> Create Invoice
-                </button>
+                <p className="text-xs text-muted-foreground">Invoice status & total</p>
+                {(() => {
+                  // invoices are joined from GET /api/jobs/[id] ordered by
+                  // createdAt DESC, so [0] is the most recent. Most jobs have
+                  // 0 or 1 invoice; milestone-split jobs may have several.
+                  const invoice = job.invoices?.[0];
+                  if (!invoice) {
+                    // No invoice yet — empty state with inline CTA.
+                    return (
+                      <div className="rounded-md border border-dashed border-border/60 px-3 py-3 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground">No invoice yet</p>
+                          <p className="text-xs text-muted-foreground">
+                            {symbol}{totalPrice.toFixed(2)} · ready to generate
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleCreateInvoice(job)}
+                          className="text-sm font-medium text-emerald-700 hover:text-emerald-800 inline-flex items-center gap-1 shrink-0"
+                        >
+                          <Plus className="size-3.5" /> Create
+                        </button>
+                      </div>
+                    );
+                  }
+                  // Invoice exists — map status → label + Tailwind classes.
+                  // NOTE: avoids indigo/blue per design rules.
+                  const statusMap: Record<string, { label: string; className: string }> = {
+                    paid: { label: 'Paid', className: 'bg-green-50 text-green-700 border-green-200' },
+                    sent: { label: 'Sent', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                    draft: { label: 'Draft', className: 'bg-muted text-muted-foreground border-border' },
+                    overdue: { label: 'Overdue', className: 'bg-red-50 text-red-700 border-red-200' },
+                    pending_approval: { label: 'Pending Approval', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+                    cancelled: { label: 'Cancelled', className: 'bg-muted text-muted-foreground border-border line-through' },
+                  };
+                  const info = statusMap[invoice.status] || {
+                    label: invoice.status || 'Unknown',
+                    className: 'bg-muted text-muted-foreground border-border',
+                  };
+                  const invoiceAmount = `${invoice.currency || 'USD'} ${Number(invoice.total).toFixed(2)}`;
+                  return (
+                    <>
+                      <div className="rounded-md border border-border/60 px-3 py-2.5 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            Invoice #{invoice.number}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {info.label} · {invoiceAmount}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className={cn('shrink-0', info.className)}>
+                          {info.label}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          onClick={() => setActiveView('invoices')}
+                          className="text-sm font-medium text-emerald-700 hover:text-emerald-800 inline-flex items-center gap-1"
+                        >
+                          <FileText className="size-3.5" /> View Invoice
+                        </button>
+                        {/* Only show "Regenerate" for draft invoices — sent /
+                            paid invoices shouldn't be regenerated (would
+                            create duplicates; the idempotency check returns
+                            the existing one anyway, but better to hide the
+                            button to avoid confusing the user). */}
+                        {invoice.status === 'draft' && (
+                          <button
+                            onClick={() => handleCreateInvoice(job)}
+                            className="text-sm font-medium text-emerald-700 hover:text-emerald-800 inline-flex items-center gap-1"
+                          >
+                            <Plus className="size-3.5" /> Regenerate
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </FormSectionCard>
 

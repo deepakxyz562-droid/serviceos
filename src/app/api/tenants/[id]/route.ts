@@ -169,6 +169,7 @@ export async function PUT(
       currency,
       logo,
       whatsappPhone,
+      website,
       settingsJson,
       onboardingCompleted,
       onboardingStep,
@@ -221,8 +222,9 @@ export async function PUT(
     if (address !== undefined) updateData.address = address;
     if (country !== undefined) updateData.country = country;
     if (currency !== undefined) updateData.currency = currency;
-    if (logo !== undefined) updateData.logo = logo;
+    if (logo !== undefined) updateData.logo = logo?.trim() || null;
     if (whatsappPhone !== undefined) updateData.whatsappPhone = whatsappPhone;
+    if (website !== undefined) updateData.website = website?.trim() || null;
     if (settingsJson !== undefined) updateData.settingsJson = settingsJson;
     if (onboardingCompleted !== undefined) updateData.onboardingCompleted = onboardingCompleted;
     if (onboardingStep !== undefined) updateData.onboardingStep = onboardingStep;
@@ -350,6 +352,7 @@ export async function PUT(
         country: finalTenant?.country ?? tenant.country,
         currency: finalTenant?.currency ?? tenant.currency,
         whatsappPhone: finalTenant?.whatsappPhone ?? tenant.whatsappPhone,
+        website: finalTenant?.website ?? tenant.website,
         plan: finalTenant?.plan ?? tenant.plan,
         planStatus: finalTenant?.planStatus ?? tenant.planStatus,
         trialEndsAt: finalTenant?.trialEndsAt ?? tenant.trialEndsAt,

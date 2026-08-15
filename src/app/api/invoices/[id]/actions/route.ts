@@ -9,6 +9,48 @@ import {
 } from '@/lib/invoice-automation';
 import { EventBus } from '@/lib/event-bus';
 
+/**
+ * Fire-and-forget ActivityLog writer for invoice state changes.
+ *
+ * Audit logging must NEVER break the user-facing response — every call is
+ * detached and swallows its own errors. Mirrors the `safeLogActivity` pattern
+ * used by the job lifecycle route, but inline because this file has only one
+ * call site per action and we want to keep the dependency surface minimal.
+ *
+ * ActivityLog.action is a free-form String (not an enum), so the new values
+ * `send_invoice`, `mark_paid`, `send_reminder`, `approve_invoice` require
+ * NO schema migration.
+ */
+function logInvoiceActivity(params: {
+  invoiceId: string;
+  invoiceNumber: string;
+  tenantId: string | null;
+  customerId?: string | null;
+  actorId?: string | null;
+  actorName?: string | null;
+  action: string;
+  description: string;
+  metadataJson?: Record<string, unknown>;
+  severity?: string;
+}): void {
+  if (!params.tenantId) return;
+  Promise.resolve(db.activityLog.create({
+    data: {
+      tenantId: params.tenantId,
+      actorId: params.actorId ?? null,
+      actorName: params.actorName ?? null,
+      actorType: params.actorId ? 'user' : 'system',
+      action: params.action,
+      entityType: 'invoice',
+      entityId: params.invoiceId,
+      entityName: params.invoiceNumber,
+      description: params.description,
+      metadataJson: JSON.stringify(params.metadataJson ?? {}),
+      severity: params.severity ?? 'info',
+    },
+  })).catch((err) => console.error('[Invoice actions] ActivityLog write failed:', err));
+}
+
 // POST /api/invoices/[id]/actions
 // Body: { action: 'send' | 'send_email' | 'send_whatsapp' | 'mark_paid' | 'reminder' | 'approve' }
 //
@@ -84,6 +126,29 @@ export async function POST(
             console.error('[Invoice actions] invoice.sent event failed:', eventErr);
           }
         }
+        // ─── Audit log: who sent the invoice, via which channels ───
+        // Best-effort, never blocks the response. Logs even on partial-channel
+        // failure so admins can see "an attempt was made".
+        logInvoiceActivity({
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          tenantId: invoice.tenantId || null,
+          customerId: invoice.customerId || null,
+          actorId: user.id,
+          actorName: user.name,
+          action: 'send_invoice',
+          description: `Invoice #${invoice.number} sent via ${action === 'send' ? 'email + WhatsApp' : action === 'send_email' ? 'email' : action === 'send_whatsapp' ? 'WhatsApp' : 'unknown channel'}${anySuccess ? '' : ' (failed)'}.`,
+          metadataJson: {
+            channel: action,
+            emailResult: result.email,
+            whatsappResult: result.whatsapp,
+            fromStatus: invoice.status,
+            toStatus: anySuccess && wasDraft ? 'sent' : invoice.status,
+            total: Number(invoice.total),
+            currency: invoice.currency,
+          },
+          severity: anySuccess ? 'info' : 'warning',
+        });
         return NextResponse.json({
           success: anyRequested ? anySuccess : false,
           action,
@@ -93,7 +158,17 @@ export async function POST(
 
       case 'mark_paid': {
         const wasNotPaid = invoice.status !== 'paid';
-        const result = await markInvoicePaid(id);
+        // BILLING-C Step 6: forward optional paymentMethod + actor context to
+        // the lib function so it can sync the linked Job's payment fields and
+        // write an accurate ActivityLog entry. The body shape is intentionally
+        // permissive — callers (UI / trigger-engine / workflow) may omit any
+        // of these.
+        const paymentMethod = typeof body.paymentMethod === 'string' ? body.paymentMethod : undefined;
+        const result = await markInvoicePaid(id, {
+          paymentMethod,
+          actorId: user.id,
+          actorName: user.name,
+        });
         // Fetch the updated invoice to return the new status
         const updatedInvoice = result.success ? await db.invoice.findUnique({ where: { id }, select: { id: true, number: true, status: true, paidAt: true, customerId: true, tenantId: true, total: true, currency: true } }) : null;
         // ─── Emit invoice.paid event ──────────────────────────────────
@@ -123,16 +198,85 @@ export async function POST(
             console.error('[Invoice actions] invoice.paid event failed:', eventErr);
           }
         }
+        // ─── Audit log: who marked the invoice paid ───
+        if (result.success && wasNotPaid && updatedInvoice) {
+          logInvoiceActivity({
+            invoiceId: updatedInvoice.id,
+            invoiceNumber: updatedInvoice.number,
+            tenantId: updatedInvoice.tenantId || null,
+            customerId: updatedInvoice.customerId || null,
+            actorId: user.id,
+            actorName: user.name,
+            action: 'mark_paid',
+            description: `Invoice #${updatedInvoice.number} marked as paid (${Number(updatedInvoice.total).toFixed(2)} ${updatedInvoice.currency}).`,
+            metadataJson: {
+              fromStatus: invoice.status,
+              toStatus: 'paid',
+              total: Number(updatedInvoice.total),
+              currency: updatedInvoice.currency,
+              paidAt: updatedInvoice.paidAt,
+            },
+            severity: 'info',
+          });
+        }
         return NextResponse.json({ success: result.success, action, error: result.error, invoice: updatedInvoice });
       }
 
       case 'reminder': {
         const result = await sendInvoiceReminder(id);
+        // ─── Audit log: who sent a payment reminder ───
+        // Logs regardless of channel success so admins can see retry history.
+        logInvoiceActivity({
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          tenantId: invoice.tenantId || null,
+          customerId: invoice.customerId || null,
+          actorId: user.id,
+          actorName: user.name,
+          action: 'send_reminder',
+          description: `Payment reminder sent for invoice #${invoice.number}${result.success ? '' : ' (failed)'} — email: ${result.email ? 'yes' : 'no'}, whatsapp: ${result.whatsapp ? 'yes' : 'no'}.`,
+          metadataJson: {
+            emailSent: result.email,
+            whatsappSent: result.whatsapp,
+            smsSent: result.sms,
+            success: result.success,
+            error: result.error ?? null,
+            total: Number(invoice.total),
+            currency: invoice.currency,
+          },
+          severity: result.success ? 'info' : 'warning',
+        });
         return NextResponse.json({ success: result.success, action, error: result.error, email: result.email, whatsapp: result.whatsapp });
       }
 
       case 'approve': {
-        const result = await approveInvoice(id);
+        // BILLING-C Step 5: forward actor context so approveInvoice can write
+        // an ActivityLog entry naming WHO approved the invoice.
+        const result = await approveInvoice(id, {
+          actorId: user.id,
+          actorName: user.name,
+        });
+        // ─── Audit log: who approved the pending-approval invoice ───
+        if (result.success) {
+          logInvoiceActivity({
+            invoiceId: result.invoiceId || invoice.id,
+            invoiceNumber: result.number || invoice.number,
+            tenantId: invoice.tenantId || null,
+            customerId: invoice.customerId || null,
+            actorId: user.id,
+            actorName: user.name,
+            action: 'approve_invoice',
+            description: `Invoice #${result.number || invoice.number} approved and sent to customer.`,
+            metadataJson: {
+              fromStatus: 'pending_approval',
+              toStatus: 'sent',
+              sendResult: result.sendResult ?? null,
+              total: Number(invoice.total),
+              currency: invoice.currency,
+            },
+            severity: 'info',
+          });
+        }
         return NextResponse.json({ success: result.success, action, error: result.error, invoiceId: result.invoiceId, number: result.number, result: result.sendResult });
       }
 

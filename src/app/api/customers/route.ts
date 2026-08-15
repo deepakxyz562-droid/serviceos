@@ -121,6 +121,27 @@ async function _GET(request: NextRequest) {
 // Automatically attaches the customer to the logged-in user's workspace so
 // the workspaceId is NEVER null (which was breaking invitation links because
 // the slug lookup chain Customer→Workspace→Tenant was broken).
+//
+// ISSUE-3: The request body now accepts the redesigned "New Customer" form
+// shape — title/firstName/lastName/companyName/leadSource,
+// notificationSettingsJson, plus nested `additionalContacts[]` and
+// `properties[]` (each property may carry nested `contacts[]`). All
+// records are persisted in a single `db.$transaction()` so a failure in
+// any child rolls back the parent too.
+//
+// Body shape (ISSUE-3):
+//   {
+//     title?, firstName?, lastName?, companyName?,
+//     name?,                  // legacy — derived from firstName+lastName if absent
+//     phone (required), email?, address?,
+//     whatsappId?, preferredCurrency?,
+//     leadSource?, notificationSettingsJson?,
+//     additionalContacts?: [{ name, phone?, email?, role? }],
+//     properties?: [{
+//       label?, street1, street2?, city?, province?, postalCode?, country?, isPrimary?,
+//       contacts?: [{ name, phone?, email?, role? }]
+//     }]
+//   }
 export async function POST(request: NextRequest) {
   try {
     const crmGuard = await requireCrmTenant(request);
@@ -131,10 +152,44 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, phone, email, address, whatsappId, preferredCurrency } = body
+    const {
+      // ── Legacy / backward-compat fields ──
+      name: explicitName,
+      phone,
+      email,
+      address,
+      whatsappId,
+      preferredCurrency,
+      // ── ISSUE-3: structured primary contact fields ──
+      title,
+      firstName,
+      lastName,
+      companyName,
+      leadSource,
+      notificationSettingsJson,
+      // ── ISSUE-3: nested repeating collections ──
+      additionalContacts,
+      properties,
+    } = body
 
-    if (!name || !phone) {
-      return NextResponse.json({ error: 'Name and phone are required' }, { status: 400 })
+    // ── Q1 (name derivation): prefer firstName + " " + lastName, then fall
+    // back to the explicit `name` field, then `companyName`. If none of
+    // those resolve to a non-empty value, reject the request.
+    const derivedName = [
+      typeof firstName === 'string' ? firstName.trim() : '',
+      typeof lastName === 'string' ? lastName.trim() : '',
+    ].filter(Boolean).join(' ').trim()
+      || (typeof explicitName === 'string' ? explicitName.trim() : '')
+      || (typeof companyName === 'string' ? companyName.trim() : '')
+
+    if (!derivedName) {
+      return NextResponse.json(
+        { error: 'At least one of firstName, lastName, or companyName is required' },
+        { status: 400 },
+      )
+    }
+    if (!phone) {
+      return NextResponse.json({ error: 'Phone is required' }, { status: 400 })
     }
 
     // Always use the logged-in user's workspaceId — ignore any workspaceId in
@@ -143,16 +198,117 @@ export async function POST(request: NextRequest) {
     // link generation.
     const workspaceId = user.workspaceId || null
 
-    const customer = await db.customer.create({
-      data: {
-        name,
-        phone,
-        email: email || null,
-        address: address || null,
-        whatsappId: whatsappId || null,
-        workspaceId,
-        preferredCurrency: preferredCurrency || 'USD',
-      },
+    // ── Validate + normalize nested collections before opening the
+    // transaction so a 400 doesn't waste a DB round-trip. ──
+    const cleanedAdditionalContacts = Array.isArray(additionalContacts)
+      ? additionalContacts
+          .filter(
+            (c: unknown): c is Record<string, unknown> =>
+              !!c && typeof c === 'object' && typeof (c as Record<string, unknown>).name === 'string' &&
+              (c as Record<string, unknown>).name.trim().length > 0,
+          )
+          .map((c: Record<string, unknown>) => ({
+            name: String(c.name).trim(),
+            phone: typeof c.phone === 'string' && c.phone.trim() ? c.phone.trim() : null,
+            email: typeof c.email === 'string' && c.email.trim() ? c.email.trim() : null,
+            role: typeof c.role === 'string' && c.role.trim() ? c.role.trim() : null,
+          }))
+      : []
+
+    const cleanedProperties = Array.isArray(properties)
+      ? properties
+          .filter(
+            (p: unknown): p is Record<string, unknown> =>
+              !!p && typeof p === 'object' && typeof (p as Record<string, unknown>).street1 === 'string' &&
+              (p as Record<string, unknown>).street1.trim().length > 0,
+          )
+          .map((p: Record<string, unknown>) => {
+            const contacts = Array.isArray(p.contacts)
+              ? p.contacts
+                  .filter(
+                    (c: unknown): c is Record<string, unknown> =>
+                      !!c && typeof c === 'object' && typeof (c as Record<string, unknown>).name === 'string' &&
+                      (c as Record<string, unknown>).name.trim().length > 0,
+                  )
+                  .map((c: Record<string, unknown>) => ({
+                    name: String(c.name).trim(),
+                    phone: typeof c.phone === 'string' && c.phone.trim() ? c.phone.trim() : null,
+                    email: typeof c.email === 'string' && c.email.trim() ? c.email.trim() : null,
+                    role: typeof c.role === 'string' && c.role.trim() ? c.role.trim() : null,
+                  }))
+              : []
+            return {
+              label: typeof p.label === 'string' && p.label.trim() ? p.label.trim() : null,
+              street1: String(p.street1).trim(),
+              street2: typeof p.street2 === 'string' && p.street2.trim() ? p.street2.trim() : null,
+              city: typeof p.city === 'string' && p.city.trim() ? p.city.trim() : null,
+              province: typeof p.province === 'string' && p.province.trim() ? p.province.trim() : null,
+              postalCode: typeof p.postalCode === 'string' && p.postalCode.trim() ? p.postalCode.trim() : null,
+              country: typeof p.country === 'string' && p.country.trim() ? p.country.trim() : null,
+              isPrimary: p.isPrimary === true,
+              contacts,
+            }
+          })
+      : []
+
+    // ── Single transaction: customer → additionalContacts → properties(+contacts) ──
+    const customer = await db.$transaction(async (tx) => {
+      const created = await tx.customer.create({
+        data: {
+          name: derivedName,
+          phone,
+          email: email || null,
+          address: address || null,
+          whatsappId: whatsappId || null,
+          workspaceId,
+          preferredCurrency: preferredCurrency || 'USD',
+          // ── ISSUE-3: structured primary contact fields ──
+          title: title || null,
+          firstName: firstName || null,
+          lastName: lastName || null,
+          companyName: companyName || null,
+          leadSource: leadSource || null,
+          notificationSettingsJson:
+            typeof notificationSettingsJson === 'string' && notificationSettingsJson.trim()
+              ? notificationSettingsJson
+              : JSON.stringify({
+                  quotes: true,
+                  jobs: true,
+                  invoices: true,
+                  visitReminders: true,
+                }),
+        },
+      })
+
+      // Customer-level additional contacts
+      if (cleanedAdditionalContacts.length > 0) {
+        await tx.customerContact.createMany({
+          data: cleanedAdditionalContacts.map((c) => ({ ...c, customerId: created.id })),
+        })
+      }
+
+      // Properties + nested property contacts
+      for (const prop of cleanedProperties) {
+        const { contacts: propContacts, ...propFields } = prop
+        const createdProp = await tx.property.create({
+          data: { ...propFields, customerId: created.id },
+        })
+        if (propContacts.length > 0) {
+          await tx.propertyContact.createMany({
+            data: propContacts.map((c) => ({ ...c, propertyId: createdProp.id })),
+          })
+        }
+      }
+
+      return created
+    })
+
+    // Re-fetch with nested relations so the response matches the GET shape
+    // (lets the caller refresh its list with the just-created customer
+    // including all the child records in one round-trip).
+    const customerWithRelations = await db.customer.findUnique({
+      where: { id: customer.id },
+      select: CUSTOMER_PUBLIC_SELECT,
     })
 
     // ─── V1.5 Activity Log ──────────────────────────────────────────
@@ -182,6 +338,9 @@ export async function POST(request: NextRequest) {
             phone: customer.phone,
             email: customer.email,
             workspaceId: customer.workspaceId,
+            leadSource: customer.leadSource,
+            additionalContactsCount: cleanedAdditionalContacts.length,
+            propertiesCount: cleanedProperties.length,
           }),
           severity: 'info',
         })
@@ -190,7 +349,7 @@ export async function POST(request: NextRequest) {
       console.error('[Customers POST] Failed to log activity:', logErr)
     }
 
-    return NextResponse.json(customer, { status: 201 })
+    return NextResponse.json(customerWithRelations ?? customer, { status: 201 })
   } catch (error) {
     console.error('Error creating customer:', error)
     return NextResponse.json({ error: 'Failed to create customer' }, { status: 500 })

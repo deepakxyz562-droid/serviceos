@@ -59,6 +59,11 @@ export async function GET(
             address: true,
             country: true,
             currency: true,
+            // ISSUE-4: surface the business profile fields so the printed
+            // invoice header can render the logo, tagline, and website.
+            logo: true,
+            tagline: true,
+            website: true,
           },
         },
       },
@@ -154,9 +159,11 @@ export async function GET(
     const tenantAddress = [invoice.tenant?.address, invoice.tenant?.country]
       .filter(Boolean)
       .join(', ');
-    const tenantContact = [invoice.tenant?.email, invoice.tenant?.phone]
+    const tenantContact = [invoice.tenant?.email, invoice.tenant?.phone, invoice.tenant?.website]
       .filter(Boolean)
       .join(' · ');
+    const tenantLogo = invoice.tenant?.logo || '';
+    const tenantTagline = invoice.tenant?.tagline || '';
 
     const customerName = invoice.customer?.name || 'Valued Customer';
     const customerAddress = invoice.customer?.address || '';
@@ -175,6 +182,8 @@ export async function GET(
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 40px; color: #0f172a; background: #f8fafc; }
   .invoice { max-width: 820px; margin: 0 auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
   .header { background: linear-gradient(135deg, #0f766e, #14b8a6); color: #fff; padding: 28px 36px; display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
+  .header .brand { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .header .brand .logo { height: 56px; max-height: 60px; width: auto; max-width: 180px; object-fit: contain; background: #fff; border-radius: 8px; padding: 4px 6px; }
   .header h1 { margin: 0; font-size: 22px; letter-spacing: 0.5px; }
   .header .sub { margin-top: 4px; font-size: 13px; opacity: 0.9; }
   .header .meta { text-align: right; font-size: 13px; opacity: 0.95; }
@@ -202,17 +211,21 @@ export async function GET(
   .actions { padding: 0 36px 28px; }
   button { background: #0f172a; color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; font-size: 13px; cursor: pointer; }
   button.secondary { background: #fff; color: #0f172a; border: 1px solid #cbd5e1; margin-left: 8px; }
-  @media print { body { background: #fff; padding: 0; } .actions { display: none; } .invoice { border: 0; border-radius: 0; } }
+  @media print { body { background: #fff; padding: 0; } .actions { display: none; } .invoice { border: 0; border-radius: 0; } .header .brand .logo { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
 </style>
 </head>
 <body>
   <div class="invoice">
     <div class="header">
-      <div>
-        <h1>INVOICE</h1>
-        <div class="sub">${escapeHtml(tenantName)}</div>
-        ${tenantAddress ? `<div class="sub">${escapeHtml(tenantAddress)}</div>` : ''}
-        ${tenantContact ? `<div class="sub">${escapeHtml(tenantContact)}</div>` : ''}
+      <div class="brand">
+        ${tenantLogo ? `<img class="logo" src="${escapeHtml(tenantLogo)}" alt="${escapeHtml(tenantName)} logo" />` : ''}
+        <div>
+          <h1>INVOICE</h1>
+          <div class="sub">${escapeHtml(tenantName)}</div>
+          ${tenantTagline ? `<div class="sub" style="font-style:italic;opacity:0.85;">${escapeHtml(tenantTagline)}</div>` : ''}
+          ${tenantAddress ? `<div class="sub">${escapeHtml(tenantAddress)}</div>` : ''}
+          ${tenantContact ? `<div class="sub">${escapeHtml(tenantContact)}</div>` : ''}
+        </div>
       </div>
       <div class="meta">
         <div class="num">#${escapeHtml(invoice.number)}</div>
