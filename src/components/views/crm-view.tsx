@@ -11,7 +11,9 @@ import {
   FolderOpen, Wrench, MessageSquare,
   Calendar, Briefcase, Clock, DollarSign, Star,
   Building2, Home, Crown, ShieldCheck,
+  LayoutGrid, List, ArrowRight,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -148,6 +150,7 @@ export function CrmView() {
   const [customersLoading, setCustomersLoading] = useState(true);
   const [customerSearch, setCustomerSearch] = useState('');
   const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState('');
+  const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
   // C-1: server-side pagination total (null during search). Used for the
   // "Total" stat so it shows the real count, not just the fetched page.
   const [customersTotal, setCustomersTotal] = useState<number | null>(null);
@@ -951,26 +954,54 @@ export function CrmView() {
 
         {/* ═══════════════════ ALL CUSTOMERS TAB ═══════════════════════════ */}
         <TabsContent value="all" className="space-y-4">
-          {/* Search + Actions (Shopify/Notion style) */}
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="relative flex-1 min-w-[200px]">
+          {/* Search + Actions + View Switcher */}
+          <div className="flex flex-wrap gap-3 items-center justify-between">
+            <div className="relative flex-1 min-w-[240px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 placeholder="Search customers by name, phone, email..."
                 value={customerSearch}
                 onChange={(e) => setCustomerSearch(e.target.value)}
-                className="pl-9"
+                className="pl-9 h-10"
               />
             </div>
-            <div className="flex gap-2 ml-auto">
-              <Button variant="outline" size="sm" onClick={handleImport}>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button variant="outline" size="sm" className="h-10 text-xs" onClick={handleImport}>
                 <Upload className="size-3.5 mr-1" /> Import
               </Button>
-              <Button variant="outline" size="sm" onClick={handleExport}>
+              <Button variant="outline" size="sm" className="h-10 text-xs" onClick={handleExport}>
                 <Download className="size-3.5 mr-1" /> Export
               </Button>
+
+              {/* View Switcher Toggle: Cards vs Table */}
+              <div className="flex items-center gap-1 bg-muted p-1 rounded-lg border border-border">
+                <button
+                  type="button"
+                  onClick={() => setViewLayout('grid')}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer',
+                    viewLayout === 'grid' ? 'bg-background text-emerald-700 shadow-2xs' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title="Grid Cards View"
+                >
+                  <LayoutGrid className="size-3.5" /> Cards
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewLayout('table')}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer',
+                    viewLayout === 'table' ? 'bg-background text-emerald-700 shadow-2xs' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title="Table View"
+                >
+                  <List className="size-3.5" /> Table
+                </button>
+              </div>
+
               <Button
-                className="bg-emerald-600 hover:bg-emerald-700"
+                className="bg-emerald-600 hover:bg-emerald-700 h-10 font-semibold text-xs"
                 onClick={() => {
                   setEditingCustomer(null);
                   setShowAddCustomer(true);
@@ -981,139 +1012,217 @@ export function CrmView() {
             </div>
           </div>
 
-          {/* Customer Table */}
+          {/* Customer Content */}
           {customersLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="animate-pulse h-12 bg-muted rounded" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <Card key={i} className="p-4 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-full bg-muted animate-pulse" />
+                    <div className="space-y-1.5 flex-1">
+                      <div className="h-4 w-28 bg-muted animate-pulse rounded" />
+                      <div className="h-3 w-36 bg-muted animate-pulse rounded" />
+                    </div>
+                  </div>
+                </Card>
               ))}
             </div>
           ) : filteredCustomers.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
               <Users className="size-12 mb-3 opacity-20" />
-              <p>No customers found</p>
-              <p className="text-xs">Add your first customer to get started</p>
+              <p className="font-semibold text-base">No customers found</p>
+              <p className="text-xs mt-1">Add your first customer to get started</p>
+            </div>
+          ) : viewLayout === 'grid' ? (
+            /* ─── Grid Cards View ────────────────────────────────────────────── */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredCustomers.map(customer => (
+                <Card
+                  key={customer.id}
+                  className="group relative p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-card hover:border-emerald-500/40 hover:shadow-md transition-all cursor-pointer space-y-3 flex flex-col justify-between"
+                  onClick={() => openCustomerDetail(customer)}
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <Avatar className="size-11 border-2 border-emerald-100 dark:border-emerald-950 shrink-0">
+                        <AvatarFallback className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 font-bold text-sm">
+                          {initials(customer.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-slate-900 dark:text-slate-100 truncate group-hover:text-emerald-600 transition-colors">
+                          {customer.name}
+                        </h4>
+                        <div className="flex items-center justify-between gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <span className="truncate">{customer.phone}</span>
+                          {customer.phone && (
+                            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <a
+                                href={`tel:${customer.phone}`}
+                                className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
+                                title="Call customer"
+                              >
+                                <Phone className="size-3.5" />
+                              </a>
+                              <a
+                                href={`https://wa.me/${customer.phone.replace(/\D/g, '')}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
+                                title="WhatsApp customer"
+                              >
+                                <MessageSquare className="size-3.5" />
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                        {customer.email && (
+                          <p className="text-xs text-slate-400 truncate">{customer.email}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {customer.address && (
+                      <div className="flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-1 pt-1">
+                        <MapPin className="size-3.5 shrink-0 text-slate-400 mt-0.5" />
+                        <span className="truncate">{customer.address}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+                    <span className="text-[11px] text-slate-400">Since {formatDate(customer.createdAt)}</span>
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-7 text-xs px-2.5 shadow-xs"
+                      onClick={() => openCustomerDetail(customer)}
+                    >
+                      Profile 360°
+                    </Button>
+                  </div>
+                </Card>
+              ))}
             </div>
           ) : (
-            <Card>
+            /* ─── Table View ───────────────────────────────────────────────── */
+            <Card className="border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
               <div className="max-h-[600px] overflow-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10">
                     <TableRow>
-                      <TableHead className="w-[250px]">
-                        <button className="flex items-center gap-1 hover:text-foreground" onClick={() => handleSort('name')}>
+                      <TableHead className="w-[220px]">
+                        <button className="flex items-center gap-1 font-bold hover:text-foreground" onClick={() => handleSort('name')}>
                           Name <ArrowUpDown className="size-3" />
                         </button>
                       </TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead className="hidden md:table-cell">Address</TableHead>
-                      <TableHead className="hidden md:table-cell">Portal</TableHead>
-                      <TableHead className="hidden md:table-cell">
+                      <TableHead className="font-bold">Phone</TableHead>
+                      <TableHead className="font-bold">Email</TableHead>
+                      <TableHead className="hidden md:table-cell font-bold">Address</TableHead>
+                      <TableHead className="hidden md:table-cell font-bold">Portal</TableHead>
+                      <TableHead className="hidden md:table-cell font-bold">
                         <button className="flex items-center gap-1 hover:text-foreground" onClick={() => handleSort('createdAt')}>
                           Added <ArrowUpDown className="size-3" />
                         </button>
                       </TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-right font-bold w-[140px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredCustomers.map(customer => (
                       <TableRow
                         key={customer.id}
-                        className="cursor-pointer"
+                        className="cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-900/50 transition-colors"
                         onClick={() => openCustomerDetail(customer)}
                       >
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <Avatar className="size-8">
-                              <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs font-medium">
+                            <Avatar className="size-8 border border-emerald-100 dark:border-emerald-950 shrink-0">
+                              <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs font-bold">
                                 {initials(customer.name)}
                               </AvatarFallback>
                             </Avatar>
                             <div>
-                              <p className="font-medium text-sm">{customer.name}</p>
-                              {customer.whatsappId && (
-                                <Badge variant="outline" className="text-[9px] h-4 bg-emerald-50 text-emerald-600 border-emerald-200 mt-0.5">
-                                  WhatsApp
-                                </Badge>
-                              )}
+                              <p className="font-bold text-sm text-slate-900 dark:text-slate-100">{customer.name}</p>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">
-                          <span className="flex items-center gap-1.5">
-                            <Phone className="size-3 text-muted-foreground" /> {customer.phone}
-                          </span>
+                        <TableCell className="text-xs">
+                          <div className="flex items-center gap-1">
+                            <span>{customer.phone}</span>
+                            {customer.phone && (
+                              <div className="flex items-center gap-0.5 ml-auto" onClick={(e) => e.stopPropagation()}>
+                                <a
+                                  href={`tel:${customer.phone}`}
+                                  className="p-1 text-slate-400 hover:text-emerald-600 transition-colors"
+                                  title="Call"
+                                >
+                                  <Phone className="size-3" />
+                                </a>
+                                <a
+                                  href={`https://wa.me/${customer.phone.replace(/\D/g, '')}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="p-1 text-slate-400 hover:text-emerald-600 transition-colors"
+                                  title="WhatsApp"
+                                >
+                                  <MessageSquare className="size-3" />
+                                </a>
+                              </div>
+                            )}
+                          </div>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {customer.email ? (
-                            <span className="flex items-center gap-1.5">
-                              <Mail className="size-3" /> {customer.email}
-                            </span>
-                          ) : '--'}
+                        <TableCell className="text-xs text-slate-500 truncate max-w-[160px]">
+                          {customer.email || '—'}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate hidden md:table-cell">
-                          {customer.address ? (
-                            <span className="flex items-center gap-1">
-                              <MapPin className="size-3 shrink-0" /> {customer.address}
-                            </span>
-                          ) : '--'}
+                        <TableCell className="text-xs text-slate-500 max-w-[180px] truncate hidden md:table-cell">
+                          {customer.address || '—'}
                         </TableCell>
                         <TableCell className="text-xs hidden md:table-cell">
                           {customer.invitationStatus === 'accepted' ? (
-                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px]">
+                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px] font-semibold">
                               <Check className="size-2.5 mr-1" /> Active
                             </Badge>
                           ) : customer.invitationStatus === 'pending' ? (
-                            <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-[10px]">
+                            <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-[10px] font-semibold">
                               <Clock className="size-2.5 mr-1" /> Pending
                             </Badge>
-                          ) : customer.invitationStatus === 'disabled' ? (
-                            <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-[10px]">
-                              <Ban className="size-2.5 mr-1" /> Disabled
-                            </Badge>
                           ) : (
-                            <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                              <UserPlus className="size-2.5 mr-1" /> Not invited
+                            <Badge variant="outline" className="text-[10px] text-muted-foreground font-medium">
+                              Not invited
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
+                        <TableCell className="text-xs text-slate-400 hidden md:table-cell">
                           {formatDate(customer.createdAt)}
                         </TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-7 w-7">
-                                <MoreHorizontal className="size-3.5" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openCustomerDetail(customer)}>
-                                <Eye className="size-3.5 mr-2" /> View Profile
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openEditCustomer(customer)}>
-                                <Pencil className="size-3.5 mr-2" /> Edit
-                              </DropdownMenuItem>
-                              {customer.invitationStatus === 'accepted' ? (
-                                <DropdownMenuItem variant="destructive" onClick={() => handleDisablePortal(customer)}>
-                                  <Ban className="size-3.5 mr-2" /> Disable Portal
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="sm"
+                              className="h-7 text-[11px] px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                              onClick={() => openCustomerDetail(customer)}
+                            >
+                              Profile 360°
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                  <MoreHorizontal className="size-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openCustomerDetail(customer)}>
+                                  <Eye className="size-3.5 mr-2" /> View Profile
                                 </DropdownMenuItem>
-                              ) : customer.invitationStatus === 'pending' ? (
-                                <DropdownMenuItem onClick={() => handleSendInvite(customer)}>
-                                  <RotateCw className="size-3.5 mr-2" /> Resend Invitation
+                                <DropdownMenuItem onClick={() => openEditCustomer(customer)}>
+                                  <Pencil className="size-3.5 mr-2" /> Edit
                                 </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem onClick={() => handleSendInvite(customer)}>
-                                  <UserPlus className="size-3.5 mr-2" /> Send Invitation
+                                <DropdownMenuItem variant="destructive" onClick={() => handleDeleteCustomer(customer.id)}>
+                                  <Trash2 className="size-3.5 mr-2" /> Delete
                                 </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem variant="destructive" onClick={() => handleDeleteCustomer(customer.id)}>
-                                <Trash2 className="size-3.5 mr-2" /> Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
