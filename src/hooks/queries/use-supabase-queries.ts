@@ -136,7 +136,12 @@ export function useContacts(tenantId?: string) {
 export function useCustomers(tenantId?: string) {
   return useQuery({
     queryKey: queryKeys.customers(tenantId),
-    queryFn: () => apiFetch<any[]>(`/api/customers${tenantId ? `?tenantId=${tenantId}` : ''}`),
+    queryFn: async () => {
+      const data = await apiFetch<any>(`/api/customers${tenantId ? `?tenantId=${tenantId}` : ''}`);
+      if (Array.isArray(data)) return data;
+      if (data && Array.isArray(data.customers)) return data.customers;
+      return [];
+    },
   });
 }
 
