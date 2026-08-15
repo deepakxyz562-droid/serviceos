@@ -4004,52 +4004,76 @@ export function JobsView() {
                   {candidate.employeeStatus.replace('_', ' ')}
                 </Badge>
                 {candidate.breakdown.distanceKm !== null && (
-                  <Badge variant="outline" className="text-[10px] h-4 text-blue-700 bg-blue-50 border-blue-200">
-                    <MapPin className="size-2.5 mr-0.5" />{candidate.breakdown.distanceKm.toFixed(1)} km
+                  <Badge variant="outline" className="text-[10px] h-4 text-blue-700 bg-blue-50 border-blue-200 gap-1">
+                    <MapPin className="size-2.5" />{candidate.breakdown.distanceKm.toFixed(1)} km · 🚗 ~{Math.max(2, Math.round((candidate.breakdown.distanceKm / 35) * 60))} min drive
                   </Badge>
                 )}
               </div>
               <div className="flex items-center gap-2 mt-1">
                 <Progress value={candidate.score} className="h-1.5 flex-1" />
-                <span className="text-xs font-medium text-emerald-600 shrink-0">{candidate.score}/100</span>
+                <span className="text-xs font-semibold text-emerald-600 shrink-0">{candidate.score}/100 match</span>
               </div>
             </div>
-            {/* Assign button */}
-            <Button
-              size="sm"
-              className={cn('h-8 text-xs shrink-0 min-h-[36px]', assignButtonClass)}
-              disabled={lifecycleLoading || isOnLeave || !canAssign}
-              onClick={() => doAssign(candidate.employeeId)}
-            >
-              {lifecycleLoading ? <Loader2 className="size-3 mr-1 animate-spin" /> : null}
-              {assignButtonLabel}
-            </Button>
+            {/* Quick contact + Assign button */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {candidate.employeePhone && (
+                <>
+                  <a
+                    href={`tel:${candidate.employeePhone}`}
+                    className="p-1.5 rounded-md text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                    title="Call technician"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Phone className="size-3.5" />
+                  </a>
+                  <a
+                    href={`https://wa.me/${candidate.employeePhone.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-1.5 rounded-md text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                    title="WhatsApp technician"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MessageSquare className="size-3.5" />
+                  </a>
+                </>
+              )}
+              <Button
+                size="sm"
+                className={cn('h-8 text-xs shrink-0 min-h-[36px] font-semibold shadow-xs', assignButtonClass)}
+                disabled={lifecycleLoading || isOnLeave || !canAssign}
+                onClick={() => doAssign(candidate.employeeId)}
+              >
+                {lifecycleLoading ? <Loader2 className="size-3 mr-1 animate-spin" /> : null}
+                {assignButtonLabel}
+              </Button>
+            </div>
           </div>
 
           {/* ── Match reasons (compact checkmark list) ── */}
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] pt-0.5">
             {candidate.breakdown.matchedSkills.length > 0 && (
-              <span className="text-emerald-700 flex items-center gap-0.5">
-                <Check className="size-3" /> Skill match ({candidate.breakdown.matchedSkills.length})
+              <span className="text-emerald-700 flex items-center gap-0.5 font-medium">
+                <Check className="size-3 text-emerald-600" /> Matched Skills ({candidate.breakdown.matchedSkills.slice(0, 2).join(', ')})
               </span>
             )}
             {candidate.breakdown.distanceKm !== null && (
-              <span className="text-blue-700 flex items-center gap-0.5">
-                <Check className="size-3" /> {candidate.breakdown.distanceKm.toFixed(1)} km away
+              <span className="text-blue-700 flex items-center gap-0.5 font-medium">
+                <Navigation className="size-3 text-blue-600" /> {candidate.breakdown.distanceKm.toFixed(1)} km from job site
               </span>
             )}
             {!conflict || conflict.type === 'none' ? (
-              <span className="text-emerald-700 flex items-center gap-0.5">
-                <Check className="size-3" /> No schedule conflict
+              <span className="text-emerald-700 flex items-center gap-0.5 font-medium">
+                <CheckCircle2 className="size-3 text-emerald-600" /> Schedule Clear
               </span>
             ) : null}
             {candidate.breakdown.activeJobCount === 0 ? (
-              <span className="text-emerald-700 flex items-center gap-0.5">
-                <Check className="size-3" /> Fully available
+              <span className="text-emerald-700 flex items-center gap-0.5 font-medium">
+                <CheckCircle2 className="size-3 text-emerald-600" /> Fully Available
               </span>
             ) : (
-              <span className="text-amber-700 flex items-center gap-0.5">
-                <Clock3 className="size-3" /> {candidate.breakdown.activeJobCount} active job{candidate.breakdown.activeJobCount > 1 ? 's' : ''}
+              <span className="text-amber-700 flex items-center gap-0.5 font-medium">
+                <Clock3 className="size-3 text-amber-600" /> {candidate.breakdown.activeJobCount} active job{candidate.breakdown.activeJobCount > 1 ? 's' : ''} today
               </span>
             )}
           </div>
@@ -4630,19 +4654,24 @@ export function JobsView() {
 
                 {/* ── Reassignment reason (mandatory) ──────────────────── */}
                 {isReassignment && (
-                  <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/50 space-y-3">
-                    <div className="flex items-center gap-2 text-amber-800">
-                      <ShieldAlert className="size-4" />
-                      <span className="text-sm font-medium">Reassignment Details</span>
+                  <div className="p-3.5 rounded-lg border border-amber-200 bg-amber-50/70 space-y-3 shadow-xs">
+                    <div className="flex items-center justify-between gap-2 text-amber-900">
+                      <div className="flex items-center gap-2">
+                        <ShieldAlert className="size-4 text-amber-600 shrink-0" />
+                        <span className="text-sm font-semibold">Reassignment Required</span>
+                      </div>
+                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 text-[10px]">
+                        Currently: {assigningJob.assigneeName || 'Assigned'}
+                      </Badge>
                     </div>
-                    <p className="text-xs text-amber-700">
-                      Currently assigned to: <span className="font-medium">{assigningJob.assigneeName || 'Previous technician'}</span>
+                    <p className="text-xs text-amber-800 leading-normal">
+                      Reassigning from <span className="font-semibold text-amber-950">{assigningJob.assigneeName || 'current technician'}</span>. Select a reason below to unlock the technician selection list.
                     </p>
                     <div className="space-y-1.5">
-                      <Label className="text-xs text-amber-800">Reason for reassignment <span className="text-red-600">*</span></Label>
+                      <Label className="text-xs font-medium text-amber-900">Reason for reassignment <span className="text-red-600 font-bold">*</span></Label>
                       <Select value={reassignReason} onValueChange={setReassignReason}>
-                        <SelectTrigger className="h-9 bg-white">
-                          <SelectValue placeholder="Select a reason…" />
+                        <SelectTrigger className="h-9 bg-white border-amber-300">
+                          <SelectValue placeholder="Select a reason (e.g. Schedule conflict, Customer request)…" />
                         </SelectTrigger>
                         <SelectContent>
                           {REASSIGNMENT_REASONS.map((r) => (
