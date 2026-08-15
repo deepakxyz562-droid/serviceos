@@ -805,14 +805,18 @@ function useJobDetailSheet({
           complete: 'completed',
         };
         toast.success(`Job ${actionLabels[action] || action} successfully`);
-        // Manage GPS tracking based on action:
-        //  - start_travel: begin 30s pings (tagged with jobId)
-        //  - arrive / complete: stop the ping interval
+        // Manage GPS tracking based on action (Phase 2 spec):
+        //  - start_travel: begin watchPosition + 15s pings (tagged with jobId)
+        //  - arrive: KEEP tracking — GPS stays live through arrival + working
+        //    so dispatch can see the technician on-site and during the job.
+        //  - start_work: no-op (tracking already running from start_travel)
+        //  - complete: stop tracking + release Wake Lock
         if (action === 'start_travel') {
           startTracking(jobId);
-        } else if (action === 'arrive' || action === 'complete') {
+        } else if (action === 'complete') {
           stopTracking();
         }
+        // Note: `arrive` and `start_work` deliberately do NOT stopTracking().
         // refetch() updates the `jobs` array; the sync effect above will
         // refresh `selectedJob` from the new data so the action buttons
         // advance.
@@ -4569,13 +4573,58 @@ function MobileBottomNav({
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
+// Compact GPS pill for the sticky header — shows a tiny live/stale/offline
+// indicator next to the page title. Hidden when tracking isn't active.
+// The full banner (with Re-sync button + last-ping timestamp) lives below
+// the header inside <main>.
+function GpsHeaderPill() {
+  const { gpsActive, status, gpsSupported } = useGpsTracking();
+  if (!gpsSupported || !gpsActive) return null;
+  const color =
+    status === 'live'
+      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+      : status === 'stale'
+        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+        : 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300';
+  const dotColor = status === 'live' ? 'bg-emerald-500' : status === 'stale' ? 'bg-amber-500' : 'bg-red-500';
+  return (
+    <span className={`hidden sm:inline-flex items-center gap-1 px-1.5 h-5 rounded-full text-[10px] font-medium ${color}`}>
+      <span className="relative flex size-1.5">
+        {status === 'live' && (
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+        )}
+        <span className={`relative inline-flex size-1.5 rounded-full ${dotColor}`} />
+      </span>
+      {status === 'live' ? 'Live' : status === 'stale' ? 'Stale' : 'Offline'}
+    </span>
+  );
+}
+
 // GPS status banner — shown across all employee sub-views so the technician
 // can see when tracking is active (green) or when location permission was
 // denied (amber, with a hint to re-enable). Rendered inside the
 // GpsTrackingProvider so it can read the shared GPS state.
+//
+// Phase 2 upgrade: now uses the declarative API (status, lastPing, error,
+// resync) and includes a 1-tap "Re-sync Location" button so the technician
+// can force an immediate ping when watchPosition has stalled (e.g., after
+// waking the phone from sleep).
 function GpsStatusBanner() {
-  const { gpsActive, locationDenied, gpsSupported } = useGpsTracking();
+  const { gpsActive, locationDenied, gpsSupported, status, lastPing, error, resync, previewMode } = useGpsTracking();
   if (!gpsSupported) return null;
+
+  // Format "X min ago" for the last-ping timestamp.
+  const ago = lastPing
+    ? (() => {
+        const secs = Math.floor((Date.now() - lastPing.getTime()) / 1000);
+        if (secs < 60) return `${secs}s ago`;
+        const mins = Math.floor(secs / 60);
+        if (mins < 60) return `${mins}m ago`;
+        const hrs = Math.floor(mins / 60);
+        return `${hrs}h ago`;
+      })()
+    : 'never';
+
   if (locationDenied) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 mb-3">
@@ -4586,16 +4635,47 @@ function GpsStatusBanner() {
       </div>
     );
   }
+
   if (gpsActive) {
+    const isLive = status === 'live';
+    const isStale = status === 'stale';
+    const color = isLive
+      ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200'
+      : isStale
+        ? 'border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200'
+        : 'border-red-300 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-200';
+    const dotColor = isLive ? 'bg-emerald-500' : isStale ? 'bg-amber-500' : 'bg-red-500';
+    const label = previewMode
+      ? `GPS preview active (no real pings) · last ${ago}`
+      : isLive
+        ? `Live GPS transmitting · last ${ago}`
+        : isStale
+          ? `GPS stale · last ${ago} — tap Re-sync`
+          : `GPS offline · last ${ago} — tap Re-sync`;
+
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 mb-3">
+      <div className={`flex items-center gap-2 rounded-lg border ${color} px-3 py-2 mb-3`}>
         <span className="relative flex size-2.5 shrink-0">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-          <span className="relative inline-flex size-2.5 rounded-full bg-emerald-500" />
+          {isLive && (
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+          )}
+          <span className={`relative inline-flex size-2.5 rounded-full ${dotColor}`} />
         </span>
-        <p className="text-xs text-emerald-800 dark:text-emerald-200 flex-1">
-          GPS tracking active — your location is being shared with dispatch.
-        </p>
+        <p className="text-xs flex-1">{label}</p>
+        {error && (
+          <span className="text-[10px] opacity-70 truncate max-w-[120px]" title={error}>
+            {error}
+          </span>
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-6 px-2 text-[10px] gap-1 shrink-0"
+          onClick={resync}
+        >
+          <RefreshCw className="size-3" />
+          Re-sync
+        </Button>
       </div>
     );
   }
@@ -4803,7 +4883,10 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header */}
+        {/* Header — sticky at top. Includes the GPS status pill so the
+            technician can always see whether tracking is live at a glance,
+            without scrolling. The pill is a compact version of the banner
+            below (which shows full status + Re-sync button). */}
         <header className="h-14 shrink-0 border-b border-border bg-card flex items-center justify-between gap-2 px-3 sm:px-4">
           {/* Left: hamburger (mobile) + page title. min-w-0 + truncate so long
               titles ("Scheduled Visits", "My Jobs") never push the right-side
@@ -4823,6 +4906,10 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
             <h1 className="text-base font-semibold text-foreground truncate min-w-0">
               {pageTitleMap[activeView]}
             </h1>
+            {/* Compact GPS pill — emerald "Live" / amber "Stale" / red "Offline".
+                Hidden when tracking isn't active (no clutter on the home screen
+                before the technician starts travel). */}
+            <GpsHeaderPill />
           </div>
 
           {/* Right: action buttons. shrink-0 so they never get squeezed;

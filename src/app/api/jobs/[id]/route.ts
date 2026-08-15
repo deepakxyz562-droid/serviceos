@@ -13,6 +13,7 @@ import { withCrmTrace } from '@/lib/crm-perf-trace';
 import { shouldUseSupabaseDB } from '@/lib/supabase-db';
 import { getJobDetail, RpcFunctionNotFoundError } from '@/lib/supabase-rpc';
 import { canTransition } from '@/lib/job-lifecycle';
+import { geocodeAddressOrNull } from '@/lib/geocode';
 
 // ── A3 fix (2025-08-15): State machine enforcement for PATCH /api/jobs/[id] ──
 // Maps a target Job.status to the lifecycle action that would produce it.
@@ -656,6 +657,40 @@ export async function PUT(
         },
       },
     });
+
+    // ── Auto-geocode when the address changes (or is cleared) ──
+    // Mirrors POST /api/jobs behavior: fire-and-forget, never blocks the
+    // response, never fails the request. Two cases:
+    //   1. Address was cleared (set to '') or removed → null out lat/lng
+    //      so the dispatch map doesn't show a stale pin at the old coords.
+    //   2. Address was changed (or stayed the same but coords are null) →
+    //      re-geocode and update lat/lng.
+    // The "coords are null" guard handles jobs created before the geocode
+    // backfill ran — editing any field on them will opportunistically
+    // populate coordinates without needing to run the backfill script.
+    if (body.address !== undefined) {
+      if (!job.address || job.address.trim().length < 3) {
+        // Address cleared or too short to geocode → null out stale coords.
+        fireAndForget('geocode-clear on address clear', async () => {
+          if (existingJob.latitude != null || existingJob.longitude != null) {
+            await db.job.update({
+              where: { id: job.id },
+              data: { latitude: null, longitude: null },
+            });
+          }
+        });
+      } else {
+        fireAndForget('geocode on address change', async () => {
+          const coords = await geocodeAddressOrNull(job.address!);
+          if (coords) {
+            await db.job.update({
+              where: { id: job.id },
+              data: { latitude: coords.latitude, longitude: coords.longitude },
+            });
+          }
+        });
+      }
+    }
 
     // ─── Auto-record AssetServiceHistory when job is marked completed ───
     // Fulfills the job-form promise: "Service history will be auto-recorded

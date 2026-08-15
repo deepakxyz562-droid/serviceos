@@ -8,6 +8,7 @@ import {
   Wifi, WifiOff, Bell, BellOff, Camera, PenLine, Trash2, Timer,
   Briefcase, CheckCircle, Route as RouteIcon, FileText, Pause,
   LogIn, LogOut, Coffee, Plus, ListChecks, MapPinned,
+  RefreshCw, AlertCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,7 @@ import { toast } from 'sonner';
 import { useRealtime } from '@/hooks/use-realtime';
 import { authFetch } from '@/lib/client-auth';
 import { compressImage } from '@/components/job/photo-capture';
+import { GpsTrackingProvider, useGpsTracking } from '@/hooks/use-gps-tracking';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -245,7 +247,97 @@ function formatTimer(startIso: string | null | undefined): string {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
+// GPS status banner for the admin preview. Mirrors the GpsStatusBanner in
+// employee-portal-layout.tsx but is passed props explicitly (since the admin
+// preview's provider is in the wrapper, not here). Shows:
+//   - Amber banner if location permission was denied
+//   - Live/Stale/Offline banner with pulsing dot + "Re-sync" button when active
+//   - Always notes "preview mode — no real pings sent" so the admin knows
+//     the dispatch map is NOT being updated by this preview.
+function GpsStatusBannerAdminPreview({
+  gpsActive,
+  status,
+  lastPing,
+  error,
+  onResync,
+}: {
+  gpsActive: boolean;
+  status: 'live' | 'stale' | 'offline';
+  lastPing: Date | null;
+  error: string | null;
+  onResync: () => void;
+}) {
+  if (!gpsActive) return null;
+
+  const ago = lastPing
+    ? (() => {
+        const secs = Math.floor((Date.now() - lastPing.getTime()) / 1000);
+        if (secs < 60) return `${secs}s ago`;
+        const mins = Math.floor(secs / 60);
+        if (mins < 60) return `${mins}m ago`;
+        const hrs = Math.floor(mins / 60);
+        return `${hrs}h ago`;
+      })()
+    : 'never';
+
+  const isLive = status === 'live';
+  const isStale = status === 'stale';
+  const color = isLive
+    ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200'
+    : isStale
+      ? 'border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200'
+      : 'border-red-300 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-200';
+  const dotColor = isLive ? 'bg-emerald-500' : isStale ? 'bg-amber-500' : 'bg-red-500';
+  const label = isLive
+    ? `GPS preview active · last ${ago} (no real pings)`
+    : isStale
+      ? `GPS stale · last ${ago} — tap Re-sync`
+      : `GPS offline · last ${ago} — tap Re-sync`;
+
+  return (
+    <div className={`flex items-center gap-2 rounded-lg border ${color} px-3 py-2 mb-3`}>
+      <span className="relative flex size-2.5 shrink-0">
+        {isLive && (
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+        )}
+        <span className={`relative inline-flex size-2.5 rounded-full ${dotColor}`} />
+      </span>
+      <p className="text-xs flex-1">{label}</p>
+      {error && (
+        <span className="text-[10px] opacity-70 truncate max-w-[120px]" title={error}>
+          {error}
+        </span>
+      )}
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-6 px-2 text-[10px] gap-1 shrink-0"
+        onClick={onResync}
+      >
+        <RefreshCw className="size-3" />
+        Re-sync
+      </Button>
+    </div>
+  );
+}
+
+// Admin preview wrapper. Renders the portal UI inside <GpsTrackingProvider>
+// with previewMode=true so the GPS banner + status indicators behave exactly
+// like the real employee portal, BUT no real GPS pings are POSTed to
+// /api/gps/track. This prevents an admin viewing the preview from a desktop
+// browser from polluting the dispatch map with their desktop coordinates.
+// The employeeId is lifted to the wrapper so the provider can be passed it
+// as soon as the inner component fetches it.
 export function EmployeePortalView() {
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
+  return (
+    <GpsTrackingProvider employeeId={employeeId} previewMode>
+      <EmployeePortalViewInner onEmployeeId={setEmployeeId} />
+    </GpsTrackingProvider>
+  );
+}
+
+function EmployeePortalViewInner({ onEmployeeId }: { onEmployeeId: (id: string | null) => void }) {
   // ── State ──
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
   const [todayJobs, setTodayJobs] = useState<Job[]>([]);
@@ -291,10 +383,9 @@ export function EmployeePortalView() {
   const [, setTick] = useState(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // GPS tracking
-  const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const gpsTrackingJobIdRef = useRef<string | null>(null);
-  const [gpsActive, setGpsActive] = useState(false);
+  // GPS tracking — delegated to the shared useGpsTracking hook (previewMode
+  // is set on the provider, so no real pings are POSTed from the admin preview).
+  const { gpsActive, status, lastPing, error, resync, captureOnce } = useGpsTracking();
 
   // Online/offline + realtime
   const [isOnline, setIsOnline] = useState(true);
@@ -461,10 +552,10 @@ export function EmployeePortalView() {
     }
   }, []);
 
-  // ── Cleanup GPS on unmount ──
+  // ── Lift employeeId to the wrapper so GpsTrackingProvider gets it ──
   useEffect(() => {
-    return () => stopGPSTracking();
-  }, [stopGPSTracking]);
+    onEmployeeId(currentEmployee?.id ?? null);
+  }, [currentEmployee?.id, onEmployeeId]);
 
   // ── Refresh totals periodically when shift is active ──
   useEffect(() => {
@@ -475,64 +566,9 @@ export function EmployeePortalView() {
     return () => clearInterval(id);
   }, [activeShift, fetchTodayTotals]);
 
-  // ─── GPS Tracking ─────────────────────────────────────────────────────────
-
-  const startGPSTracking = useCallback((jobId: string) => {
-    if (!currentEmployee?.id) return;
-    if (!('geolocation' in navigator)) {
-      toast.error('Geolocation not supported by this device');
-      return;
-    }
-    // Stop any existing tracking
-    stopGPSTracking();
-    gpsTrackingJobIdRef.current = jobId;
-    setGpsActive(true);
-
-    const sendPing = () => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude, accuracy, heading, speed } = pos.coords;
-          fetch('/api/gps/track', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              employeeId: currentEmployee.id,
-              jobId,
-              latitude,
-              longitude,
-              accuracy,
-              heading,
-              speed,
-            }),
-          }).catch(() => {
-            // Silent — offline pings will be lost (acceptable for V1.5)
-          });
-        },
-        (err) => {
-          console.warn('[GPS] ping failed:', err.message);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
-      );
-    };
-
-    // Send immediately + every 30s
-    sendPing();
-    gpsIntervalRef.current = setInterval(sendPing, 30000);
-    toast.success('GPS tracking started — pinging every 30s');
-  }, [currentEmployee?.id]);
-
-  const stopGPSTracking = useCallback(() => {
-    if (gpsIntervalRef.current) {
-      clearInterval(gpsIntervalRef.current);
-      gpsIntervalRef.current = null;
-    }
-    if (gpsTrackingJobIdRef.current) {
-      gpsTrackingJobIdRef.current = null;
-    }
-    setGpsActive(false);
-  }, []);
-
   // ─── Lifecycle Action ─────────────────────────────────────────────────────
+
+  const { startTracking, stopTracking } = useGpsTracking();
 
   const handleLifecycle = useCallback(
     async (
@@ -542,13 +578,21 @@ export function EmployeePortalView() {
     ) => {
       setActionLoading(`${action}-${jobId}`);
       try {
+        // Capture GPS for lifecycle transitions that need it (best-effort).
+        let bodyLatitude = opts?.latitude;
+        let bodyLongitude = opts?.longitude;
+        if ((action === 'start_travel' || action === 'arrive' || action === 'complete') && bodyLatitude == null) {
+          const coords = await captureOnce();
+          bodyLatitude = coords.latitude;
+          bodyLongitude = coords.longitude;
+        }
         const res = await authFetch(`/api/employee/jobs/${jobId}/lifecycle`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action,
-            latitude: opts?.latitude,
-            longitude: opts?.longitude,
+            latitude: bodyLatitude,
+            longitude: bodyLongitude,
           }),
         });
         if (res.ok) {
@@ -563,32 +607,15 @@ export function EmployeePortalView() {
           };
           toast.success(`Job ${labels[action] || action}`);
 
-          // Manage GPS based on action
+          // Manage GPS based on action (Phase 2 spec):
+          //   start_travel → startTracking(jobId)  GPS ON
+          //   arrive       → keep tracking (no-op)  GPS still ON
+          //   start_work   → keep tracking (no-op)  GPS still ON
+          //   complete     → stopTracking()        GPS OFF
           if (action === 'start_travel') {
-            // Capture current position for the initial ping + start tracking
-            if ('geolocation' in navigator) {
-              navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                  // Send the first ping via the dedicated GPS endpoint
-                  fetch('/api/gps/track', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      employeeId: currentEmployee?.id,
-                      jobId,
-                      latitude: pos.coords.latitude,
-                      longitude: pos.coords.longitude,
-                      accuracy: pos.coords.accuracy,
-                    }),
-                  }).catch(() => {});
-                },
-                () => {},
-                { enableHighAccuracy: true, timeout: 10000 },
-              );
-            }
-            startGPSTracking(jobId);
-          } else if (action === 'arrive' || action === 'complete') {
-            stopGPSTracking();
+            startTracking(jobId);
+          } else if (action === 'complete') {
+            stopTracking();
           }
 
           await Promise.all([fetchAllJobs(), fetchTodayTotals()]);
@@ -602,7 +629,7 @@ export function EmployeePortalView() {
         setActionLoading(null);
       }
     },
-    [currentEmployee?.id, fetchAllJobs, fetchTodayTotals, startGPSTracking, stopGPSTracking],
+    [captureOnce, fetchAllJobs, fetchTodayTotals, startTracking, stopTracking],
   );
 
   // ─── Shift Actions ────────────────────────────────────────────────────────
@@ -1310,16 +1337,14 @@ export function EmployeePortalView() {
         </CardContent>
       </Card>
 
-      {/* ─── GPS Active Banner ─── */}
-      {gpsActive && (
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-purple-50 border border-purple-300">
-          <MapPinned className="size-5 text-purple-600 shrink-0 animate-pulse" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-purple-800">GPS Tracking Active</p>
-            <p className="text-xs text-purple-600">Sharing your location every 30 seconds while travelling.</p>
-          </div>
-        </div>
-      )}
+      {/* ─── GPS Status Banner (Phase 2: shared hook + declarative status + Re-sync) ─── */}
+      <GpsStatusBannerAdminPreview
+        gpsActive={gpsActive}
+        status={status}
+        lastPing={lastPing}
+        error={error}
+        onResync={resync}
+      />
 
       {/* ─── Active Job (Working / Paused / Arrived / Travelling) ─── */}
       {activeJob && (

@@ -157,7 +157,15 @@ const COLOR_JOB_HIGH = '#f59e0b';
 const COLOR_JOB_MEDIUM = '#3b82f6';
 const COLOR_JOB_LOW = '#94a3b8';
 
-const ROUTE_LINE_COLOR = '#6366f1';
+// Phase 3.2: ROUTE_LINE_COLOR was indigo (#6366f1) — changed to emerald per the
+// project's "no indigo/blue" rule. The new breadcrumb renderer uses the dedicated
+// constants below; ROUTE_LINE_COLOR is retained for backwards compatibility.
+const ROUTE_LINE_COLOR = '#10b981';
+const ROUTE_BREADCRUMB_COLOR = '#10b981'; // emerald — completed path actually driven
+const ROUTE_REMAINING_COLOR = '#f59e0b';  // amber — remaining route to destination (animated dashes)
+const ROUTE_HISTORY_COLOR = '#94a3b8';    // slate-gray — historical completed routes (faint)
+const ROUTE_REFRESH_ACTIVE_MS = 15_000;   // 15s throttle for in_progress routes
+const ROUTE_REFRESH_COMPLETED_MS = 60_000; // 60s throttle for completed routes
 
 const TILE_URL_STREETS = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 const TILE_URL_SATELLITE =
@@ -571,6 +579,23 @@ function computeEtaMinutes(
   return eta;
 }
 
+// ─── Route history cache types (Phase 3.2 breadcrumb trail) ───────────────
+// Keyed by jobId so multiple techs with different jobs don't collide.
+// Refreshed every ROUTE_REFRESH_ACTIVE_MS for active routes, ROUTE_REFRESH_COMPLETED_MS
+// for completed ones.
+interface PathPoint {
+  lat: number;
+  lng: number;
+  capturedAt: string;
+  accuracy?: number | null;
+}
+interface RouteCacheEntry {
+  activePath: PathPoint[];       // breadcrumb from the in_progress RouteHistory
+  completedPaths: PathPoint[][]; // breadcrumbs from completed routes (max 5)
+  fetchedAt: number;
+  status: 'in_progress' | 'completed' | 'none';
+}
+
 // ─── Per-marker animation state ───────────────────────────────────────────
 // Stored on a single ref Map keyed by employeeId. Each entry tracks the
 // marker's "displayed" (interpolated) position, the last ping, the previous
@@ -603,7 +628,11 @@ export default function LiveTechnicianMap({
   const mapRef = useRef<L.Map | null>(null);
   const techMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const jobMarkersRef = useRef<Map<string, L.Marker>>(new Map());
-  const routeLinesRef = useRef<L.Polyline[]>([]);
+  // Phase 3.2: Per-job route polyline cache (replaces the flat routeLinesRef array
+  // so we can update only the affected tech's route on each GPS ping, not all routes).
+  const routeLinesByJobRef = useRef<Map<string, L.Polyline[]>>(new Map());
+  // Route history cache: jobId → breadcrumb trail fetched from /api/jobs/[id]/route-history.
+  const routeCacheRef = useRef<Map<string, RouteCacheEntry>>(new Map());
   const accuracyCirclesRef = useRef<Map<string, L.Circle>>(new Map());
   const animStateRef = useRef<Map<string, AnimState>>(new Map());
   const tileLayersRef = useRef<{ streets: L.TileLayer | null; satellite: L.TileLayer | null }>({
@@ -749,8 +778,10 @@ export default function LiveTechnicianMap({
     // B3: compute ETA from current displayed position + assigned job.
     const dispLat = telemetry?.latitude ?? tech.latitude;
     const dispLng = telemetry?.longitude ?? tech.longitude;
+    // isValidCoord narrows dispLat to number, but not dispLng (type predicates
+    // can only narrow one param). Cast longitude since we just verified both.
     const eta = isValidCoord(dispLat, dispLng)
-      ? computeEtaMinutes(dispLat, dispLng, jobsRef.current, tech.currentJobId)
+      ? computeEtaMinutes(dispLat, dispLng as number, jobsRef.current, tech.currentJobId)
       : null;
     marker.setIcon(buildTechDivIcon(tech, color, isFollowed, telemetry, eta));
     marker.setPopupContent(buildTechPopupHtml(tech, color, telemetry));
@@ -832,7 +863,7 @@ export default function LiveTechnicianMap({
       }
     });
 
-    if (techMarkersRef.current.size > 0 && routeLinesRef.current.length === 0) {
+    if (techMarkersRef.current.size > 0 && routeLinesByJobRef.current.size === 0) {
       const bounds: L.LatLngExpression[] = techsWithCoords.map(
         (t) => [t.latitude, t.longitude] as [number, number],
       );
@@ -934,41 +965,191 @@ export default function LiveTechnicianMap({
     });
   };
 
-  const drawRouteLines = () => {
+  /**
+   * Phase 3.2: Draw the breadcrumb trail + remaining route for a SINGLE job.
+   * Replaces the old drawRouteLines() which rebuilt ALL routes on every GPS ping.
+   *
+   * Renders up to three polylines per job:
+   *   1. Completed breadcrumb (solid emerald) — the path the tech has actually driven.
+   *   2. Remaining route (animated dashed amber) — from the latest breadcrumb point
+   *      (or the tech's current marker position if no breadcrumbs yet) to the job.
+   *   3. Historical completed routes (faint gray solid lines) — up to 5 past trips.
+   */
+  const drawRouteForJob = (jobId: string) => {
     const map = mapRef.current;
     if (!map) return;
-    routeLinesRef.current.forEach((l) => l.remove());
-    routeLinesRef.current = [];
 
-    const techById = new Map(
-      employeesRef.current
-        .filter((t) => isValidCoord(t.latitude, t.longitude))
-        .map((t) => [t.id, t] as const),
-    );
+    // Remove only this job's existing polylines (not all routes).
+    const oldLines = routeLinesByJobRef.current.get(jobId);
+    if (oldLines) {
+      oldLines.forEach((l) => l.remove());
+    }
 
-    jobsRef.current.forEach((job) => {
-      if (!isValidCoord(job.latitude, job.longitude)) return;
-      if (!job.assigneeId) return;
-      const tech = techById.get(job.assigneeId);
-      if (!tech) return;
-      const techLat = tech.latitude as number;
-      const techLng = tech.longitude as number;
-      const line = L.polyline(
+    const entry = routeCacheRef.current.get(jobId);
+    // If no cache entry yet, do nothing — the fetch will populate it asynchronously.
+    if (!entry) {
+      routeLinesByJobRef.current.delete(jobId);
+      return;
+    }
+
+    // Look up the job destination (jobsRef is the single source of truth for job coords).
+    const job = jobsRef.current.find((j) => j.id === jobId);
+    if (!job || !isValidCoord(job.latitude, job.longitude)) {
+      routeLinesByJobRef.current.delete(jobId);
+      return;
+    }
+    const jobLat = job.latitude;
+    const jobLng = job.longitude;
+
+    // For the remaining-route start point: prefer the latest breadcrumb from the
+    // server. If the route just started (no breadcrumbs yet), fall back to the
+    // tech's current live marker position (post-glide).
+    let startLat: number | null = null;
+    let startLng: number | null = null;
+    const lastBreadcrumb = entry.activePath[entry.activePath.length - 1];
+    if (lastBreadcrumb) {
+      startLat = lastBreadcrumb.lat;
+      startLng = lastBreadcrumb.lng;
+    } else {
+      const tech = employeesRef.current.find(
+        (t) => (job.assigneeId != null && t.id === job.assigneeId) || t.currentJobId === jobId,
+      );
+      const liveMarker = tech ? techMarkersRef.current.get(tech.id) : undefined;
+      if (liveMarker) {
+        const ll = liveMarker.getLatLng();
+        startLat = ll.lat;
+        startLng = ll.lng;
+      } else if (tech && isValidCoord(tech.latitude, tech.longitude)) {
+        startLat = tech.latitude;
+        startLng = tech.longitude;
+      }
+    }
+
+    const newLines: L.Polyline[] = [];
+
+    // 1. Completed breadcrumb (solid emerald) — the path the tech has actually driven.
+    if (entry.activePath.length >= 2) {
+      const pts = entry.activePath.map((p) => [p.lat, p.lng] as [number, number]);
+      const breadcrumb = L.polyline(pts, {
+        color: ROUTE_BREADCRUMB_COLOR,
+        weight: 4,
+        opacity: 0.8,
+        lineCap: 'round',
+        lineJoin: 'round',
+      });
+      breadcrumb.addTo(map);
+      newLines.push(breadcrumb);
+    }
+
+    // 2. Remaining route (animated dashed amber) — from the latest breadcrumb point
+    //    (or the tech's current position if no breadcrumbs yet) to the destination.
+    if (startLat != null && startLng != null) {
+      const remaining = L.polyline(
         [
-          [techLat, techLng],
-          [job.latitude, job.longitude],
-        ],
+          [startLat, startLng],
+          [jobLat, jobLng],
+        ] as [number, number][],
         {
-          color: ROUTE_LINE_COLOR,
-          weight: 2,
-          opacity: 0.6,
-          dashArray: '8, 8',
+          color: ROUTE_REMAINING_COLOR,
+          weight: 3,
+          opacity: 0.7,
+          dashArray: '10, 10',
           lineCap: 'round',
         },
       );
-      line.addTo(map);
-      routeLinesRef.current.push(line);
+      remaining.addTo(map);
+      // Marching-ants animation via CSS (more performant than a rAF dashOffset loop).
+      const el = remaining.getElement();
+      if (el) el.classList.add('fieseros-marching-ants');
+      newLines.push(remaining);
+    }
+
+    // 3. Historical completed routes (faint gray solid lines) — up to 5 past trips.
+    entry.completedPaths.forEach((path) => {
+      if (path.length < 2) return;
+      const pts = path.map((p) => [p.lat, p.lng] as [number, number]);
+      const historical = L.polyline(pts, {
+        color: ROUTE_HISTORY_COLOR,
+        weight: 2,
+        opacity: 0.4,
+        lineCap: 'round',
+        lineJoin: 'round',
+      });
+      historical.addTo(map);
+      newLines.push(historical);
     });
+
+    routeLinesByJobRef.current.set(jobId, newLines);
+  };
+
+  /**
+   * Thin wrapper: redraw routes for every known job + clean up routes for jobs
+   * that are no longer in jobsRef. Used on initial render and full refreshes
+   * (employees/jobs useEffects). GPS pings should call drawRouteForJob(jobId)
+   * directly to avoid rebuilding ALL routes.
+   */
+  const drawRouteLines = () => {
+    const currentJobIds = new Set(jobsRef.current.map((j) => j.id));
+    // Remove routes for jobs no longer in jobsRef (e.g., completed and removed).
+    routeLinesByJobRef.current.forEach((lines, jobId) => {
+      if (!currentJobIds.has(jobId)) {
+        lines.forEach((l) => l.remove());
+        routeLinesByJobRef.current.delete(jobId);
+        routeCacheRef.current.delete(jobId);
+      }
+    });
+    // Redraw routes for present jobs.
+    jobsRef.current.forEach((job) => {
+      if (!isValidCoord(job.latitude, job.longitude)) return;
+      drawRouteForJob(job.id);
+    });
+  };
+
+  /**
+   * Phase 3.2: Fetch the breadcrumb trail for a job from
+   * GET /api/jobs/[id]/route-history. Throttled per the route status
+   * (15s for in_progress, 60s for completed). On success, updates the cache
+   * and triggers a re-render of that job's polylines only.
+   *
+   * Errors are swallowed (non-fatal — the map still works without breadcrumbs).
+   */
+  const fetchRouteHistory = async (jobId: string, force: boolean) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const existing = routeCacheRef.current.get(jobId);
+    if (!force && existing) {
+      const age = Date.now() - existing.fetchedAt;
+      const ttl =
+        existing.status === 'in_progress' ? ROUTE_REFRESH_ACTIVE_MS : ROUTE_REFRESH_COMPLETED_MS;
+      if (age < ttl) return;
+    }
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/route-history?XTransformPort=3000`);
+      if (!res.ok) return;
+      const data = await res.json();
+      // Guard: if the job was removed while we were fetching, drop the result.
+      if (!jobsRef.current.some((j) => j.id === jobId)) return;
+      const active = data?.active;
+      const completed = Array.isArray(data?.completed) ? data.completed : [];
+      const activePath: PathPoint[] = Array.isArray(active?.path) ? active.path : [];
+      const completedPaths: PathPoint[][] = completed
+        .map((r: { path?: PathPoint[] }) => (Array.isArray(r?.path) ? r.path : []))
+        .filter((p: PathPoint[]) => p.length > 0);
+      const status: RouteCacheEntry['status'] = active
+        ? 'in_progress'
+        : completedPaths.length > 0
+          ? 'completed'
+          : 'none';
+      routeCacheRef.current.set(jobId, {
+        activePath,
+        completedPaths,
+        fetchedAt: Date.now(),
+        status,
+      });
+      drawRouteForJob(jobId);
+    } catch {
+      // Non-fatal — the map still works without breadcrumbs.
+    }
   };
 
   useEffect(() => {
@@ -983,21 +1164,35 @@ export default function LiveTechnicianMap({
     if (sel && mapRef.current) {
       const tech = employeesRef.current.find((t) => t.id === sel);
       if (tech && isValidCoord(tech.latitude, tech.longitude)) {
+        // isValidCoord narrows tech.latitude to number, but not tech.longitude
+        // (type predicates can only narrow one param). Cast longitude to number
+        // since we just verified both are valid coords.
+        const techLat = tech.latitude;
+        const techLng = tech.longitude as number;
+        // Phase 3.2 fix: frame ALL assigned jobs (not just the first) so multi-job
+        // technicians get their full trip framed in a single flyToBounds call.
+        const assignedJobs = jobsRef.current.filter(
+          (j) => j.assigneeId === tech.id || j.id === tech.currentJobId,
+        );
+        const validJobs = assignedJobs.filter((j) => isValidCoord(j.latitude, j.longitude));
         try {
-          // Find assigned job's destination lat/lng to compute start-to-end trip bounds
-          const assignedJob = jobsRef.current.find((j) => j.assigneeId === tech.id || j.id === tech.currentJobId);
-          if (assignedJob && isValidCoord(assignedJob.latitude, assignedJob.longitude)) {
-            const bounds = L.latLngBounds(
-              [tech.latitude, tech.longitude],
-              [assignedJob.latitude, assignedJob.longitude]
-            );
+          if (validJobs.length > 0) {
+            const bounds = L.latLngBounds([
+              [techLat, techLng],
+              ...validJobs.map((j) => [j.latitude, j.longitude] as [number, number]),
+            ]);
             mapRef.current.flyToBounds(bounds, { padding: [60, 60], maxZoom: 16, duration: 1.4 });
           } else {
-            mapRef.current.flyTo([tech.latitude, tech.longitude], 15, { duration: 1.2 });
+            mapRef.current.flyTo([techLat, techLng], 15, { duration: 1.2 });
           }
         } catch {
           // ignore
         }
+        // Phase 3.2: fetch breadcrumb trails for each of the tech's assigned jobs.
+        // The 15s/60s throttle skips redundant fetches.
+        assignedJobs.forEach((j) => {
+          fetchRouteHistory(j.id, false);
+        });
       }
     }
     rerenderTechMarkers();
@@ -1043,6 +1238,14 @@ export default function LiveTechnicianMap({
           70%  { transform: scale(1.8);  opacity: 0;    }
           100% { transform: scale(1.8);  opacity: 0;    }
         }
+        /* Phase 3.2: Marching-ants animation for the dashed remaining-route line.
+           Animating stroke-dashoffset via CSS is far cheaper than a rAF loop. */
+        @keyframes fieseros-march {
+          to { stroke-dashoffset: -20; }
+        }
+        .fieseros-marching-ants {
+          animation: fieseros-march 0.8s linear infinite;
+        }
         .fieseros-tech-marker,
         .fieseros-job-marker,
         .fieseros-job-cluster { background: transparent !important; border: none !important; }
@@ -1080,8 +1283,10 @@ export default function LiveTechnicianMap({
       jobMarkersRef.current.clear();
       accuracyCirclesRef.current.forEach((c) => c.remove());
       accuracyCirclesRef.current.clear();
-      routeLinesRef.current.forEach((l) => l.remove());
-      routeLinesRef.current = [];
+      // Phase 3.2: tear down per-job route polylines + cache.
+      routeLinesByJobRef.current.forEach((lines) => lines.forEach((l) => l.remove()));
+      routeLinesByJobRef.current.clear();
+      routeCacheRef.current.clear();
       map.remove();
       mapRef.current = null;
     };
@@ -1207,7 +1412,13 @@ export default function LiveTechnicianMap({
           }
         }
 
-        drawRouteLines();
+        // Phase 3.2: Update only the affected tech's route (not all routes — wasteful).
+        // The 15s throttle inside fetchRouteHistory skips if it was recently fetched.
+        const currentJobId = tech.currentJobId;
+        if (currentJobId) {
+          fetchRouteHistory(currentJobId, false);
+          drawRouteForJob(currentJobId);
+        }
       },
       recenter: () => {
         const map = mapRef.current;

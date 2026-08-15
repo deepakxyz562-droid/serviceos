@@ -8,7 +8,7 @@ import { notifyEmployeeJobAssigned, notifyCustomerBookingConfirmed } from '@/lib
 import { dispatchJobEvent } from '@/lib/event-webhook-dispatcher'
 import { logActivity } from '@/lib/activity-log'
 import { EventBus } from '@/lib/event-bus'
-import { setDefaultResultOrder } from 'dns'
+import { geocodeAddressOrNull as geocodeAddress } from '@/lib/geocode'
 import { requireCrmTenant } from '@/lib/require-crm-tenant'
 
 export const dynamic = 'force-dynamic'
@@ -17,44 +17,10 @@ export const revalidate = 0
 // Set JOBS_TTL = 0 to ensure live CRM data refresh returns instant fresh database rows
 const JOBS_TTL = 0;
 
-// Force IPv4-first for server-side Nominatim fetches (same reason as the
-// geocode proxy route — IPv6 route is unreachable in this sandbox).
-setDefaultResultOrder('ipv4first')
-
-/**
- * Geocode an address string using OpenStreetMap Nominatim.
- * Returns { latitude, longitude } or null on failure.
- * Best-effort: never throws — used as a background task after job creation.
- */
-async function geocodeAddress(address: string): Promise<{ latitude: number; longitude: number } | null> {
-  try {
-    if (!address || address.trim().length < 3) return null;
-    const upstreamUrl =
-      'https://nominatim.openstreetmap.org/search?format=json' +
-      `&q=${encodeURIComponent(address)}` +
-      '&limit=1';
-    const res = await fetch(upstreamUrl, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': process.env.NOMINATIM_USER_AGENT || 'Fieseros-Dispatch/1.0 (dispatch@fieseros.app)',
-      },
-      // Short timeout — geocoding is best-effort, don't hang the server.
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
-      return {
-        latitude: parseFloat(data[0].lat),
-        longitude: parseFloat(data[0].lon),
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
+// Note: `setDefaultResultOrder('ipv4first')` is now called as a module side
+// effect inside `src/lib/geocode.ts`, so every importer gets IPv4-first DNS
+// for Nominatim fetches automatically. See that file for the rationale
+// (IPv6 route is unreachable in this sandbox).
 
 /**
  * Resolve a workspaceId for a new job.
