@@ -403,33 +403,43 @@ function buildTechDivIcon(
         ">${Math.round(speedKmh)}</span>`
       : '';
 
+  // Vehicle Van SVG icon for the map marker
+  const vehicleSvg = `
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
+      <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/>
+      <path d="M15 18H9"/>
+      <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.23-4.11a1 1 0 0 0-.78-.37H14"/>
+      <circle cx="7" cy="18" r="2"/>
+      <circle cx="17" cy="18" r="2"/>
+    </svg>`;
+
   const html = `
-    <div style="position:relative;width:28px;height:28px;">
+    <div style="position:relative;width:32px;height:32px;">
       ${arrowHtml}
       ${
         !isOfflineMarker
-          ? `<span style="position:absolute;inset:-4px;border-radius:9999px;background:${color};opacity:0.25;animation:fieseros-tech-pulse 2s ease-out infinite;"></span>`
+          ? `<span style="position:absolute;inset:-5px;border-radius:9999px;background:${color};opacity:0.3;animation:fieseros-tech-pulse 2s ease-out infinite;"></span>`
           : ''
       }
       <span style="
         position:absolute;inset:0;
         display:flex;align-items:center;justify-content:center;
-        width:28px;height:28px;border-radius:9999px;
+        width:32px;height:32px;border-radius:9999px;
         background:${color};color:#ffffff;
-        border:2px solid #ffffff;
+        border:2px.5px solid #ffffff;
         ${ringStyle}
-        font-size:11px;font-weight:700;font-family:ui-sans-serif,system-ui,sans-serif;
-        line-height:1;text-transform:uppercase;
-      ">${escapeHtml(initial)}</span>
+      " title="${escapeHtml(tech.name)}">
+        ${vehicleSvg}
+      </span>
       ${speedBadgeHtml}
     </div>
   `;
   return L.divIcon({
     html,
     className: 'fieseros-tech-marker',
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -16],
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -18],
   });
 }
 
@@ -894,11 +904,21 @@ export default function LiveTechnicianMap({
   useEffect(() => {
     selectedTechIdRef.current = selectedTechnicianId;
     const sel = selectedTechnicianId;
-    if (sel) {
+    if (sel && mapRef.current) {
       const tech = employeesRef.current.find((t) => t.id === sel);
-      if (tech && isValidCoord(tech.latitude, tech.longitude) && mapRef.current) {
+      if (tech && isValidCoord(tech.latitude, tech.longitude)) {
         try {
-          mapRef.current.panTo([tech.latitude, tech.longitude], { animate: true });
+          // Find assigned job's destination lat/lng to compute start-to-end trip bounds
+          const assignedJob = jobsRef.current.find((j) => j.assigneeId === tech.id || j.id === tech.currentJobId);
+          if (assignedJob && isValidCoord(assignedJob.latitude, assignedJob.longitude)) {
+            const bounds = L.latLngBounds(
+              [tech.latitude, tech.longitude],
+              [assignedJob.latitude, assignedJob.longitude]
+            );
+            mapRef.current.flyToBounds(bounds, { padding: [60, 60], maxZoom: 16, duration: 1.4 });
+          } else {
+            mapRef.current.flyTo([tech.latitude, tech.longitude], 15, { duration: 1.2 });
+          }
         } catch {
           // ignore
         }

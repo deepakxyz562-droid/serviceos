@@ -423,15 +423,11 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
 
   // Helper: check if a view needs full-height layout (no padding).
   const isViewFullHeight = (viewId: string) =>
-    viewId === 'canvas' || viewId === 'omnichannel';
+    viewId === 'canvas' || viewId === 'omnichannel' || viewId === 'dispatch';
 
-  // Canvas view needs no padding for full-screen editor.
-  // Omnichannel inbox also needs no padding — it's a full-height 3-column
-  // layout that should fill the entire content area below the app header
-  // with zero gaps, so the conversation list / chat / profile panel all
-  // align flush with the top and sides.
+  // Canvas, Omnichannel, and Live Dispatch views need no padding for full-screen display.
   const isCanvas = currentView === 'canvas';
-  const isFullHeight = isCanvas || currentView === 'omnichannel';
+  const isFullHeight = isCanvas || currentView === 'omnichannel' || currentView === 'dispatch';
 
   // ─── Full-takeover console: SuperAdmin owns the entire viewport ─────────
   // The superadmin shell has its OWN top bar + left sidebar + bottom status
