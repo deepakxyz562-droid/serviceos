@@ -75,6 +75,15 @@ const TABLE_MAP: Record<string, string> = {
   gPSLocation: 'GPSLocation',
   routeHistory: 'RouteHistory',
   customer: 'Customer',
+  // ── ISSUE-3 nested customer form collections ──
+  // These back the redesigned "New Customer" form. Without explicit entries
+  // the adapter falls back to default capitalization (CustomerContact /
+  // Property / PropertyContact), which happens to match — but listing them
+  // makes the customer-form subsystem grep-able and resilient to future
+  // capitalization drift.
+  customerContact: 'CustomerContact',
+  property: 'Property',
+  propertyContact: 'PropertyContact',
   resource: 'Resource',
   job: 'Job',
   jobVisit: 'JobVisit',
@@ -296,6 +305,26 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   },
   Customer: {
     workspace: { targetTable: 'Workspace', fkColumn: 'workspaceId' },
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    // ── ISSUE-3 nested form collections ──
+    // Customer.properties → Property[] (Property.customerId points back)
+    // Customer.additionalContacts → CustomerContact[] (CustomerContact.customerId points back)
+    // Without these, db.customer.findMany({ select: CUSTOMER_PUBLIC_SELECT })
+    // fails with "column Customer.additionalContacts does not exist" because
+    // the adapter tries to fetch them as columns. resolveIncludes() handles
+    // them via separate queries once they're declared here.
+    properties: { targetTable: 'Property', targetFkColumn: 'customerId', isMany: true },
+    additionalContacts: { targetTable: 'CustomerContact', targetFkColumn: 'customerId', isMany: true },
+  },
+  Property: {
+    customer: { targetTable: 'Customer', fkColumn: 'customerId' },
+    contacts: { targetTable: 'PropertyContact', targetFkColumn: 'propertyId', isMany: true },
+  },
+  CustomerContact: {
+    customer: { targetTable: 'Customer', fkColumn: 'customerId' },
+  },
+  PropertyContact: {
+    property: { targetTable: 'Property', fkColumn: 'propertyId' },
   },
   Workflow: {
     workspace: { targetTable: 'Workspace', fkColumn: 'workspaceId' },
@@ -945,6 +974,70 @@ function getTableName(modelName: string): string {
   return modelName.charAt(0).toUpperCase() + modelName.slice(1);
 }
 
+// ── Helper: Split a Prisma `select` into column-select + relation-include ──
+//
+// Prisma's `select` supports THREE shapes per key:
+//   1. columnName: true                  → select this column
+//   2. relationName: true                → load this relation (all fields)
+//   3. relationName: { select: {...} }   → load this relation with field subset
+//   4. relationName: { include: {...} }  → load relation + nested relations
+//
+// PostgREST only understands shape #1 — passing `additionalContacts` (a
+// relation name) as a select column fails with:
+//   "column Customer.additionalContacts does not exist" (code 42703)
+//
+// This helper splits a Prisma `select` into:
+//   - columnSelect: { col1: true, col2: true, ... } — safe to send to PostgREST
+//   - relationInclude: { rel1: {...}, rel2: {...} } — passed to resolveIncludes
+//
+// A key is treated as a relation if EITHER:
+//   - its value is an object (shapes #3/#4), OR
+//   - its value is `true` AND the key exists in RELATION_MAP[tableName] (#2)
+//
+// This unblocks CUSTOMER_PUBLIC_SELECT (which uses both #2 and #4 shapes)
+// and any other Prisma select that mixes columns and relations.
+function splitSelectAndRelations(
+  tableName: string,
+  select: Record<string, unknown> | undefined,
+): {
+  columnSelect: Record<string, true> | undefined;
+  relationInclude: Record<string, unknown> | undefined;
+} {
+  if (!select) return { columnSelect: undefined, relationInclude: undefined };
+
+  const columnSelect: Record<string, true> = {};
+  const relationInclude: Record<string, unknown> = {};
+  const modelRelations = RELATION_MAP[tableName] || {};
+
+  for (const [key, value] of Object.entries(select)) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      // Shape #3 or #4: relation with sub-select / sub-include.
+      // Pass through as-is. resolveIncludes reads `relInclude.select`
+      // and ignores `include` for nested relations (Prisma semantics:
+      // nested `include` inside a `select` block still loads the relation).
+      relationInclude[key] = value;
+      continue;
+    }
+    if (value === true && modelRelations[key]) {
+      // Shape #2: relation name with `true` — load all fields.
+      relationInclude[key] = {};
+      continue;
+    }
+    if (value === true) {
+      // Shape #1: plain column.
+      columnSelect[key] = true;
+      continue;
+    }
+    // Any other shape (e.g. false) — skip.
+  }
+
+  return {
+    columnSelect: Object.keys(columnSelect).length > 0 ? columnSelect : undefined,
+    relationInclude: Object.keys(relationInclude).length > 0 ? relationInclude : undefined,
+  };
+}
+
+
 // ── Helper: Resolve includes with separate queries ─────────────────────────
 
 async function resolveIncludes(
@@ -976,6 +1069,34 @@ async function resolveIncludes(
     const rel = modelRelations[relName];
     const relInclude = relConfig as Record<string, unknown>;
     const relSelect = (relInclude?.select as Record<string, boolean>) || undefined;
+    // Nested `include` (e.g. properties: { include: { contacts: true } })
+    // — recursively resolveIncludes on the related rows after we fetch them.
+    const nestedInclude = (relInclude?.include as Record<string, unknown>) || undefined;
+    // Also support `select` containing nested relation objects (e.g.
+    // properties: { select: { street1: true, contacts: true } }) — split out
+    // the relation parts and merge into nestedInclude for recursive resolution.
+    let nestedSelectForRecursive: Record<string, boolean> | undefined;
+    if (relSelect) {
+      const nestedModelRelations = RELATION_MAP[rel.targetTable] || {};
+      const cleanedSelect: Record<string, true> = {};
+      for (const [k, v] of Object.entries(relSelect)) {
+        if (v === true && nestedModelRelations[k]) {
+          // Promote nested relation: select: { contacts: true } → include: { contacts: {} }
+          if (!nestedInclude) {
+            (relInclude as Record<string, unknown>).include = {};
+          }
+          (relInclude!.include as Record<string, unknown>)[k] = {};
+        } else if (v && typeof v === 'object') {
+          if (!nestedInclude) {
+            (relInclude as Record<string, unknown>).include = {};
+          }
+          (relInclude!.include as Record<string, unknown>)[k] = v;
+        } else if (v === true) {
+          cleanedSelect[k] = true;
+        }
+      }
+      nestedSelectForRecursive = Object.keys(cleanedSelect).length > 0 ? cleanedSelect : undefined;
+    }
 
     const joinKey = rel.isMany
       ? rel.targetFkColumn!
@@ -1007,6 +1128,12 @@ async function resolveIncludes(
 
         if (error || !related) return;
 
+        // Recursively resolve nested includes on the related rows
+        // (e.g. Property.contacts when Customer.properties was included).
+        if (nestedInclude || nestedSelectForRecursive) {
+          await resolveIncludes(rel.targetTable, related as Record<string, unknown>[], nestedInclude);
+        }
+
         const grouped = new Map<string, unknown[]>();
         for (const r of related) {
           const fkVal = r[targetFkCol] as string;
@@ -1031,6 +1158,10 @@ async function resolveIncludes(
           .in(rel.targetFkColumn, mainIds);
 
         if (error || !related) return;
+
+        if (nestedInclude || nestedSelectForRecursive) {
+          await resolveIncludes(rel.targetTable, related as Record<string, unknown>[], nestedInclude);
+        }
 
         const relatedMap = new Map<string, unknown>();
         for (const r of related) {
@@ -1058,6 +1189,10 @@ async function resolveIncludes(
           .in('id', fkValues);
 
         if (error || !related) return;
+
+        if (nestedInclude || nestedSelectForRecursive) {
+          await resolveIncludes(rel.targetTable, related as Record<string, unknown>[], nestedInclude);
+        }
 
         const relatedMap = new Map<string, unknown>();
         for (const r of related) {
@@ -1193,9 +1328,20 @@ class SupabaseModel {
     // otherwise '*'. This mirrors findFirst/findUnique behavior and keeps
     // payloads small for callers that only need a few columns (e.g. the
     // marketplace cities endpoint fetching only city/lat/lng).
+    //
+    // NOTE: `select` may contain relation entries (e.g. CUSTOMER_PUBLIC_SELECT
+    // has `additionalContacts: true` and `properties: { include: ... }`).
+    // PostgREST rejects relation names as columns, so we split them out via
+    // splitSelectAndRelations() and merge them into `include` for
+    // resolveIncludes() to handle as separate queries.
+    const { columnSelect, relationInclude } = splitSelectAndRelations(this.tableName, select as Record<string, unknown> | undefined);
+    const mergedInclude = (include || relationInclude)
+      ? { ...(include as Record<string, unknown> || {}), ...(relationInclude || {}) }
+      : undefined;
+
     let selectStr = '*';
-    if (select) {
-      const cols = Object.entries(select).filter(([, v]) => v === true).map(([k]) => k);
+    if (columnSelect) {
+      const cols = Object.keys(columnSelect);
       if (cols.length > 0) selectStr = cols.join(',');
     }
 
@@ -1250,10 +1396,11 @@ class SupabaseModel {
       });
     }
 
-    // Resolve includes with separate queries
-    if (include) {
-      results = await resolveIncludes(this.tableName, results, include);
-      await resolveCounts(this.tableName, results, include);
+    // Resolve includes with separate queries (also handles relations that
+    // were extracted from `select` by splitSelectAndRelations).
+    if (mergedInclude) {
+      results = await resolveIncludes(this.tableName, results, mergedInclude);
+      await resolveCounts(this.tableName, results, mergedInclude);
     }
 
     return results;
@@ -1264,10 +1411,17 @@ class SupabaseModel {
 
     const { where, include, select } = options;
 
+    // Split relation entries out of `select` (same logic as findMany —
+    // see comment there). PostgREST rejects relation names as columns.
+    const { columnSelect, relationInclude } = splitSelectAndRelations(this.tableName, select as Record<string, unknown> | undefined);
+    const mergedInclude = (include || relationInclude)
+      ? { ...(include as Record<string, unknown> || {}), ...(relationInclude || {}) }
+      : undefined;
+
     // Build select string: use specific columns if select is provided, otherwise '*'
     let selectStr = '*';
-    if (select) {
-      const cols = Object.entries(select).filter(([, v]) => v === true).map(([k]) => k);
+    if (columnSelect) {
+      const cols = Object.keys(columnSelect);
       if (cols.length > 0) selectStr = cols.join(',');
     }
     let query = this.client.from(this.tableName).select(selectStr);
@@ -1294,9 +1448,9 @@ class SupabaseModel {
       throw new Error(`[SupabaseDB] findUnique on ${this.tableName} failed: ${error.message} (code=${error.code})`);
     }
 
-    if (include && data) {
-      const resolved = await resolveIncludes(this.tableName, [data as Record<string, unknown>], include);
-      await resolveCounts(this.tableName, resolved, include);
+    if (mergedInclude && data) {
+      const resolved = await resolveIncludes(this.tableName, [data as Record<string, unknown>], mergedInclude);
+      await resolveCounts(this.tableName, resolved, mergedInclude);
       return resolved?.[0] ?? data;
     }
 
@@ -1308,10 +1462,17 @@ class SupabaseModel {
 
     const { where, include, orderBy, select } = options;
 
+    // Split relation entries out of `select` (same logic as findMany —
+    // see comment there). PostgREST rejects relation names as columns.
+    const { columnSelect, relationInclude } = splitSelectAndRelations(this.tableName, select as Record<string, unknown> | undefined);
+    const mergedInclude = (include || relationInclude)
+      ? { ...(include as Record<string, unknown> || {}), ...(relationInclude || {}) }
+      : undefined;
+
     // Build select string: use specific columns if select is provided, otherwise '*'
     let selectStr = '*';
-    if (select) {
-      const cols = Object.entries(select).filter(([, v]) => v === true).map(([k]) => k);
+    if (columnSelect) {
+      const cols = Object.keys(columnSelect);
       if (cols.length > 0) selectStr = cols.join(',');
     }
     let query = this.client.from(this.tableName).select(selectStr);
@@ -1335,8 +1496,8 @@ class SupabaseModel {
       throw new Error(`[SupabaseDB] findFirst on ${this.tableName} failed: ${error.message} (code=${error.code}${error.hint ? `, hint="${error.hint}"` : ''})`);
     }
 
-    if (include && data) {
-      const resolved = await resolveIncludes(this.tableName, [data as Record<string, unknown>], include);
+    if (mergedInclude && data) {
+      const resolved = await resolveIncludes(this.tableName, [data as Record<string, unknown>], mergedInclude);
       return resolved?.[0] ?? data;
     }
 

@@ -181,13 +181,50 @@ export async function reverseGeocode(
  * don't need to distinguish rate-limiting from no-result — they just want
  * coords-or-null. Mirrors the original inline `geocodeAddress` signature
  * from `src/app/api/jobs/route.ts` so the refactor is a 1:1 swap.
+ *
+ * PROGRESSIVE FALLBACK: If the full address doesn't geocode, tries
+ * progressively shorter / cleaned-up versions so imperfect user-entered
+ * addresses (typos, missing city, "X in Y" phrasing, etc.) still resolve
+ * to a usable lat/lng. This is critical for the Live Dispatch map — a job
+ * with no coordinates can't show a destination marker, which breaks the
+ * Uber-style start→end polyline.
  */
 export async function geocodeAddressOrNull(
   address: string,
 ): Promise<{ latitude: number; longitude: number; displayName?: string } | null> {
-  const r = await geocodeAddress(address)
-  if (r.ok) {
-    return { latitude: r.latitude, longitude: r.longitude, displayName: r.displayName }
+  if (!address || address.trim().length < 3) return null;
+
+  const trimmed = address.trim();
+
+  // Strategy 1: try the full address as-is.
+  let r = await geocodeAddress(trimmed);
+  if (r.ok) return { latitude: r.latitude, longitude: r.longitude, displayName: r.displayName };
+
+  // Strategy 2: strip "X in Y" → "Y" (common in Indian addresses like
+  // "Ashiana-Digha Road in Jagat Vihar Colony, Rukanpura, Patna, 800025").
+  const inMatch = trimmed.match(/^[^,]+?\s+in\s+(.+)$/i);
+  if (inMatch) {
+    r = await geocodeAddress(inMatch[1].trim());
+    if (r.ok) return { latitude: r.latitude, longitude: r.longitude, displayName: r.displayName };
   }
-  return null
+
+  // Strategy 3: try progressively shorter comma-separated versions.
+  // "A6 Shashi Garden, Mayur Vihar, Delhi, India" → try "Mayur Vihar, Delhi, India" → "Delhi, India"
+  const parts = trimmed.split(',').map((p) => p.trim()).filter(Boolean);
+  for (let i = 1; i < parts.length; i++) {
+    const shorter = parts.slice(i).join(', ');
+    r = await geocodeAddress(shorter);
+    if (r.ok) return { latitude: r.latitude, longitude: r.longitude, displayName: r.displayName };
+    // Respect Nominatim's 1 req/sec policy on fallbacks.
+    await new Promise((res) => setTimeout(res, 1100));
+  }
+
+  // Strategy 4: append ", India" if not already present (helps Indian
+  // addresses missing country context — Nominatim sometimes needs it).
+  if (!/india/i.test(trimmed)) {
+    r = await geocodeAddress(`${trimmed}, India`);
+    if (r.ok) return { latitude: r.latitude, longitude: r.longitude, displayName: r.displayName };
+  }
+
+  return null;
 }
