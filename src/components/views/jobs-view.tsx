@@ -2471,36 +2471,35 @@ export function JobsView() {
       case 'pending':
         return (
           <div className="flex items-center gap-2 justify-end">
-            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}>
-              <User className="size-3 mr-1" /> Assign
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-9 text-xs min-h-[44px] font-semibold" onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}>
+              <User className="size-3.5 mr-1" /> Assign Technician
             </Button>
-            {canManageJob && (
-              <Button size="sm" variant="outline" className="h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('start', job.id); }} disabled={loadingJobId === job.id && loadingAction === 'start'}>
-                {loadingJobId === job.id && loadingAction === 'start' ? <Loader2 className="size-3 mr-1 animate-spin" /> : <Play className="size-3 mr-1" />} Start
-              </Button>
-            )}
             {moreMenu}
           </div>
         );
       case 'assigned':
+      case 'accepted':
         return (
           <div className="flex items-center gap-2 justify-end">
-            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('start', job.id); }} disabled={loadingJobId === job.id && loadingAction === 'start'}>
-              {loadingJobId === job.id && loadingAction === 'start' ? <Loader2 className="size-3 mr-1 animate-spin" /> : <Play className="size-3 mr-1" />} Start
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-9 text-xs min-h-[44px] font-semibold" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('start', job.id); }} disabled={loadingJobId === job.id && loadingAction === 'start'}>
+              {loadingJobId === job.id && loadingAction === 'start' ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <Play className="size-3.5 mr-1" />} Start Travel
             </Button>
             {canManageJob && (
               <Button size="sm" variant="outline" className="h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}>
-                <User className="size-3 mr-1" /> Re-assign
+                <User className="size-3.5 mr-1" /> Re-assign
               </Button>
             )}
             {moreMenu}
           </div>
         );
+      case 'travelling':
+      case 'en_route':
+      case 'arrived':
       case 'in_progress':
         return (
           <div className="flex items-center gap-2 justify-end">
-            <Button size="sm" className="bg-green-600 hover:bg-green-700 h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }} disabled={loadingJobId === job.id && loadingAction === 'complete'}>
-              {loadingJobId === job.id && loadingAction === 'complete' ? <Loader2 className="size-3 mr-1 animate-spin" /> : <CheckCircle2 className="size-3 mr-1" />} Complete
+            <Button size="sm" className="bg-green-600 hover:bg-green-700 h-9 text-xs min-h-[44px] font-semibold" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }} disabled={loadingJobId === job.id && loadingAction === 'complete'}>
+              {loadingJobId === job.id && loadingAction === 'complete' ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <CheckCircle2 className="size-3.5 mr-1" />} Complete Job
             </Button>
             {moreMenu}
           </div>
@@ -2511,7 +2510,7 @@ export function JobsView() {
         return (
           <div className="flex items-center gap-2 justify-end">
             <Button size="sm" variant="outline" className="h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); openJobDetail(job); }}>
-              <Eye className="size-3 mr-1" /> View
+              <Eye className="size-3.5 mr-1" /> View Details
             </Button>
             {moreMenu}
           </div>
