@@ -67,7 +67,8 @@ import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { useToast } from '@/components/ui/Toast';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { useJob, useJobLifecycle } from '@/hooks/use-jobs';
-import { COLORS } from '@/lib/constants';
+import { useLiveTracking } from '@/hooks/use-live-tracking';
+import { COLORS, API_BASE_URL } from '@/lib/constants';
 import { formatCurrency } from '@/lib/currency';
 import { captureGps } from '@/lib/gps';
 import { getStatusVariant } from '@/lib/status-colors';
@@ -93,6 +94,19 @@ function formatDuration(minutes: number): string {
   if (h === 0) return `${m}m`;
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
+}
+
+// Compact "time ago" formatter for the live-tracking banner — e.g. "12s ago",
+// "3m ago". Kept inline to avoid pulling in date-fns's formatDistanceToNow
+// (which has a larger locale bundle).
+function formatDistanceToNowShort(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 5) return 'just now';
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ago`;
 }
 
 // V1.5 lifecycle stages in canonical order. Used by the LifecycleProgress
@@ -254,6 +268,7 @@ export default function JobDetailScreen() {
         : '';
   const { show } = useToast();
   const tenantCurrency = useAuthStore((s) => s.tenant?.currency ?? null);
+  const employeeId = useAuthStore((s) => s.user?.employeeId ?? null);
 
   const { data: job, isLoading, error, refetch, isRefetching } = useJob(id);
   const lifecycle = useJobLifecycle();
@@ -279,6 +294,20 @@ export default function JobDetailScreen() {
   // falling back to a status-derived mapping for legacy jobs). This drives
   // both the LifecycleBadge and the sticky footer's stage-aware buttons.
   const currentState = resolveLifecycleStage(job).toLowerCase();
+
+  // ── Continuous live GPS tracking ────────────────────────────────────
+  // While the active job is in the `travelling` state, start a foreground
+  // GPS watch + background location task + 60s heartbeat so the Live
+  // Dispatch dashboard shows the technician's position in real time and
+  // the employee never appears "Offline" mid-route.
+  // Stops automatically when the job transitions to `arrived` / `working`
+  // / `completed` (because `enabled` becomes false).
+  const liveTracking = useLiveTracking({
+    enabled: currentState === 'travelling',
+    employeeId,
+    jobId: job?.id ?? null,
+    apiBaseUrl: API_BASE_URL,
+  });
 
   const handleCall = useCallback(() => {
     if (!job?.customer?.phone) return;
@@ -473,6 +502,57 @@ export default function JobDetailScreen() {
           />
         }
       >
+        {/* Live tracking status banner — only visible while the job is in
+            the `travelling` state. Shows a green confirmation when tracking
+            is active, or a red warning if the employee denied location
+            permission (which means dispatch can't see their position). */}
+        {currentState === 'travelling' &&
+          (liveTracking.permissionDenied ? (
+            <View
+              style={{
+                backgroundColor: '#FEF2F2',
+                borderColor: '#FECACA',
+                borderWidth: 1,
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                marginBottom: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <MapPin size={16} color="#DC2626" />
+              <Text style={{ fontSize: 13, color: '#991B1B', flex: 1 }}>
+                Location permission denied — dispatch can't see your live position.
+                Enable location in Settings to share your ETA.
+              </Text>
+            </View>
+          ) : liveTracking.isTracking ? (
+            <View
+              style={{
+                backgroundColor: '#ECFDF5',
+                borderColor: '#A7F3D0',
+                borderWidth: 1,
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                marginBottom: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <Navigation size={16} color="#059669" />
+              <Text style={{ fontSize: 13, color: '#065F46', flex: 1 }}>
+                Live tracking active — dispatch can see your position
+                {liveTracking.lastPingAt
+                  ? ` · last ping ${formatDistanceToNowShort(liveTracking.lastPingAt)}`
+                  : ''}
+              </Text>
+            </View>
+          ) : null)}
+
         {/* Customer / Service header card */}
         <Card className="mb-3">
           <View className="flex-row items-start justify-between">

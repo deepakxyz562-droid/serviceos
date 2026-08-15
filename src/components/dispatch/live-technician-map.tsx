@@ -44,6 +44,7 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { fetchOsmrRoute } from '@/lib/osrm-route';
 
 // Fix default Leaflet asset URLs to prevent broken image cross icons [x]
 if (typeof window !== 'undefined') {
@@ -166,6 +167,12 @@ const ROUTE_REMAINING_COLOR = '#f59e0b';  // amber — remaining route to destin
 const ROUTE_HISTORY_COLOR = '#94a3b8';    // slate-gray — historical completed routes (faint)
 const ROUTE_REFRESH_ACTIVE_MS = 15_000;   // 15s throttle for in_progress routes
 const ROUTE_REFRESH_COMPLETED_MS = 60_000; // 60s throttle for completed routes
+// Phase LIVE-OSRM: refetch the road-following route when the tech has moved
+// more than this many meters from the position the cached route started at.
+// 100m is a good balance — small enough to keep the route fresh as the tech
+// drives, large enough to avoid hammering the public OSRM server on every
+// noisy GPS ping (which can jitter ±10-20m even when stationary).
+const OSRM_REFETCH_DISTANCE_M = 100;
 
 const TILE_URL_STREETS = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 const TILE_URL_SATELLITE =
@@ -596,6 +603,17 @@ interface RouteCacheEntry {
   status: 'in_progress' | 'completed' | 'none';
 }
 
+// Phase LIVE-OSRM: Per-job cache of the last OSRM road-following route.
+// Keyed by jobId (in `osrmRouteCacheRef`) so multiple jobs don't collide.
+// The `fromLat`/`fromLng` fields record where the tech was when the route was
+// fetched — used to decide whether the tech has moved far enough
+// (> OSRM_REFETCH_DISTANCE_M) to justify a refetch.
+interface OsmrRouteCacheEntry {
+  coords: [number, number][]; // road-following polyline (Leaflet [lat, lng] format)
+  fromLat: number;            // tech latitude when the route was fetched
+  fromLng: number;            // tech longitude when the route was fetched
+}
+
 // ─── Per-marker animation state ───────────────────────────────────────────
 // Stored on a single ref Map keyed by employeeId. Each entry tracks the
 // marker's "displayed" (interpolated) position, the last ping, the previous
@@ -633,6 +651,15 @@ export default function LiveTechnicianMap({
   const routeLinesByJobRef = useRef<Map<string, L.Polyline[]>>(new Map());
   // Route history cache: jobId → breadcrumb trail fetched from /api/jobs/[id]/route-history.
   const routeCacheRef = useRef<Map<string, RouteCacheEntry>>(new Map());
+  // Phase LIVE-OSRM: OSRM road-following route cache, keyed by jobId. Lets us
+  // swap the straight "as the crow flies" placeholder for real road directions
+  // without refetching on every redraw. Cleared on unmount + when a job is
+  // removed from jobsRef (see drawRouteLines cleanup).
+  const osrmRouteCacheRef = useRef<Map<string, OsmrRouteCacheEntry>>(new Map());
+  // Tracks which jobs currently have an OSRM fetch in flight. Prevents duplicate
+  // concurrent requests for the same job — important because drawRouteForJob
+  // can fire many times per second during a marker glide.
+  const osrmFetchInFlightRef = useRef<Set<string>>(new Set());
   const accuracyCirclesRef = useRef<Map<string, L.Circle>>(new Map());
   const animStateRef = useRef<Map<string, AnimState>>(new Map());
   const tileLayersRef = useRef<{ streets: L.TileLayer | null; satellite: L.TileLayer | null }>({
@@ -1041,8 +1068,14 @@ export default function LiveTechnicianMap({
       newLines.push(breadcrumb);
     }
 
-    // 2. Remaining route (animated dashed amber) — from the latest breadcrumb point
-    //    (or the tech's current position if no breadcrumbs yet) to the destination.
+    // 2. Remaining route (animated dashed amber) — from the latest breadcrumb
+    //    point (or the tech's current position if no breadcrumbs yet) to the
+    //    destination. Upgraded (Phase LIVE-OSRM) to road-following directions:
+    //    we draw the straight 2-point line as an immediate placeholder, then
+    //    asynchronously fetch the OSRM route and swap it in when it arrives.
+    //    If the fetch fails or times out, the straight line stays (graceful
+    //    degradation). The driven breadcrumb (emerald, item 1 above) is NOT
+    //    touched — that's actual GPS data, not a routing API.
     if (startLat != null && startLng != null) {
       const remaining = L.polyline(
         [
@@ -1062,6 +1095,36 @@ export default function LiveTechnicianMap({
       const el = remaining.getElement();
       if (el) el.classList.add('fieseros-marching-ants');
       newLines.push(remaining);
+
+      // Try to upgrade the placeholder to an OSRM road-following polyline.
+      // Skip if either coord is (0,0) — OSRM can't route to/from null island
+      // (Gulf of Guinea), and the request would just fail.
+      const techAtNullIsland = startLat === 0 && startLng === 0;
+      const destAtNullIsland = jobLat === 0 && jobLng === 0;
+      if (!techAtNullIsland && !destAtNullIsland) {
+        const cached = osrmRouteCacheRef.current.get(jobId);
+        if (cached) {
+          // Reuse the cached road route if the tech hasn't moved far
+          // (> OSRM_REFETCH_DISTANCE_M). Just swap the placeholder polyline's
+          // coords in place — no network call needed.
+          const movedM = haversineMeters(
+            startLat,
+            startLng,
+            cached.fromLat,
+            cached.fromLng,
+          );
+          if (movedM <= OSRM_REFETCH_DISTANCE_M) {
+            remaining.setLatLngs(cached.coords);
+          } else {
+            // Tech moved significantly — refetch in the background. The
+            // placeholder stays until the new road route arrives.
+            upgradeOsmrRoute(jobId, startLat, startLng, jobLat, jobLng);
+          }
+        } else {
+          // No cache yet — fetch the road route in the background.
+          upgradeOsmrRoute(jobId, startLat, startLng, jobLat, jobLng);
+        }
+      }
     }
 
     // 3. Historical completed routes (faint gray solid lines) — up to 5 past trips.
@@ -1083,6 +1146,54 @@ export default function LiveTechnicianMap({
   };
 
   /**
+   * Phase LIVE-OSRM: Asynchronously fetch a road-following polyline from OSRM
+   * for the remaining route (tech → destination) and cache it per-job. When
+   * the fetch resolves, triggers a redraw of that job's route so the straight
+   * placeholder is swapped for the road-following line.
+   *
+   * The fetchOsmrRoute helper already falls back to a straight 2-point line on
+   * any error / timeout — so the cached result is always a valid polyline, and
+   * the redraw always has something road-shaped (or straight) to draw.
+   *
+   * Guards:
+   *   • Skips if a fetch is already in flight for this job (prevents duplicate
+   *     concurrent requests during marker glides that fire drawRouteForJob
+   *     many times per second).
+   *   • Skips the redraw if the job was removed during the fetch.
+   *   • The redraw itself no-ops safely if the map has unmounted.
+   */
+  const upgradeOsmrRoute = (
+    jobId: string,
+    fromLat: number,
+    fromLng: number,
+    toLat: number,
+    toLng: number,
+  ) => {
+    if (osrmFetchInFlightRef.current.has(jobId)) return;
+    osrmFetchInFlightRef.current.add(jobId);
+    fetchOsmrRoute(fromLat, fromLng, toLat, toLng)
+      .then((coords) => {
+        osrmRouteCacheRef.current.set(jobId, {
+          coords,
+          fromLat,
+          fromLng,
+        });
+      })
+      .catch(() => {
+        // Swallow — fetchOsmrRoute returns a fallback on any error, so this
+        // catch is purely defensive. The straight placeholder stays.
+      })
+      .finally(() => {
+        osrmFetchInFlightRef.current.delete(jobId);
+        // Trigger a redraw to swap the placeholder for the road-following
+        // route. Guard against the job being removed during the fetch.
+        if (jobsRef.current.some((j) => j.id === jobId)) {
+          drawRouteForJob(jobId);
+        }
+      });
+  };
+
+  /**
    * Thin wrapper: redraw routes for every known job + clean up routes for jobs
    * that are no longer in jobsRef. Used on initial render and full refreshes
    * (employees/jobs useEffects). GPS pings should call drawRouteForJob(jobId)
@@ -1096,6 +1207,8 @@ export default function LiveTechnicianMap({
         lines.forEach((l) => l.remove());
         routeLinesByJobRef.current.delete(jobId);
         routeCacheRef.current.delete(jobId);
+        osrmRouteCacheRef.current.delete(jobId);
+        osrmFetchInFlightRef.current.delete(jobId);
       }
     });
     // Redraw routes for present jobs.
@@ -1287,6 +1400,8 @@ export default function LiveTechnicianMap({
       routeLinesByJobRef.current.forEach((lines) => lines.forEach((l) => l.remove()));
       routeLinesByJobRef.current.clear();
       routeCacheRef.current.clear();
+      osrmRouteCacheRef.current.clear();
+      osrmFetchInFlightRef.current.clear();
       map.remove();
       mapRef.current = null;
     };
@@ -1300,6 +1415,18 @@ export default function LiveTechnicianMap({
   useEffect(() => {
     rerenderJobMarkers();
     drawRouteLines();
+    // ── Live Dispatch fix (Layer 2): fetch breadcrumb trails for ALL assigned
+    // jobs on initial render / when jobs list changes. Previously routes only
+    // appeared when the user clicked a technician (selectedTechnicianId effect
+    // at L1191) or when a new GPS ping arrived (handleGpsPing at L1419). This
+    // meant the map looked empty on first load — no start-end path visible.
+    // Now we proactively populate the route cache for every job that has an
+    // assignee, so polylines draw immediately without requiring a click.
+    jobs.forEach((j) => {
+      if (j.assigneeId) {
+        fetchRouteHistory(j.id, false);
+      }
+    });
   }, [jobs]);
 
   // ─── Imperative controller ─────────────────────────────────────────────

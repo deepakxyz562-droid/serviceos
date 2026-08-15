@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { cookies, headers } from 'next/headers';
 import { recordUserActivity } from '@/lib/presence';
 import { getCookieDomain } from '@/lib/brand';
+import { db } from '@/lib/db';
 
 // JWT secret resolution.
 // NOTE: We intentionally do NOT throw at module-load time. During `next build`,
@@ -142,6 +143,30 @@ export async function getAuthUser(): Promise<AuthUser | null> {
         recordUserActivity(normalized.id, normalized.tenantId);
       } catch {
         // Never let presence tracking break auth — swallow all errors.
+      }
+
+      // ── Live Dispatch fix (Layer 1): refresh Employee.lastSeenAt on every
+      // authenticated API request so the technician's "Online" status stays
+      // current on the Live Dispatch dashboard. The mobile app / PWA employee
+      // portal makes many API calls per session (fetch jobs, upload photo,
+      // poll lifecycle, etc.) — each one now acts as a heartbeat. This is a
+      // fire-and-forget, non-blocking update that never throws.
+      // NOTE: Only refresh if the user is linked to an Employee record (role
+      // 'employee' or has an employeeId). Admins/agents without an Employee
+      // row are skipped (db.employee.update would throw P2025).
+      if (normalized.role === 'employee' || normalized.employeeId) {
+        try {
+          // Throttle: only update if lastSeenAt is older than 60s to avoid
+          // hammering the DB on every single API call.
+          // We do this unconditionally here — the update is cheap (single row)
+          // and the cost of a stale "Offline" status is high (user confusion).
+          void db.employee.updateMany({
+            where: { id: normalized.employeeId || normalized.id },
+            data: { lastSeenAt: new Date() },
+          });
+        } catch {
+          // Swallow — never let presence break auth.
+        }
       }
     }
 

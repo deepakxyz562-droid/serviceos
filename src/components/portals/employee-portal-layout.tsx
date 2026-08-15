@@ -1023,6 +1023,83 @@ function usePushAutoSubscribe() {
 }
 
 /**
+ * useEmployeeHeartbeat — keeps Employee.lastSeenAt fresh while the PWA is open.
+ *
+ * Why this exists:
+ *   The admin Live Dispatch dashboard computes each technician's
+ *   "Online" / "Offline" / "Stale" badge purely from `Employee.lastSeenAt`
+ *   (see dispatch-view.tsx → OFFLINE_MS = 30 min, STALE_GPS_MS = 5 min).
+ *   Without periodic heartbeats, a logged-in employee who is browsing their
+ *   schedule (but not actively clocked in or travelling) goes "Offline" on
+ *   the dashboard after 30 min — even though they're staring at the app.
+ *
+ *   EXPLORE-LIVE-2 originally claimed this heartbeat lived in
+ *   `employee-portal-layout.tsx`, but that was a misread — the 60s
+ *   setInterval at the old line 4395 was the notifications poller
+ *   (`useNotifications`), not a heartbeat. The actual heartbeat was only
+ *   wired into `employee-portal-view.tsx` (the admin *preview* of the
+ *   portal), so real logged-in employees never sent one. This hook fixes
+ *   that gap.
+ *
+ * What it does:
+ *   - On mount (once `employeeId` is non-null), POSTs to
+ *     /api/employees/heartbeat with `{ employeeId }` immediately, then
+ *     every 60 seconds.
+ *   - Re-sends an immediate heartbeat when the tab becomes visible again
+ *     (user switched back to the PWA) so the dashboard flips to "Live"
+ *     without waiting up to 60s for the next tick.
+ *   - Silently swallows errors — heartbeats are best-effort. The GPS
+ *     tracking hook (`useGpsTracking`) already updates `lastSeenAt` every
+ *     5-15s while a job is in `travelling` status; this heartbeat is the
+ *     safety net for the in-between times (logged in, not clocked in,
+ *     between jobs, GPS permission denied, etc.).
+ *
+ * Auth: `authFetch` attaches the `Authorization: Bearer <jwt>` header
+ * automatically. The backend (`/api/employees/heartbeat/route.ts`) resolves
+ * the employee by `employeeId` and rejects if it doesn't match the JWT's
+ * user (employees can only heartbeat themselves).
+ */
+function useEmployeeHeartbeat(employeeId: string | null) {
+  useEffect(() => {
+    if (!employeeId) return;
+
+    const send = async () => {
+      try {
+        await authFetch('/api/employees/heartbeat?XTransformPort=3000', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employeeId }),
+        });
+      } catch {
+        // Silent — heartbeats are best-effort. Network blips, expired
+        // sessions, etc. will resolve on the next tick.
+      }
+    };
+
+    // Fire immediately so the dashboard flips to "Live" within one poll
+    // cycle (the dashboard polls /api/employees every 60s).
+    send();
+
+    // Then every 60s — matches the dashboard's polling cadence so
+    // lastSeenAt never gets older than ~60s while the PWA is open.
+    const intervalId = setInterval(send, 60_000);
+
+    // Re-send on visibility → visible (user switched back to the PWA after
+    // using another app). This matches the pattern used by
+    // refreshShiftState below.
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') send();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [employeeId]);
+}
+
+/**
  * PushEnableBanner — one-tap opt-in banner shown on the Home view.
  *
  * Renders only when ALL of these are true:
@@ -4695,6 +4772,19 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
   const { auth } = useAppStore();
 
   const employeeId = auth.user?.employeeId ?? null;
+
+  // ── Heartbeat every 60s (keeps Employee.lastSeenAt fresh) ─────────────
+  // Without this, the admin Live Dispatch dashboard shows the technician as
+  // "Offline" after 30 min of no API activity (OFFLINE_MS = 30 * 60 * 1000
+  // in dispatch-view.tsx). The heartbeat flips Employee.lastSeenAt to now
+  // on every tick → dashboard shows "Live" / "Online" within one polling
+  // cycle (dashboard polls /api/employees every 60s). Also re-sends on
+  // visibility → visible so the badge refreshes immediately when the
+  // employee switches back to the PWA. GPS pings (useGpsTracking) are a
+  // separate, higher-frequency path that also updates lastSeenAt — this
+  // heartbeat is the safety net for when GPS tracking is off.
+  useEmployeeHeartbeat(employeeId);
+
   // Hoisted shared data hooks — previously each of HomeView, MyJobsView and
   // ScheduleView called useEmployeeJobs(employeeId) independently, firing 3
   // parallel GET /api/employee/jobs requests on the first paint of every

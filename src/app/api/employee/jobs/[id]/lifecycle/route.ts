@@ -280,6 +280,25 @@ export async function POST(
           metadataJson: JSON.stringify({ jobId: job.id, employeeId: employee.id }),
           actionUrl: `/jobs?id=${job.id}`,
         });
+
+        // ── Live Dispatch fix: refresh lastSeenAt + lastLocationAt on every
+        // lifecycle action so the technician's "Online" status stays current
+        // on the Live Dispatch dashboard. Previously only `start_travel`
+        // updated these fields, so after 30 min the tech showed "Offline"
+        // even while actively working. (Layer 1 fix)
+        try {
+          await db.employee.update({
+            where: { id: employee.id },
+            data: {
+              lastSeenAt: now,
+              ...(typeof latitude === 'number' && typeof longitude === 'number'
+                ? { lastLocationAt: now, latitude, longitude }
+                : {}),
+            },
+          });
+        } catch (empErr) {
+          console.warn('[lifecycle/arrive] Employee lastSeenAt update failed (non-critical):', empErr instanceof Error ? empErr.message : empErr);
+        }
         break;
       }
 
@@ -348,6 +367,22 @@ export async function POST(
             },
           });
         }
+
+        // ── Live Dispatch fix (Layer 1): refresh lastSeenAt so the tech stays
+        // "Online" on the dispatch map while working.
+        try {
+          await db.employee.update({
+            where: { id: employee.id },
+            data: {
+              lastSeenAt: now,
+              ...(typeof latitude === 'number' && typeof longitude === 'number'
+                ? { lastLocationAt: now, latitude, longitude }
+                : {}),
+            },
+          });
+        } catch (empErr) {
+          console.warn('[lifecycle/start_work] Employee lastSeenAt update failed (non-critical):', empErr instanceof Error ? empErr.message : empErr);
+        }
         break;
       }
 
@@ -387,6 +422,21 @@ export async function POST(
           }
         } catch (entryErr) {
           console.warn('[lifecycle/pause] JobTimeEntry update failed (non-critical):', entryErr instanceof Error ? entryErr.message : entryErr);
+        }
+
+        // ── Live Dispatch fix (Layer 1): refresh lastSeenAt on pause.
+        try {
+          await db.employee.update({
+            where: { id: employee.id },
+            data: {
+              lastSeenAt: now,
+              ...(typeof latitude === 'number' && typeof longitude === 'number'
+                ? { lastLocationAt: now, latitude, longitude }
+                : {}),
+            },
+          });
+        } catch (empErr) {
+          console.warn('[lifecycle/pause] Employee lastSeenAt update failed (non-critical):', empErr instanceof Error ? empErr.message : empErr);
         }
         break;
       }
@@ -435,6 +485,21 @@ export async function POST(
           }
         } catch (entryErr) {
           console.warn('[lifecycle/resume] JobTimeEntry update failed (non-critical):', entryErr instanceof Error ? entryErr.message : entryErr);
+        }
+
+        // ── Live Dispatch fix (Layer 1): refresh lastSeenAt on resume.
+        try {
+          await db.employee.update({
+            where: { id: employee.id },
+            data: {
+              lastSeenAt: now,
+              ...(typeof latitude === 'number' && typeof longitude === 'number'
+                ? { lastLocationAt: now, latitude, longitude }
+                : {}),
+            },
+          });
+        } catch (empErr) {
+          console.warn('[lifecycle/resume] Employee lastSeenAt update failed (non-critical):', empErr instanceof Error ? empErr.message : empErr);
         }
         break;
       }
@@ -607,6 +672,24 @@ export async function POST(
         // to the customer based on tenant invoice settings. Fire-and-forget
         // so the lifecycle response isn't blocked by email/SMS latency.
         fireAndForget('auto-invoice on completion', autoCreateInvoiceFromJob(job.id));
+
+        // ── Live Dispatch fix (Layer 1): refresh lastSeenAt on complete +
+        // clear currentJobId (tech is done with this job). Status stays
+        // 'busy'/'available' based on whether they have other assigned jobs.
+        try {
+          await db.employee.update({
+            where: { id: employee.id },
+            data: {
+              lastSeenAt: now,
+              currentJobId: null,
+              ...(typeof latitude === 'number' && typeof longitude === 'number'
+                ? { lastLocationAt: now, latitude, longitude }
+                : {}),
+            },
+          });
+        } catch (empErr) {
+          console.warn('[lifecycle/complete] Employee lastSeenAt update failed (non-critical):', empErr instanceof Error ? empErr.message : empErr);
+        }
         break;
       }
 

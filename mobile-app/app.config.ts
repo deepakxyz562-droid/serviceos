@@ -24,9 +24,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     infoPlist: {
       NSCameraUsageDescription: 'Fieseros needs camera access to take job photos and capture customer signatures.',
       NSLocationWhenInUseUsageDescription: 'Fieseros uses your location to detect your city for the marketplace and to track travel for assigned jobs.',
+      // Required for background GPS tracking while the employee is en route
+      // to a job (continues when the phone is locked / app is backgrounded).
+      NSLocationAlwaysAndWhenInUseUsageDescription: 'Fieseros tracks your live location while you are travelling to a job so dispatchers and customers can see your ETA in real time, even when the app is in the background.',
+      NSLocationAlwaysUsageDescription: 'Fieseros tracks your live location while you are travelling to a job so dispatchers and customers can see your ETA in real time, even when the app is in the background.',
       NSPhotoLibraryUsageDescription: 'Fieseros needs photo access to upload job evidence and proof of work.',
       NSPhotoLibraryAddUsageDescription: 'Fieseros saves job photos to your library for record-keeping.',
       NSUserNotificationsUsageDescription: 'Fieseros sends notifications about your jobs, bookings, and shift updates.',
+      // Allows the OS to keep the location background task running. Without
+      // this entry the app will crash on `startLocationUpdatesAsync`.
+      UIBackgroundModes: ['location', 'fetch', 'remote-notification'],
     },
   },
   android: {
@@ -39,9 +46,18 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'CAMERA',
       'ACCESS_FINE_LOCATION',
       'ACCESS_COARSE_LOCATION',
+      // Required for background location updates while en route. Android 10+
+      // requires a separate runtime permission prompt for this; the
+      // useLiveTracking hook requests it via
+      // Location.requestBackgroundPermissionsAsync().
+      'ACCESS_BACKGROUND_LOCATION',
       'READ_EXTERNAL_STORAGE',
       'WRITE_EXTERNAL_STORAGE',
       'POST_NOTIFICATIONS',
+      // Foreground service permission — needed for the persistent notification
+      // that Android shows while a background location task is running.
+      'FOREGROUND_SERVICE',
+      'FOREGROUND_SERVICE_LOCATION',
     ],
   },
   web: {
@@ -66,8 +82,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-location',
       {
-        locationAlwaysAndWhenInUsePermission: 'Fieseros uses your location to detect your city and track travel for jobs.',
+        locationAlwaysAndWhenInUsePermission: 'Fieseros needs background location to track your live travel to a job so dispatchers and customers can see your ETA in real time, even when the app is in the background.',
         locationWhenInUsePermission: 'Fieseros uses your location to detect your city and track travel for jobs.',
+        isIosBackgroundLocationEnabled: true,
+        isAndroidBackgroundLocationEnabled: true,
       },
     ],
     [
