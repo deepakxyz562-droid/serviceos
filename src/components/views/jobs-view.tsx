@@ -4554,37 +4554,135 @@ export function JobsView() {
         </div>
       ) : (
         /* ─── Table View ───────────────────────────────────────────── */
-        <Card>
-          <div className="max-h-[600px] overflow-auto">
+        <Card className="border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+          <div className="max-h-[650px] overflow-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10">
                 <TableRow>
-                  <TableHead className="w-[100px]">Job #</TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Service</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Scheduled</TableHead>
-                  <TableHead>Assignee</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-[120px] font-bold">Job #</TableHead>
+                  <TableHead className="font-bold">Title & Service</TableHead>
+                  <TableHead className="font-bold">Customer</TableHead>
+                  <TableHead className="font-bold">Address</TableHead>
+                  <TableHead className="font-bold">Scheduled</TableHead>
+                  <TableHead className="font-bold">Assignee</TableHead>
+                  <TableHead className="font-bold">Status</TableHead>
+                  <TableHead className="text-right font-bold w-[160px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {jobs.map((job) => (
-                  <TableRow key={job.id} className="cursor-pointer" onClick={() => openJobDetail(job)}>
-                    <TableCell className="font-mono text-xs">{job.jobNumber || job.id.slice(0, 8).toUpperCase()}</TableCell>
-                    <TableCell className="font-medium text-sm">{job.title}</TableCell>
-                    <TableCell className="text-sm">{job.customerName || '--'}</TableCell>
-                    <TableCell><Badge variant="secondary" className="text-[10px]">{getJobTypeLabel(job.type)}</Badge></TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">{job.address || job.pickup || '--'}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {job.scheduledAt ? formatDate(job.scheduledAt) : '--'}
-                      {job.scheduledTime && <div>{job.scheduledTime}</div>}
+                  <TableRow key={job.id} className="cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-900/50 transition-colors" onClick={() => openJobDetail(job)}>
+                    <TableCell className="font-mono text-xs font-semibold">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Badge variant="outline" className="font-mono text-[11px] bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 font-bold">
+                          #{job.jobNumber || job.id.slice(0, 8).toUpperCase()}
+                        </Badge>
+                        {job.priority === 'urgent' && (
+                          <Badge variant="outline" className="text-[9px] h-4 px-1 bg-red-50 text-red-700 border-red-300 font-bold animate-pulse">
+                            Urgent
+                          </Badge>
+                        )}
+                        {isJobOverdue(job) && (
+                          <Badge variant="outline" className="text-[9px] h-4 px-1 bg-red-600 text-white border-red-600 font-bold">
+                            Overdue
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
-                    <TableCell className="text-sm">{job.assigneeName || <span className="text-amber-600 text-xs">Unassigned</span>}</TableCell>
-                    <TableCell><Badge variant="outline" className={`${getStatusColor(job.status)} text-[10px]`}>{job.status.replace('_', ' ')}</Badge></TableCell>
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>{getActionButtons(job)}</TableCell>
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <p className="font-bold text-sm text-slate-900 dark:text-slate-100 leading-tight line-clamp-1">{job.title}</p>
+                        <Badge variant="secondary" className="text-[10px] h-4 font-medium px-1.5">
+                          {getJobTypeLabel(job.type)}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {job.customerName ? (
+                        <div className="flex items-center gap-1.5">
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{job.customerName}</p>
+                            <p className="text-[10px] text-slate-400 truncate">{job.customerPhone || 'No phone'}</p>
+                          </div>
+                          {job.customerPhone && (
+                            <div className="flex items-center gap-0.5 ml-auto" onClick={(e) => e.stopPropagation()}>
+                              <a
+                                href={`tel:${job.customerPhone}`}
+                                className="p-1 text-slate-400 hover:text-emerald-600 transition-colors"
+                                title="Call customer"
+                              >
+                                <Phone className="size-3" />
+                              </a>
+                              <a
+                                href={`https://wa.me/${job.customerPhone.replace(/\D/g, '')}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1 text-slate-400 hover:text-emerald-600 transition-colors"
+                                title="WhatsApp customer"
+                              >
+                                <MessageSquare className="size-3" />
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-slate-500 dark:text-slate-400 max-w-[160px] truncate">
+                      {job.address ? (
+                        <span title={job.address} className="flex items-center gap-1 truncate">
+                          <MapPin className="size-3 shrink-0 text-slate-400" />
+                          <span className="truncate">{job.address}</span>
+                        </span>
+                      ) : '—'}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {(() => {
+                        const pill = formatSchedulePill(job.scheduledAt, job.scheduledTime, job.estimatedDuration);
+                        if (!pill) return <span className="text-slate-400">—</span>;
+                        return (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium text-[11px] whitespace-nowrap">
+                            <Calendar className="size-3" /> {pill}
+                          </span>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell>
+                      {job.assigneeName ? (
+                        <div className="flex items-center gap-2">
+                          <div className="relative shrink-0">
+                            <Avatar className="size-6">
+                              <AvatarFallback className="bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                {job.assigneeName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span
+                              className={cn(
+                                'absolute -bottom-0.5 -right-0.5 size-2 rounded-full border-1.5 border-background',
+                                job.status === 'in_progress' ? 'bg-emerald-500' :
+                                job.status === 'assigned' || job.status === 'accepted' ? 'bg-blue-500' :
+                                job.status === 'travelling' || job.status === 'arrived' ? 'bg-amber-500' :
+                                job.status === 'completed' ? 'bg-slate-400' : 'bg-slate-400',
+                              )}
+                            />
+                          </div>
+                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{job.assigneeName}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs font-semibold text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200">
+                          Unassigned
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={cn('text-[10px] px-2 py-0.5 capitalize font-semibold', getStatusColor(job.status))}>
+                        {job.status.replace('_', ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      {getActionButtons(job)}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
