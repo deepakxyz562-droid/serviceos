@@ -1736,90 +1736,115 @@ function EmployeeDetail({
 
   return (
     <div className="space-y-6 w-full pb-8">
-      {/* Header with Back button */}
-      <div className="flex items-start sm:items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <Button variant="ghost" size="sm" onClick={onBack} className="shrink-0">
-            <ArrowLeft className="size-4 mr-1" /> Back
+      {/* Header with Back button and Quick Actions */}
+      <div className="flex items-start sm:items-center justify-between flex-wrap gap-4 bg-card p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-2xs">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <Button variant="outline" size="sm" onClick={onBack} className="shrink-0 h-9 font-semibold text-slate-700 dark:text-slate-200">
+            <ArrowLeft className="size-4 mr-1.5" /> Back
           </Button>
           <Separator orientation="vertical" className="h-10 hidden sm:block" />
-          <Avatar className="size-14 sm:size-16 shrink-0">
-            {employee.avatar && <AvatarImage src={employee.avatar} alt={employee.name} />}
-            <AvatarFallback className={cn(
-              'text-lg font-bold',
-              employee.status === 'available'
-                ? 'bg-emerald-100 text-emerald-700'
-                : (employee.status === 'on_job' || employee.status === 'busy')
-                ? 'bg-amber-100 text-amber-700'
-                : employee.status === 'on_leave'
-                ? 'bg-purple-100 text-purple-700'
-                : 'bg-slate-100 text-slate-600'
-            )}>
-              {getInitials(employee.name)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0">
+          <div className="relative shrink-0">
+            <Avatar className="size-14 sm:size-16 border-2 border-emerald-100 dark:border-emerald-950 shadow-xs">
+              {employee.avatar && <AvatarImage src={employee.avatar} alt={employee.name} />}
+              <AvatarFallback className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 font-bold text-lg">
+                {getInitials(employee.name)}
+              </AvatarFallback>
+            </Avatar>
+            <span
+              className={cn(
+                'absolute bottom-0 right-0 size-3.5 rounded-full border-2 border-background',
+                getStatusDot(employee.status)
+              )}
+            />
+          </div>
+          <div className="min-w-0 space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground truncate">{employee.name}</h1>
-              <Badge variant="outline" className={cn(getStatusColor(employee.status), 'text-[10px]')}>
+              <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 truncate">{employee.name}</h1>
+              <Badge variant="outline" className={cn(getStatusColor(employee.status), 'text-[10px] font-semibold')}>
                 <span className={cn('size-1.5 rounded-full mr-1', getStatusDot(employee.status))} />
                 {employee.status === 'busy' ? 'on job' : employee.status.replace('_', ' ')}
               </Badge>
               {getInvitationBadge(employee.invitationStatus)}
             </div>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <Badge variant="secondary" className="text-[10px] capitalize">{employee.role}</Badge>
+            <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500">
+              <Badge variant="secondary" className="text-[10px] capitalize font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">{employee.role}</Badge>
               {employee.rating > 0 && (
                 <div className="flex items-center gap-1">
                   <StarRating rating={employee.rating} size="sm" />
-                  <span className="text-xs font-semibold text-foreground">{employee.rating.toFixed(1)}</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{employee.rating.toFixed(1)}</span>
                 </div>
               )}
+              {employee.phone && (
+                <span className="font-medium text-slate-600 dark:text-slate-400">· {employee.phone}</span>
+              )}
               {skills.length > 0 && (
-                <span className="text-xs text-muted-foreground">· {skills.slice(0, 2).join(', ')}{skills.length > 2 ? '…' : ''}</span>
+                <span className="text-slate-400">· {skills.slice(0, 2).join(', ')}{skills.length > 2 ? '…' : ''}</span>
               )}
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" size="sm" onClick={onEdit}>
+
+        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
+          {employee.phone && (
+            <div className="flex items-center gap-1 mr-1">
+              <a
+                href={`tel:${employee.phone}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 hover:text-emerald-700 transition-all border border-slate-200/80 dark:border-slate-700"
+                title="Call Employee"
+              >
+                <Phone className="size-3.5 text-emerald-600" /> Call
+              </a>
+              <a
+                href={`https://wa.me/${employee.phone.replace(/\D/g, '')}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-xs"
+                title="WhatsApp Employee"
+              >
+                <MessageSquare className="size-3.5" /> WhatsApp
+              </a>
+            </div>
+          )}
+
+          <Button variant="outline" size="sm" onClick={onEdit} className="h-9 font-semibold">
             <Pencil className="size-3.5 mr-1.5" /> Edit
           </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" disabled={actionLoading}>
-                <MoreVertical className="size-3.5" />
+              <Button variant="outline" size="sm" className="h-9 w-9 p-0" disabled={actionLoading}>
+                <MoreVertical className="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {(!employee.invitationStatus || employee.invitationStatus === 'none') && (
                 <DropdownMenuItem onClick={onInvite} disabled={actionLoading}>
-                  <Send className="size-3 mr-2" /> Send Invitation
+                  <Send className="size-3.5 mr-2" /> Send Invitation
                 </DropdownMenuItem>
               )}
               {employee.invitationStatus === 'pending' && (
                 <DropdownMenuItem onClick={onInvite} disabled={actionLoading}>
-                  <Send className="size-3 mr-2" /> Resend Invitation
+                  <Send className="size-3.5 mr-2" /> Resend Invitation
                 </DropdownMenuItem>
               )}
               {employee.invitationStatus === 'accepted' && (
                 <DropdownMenuItem onClick={onResetPassword} disabled={actionLoading || !employee.userId}>
-                  <KeyRound className="size-3 mr-2" /> Reset Password
+                  <KeyRound className="size-3.5 mr-2" /> Reset Password
                 </DropdownMenuItem>
               )}
               {employee.invitationStatus === 'accepted' && (
                 <DropdownMenuItem onClick={onSuspendToggle} disabled={actionLoading} className="text-amber-600">
-                  <Power className="size-3 mr-2" /> Suspend
+                  <Power className="size-3.5 mr-2" /> Suspend
                 </DropdownMenuItem>
               )}
               {employee.invitationStatus === 'suspended' && (
                 <DropdownMenuItem onClick={onSuspendToggle} disabled={actionLoading} className="text-emerald-600">
-                  <Power className="size-3 mr-2" /> Reactivate
+                  <Power className="size-3.5 mr-2" /> Reactivate
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-red-600" onClick={onDelete}>
-                <Trash2 className="size-3 mr-2" /> Delete
+              <DropdownMenuItem className="text-red-600 font-semibold" onClick={onDelete}>
+                <Trash2 className="size-3.5 mr-2" /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

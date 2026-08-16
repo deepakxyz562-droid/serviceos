@@ -1448,12 +1448,7 @@ export function Customer360View() {
                       </Badge>
                     )}
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="assets"
-                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
-                  >
-                    <Package className="size-3.5" /> Assets
-                  </TabsTrigger>
+
                   <TabsTrigger
                     value="communication"
                     className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
