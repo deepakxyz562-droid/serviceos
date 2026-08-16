@@ -941,18 +941,42 @@ export function DispatchView() {
     [employees],
   );
 
+  // Technician-Focused Map Mode: the selected technician's currentJobId,
+  // memoized separately so that GPS polls (which update `employees` positions
+  // but NOT `currentJobId`) don't cause `activeJobsForMap` to recompute and
+  // trigger an unnecessary full map redraw. The dep is a primitive string,
+  // so the memo is stable across GPS polls as long as currentJobId is unchanged.
+  const selectedTechCurrentJobId = useMemo(() => {
+    if (!selectedTechnicianId) return null;
+    return employees.find((e) => e.id === selectedTechnicianId)?.currentJobId ?? null;
+  }, [employees, selectedTechnicianId]);
+
   const activeJobsForMap = useMemo(() => {
     // A5 fix (2025-08-15): Use canonical active statuses.
     const ACTIVE = new Set(['pending', 'assigned', 'accepted', 'travelling', 'arrived', 'working', 'paused']);
+    // Technician-Focused Map Mode: when a technician is selected, show only
+    // their assigned jobs + their currentJob. Other technicians' jobs are
+    // filtered out HERE (at the source) so the map's downstream render paths
+    // — rerenderJobMarkers, drawRouteLines, pollTravellingRoutes — naturally
+    // only see the selected technician's jobs. The existing cleanup in
+    // drawRouteLines() then removes stale route lines / END markers / route
+    // cache / START markers for the now-filtered-out jobs. When no technician
+    // is selected, preserve the existing fleet-wide behavior.
+    const techId = selectedTechnicianId;
+    const techCurrentJobId = selectedTechCurrentJobId;
     return jobs
-      .filter((j) => ACTIVE.has(j.status) && hasGps(j as { latitude?: number | null; longitude?: number | null }))
+      .filter((j) =>
+        ACTIVE.has(j.status) &&
+        hasGps(j as { latitude?: number | null; longitude?: number | null }) &&
+        (!techId || j.assigneeId === techId || j.id === techCurrentJobId)
+      )
       .map((j) => ({
         id: j.id, title: j.title, status: j.status, priority: j.priority,
         latitude: j.latitude as number, longitude: j.longitude as number,
         assigneeId: j.assigneeId ?? null, customerName: j.customerName,
         address: j.address, scheduledAt: j.scheduledAt,
       }));
-  }, [jobs]);
+  }, [jobs, selectedTechnicianId, selectedTechCurrentJobId]);
 
   const pendingJobs = useMemo(() => jobs.filter((j) => j.status === 'pending'), [jobs]);
   // A5 fix (2025-08-15): Assigned-but-not-yet-working jobs (shows in the
@@ -1394,7 +1418,7 @@ export function DispatchView() {
                       <span className="font-medium">{distKm.toFixed(1)} km</span>
                     </div>
                   )}
-                  {etaMin !== null && !Number.isInfinity(etaMin) && (
+                  {etaMin !== null && Number.isFinite(etaMin) && (
                     <div className="flex items-center gap-1">
                       <Clock className="size-3 text-muted-foreground" />
                       <span className="text-muted-foreground">ETA:</span>

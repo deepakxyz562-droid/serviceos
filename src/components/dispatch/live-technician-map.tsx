@@ -1368,6 +1368,16 @@ export default function LiveTechnicianMap({
         routeCacheRef.current.delete(jobId);
         osrmRouteCacheRef.current.delete(jobId);
         osrmFetchInFlightRef.current.delete(jobId);
+        // Technician-Focused Map Mode: also remove the START marker for this
+        // job. Without this, switching A → B leaves A's green "start point"
+        // pin on the map (drawRouteForJob is never called for A again since
+        // A is no longer in jobsRef, so its start marker is never cleaned up
+        // by the per-job removal at L1167-1170). Mirrors the same pattern.
+        const oldStartMarker = routeStartMarkersRef.current.get(jobId);
+        if (oldStartMarker) {
+          oldStartMarker.remove();
+          routeStartMarkersRef.current.delete(jobId);
+        }
       }
     });
     // Redraw routes for present jobs.
