@@ -686,14 +686,23 @@ export function DispatchView() {
           });
 
           // Detect non-position metadata changes for the debounced flush.
-          // Phase B fix: also detect gpsStatus transitions (live→stale→offline)
-          // so the Inspector badge + "Last:" display stay truthful. Without
-          // this, the badge could show "Live" while "Last: 5h ago" because
-          // gpsStatus in React state was never flushed (only positionsRef was).
+          // Phase B fix: detect THREE kinds of telemetry transitions so the
+          // Inspector stays truthful during continuous transmission:
+          //   1. status / currentJobId  → technician lifecycle changes
+          //   2. gpsStatus transition   → live→stale→offline badge flips
+          //   3. lastGpsAt change       → "Last:" display refresh
+          // Without (3), React `employees.lastGpsAt` froze at the first poll's
+          // value because gpsStatus stays "live" indefinitely while the tech
+          // keeps transmitting, so metaChanged was never true again — producing
+          // the production symptom "GPS Tracking Live" + "Last: 5h ago".
+          // GPS coordinates (lat/lng) are NEVER flushed here — they flow
+          // through positionsRef → handleGpsPing → Leaflet/rAF only, so no
+          // map flicker is introduced.
           if (
             (newStatus && newStatus !== existing?.status) ||
             (newJobId !== undefined && newJobId !== existing?.currentJobId) ||
-            (newGpsStatus !== existing?.gpsStatus)
+            (newGpsStatus !== existing?.gpsStatus) ||
+            (newLastGps !== existing?.lastGpsAt)
           ) {
             metaChanged = true;
           }
