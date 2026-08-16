@@ -474,14 +474,32 @@ export function DispatchView() {
       if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const res = await fetch('/api/employees/positions?XTransformPort=3000');
-        if (!res.ok) return;
+        // Diagnostic logging — visible in browser DevTools console. Helps
+        // pinpoint whether the polling is running, what HTTP status comes
+        // back, and how many rows are returned. Remove once confirmed.
+        if (!res.ok) {
+          console.warn('[dispatch-poll] positions endpoint returned', res.status, res.statusText);
+          return;
+        }
         const data = await res.json();
-        if (!active || !Array.isArray(data)) return;
+        if (!active || !Array.isArray(data)) {
+          console.warn('[dispatch-poll] positions returned non-array:', typeof data);
+          return;
+        }
+
+        // Log a compact summary so the user can verify fresh data is arriving.
+        const sample = data.slice(0, 3).map((p: { id: string; lastSeenAt: string | null; latitude: unknown; longitude: unknown }) => ({
+          id: p.id?.slice(-8),
+          last: p.lastSeenAt ? Math.round((Date.now() - new Date(p.lastSeenAt).getTime()) / 1000) + 's' : 'null',
+          hasCoords: p.latitude != null && p.longitude != null,
+        }));
+        console.log('[dispatch-poll] got', data.length, 'positions', JSON.stringify(sample));
 
         // Snapshot the current positions so we can detect movement without
         // depending on stale closure state.
         setEmployees((prev) => {
           const byId = new Map(prev.map((e) => [e.id, e]));
+          let movedCount = 0;
           for (const p of data) {
             const id = p?.id;
             if (typeof id !== 'string') continue;
@@ -499,6 +517,7 @@ export function DispatchView() {
               newLng != null &&
               (existing?.latitude !== newLat || existing?.longitude !== newLng)
             ) {
+              movedCount++;
               mapControllerRef.current?.handleGpsPing({
                 employeeId: id,
                 latitude: newLat,
@@ -522,10 +541,13 @@ export function DispatchView() {
               });
             }
           }
+          if (movedCount > 0) {
+            console.log('[dispatch-poll] moved', movedCount, 'technician(s) — fed to map glide');
+          }
           return Array.from(byId.values());
         });
-      } catch {
-        // Non-fatal — the next tick will retry.
+      } catch (e) {
+        console.error('[dispatch-poll] positions fetch failed:', e);
       }
     };
 

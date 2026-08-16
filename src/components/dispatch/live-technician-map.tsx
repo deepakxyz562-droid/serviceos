@@ -1533,18 +1533,27 @@ export default function LiveTechnicianMap({
   //    status 'travelling' every 5s (force=true bypasses the 15s throttle
   //    inside fetchRouteHistory). Without this the emerald breadcrumb
   //    polyline freezes at whatever was loaded on mount — the dispatcher
-  //    can't see the tech's actual driven path growing as they move. This
-  //    is the polling equivalent of the `handleGpsPing` route refresh
-  //    (which only fires when a realtime socket event arrives — never on
-  //    Vercel).
+  //    can't see the tech's actual driven path growing as they move.
   //
-  // 2. AUTO-FRAME (Uber-style zoom): When a travelling job's route history
-  //    first arrives (start point known), frame the map to show the start
-  //    point → technician's current position → job destination in a single
-  //    `flyToBounds` call. This gives the "zoomed in, showing both ends"
-  //    view the user expects (like Uber), WITHOUT requiring a manual click
-  //    on the technician. Only fires once per job (tracked in
-  //    autoFramedJobIdsRef) so it doesn't fight the user's manual pan/zoom.
+  // 2. AUTO-FRAME (Uber-style zoom): When a travelling job is detected,
+  //    frame the map to show the technician's current position + the job
+  //    destination using RAW COORDINATES ONLY. This does NOT depend on
+  //    route history, OSRM, or any async fetch — just the tech + job
+  //    lat/lng that are already in props. This makes zoom reliable: even
+  //    if the OSRM routing request fails or the route history is empty,
+  //    the map still zooms to show both ends of the trip.
+  //
+  //    Zoom logic:
+  //      - Tech has coords AND job has coords → flyToBounds([tech, job])
+  //        (frames the whole trip — the Uber view)
+  //      - Only tech has coords (job has no address) → flyTo(tech, 15)
+  //        (centers on the moving vehicle so you can still watch it)
+  //      - Only job has coords (tech has no GPS) → flyTo(job, 15)
+  //      - Neither has coords → skip (nothing to show)
+  //
+  //    Fires once per job (tracked in autoFramedJobIdsRef) so it doesn't
+  //    fight the user's manual pan/zoom. Cleared when a job stops
+  //    travelling so it re-frames if travel restarts.
   useEffect(() => {
     const pollTravellingRoutes = () => {
       const map = mapRef.current;
@@ -1556,21 +1565,11 @@ export default function LiveTechnicianMap({
       );
 
       for (const job of travellingJobs) {
-        // Force-refresh so the breadcrumb grows live.
+        // 1. Force-refresh route history so the breadcrumb grows live.
         fetchRouteHistory(job.id, true);
 
-        // Auto-frame once per travelling job when we first have a start point.
+        // 2. Auto-frame using RAW coordinates (no route history dependency).
         if (autoFramedJobIdsRef.current.has(job.id)) continue;
-        const entry = routeCacheRef.current.get(job.id);
-        if (!entry) continue;
-        if (
-          entry.activeStartLat == null ||
-          entry.activeStartLng == null ||
-          !isValidCoord(entry.activeStartLat, entry.activeStartLng)
-        ) {
-          continue;
-        }
-        if (!isValidCoord(job.latitude, job.longitude)) continue;
 
         // Find the technician's current position (live marker if present,
         // else the employee record).
@@ -1589,25 +1588,50 @@ export default function LiveTechnicianMap({
           techLng = tech.longitude as number;
         }
 
-        // Build bounds: start point + destination (always), plus tech
-        // position if available. This frames the whole trip like Uber.
-        const points: [number, number][] = [
-          [entry.activeStartLat, entry.activeStartLng],
-          [job.latitude, job.longitude],
-        ];
-        if (techLat != null && techLng != null) {
-          points.push([techLat, techLng]);
-        }
+        const jobHasCoords = isValidCoord(job.latitude, job.longitude);
 
-        try {
-          map.flyToBounds(L.latLngBounds(points), {
-            padding: [80, 80],
-            maxZoom: 16,
-            duration: 1.4,
-          });
-          autoFramedJobIdsRef.current.add(job.id);
-        } catch {
-          // ignore bounds errors (e.g. identical points)
+        // Diagnostic log — visible in browser console. Shows exactly which
+        // condition is met for each travelling job so we can see why zoom
+        // does/doesn't fire. Remove once confirmed.
+        console.log('[dispatch-zoom] job=' + job.id.slice(-8) + ' title="' + job.title + '"', {
+          techLat, techLng, jobLat: job.latitude, jobLng: job.longitude,
+          techHasCoords: techLat != null && techLng != null,
+          jobHasCoords,
+        });
+
+        if (techLat != null && techLng != null && jobHasCoords) {
+          // Both coords → frame the whole trip (Uber view).
+          try {
+            map.flyToBounds(
+              L.latLngBounds([
+                [techLat, techLng],
+                [job.latitude, job.longitude],
+              ]),
+              { padding: [80, 80], maxZoom: 16, duration: 1.4 },
+            );
+            autoFramedJobIdsRef.current.add(job.id);
+            console.log('[dispatch-zoom] ✅ flyToBounds tech+job');
+          } catch {
+            // ignore bounds errors (e.g. identical points)
+          }
+        } else if (techLat != null && techLng != null) {
+          // Only tech coords (job has no address) → center on the vehicle.
+          try {
+            map.flyTo([techLat, techLng], 15, { duration: 1.2 });
+            autoFramedJobIdsRef.current.add(job.id);
+            console.log('[dispatch-zoom] ✅ flyTo tech only (job has no coords)');
+          } catch {
+            // ignore
+          }
+        } else if (jobHasCoords) {
+          // Only job coords (tech has no GPS) → center on destination.
+          try {
+            map.flyTo([job.latitude, job.longitude], 15, { duration: 1.2 });
+            autoFramedJobIdsRef.current.add(job.id);
+            console.log('[dispatch-zoom] ✅ flyTo job only (tech has no GPS)');
+          } catch {
+            // ignore
+          }
         }
       }
 

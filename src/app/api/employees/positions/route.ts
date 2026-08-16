@@ -84,6 +84,16 @@ export async function GET() {
       take: 200,
     });
 
+    // Diagnostic log — visible in Vercel function logs. Helps confirm the
+    // endpoint is executing, the auth scope is correct, and rows are returned
+    // with fresh lastSeenAt values. Remove once live tracking is confirmed.
+    const summary = rows.map((r: { id: string; lastSeenAt: string | null; latitude: unknown; longitude: unknown }) => ({
+      id: r.id.slice(-8),
+      last: r.lastSeenAt ? Math.round((Date.now() - new Date(r.lastSeenAt).getTime()) / 1000) + 's' : 'null',
+      hasCoords: r.latitude != null && r.longitude != null,
+    }));
+    console.log('[positions] user=' + authUser.email + ' scope=' + (isSuperAdmin ? 'super' : authUser.workspaceId ?? authUser.tenantId ?? 'none') + ' rows=' + rows.length, JSON.stringify(summary));
+
     return cachedJson(rows);
   } catch (error) {
     console.error('[employees/positions GET] error:', error);
