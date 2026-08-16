@@ -1050,6 +1050,9 @@ export default function LiveTechnicianMap({
       });
       marker.addTo(map);
       jobMarkersRef.current.set(job.id, marker);
+      // [dispatch-map] diagnostic — checkpoints 1+2: destination + END marker
+      console.log('[dispatch-map] destination', { jobId: job.id, lat: job.latitude, lng: job.longitude });
+      console.log('[dispatch-map] ✅ end marker', { jobId: job.id });
     });
 
     clusters.forEach((cluster, idx) => {
@@ -1103,12 +1106,15 @@ export default function LiveTechnicianMap({
       oldLines.forEach((l) => l.remove());
     }
 
+    // P0: entry is OPTIONAL. RouteHistory-dependent features (START marker,
+    // breadcrumb, historical routes) require it, but the remaining route
+    // (TECH → END) must draw even when RouteHistory hasn't resolved yet or
+    // failed. Previously this early-returned, blocking the entire render.
     const entry = routeCacheRef.current.get(jobId);
-    // If no cache entry yet, do nothing — the fetch will populate it asynchronously.
-    if (!entry) {
-      routeLinesByJobRef.current.delete(jobId);
-      return;
-    }
+    const activePath = entry?.activePath ?? [];
+    const completedPaths = entry?.completedPaths ?? [];
+    const activeStartLat = entry?.activeStartLat ?? null;
+    const activeStartLng = entry?.activeStartLng ?? null;
 
     // Look up the job destination (jobsRef is the single source of truth for job coords).
     const job = jobsRef.current.find((j) => j.id === jobId);
@@ -1119,12 +1125,20 @@ export default function LiveTechnicianMap({
     const jobLat = job.latitude;
     const jobLng = job.longitude;
 
+    // [dispatch-map] diagnostic — checkpoint 4: drawRouteForJob entry
+    console.log('[dispatch-map] drawRouteForJob', {
+      jobId,
+      hasEntry: !!entry,
+      jobLat,
+      jobLng,
+    });
+
     // For the remaining-route start point: prefer the latest breadcrumb from the
     // server. If the route just started (no breadcrumbs yet), fall back to the
     // tech's current live marker position (post-glide).
     let startLat: number | null = null;
     let startLng: number | null = null;
-    const lastBreadcrumb = entry.activePath[entry.activePath.length - 1];
+    const lastBreadcrumb = activePath[activePath.length - 1];
     if (lastBreadcrumb) {
       startLat = lastBreadcrumb.lat;
       startLng = lastBreadcrumb.lng;
@@ -1156,9 +1170,9 @@ export default function LiveTechnicianMap({
       routeStartMarkersRef.current.delete(jobId);
     }
     if (
-      entry.activeStartLat != null &&
-      entry.activeStartLng != null &&
-      isValidCoord(entry.activeStartLat, entry.activeStartLng)
+      activeStartLat != null &&
+      activeStartLng != null &&
+      isValidCoord(activeStartLat, activeStartLng)
     ) {
       const startIcon = L.divIcon({
         className: 'fieseros-route-start-marker',
@@ -1173,7 +1187,7 @@ export default function LiveTechnicianMap({
         iconAnchor: [14, 28],
       });
       const startMarker = L.marker(
-        [entry.activeStartLat, entry.activeStartLng],
+        [activeStartLat, activeStartLng],
         { icon: startIcon },
       );
       startMarker.bindPopup(
@@ -1188,8 +1202,8 @@ export default function LiveTechnicianMap({
     }
 
     // 1. Completed breadcrumb (solid emerald) — the path the tech has actually driven.
-    if (entry.activePath.length >= 2) {
-      const pts = entry.activePath.map((p) => [p.lat, p.lng] as [number, number]);
+    if (activePath.length >= 2) {
+      const pts = activePath.map((p) => [p.lat, p.lng] as [number, number]);
       const breadcrumb = L.polyline(pts, {
         color: ROUTE_BREADCRUMB_COLOR,
         weight: 4,
@@ -1229,6 +1243,13 @@ export default function LiveTechnicianMap({
       if (el) el.classList.add('fieseros-marching-ants');
       newLines.push(remaining);
 
+      // [dispatch-map] diagnostic — checkpoint 5: remaining polyline created
+      console.log('[dispatch-map] remaining route', {
+        jobId,
+        from: [startLat, startLng],
+        to: [jobLat, jobLng],
+      });
+
       // Try to upgrade the placeholder to an OSRM road-following polyline.
       // Skip if either coord is (0,0) — OSRM can't route to/from null island
       // (Gulf of Guinea), and the request would just fail.
@@ -1261,7 +1282,7 @@ export default function LiveTechnicianMap({
     }
 
     // 3. Historical completed routes (faint gray solid lines) — up to 5 past trips.
-    entry.completedPaths.forEach((path) => {
+    completedPaths.forEach((path) => {
       if (path.length < 2) return;
       const pts = path.map((p) => [p.lat, p.lng] as [number, number]);
       const historical = L.polyline(pts, {
@@ -1310,6 +1331,11 @@ export default function LiveTechnicianMap({
           coords,
           fromLat,
           fromLng,
+        });
+        // [dispatch-map] diagnostic — checkpoint 6: OSRM result
+        console.log('[dispatch-map] OSRM', {
+          jobId,
+          points: coords.length,
         });
       })
       .catch(() => {
@@ -1371,12 +1397,23 @@ export default function LiveTechnicianMap({
     }
     try {
       const res = await fetch(apiUrl(`/api/jobs/${jobId}/route-history`));
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.log('[dispatch-map] route-history fetch failed', { jobId, status: res.status });
+        return;
+      }
       const data = await res.json();
       // Guard: if the job was removed while we were fetching, drop the result.
       if (!jobsRef.current.some((j) => j.id === jobId)) return;
       const active = data?.active;
       const completed = Array.isArray(data?.completed) ? data.completed : [];
+      // [dispatch-map] diagnostic — checkpoint 3: route-history fetch result
+      console.log('[dispatch-map] route-history', {
+        jobId,
+        hasActive: !!active,
+        activeStartLat: active?.startLat ?? null,
+        activeStartLng: active?.startLng ?? null,
+        breadcrumbPoints: Array.isArray(active?.path) ? active.path.length : 0,
+      });
       const activePath: PathPoint[] = Array.isArray(active?.path) ? active.path : [];
       const completedPaths: PathPoint[][] = completed
         .map((r: { path?: PathPoint[] }) => (Array.isArray(r?.path) ? r.path : []))
