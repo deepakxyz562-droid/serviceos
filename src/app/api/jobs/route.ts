@@ -267,6 +267,12 @@ async function _GET(request: NextRequest) {
       checkInLng: true,
       checkOutLat: true,
       checkOutLng: true,
+      // Destination coordinates (geocoded from `address`). Required by the
+      // Live Dispatch map to render the END/destination marker + route
+      // polyline. Without these, `activeJobsForMap` filters every job out
+      // (hasGps() returns false) and the map shows only technician vehicles.
+      latitude: true,
+      longitude: true,
       customerRating: true,
       whatsappMessageId: true,
       whatsappSessionId: true,
