@@ -582,16 +582,35 @@ export function DispatchView() {
           return;
         }
 
-        // Compact diagnostic — includes last-8 of id + lastSeenAt age.
-        const sample = data.slice(0, 3).map((p: { id: string; lastSeenAt: string | null; latitude: unknown; longitude: unknown }) => ({
+        // Phase B diagnostic — includes lastSeenAt age (presence) AND
+        // lastGpsAt age (telemetry) + gpsStatus. If `gps` shows `—` or
+        // `lastGps` shows `null`, the API (or the production JS bundle) is
+        // stale and does NOT contain Phase B. This is the single most useful
+        // console check for confirming Phase B is actually deployed.
+        const sample = data.slice(0, 3).map((p: { id: string; lastSeenAt: string | null; lastGpsAt?: string | null; gpsStatus?: string; latitude: unknown; longitude: unknown }) => ({
           id: p.id?.slice(-8),
           last: p.lastSeenAt ? Math.round((Date.now() - new Date(p.lastSeenAt).getTime()) / 1000) + 's' : 'null',
+          lastGps: p.lastGpsAt ? Math.round((Date.now() - new Date(p.lastGpsAt).getTime()) / 1000) + 's' : 'null',
+          gps: p.gpsStatus ?? '—',
           hasCoords: p.latitude != null && p.longitude != null,
         }));
         console.log('[dispatch-poll] got', data.length, 'positions', JSON.stringify(sample));
 
         const ref = positionsRef.current;
         let movedCount = 0;
+        // Collect per-employee movement details for the diagnostic log so the
+        // dispatcher can see EXACTLY which tech moved, from where to where, by
+        // how many meters, and their current GPS freshness. This replaces the
+        // opaque `moved N technician(s)` count with actionable detail.
+        const movements: Array<{
+          id: string;
+          email: string | null;
+          old: [number, number] | null;
+          next: [number, number];
+          distM: number;
+          lastGpsAt: string | null;
+          gpsStatus: string;
+        }> = [];
         let metaChanged = false;
         const now = Date.now();
 
@@ -627,6 +646,18 @@ export function DispatchView() {
                 : Infinity;
             if (distM > MOVE_THRESHOLD_M) {
               movedCount++;
+              movements.push({
+                id,
+                email: (p as { email?: string | null }).email ?? null,
+                old:
+                  prevLat != null && prevLng != null && !isNaN(prevLat) && !isNaN(prevLng)
+                    ? [prevLat, prevLng]
+                    : null,
+                next: [newLat, newLng],
+                distM,
+                lastGpsAt: newLastGps,
+                gpsStatus: newGpsStatus,
+              });
               mapControllerRef.current?.handleGpsPing({
                 employeeId: id,
                 latitude: newLat,
@@ -655,9 +686,14 @@ export function DispatchView() {
           });
 
           // Detect non-position metadata changes for the debounced flush.
+          // Phase B fix: also detect gpsStatus transitions (live→stale→offline)
+          // so the Inspector badge + "Last:" display stay truthful. Without
+          // this, the badge could show "Live" while "Last: 5h ago" because
+          // gpsStatus in React state was never flushed (only positionsRef was).
           if (
             (newStatus && newStatus !== existing?.status) ||
-            (newJobId !== undefined && newJobId !== existing?.currentJobId)
+            (newJobId !== undefined && newJobId !== existing?.currentJobId) ||
+            (newGpsStatus !== existing?.gpsStatus)
           ) {
             metaChanged = true;
           }
@@ -665,6 +701,17 @@ export function DispatchView() {
 
         if (movedCount > 0) {
           console.log('[dispatch-poll] moved', movedCount, 'technician(s) — fed to map glide');
+          for (const m of movements) {
+            console.log('[dispatch-poll] movement', {
+              id: m.id.slice(-8),
+              name: m.email,
+              old: m.old,
+              next: m.next,
+              distanceM: Math.round(m.distM),
+              lastGpsAt: m.lastGpsAt,
+              gpsStatus: m.gpsStatus,
+            });
+          }
         }
 
         // FIX A: Only flush to React state when metadata (status /
