@@ -177,6 +177,18 @@ export function GpsTrackingProvider({
   const batteryRef = useRef<{ level: number; charging: boolean } | null>(null);
   const previewModeRef = useRef(previewMode);
 
+  // ── Phase A: Watchdog + watcher recovery refs ─────────────────────────
+  // `lastSuccessRef` tracks the timestamp of the last SUCCESSFUL GPS fix
+  // (not just the last ping attempt). The watchdog checks this to detect a
+  // stalled watcher — if no success in 45s, we restart watchPosition.
+  const lastSuccessRef = useRef<number>(0);
+  // `watchdogRef` holds the watchdog interval (checks every 15s).
+  const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // `retryCountRef` tracks consecutive recovery attempts for backoff.
+  const retryCountRef = useRef<number>(0);
+  // `isRecoveringRef` prevents concurrent recovery attempts.
+  const isRecoveringRef = useRef<boolean>(false);
+
   // Keep previewModeRef in sync so sendPing (which is a useCallback) reads
   // the latest value without needing to be re-created.
   useEffect(() => {
@@ -218,17 +230,6 @@ export function GpsTrackingProvider({
     }
     wakeLockRef.current = null;
   }, []);
-
-  // Re-acquire Wake Lock when the tab becomes visible again.
-  useEffect(() => {
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible' && gpsActive) {
-        acquireWakeLock();
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [gpsActive, acquireWakeLock]);
 
   // ── Battery Level (Chrome-only) ────────────────────────────────────────
   // Read once at provider mount + listen for changes. Falls back to null
@@ -307,6 +308,43 @@ export function GpsTrackingProvider({
     [employeeId],
   );
 
+  // ── Phase A: Visibility recovery ──────────────────────────────────────
+  // When the PWA returns from background (phone was locked, user switched
+  // apps), the watchPosition callback may have been suspended by the OS.
+  // We immediately:
+  //   1. Re-acquire the Wake Lock (sentinel auto-releases on hidden)
+  //   2. Force an immediate one-shot getCurrentPosition ping (bypass throttle)
+  //   3. Update lastSuccessRef so the watchdog doesn't fire a redundant recovery
+  // This gives the "return to app → instant GPS refresh" UX.
+  //
+  // NOTE: This effect MUST be declared after `sendPing` because it references
+  // it in the dependency array + callback. Moved here to fix the
+  // "Cannot access variable before it is declared" lint error.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && gpsActive) {
+        acquireWakeLock();
+        // Phase A: Immediate resync on visible. Bypass throttle + force ping.
+        if (gpsSupported && !previewModeRef.current) {
+          lastPingRef.current = 0;
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const { latitude, longitude, accuracy, heading, speed, altitude } = pos.coords;
+              lastSuccessRef.current = Date.now();
+              sendPing(latitude, longitude, accuracy ?? undefined, heading, speed, altitude ?? undefined);
+            },
+            () => {
+              // Silent — the watchdog will handle recovery if this fails.
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+          );
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [gpsActive, gpsSupported, acquireWakeLock, sendPing]);
+
   // ── captureOnce: one-shot position (triggers permission prompt) ───────
   const captureOnce = useCallback(async (): Promise<GpsCoords> => {
     if (!gpsSupported) return {};
@@ -336,12 +374,89 @@ export function GpsTrackingProvider({
     }
   }, [gpsSupported]);
 
-  // ── startTracking: continuous watchPosition + 15s fallback interval ───
-  // Uses navigator.geolocation.watchPosition for smooth real-time movement
-  // (Uber/Jobber-style live tracking). watchPosition fires whenever the
-  // device detects movement, giving sub-second updates on mobile. A 15s
-  // fallback interval ensures pings continue even if watchPosition stalls
-  // (e.g., device sleeps). Pings are throttled to max 1 per 5s in sendPing.
+  // ── Phase A: restartWatcher — tear down + recreate watchPosition ───────
+  // Called by the watchdog when it detects a stalled watcher (no successful
+  // GPS fix in 45s). Also called on error recovery (non-permission errors).
+  // Uses exponential backoff: 1st retry immediate, then 60s, 90s, 2min.
+  const restartWatcher = useCallback(() => {
+    if (!gpsSupported) return;
+    if (isRecoveringRef.current) return; // prevent concurrent restarts
+    isRecoveringRef.current = true;
+
+    try {
+      // Tear down existing watcher.
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+
+      // Recreate watchPosition with fresh options.
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          // SUCCESS — reset recovery state + update lastSuccessRef.
+          lastSuccessRef.current = Date.now();
+          retryCountRef.current = 0;
+          isRecoveringRef.current = false;
+          const { latitude, longitude, accuracy, heading, speed, altitude } = pos.coords;
+          sendPing(latitude, longitude, accuracy ?? undefined, heading, speed, altitude ?? undefined);
+        },
+        (err) => {
+          if (err.code === err.PERMISSION_DENIED) {
+            setLocationDenied(true);
+            setError('Location permission denied');
+            setGpsActive(false);
+            releaseWakeLock();
+            if (watchIdRef.current !== null) {
+              navigator.geolocation.clearWatch(watchIdRef.current);
+              watchIdRef.current = null;
+            }
+            isRecoveringRef.current = false;
+          } else {
+            // Non-permission error (timeout, position unavailable) — the
+            // watchdog will retry on the next cycle. Don't clear the watcher
+            // here; let it keep trying.
+            isRecoveringRef.current = false;
+          }
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
+      );
+    } catch {
+      isRecoveringRef.current = false;
+    }
+  }, [gpsSupported, sendPing, releaseWakeLock]);
+
+  // ── startTracking: continuous watchPosition + watchdog + 15s fallback ──
+  // Phase A architecture (3 layers):
+  //
+  //   Layer 1 — watchPosition (primary GPS source)
+  //     Fires on movement for smooth real-time tracking (Uber/Jobber-style).
+  //
+  //   Layer 2 — Watchdog (stall detection)
+  //     Checks every 15s: if no successful GPS fix in 45s, restart the
+  //     watcher. Uses exponential backoff for retries:
+  //       45s  → first recovery attempt
+  //       60s  → retry
+  //       90s  → retry
+  //       2min → retry (max interval)
+  //     Resets to 0 on any successful fix.
+  //
+  //   Layer 3 — 15s fallback interval
+  //     Ensures pings continue even if watchPosition stalls (device sleep,
+  //     poor GPS signal). This is the "keep-alive" — it supplements the
+  //     watcher but does NOT replace it.
+  //
+  //   Layer 4 — Visibility recovery (in the visibilitychange effect above)
+  //     When the PWA returns from background, immediately force a one-shot
+  //     ping + re-acquire Wake Lock.
+  //
+  //   Layer 5 — Wake Lock
+  //     Keeps the screen awake during active travel so the OS doesn't
+  //     throttle/suspend the GPS watcher.
+  //
+  // LIMITATION: A watchdog CANNOT defeat full OS suspension (iOS/Android
+  // backgrounding the PWA completely). When the OS suspends JavaScript,
+  // the watchdog itself is suspended. The visibilitychange handler (Layer 4)
+  // is the recovery path for that scenario — it fires when the user returns.
   const startTracking = useCallback(
     (jobId?: string) => {
       if (!gpsSupported) return;
@@ -354,8 +469,15 @@ export function GpsTrackingProvider({
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      if (watchdogRef.current) {
+        clearInterval(watchdogRef.current);
+        watchdogRef.current = null;
+      }
       jobIdRef.current = jobId ?? null;
       lastPingRef.current = 0; // reset throttle so first ping is immediate
+      lastSuccessRef.current = 0; // reset so watchdog doesn't immediately fire
+      retryCountRef.current = 0;
+      isRecoveringRef.current = false;
       setGpsActive(true);
       setLocationDenied(false);
       setError(null);
@@ -366,6 +488,7 @@ export function GpsTrackingProvider({
       // Immediate one-shot ping for instant feedback on the map.
       navigator.geolocation.getCurrentPosition(
         (pos) => {
+          lastSuccessRef.current = Date.now();
           const { latitude, longitude, accuracy, heading, speed, altitude } = pos.coords;
           sendPing(latitude, longitude, accuracy ?? undefined, heading, speed, altitude ?? undefined);
         },
@@ -376,13 +499,16 @@ export function GpsTrackingProvider({
             setGpsActive(false);
             releaseWakeLock();
           }
+          // Non-permission errors: the watchdog will handle recovery.
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
       );
 
-      // watchPosition: fires on movement — smooth live tracking.
+      // Layer 1: watchPosition — primary GPS source (fires on movement).
       watchIdRef.current = navigator.geolocation.watchPosition(
         (pos) => {
+          lastSuccessRef.current = Date.now();
+          retryCountRef.current = 0;
           const { latitude, longitude, accuracy, heading, speed, altitude } = pos.coords;
           sendPing(latitude, longitude, accuracy ?? undefined, heading, speed, altitude ?? undefined);
         },
@@ -400,21 +526,48 @@ export function GpsTrackingProvider({
               clearInterval(intervalRef.current);
               intervalRef.current = null;
             }
+            if (watchdogRef.current) {
+              clearInterval(watchdogRef.current);
+              watchdogRef.current = null;
+            }
           }
+          // Non-permission errors: watchdog will restart the watcher.
         },
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
       );
 
-      // 15s fallback interval: ensures pings continue even if watchPosition
-      // stalls (device sleep, poor GPS signal).
+      // Layer 2: Watchdog — checks every 15s for stalled watcher.
+      // If no successful GPS fix in 45s, restart the watcher with backoff.
+      watchdogRef.current = setInterval(() => {
+        const now = Date.now();
+        const lastSuccess = lastSuccessRef.current;
+        const staleMs = lastSuccess > 0 ? now - lastSuccess : Infinity;
+
+        // Backoff schedule: 45s, 60s, 90s, 120s (max)
+        const backoffThresholds = [45000, 60000, 90000, 120000];
+        const currentThreshold = backoffThresholds[
+          Math.min(retryCountRef.current, backoffThresholds.length - 1)
+        ];
+
+        if (staleMs > currentThreshold) {
+          retryCountRef.current++;
+          restartWatcher();
+        }
+      }, 15000);
+
+      // Layer 3: 15s fallback interval — keeps pings flowing even if
+      // watchPosition stalls. This is a supplement, NOT a replacement for
+      // the watchdog (which restarts the stalled watcher).
       intervalRef.current = setInterval(() => {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
+            lastSuccessRef.current = Date.now();
             const { latitude, longitude, accuracy, heading, speed, altitude } = pos.coords;
             sendPing(latitude, longitude, accuracy ?? undefined, heading, speed, altitude ?? undefined);
           },
           () => {
-            // Silent — watchPosition is the primary source
+            // Silent — watchPosition is the primary source, watchdog
+            // handles recovery.
           },
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
         );
@@ -426,10 +579,10 @@ export function GpsTrackingProvider({
         toast.info('GPS preview mode — no real pings sent');
       }
     },
-    [employeeId, gpsSupported, sendPing, acquireWakeLock, releaseWakeLock],
+    [employeeId, gpsSupported, sendPing, acquireWakeLock, releaseWakeLock, restartWatcher],
   );
 
-  // ── stopTracking: clear watch + interval + release Wake Lock ──────────
+  // ── stopTracking: clear watch + watchdog + interval + release Wake Lock ─
   const stopTracking = useCallback(() => {
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
@@ -439,7 +592,14 @@ export function GpsTrackingProvider({
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
+    // Phase A: clear the watchdog too so it doesn't fire after stop.
+    if (watchdogRef.current) {
+      clearInterval(watchdogRef.current);
+      watchdogRef.current = null;
+    }
     jobIdRef.current = null;
+    retryCountRef.current = 0;
+    isRecoveringRef.current = false;
     setGpsActive(false);
     releaseWakeLock();
   }, [releaseWakeLock]);
@@ -452,8 +612,12 @@ export function GpsTrackingProvider({
   const resync = useCallback(() => {
     if (!employeeId || !gpsSupported) return;
     lastPingRef.current = 0; // bypass throttle
+    // Phase A: reset lastSuccess on manual resync so the watchdog doesn't
+    // fire immediately after (the resync itself is a fresh GPS fix attempt).
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        lastSuccessRef.current = Date.now();
+        retryCountRef.current = 0;
         const { latitude, longitude, accuracy, heading, speed, altitude } = pos.coords;
         sendPing(latitude, longitude, accuracy ?? undefined, heading, speed, altitude ?? undefined);
         toast.success('Location re-synced');
@@ -482,6 +646,11 @@ export function GpsTrackingProvider({
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
+      }
+      // Phase A: clear the watchdog on unmount too.
+      if (watchdogRef.current) {
+        clearInterval(watchdogRef.current);
+        watchdogRef.current = null;
       }
       releaseWakeLock();
     };

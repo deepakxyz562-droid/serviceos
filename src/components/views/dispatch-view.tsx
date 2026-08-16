@@ -128,6 +128,10 @@ interface Employee {
   longitude?: number | null;
   avatar?: string;
   lastSeenAt?: string | null;
+  /** Phase B: Authoritative GPS telemetry timestamp from GPSLocation.capturedAt. */
+  lastGpsAt?: string | null;
+  /** Phase B: Derived GPS freshness — 'live' | 'stale' | 'offline'. */
+  gpsStatus?: 'live' | 'stale' | 'offline';
   currentJobId?: string | null;
   onLeaveUntil?: string | null;
   teamId?: string | null;
@@ -309,7 +313,23 @@ function hasGps(e: Employee): boolean {
     !Number.isNaN(e.latitude) && !Number.isNaN(e.longitude);
 }
 
+/**
+ * Phase B: GPS freshness helpers.
+ *
+ * These now prefer `gpsStatus` (derived from GPSLocation.capturedAt by the
+ * server) when available, falling back to the legacy lastSeenAt-based
+ * computation for employees that haven't been enriched yet (e.g., loaded
+ * from the cached /api/employees endpoint instead of /positions).
+ *
+ * This is the key architectural change: "employee presence" (lastSeenAt)
+ * and "GPS telemetry freshness" (gpsStatus / lastGpsAt) are now separate.
+ * A technician who is logged in but whose GPS watcher died will show as
+ * 'offline' on the map even though their lastSeenAt is recent.
+ */
 function isStaleGps(e: Employee): boolean {
+  // Prefer server-derived gpsStatus when available.
+  if (e.gpsStatus) return e.gpsStatus !== 'live';
+  // Fallback for non-enriched employees (from /api/employees cache).
   if (!e.lastSeenAt) return true;
   const ts = new Date(e.lastSeenAt).getTime();
   if (Number.isNaN(ts)) return true;
@@ -317,10 +337,21 @@ function isStaleGps(e: Employee): boolean {
 }
 
 function isOfflineEmp(e: Employee): boolean {
+  // Prefer server-derived gpsStatus when available.
+  if (e.gpsStatus) return e.gpsStatus === 'offline';
+  // Fallback for non-enriched employees (from /api/employees cache).
   if (!e.lastSeenAt) return true;
   const ts = new Date(e.lastSeenAt).getTime();
   if (Number.isNaN(ts)) return true;
   return Date.now() - ts > OFFLINE_MS;
+}
+
+/**
+ * Phase B: Return the most authoritative GPS timestamp for display.
+ * Prefers lastGpsAt (from GPSLocation.capturedAt) over lastSeenAt.
+ */
+function gpsTimestamp(e: Employee): string | null {
+  return e.lastGpsAt ?? e.lastSeenAt ?? null;
 }
 
 function isIdleTech(e: Employee, activeJobCount: number): boolean {
@@ -402,6 +433,10 @@ export function DispatchView() {
         lat: number;
         lng: number;
         lastSeenAt: string | null;
+        /** Phase B: Authoritative GPS telemetry timestamp. */
+        lastGpsAt: string | null;
+        /** Phase B: Derived GPS freshness. */
+        gpsStatus: 'live' | 'stale' | 'offline';
         status?: string;
         currentJobId?: string | null;
       }
@@ -434,10 +469,14 @@ export function DispatchView() {
       // metadata (status / currentJobId), refreshed by the 5s poll's
       // debounced flush. This prevents the flicker caused by rebuilding
       // Leaflet markers on every GPS ping.
+      const rtCapturedAt = data?.capturedAt ?? new Date().toISOString();
       positionsRef.current.set(empId, {
         lat,
         lng,
-        lastSeenAt: data?.capturedAt ?? new Date().toISOString(),
+        lastSeenAt: rtCapturedAt,
+        // Phase B: Realtime ping = authoritative GPS telemetry is fresh.
+        lastGpsAt: rtCapturedAt,
+        gpsStatus: 'live',
       });
     },
   });
@@ -562,6 +601,12 @@ export function DispatchView() {
           const newLat = typeof p.latitude === 'number' ? p.latitude : null;
           const newLng = typeof p.longitude === 'number' ? p.longitude : null;
           const newLast = p.lastSeenAt ?? null;
+          // Phase B: Read authoritative GPS telemetry fields from the
+          // positions endpoint. lastGpsAt comes from GPSLocation.capturedAt
+          // (the latest actual GPS coordinate), NOT from Employee.lastSeenAt
+          // (which can be updated by non-GPS flows).
+          const newLastGps = (p.lastGpsAt ?? null) as string | null;
+          const newGpsStatus = (p.gpsStatus ?? 'offline') as 'live' | 'stale' | 'offline';
           const newStatus = typeof p.status === 'string' ? p.status : undefined;
           const newJobId = p.currentJobId ?? undefined;
 
@@ -602,6 +647,9 @@ export function DispatchView() {
             lat: newLat ?? existing?.lat ?? NaN,
             lng: newLng ?? existing?.lng ?? NaN,
             lastSeenAt: newLast ?? existing?.lastSeenAt ?? null,
+            // Phase B: Store authoritative GPS telemetry for the Inspector.
+            lastGpsAt: newLastGps ?? existing?.lastGpsAt ?? null,
+            gpsStatus: newGpsStatus,
             status: newStatus ?? existing?.status,
             currentJobId: newJobId ?? existing?.currentJobId,
           });
@@ -624,6 +672,11 @@ export function DispatchView() {
         // updates go through handleGpsPing() (imperative) — React state
         // is NOT the transport for GPS coordinates. This prevents the
         // useEffect([employees]) → rerenderTechMarkers() flicker loop.
+        //
+        // Phase B: We also flush gpsStatus changes here so the Inspector
+        // badge updates when a tech transitions live→stale→offline. The
+        // debounce is acceptable because gpsStatus is derived from
+        // lastGpsAt which changes slowly (30s+ for a status transition).
         if (metaChanged && now - lastMetaFlushRef.current > 30_000) {
           lastMetaFlushRef.current = now;
           setEmployees((prev) => {
@@ -638,6 +691,9 @@ export function DispatchView() {
                   status: typeof p.status === 'string' ? p.status : existing.status,
                   currentJobId: p.currentJobId ?? existing.currentJobId ?? null,
                   lastSeenAt: p.lastSeenAt ?? existing.lastSeenAt ?? null,
+                  // Phase B: propagate authoritative GPS telemetry.
+                  lastGpsAt: (p.lastGpsAt ?? null) as string | null ?? existing.lastGpsAt ?? null,
+                  gpsStatus: (p.gpsStatus ?? 'offline') as 'live' | 'stale' | 'offline',
                 });
               }
             }
@@ -1263,7 +1319,10 @@ export function DispatchView() {
                   <div className="flex items-center gap-1">
                     <MapPin className="size-3 text-muted-foreground" />
                     <span className="text-muted-foreground">Last:</span>
-                    <span className="font-medium">{timeAgo(e.lastSeenAt)}</span>
+                    {/* Phase B: Use gpsTimestamp (lastGpsAt ?? lastSeenAt) for
+                         the "Last:" display. This shows the true GPS telemetry
+                         age, not the employee-presence age. */}
+                    <span className="font-medium">{timeAgo(gpsTimestamp(e))}</span>
                   </div>
                   {distKm !== null && (
                     <div className="flex items-center gap-1">
@@ -1285,6 +1344,19 @@ export function DispatchView() {
                     <span className="font-mono text-[9px]">{e.latitude!.toFixed(3)}, {e.longitude!.toFixed(3)}</span>
                   </div>
                 </div>
+                {/* Phase B: Contextual hint based on GPS freshness.
+                     Live    → no hint (healthy)
+                     Stale   → "Trying to reconnect…" (watcher may have stalled)
+                     Offline → "Last known location" (marker is stale) */}
+                {isOfflineEmp(e) ? (
+                  <p className="text-[10px] text-red-600 dark:text-red-400 italic">
+                    Showing last known location. GPS is offline.
+                  </p>
+                ) : isStaleGps(e) ? (
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400 italic">
+                    Trying to reconnect…
+                  </p>
+                ) : null}
                 {/* FIX F: Explicit recenter button. Frames the map on this tech
                      + their assigned job destination. The dispatcher clicks
                      this after the PWA tech hits "Resync" to see where they
