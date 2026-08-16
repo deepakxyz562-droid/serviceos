@@ -894,7 +894,7 @@ export function DispatchView() {
     setSmartMatchLoading(true);
     setAssignCandidates([]);
     try {
-      const res = await fetch('/api/dispatch/smart?XTransformPort=3000', {
+      const res = await fetch(apiUrl('/api/dispatch/smart'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId: job.id, autoAssign: false }),
@@ -917,7 +917,7 @@ export function DispatchView() {
     if (!employee) return;
     setAssignLoading(true);
     try {
-      const res = await fetch(`/api/jobs/${jobId}?XTransformPort=3000`, {
+      const res = await fetch(apiUrl(`/api/jobs/${jobId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -943,7 +943,7 @@ export function DispatchView() {
 
   const handleStartJob = useCallback(async (job: Job) => {
     try {
-      const res = await fetch(`/api/jobs/${job.id}?XTransformPort=3000`, {
+      const res = await fetch(apiUrl(`/api/jobs/${job.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: job.id, status: 'in_progress' }),
@@ -969,7 +969,7 @@ export function DispatchView() {
       let assigned = 0;
       for (const job of pendingJobs) {
         try {
-          const res = await fetch('/api/dispatch/smart?XTransformPort=3000', {
+          const res = await fetch(apiUrl('/api/dispatch/smart'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ jobId: job.id, autoAssign: true }),

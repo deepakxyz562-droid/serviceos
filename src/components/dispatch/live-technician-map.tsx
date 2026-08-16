@@ -45,6 +45,7 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { fetchOsmrRoute } from '@/lib/osrm-route';
+import { apiUrl } from '@/lib/api';
 
 // Fix default Leaflet asset URLs to prevent broken image cross icons [x]
 if (typeof window !== 'undefined') {
@@ -1369,7 +1370,7 @@ export default function LiveTechnicianMap({
       if (age < ttl) return;
     }
     try {
-      const res = await fetch(`/api/jobs/${jobId}/route-history?XTransformPort=3000`);
+      const res = await fetch(apiUrl(`/api/jobs/${jobId}/route-history`));
       if (!res.ok) return;
       const data = await res.json();
       // Guard: if the job was removed while we were fetching, drop the result.
