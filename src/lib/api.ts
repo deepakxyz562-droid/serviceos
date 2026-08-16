@@ -13,8 +13,21 @@
 
 const API_PORT = '3000';
 
+/**
+ * Append ?XTransformPort=3000 to relative API URLs — but ONLY in non-production
+ * environments.
+ *
+ * In the sandbox/preview, the Caddy gateway requires this query param to route
+ * requests to the correct backend port (3000 = Next.js app).
+ *
+ * In production (fieseros.com), Caddy's default reverse_proxy already routes
+ * to localhost:3000, so the param is a no-op. Worse, it pollutes HTTP cache
+ * keys (different query string = different cache entry) and adds noise to the
+ * browser Network panel. So we strip it entirely in production.
+ */
 function addTransformPort(url: string): string {
   if (!url.startsWith('/')) return url; // only relative URLs
+  if (process.env.NODE_ENV === 'production') return url; // Caddy handles routing
   const separator = url.includes('?') ? '&' : '?';
   return `${url}${separator}XTransformPort=${API_PORT}`;
 }

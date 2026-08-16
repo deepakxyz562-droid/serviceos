@@ -75,6 +75,7 @@ export async function GET() {
       where,
       select: {
         id: true,
+        email: true,
         latitude: true,
         longitude: true,
         lastSeenAt: true,
@@ -84,11 +85,15 @@ export async function GET() {
       take: 200,
     });
 
-    // Diagnostic log — visible in Vercel function logs. Helps confirm the
-    // endpoint is executing, the auth scope is correct, and rows are returned
-    // with fresh lastSeenAt values. Remove once live tracking is confirmed.
-    const summary = rows.map((r: { id: string; lastSeenAt: string | null; latitude: unknown; longitude: unknown }) => ({
+    // FIX C: Diagnostic log — includes email (not just id.slice(-8)) so the
+    // dispatcher can self-verify which employees are in scope. Previously
+    // only the last 8 chars of the cuid were logged, which made it look like
+    // "xyz" was missing from the results when it was actually present as
+    // "hfM08RbT" (the tail of I58eXzN1qCZMHo3RFhfM08RbT). Keeping this log
+    // until live tracking is confirmed stable in production.
+    const summary = rows.map((r: { id: string; email: string | null; lastSeenAt: string | null; latitude: unknown; longitude: unknown }) => ({
       id: r.id.slice(-8),
+      email: r.email ?? '—',
       last: r.lastSeenAt ? Math.round((Date.now() - new Date(r.lastSeenAt).getTime()) / 1000) + 's' : 'null',
       hasCoords: r.latitude != null && r.longitude != null,
     }));

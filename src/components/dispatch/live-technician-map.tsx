@@ -114,6 +114,21 @@ export interface LiveTechnicianMapController {
   }) => void;
   /** Recenter the map on all technicians (and job pins if present). */
   recenter: () => void;
+  /**
+   * FIX F: Recenter/reframe the map on a SPECIFIC technician.
+   *
+   * Called when the dispatcher explicitly wants to follow a tech (e.g. after
+   * the PWA tech hits "Resync" and the dispatcher wants to see where they
+   * are). This is NOT called on every GPS ping — only on explicit user
+   * action. Normal GPS pings just glide the marker; this frames the map.
+   *
+   * Logic:
+   *   - Tech has coords AND assigned job has coords → flyToBounds([tech, job])
+   *     (frames the whole trip — the Uber view)
+   *   - Only tech has coords → flyTo(tech, 15) (centers on the vehicle)
+   *   - No coords → no-op (can't recenter on a tech without GPS)
+   */
+  recenterOnTech: (employeeId: string) => void;
   /** Toggle between streets and satellite basemap. */
   setLayer: (layer: 'streets' | 'satellite') => void;
   /** Force a refresh of all marker icons (used when selection changes). */
@@ -676,6 +691,14 @@ export default function LiveTechnicianMap({
   // Start-point markers for active routes, keyed by jobId. Cleared on redraw.
   const routeStartMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const animStateRef = useRef<Map<string, AnimState>>(new Map());
+  // FIX A: Per-marker signature cache. Stores a cheap hash of the fields that
+  // affect the marker's visual appearance (status, selected, telemetry ts,
+  // name, currentJobId). rerenderTechMarkers() compares the current signature
+  // against this; if unchanged, it skips setIcon()/setPopupContent() — which
+  // destroy and rebuild the DivIcon DOM, causing the visible flicker. Without
+  // this guard, every useEffect([employees]) cycle rebuilds every marker's
+  // icon even when nothing visually changed.
+  const markerSigRef = useRef<Map<string, string>>(new Map());
   const tileLayersRef = useRef<{ streets: L.TileLayer | null; satellite: L.TileLayer | null }>({
     streets: null,
     satellite: null,
@@ -845,6 +868,7 @@ export default function LiveTechnicianMap({
       if (!currentIds.has(id)) {
         marker.remove();
         techMarkersRef.current.delete(id);
+        markerSigRef.current.delete(id);
         const circle = accuracyCirclesRef.current.get(id);
         if (circle) {
           circle.remove();
@@ -864,28 +888,69 @@ export default function LiveTechnicianMap({
       const color = getMarkerColor(tech);
       const isFollowed = selectedTechIdRef.current === tech.id;
       const existingState = animStateRef.current.get(tech.id);
-      const icon = buildTechDivIcon(
-        tech,
-        color,
-        isFollowed,
-        existingState?.telemetry ?? null,
-        // B3: compute ETA from tech's current position + assigned job.
-        isValidCoord(tech.latitude, tech.longitude)
-          ? computeEtaMinutes(tech.latitude as number, tech.longitude as number, jobsRef.current, tech.currentJobId)
-          : null,
-      );
+      const telemetry = existingState?.telemetry ?? null;
+
+      // FIX A: Compute a cheap signature of everything that affects the
+      // marker's visual appearance. If it hasn't changed since the last
+      // render, skip setIcon()/setPopupContent() entirely — those calls
+      // destroy and rebuild the DivIcon DOM, which is the primary cause
+      // of the map flicker.
+      const sig = [
+        tech.status,
+        isFollowed ? '1' : '0',
+        telemetry?.capturedAt ?? 'none',
+        tech.name,
+        tech.currentJobId ?? 'none',
+        Math.round((tech.latitude as number) * 1e6),
+        Math.round((tech.longitude as number) * 1e6),
+      ].join('|');
+
       const existing = techMarkersRef.current.get(tech.id);
+      const prevSig = markerSigRef.current.get(tech.id);
+      const sigChanged = sig !== prevSig;
+
       if (existing) {
-        existing.setLatLng([tech.latitude as number, tech.longitude as number]);
-        existing.setIcon(icon);
-        existing.setPopupContent(buildTechPopupHtml(tech, color, existingState?.telemetry ?? null));
-        existing.setZIndexOffset(color === COLOR_AVAILABLE || isFollowed ? 500 : 0);
+        // FIX A: Only call setLatLng() when a glide is NOT in flight.
+        // During a rAF glide, the marker is at an interpolated position
+        // between the previous and target DB positions. Calling setLatLng()
+        // with the raw DB position would snap the marker, interrupting
+        // the smooth animation and causing a visible stutter.
+        const gliding = existingState?.rafId !== null && existingState?.rafId !== undefined;
+        if (!gliding) {
+          existing.setLatLng([tech.latitude as number, tech.longitude as number]);
+        }
+        // FIX A: Only rebuild the icon/popup when the signature actually
+        // changed. This is the key idempotency guard.
+        if (sigChanged) {
+          const icon = buildTechDivIcon(
+            tech,
+            color,
+            isFollowed,
+            telemetry,
+            isValidCoord(tech.latitude, tech.longitude)
+              ? computeEtaMinutes(tech.latitude as number, tech.longitude as number, jobsRef.current, tech.currentJobId)
+              : null,
+          );
+          existing.setIcon(icon);
+          existing.setPopupContent(buildTechPopupHtml(tech, color, telemetry));
+          existing.setZIndexOffset(color === COLOR_AVAILABLE || isFollowed ? 500 : 0);
+          markerSigRef.current.set(tech.id, sig);
+        }
       } else {
+        const icon = buildTechDivIcon(
+          tech,
+          color,
+          isFollowed,
+          telemetry,
+          isValidCoord(tech.latitude, tech.longitude)
+            ? computeEtaMinutes(tech.latitude as number, tech.longitude as number, jobsRef.current, tech.currentJobId)
+            : null,
+        );
         const marker = L.marker([tech.latitude as number, tech.longitude as number], {
           icon,
           zIndexOffset: color === COLOR_AVAILABLE || isFollowed ? 500 : 0,
         });
-        marker.bindPopup(buildTechPopupHtml(tech, color, existingState?.telemetry ?? null), {
+        marker.bindPopup(buildTechPopupHtml(tech, color, telemetry), {
           closeButton: true,
           autoPan: true,
           maxWidth: 280,
@@ -896,6 +961,7 @@ export default function LiveTechnicianMap({
         });
         marker.addTo(map);
         techMarkersRef.current.set(tech.id, marker);
+        markerSigRef.current.set(tech.id, sig);
         animStateRef.current.set(tech.id, {
           fromLat: tech.latitude as number,
           fromLng: tech.longitude as number,
@@ -911,6 +977,9 @@ export default function LiveTechnicianMap({
       }
     });
 
+    // FIX A: Only fitBounds when route lines haven't been drawn yet (initial
+    // framing). Previously this ran on every rerenderTechMarkers call, which
+    // could fight the user's manual pan/zoom on every employees state change.
     if (techMarkersRef.current.size > 0 && routeLinesByJobRef.current.size === 0) {
       const bounds: L.LatLngExpression[] = techsWithCoords.map(
         (t) => [t.latitude, t.longitude] as [number, number],
@@ -1790,6 +1859,53 @@ export default function LiveTechnicianMap({
           map.setView(points[0], DEFAULT_ZOOM);
         } else {
           map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+        }
+      },
+      // FIX F: Explicit recenter on a specific technician. Called by the
+      // dispatch inspector's "Recenter" button — NOT on every GPS ping.
+      recenterOnTech: (employeeId: string) => {
+        const map = mapRef.current;
+        if (!map) return;
+
+        // Prefer the live marker's current displayed position (which may be
+        // mid-glide) over the DB-stored position — gives a more accurate
+        // frame of where the tech actually is right now.
+        const liveMarker = techMarkersRef.current.get(employeeId);
+        let techLat: number | null = null;
+        let techLng: number | null = null;
+        if (liveMarker) {
+          const ll = liveMarker.getLatLng();
+          techLat = ll.lat;
+          techLng = ll.lng;
+        } else {
+          const tech = employeesRef.current.find((t) => t.id === employeeId);
+          if (tech && isValidCoord(tech.latitude, tech.longitude)) {
+            techLat = tech.latitude;
+            techLng = tech.longitude as number;
+          }
+        }
+
+        if (techLat == null || techLng == null) return;
+
+        // Find assigned jobs with coords to frame the full trip.
+        const assignedJobs = jobsRef.current.filter(
+          (j) =>
+            (j.assigneeId === employeeId || j.id === employeesRef.current.find((t) => t.id === employeeId)?.currentJobId) &&
+            isValidCoord(j.latitude, j.longitude),
+        );
+
+        try {
+          if (assignedJobs.length > 0) {
+            const bounds = L.latLngBounds([
+              [techLat, techLng],
+              ...assignedJobs.map((j) => [j.latitude, j.longitude] as [number, number]),
+            ]);
+            map.flyToBounds(bounds, { padding: [80, 80], maxZoom: 16, duration: 1.4 });
+          } else {
+            map.flyTo([techLat, techLng], 15, { duration: 1.2 });
+          }
+        } catch {
+          // ignore bounds errors (e.g. identical points)
         }
       },
       setLayer: (layer) => {

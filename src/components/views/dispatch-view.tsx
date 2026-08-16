@@ -65,6 +65,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { toast } from 'sonner';
 import { useRealtime } from '@/hooks/use-realtime';
 import type { LiveTechnicianMapController } from '@/components/dispatch/live-technician-map';
+import { apiUrl } from '@/lib/api';
 import dynamic from 'next/dynamic';
 
 const LiveTechnicianMap = dynamic(
@@ -75,6 +76,28 @@ const LiveTechnicianMap = dynamic(
     </div>
   ) },
 );
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Haversine distance in meters between two lat/lng points.
+ * Used by the position poll to decide whether a technician has moved enough
+ * to warrant feeding the new position into the map's glide animation.
+ * Threshold: < 5m = noise (GPS jitter), skip. > 5m = real movement, glide.
+ */
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/** Movement threshold (meters). Below this = GPS noise, no glide triggered. */
+const MOVE_THRESHOLD_M = 5;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -360,6 +383,32 @@ export function DispatchView() {
 
   const mapControllerRef = useRef<LiveTechnicianMapController | null>(null);
 
+  // ─── Live position ref (FIX A+B) ────────────────────────────────────
+  //
+  // GPS positions are held in this ref, NOT in React state. This is the
+  // critical fix for the map flicker: previously every 5s poll called
+  // setEmployees() with a new array, which triggered
+  // LiveTechnicianMap's useEffect([employees]) → rerenderTechMarkers() →
+  // setIcon() + setLatLng() on every marker — rebuilding the DivIcon DOM
+  // and interrupting in-flight rAF glides every 5 seconds.
+  //
+  // Now positions flow through this ref → handleGpsPing() (imperative).
+  // React state (employees) is only flushed for non-position metadata
+  // (status / currentJobId changes), debounced to 30s.
+  const positionsRef = useRef<
+    Map<
+      string,
+      {
+        lat: number;
+        lng: number;
+        lastSeenAt: string | null;
+        status?: string;
+        currentJobId?: string | null;
+      }
+    >
+  >(new Map());
+  const lastMetaFlushRef = useRef<number>(0);
+
   // ─── Realtime GPS ───────────────────────────────────────────────────
   const { connected: realtimeConnected } = useRealtime({
     enabled: true,
@@ -379,19 +428,17 @@ export function DispatchView() {
         batteryLevel: data?.batteryLevel ?? null,
         capturedAt: data?.capturedAt,
       });
-      // Cheap in-place update of local employee state.
-      setEmployees((prev) =>
-        prev.map((e) =>
-          e.id === empId
-            ? {
-                ...e,
-                latitude: lat,
-                longitude: lng,
-                lastSeenAt: data?.capturedAt ?? new Date().toISOString(),
-              }
-            : e,
-        ),
-      );
+      // FIX A: Update the positions ref (imperative) — do NOT call
+      // setEmployees(). Position updates go through handleGpsPing() above,
+      // which drives the rAF glide directly. React state is only for
+      // metadata (status / currentJobId), refreshed by the 5s poll's
+      // debounced flush. This prevents the flicker caused by rebuilding
+      // Leaflet markers on every GPS ping.
+      positionsRef.current.set(empId, {
+        lat,
+        lng,
+        lastSeenAt: data?.capturedAt ?? new Date().toISOString(),
+      });
     },
   });
 
@@ -405,7 +452,7 @@ export function DispatchView() {
       // src/lib/job-lifecycle.ts are: pending, assigned, accepted, travelling,
       // arrived, working, paused.
       const params = new URLSearchParams({ status: 'pending,assigned,accepted,travelling,arrived,working,paused' });
-      const res = await fetch(`/api/jobs?XTransformPort=3000&${params.toString()}`);
+      const res = await fetch(apiUrl(`/api/jobs?${params.toString()}`));
       if (res.ok) {
         const data = await res.json();
         setJobs(data.jobs ?? (Array.isArray(data) ? data : []));
@@ -415,7 +462,7 @@ export function DispatchView() {
 
   const fetchEmployees = useCallback(async () => {
     try {
-      const res = await fetch('/api/employees?XTransformPort=3000');
+      const res = await fetch(apiUrl('/api/employees'));
       if (res.ok) {
         const data = await res.json();
         setEmployees(Array.isArray(data) ? data : []);
@@ -425,7 +472,7 @@ export function DispatchView() {
 
   const fetchTeams = useCallback(async () => {
     try {
-      const res = await fetch('/api/teams?XTransformPort=3000');
+      const res = await fetch(apiUrl('/api/teams'));
       if (res.ok) {
         const data = await res.json();
         setTeams(Array.isArray(data) ? data : []);
@@ -448,20 +495,32 @@ export function DispatchView() {
     return () => clearInterval(interval);
   }, [fetchJobs]);
 
-  // ─── Live position polling (Vercel-compatible realtime replacement) ──
+  // ─── Live position polling (ref-based, no React state churn) ────────
   //
-  // The socket.io realtime mini-service cannot run on Vercel serverless, so
-  // `useRealtime`'s `onGpsPing` callback never fires in production. Without
-  // this poll, the technician marker on the Live Dispatch map freezes at
-  // whatever position was loaded on page mount — even though the employee's
-  // PWA is actively transmitting GPS pings to Supabase every few seconds.
+  // FIX A+B (2026-08-16): Previously this poll called setEmployees() on
+  // every 5s cycle, creating a new array reference that triggered
+  // LiveTechnicianMap's useEffect([employees]) → rerenderTechMarkers() →
+  // setIcon() + setLatLng() on every technician marker. That destroyed
+  // and rebuilt the DivIcon DOM every 5s, causing the visible flicker
+  // even when no technician had moved.
   //
-  // This polls the lightweight `/api/employees/positions` endpoint (no cache,
-  // 6 scalar fields, no joins) every 5s. For every employee whose lat/lng
-  // changed since the last poll, it feeds the new position into the map
-  // controller's `handleGpsPing(...)` — which triggers the existing glide
-  // animation, giving an Uber-like "vehicle moving" feel. It also updates
-  // `lastSeenAt` / `status` / `currentJobId` so presence badges refresh.
+  // It also used `!==` equality for move detection, which fired phantom
+  // "moved" pings whenever an employee was missing from the cached
+  // /api/employees list (existing === undefined → undefined !== 25.60 →
+  // "moved" every cycle forever, because the `if (existing)` guard
+  // prevented the employee from ever being added).
+  //
+  // NOW:
+  //   1. Positions are held in positionsRef (imperative — no React state).
+  //   2. Move detection uses haversine distance > 5m (eliminates both
+  //      float noise AND the missing-employee phantom ping).
+  //   3. handleGpsPing() is called ONLY when a tech moves > 5m.
+  //   4. React state (employees) is flushed ONLY for non-position
+  //      metadata (status / currentJobId), debounced to 30s, so roster
+  //      badges refresh without re-rendering the map.
+  //   5. The ref is always updated (no `if (existing)` guard) so polled
+  //      employees that aren't in the cached /api/employees list still
+  //      get tracked.
   //
   // 5s is the sweet spot: fast enough to feel live (a vehicle at 40 km/h
   // moves ~55m in 5s — clearly visible), slow enough to stay well within
@@ -473,10 +532,7 @@ export function DispatchView() {
     const pollPositions = async () => {
       if (typeof document !== 'undefined' && document.hidden) return;
       try {
-        const res = await fetch('/api/employees/positions?XTransformPort=3000');
-        // Diagnostic logging — visible in browser DevTools console. Helps
-        // pinpoint whether the polling is running, what HTTP status comes
-        // back, and how many rows are returned. Remove once confirmed.
+        const res = await fetch(apiUrl('/api/employees/positions'));
         if (!res.ok) {
           console.warn('[dispatch-poll] positions endpoint returned', res.status, res.statusText);
           return;
@@ -487,7 +543,7 @@ export function DispatchView() {
           return;
         }
 
-        // Log a compact summary so the user can verify fresh data is arriving.
+        // Compact diagnostic — includes last-8 of id + lastSeenAt age.
         const sample = data.slice(0, 3).map((p: { id: string; lastSeenAt: string | null; latitude: unknown; longitude: unknown }) => ({
           id: p.id?.slice(-8),
           last: p.lastSeenAt ? Math.round((Date.now() - new Date(p.lastSeenAt).getTime()) / 1000) + 's' : 'null',
@@ -495,28 +551,36 @@ export function DispatchView() {
         }));
         console.log('[dispatch-poll] got', data.length, 'positions', JSON.stringify(sample));
 
-        // Snapshot the current positions so we can detect movement without
-        // depending on stale closure state.
-        setEmployees((prev) => {
-          const byId = new Map(prev.map((e) => [e.id, e]));
-          let movedCount = 0;
-          for (const p of data) {
-            const id = p?.id;
-            if (typeof id !== 'string') continue;
-            const existing = byId.get(id);
-            const newLat = typeof p.latitude === 'number' ? p.latitude : null;
-            const newLng = typeof p.longitude === 'number' ? p.longitude : null;
-            const newLast = p.lastSeenAt ?? null;
+        const ref = positionsRef.current;
+        let movedCount = 0;
+        let metaChanged = false;
+        const now = Date.now();
 
-            // Feed moved positions into the map controller for glide animation.
-            // Only fire when we actually have coords AND they differ from the
-            // last known position (avoids spurious re-renders for stationary
-            // technicians).
-            if (
-              newLat != null &&
-              newLng != null &&
-              (existing?.latitude !== newLat || existing?.longitude !== newLng)
-            ) {
+        for (const p of data) {
+          const id = p?.id;
+          if (typeof id !== 'string') continue;
+          const newLat = typeof p.latitude === 'number' ? p.latitude : null;
+          const newLng = typeof p.longitude === 'number' ? p.longitude : null;
+          const newLast = p.lastSeenAt ?? null;
+          const newStatus = typeof p.status === 'string' ? p.status : undefined;
+          const newJobId = p.currentJobId ?? undefined;
+
+          const existing = ref.get(id);
+
+          // FIX B: Haversine distance > 5m instead of `!==` equality.
+          // - Eliminates phantom pings from float noise.
+          // - Eliminates phantom pings from employees missing from the
+          //   cached /api/employees list (existing === undefined →
+          //   distM = Infinity → moved ONCE, then ref is populated and
+          //   subsequent pings are quiet).
+          if (newLat != null && newLng != null) {
+            const prevLat = existing?.lat;
+            const prevLng = existing?.lng;
+            const distM =
+              prevLat != null && prevLng != null && !isNaN(prevLat) && !isNaN(prevLng)
+                ? haversineMeters(prevLat, prevLng, newLat, newLng)
+                : Infinity;
+            if (distM > MOVE_THRESHOLD_M) {
               movedCount++;
               mapControllerRef.current?.handleGpsPing({
                 employeeId: id,
@@ -529,23 +593,57 @@ export function DispatchView() {
                 capturedAt: newLast ?? new Date().toISOString(),
               });
             }
+          }
 
-            if (existing) {
-              byId.set(id, {
-                ...existing,
-                latitude: newLat ?? existing.latitude,
-                longitude: newLng ?? existing.longitude,
-                lastSeenAt: newLast ?? existing.lastSeenAt,
-                status: typeof p.status === 'string' ? p.status : existing.status,
-                currentJobId: p.currentJobId ?? existing.currentJobId ?? null,
-              });
+          // Always update the ref — no `if (existing)` guard. This fixes
+          // the bug where polled-but-uncached employees were never added,
+          // causing infinite phantom "moved" pings.
+          ref.set(id, {
+            lat: newLat ?? existing?.lat ?? NaN,
+            lng: newLng ?? existing?.lng ?? NaN,
+            lastSeenAt: newLast ?? existing?.lastSeenAt ?? null,
+            status: newStatus ?? existing?.status,
+            currentJobId: newJobId ?? existing?.currentJobId,
+          });
+
+          // Detect non-position metadata changes for the debounced flush.
+          if (
+            (newStatus && newStatus !== existing?.status) ||
+            (newJobId !== undefined && newJobId !== existing?.currentJobId)
+          ) {
+            metaChanged = true;
+          }
+        }
+
+        if (movedCount > 0) {
+          console.log('[dispatch-poll] moved', movedCount, 'technician(s) — fed to map glide');
+        }
+
+        // FIX A: Only flush to React state when metadata (status /
+        // currentJobId) actually changed, AND debounce to 30s. Position
+        // updates go through handleGpsPing() (imperative) — React state
+        // is NOT the transport for GPS coordinates. This prevents the
+        // useEffect([employees]) → rerenderTechMarkers() flicker loop.
+        if (metaChanged && now - lastMetaFlushRef.current > 30_000) {
+          lastMetaFlushRef.current = now;
+          setEmployees((prev) => {
+            const byId = new Map(prev.map((e) => [e.id, e]));
+            for (const p of data) {
+              const id = p?.id;
+              if (typeof id !== 'string') continue;
+              const existing = byId.get(id);
+              if (existing) {
+                byId.set(id, {
+                  ...existing,
+                  status: typeof p.status === 'string' ? p.status : existing.status,
+                  currentJobId: p.currentJobId ?? existing.currentJobId ?? null,
+                  lastSeenAt: p.lastSeenAt ?? existing.lastSeenAt ?? null,
+                });
+              }
             }
-          }
-          if (movedCount > 0) {
-            console.log('[dispatch-poll] moved', movedCount, 'technician(s) — fed to map glide');
-          }
-          return Array.from(byId.values());
-        });
+            return Array.from(byId.values());
+          });
+        }
       } catch (e) {
         console.error('[dispatch-poll] positions fetch failed:', e);
       }
@@ -893,6 +991,15 @@ export function DispatchView() {
   }, [pendingJobs, refreshAll]);
 
   const handleRecenter = useCallback(() => mapControllerRef.current?.recenter(), []);
+
+  // FIX F: Explicit recenter on the selected technician. Called by the
+  // "Recenter" button in the inspector's GPS Tracking card — NOT on every
+  // GPS ping. Normal pings just glide the marker; this frames the map on
+  // the tech + their destination (Uber view). The dispatcher clicks this
+  // after the PWA tech hits "Resync" to see where they are.
+  const handleRecenterOnTech = useCallback((techId: string) => {
+    mapControllerRef.current?.recenterOnTech(techId);
+  }, []);
   const handleToggleLayer = useCallback(() => {
     setMapLayer((prev) => {
       const next = prev === 'streets' ? 'satellite' : 'streets';
@@ -1151,6 +1258,7 @@ export function DispatchView() {
                 )}
               </div>
               {gps ? (
+                <>
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
                   <div className="flex items-center gap-1">
                     <MapPin className="size-3 text-muted-foreground" />
@@ -1177,6 +1285,21 @@ export function DispatchView() {
                     <span className="font-mono text-[9px]">{e.latitude!.toFixed(3)}, {e.longitude!.toFixed(3)}</span>
                   </div>
                 </div>
+                {/* FIX F: Explicit recenter button. Frames the map on this tech
+                     + their assigned job destination. The dispatcher clicks
+                     this after the PWA tech hits "Resync" to see where they
+                     are. NOT triggered on every GPS ping — only on explicit
+                     user action. */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-7 text-[10px]"
+                  onClick={() => handleRecenterOnTech(e.id)}
+                >
+                  <Locate className="size-3 mr-1" />
+                  Recenter on {e.name.split(' ')[0]}
+                </Button>
+                </>
               ) : (
                 <p className="text-[11px] text-muted-foreground">
                   This technician hasn&apos;t sent GPS coordinates yet. Location permission may be needed in the mobile app.
