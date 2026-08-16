@@ -133,6 +133,9 @@ export function buildAdminUrl(): string {
  * @example → '.fieseros.com' (production) | undefined (localhost)
  */
 export function getCookieDomain(): string | undefined {
+  // DEV OVERRIDE: always return undefined in development so cookies work on
+  // 127.0.0.1 / localhost without the .fieseros.com domain mismatch.
+  if (process.env.NODE_ENV !== 'production') return undefined;
   const appUrl = getAppUrl();
   if (!appUrl) return undefined;
   try {

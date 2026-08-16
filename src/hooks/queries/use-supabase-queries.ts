@@ -159,26 +159,29 @@ export function useCustomer360(customerId: string) {
   return useQuery({
     queryKey: queryKeys.customer360(customerId),
     queryFn: async () => {
-      const [customer, jobs, invoices, conversations, timeline] = await Promise.allSettled([
+      // Phase 5: reduced from 5 parallel fetches to 2.
+      // Previously fetched jobs/invoices/conversations separately, but they're
+      // already nested in the /api/customers/[id] response (with lean Prisma
+      // select). The timeline endpoint is separate because it returns a
+      // unified view with synthesized entries from multiple tables.
+      const [customer, timeline] = await Promise.allSettled([
         apiFetch<any>(`/api/customers/${customerId}`),
-        apiFetch<any[]>(`/api/jobs?customerId=${customerId}`),
-        apiFetch<any>(`/api/invoices?customerId=${customerId}`),
-        apiFetch<any>(`/api/conversations?customerId=${customerId}`),
-        apiFetch<any>(`/api/timeline-events?customerId=${customerId}`),
+        apiFetch<any>(`/api/customers/${customerId}/timeline`),
       ]);
+      const customerData = customer.status === 'fulfilled' ? customer.value : null;
       return {
-        customer: customer.status === 'fulfilled' ? customer.value : null,
-        jobs: jobs.status === 'fulfilled'
-          ? (jobs.value?.jobs ?? (Array.isArray(jobs.value) ? jobs.value : []))
-          : [],
-        invoices: invoices.status === 'fulfilled'
-          ? (Array.isArray(invoices.value) ? invoices.value : invoices.value?.invoices || [])
-          : [],
-        conversations: conversations.status === 'fulfilled'
-          ? (Array.isArray(conversations.value) ? conversations.value : conversations.value?.conversations || [])
-          : [],
+        customer: customerData,
+        // Use nested arrays from the customer response (already lean-selected)
+        jobs: customerData?.jobs ?? [],
+        invoices: customerData?.invoices ?? [],
+        conversations: customerData?.conversations ?? [],
+        quotes: customerData?.quotes ?? [],
+        leads: customerData?.leads ?? [],
+        stats: customerData?.stats ?? null,
         timeline: timeline.status === 'fulfilled'
-          ? (Array.isArray(timeline.value) ? timeline.value : timeline.value?.data || [])
+          ? (Array.isArray(timeline.value)
+              ? timeline.value
+              : timeline.value?.entries || timeline.value?.data || [])
           : [],
       };
     },

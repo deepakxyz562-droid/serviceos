@@ -1470,6 +1470,14 @@ model Customer {
   address            String?
   whatsappId         String?
   preferredCurrency  String   @default("USD")  // Customer's preferred display currency
+  // ── Duplicate detection (Phase 3): normalized values for tenant-scoped uniqueness ──
+  // Stored alongside the raw phone/email so the original display value is preserved.
+  // Unique constraint is (tenantId, normalizedPhone) and (tenantId, normalizedEmail) —
+  // NOT global, because the same person can legitimately exist in two different tenants.
+  // Nullable so existing rows (pre-backfill) don't violate the constraint; backfilled
+  // immediately after migration by the API layer or a one-off script.
+  normalizedPhone    String?
+  normalizedEmail    String?
   // ── ISSUE-3: New structured customer fields (redesigned "New Customer" form) ──
   // `name` is kept as a derived field for backward compat (auto-filled on save
   // from firstName + " " + lastName, falling back to companyName).
@@ -1531,6 +1539,11 @@ model Customer {
   @@index([tenantId])
   @@index([portalEnabled])
   @@index([invitationStatus])
+  // ── Duplicate detection: tenant-scoped uniqueness on normalized contact info ──
+  // SQLite treats NULL as distinct, so rows with NULL normalizedPhone/normalizedEmail
+  // (e.g. customers created before backfill, or with no email) never conflict.
+  @@unique([tenantId, normalizedPhone])
+  @@unique([tenantId, normalizedEmail])
 }
 
 model Resource {
@@ -4504,6 +4517,10 @@ model CustomerTimelineEntry {
   isInternal      Boolean  @default(false) // internal notes only visible to staff
   isPinned        Boolean  @default(false)
   createdAt       DateTime @default(now())
+  // ── Notes management (Phase 4): tracks when a note was last edited. ──
+  // Null for system-generated entries and notes that have never been edited.
+  // Set automatically by Prisma @updatedAt on every update.
+  updatedAt       DateTime @updatedAt
 
   @@index([tenantId, customerId, eventDate])
   @@index([tenantId, customerId, entryType])

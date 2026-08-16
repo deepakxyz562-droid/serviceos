@@ -57,7 +57,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Trash2, Loader2, Bell, TriangleAlert } from 'lucide-react';
+import { Plus, Trash2, Loader2, Bell, TriangleAlert, User, Phone, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { LEAD_SOURCE_OPTIONS } from '@/lib/lead-sources';
 import { CUSTOMER_COUNTRIES, CUSTOMER_COUNTRY_NAMES } from '@/lib/customer-countries';
@@ -85,8 +85,18 @@ interface NotificationSettings {
 export interface CustomerFormSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Called after a successful save. Parent should refresh its list. */
-  onSaved?: () => void;
+  /**
+   * Called after a successful save. Parent should refresh its list.
+   * When triggered from the duplicate-detection dialog, an existing
+   * customer payload is passed so the parent can navigate to / open
+   * that record instead of the freshly created one.
+   */
+  onSaved?: (existing?: {
+    id: string;
+    name: string;
+    phone: string | null;
+    email: string | null;
+  }) => void;
   /**
    * Optional existing customer to populate the form with (for future
    * edit support). When omitted, the form is initialized to empty
@@ -170,6 +180,16 @@ export function CustomerFormSheet({
 
   const [submitting, setSubmitting] = useState(false);
 
+  // Duplicate-detection result — when the backend POST returns 409 with
+  // `error: "duplicate_customer"`, we populate this state and show a dialog
+  // offering to open the existing customer instead of creating a duplicate.
+  const [duplicateCustomer, setDuplicateCustomer] = useState<{
+    id: string;
+    name: string;
+    phone: string | null;
+    email: string | null;
+  } | null>(null);
+
   // Reset the form whenever the sheet is opened (so a fresh "New Customer"
   // never inherits stale state from a previous edit session).
   useEffect(() => {
@@ -192,6 +212,7 @@ export function CustomerFormSheet({
       setCountry('');
       setPropertyContacts([]);
       setTaxRulesForCountry(null);
+      setDuplicateCustomer(null);
     }
   }, [open]);
 
@@ -331,6 +352,22 @@ export function CustomerFormSheet({
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        // Duplicate-customer short-circuit: instead of throwing a generic
+        // error, surface the existing customer record in a dedicated dialog
+        // so the user can choose to open it rather than create a dup.
+        if (
+          res.status === 409 &&
+          data?.error === 'duplicate_customer' &&
+          data?.existingCustomer
+        ) {
+          setDuplicateCustomer(data.existingCustomer as {
+            id: string;
+            name: string;
+            phone: string | null;
+            email: string | null;
+          });
+          return;
+        }
         throw new Error(data?.error || `Request failed (${res.status})`);
       }
 
@@ -771,6 +808,89 @@ export function CustomerFormSheet({
           </SheetFooter>
         </SheetContent>
       </Sheet>
+
+      {/* ── Secondary dialog: duplicate customer detection ──
+          Rendered OUTSIDE the Sheet so it stacks on top (z-index higher
+          than the Sheet's overlay). Triggered when POST /api/customers
+          returns 409 with `error: "duplicate_customer"`. */}
+      <Dialog
+        open={!!duplicateCustomer}
+        onOpenChange={(open) => {
+          if (!open) setDuplicateCustomer(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Existing customer found</DialogTitle>
+            <DialogDescription>
+              A customer with the same phone number or email already exists
+              in your workspace.
+            </DialogDescription>
+          </DialogHeader>
+          {duplicateCustomer && (
+            <div className="py-4 space-y-3">
+              <div className="bg-muted rounded-lg p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="size-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                    <User className="size-5 text-emerald-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {duplicateCustomer.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Existing customer
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-1 pl-12">
+                  {duplicateCustomer.phone && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Phone className="size-3" /> {duplicateCustomer.phone}
+                    </p>
+                  )}
+                  {duplicateCustomer.email && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Mail className="size-3" /> {duplicateCustomer.email}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Would you like to open the existing customer record instead
+                of creating a duplicate?
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDuplicateCustomer(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => {
+                if (duplicateCustomer) {
+                  // Mirror the success-path: close the form sheet, then
+                  // notify the parent (which refreshes the list). The parent
+                  // receives the existing customer's id so it can navigate
+                  // to / open the existing record.
+                  const existing = duplicateCustomer;
+                  setDuplicateCustomer(null);
+                  onOpenChange(false);
+                  onSaved?.(existing);
+                }
+              }}
+            >
+              Open Customer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Secondary dialog: notification settings ── */}
       <Dialog open={showNotificationsDialog} onOpenChange={setShowNotificationsDialog}>

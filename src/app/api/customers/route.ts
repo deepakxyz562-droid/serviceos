@@ -5,6 +5,7 @@ import { getAuthUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activity-log'
 import { requireCrmTenant } from '@/lib/require-crm-tenant'
 import { CUSTOMER_PUBLIC_SELECT } from '@/lib/customer-select'
+import { normalizePhone, normalizeEmail } from '@/lib/customer-normalize'
 
 // GET /api/customers — list customers for the authenticated user's tenant
 // Scopes results to the logged-in user's workspace/tenant so cross-tenant
@@ -198,6 +199,53 @@ export async function POST(request: NextRequest) {
     // link generation.
     const workspaceId = user.workspaceId || null
 
+    // ── Phase 3: Duplicate customer detection ────────────────────────
+    // Normalize phone/email and check for existing customers in the same
+    // tenant. Returns 409 with the existing customer's data so the UI can
+    // show "Existing customer found → Open Customer | Cancel".
+    const normalizedPhone = normalizePhone(phone)
+    const normalizedEmail = normalizeEmail(email)
+
+    // Resolve tenantId for the new customer (from user or workspace)
+    let resolvedTenantId: string | null = user.tenantId || null
+    if (!resolvedTenantId && workspaceId) {
+      try {
+        const ws = await db.workspace.findUnique({
+          where: { id: workspaceId },
+          select: { tenantId: true },
+        })
+        resolvedTenantId = ws?.tenantId ?? null
+      } catch {
+        // ignore
+      }
+    }
+
+    // Check for duplicates (only if we have a tenantId and a normalized value)
+    if (resolvedTenantId && (normalizedPhone || normalizedEmail)) {
+      const orConditions: Array<{ tenantId: string; normalizedPhone?: string; normalizedEmail?: string }> = []
+      if (normalizedPhone) {
+        orConditions.push({ tenantId: resolvedTenantId, normalizedPhone })
+      }
+      if (normalizedEmail) {
+        orConditions.push({ tenantId: resolvedTenantId, normalizedEmail })
+      }
+
+      const existing = await db.customer.findFirst({
+        where: { OR: orConditions },
+        select: { id: true, name: true, phone: true, email: true },
+      })
+
+      if (existing) {
+        return NextResponse.json(
+          {
+            error: 'duplicate_customer',
+            existingCustomer: existing,
+          },
+          { status: 409 },
+        )
+      }
+    }
+
     // ── Validate + normalize nested collections before opening the
     // transaction so a 400 doesn't waste a DB round-trip. ──
     const cleanedAdditionalContacts = Array.isArray(additionalContacts)
@@ -261,6 +309,9 @@ export async function POST(request: NextRequest) {
           address: address || null,
           whatsappId: whatsappId || null,
           workspaceId,
+          tenantId: resolvedTenantId,
+          normalizedPhone,
+          normalizedEmail,
           preferredCurrency: preferredCurrency || 'USD',
           // ── ISSUE-3: structured primary contact fields ──
           title: title || null,
@@ -386,12 +437,18 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const { name, phone, email, address, whatsappId, preferredCurrency } = body
 
+    // Keep normalizedPhone/normalizedEmail in sync when phone/email changes
+    const normalizedPhone = phone ? normalizePhone(phone) : undefined
+    const normalizedEmail = email !== undefined ? normalizeEmail(email) : undefined
+
     const customer = await db.customer.update({
       where: { id },
       data: {
         ...(name && { name }),
         ...(phone && { phone }),
         ...(email !== undefined && { email }),
+        ...(normalizedPhone !== undefined && { normalizedPhone }),
+        ...(normalizedEmail !== undefined && { normalizedEmail }),
         ...(address !== undefined && { address }),
         ...(whatsappId !== undefined && { whatsappId }),
         ...(preferredCurrency !== undefined && { preferredCurrency }),

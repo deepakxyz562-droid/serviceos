@@ -168,9 +168,20 @@ const jobStatusConfig: Record<string, { label: string; color: string; bg: string
 
 const invoiceStatusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   draft: { label: 'Draft', color: 'text-muted-foreground', bg: 'bg-muted border-border', icon: FileText },
+  sent: { label: 'Sent', color: 'text-sky-700', bg: 'bg-sky-100 border-sky-200', icon: Send },
   pending: { label: 'Pending', color: 'text-amber-700', bg: 'bg-amber-100 border-amber-200', icon: Clock },
+  pending_approval: { label: 'Pending Approval', color: 'text-amber-700', bg: 'bg-amber-100 border-amber-200', icon: Clock },
   paid: { label: 'Paid', color: 'text-emerald-700', bg: 'bg-emerald-100 border-emerald-200', icon: CheckCircle2 },
   overdue: { label: 'Overdue', color: 'text-red-700', bg: 'bg-red-100 border-red-200', icon: AlertCircle },
+  cancelled: { label: 'Cancelled', color: 'text-muted-foreground', bg: 'bg-muted border-border', icon: X },
+};
+
+const quoteStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
+  draft: { label: 'Draft', color: 'text-muted-foreground', bg: 'bg-muted border-border' },
+  sent: { label: 'Sent', color: 'text-sky-700', bg: 'bg-sky-100 border-sky-200' },
+  accepted: { label: 'Accepted', color: 'text-emerald-700', bg: 'bg-emerald-100 border-emerald-200' },
+  rejected: { label: 'Rejected', color: 'text-red-700', bg: 'bg-red-100 border-red-200' },
+  expired: { label: 'Expired', color: 'text-muted-foreground', bg: 'bg-muted border-border' },
 };
 
 const bookingStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -497,6 +508,15 @@ export function Customer360View() {
   // Jobs tab status filter
   const [jobStatusFilter, setJobStatusFilter] = useState<string>('all');
 
+  // Convert Quote → Job state
+  const [convertingQuoteId, setConvertingQuoteId] = useState<string | null>(null);
+
+  // Notes tab state
+  const [noteText, setNoteText] = useState('');
+  const [addingNote, setAddingNote] = useState(false);
+  const [editingNote, setEditingNote] = useState<{ id: string; title: string; description: string } | null>(null);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+
   // V1.5: Communication composer state
   const [composerOpen, setComposerOpen] = useState(false);
 
@@ -536,32 +556,9 @@ export function Customer360View() {
   const jobs: any[] = customer360?.jobs || [];
   const invoices: any[] = customer360?.invoices || [];
   const conversations: any[] = customer360?.conversations || [];
+  const quotes: any[] = customer360?.quotes || [];
   const timelineEvents: any[] = customer360?.timeline || [];
   const bookings: any[] = bookingsData?.bookings || (Array.isArray(bookingsData) ? bookingsData : []);
-
-  // ─── E-commerce Orders ─────────────────────────────────────
-  const [ecommerceOrders, setEcommerceOrders] = useState<any[]>([]);
-  const [ecommerceLoading, setEcommerceLoading] = useState(false);
-
-  useEffect(() => {
-    if (!customer) { setEcommerceOrders([]); return; }
-    const email = (customer as any).email;
-    const phone = (customer as any).phone;
-    if (!email && !phone) { setEcommerceOrders([]); return; }
-    setEcommerceLoading(true);
-    const param = email || phone || '';
-    fetch(`/api/ecommerce/orders?search=${encodeURIComponent(param)}&limit=50`)
-      .then(r => r.ok ? r.json() : { orders: [] })
-      .then(d => setEcommerceOrders(d.orders || []))
-      .catch(() => setEcommerceOrders([]))
-      .finally(() => setEcommerceLoading(false));
-  }, [customer]);
-
-  const ecommerceStats = useMemo(() => {
-    const t = ecommerceOrders.length;
-    const s = ecommerceOrders.reduce((a, o) => a + (o.total || 0), 0);
-    return { totalOrders: t, totalSpent: s, avgOrderValue: t > 0 ? s / t : 0 };
-  }, [ecommerceOrders]);
 
   // Computed stats
   const stats = useMemo(() => {
@@ -737,6 +734,83 @@ export function Customer360View() {
     () => (jobStatusFilter === 'all' ? jobs : jobs.filter(j => j.status === jobStatusFilter)),
     [jobs, jobStatusFilter]
   );
+
+  // ─── Convert Quote → Job handler ───────────────────────────────────────────
+  const handleConvertQuoteToJob = async (quoteId: string) => {
+    setConvertingQuoteId(quoteId);
+    try {
+      const res = await fetch(`/api/quotes/${quoteId}/convert-to-job`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 409 && data.jobId) {
+          toast.info('This quote was already converted to a job');
+        } else {
+          toast.error(data.error || 'Failed to convert quote to job');
+        }
+      } else {
+        toast.success('Quote converted to job successfully');
+      }
+      // Invalidate the customer360 query to refresh quotes
+      queryClient.invalidateQueries({ queryKey: ['customer360', selectedCustomerId] });
+    } catch {
+      toast.error('Failed to convert quote to job');
+    } finally {
+      setConvertingQuoteId(null);
+    }
+  };
+
+  // ─── Add Note handler ──────────────────────────────────────────────────────
+  const handleAddNote = async () => {
+    if (!noteText.trim() || !selectedCustomerId) return;
+    setAddingNote(true);
+    try {
+      const res = await fetch(`/api/customers/${selectedCustomerId}/timeline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entryType: 'note', title: noteText.trim().slice(0, 200), description: noteText.trim() }),
+      });
+      if (!res.ok) throw new Error('Failed to add note');
+      toast.success('Note added');
+      setNoteText('');
+      queryClient.invalidateQueries({ queryKey: ['customer360', selectedCustomerId] });
+    } catch {
+      toast.error('Failed to add note');
+    } finally {
+      setAddingNote(false);
+    }
+  };
+
+  // ─── Edit Note handler ─────────────────────────────────────────────────────
+  const handleEditNote = async () => {
+    if (!editingNote || !selectedCustomerId) return;
+    try {
+      const res = await fetch(`/api/customers/${selectedCustomerId}/timeline/${editingNote.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editingNote.title, description: editingNote.description }),
+      });
+      if (!res.ok) throw new Error('Failed to edit note');
+      toast.success('Note updated');
+      setEditingNote(null);
+      queryClient.invalidateQueries({ queryKey: ['customer360', selectedCustomerId] });
+    } catch {
+      toast.error('Failed to edit note');
+    }
+  };
+
+  // ─── Delete Note handler ───────────────────────────────────────────────────
+  const handleDeleteNote = async () => {
+    if (!deletingNoteId || !selectedCustomerId) return;
+    try {
+      const res = await fetch(`/api/customers/${selectedCustomerId}/timeline/${deletingNoteId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete note');
+      toast.success('Note deleted');
+      setDeletingNoteId(null);
+      queryClient.invalidateQueries({ queryKey: ['customer360', selectedCustomerId] });
+    } catch {
+      toast.error('Failed to delete note');
+    }
+  };
 
   // ─── No customer selected — show list ─────────────────────────────────────
   if (!selectedCustomerId) {
@@ -1331,23 +1405,6 @@ export function Customer360View() {
                     <Clock className="size-3.5" /> Timeline
                   </TabsTrigger>
                   <TabsTrigger
-                    value="conversations"
-                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
-                  >
-                    <MessageCircle className="size-3.5" /> Conversations
-                    {conversations.length > 0 && (
-                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-emerald-600 text-foreground flex items-center justify-center">
-                        {conversations.length}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="bookings"
-                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
-                  >
-                    <Calendar className="size-3.5" /> Bookings
-                  </TabsTrigger>
-                  <TabsTrigger
                     value="jobs"
                     className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
                   >
@@ -1355,6 +1412,17 @@ export function Customer360View() {
                     {jobs.length > 0 && (
                       <Badge className="size-4 rounded-full p-0 text-[9px] bg-muted text-muted-foreground flex items-center justify-center">
                         {jobs.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="quotes"
+                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
+                  >
+                    <FileText className="size-3.5" /> Quotes
+                    {quotes.length > 0 && (
+                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-muted text-muted-foreground flex items-center justify-center">
+                        {quotes.length}
                       </Badge>
                     )}
                   </TabsTrigger>
@@ -1370,33 +1438,49 @@ export function Customer360View() {
                     )}
                   </TabsTrigger>
                   <TabsTrigger
-                    value="orders"
+                    value="payments"
                     className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
                   >
-                    <ShoppingCart className="size-3.5" /> Orders
-                    {ecommerceOrders.length > 0 && (
-                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-emerald-600 text-foreground flex items-center justify-center">
-                        {ecommerceOrders.length}
+                    <DollarSign className="size-3.5" /> Payments
+                    {invoices.filter((i: any) => i.status === 'paid').length > 0 && (
+                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-muted text-muted-foreground flex items-center justify-center">
+                        {invoices.filter((i: any) => i.status === 'paid').length}
                       </Badge>
                     )}
                   </TabsTrigger>
                   <TabsTrigger
-                    value="equipment"
+                    value="assets"
                     className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
                   >
-                    <Wrench className="size-3.5" /> Equipment
+                    <Package className="size-3.5" /> Assets
                   </TabsTrigger>
                   <TabsTrigger
-                    value="documents"
+                    value="communication"
                     className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
                   >
-                    <FileStack className="size-3.5" /> Documents
+                    <MessageCircle className="size-3.5" /> Communication
+                    {conversations.length > 0 && (
+                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-emerald-600 text-foreground flex items-center justify-center">
+                        {conversations.length}
+                      </Badge>
+                    )}
                   </TabsTrigger>
                   <TabsTrigger
-                    value="automation"
+                    value="notes"
                     className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
                   >
-                    <Zap className="size-3.5" /> Automation
+                    <StickyNote className="size-3.5" /> Notes
+                    {timelineEvents.filter((e: any) => e.entryType === 'note').length > 0 && (
+                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-muted text-muted-foreground flex items-center justify-center">
+                        {timelineEvents.filter((e: any) => e.entryType === 'note').length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="bookings"
+                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
+                  >
+                    <Calendar className="size-3.5" /> Bookings
                   </TabsTrigger>
                 </TabsList>
               </div>
@@ -1543,8 +1627,8 @@ export function Customer360View() {
                   </ScrollArea>
                 </TabsContent>
 
-                {/* ─── Conversations Tab ────────────────────────────────────── */}
-                <TabsContent value="conversations" className="h-full m-0">
+                {/* ─── Communication Tab ────────────────────────────────────── */}
+                <TabsContent value="communication" className="h-full m-0">
                   <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
                     <div className="p-5 space-y-6">
                       {customer360Loading ? (
@@ -1643,6 +1727,110 @@ export function Customer360View() {
                           </Card>
                         ))
                       )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+
+                {/* ─── Notes Tab ────────────────────────────────────────────── */}
+                <TabsContent value="notes" className="h-full m-0">
+                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+                    <div className="p-5 space-y-4">
+                      {/* Add Note box */}
+                      <div className="bg-card rounded-xl border border-border p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <StickyNote className="size-4 text-amber-500" />
+                          <h4 className="text-sm font-semibold text-foreground">Add Note</h4>
+                        </div>
+                        <Textarea
+                          placeholder="Type a note about this customer..."
+                          value={noteText}
+                          onChange={(e) => setNoteText(e.target.value)}
+                          className="min-h-[80px] resize-none bg-background"
+                        />
+                        <div className="flex justify-end">
+                          <Button
+                            size="sm"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-foreground gap-1.5"
+                            onClick={handleAddNote}
+                            disabled={!noteText.trim() || addingNote}
+                          >
+                            {addingNote ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+                            Add Note
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Notes list */}
+                      {customer360Loading ? (
+                        <div className="space-y-3">
+                          {Array.from({ length: 3 }).map((_, i) => (
+                            <div key={i} className="h-20 bg-muted animate-pulse rounded-lg" />
+                          ))}
+                        </div>
+                      ) : (() => {
+                        const notes = timelineEvents.filter((e: any) => e.entryType === 'note');
+                        if (notes.length === 0) {
+                          return (
+                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                              <StickyNote className="size-10 text-muted-foreground mb-3" />
+                              <h3 className="text-sm font-semibold text-foreground">No notes yet</h3>
+                              <p className="text-xs text-muted-foreground mt-1">Notes added above will appear here</p>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="space-y-2">
+                            {notes.map((note: any) => {
+                              const isUserNote = note.actorType === 'user' && note.sourceType === 'Manual';
+                              return (
+                                <div key={note.id} className="bg-card rounded-xl border border-border p-3 hover:shadow-sm transition-all duration-200">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                                      <div className="size-7 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                                        <StickyNote className="size-3 text-amber-500" />
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-medium text-foreground">{note.title}</p>
+                                        {note.description && (
+                                          <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">{note.description}</p>
+                                        )}
+                                        <div className="flex items-center gap-2 mt-1.5">
+                                          <p className="text-[10px] text-muted-foreground">
+                                            {note.actorName || 'System'} \u00B7 {formatDateTime(note.eventDate || note.createdAt)}
+                                          </p>
+                                          {note.updatedAt && note.createdAt && new Date(note.updatedAt).getTime() > new Date(note.createdAt).getTime() + 1000 && (
+                                            <span className="text-[10px] text-muted-foreground italic">\u00B7 edited</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    {isUserNote && (
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="size-7 p-0 text-muted-foreground hover:text-foreground"
+                                          onClick={() => setEditingNote({ id: note.id, title: note.title, description: note.description || '' })}
+                                        >
+                                          <FileText className="size-3" />
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="size-7 p-0 text-muted-foreground hover:text-red-500"
+                                          onClick={() => setDeletingNoteId(note.id)}
+                                        >
+                                          <X className="size-3" />
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </ScrollArea>
                 </TabsContent>
@@ -2214,61 +2402,114 @@ export function Customer360View() {
                   </ScrollArea>
                 </TabsContent>
 
-                {/* ─── Orders Tab ────────────────────────────────────────── */}
-                <TabsContent value="orders" className="h-full m-0">
+                {/* ─── Quotes Tab ────────────────────────────────────────────── */}
+                <TabsContent value="quotes" className="h-full m-0">
                   <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
                     <div className="p-5 space-y-4">
-                      {ecommerceLoading ? (
+                      {customer360Loading ? (
                         <div className="space-y-3">
                           {Array.from({ length: 3 }).map((_, i) => (
-                            <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
+                            <div key={i} className="h-20 bg-muted animate-pulse rounded-lg" />
                           ))}
                         </div>
-                      ) : ecommerceOrders.length === 0 ? (
+                      ) : quotes.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 text-center">
-                          <ShoppingCart className="size-10 text-muted-foreground mb-3" />
-                          <h3 className="text-base font-semibold text-foreground">No e-commerce orders</h3>
-                          <p className="text-xs text-muted-foreground mt-1">Orders from connected stores will appear here</p>
+                          <FileText className="size-10 text-muted-foreground mb-3" />
+                          <h3 className="text-base font-semibold text-foreground">No quotes</h3>
+                          <p className="text-xs text-muted-foreground mt-1">Quotes created for this customer will appear here</p>
                         </div>
                       ) : (
                         <>
+                          {/* Summary */}
                           <div className="grid grid-cols-3 gap-3">
                             <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
-                              <p className="text-lg font-extrabold text-foreground">{ecommerceStats.totalOrders}</p>
-                              <p className="text-[10px] text-muted-foreground font-medium">Total Orders</p>
+                              <p className="text-lg font-extrabold text-foreground">{quotes.length}</p>
+                              <p className="text-[10px] text-muted-foreground font-medium">Total Quotes</p>
                             </div>
                             <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
-                              <p className="text-lg font-extrabold text-emerald-500">{format(ecommerceStats.totalSpent)}</p>
-                              <p className="text-[10px] text-muted-foreground font-medium">Total Spent</p>
+                              <p className="text-lg font-extrabold text-emerald-500">{quotes.filter((q: any) => q.status === 'accepted').length}</p>
+                              <p className="text-[10px] text-muted-foreground font-medium">Accepted</p>
                             </div>
-                            <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-sky-500 shadow-sm">
-                              <p className="text-lg font-extrabold text-foreground">{format(ecommerceStats.avgOrderValue)}</p>
-                              <p className="text-[10px] text-muted-foreground font-medium">Avg Order Value</p>
+                            <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-amber-500 shadow-sm">
+                              <p className="text-lg font-extrabold text-foreground">{format(quotes.reduce((s: number, q: any) => s + (q.total || 0), 0))}</p>
+                              <p className="text-[10px] text-muted-foreground font-medium">Total Value</p>
                             </div>
                           </div>
+                          {/* Quote cards */}
                           <div className="space-y-2">
-                            {ecommerceOrders.map((order: any) => {
-                              const badge = ORDER_STATUS_BADGE[order.status] || ORDER_STATUS_BADGE.pending;
+                            {quotes.map((quote: any) => {
+                              const cfg = quoteStatusConfig[quote.status] || quoteStatusConfig.draft;
+                              const items = (() => { try { return JSON.parse(quote.itemsJson || '[]'); } catch { return []; } })();
+                              const addOns = (() => { try { return JSON.parse(quote.addOnsJson || '[]'); } catch { return []; } })();
+                              const canConvert = quote.status === 'accepted' && !quote.jobId;
+                              const isConverted = !!quote.jobId;
                               return (
-                                <div key={order.id} className="bg-card rounded-xl border border-border p-3 hover:shadow-sm transition-all">
-                                  <div className="flex items-center justify-between gap-3">
+                                <div key={quote.id} className="bg-card rounded-xl border border-border p-4 hover:shadow-sm transition-all duration-200">
+                                  <div className="flex items-start justify-between gap-3 mb-2">
                                     <div className="flex items-center gap-3 min-w-0">
                                       <div className="size-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
-                                        <ShoppingCart className="size-3.5 text-emerald-500" />
+                                        <FileText className="size-3.5 text-emerald-500" />
                                       </div>
                                       <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-sm font-medium text-foreground">{order.orderNumber || order.externalOrderId}</span>
-                                          <Badge variant="outline" className={cn('text-[10px] rounded-md', badge.cls)}>{badge.label}</Badge>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-sm font-medium text-foreground">{quote.title}</span>
+                                          <Badge variant="outline" className={cn('text-[10px] rounded-md', cfg.bg, cfg.color)}>{cfg.label}</Badge>
+                                          {isConverted && (
+                                            <Badge variant="outline" className="text-[10px] rounded-md bg-emerald-500/10 text-emerald-400 border-emerald-700">
+                                              <CheckCircle2 className="size-2.5 mr-0.5" /> Converted to Job
+                                            </Badge>
+                                          )}
                                         </div>
-                                        <p className="text-xs text-muted-foreground truncate">{order.customerName || order.customerEmail || ''}</p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                          {formatDate(quote.createdAt)}
+                                          {quote.validUntil ? ` \u00B7 Valid until ${formatDate(quote.validUntil)}` : ''}
+                                        </p>
                                       </div>
                                     </div>
                                     <div className="text-right shrink-0">
-                                      <p className="text-sm font-semibold text-foreground">{format(order.total || 0)}</p>
-                                      <p className="text-[10px] text-muted-foreground">{order.orderedAt ? new Date(order.orderedAt).toLocaleDateString() : ''}</p>
+                                      <p className="text-sm font-bold text-foreground">{format(quote.total)}</p>
+                                      <p className="text-[10px] text-muted-foreground">{items.length + addOns.length} items</p>
                                     </div>
                                   </div>
+                                  {/* Line items preview */}
+                                  {(items.length > 0 || addOns.length > 0) && (
+                                    <div className="mt-2 pt-2 border-t border-border space-y-1">
+                                      {items.slice(0, 3).map((item: any, i: number) => (
+                                        <div key={i} className="flex justify-between text-xs text-muted-foreground">
+                                          <span className="truncate">{item.name || item.serviceName || 'Service'} \u00D7 {item.qty || item.quantity || 1}</span>
+                                          <span className="shrink-0 ml-2">{format((item.price || 0) * (item.qty || item.quantity || 1))}</span>
+                                        </div>
+                                      ))}
+                                      {addOns.slice(0, 2).map((addon: any, i: number) => (
+                                        <div key={`addon-${i}`} className="flex justify-between text-xs text-muted-foreground">
+                                          <span className="truncate">{addon.name || 'Add-on'}</span>
+                                          <span className="shrink-0 ml-2">{format(addon.price || 0)}</span>
+                                        </div>
+                                      ))}
+                                      {(items.length > 3 || addOns.length > 2) && (
+                                        <p className="text-[10px] text-muted-foreground italic">
+                                          +{Math.max(0, items.length - 3) + Math.max(0, addOns.length - 2)} more items
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                  {/* Convert to Job button */}
+                                  {canConvert && (
+                                    <div className="mt-3 pt-3 border-t border-border">
+                                      <Button
+                                        size="sm"
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-foreground gap-1.5 transition-all duration-200"
+                                        onClick={() => handleConvertQuoteToJob(quote.id)}
+                                        disabled={convertingQuoteId === quote.id}
+                                      >
+                                        {convertingQuoteId === quote.id ? (
+                                          <><Loader2 className="size-3.5 animate-spin" /> Converting...</>
+                                        ) : (
+                                          <><ArrowUpRight className="size-3.5" /> Convert to Job</>
+                                        )}
+                                      </Button>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -2279,244 +2520,81 @@ export function Customer360View() {
                   </ScrollArea>
                 </TabsContent>
 
-                {/* ─── Equipment Tab ───────────────────────────────────────── */}
-                <TabsContent value="equipment" className="h-full m-0">
+                {/* ─── Payments Tab ─────────────────────────────────────────── */}
+                <TabsContent value="payments" className="h-full m-0">
+                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+                    <div className="p-5 space-y-4">
+                      {(() => {
+                        const paidInvoices = invoices.filter((i: any) => i.status === 'paid');
+                        const totalPaid = paidInvoices.reduce((s: number, i: any) => s + (i.total || 0), 0);
+                        const avgPayment = paidInvoices.length > 0 ? totalPaid / paidInvoices.length : 0;
+                        if (customer360Loading) {
+                          return Array.from({ length: 3 }).map((_, i) => (
+                            <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
+                          ));
+                        }
+                        if (paidInvoices.length === 0) {
+                          return (
+                            <div className="flex flex-col items-center justify-center py-16 text-center">
+                              <DollarSign className="size-10 text-muted-foreground mb-3" />
+                              <h3 className="text-base font-semibold text-foreground">No payments recorded</h3>
+                              <p className="text-xs text-muted-foreground mt-1">Paid invoices will appear here</p>
+                            </div>
+                          );
+                        }
+                        return (
+                          <>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
+                                <p className="text-lg font-extrabold text-emerald-500">{format(totalPaid)}</p>
+                                <p className="text-[10px] text-muted-foreground font-medium">Total Paid</p>
+                              </div>
+                              <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
+                                <p className="text-lg font-extrabold text-foreground">{paidInvoices.length}</p>
+                                <p className="text-[10px] text-muted-foreground font-medium">Payments</p>
+                              </div>
+                              <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-sky-500 shadow-sm">
+                                <p className="text-lg font-extrabold text-foreground">{format(avgPayment)}</p>
+                                <p className="text-[10px] text-muted-foreground font-medium">Avg Payment</p>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              {paidInvoices.map((inv: any) => (
+                                <div key={inv.id} className="bg-card rounded-xl border border-border p-3 hover:shadow-sm transition-all duration-200">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className="size-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                                        <CheckCircle2 className="size-3.5 text-emerald-500" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <span className="text-sm font-medium text-foreground">{inv.number || 'Invoice'}</span>
+                                        <p className="text-xs text-muted-foreground">
+                                          {inv.paidAt ? `Paid ${formatDate(inv.paidAt)}` : formatDate(inv.createdAt)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <p className="text-sm font-bold text-emerald-400">{format(inv.total)}</p>
+                                      <Badge variant="outline" className="text-[10px] rounded-md bg-emerald-500/10 text-emerald-400 border-emerald-700">Paid</Badge>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+
+                {/* ─── Assets Tab ───────────────────────────────────────── */}
+                <TabsContent value="assets" className="h-full m-0">
                   <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
                     <div className="p-5">
                       {selectedCustomerId && (
                         <AssetsSection customerId={selectedCustomerId} />
                       )}
-                    </div>
-                  </ScrollArea>
-                </TabsContent>
-
-                {/* ─── Documents Tab ────────────────────────────────────────── */}
-                <TabsContent value="documents" className="h-full m-0">
-                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
-                    <div className="p-5 space-y-6">
-                      {/* Upload button area */}
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-semibold text-foreground">Documents</h3>
-                        <Button
-                          size="sm"
-                          className="bg-emerald-600 hover:bg-emerald-700 text-foreground gap-1.5 transition-all duration-200"
-                          onClick={() => toast.info('Document upload coming soon')}
-                        >
-                          <Upload className="size-3.5" /> Upload
-                        </Button>
-                      </div>
-
-                      {/* File type categories placeholder */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div className="bg-card rounded-xl border border-border p-4 text-center hover:shadow-sm transition-all duration-200 cursor-pointer group">
-                          <div className="size-12 rounded-xl bg-sky-500/10 flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform duration-200">
-                            <FileText className="size-6 text-sky-500" />
-                          </div>
-                          <p className="text-xs font-medium text-foreground">Contracts</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">PDF, DOC</p>
-                        </div>
-                        <div className="bg-card rounded-xl border border-border p-4 text-center hover:shadow-sm transition-all duration-200 cursor-pointer group">
-                          <div className="size-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform duration-200">
-                            <Receipt className="size-6 text-emerald-500" />
-                          </div>
-                          <p className="text-xs font-medium text-foreground">Invoices</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">PDF</p>
-                        </div>
-                        <div className="bg-card rounded-xl border border-border p-4 text-center hover:shadow-sm transition-all duration-200 cursor-pointer group">
-                          <div className="size-12 rounded-xl bg-amber-500/10 flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform duration-200">
-                            <Image className="size-6 text-amber-500" />
-                          </div>
-                          <p className="text-xs font-medium text-foreground">Photos</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">JPG, PNG</p>
-                        </div>
-                      </div>
-
-                      {/* Empty state with illustration */}
-                      <div className="flex flex-col items-center justify-center py-10 text-center">
-                        <div className="relative mb-4">
-                          <div className="size-16 rounded-2xl bg-muted/50 flex items-center justify-center">
-                            <FileStack className="size-8 text-muted-foreground/60" />
-                          </div>
-                          <div className="absolute -bottom-1 -right-1 size-7 rounded-lg bg-muted flex items-center justify-center">
-                            <Upload className="size-3.5 text-muted-foreground/80" />
-                          </div>
-                        </div>
-                        <p className="text-sm text-muted-foreground max-w-sm">
-                          Upload and manage documents for this customer. Contracts, proposals, and other files will appear here.
-                        </p>
-                      </div>
-                    </div>
-                  </ScrollArea>
-                </TabsContent>
-
-                {/* ─── Automation Tab ───────────────────────────────────────── */}
-                <TabsContent value="automation" className="h-full m-0">
-                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
-                    <div className="p-5 space-y-6">
-                      {/* Visual Flow Diagram Placeholder */}
-                      <Card className="bg-card border-border rounded-xl overflow-hidden">
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-sm text-foreground flex items-center gap-2">
-                            <Workflow className="size-4 text-emerald-500" />
-                            Automation Flow
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="flex items-center justify-center gap-3 py-6 overflow-x-auto">
-                            {/* Visual flow nodes */}
-                            <div className="flex flex-col items-center gap-1.5 min-w-[80px]">
-                              <div className="size-12 rounded-xl bg-sky-500/10 border-2 border-sky-500/30 flex items-center justify-center">
-                                <MessageSquare className="size-5 text-sky-500" />
-                              </div>
-                              <span className="text-[10px] font-medium text-muted-foreground text-center">Trigger</span>
-                              <span className="text-[9px] text-muted-foreground">New Message</span>
-                            </div>
-                            <div className="flex items-center text-muted-foreground">
-                              <ChevronRight className="size-5" />
-                            </div>
-                            <div className="flex flex-col items-center gap-1.5 min-w-[80px]">
-                              <div className="size-12 rounded-xl bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center">
-                                <Bot className="size-5 text-amber-500" />
-                              </div>
-                              <span className="text-[10px] font-medium text-muted-foreground text-center">Process</span>
-                              <span className="text-[9px] text-muted-foreground">Classify</span>
-                            </div>
-                            <div className="flex items-center text-muted-foreground">
-                              <ChevronRight className="size-5" />
-                            </div>
-                            <div className="flex flex-col items-center gap-1.5 min-w-[80px]">
-                              <div className="size-12 rounded-xl bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center">
-                                <Send className="size-5 text-emerald-500" />
-                              </div>
-                              <span className="text-[10px] font-medium text-muted-foreground text-center">Action</span>
-                              <span className="text-[9px] text-muted-foreground">Auto-Reply</span>
-                            </div>
-                            <div className="flex items-center text-muted-foreground">
-                              <ChevronRight className="size-5" />
-                            </div>
-                            <div className="flex flex-col items-center gap-1.5 min-w-[80px]">
-                              <div className="size-12 rounded-xl bg-violet-500/10 border-2 border-violet-500/30 flex items-center justify-center">
-                                <Zap className="size-5 text-violet-500" />
-                              </div>
-                              <span className="text-[10px] font-medium text-muted-foreground text-center">Result</span>
-                              <span className="text-[9px] text-muted-foreground">Notify Team</span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      {/* Automation Stats */}
-                      <div className="grid grid-cols-3 gap-4">
-                        <Card className="bg-card border-border rounded-xl hover:shadow-sm transition-all duration-200">
-                          <CardContent className="p-3 text-center">
-                            <Bot className="size-5 text-emerald-400 mx-auto mb-1" />
-                            <p className="text-lg font-extrabold text-foreground">
-                              {timelineEvents.filter(
-                                (e: any) =>
-                                  e.actorType === 'system' || e.actorType === 'bot'
-                              ).length}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground font-medium">Triggers Fired</p>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-card border-border rounded-xl hover:shadow-sm transition-all duration-200">
-                          <CardContent className="p-3 text-center">
-                            <Send className="size-5 text-sky-400 mx-auto mb-1" />
-                            <p className="text-lg font-extrabold text-foreground">
-                              {timelineEvents.filter(
-                                (e: any) =>
-                                  e.eventType === 'message' ||
-                                  e.eventType === 'whatsapp_sent'
-                              ).length}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground font-medium">Messages Sent</p>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-card border-border rounded-xl hover:shadow-sm transition-all duration-200">
-                          <CardContent className="p-3 text-center">
-                            <Zap className="size-5 text-amber-400 mx-auto mb-1" />
-                            <p className="text-lg font-extrabold text-foreground">
-                              {timelineEvents.filter((e: any) =>
-                                e.eventType?.includes('lead') ||
-                                e.eventType?.includes('booking') ||
-                                e.eventType?.includes('invoice')
-                              ).length}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground font-medium">Workflows Run</p>
-                          </CardContent>
-                        </Card>
-                      </div>
-
-                      {/* Automation History */}
-                      <div className="space-y-3">
-                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                          Workflow History
-                        </h4>
-                        {timelineEvents
-                          .filter(
-                            (e: any) =>
-                              e.actorType === 'system' ||
-                              e.actorType === 'bot' ||
-                              e.eventType === 'whatsapp_sent' ||
-                              e.eventType === 'campaign' ||
-                              e.eventType === 'lead_converted'
-                          )
-                          .length === 0 ? (
-                          <div className="text-center py-8">
-                            <Zap className="size-8 text-muted-foreground mx-auto mb-2" />
-                            <p className="text-sm text-muted-foreground">
-                              No automation events yet
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Automated workflows will be recorded here
-                            </p>
-                          </div>
-                        ) : (
-                          timelineEvents
-                            .filter(
-                              (e: any) =>
-                                e.actorType === 'system' ||
-                                e.actorType === 'bot' ||
-                                e.eventType === 'whatsapp_sent' ||
-                                e.eventType === 'campaign' ||
-                                e.eventType === 'lead_converted'
-                            )
-                            .map((event: any, i: number) => {
-                              const config =
-                                timelineEventTypeConfig[event.eventType] ||
-                                timelineEventTypeConfig.message;
-                              const Icon = config.icon;
-                              return (
-                                <div
-                                  key={event.id || i}
-                                  className="flex items-start gap-3 p-3 bg-card rounded-xl border border-border hover:shadow-sm transition-all duration-200"
-                                >
-                                  <div
-                                    className={cn(
-                                      'size-8 rounded-full flex items-center justify-center shrink-0',
-                                      config.bg
-                                    )}
-                                  >
-                                    <Icon className={cn('size-3.5', config.color)} />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-medium text-foreground">
-                                      {event.title}
-                                    </p>
-                                    {event.description && (
-                                      <p className="text-xs text-muted-foreground mt-0.5">
-                                        {event.description}
-                                      </p>
-                                    )}
-                                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                                      {event.createdAt ? formatDateTime(event.createdAt) : ''}
-                                    </p>
-                                  </div>
-                                </div>
-                              );
-                            })
-                        )}
-                      </div>
                     </div>
                   </ScrollArea>
                 </TabsContent>
@@ -2625,6 +2703,53 @@ export function Customer360View() {
             <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreateInvoice} disabled={creatingInvoice}>
               {creatingInvoice ? <><Loader2 className="size-4 mr-1 animate-spin" /> Creating...</> : 'Create Invoice'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Edit Note Dialog ─────────────────────────────────────────── */}
+      <Dialog open={!!editingNote} onOpenChange={(open) => !open && setEditingNote(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Note</DialogTitle>
+            <DialogDescription>Make changes to this note. The update timestamp will be recorded.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Title</Label>
+              <Input
+                value={editingNote?.title || ''}
+                onChange={(e) => setEditingNote(prev => prev ? { ...prev, title: e.target.value } : null)}
+                placeholder="Note title"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Description</Label>
+              <Textarea
+                value={editingNote?.description || ''}
+                onChange={(e) => setEditingNote(prev => prev ? { ...prev, description: e.target.value } : null)}
+                placeholder="Note details..."
+                className="min-h-[100px] resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingNote(null)}>Cancel</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-foreground" onClick={handleEditNote}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Delete Note Confirmation ─────────────────────────────────── */}
+      <Dialog open={!!deletingNoteId} onOpenChange={(open) => !open && setDeletingNoteId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Note?</DialogTitle>
+            <DialogDescription>This action cannot be undone. The note will be permanently removed from the customer timeline.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingNoteId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteNote}>Delete Note</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
