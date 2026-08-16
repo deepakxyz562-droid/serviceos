@@ -1307,6 +1307,13 @@ export function DispatchView() {
     const skills = parseSkills(e.skills);
     const gps = hasGps(e);
 
+    // Contact: production data has proven phone can be null | undefined | ""
+    // despite the `phone: string` type declaration. Guard every .replace()
+    // call and disable the Call/WhatsApp buttons when no usable number exists.
+    const rawPhone = e.phone;
+    const hasPhone = typeof rawPhone === 'string' && rawPhone.trim().length > 0;
+    const phoneDigits = hasPhone ? rawPhone.replace(/[^+\d]/g, '') : '';
+
     // ETA to current job
     let etaMin: number | null = null;
     let distKm: number | null = null;
@@ -1481,18 +1488,33 @@ export function DispatchView() {
               </div>
             )}
 
-            {/* Contact actions */}
+            {/* Contact actions — when phone is absent we render a plain
+                <button disabled> (valid HTML, natively non-clickable). We do
+                NOT use asChild + disabled because <a disabled> is invalid HTML
+                and does not prevent navigation. */}
             <div className="grid grid-cols-2 gap-2">
-              <Button size="sm" variant="outline" className="h-8 text-xs" asChild>
-                <a href={`tel:${e.phone.replace(/[^+\d]/g, '')}`}>
+              {hasPhone ? (
+                <Button size="sm" variant="outline" className="h-8 text-xs" asChild>
+                  <a href={`tel:${phoneDigits}`}>
+                    <Phone className="size-3.5 mr-1" /> Call
+                  </a>
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" className="h-8 text-xs" disabled title="No phone number on file">
                   <Phone className="size-3.5 mr-1" /> Call
-                </a>
-              </Button>
-              <Button size="sm" variant="outline" className="h-8 text-xs" asChild>
-                <a href={`https://wa.me/${e.phone.replace(/[^+\d]/g, '').replace(/^\+/, '')}`} target="_blank" rel="noreferrer">
+                </Button>
+              )}
+              {hasPhone ? (
+                <Button size="sm" variant="outline" className="h-8 text-xs" asChild>
+                  <a href={`https://wa.me/${phoneDigits.replace(/^\+/, '')}`} target="_blank" rel="noreferrer">
+                    <MessageCircle className="size-3.5 mr-1" /> WhatsApp
+                  </a>
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" className="h-8 text-xs" disabled title="No phone number on file">
                   <MessageCircle className="size-3.5 mr-1" /> WhatsApp
-                </a>
-              </Button>
+                </Button>
+              )}
             </div>
 
             <Button
