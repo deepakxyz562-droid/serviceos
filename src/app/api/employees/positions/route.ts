@@ -81,6 +81,51 @@ function deriveGpsStatus(lastGpsAt: string | null): 'live' | 'stale' | 'offline'
   return 'live';
 }
 
+/**
+ * Normalize a timestamp (Date | ISO string with/without TZ) to a proper
+ * UTC ISO-8601 string ending in 'Z'.
+ *
+ * WHY THIS EXISTS:
+ *   Under the Supabase PostgREST adapter, Prisma `DateTime` columns (which
+ *   map to PostgreSQL `timestamp(3)` WITHOUT timezone) are returned as
+ *   naive ISO strings like "2026-08-16T13:39:37.084" — NO 'Z' suffix.
+ *
+ *   Per ECMAScript spec, a date-time string without a timezone suffix is
+ *   parsed as LOCAL time. On a UTC server (Vercel) this happens to work,
+ *   but a browser in IST (UTC+5:30) interprets the same string as 5h30m
+ *   older than it actually is — producing the production symptom
+ *   "GPS Tracking Live" + "Last: 5h ago".
+ *
+ *   Verified UTC write-path audit (2026-08-16):
+ *     - /api/gps/track:344            → now = new Date()           (UTC)
+ *     - /api/employees/heartbeat:34   → now = new Date()           (UTC)
+ *     - /api/employees/status:124     → now = new Date()           (UTC)
+ *     - /api/employee/jobs/[id]/lifecycle:95 → now = new Date()    (UTC)
+ *     - /lib/auth:191                 → new Date()                 (UTC)
+ *     - GPSLocation.capturedAt writes → new Date() | client .toISOString() (UTC)
+ *   The Supabase adapter's serializeData converts Date → .toISOString()
+ *   (with Z) before PostgREST; PostgreSQL timestamp(3) strips the Z on
+ *   storage but preserves the UTC numeric value. Appending 'Z' on read
+ *   makes the UTC semantics explicit for every consumer.
+ */
+function toUtcIso(v: string | Date | null | undefined): string | null {
+  if (v == null) return null;
+  if (v instanceof Date) {
+    return v.toISOString(); // always ends in Z
+  }
+  if (typeof v === 'string') {
+    // Already has Z or +HH:MM offset → parse + re-emit to normalize.
+    if (/[zZ]$/.test(v) || /[+-]\d{2}:?\d{2}$/.test(v)) {
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? v : d.toISOString();
+    }
+    // Naive timestamp (no TZ) — Prisma DateTime semantics: it was written
+    // as UTC, so append Z to make that explicit.
+    return v + 'Z';
+  }
+  return null;
+}
+
 export async function GET() {
   try {
     const authUser = await getAuthUser();
@@ -163,10 +208,7 @@ export async function GET() {
           }),
         );
         for (const [empId, capturedAt] of results) {
-          lastGpsMap.set(
-            empId,
-            capturedAt instanceof Date ? capturedAt.toISOString() : (capturedAt as string | null),
-          );
+          lastGpsMap.set(empId, toUtcIso(capturedAt));
         }
       } catch (e) {
         // Non-fatal — if GPSLocation table is missing or query fails, fall
@@ -179,9 +221,9 @@ export async function GET() {
     const enriched = rows.map((r: { id: string; email: string | null; latitude: number | null; longitude: number | null; lastSeenAt: string | Date | null; status: string; currentJobId: string | null }) => {
       const lastGpsAt = lastGpsMap.get(r.id) ?? null;
       const gpsStatus = deriveGpsStatus(lastGpsAt);
-      // Normalize lastSeenAt to ISO string for the client.
-      const lastSeenNorm =
-        r.lastSeenAt instanceof Date ? r.lastSeenAt.toISOString() : r.lastSeenAt;
+      // Normalize lastSeenAt to a UTC ISO string for the client.
+      // toUtcIso appends 'Z' to naive Supabase timestamps (see helper docs).
+      const lastSeenNorm = toUtcIso(r.lastSeenAt);
       return {
         id: r.id,
         email: r.email,
