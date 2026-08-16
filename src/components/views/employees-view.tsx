@@ -15,6 +15,7 @@ import {
   IdCard, FileStack, FileCheck, FileWarning, FileX, Package, QrCode, Wrench as WrenchIcon,
   Navigation, Clock3, Coffee, PlayCircle, StopCircle, Award, MessageSquare,
   ThumbsUp, ThumbsDown, Building2, ChevronRight, Sparkles, FileBadge,
+  LayoutGrid, List,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -536,6 +537,8 @@ export function EmployeesView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'working' | 'offline'>('all');
   const [listTab, setListTab] = useState<'list' | 'teams'>('list');
   const [tab, setTab] = useState<'employees' | 'timesheet'>('employees');
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -678,22 +681,35 @@ export function EmployeesView() {
   // ─── Computed ───────────────────────────────────────────────────────────
 
   const filteredEmployees = useMemo(() => {
-    if (!search) return employees;
-    const q = search.toLowerCase();
-    return employees.filter((e) => {
-      const name = (e.name || '').toLowerCase();
-      const role = (e.role || '').toLowerCase();
-      const phone = (e.phone || '').toLowerCase();
-      const skills = (e.skills || '').toLowerCase();
-      return name.includes(q) || role.includes(q) || phone.includes(q) || skills.includes(q);
-    });
-  }, [employees, search]);
+    let result = employees;
+
+    if (statusFilter === 'available') {
+      result = result.filter((e) => e.status === 'available');
+    } else if (statusFilter === 'working') {
+      result = result.filter((e) => e.status === 'on_job' || e.status === 'busy' || e.status === 'en_route');
+    } else if (statusFilter === 'offline') {
+      result = result.filter((e) => e.status === 'on_leave' || e.status === 'offline');
+    }
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter((e) => {
+        const name = (e.name || '').toLowerCase();
+        const role = (e.role || '').toLowerCase();
+        const phone = (e.phone || '').toLowerCase();
+        const skills = (e.skills || '').toLowerCase();
+        return name.includes(q) || role.includes(q) || phone.includes(q) || skills.includes(q);
+      });
+    }
+
+    return result;
+  }, [employees, search, statusFilter]);
 
   const stats = useMemo(() => ({
     total: employees.length,
     available: employees.filter((e) => e.status === 'available').length,
-    onJob: employees.filter((e) => e.status === 'on_job' || e.status === 'busy').length,
-    onLeave: employees.filter((e) => e.status === 'on_leave').length,
+    working: employees.filter((e) => e.status === 'on_job' || e.status === 'busy' || e.status === 'en_route').length,
+    offline: employees.filter((e) => e.status === 'on_leave' || e.status === 'offline').length,
   }), [employees]);
 
   // Teams: derive a simple grouping by role (no dedicated team model exists).
@@ -1041,9 +1057,12 @@ export function EmployeesView() {
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Stats Cards with click-to-filter */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card
+          className={cn('cursor-pointer transition-all hover:border-emerald-500/50', statusFilter === 'all' && 'ring-2 ring-emerald-500')}
+          onClick={() => setStatusFilter('all')}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
@@ -1051,12 +1070,15 @@ export function EmployeesView() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.total}</p>
-                <p className="text-xs text-muted-foreground">Total</p>
+                <p className="text-xs text-muted-foreground">Total Staff</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn('cursor-pointer transition-all hover:border-emerald-500/50', statusFilter === 'available' && 'ring-2 ring-emerald-500')}
+          onClick={() => setStatusFilter('available')}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
@@ -1064,62 +1086,127 @@ export function EmployeesView() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.available}</p>
-                <p className="text-xs text-muted-foreground">Available</p>
+                <p className="text-xs text-muted-foreground">🟢 Available</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn('cursor-pointer transition-all hover:border-emerald-500/50', statusFilter === 'working' && 'ring-2 ring-emerald-500')}
+          onClick={() => setStatusFilter('working')}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="size-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
                 <Clock className="size-4 text-amber-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.onJob}</p>
-                <p className="text-xs text-muted-foreground">On Job</p>
+                <p className="text-2xl font-bold">{stats.working}</p>
+                <p className="text-xs text-muted-foreground">🚗 Working / On Job</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn('cursor-pointer transition-all hover:border-emerald-500/50', statusFilter === 'offline' && 'ring-2 ring-emerald-500')}
+          onClick={() => setStatusFilter('offline')}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="size-9 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                <Shield className="size-4 text-purple-600" />
+              <div className="size-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                <Shield className="size-4 text-slate-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.onLeave}</p>
-                <p className="text-xs text-muted-foreground">On Leave</p>
+                <p className="text-2xl font-bold">{stats.offline}</p>
+                <p className="text-xs text-muted-foreground">⚪ Offline / On Leave</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Search + Tabs */}
-      <Card>
-        <CardContent className="p-4 space-y-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
+      {/* Search + Status Chips + View Switcher */}
+      <Card className="border-slate-200 dark:border-slate-800">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row items-center gap-3 justify-between">
+            <div className="relative flex-1 w-full max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                placeholder="Search employees by name, role, or skill..."
-                className="pl-9"
+                placeholder="Search employees by name, role, phone, or skill..."
+                className="pl-9 h-10"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Tabs value={listTab} onValueChange={(v) => setListTab(v as 'list' | 'teams')}>
-              <TabsList>
-                <TabsTrigger value="list" className="text-xs">
-                  <Users className="size-3.5 mr-1.5" /> List
-                </TabsTrigger>
-                <TabsTrigger value="teams" className="text-xs">
-                  <Building2 className="size-3.5 mr-1.5" /> Teams
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+              <Tabs value={listTab} onValueChange={(v) => setListTab(v as 'list' | 'teams')}>
+                <TabsList className="h-9">
+                  <TabsTrigger value="list" className="text-xs h-7">
+                    <Users className="size-3.5 mr-1.5" /> Staff
+                  </TabsTrigger>
+                  <TabsTrigger value="teams" className="text-xs h-7">
+                    <Building2 className="size-3.5 mr-1.5" /> Teams
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              {/* View Switcher Toggle: Cards vs Table */}
+              <div className="flex items-center gap-1 bg-muted p-1 rounded-lg border border-border">
+                <button
+                  type="button"
+                  onClick={() => setViewLayout('grid')}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer',
+                    viewLayout === 'grid' ? 'bg-background text-emerald-700 shadow-2xs' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title="Grid Cards View"
+                >
+                  <LayoutGrid className="size-3.5" /> Cards
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewLayout('table')}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer',
+                    viewLayout === 'table' ? 'bg-background text-emerald-700 shadow-2xs' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title="Table View"
+                >
+                  <List className="size-3.5" /> Table
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Status Filter Chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1">
+            {[
+              { id: 'all', label: 'All Staff', count: stats.total },
+              { id: 'available', label: '🟢 Available', count: stats.available },
+              { id: 'working', label: '🚗 Working / En Route', count: stats.working },
+              { id: 'offline', label: '⚪ Offline / On Leave', count: stats.offline },
+            ].map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => setStatusFilter(chip.id as typeof statusFilter)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border',
+                  statusFilter === chip.id
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                    : 'bg-background text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'
+                )}
+              >
+                <span>{chip.label}</span>
+                <span className={cn(
+                  'px-1.5 py-0.2 rounded-full text-[10px] font-bold',
+                  statusFilter === chip.id ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                )}>
+                  {chip.count}
+                </span>
+              </button>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -1158,19 +1245,20 @@ export function EmployeesView() {
           <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Users className="size-14 mb-4 opacity-30" />
             <p className="text-lg font-medium">
-              {search ? 'No employees match your search' : 'No employees yet'}
+              {search || statusFilter !== 'all' ? 'No employees match your search filter' : 'No employees yet'}
             </p>
             <p className="text-sm mt-1">
-              {search ? 'Try a different search term' : 'Add your first employee to get started'}
+              {search || statusFilter !== 'all' ? 'Try adjusting your search query or status filter' : 'Add your first employee to get started'}
             </p>
-            {!search && (
+            {!search && statusFilter === 'all' && (
               <Button className="bg-emerald-600 hover:bg-emerald-700 mt-4" onClick={() => { resetForm(); setShowAddDialog(true); }}>
                 <UserPlus className="size-4 mr-1.5" /> Add Employee
               </Button>
             )}
           </CardContent>
         </Card>
-      ) : (
+      ) : viewLayout === 'grid' ? (
+        /* ─── Grid Cards View ────────────────────────────────────────────── */
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredEmployees.map((emp) => {
             let skills: string[] = [];
@@ -1182,138 +1270,247 @@ export function EmployeesView() {
             return (
               <Card
                 key={emp.id}
-                className="transition-all hover:shadow-md cursor-pointer group"
+                className="group relative p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-card hover:border-emerald-500/40 hover:shadow-md transition-all cursor-pointer space-y-3 flex flex-col justify-between"
                 onClick={() => setSelectedEmployee(emp)}
               >
-                <CardContent className="p-4 space-y-3">
-                  {/* Header */}
+                <div className="space-y-3">
+                  {/* Header: Avatar + Live Dot + Name + Role + Dropdown */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3 min-w-0">
-                      <Avatar className="size-12 shrink-0">
-                        {emp.avatar && <AvatarImage src={emp.avatar} alt={emp.name} />}
-                        <AvatarFallback className={cn(
-                          'text-sm font-semibold',
-                          emp.status === 'available'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : (emp.status === 'on_job' || emp.status === 'busy')
-                            ? 'bg-amber-100 text-amber-700'
-                            : emp.status === 'on_leave'
-                            ? 'bg-purple-100 text-purple-700'
-                            : 'bg-slate-100 text-slate-600'
-                        )}>
-                          {getInitials(emp.name)}
-                        </AvatarFallback>
-                      </Avatar>
+                      <div className="relative shrink-0">
+                        <Avatar className="size-11 border-2 border-emerald-100 dark:border-emerald-950">
+                          {emp.avatar && <AvatarImage src={emp.avatar} alt={emp.name} />}
+                          <AvatarFallback className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 font-bold text-sm">
+                            {getInitials(emp.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span
+                          className={cn(
+                            'absolute bottom-0 right-0 size-3 rounded-full border-2 border-background',
+                            getStatusDot(emp.status)
+                          )}
+                        />
+                      </div>
                       <div className="min-w-0">
-                        <h3 className="font-semibold text-sm truncate group-hover:text-emerald-600 transition-colors">{emp.name}</h3>
-                        <p className="text-xs text-muted-foreground capitalize">{emp.role}</p>
+                        <h4 className="font-bold text-slate-900 dark:text-slate-100 truncate group-hover:text-emerald-600 transition-colors">
+                          {emp.name}
+                        </h4>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 capitalize bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                            {emp.role}
+                          </Badge>
+                          {getInvitationBadge(emp.invitationStatus)}
+                        </div>
                       </div>
                     </div>
+
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 w-7 p-0 shrink-0"
+                          className="h-7 w-7 p-0 shrink-0 text-slate-400 hover:text-slate-700"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <MoreVertical className="size-3.5" />
+                          <MoreVertical className="size-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenuItem onClick={() => setSelectedEmployee(emp)}>
-                          <ArrowLeft className="size-3 mr-2 rotate-180" /> View Details
+                          <ArrowLeft className="size-3.5 mr-2 rotate-180" /> Profile 360°
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => openEditDialog(emp)}>
-                          <Pencil className="size-3 mr-2" /> Edit
+                          <Pencil className="size-3.5 mr-2" /> Edit
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         {(!emp.invitationStatus || emp.invitationStatus === 'none') && (
                           <DropdownMenuItem onClick={() => handleSendInvite(emp)} disabled={inviteLoading || actionLoading}>
-                            <Send className="size-3 mr-2" /> Send Invitation
+                            <Send className="size-3.5 mr-2" /> Send Invitation
                           </DropdownMenuItem>
                         )}
                         {emp.invitationStatus === 'pending' && (
                           <DropdownMenuItem onClick={() => handleSendInvite(emp)} disabled={inviteLoading || actionLoading}>
-                            <Send className="size-3 mr-2" /> Resend Invitation
+                            <Send className="size-3.5 mr-2" /> Resend Invitation
                           </DropdownMenuItem>
                         )}
                         {emp.invitationStatus === 'accepted' && (
                           <DropdownMenuItem onClick={() => handleResetPassword(emp)} disabled={inviteLoading || actionLoading || !emp.userId}>
-                            <KeyRound className="size-3 mr-2" /> Reset Password
-                          </DropdownMenuItem>
-                        )}
-                        {emp.invitationStatus === 'pending' && (
-                          <DropdownMenuItem onClick={() => handleResetPassword(emp)} disabled={inviteLoading || actionLoading || !emp.userId}>
-                            <Mail className="size-3 mr-2" /> Reset Password
-                          </DropdownMenuItem>
-                        )}
-                        {emp.invitationStatus === 'accepted' && (
-                          <DropdownMenuItem onClick={() => handleSuspendToggle(emp)} disabled={inviteLoading || actionLoading} className="text-amber-600">
-                            <Power className="size-3 mr-2" /> Suspend
-                          </DropdownMenuItem>
-                        )}
-                        {emp.invitationStatus === 'suspended' && (
-                          <DropdownMenuItem onClick={() => handleSuspendToggle(emp)} disabled={inviteLoading || actionLoading} className="text-emerald-600">
-                            <Power className="size-3 mr-2" /> Reactivate
+                            <KeyRound className="size-3.5 mr-2" /> Reset Password
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-red-600" onClick={() => setShowDeleteDialog(emp.id)}>
-                          <Trash2 className="size-3 mr-2" /> Delete
+                          <Trash2 className="size-3.5 mr-2" /> Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
 
-                  {/* Status + Rating */}
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className={cn(getStatusColor(emp.status), 'text-[10px]')}>
-                        <span className={cn('size-1.5 rounded-full mr-1', getStatusDot(emp.status))} />
-                        {emp.status === 'busy' ? 'on job' : emp.status.replace('_', ' ')}
-                      </Badge>
-                      {getInvitationBadge(emp.invitationStatus)}
-                    </div>
-                    <StarRating rating={emp.rating} size="sm" />
+                  {/* Phone + One-tap Call & WhatsApp */}
+                  <div className="flex items-center justify-between gap-1 text-xs text-slate-500 dark:text-slate-400 pt-1">
+                    <span className="truncate">{emp.phone || 'No phone'}</span>
+                    {emp.phone && (
+                      <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <a
+                          href={`tel:${emp.phone}`}
+                          className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
+                          title="Call employee"
+                        >
+                          <Phone className="size-3.5" />
+                        </a>
+                        <a
+                          href={`https://wa.me/${emp.phone.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
+                          title="WhatsApp employee"
+                        >
+                          <MessageSquare className="size-3.5" />
+                        </a>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Footer Stats Row */}
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Briefcase className="size-3 text-emerald-500" />
-                      <span>{emp.completedJobs} Jobs</span>
+                  {/* Location & Rating */}
+                  <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                    <div className="flex items-center gap-1 truncate">
+                      <MapPin className="size-3.5 shrink-0 text-slate-400" />
+                      <span className="truncate">{emp.location || 'Location unmapped'}</span>
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <CheckCircle2 className="size-3 text-emerald-500" />
-                      <span>—</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Star className="size-3 text-amber-500" />
-                      <span>{emp.rating > 0 ? emp.rating.toFixed(1) : '—'}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Star className="size-3 text-amber-500 fill-amber-500" />
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">{emp.rating > 0 ? emp.rating.toFixed(1) : '—'}</span>
                     </div>
                   </div>
 
-                  {/* Skills (if any) */}
+                  {/* Skills tags */}
                   {skills.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap gap-1 pt-1">
                       {skills.slice(0, 3).map((skill, i) => (
-                        <Badge key={i} variant="secondary" className="text-[10px] h-5 px-1.5">
+                        <Badge key={i} variant="secondary" className="text-[9px] px-1.5 py-0 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                           {skill}
                         </Badge>
                       ))}
-                      {skills.length > 3 && (
-                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
-                          +{skills.length - 3}
-                        </Badge>
-                      )}
                     </div>
                   )}
-                </CardContent>
+                </div>
+
+                {/* Footer Bar: Completed Jobs + Profile 360° CTA */}
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-1 text-xs text-slate-500 font-medium">
+                    <Briefcase className="size-3.5 text-emerald-600" />
+                    <span>{emp.completedJobs || 0} jobs done</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-7 text-xs px-2.5 shadow-xs"
+                    onClick={() => setSelectedEmployee(emp)}
+                  >
+                    Profile 360°
+                  </Button>
+                </div>
               </Card>
             );
           })}
         </div>
+      ) : (
+        /* ─── Table View ───────────────────────────────────────────────── */
+        <Card className="border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+          <div className="max-h-[600px] overflow-auto">
+            <Table>
+              <TableHeader className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10">
+                <TableRow>
+                  <TableHead className="font-bold">Employee</TableHead>
+                  <TableHead className="font-bold">Status</TableHead>
+                  <TableHead className="font-bold">Phone</TableHead>
+                  <TableHead className="font-bold">Role & Rating</TableHead>
+                  <TableHead className="hidden md:table-cell font-bold">Location</TableHead>
+                  <TableHead className="text-right font-bold w-[120px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredEmployees.map((emp) => (
+                  <TableRow
+                    key={emp.id}
+                    className="cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-900/50 transition-colors"
+                    onClick={() => setSelectedEmployee(emp)}
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="relative shrink-0">
+                          <Avatar className="size-8 border border-emerald-100 dark:border-emerald-950">
+                            {emp.avatar && <AvatarImage src={emp.avatar} alt={emp.name} />}
+                            <AvatarFallback className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 font-bold text-xs">
+                              {getInitials(emp.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span
+                            className={cn(
+                              'absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border border-background',
+                              getStatusDot(emp.status)
+                            )}
+                          />
+                        </div>
+                        <span className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">{emp.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <Badge variant="outline" className={cn(getStatusColor(emp.status), 'text-[10px]')}>
+                        {emp.status === 'busy' ? 'on job' : emp.status.replace('_', ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <div className="flex items-center gap-1">
+                        <span>{emp.phone || '—'}</span>
+                        {emp.phone && (
+                          <div className="flex items-center gap-0.5 ml-auto" onClick={(e) => e.stopPropagation()}>
+                            <a
+                              href={`tel:${emp.phone}`}
+                              className="p-1 text-slate-400 hover:text-emerald-600 transition-colors"
+                              title="Call"
+                            >
+                              <Phone className="size-3" />
+                            </a>
+                            <a
+                              href={`https://wa.me/${emp.phone.replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1 text-slate-400 hover:text-emerald-600 transition-colors"
+                              title="WhatsApp"
+                            >
+                              <MessageSquare className="size-3" />
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="capitalize text-slate-700 font-medium">{emp.role}</span>
+                        <span className="text-slate-400">·</span>
+                        <span className="flex items-center gap-0.5 text-amber-600 font-semibold">
+                          <Star className="size-3 fill-amber-500" /> {emp.rating > 0 ? emp.rating.toFixed(1) : '—'}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-slate-500 truncate max-w-[160px] hidden md:table-cell">
+                      {emp.location || '—'}
+                    </TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] h-7 px-2.5 font-semibold"
+                        onClick={() => setSelectedEmployee(emp)}
+                      >
+                        Profile 360°
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
       )}
 
       {/* Add Employee Dialog */}
