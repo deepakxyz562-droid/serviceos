@@ -315,6 +315,18 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
     // them via separate queries once they're declared here.
     properties: { targetTable: 'Property', targetFkColumn: 'customerId', isMany: true },
     additionalContacts: { targetTable: 'CustomerContact', targetFkColumn: 'customerId', isMany: true },
+    // ── Customer 360 nested relations ──────────────────────────────────────
+    // Without these mappings, db.customer.findUnique({ select: { jobs: {...}, invoices: {...}, ... } })
+    // silently drops the nested selects (the adapter doesn't know they're relations,
+    // tries to fetch them as columns, fails, returns undefined → coerced to [] by the
+    // hook → Quotes/Invoices/Payments/Communication tabs all show empty).
+    // Mapped as isMany:true with targetFkColumn (the FK on the TARGET table pointing
+    // back to Customer.id), matching the same shape as properties/additionalContacts.
+    jobs: { targetTable: 'Job', targetFkColumn: 'customerId', isMany: true },
+    invoices: { targetTable: 'Invoice', targetFkColumn: 'customerId', isMany: true },
+    conversations: { targetTable: 'Conversation', targetFkColumn: 'customerId', isMany: true },
+    quotes: { targetTable: 'Quote', targetFkColumn: 'customerId', isMany: true },
+    leads: { targetTable: 'Lead', targetFkColumn: 'customerId', isMany: true },
   },
   Property: {
     customer: { targetTable: 'Customer', fkColumn: 'customerId' },
