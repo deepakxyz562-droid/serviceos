@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { ensureDealsForTenant } from '@/lib/lead-deal-sync'
+import { resolveCustomerByPhone } from '@/lib/customer-resolve'
 
 export async function GET(request: NextRequest) {
   try {
@@ -256,6 +257,39 @@ export async function POST(request: NextRequest) {
 
     let leadId = body.leadId || null
 
+    // ─── Layer 2: best-effort resolve existing Customer by phone ────────
+    // When the caller sends `customerPhone` but no `customerId`, try to
+    // find an existing Customer in the same tenant by `normalizedPhone`
+    // (deterministic — `@@unique([tenantId, normalizedPhone])`).
+    //
+    // This prevents orphan Deals when a user types a name+phone that
+    // already belongs to an existing Customer. Best-effort: if no match,
+    // leave `customerId` null — a new prospect legitimately starts without
+    // a Customer until the Lead is converted.
+    //
+    // See /home/z/my-project/worklog.md Task ID 4 (Layer 2) for context.
+    let resolvedCustomerId: string | null = body.customerId || null
+    let resolvedCustomerName: string | null = body.customerName || null
+    let resolvedCustomerPhone: string | null = body.customerPhone || null
+    if (!resolvedCustomerId && body.customerPhone && tenantId) {
+      try {
+        const found = await resolveCustomerByPhone(body.customerPhone, tenantId)
+        if (found) {
+          resolvedCustomerId = found.id
+          // Prefer the caller-supplied name/phone for display, but fall
+          // back to the matched Customer's values if the caller didn't send them.
+          resolvedCustomerName = resolvedCustomerName || found.name
+          resolvedCustomerPhone = resolvedCustomerPhone || found.phone
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('[DealsCreate] Resolved existing Customer by phone:', found.id)
+          }
+        }
+      } catch (resolveErr) {
+        // Non-fatal — continue with customerId=null (best-effort).
+        console.error('[DealsCreate] Customer phone resolution failed (non-blocking):', resolveErr)
+      }
+    }
+
     // ─── HubSpot model: every Deal is linked to a Lead ─────────
     // If no leadId is provided, auto-create a Lead from the Deal data.
     // This ensures the Sales Pipeline "Create" button creates a Lead+Deal pair.
@@ -274,7 +308,7 @@ export async function POST(request: NextRequest) {
             description: null,
             address: null,
             tenantId: tenantId || null,
-            customerId: body.customerId || null,
+            customerId: resolvedCustomerId,
             assignedToId: body.assigneeId || null,
           },
         })
@@ -292,9 +326,9 @@ export async function POST(request: NextRequest) {
         currency: body.currency || 'USD',
         stage: body.stage || 'new_lead',
         probability: body.probability ?? 10,
-        customerId: body.customerId,
-        customerName: body.customerName,
-        customerPhone: body.customerPhone,
+        customerId: resolvedCustomerId,
+        customerName: resolvedCustomerName,
+        customerPhone: resolvedCustomerPhone,
         assigneeId: body.assigneeId,
         assigneeName: body.assigneeName,
         leadId,

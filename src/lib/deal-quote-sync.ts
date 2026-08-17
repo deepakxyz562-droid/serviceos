@@ -44,6 +44,7 @@
  */
 
 import { db } from '@/lib/db';
+import { resolveCustomerIdFromDealChain } from '@/lib/customer-resolve';
 
 export type EnsureQuoteResult = {
   quoteId: string | null;
@@ -107,6 +108,65 @@ export async function ensureQuoteForDeal(
     //    The Quote's totals are seeded from the Deal's value so the
     //    draft is immediately usable; the user can edit line items /
     //    tax / discount from the Quotes view.
+    //
+    // ── Customer resolution (Layer 1 fix) ───────────────────────────────
+    // Previously: `customerId: deal.customerId || null` — faithfully
+    // propagated the Deal's null customerId, orphaning the Quote from
+    // the Customer relation. Now we resolve customerId deterministically
+    // via the Deal → Lead → Customer (by normalizedPhone) chain BEFORE
+    // creating the Quote. When resolved, we ALSO backfill the Deal's
+    // customerId so subsequent operations don't re-resolve.
+    //
+    // This fixes the root cause of orphaned Pipeline-generated Quotes
+    // (e.g. "Quote — ritesh gandhi" with customerId=null). See
+    // /home/z/my-project/worklog.md Task ID 3 & 4 for the full trace.
+    let resolvedCustomerId = deal.customerId || null;
+    let resolutionSource: string | null = null;
+    if (!resolvedCustomerId) {
+      const resolved = await resolveCustomerIdFromDealChain(deal.id);
+      resolvedCustomerId = resolved.customerId;
+      resolutionSource = resolved.source;
+    }
+
+    // Backfill the Deal's customerId if we resolved one (idempotent + safe).
+    if (resolvedCustomerId && !deal.customerId) {
+      try {
+        await db.deal.update({
+          where: { id: deal.id },
+          data: { customerId: resolvedCustomerId },
+          select: { id: true },
+        });
+        console.log(
+          '[deal-quote-sync] Backfilled Deal',
+          deal.id,
+          'customerId =',
+          resolvedCustomerId,
+          '(source:',
+          resolutionSource || 'deal.customerId',
+          ')',
+        );
+      } catch (backfillErr) {
+        // Non-fatal — the Quote will still be created with the resolved
+        // customerId; the Deal just stays un-backfilled (next resolution
+        // will re-resolve). Log so it's visible.
+        console.error(
+          '[deal-quote-sync] Failed to backfill Deal.customerId (non-blocking):',
+          backfillErr,
+        );
+      }
+    } else if (!resolvedCustomerId) {
+      // No customer could be resolved — create the Quote as an orphan
+      // but log a WARNING so it's not silently lost. The user can
+      // assign a customer from the Quotes view.
+      console.warn(
+        '[deal-quote-sync] Could not resolve customerId for Deal',
+        deal.id,
+        '(title:',
+        deal.title,
+        ') — Quote will be created with customerId=null.',
+      );
+    }
+
     const quote = await db.quote.create({
       data: {
         title: deal.title ? `Quote — ${deal.title}` : 'Draft Quote',
@@ -124,7 +184,7 @@ export async function ensureQuoteForDeal(
         baseCurrency: deal.currency || 'USD',
         baseAmount: deal.value || 0,
         status: 'draft',
-        customerId: deal.customerId || null,
+        customerId: resolvedCustomerId,
         leadId: deal.leadId || null,
         dealId: deal.id, // ← the link
         tenantId: deal.tenantId || null,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { EventBus } from '@/lib/event-bus';
+import { normalizePhone, normalizeEmail } from '@/lib/customer-normalize';
 
 // POST /api/leads/convert - Convert lead to job
 export async function POST(request: NextRequest) {
@@ -94,12 +95,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Create Customer from lead data
+    //
+    // ── Layer 3 fix: set normalizedPhone / normalizedEmail ──────────────
+    // Previously these were left null, which broke phone-based Customer
+    // resolution in `ensureQuoteForDeal` (Layer 1) and `POST /api/deals`
+    // (Layer 2) — a Customer created here was invisible to the
+    // `normalizedPhone` lookup. Now we stamp them so the Customer is
+    // discoverable by any downstream resolver.
+    // See /home/z/my-project/worklog.md Task ID 4 (Layer 3).
     const customer = await db.customer.create({
       data: {
         name: lead.name,
         phone: lead.phone,
         email: lead.email,
         address: lead.address,
+        normalizedPhone: normalizePhone(lead.phone),
+        normalizedEmail: normalizeEmail(lead.email),
         workspaceId: jobWorkspaceId,
       },
     });
@@ -171,6 +182,14 @@ export async function POST(request: NextRequest) {
     });
 
     // ─── Mark linked Deal as won (HubSpot model) ──────────────
+    //
+    // ── Layer 3 fix: ALSO backfill deal.customerId ─────────────────────
+    // Previously the Deal update only set `stage: 'won', closedAt`. The
+    // Deal's `customerId` stayed null even after the Lead was converted —
+    // which meant `ensureQuoteForDeal` would still create orphaned Quotes
+    // from that Deal. Now we backfill `customerId` (and the denormalized
+    // `customerName`/`customerPhone` for display) so the chain is healed.
+    // See /home/z/my-project/worklog.md Task ID 4 (Layer 3).
     try {
       const linkedDeal = await db.deal.findFirst({ where: { leadId: leadId } });
       if (linkedDeal) {
@@ -179,6 +198,11 @@ export async function POST(request: NextRequest) {
           data: {
             stage: 'won',
             closedAt: new Date(),
+            // Backfill the customer relation if it was missing.
+            ...(linkedDeal.customerId ? {} : { customerId: customer.id }),
+            // Keep the denormalized display fields in sync.
+            customerName: customer.name,
+            customerPhone: customer.phone,
           },
         });
         // Log stage change in history

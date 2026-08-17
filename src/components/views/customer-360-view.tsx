@@ -40,7 +40,6 @@ import {
   useBookings,
 } from '@/hooks/queries/use-supabase-queries';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
-import { AssetsSection } from '@/components/customer/assets-section';
 import { TimelineSection } from '@/components/customer/timeline-section';
 import { CommunicationComposer } from '@/components/communication/composer';
 
@@ -1471,12 +1470,6 @@ export function Customer360View() {
                       </Badge>
                     )}
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="bookings"
-                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
-                  >
-                    <Calendar className="size-3.5" /> Bookings
-                  </TabsTrigger>
                 </TabsList>
               </div>
 
@@ -1829,172 +1822,6 @@ export function Customer360View() {
                     </div>
                   </ScrollArea>
                 </TabsContent>
-
-                {/* ─── Bookings Tab ─────────────────────────────────────────── */}
-                <TabsContent value="bookings" className="h-full m-0">
-                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
-                    <div className="p-5 space-y-6">
-                      {bookingsLoading ? (
-                        <div className="space-y-3">
-                          {Array.from({ length: 3 }).map((_, i) => (
-                            <Skeleton key={i} className="h-16 w-full rounded-lg" />
-                          ))}
-                        </div>
-                      ) : bookings.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 text-center">
-                          <Calendar className="size-10 text-muted-foreground mb-3" />
-                          <h3 className="text-base font-semibold text-foreground">
-                            No bookings
-                          </h3>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Bookings for this customer will appear here
-                          </p>
-                        </div>
-                      ) : (
-                        <>
-                          {/* Upcoming — grouped by date */}
-                          {bookings.filter(
-                            (b: any) =>
-                              b.status === 'confirmed' || b.status === 'pending'
-                          ).length > 0 && (
-                            <div className="space-y-4">
-                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                <Clock className="size-3.5" /> Upcoming
-                              </h4>
-                              {(() => {
-                                const upcoming = bookings.filter(
-                                  (b: any) => b.status === 'confirmed' || b.status === 'pending'
-                                );
-                                // Group by date
-                                const dateGroups: Record<string, any[]> = {};
-                                upcoming.forEach((b: any) => {
-                                  const dateKey = b.scheduledAt
-                                    ? new Date(b.scheduledAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-                                    : 'No date set';
-                                  if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
-                                  dateGroups[dateKey].push(b);
-                                });
-                                return Object.entries(dateGroups).map(([dateLabel, dateBookings]) => (
-                                  <div key={dateLabel} className="space-y-2">
-                                    <div className="flex items-center gap-2 pl-1">
-                                      <div className="size-1.5 rounded-full bg-emerald-500" />
-                                      <span className="text-xs font-semibold text-foreground">{dateLabel}</span>
-                                    </div>
-                                    {dateBookings.map((booking: any) => {
-                                      const statusCfg =
-                                        bookingStatusConfig[booking.status] ||
-                                        bookingStatusConfig.pending;
-                                      return (
-                                        <div
-                                          key={booking.id}
-                                          className="flex items-center justify-between p-3 bg-card rounded-xl border border-border hover:shadow-sm transition-all duration-200 ml-3"
-                                        >
-                                          <div className="min-w-0">
-                                            <p className="text-sm font-medium text-foreground truncate">
-                                              {booking.title || 'Booking'}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                              {booking.scheduledAt
-                                                ? formatDateTime(booking.scheduledAt)
-                                                : 'No time set'}
-                                              {booking.employee?.name &&
-                                                ` \u00B7 ${booking.employee.name}`}
-                                            </p>
-                                          </div>
-                                          <Badge
-                                            variant="outline"
-                                            className={cn(
-                                              'text-[10px] shrink-0 rounded-md',
-                                              statusCfg.bg,
-                                              statusCfg.color
-                                            )}
-                                          >
-                                            {statusCfg.label}
-                                          </Badge>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                ));
-                              })()}
-                            </div>
-                          )}
-
-                          {/* Completed */}
-                          {bookings.filter((b: any) => b.status === 'completed').length >
-                            0 && (
-                            <div className="space-y-2">
-                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                <CheckCircle2 className="size-3.5" /> Completed
-                              </h4>
-                              {bookings
-                                .filter((b: any) => b.status === 'completed')
-                                .map((booking: any) => (
-                                  <div
-                                    key={booking.id}
-                                    className="flex items-center justify-between p-3 bg-card rounded-xl border border-border hover:shadow-sm transition-all duration-200"
-                                  >
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-medium text-foreground truncate">
-                                        {booking.title || 'Booking'}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground">
-                                        {booking.scheduledAt
-                                          ? formatDate(booking.scheduledAt)
-                                          : ''}
-                                      </p>
-                                    </div>
-                                    <Badge
-                                      variant="outline"
-                                      className="text-[10px] shrink-0 rounded-md bg-emerald-500/10 text-emerald-400 border-emerald-700"
-                                    >
-                                      Completed
-                                    </Badge>
-                                  </div>
-                                ))}
-                            </div>
-                          )}
-
-                          {/* Cancelled */}
-                          {bookings.filter((b: any) => b.status === 'cancelled').length >
-                            0 && (
-                            <div className="space-y-2">
-                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                <X className="size-3.5" /> Cancelled
-                              </h4>
-                              {bookings
-                                .filter((b: any) => b.status === 'cancelled')
-                                .map((booking: any) => (
-                                  <div
-                                    key={booking.id}
-                                    className="flex items-center justify-between p-3 bg-card rounded-xl border border-border opacity-60 transition-all duration-200"
-                                  >
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-medium text-muted-foreground line-through truncate">
-                                        {booking.title || 'Booking'}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground">
-                                        {booking.scheduledAt
-                                          ? formatDate(booking.scheduledAt)
-                                          : ''}
-                                      </p>
-                                    </div>
-                                    <Badge
-                                      variant="outline"
-                                      className="text-[10px] shrink-0 rounded-md bg-red-500/10 text-red-400 border-red-700"
-                                    >
-                                      Cancelled
-                                    </Badge>
-                                  </div>
-                                ))}
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </TabsContent>
-
                 {/* ─── Jobs Tab ─────────────────────────────────────────────── */}
                 <TabsContent value="jobs" className="h-full m-0">
                   <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
@@ -2205,193 +2032,139 @@ export function Customer360View() {
                           </p>
                         </div>
                       ) : (
-                        <>
-                          {/* Paid */}
-                          {invoices.filter((i: any) => i.status === 'paid').length > 0 && (
-                            <div className="space-y-2">
-                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                <CheckCircle2 className="size-3.5 text-emerald-500" /> Paid
-                              </h4>
-                              {invoices
-                                .filter((i: any) => i.status === 'paid')
-                                .map((inv: any) => {
-                                  const cfg = invoiceStatusConfig.paid;
-                                  const StatusIcon = cfg.icon;
-                                  return (
-                                    <div
-                                      key={inv.id}
-                                      className="flex items-center justify-between p-3 bg-card rounded-xl border border-border hover:shadow-sm transition-all duration-200"
-                                    >
-                                      <div className="flex items-center gap-3 min-w-0">
-                                        <div className="size-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
-                                          <StatusIcon className="size-3.5 text-emerald-500" />
-                                        </div>
-                                        <div className="min-w-0">
-                                          <p className="text-sm font-medium text-foreground">
-                                            {inv.number || inv.invoiceNumber || 'Invoice'}
-                                          </p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {formatDate(inv.createdAt)}
-                                            {inv.paidAt ? ` \u00B7 Paid ${formatDate(inv.paidAt)}` : ''}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2 shrink-0">
-                                        <span className="text-sm font-bold text-emerald-400">
-                                          {format(inv.total)}
-                                        </span>
-                                        <Badge
-                                          variant="outline"
-                                          className="text-[10px] rounded-md bg-emerald-500/10 text-emerald-400 border-emerald-700"
-                                        >
-                                          Paid
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                            </div>
-                          )}
+                        (() => {
+                          // ── Dynamic invoice status grouping ──────────────────────
+                          // Uses `invoiceStatusConfig` (defined above) as the single
+                          // source of truth for labels / colors / icons. Previously
+                          // this tab had 4 hardcoded buckets (paid / pending / overdue
+                          // / draft) which silently dropped invoices with status `sent`,
+                          // `pending_approval`, or `cancelled`. Now every non-empty
+                          // status group renders, with a final "Other" fallback so no
+                          // invoice is ever hidden.
+                          const STATUS_ORDER = ['paid', 'sent', 'pending_approval', 'pending', 'overdue', 'draft', 'cancelled'];
+                          const FALLBACK_CFG = { label: 'Other', color: 'text-muted-foreground', bg: 'bg-muted border-border', icon: FileText };
 
-                          {/* Pending */}
-                          {invoices.filter((i: any) => i.status === 'pending').length > 0 && (
-                            <div className="space-y-2">
-                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                <Clock className="size-3.5 text-amber-500" /> Pending
-                              </h4>
-                              {invoices
-                                .filter((i: any) => i.status === 'pending')
-                                .map((inv: any) => {
-                                  const cfg = invoiceStatusConfig.pending;
-                                  const StatusIcon = cfg.icon;
-                                  return (
-                                    <div
-                                      key={inv.id}
-                                      className="flex items-center justify-between p-3 bg-card rounded-xl border border-amber-700/30 hover:shadow-sm transition-all duration-200"
-                                    >
-                                      <div className="flex items-center gap-3 min-w-0">
-                                        <div className="size-8 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
-                                          <StatusIcon className="size-3.5 text-amber-500" />
-                                        </div>
-                                        <div className="min-w-0">
-                                          <p className="text-sm font-medium text-foreground">
-                                            {inv.number || inv.invoiceNumber || 'Invoice'}
-                                          </p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {formatDate(inv.createdAt)}
-                                            {inv.dueDate ? ` \u00B7 Due ${formatDate(inv.dueDate)}` : ''}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2 shrink-0">
-                                        <span className="text-sm font-bold text-amber-400">
-                                          {format(inv.total)}
-                                        </span>
-                                        <Badge
-                                          variant="outline"
-                                          className="text-[10px] rounded-md bg-amber-500/10 text-amber-400 border-amber-700"
-                                        >
-                                          Pending
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                            </div>
-                          )}
+                          // Group invoices by status.
+                          const groups = new Map<string, any[]>();
+                          for (const inv of invoices) {
+                            const status = inv.status || 'draft';
+                            if (!groups.has(status)) groups.set(status, []);
+                            groups.get(status)!.push(inv);
+                          }
 
-                          {/* Overdue */}
-                          {invoices.filter((i: any) => i.status === 'overdue').length > 0 && (
-                            <div className="space-y-2">
-                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                <AlertCircle className="size-3.5 text-red-500" /> Overdue
-                              </h4>
-                              {invoices
-                                .filter((i: any) => i.status === 'overdue')
-                                .map((inv: any) => {
-                                  const cfg = invoiceStatusConfig.overdue;
-                                  const StatusIcon = cfg.icon;
-                                  return (
-                                    <div
-                                      key={inv.id}
-                                      className="flex items-center justify-between p-3 bg-destructive/10 rounded-xl border border-destructive/30 hover:shadow-sm transition-all duration-200"
-                                    >
-                                      <div className="flex items-center gap-3 min-w-0">
-                                        <div className="size-8 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
-                                          <StatusIcon className="size-3.5 text-red-500" />
-                                        </div>
-                                        <div className="min-w-0">
-                                          <p className="text-sm font-medium text-foreground">
-                                            {inv.number || inv.invoiceNumber || 'Invoice'}
-                                          </p>
-                                          <p className="text-xs text-red-400">
-                                            Due {inv.dueDate ? formatDate(inv.dueDate) : 'N/A'}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2 shrink-0">
-                                        <span className="text-sm font-bold text-red-400">
-                                          {format(inv.total)}
-                                        </span>
-                                        <Badge
-                                          variant="outline"
-                                          className="text-[10px] rounded-md bg-red-500/10 text-red-400 border-red-700"
-                                        >
-                                          Overdue
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                            </div>
-                          )}
+                          // Canonical groups (in display order) + any unrecognized statuses.
+                          const canonical = STATUS_ORDER.filter(s => groups.has(s));
+                          const others = [...groups.keys()].filter(s => !STATUS_ORDER.includes(s));
 
-                          {/* Draft */}
-                          {invoices.filter((i: any) => i.status === 'draft').length > 0 && (
-                            <div className="space-y-2">
-                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                <FileText className="size-3.5 text-muted-foreground" /> Draft
-                              </h4>
-                              {invoices
-                                .filter((i: any) => i.status === 'draft')
-                                .map((inv: any) => {
-                                  const cfg = invoiceStatusConfig.draft;
-                                  const StatusIcon = cfg.icon;
-                                  return (
-                                    <div
-                                      key={inv.id}
-                                      className="flex items-center justify-between p-3 bg-card rounded-xl border border-border opacity-70 transition-all duration-200"
-                                    >
-                                      <div className="flex items-center gap-3 min-w-0">
-                                        <div className="size-8 rounded-full bg-muted/50 flex items-center justify-center shrink-0">
-                                          <StatusIcon className="size-3.5 text-muted-foreground" />
-                                        </div>
-                                        <div className="min-w-0">
-                                          <p className="text-sm font-medium text-muted-foreground">
-                                            {inv.number || inv.invoiceNumber || 'Invoice'}
-                                          </p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {formatDate(inv.createdAt)}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2 shrink-0">
-                                        <span className="text-sm font-bold text-muted-foreground">
-                                          {format(inv.total)}
-                                        </span>
-                                        <Badge
-                                          variant="outline"
-                                          className="text-[10px] rounded-md bg-muted text-muted-foreground border-border"
+                          return (
+                            <div className="space-y-6">
+                              {canonical.map(status => {
+                                const cfg = invoiceStatusConfig[status] || FALLBACK_CFG;
+                                const StatusIcon = cfg.icon || FileText;
+                                const groupInvoices = groups.get(status)!;
+                                return (
+                                  <div key={status} className="space-y-2">
+                                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                      <StatusIcon className={cn('size-3.5', cfg.color)} /> {cfg.label}
+                                      <span className="text-muted-foreground/60 normal-case font-normal">({groupInvoices.length})</span>
+                                    </h4>
+                                    {groupInvoices.map((inv: any) => {
+                                      const invCfg = invoiceStatusConfig[inv.status] || FALLBACK_CFG;
+                                      const InvIcon = invCfg.icon || FileText;
+                                      return (
+                                        <div
+                                          key={inv.id}
+                                          className={cn(
+                                            'flex items-center justify-between p-3 bg-card rounded-xl border border-border hover:shadow-sm transition-all duration-200',
+                                            status === 'overdue' && 'border-destructive/30 bg-destructive/5',
+                                            status === 'draft' && 'opacity-70',
+                                          )}
                                         >
-                                          Draft
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+                                          <div className="flex items-center gap-3 min-w-0">
+                                            <div className={cn('size-8 rounded-full flex items-center justify-center shrink-0', invCfg.bg)}>
+                                              <InvIcon className={cn('size-3.5', invCfg.color)} />
+                                            </div>
+                                            <div className="min-w-0">
+                                              <p className={cn('text-sm font-medium', status === 'draft' ? 'text-muted-foreground' : 'text-foreground')}>
+                                                {inv.number || inv.invoiceNumber || 'Invoice'}
+                                              </p>
+                                              <p className="text-xs text-muted-foreground">
+                                                {formatDate(inv.createdAt)}
+                                                {inv.paidAt && status === 'paid' ? ` \u00B7 Paid ${formatDate(inv.paidAt)}` : ''}
+                                                {inv.dueDate && status !== 'paid' ? ` \u00B7 Due ${formatDate(inv.dueDate)}` : ''}
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2 shrink-0">
+                                            <span className={cn('text-sm font-bold', invCfg.color)}>
+                                              {format(inv.total)}
+                                            </span>
+                                            <Badge
+                                              variant="outline"
+                                              className={cn('text-[10px] rounded-md', invCfg.bg, invCfg.color)}
+                                            >
+                                              {invCfg.label}
+                                            </Badge>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })}
+
+                              {/* Fallback: any invoices with unrecognized statuses */}
+                              {others.length > 0 && (
+                                <div className="space-y-2">
+                                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                    <FileText className="size-3.5 text-muted-foreground" /> Other
+                                    <span className="text-muted-foreground/60 normal-case font-normal">
+                                      ({others.reduce((n, s) => n + groups.get(s)!.length, 0)})
+                                    </span>
+                                  </h4>
+                                  {others.flatMap(status =>
+                                    groups.get(status)!.map((inv: any) => {
+                                      const invCfg = FALLBACK_CFG;
+                                      const InvIcon = invCfg.icon;
+                                      return (
+                                        <div
+                                          key={inv.id}
+                                          className="flex items-center justify-between p-3 bg-card rounded-xl border border-border hover:shadow-sm transition-all duration-200"
+                                        >
+                                          <div className="flex items-center gap-3 min-w-0">
+                                            <div className={cn('size-8 rounded-full flex items-center justify-center shrink-0', invCfg.bg)}>
+                                              <InvIcon className={cn('size-3.5', invCfg.color)} />
+                                            </div>
+                                            <div className="min-w-0">
+                                              <p className="text-sm font-medium text-foreground">
+                                                {inv.number || inv.invoiceNumber || 'Invoice'}
+                                              </p>
+                                              <p className="text-xs text-muted-foreground">
+                                                {formatDate(inv.createdAt)}
+                                                {inv.dueDate ? ` \u00B7 Due ${formatDate(inv.dueDate)}` : ''}
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2 shrink-0">
+                                            <span className={cn('text-sm font-bold', invCfg.color)}>
+                                              {format(inv.total)}
+                                            </span>
+                                            <Badge
+                                              variant="outline"
+                                              className={cn('text-[10px] rounded-md', invCfg.bg, invCfg.color)}
+                                            >
+                                              {inv.status || 'unknown'}
+                                            </Badge>
+                                          </div>
+                                        </div>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </>
+                          );
+                        })()
                       )}
                     </div>
                   </ScrollArea>
@@ -2581,19 +2354,7 @@ export function Customer360View() {
                       })()}
                     </div>
                   </ScrollArea>
-                </TabsContent>
-
-                {/* ─── Assets Tab ───────────────────────────────────────── */}
-                <TabsContent value="assets" className="h-full m-0">
-                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
-                    <div className="p-5">
-                      {selectedCustomerId && (
-                        <AssetsSection customerId={selectedCustomerId} />
-                      )}
-                    </div>
-                  </ScrollArea>
-                </TabsContent>
-              </div>
+                </TabsContent>              </div>
             </Tabs>
           </div>
         </div>
