@@ -112,6 +112,33 @@ interface AppState {
   setPipelineDensity: (d: 'comfortable' | 'compact' | 'dense') => void;
   pipelineViewMode: 'kanban' | 'table' | 'timeline' | 'calendar' | 'analytics';
   setPipelineViewMode: (m: 'kanban' | 'table' | 'timeline' | 'calendar' | 'analytics') => void;
+
+  // ── Cross-view "open entity detail" signal (Customer 360 → Jobs/Quotes/Invoices) ──
+  // When the user clicks a Job/Quote/Invoice row inside the Customer 360 detail
+  // panel (crm-view.tsx), we can't open the detail inline — those detail panels
+  // live inside their own list views (jobs-view / quotes-view / invoices-view)
+  // and depend on ~15 useState hooks each, so they can't be extracted into a
+  // shared component. Instead we mirror the pendingJobPrefill pattern:
+  //
+  //   setPendingOpenEntity({ kind: 'job', id })
+  //     → setActiveView('jobs')
+  //     → jobs-view.tsx useEffect consumes the signal
+  //     → calls openJobDetail(job) (which already exists)
+  //     → clears the signal so a refresh doesn't re-open it.
+  //
+  // The consumer is responsible for fetching the entity by id if it isn't
+  // already in its local list (the views already do this when opening a
+  // detail by row click — they have a `selectedX` + `openXDetail(x)` flow).
+  pendingOpenEntity: PendingOpenEntity | null;
+  setPendingOpenEntity: (e: PendingOpenEntity | null) => void;
+}
+
+// Shape of the cross-view "open detail" signal.
+export interface PendingOpenEntity {
+  kind: 'job' | 'quote' | 'invoice';
+  id: string;
+  /** Optional: originating customer id, useful for back-navigation. */
+  fromCustomerId?: string;
 }
 
 // Shape of the data passed from a Lead into the New Job form.
@@ -222,6 +249,10 @@ export const useAppStore = create<AppState>()(
   setPipelineDensity: (d) => set({ pipelineDensity: d }),
   pipelineViewMode: 'kanban',
   setPipelineViewMode: (m) => set({ pipelineViewMode: m }),
+
+  // Cross-view "open entity detail" signal (Customer 360 clickable records)
+  pendingOpenEntity: null,
+  setPendingOpenEntity: (e) => set({ pendingOpenEntity: e }),
     }),
     {
       name: 'fieseros-app-store',

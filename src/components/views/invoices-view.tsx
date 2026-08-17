@@ -406,6 +406,14 @@ export function InvoicesView() {
   const pendingCreate = useAppStore((s) => s.pendingCreate);
   const setPendingCreate = useAppStore((s) => s.setPendingCreate);
 
+  // ── Cross-view "open entity detail" signal (Customer 360 → Invoices deep-link) ──
+  // When the user clicks an Invoice row inside the Customer 360 detail panel
+  // (crm-view.tsx), the signal carries the invoice id; we fetch it (or reuse
+  // the local copy) and open the detail panel, then clear the signal so a
+  // refresh doesn't re-open it.
+  const pendingOpenEntity = useAppStore((s) => s.pendingOpenEntity);
+  const setPendingOpenEntity = useAppStore((s) => s.setPendingOpenEntity);
+
   // Data state
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -607,6 +615,36 @@ export function InvoicesView() {
       setPendingCreate(null);
     }
   }, [pendingCreate]);
+
+  // ── Consume the cross-view "open invoice detail" signal (Customer 360 deep-link) ──
+  // Mirrors the pendingCreate consumer above. The signal is set by crm-view.tsx
+  // when the user clicks an Invoice row inside the Customer 360 detail panel. We:
+  //   1. clear it immediately (so a re-render doesn't re-trigger),
+  //   2. reuse the local invoice if it's already in the list,
+  //   3. otherwise fetch it via /api/invoices/[id] — that endpoint includes the
+  //      full `customer` relation, so parseApiInvoice can derive customer name/
+  //      phone/email without an extra round-trip.
+  // If the fetch fails (404 / network), we log + don't open anything.
+  useEffect(() => {
+    if (!pendingOpenEntity || pendingOpenEntity.kind !== 'invoice') return;
+    const targetId = pendingOpenEntity.id;
+    setPendingOpenEntity(null);
+    const local = invoices.find((inv) => inv.id === targetId);
+    if (local) {
+      openInvoiceDetail(local);
+      return;
+    }
+    authFetch(`/api/invoices/${encodeURIComponent(targetId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((raw) => {
+        if (!raw || raw.error) {
+          console.error('[invoices-view] pendingOpenEntity: invoice not found for id', targetId);
+          return;
+        }
+        openInvoiceDetail(parseApiInvoice(raw as Record<string, unknown>));
+      })
+      .catch((err) => console.error('[invoices-view] pendingOpenEntity fetch failed:', err));
+  }, [pendingOpenEntity]);
 
   const openEditDialog = (invoice: Invoice) => {
     setEditingInvoice(invoice);

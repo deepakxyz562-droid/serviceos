@@ -1,9 +1,18 @@
 import { db } from '@/lib/db';
 import { CI } from '@/lib/db-utils';
 import { getAuthUser } from '@/lib/auth';
+import { hasRole } from '@/lib/auth/permissions';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/documents — List documents with filters
+//
+// PERMISSION GATE (Phase 1.4): when a non-customer caller passes
+// `?employeeId=X`, they must hold one of the Documents-tab roles
+// (owner/admin/manager). Without this gate, any tenant member could read
+// any other employee's documents by simply passing `?employeeId=...`.
+// Self-access (an employee reading their own documents) is allowed.
+// The pre-existing `accessLevel` filter (employee/customer/admin) is a
+// useful secondary data-tagging layer but is NOT a role gate.
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
@@ -49,6 +58,23 @@ export async function GET(request: NextRequest) {
     if (employeeId) where.employeeId = employeeId;
     if (isShared !== null && isShared !== undefined) {
       where.isShared = isShared === 'true';
+    }
+
+    // PERMISSION GATE: cross-employee document reads require the
+    // Documents-tab role lane (owner/admin/manager). Self-access is allowed —
+    // an employee reading their own documents via ?employeeId=<own id> is
+    // permitted. Customer sessions are scoped by accessLevel='customer'
+    // above, so they cannot read employee documents regardless of this gate.
+    if (
+      employeeId &&
+      user.role !== 'customer' &&
+      employeeId !== user.employeeId &&
+      !hasRole(user, ['owner', 'admin', 'manager'])
+    ) {
+      return NextResponse.json(
+        { error: 'Forbidden — insufficient role to read other employees\' documents' },
+        { status: 403 }
+      );
     }
 
     if (search) {

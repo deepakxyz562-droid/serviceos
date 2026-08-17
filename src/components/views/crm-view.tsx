@@ -11,7 +11,7 @@ import {
   Wrench, MessageSquare,
   Calendar, Briefcase, Clock, DollarSign, Star,
   Building2, Home, Crown, ShieldCheck,
-  LayoutGrid, List, ArrowRight,
+  LayoutGrid, List, ArrowRight, ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -212,7 +212,7 @@ const SMART_LISTS = [
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function CrmView() {
-  const { setActiveView, pendingCreate, setPendingCreate } = useAppStore();
+  const { setActiveView, pendingCreate, setPendingCreate, setPendingOpenEntity } = useAppStore();
 
   // ─── View Mode: 'list' | 'detail' ──────────────────────────────────────
   const [formMode, setFormMode] = useState<'list' | 'detail'>('list');
@@ -597,6 +597,25 @@ export function CrmView() {
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // ─── Cross-view "open entity detail" deep-link ───────────────────────────
+  // When the user clicks a Job/Quote/Invoice row inside the Customer 360 detail
+  // panel, we stash the entity id here, switch to the matching list view, and
+  // the target view's mount-effect consumes the signal (fetches the entity by
+  // id if it's not already in the local list, opens its detail panel, then
+  // clears the signal so a refresh doesn't re-open it).
+  const openJobFromCustomer360 = (jobId: string) => {
+    setPendingOpenEntity({ kind: 'job', id: jobId, fromCustomerId: selectedCustomer?.id });
+    setActiveView('jobs');
+  };
+  const openQuoteFromCustomer360 = (quoteId: string) => {
+    setPendingOpenEntity({ kind: 'quote', id: quoteId, fromCustomerId: selectedCustomer?.id });
+    setActiveView('quotes');
+  };
+  const openInvoiceFromCustomer360 = (invoiceId: string) => {
+    setPendingOpenEntity({ kind: 'invoice', id: invoiceId, fromCustomerId: selectedCustomer?.id });
+    setActiveView('invoices');
+  };
+
   // ─── DETAIL MODE: Customer Profile (360 View) ────────────────────────────
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -845,7 +864,11 @@ export function CrmView() {
                       </TableHeader>
                       <TableBody>
                         {jobs.map(job => (
-                          <TableRow key={job.id}>
+                          <TableRow
+                            key={job.id}
+                            onClick={() => openJobFromCustomer360(job.id)}
+                            className="cursor-pointer hover:bg-muted/50 transition-colors"
+                          >
                             <TableCell className="font-medium text-sm">{job.title}</TableCell>
                             <TableCell>
                               <Badge variant="outline" className="text-xs capitalize">{job.status}</Badge>
@@ -854,7 +877,10 @@ export function CrmView() {
                               {job.scheduledDate ? formatDate(job.scheduledDate) : '--'}
                             </TableCell>
                             <TableCell className="text-sm text-right">
-                              {job.totalAmount ? `₹${job.totalAmount.toLocaleString('en-IN')}` : '--'}
+                              <span className="inline-flex items-center gap-1.5">
+                                {job.totalAmount ? `₹${job.totalAmount.toLocaleString('en-IN')}` : '--'}
+                                <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+                              </span>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -905,7 +931,11 @@ export function CrmView() {
                         const cfg = quoteStatusConfig[quote.status] || { label: quote.status, color: 'text-muted-foreground', bg: 'bg-muted border-border' };
                         const items = (() => { try { return JSON.parse(quote.itemsJson || '[]'); } catch { return []; } })();
                         return (
-                          <div key={quote.id} className="rounded-lg border p-3 hover:shadow-sm transition-shadow">
+                          <div
+                            key={quote.id}
+                            onClick={() => openQuoteFromCustomer360(quote.id)}
+                            className="rounded-lg border p-3 hover:shadow-sm hover:bg-muted/40 transition-colors cursor-pointer"
+                          >
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex items-center gap-2 min-w-0">
                                 <div className="size-8 shrink-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
@@ -923,6 +953,7 @@ export function CrmView() {
                               <div className="flex items-center gap-2 shrink-0">
                                 <Badge variant="outline" className={cn('text-xs', cfg.color, cfg.bg)}>{cfg.label}</Badge>
                                 <span className="text-sm font-semibold">{formatMoney(quote.total, quote.currency)}</span>
+                                <ChevronRight className="size-4 text-muted-foreground shrink-0" />
                               </div>
                             </div>
                           </div>
@@ -991,7 +1022,11 @@ export function CrmView() {
                             </div>
                             <div className="space-y-2">
                               {rows.map(inv => (
-                                <div key={inv.id} className="rounded-lg border p-3 hover:shadow-sm transition-shadow">
+                                <div
+                                  key={inv.id}
+                                  onClick={() => openInvoiceFromCustomer360(inv.id)}
+                                  className="rounded-lg border p-3 hover:shadow-sm hover:bg-muted/40 transition-colors cursor-pointer"
+                                >
                                   <div className="flex items-start justify-between gap-3">
                                     <div className="flex items-center gap-2 min-w-0">
                                       <div className="size-8 shrink-0 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center">
@@ -1007,7 +1042,10 @@ export function CrmView() {
                                         </p>
                                       </div>
                                     </div>
-                                    <span className="text-sm font-semibold shrink-0">{formatMoney(inv.total, inv.currency)}</span>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <span className="text-sm font-semibold">{formatMoney(inv.total, inv.currency)}</span>
+                                      <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+                                    </div>
                                   </div>
                                 </div>
                               ))}

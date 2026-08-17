@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
@@ -12,16 +12,18 @@ import {
   Mail, Send, KeyRound, Power, Globe, Copy, ExternalLink, AlertCircle,
   ArrowLeft, Calendar, FileText, Wrench, MapPinned, Wallet, Activity as ActivityIcon,
   TrendingUp, TrendingDown, Route, IndianRupee, Timer, CalendarCheck, AlertTriangle,
-  IdCard, FileStack, FileCheck, FileWarning, FileX, Package, QrCode, Wrench as WrenchIcon,
+  IdCard, FileStack, FileCheck, FileWarning, FileX, Package, QrCode,
   Navigation, Clock3, Coffee, PlayCircle, StopCircle, Award, MessageSquare,
   ThumbsUp, ThumbsDown, Building2, ChevronRight, Sparkles, FileBadge,
-  LayoutGrid, List,
+  LayoutGrid, List, ChevronDown, MoreHorizontal,
+  Upload, Plus, User, RotateCcw, PackagePlus,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -32,6 +34,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { authFetch } from '@/lib/client-auth';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { usePermissions } from '@/hooks/use-permissions';
+import { SECONDARY_EMPLOYEE_TABS, type EmployeeDetailTab } from '@/lib/auth/permissions';
 import { TimesheetView } from '@/components/views/timesheet-view';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -116,6 +120,13 @@ interface EmployeeJob {
   scheduledAt: string | null;
   createdAt: string;
   completedAt: string | null;
+  // Geocoded customer-address coordinates (nullable on the Job model).
+  // Used by LocationTab ETA computation (haversine distance from the
+  // employee's current GPS to the job site). Populated async by
+  // geocodeAddress() on job creation; may be null for un-geocoded jobs.
+  latitude?: number | null;
+  longitude?: number | null;
+  address?: string | null;
   [key: string]: unknown;
 }
 
@@ -161,6 +172,7 @@ interface Review {
   id: string;
   rating: number;
   comment: string | null;
+  authorName?: string | null;
   jobId: string | null;
   customerId: string | null;
   employeeId: string | null;
@@ -259,6 +271,57 @@ interface RouteResponse {
     gpsPointCount: number;
   };
 }
+
+// ─── Calendar / Payroll / Documents supporting types ────────────────────────
+
+interface BookingItem {
+  id: string;
+  title: string;
+  status: string;
+  source: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  address: string | null;
+  scheduledAt: string | null;
+  scheduledEndTime: string | null;
+  duration: number | null;
+  employee?: { id: string; name: string; phone: string; avatar: string | null } | null;
+  [key: string]: unknown;
+}
+
+interface BookingsResponse {
+  bookings: BookingItem[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+}
+
+interface PayrollEntry {
+  employee: { id: string; name: string; role: string };
+  totalMinutes: number;
+  workingMinutes: number;
+  breakMinutes: number;
+  travelMinutes: number;
+  byCategory: Record<string, number>;
+  entriesCount: number;
+  approvedCount: number;
+  pendingCount: number;
+}
+
+interface PayrollResponse {
+  payroll: PayrollEntry[];
+  periodLabel: string;
+}
+
+interface PayrollError {
+  error: string;
+}
+
+// Discriminated union of calendar items (jobs + shifts + bookings) for the
+// unified date-grouped agenda view in CalendarTab.
+type CalendarItem =
+  | { kind: 'job'; id: string; title: string; subtitle: string; scheduledAt: string | null; status: string }
+  | { kind: 'shift'; id: string; title: string; subtitle: string; scheduledAt: string; status: string }
+  | { kind: 'booking'; id: string; title: string; subtitle: string; scheduledAt: string | null; status: string };
+
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -393,6 +456,85 @@ function timeAgo(iso: string): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * Haversine straight-line distance between two lat/lng points, in km.
+ * Used by LocationTab ETA computation (no routing API call — the spec
+ * explicitly says geocoding/routing is NOT required; a rough urban
+ * average speed of 40 km/h is used to estimate travel time).
+ */
+function haversineDistanceKm(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const R = 6371; // Earth radius in km
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Rough urban travel-time estimate. 40 km/h is a typical mixed-traffic
+ * urban average (per Phase 2 spec for LocationTab ETA). Returns minutes.
+ */
+function estimateTravelMinutes(distanceKm: number): number {
+  return Math.max(1, Math.round((distanceKm / 40) * 60));
+}
+
+/**
+ * Date-bucket a calendar item into "Today" / "Tomorrow" / "This Week" /
+ * "Upcoming" / "Past" / "Unscheduled" based on its scheduledAt timestamp.
+ *
+ * - Today: same calendar day as now.
+ * - Tomorrow: the calendar day immediately after today.
+ * - This Week: within the next 7 days (excluding today + tomorrow, which
+ *   already have their own buckets).
+ * - Upcoming: anything later than This Week.
+ * - Past: anything earlier than today (kept for completeness — CalendarTab
+ *   filters past items out, but this guards against bad data).
+ * - Unscheduled: no scheduledAt (caller decides how to bucket).
+ */
+type CalendarBucket = 'Today' | 'Tomorrow' | 'This Week' | 'Upcoming' | 'Past' | 'Unscheduled';
+
+function dateBucketKey(iso: string | null | undefined): CalendarBucket {
+  if (!iso) return 'Unscheduled';
+  const now = new Date();
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'Unscheduled';
+
+  // Calendar-day boundaries in local time.
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const startOfTomorrow = new Date(startOfToday);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+  const twoDaysFromToday = new Date(startOfTomorrow);
+  twoDaysFromToday.setDate(twoDaysFromToday.getDate() + 1);
+  const startOfNextWeek = new Date(startOfToday);
+  startOfNextWeek.setDate(startOfNextWeek.getDate() + 7);
+
+  if (date < startOfToday) return 'Past';
+  if (date < startOfTomorrow) return 'Today';
+  if (date < twoDaysFromToday) return 'Tomorrow';
+  if (date < startOfNextWeek) return 'This Week';
+  return 'Upcoming';
+}
+
+/**
+ * Format a YYYY-MM-DD date string for use in PayrollTab query params.
+ * Returns local-timezone YYYY-MM-DD (no UTC drift).
+ */
+function toYMD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function trendPct(curr: number, prev: number): { pct: number; dir: 'up' | 'down' | 'flat' } {
@@ -1721,7 +1863,7 @@ function EmployeeDetail({
   onSuspendToggle: () => void;
   actionLoading: boolean;
 }) {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState<string>('overview');
 
   // Refresh employee data when active tab changes — used to invalidate queries.
   // The actual data is fetched per-tab via useQuery with the employee.id.
@@ -1732,7 +1874,37 @@ function EmployeeDetail({
     if (Array.isArray(parsed)) skills = parsed;
   } catch { /* ignore */ }
 
+  // Per-tab role gating. The user's hard requirement: hiding a tab in React
+  // is NOT sufficient — the underlying APIs (/api/reviews, /api/documents,
+  // /api/time-tracking/payroll, /api/employees/[id]) MUST also enforce the
+  // same allow-list server-side. Those gates are added in Phase 1.4.
+  const perms = usePermissions();
+  const visibleSecondaryTabs = SECONDARY_EMPLOYEE_TABS.filter((t) =>
+    perms.canAccessEmployeeTab(t as EmployeeDetailTab)
+  );
+  // The active tab is one of: a primary tab, or one of the user's visible
+  // secondary tabs. If the user lacks access to the active tab (e.g. they
+  // switched accounts in another tab), fall back to Overview.
+  const isSecondaryActive = (SECONDARY_EMPLOYEE_TABS as string[]).includes(activeTab);
+  const secondaryActiveLabel = (() => {
+    if (!isSecondaryActive) return null;
+    if (!visibleSecondaryTabs.includes(activeTab as EmployeeDetailTab)) return null;
+    const map: Record<string, string> = {
+      reviews: 'Reviews',
+      documents: 'Documents',
+      payroll: 'Payroll',
+    };
+    return map[activeTab] ?? null;
+  })();
+  // If the active tab is a secondary tab the user can't access (e.g. they
+  // were granted Payroll then lost the role), reset to Overview. This is a
+  // safety net — the dropdown won't show the option, but a stale URL hash
+  // or devtools `setActiveTab('payroll')` could otherwise reveal content.
+  // Note: we intentionally do NOT auto-strip during render (would loop);
+  // the TabsContent gate below already prevents the content from rendering.
+
   const tabTriggerClass = 'data-[state=active]:bg-accent data-[state=active]:text-emerald-600 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200 whitespace-nowrap';
+  const moreTriggerClass = 'data-[state=active]:bg-accent data-[state=active]:text-emerald-600 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200 whitespace-nowrap';
 
   return (
     <div className="space-y-6 w-full pb-8">
@@ -1851,7 +2023,16 @@ function EmployeeDetail({
         </div>
       </div>
 
-      {/* 11-Tab Switcher */}
+      {/* 8-Tab Switcher + More ▾ dropdown (Reviews/Documents/Payroll)
+       *
+       * Per the approved spec: primary tabs are operational data visible to
+       * every authenticated tenant member. Secondary tabs (Reviews/Documents/
+       * Payroll) are gated by role via usePermissions() — the underlying APIs
+       * enforce the same allow-list server-side.
+       *
+       * When a secondary tab is active, the More button shows a small dot
+       * indicator (More • ▾) so the user doesn't lose context.
+       */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="border-b border-border -mx-1 px-1 overflow-x-auto">
           <TabsList className="bg-transparent h-11 gap-0.5 p-0 overflow-x-auto justify-start w-max sm:w-full sm:justify-start">
@@ -1865,16 +2046,10 @@ function EmployeeDetail({
               <Calendar className="size-3.5" /> Calendar
             </TabsTrigger>
             <TabsTrigger value="time" className={tabTriggerClass}>
-              <Clock className="size-3.5" /> Time Tracking
+              <Clock className="size-3.5" /> Time
             </TabsTrigger>
             <TabsTrigger value="performance" className={tabTriggerClass}>
               <TrendingUp className="size-3.5" /> Performance
-            </TabsTrigger>
-            <TabsTrigger value="reviews" className={tabTriggerClass}>
-              <Star className="size-3.5" /> Reviews
-            </TabsTrigger>
-            <TabsTrigger value="documents" className={tabTriggerClass}>
-              <FileStack className="size-3.5" /> Documents
             </TabsTrigger>
             <TabsTrigger value="equipment" className={tabTriggerClass}>
               <Wrench className="size-3.5" /> Equipment
@@ -1882,12 +2057,54 @@ function EmployeeDetail({
             <TabsTrigger value="location" className={tabTriggerClass}>
               <MapPinned className="size-3.5" /> Location
             </TabsTrigger>
-            <TabsTrigger value="payroll" className={tabTriggerClass}>
-              <Wallet className="size-3.5" /> Payroll
-            </TabsTrigger>
             <TabsTrigger value="activity" className={tabTriggerClass}>
               <ActivityIcon className="size-3.5" /> Activity
             </TabsTrigger>
+
+            {visibleSecondaryTabs.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      moreTriggerClass,
+                      'inline-flex items-center justify-center gap-1.5 font-medium',
+                      isSecondaryActive && 'bg-accent text-emerald-600'
+                    )}
+                    aria-label="More tabs"
+                    aria-haspopup="menu"
+                  >
+                    <MoreHorizontal className="size-3.5" />
+                    <span>More</span>
+                    {secondaryActiveLabel && (
+                      <span className="flex items-center gap-1 text-emerald-600 font-semibold">
+                        <span className="size-1 rounded-full bg-emerald-500 inline-block" aria-hidden />
+                        <span className="hidden sm:inline">{secondaryActiveLabel}</span>
+                        <ChevronDown className="size-3" />
+                      </span>
+                    )}
+                    {!secondaryActiveLabel && <ChevronDown className="size-3" />}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  {visibleSecondaryTabs.includes('reviews' as EmployeeDetailTab) && (
+                    <DropdownMenuItem onClick={() => setActiveTab('reviews')}>
+                      <Star className="size-3.5 mr-2" /> Reviews
+                    </DropdownMenuItem>
+                  )}
+                  {visibleSecondaryTabs.includes('documents' as EmployeeDetailTab) && (
+                    <DropdownMenuItem onClick={() => setActiveTab('documents')}>
+                      <FileStack className="size-3.5 mr-2" /> Documents
+                    </DropdownMenuItem>
+                  )}
+                  {visibleSecondaryTabs.includes('payroll' as EmployeeDetailTab) && (
+                    <DropdownMenuItem onClick={() => setActiveTab('payroll')}>
+                      <Wallet className="size-3.5 mr-2" /> Payroll
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </TabsList>
         </div>
 
@@ -1907,19 +2124,31 @@ function EmployeeDetail({
           <PerformanceTab employeeId={employee.id} />
         </TabsContent>
         <TabsContent value="reviews" className="mt-6">
-          <ReviewsTab employeeId={employee.id} defaultRating={employee.rating} />
+          {perms.canAccessEmployeeTab('reviews') ? (
+            <ReviewsTab employeeId={employee.id} defaultRating={employee.rating} />
+          ) : (
+            <ForbiddenNotice tab="Reviews" />
+          )}
         </TabsContent>
         <TabsContent value="documents" className="mt-6">
-          <DocumentsTab employeeId={employee.id} employeeName={employee.name} />
+          {perms.canAccessEmployeeTab('documents') ? (
+            <DocumentsTab employeeId={employee.id} employeeName={employee.name} />
+          ) : (
+            <ForbiddenNotice tab="Documents" />
+          )}
         </TabsContent>
         <TabsContent value="equipment" className="mt-6">
-          <EquipmentTab />
+          <EquipmentTab employeeId={employee.id} employeeName={employee.name} />
         </TabsContent>
         <TabsContent value="location" className="mt-6">
           <LocationTab employee={employee} />
         </TabsContent>
         <TabsContent value="payroll" className="mt-6">
-          <PayrollTab employeeName={employee.name} />
+          {perms.canAccessEmployeeTab('payroll') ? (
+            <PayrollTab employeeName={employee.name} employeeId={employee.id} />
+          ) : (
+            <ForbiddenNotice tab="Payroll" />
+          )}
         </TabsContent>
         <TabsContent value="activity" className="mt-6">
           <ActivityTab employee={employee} />
@@ -2191,44 +2420,119 @@ function JobsTab({ employeeId }: { employeeId: string }) {
 // ─── Calendar Tab ────────────────────────────────────────────────────────────
 
 function CalendarTab({ employeeId }: { employeeId: string }) {
-  const { data, isLoading } = useQuery<{ employee: { id: string; name: string; status: string }; jobs: EmployeeJob[] }>({
-    queryKey: ['employee-calendar', employeeId],
+  // Phase 2: merge 3 data sources into a unified date-grouped agenda.
+  //   - /api/employees/[id]/jobs   → Briefcase icon, source-of-truth for
+  //                                  what the employee is assigned to.
+  //   - /api/employees/[id]/shifts → Clock icon, the employee's clocked-in
+  //                                  shifts (today + recent).
+  //   - /api/bookings?employeeId=X → Calendar icon, customer-made bookings
+  //                                  (verified the endpoint supports the
+  //                                  employeeId filter — see worklog).
+  // Each source fetches independently; the three results are merged and
+  // bucketed by date (Today / Tomorrow / This Week / Upcoming).
+  const jobsQuery = useQuery<{ employee: { id: string; name: string; status: string }; jobs: EmployeeJob[] }>({
+    queryKey: ['employee-calendar-jobs', employeeId],
     queryFn: async () => {
       const res = await authFetch(apiUrl(`/api/employees/${employeeId}/jobs`));
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) throw new Error('Failed to load jobs');
       return res.json();
     },
   });
 
-  const upcomingJobs = useMemo(() => {
-    const all = data?.jobs ?? [];
-    const now = Date.now();
-    return all
-      .filter((j) => {
-        if (j.status === 'completed' || j.status === 'cancelled') return false;
-        if (j.scheduledAt) return new Date(j.scheduledAt).getTime() >= now - 24 * 60 * 60 * 1000;
-        return true;
-      })
-      .sort((a, b) => {
-        const aT = a.scheduledAt ? new Date(a.scheduledAt).getTime() : 0;
-        const bT = b.scheduledAt ? new Date(b.scheduledAt).getTime() : 0;
-        return aT - bT;
-      });
-  }, [data]);
+  const shiftsQuery = useQuery<ShiftsResponse>({
+    queryKey: ['employee-calendar-shifts', employeeId],
+    queryFn: async () => {
+      const res = await authFetch(apiUrl(`/api/employees/${employeeId}/shifts?days=30`));
+      if (!res.ok) throw new Error('Failed to load shifts');
+      return res.json();
+    },
+  });
 
-  // Group by day
-  const byDay = useMemo(() => {
-    const map = new Map<string, EmployeeJob[]>();
-    for (const j of upcomingJobs) {
-      const key = j.scheduledAt
-        ? new Date(j.scheduledAt).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
-        : 'Unscheduled';
+  const bookingsQuery = useQuery<BookingsResponse>({
+    queryKey: ['employee-calendar-bookings', employeeId],
+    queryFn: async () => {
+      const res = await authFetch(apiUrl(`/api/bookings?employeeId=${employeeId}&limit=50`));
+      if (!res.ok) throw new Error('Failed to load bookings');
+      return res.json();
+    },
+  });
+
+  const isLoading = jobsQuery.isLoading || shiftsQuery.isLoading || bookingsQuery.isLoading;
+
+  // Merge into CalendarItem[], filter out past items, sort by scheduledAt asc.
+  const items = useMemo<CalendarItem[]>(() => {
+    const out: CalendarItem[] = [];
+
+    for (const job of jobsQuery.data?.jobs ?? []) {
+      if (job.status === 'completed' || job.status === 'cancelled') continue;
+      const customerName = job.customer?.name || job.customerName || 'No customer';
+      const timeStr = job.scheduledAt ? ` · ${formatTime(job.scheduledAt)}` : '';
+      out.push({
+        kind: 'job',
+        id: job.id,
+        title: job.title,
+        subtitle: `${customerName}${timeStr}`,
+        scheduledAt: job.scheduledAt,
+        status: job.status,
+      });
+    }
+
+    for (const shift of shiftsQuery.data?.recent ?? []) {
+      // Only surface future or in-progress shifts on the agenda.
+      if (shift.status === 'completed' && shift.clockOut) {
+        const age = Date.now() - new Date(shift.clockOut).getTime();
+        if (age > 24 * 60 * 60 * 1000) continue; // older than 1 day
+      }
+      const dateStr = shift.clockIn ? formatTime(shift.clockIn) : '';
+      out.push({
+        kind: 'shift',
+        id: shift.id,
+        title: shift.clockOut ? 'Shift (completed)' : 'Active shift',
+        subtitle: `${formatMinutes(shift.totalMinutes)}${dateStr ? ` · ${dateStr}` : ''}`,
+        scheduledAt: shift.clockIn,
+        status: shift.status,
+      });
+    }
+
+    for (const booking of bookingsQuery.data?.bookings ?? []) {
+      if (booking.status === 'cancelled' || booking.status === 'completed') continue;
+      const customerName = booking.customerName || 'No customer';
+      const timeStr = booking.scheduledAt ? ` · ${formatTime(booking.scheduledAt)}` : '';
+      out.push({
+        kind: 'booking',
+        id: booking.id,
+        title: booking.title,
+        subtitle: `${customerName}${timeStr}`,
+        scheduledAt: booking.scheduledAt,
+        status: booking.status,
+      });
+    }
+
+    // Sort: scheduled (asc by time) first, unscheduled last.
+    out.sort((a, b) => {
+      const aT = a.scheduledAt ? new Date(a.scheduledAt).getTime() : Number.MAX_SAFE_INTEGER;
+      const bT = b.scheduledAt ? new Date(b.scheduledAt).getTime() : Number.MAX_SAFE_INTEGER;
+      return aT - bT;
+    });
+    return out;
+  }, [jobsQuery.data, shiftsQuery.data, bookingsQuery.data]);
+
+  // Bucket by Today / Tomorrow / This Week / Upcoming / Unscheduled.
+  // Past items are filtered out.
+  const buckets = useMemo<{ key: CalendarBucket; label: string; items: CalendarItem[] }[]>(() => {
+    const order: CalendarBucket[] = ['Today', 'Tomorrow', 'This Week', 'Upcoming', 'Unscheduled'];
+    const map = new Map<CalendarBucket, CalendarItem[]>();
+    for (const item of items) {
+      const key = dateBucketKey(item.scheduledAt);
+      if (key === 'Past') continue;
       const arr = map.get(key) ?? [];
-      arr.push(j);
+      arr.push(item);
       map.set(key, arr);
     }
-    return Array.from(map.entries());
-  }, [upcomingJobs]);
+    return order
+      .filter((k) => map.has(k))
+      .map((k) => ({ key: k, label: k, items: map.get(k)! }));
+  }, [items]);
 
   if (isLoading) {
     return (
@@ -2248,47 +2552,70 @@ function CalendarTab({ employeeId }: { employeeId: string }) {
     );
   }
 
-  if (byDay.length === 0) {
+  if (buckets.length === 0) {
     return (
       <EmptyState
         icon={Calendar}
-        title="No upcoming jobs"
-        description="This employee has no upcoming scheduled jobs. Assign a job to see it appear on the calendar."
+        title="No scheduled items"
+        description="This employee has no upcoming jobs, shifts, or bookings. Assign a job or schedule a shift to see it appear on the calendar."
       />
     );
   }
 
   return (
     <div className="space-y-4">
-      {byDay.map(([day, jobs]) => (
-        <Card key={day}>
+      {buckets.map(({ key, label, items: bucketItems }) => (
+        <Card key={key}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Calendar className="size-4 text-emerald-600" /> {day}
+              <Calendar className="size-4 text-emerald-600" /> {label}
             </CardTitle>
-            <CardDescription className="text-xs">{jobs.length} job{jobs.length === 1 ? '' : 's'}</CardDescription>
+            <CardDescription className="text-xs">
+              {bucketItems.length} item{bucketItems.length === 1 ? '' : 's'}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {jobs.map((job) => (
-              <div key={job.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/30 transition-colors">
-                <div className="size-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center shrink-0">
-                  <Clock3 className="size-4 text-emerald-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{job.title}</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {job.customer?.name || job.customerName || 'No customer'}
-                    {job.scheduledAt && ` · ${formatTime(job.scheduledAt)}`}
-                  </p>
-                </div>
-                <Badge variant="outline" className={cn('text-[10px] capitalize', jobStatusBadgeClass(job.status))}>
-                  {job.status.replace('_', ' ')}
-                </Badge>
-              </div>
+            {bucketItems.map((item) => (
+              <CalendarItemRow key={`${item.kind}-${item.id}`} item={item} />
             ))}
           </CardContent>
         </Card>
       ))}
+    </div>
+  );
+}
+
+function CalendarItemRow({ item }: { item: CalendarItem }) {
+  const Icon = item.kind === 'job' ? Briefcase : item.kind === 'shift' ? Clock : Calendar;
+  const iconColor =
+    item.kind === 'job'
+      ? 'text-emerald-600'
+      : item.kind === 'shift'
+      ? 'text-blue-600'
+      : 'text-purple-600';
+  const iconBg =
+    item.kind === 'job'
+      ? 'bg-emerald-50 dark:bg-emerald-950/30'
+      : item.kind === 'shift'
+      ? 'bg-blue-50 dark:bg-blue-950/30'
+      : 'bg-purple-50 dark:bg-purple-950/30';
+  const kindLabel =
+    item.kind === 'job' ? 'Job' : item.kind === 'shift' ? 'Shift' : 'Booking';
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/30 transition-colors">
+      <div className={cn('size-9 rounded-lg flex items-center justify-center shrink-0', iconBg)}>
+        <Icon className={cn('size-4', iconColor)} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{item.title}</p>
+        <p className="text-xs text-muted-foreground truncate">{item.subtitle}</p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <Badge variant="secondary" className="text-[9px] uppercase tracking-wide">{kindLabel}</Badge>
+        <Badge variant="outline" className={cn('text-[10px] capitalize', jobStatusBadgeClass(item.status))}>
+          {item.status.replace('_', ' ')}
+        </Badge>
+      </div>
     </div>
   );
 }
@@ -2806,13 +3133,19 @@ function ReviewsTab({ employeeId, defaultRating }: { employeeId: string; default
                   {review.comment && (
                     <p className="text-sm text-foreground leading-relaxed mb-2">&ldquo;{review.comment}&rdquo;</p>
                   )}
-                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                  <div className="flex items-center gap-2 flex-wrap text-[10px] text-muted-foreground">
+                    {(review.authorName || review.customerId) && (
+                      <span className="inline-flex items-center gap-1 text-muted-foreground">
+                        <User className="size-3" />
+                        <span className="font-medium">{review.authorName || 'Anonymous'}</span>
+                      </span>
+                    )}
                     {review.source && review.source !== 'internal' && (
                       <Badge variant="secondary" className="text-[10px] capitalize">{review.source}</Badge>
                     )}
-                    {review.status !== 'published' && (
-                      <Badge variant="outline" className="text-[10px] capitalize">{review.status}</Badge>
-                    )}
+                    <Badge variant="outline" className={cn('text-[10px] capitalize', jobStatusBadgeClass(review.status))}>
+                      {review.status}
+                    </Badge>
                   </div>
                 </div>
               ))}
@@ -2834,7 +3167,15 @@ const DOCUMENT_TYPES = [
   { key: 'certificate', label: 'Certificates', icon: Award },
 ];
 
+const DOCUMENT_ACCESS_LEVELS = [
+  { value: 'admin', label: 'Admin only' },
+  { value: 'manager', label: 'Managers' },
+  { value: 'employee', label: 'Employee' },
+  { value: 'customer', label: 'Customer' },
+];
+
 function DocumentsTab({ employeeId, employeeName }: { employeeId: string; employeeName: string }) {
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery<DocumentsResponse>({
     queryKey: ['employee-documents', employeeId],
     queryFn: async () => {
@@ -2845,6 +3186,8 @@ function DocumentsTab({ employeeId, employeeName }: { employeeId: string; employ
   });
 
   const documents = data?.documents ?? [];
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadPresetType, setUploadPresetType] = useState<string | null>(null);
 
   // For each standard doc type, find a matching uploaded document (by name/type/category fuzzy match).
   const findDoc = (key: string) => {
@@ -2861,18 +3204,34 @@ function DocumentsTab({ employeeId, employeeName }: { employeeId: string; employ
     });
   };
 
+  const openUpload = (presetType?: string) => {
+    setUploadPresetType(presetType ?? null);
+    setUploadOpen(true);
+  };
+
+  const handleUploadSuccess = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['employee-documents', employeeId] });
+    setUploadOpen(false);
+    setUploadPresetType(null);
+  }, [queryClient, employeeId]);
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <FileStack className="size-4 text-emerald-600" /> Employee Documents
               </CardTitle>
               <CardDescription className="text-xs">Manage {employeeName}&apos;s documents and certifications</CardDescription>
             </div>
-            <Badge variant="secondary" className="text-xs">{documents.length} uploaded</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs">{documents.length} uploaded</Badge>
+              <Button size="sm" className="h-8" onClick={() => openUpload()}>
+                <Plus className="size-3.5 mr-1" /> Upload
+              </Button>
+            </div>
           </div>
         </CardHeader>
       </Card>
@@ -2881,7 +3240,6 @@ function DocumentsTab({ employeeId, employeeName }: { employeeId: string; employ
         {DOCUMENT_TYPES.map((dt) => {
           const doc = findDoc(dt.key);
           const Icon = dt.icon;
-          const status = doc ? 'uploaded' : 'missing';
           return (
             <Card key={dt.key} className={cn('hover:shadow-md transition-shadow', !doc && 'border-dashed')}>
               <CardContent className="p-4 space-y-3">
@@ -2923,8 +3281,13 @@ function DocumentsTab({ employeeId, employeeName }: { employeeId: string; employ
                     </Button>
                   </div>
                 ) : (
-                  <Button variant="outline" size="sm" className="w-full h-7 text-xs" disabled>
-                    <FileX className="size-3 mr-1" /> Upload
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full h-7 text-xs"
+                    onClick={() => openUpload(dt.key)}
+                  >
+                    <Upload className="size-3 mr-1" /> Upload
                   </Button>
                 )}
               </CardContent>
@@ -2946,69 +3309,1071 @@ function DocumentsTab({ employeeId, employeeName }: { employeeId: string; employ
           ))}
         </div>
       )}
+
+      <UploadDocumentDialog
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        employeeId={employeeId}
+        employeeName={employeeName}
+        presetType={uploadPresetType}
+        onSuccess={handleUploadSuccess}
+      />
     </div>
+  );
+}
+
+/**
+ * Upload Document Dialog (Phase 2).
+ *
+ * Records document metadata only — no actual file upload to S3/storage.
+ * The user pastes a file URL (e.g. a Google Drive link, an S3 URL, etc.)
+ * and we POST { name, description, type, accessLevel, fileUrl, employeeId }
+ * to /api/documents, which already enforces the Documents-tab role gate
+ * (owner/admin/manager) server-side.
+ */
+function UploadDocumentDialog({
+  open,
+  onOpenChange,
+  employeeId,
+  employeeName,
+  presetType,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  employeeId: string;
+  employeeName: string;
+  presetType: string | null;
+  onSuccess: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [type, setType] = useState('general');
+  const [accessLevel, setAccessLevel] = useState('admin');
+  const [fileUrl, setFileUrl] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // When the dialog opens with a preset type (e.g. user clicked "Upload" on
+  // the "Driving License" card), seed both the type field and the name field
+  // with a friendly default. The dialog resets state on close, so re-opening
+  // with a different preset always starts fresh.
+  useEffect(() => {
+    if (open && presetType) {
+      setType(presetType);
+      const presetLabel = DOCUMENT_TYPES.find((t) => t.key === presetType)?.label;
+      if (presetLabel) setName(presetLabel);
+    }
+    if (!open) {
+      // Reset on close so the dialog doesn't carry stale state across opens.
+      setName('');
+      setDescription('');
+      setType('general');
+      setAccessLevel('admin');
+      setFileUrl('');
+    }
+  }, [open, presetType]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !fileUrl.trim()) {
+      toast.error('Name and file URL are required');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await authFetch(apiUrl('/api/documents'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim() || null,
+          type: type || 'general',
+          accessLevel: accessLevel || 'admin',
+          fileUrl: fileUrl.trim(),
+          employeeId,
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as PayrollError;
+        throw new Error(body.error || `Upload failed (HTTP ${res.status})`);
+      }
+      toast.success(`Document uploaded for ${employeeName}`);
+      onSuccess();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="size-4 text-emerald-600" /> Upload Document
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Record a document for {employeeName}. Paste a publicly-accessible file URL — no actual file upload is performed.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="doc-name" className="text-xs font-medium">Name *</Label>
+            <Input
+              id="doc-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Driving License"
+              required
+              disabled={submitting}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="doc-desc" className="text-xs font-medium">Description</Label>
+            <Textarea
+              id="doc-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional notes (expiry, version, etc.)"
+              rows={2}
+              disabled={submitting}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="doc-type" className="text-xs font-medium">Type</Label>
+              <Select value={type} onValueChange={setType} disabled={submitting}>
+                <SelectTrigger id="doc-type" className="h-9">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="general">General</SelectItem>
+                  {DOCUMENT_TYPES.map((dt) => (
+                    <SelectItem key={dt.key} value={dt.key}>{dt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="doc-access" className="text-xs font-medium">Access Level</Label>
+              <Select value={accessLevel} onValueChange={setAccessLevel} disabled={submitting}>
+                <SelectTrigger id="doc-access" className="h-9">
+                  <SelectValue placeholder="Select access" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DOCUMENT_ACCESS_LEVELS.map((al) => (
+                    <SelectItem key={al.value} value={al.value}>{al.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="doc-url" className="text-xs font-medium">File URL *</Label>
+            <Input
+              id="doc-url"
+              value={fileUrl}
+              onChange={(e) => setFileUrl(e.target.value)}
+              placeholder="https://drive.google.com/..."
+              type="url"
+              required
+              disabled={submitting}
+            />
+            <p className="text-[10px] text-muted-foreground">Direct link to the document. Must be accessible to viewers.</p>
+          </div>
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting} className="bg-emerald-600 hover:bg-emerald-700">
+              {submitting ? (
+                <>
+                  <Loader2 className="size-3.5 mr-1 animate-spin" /> Saving…
+                </>
+              ) : (
+                <>
+                  <Upload className="size-3.5 mr-1" /> Save Document
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Forbidden Notice (defense-in-depth UI gate) ────────────────────────────
+//
+// Rendered by TabsContent for Reviews/Documents/Payroll when the user lacks
+// the role to view that tab. This is NOT the security boundary — the
+// underlying API endpoint enforces the same allow-list server-side. This UI
+// gate exists so devtools `setActiveTab('payroll')` cannot reveal content
+// even if the dropdown trigger itself is hidden.
+function ForbiddenNotice({ tab }: { tab: string }) {
+  return (
+    <Card className="border-dashed">
+      <CardContent className="p-8 text-center">
+        <div className="size-14 rounded-full bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center mx-auto mb-3">
+          <Shield className="size-7 text-amber-600" />
+        </div>
+        <h3 className="text-base font-semibold">{tab} access restricted</h3>
+        <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+          Your role doesn&apos;t include permission to view this employee&apos;s {tab.toLowerCase()} information.
+          Contact an administrator if you believe this is an error.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
 // ─── Equipment Tab ───────────────────────────────────────────────────────────
 
-function EquipmentTab() {
-  // No equipment model/API exists yet → friendly placeholder + CTA.
+/**
+ * Equipment tab — Phase 3c.
+ *
+ * Wires the EquipmentTab to the Phase 3a/3b endpoints:
+ *   • GET  /api/employees/[id]/equipment   → assigned assets + assignment history
+ *   • GET  /api/inventory/assets?status=available&search=…  → available pool
+ *   • POST /api/inventory/assets/[id]/assign  → assign an asset to this employee
+ *   • POST /api/inventory/assets/[id]/return  → close the current assignment
+ *
+ * The Equipment tab is operational data, visible to every authenticated tenant
+ * member (per the RBAC table in lib/auth/permissions.ts). However the assign /
+ * return write actions are role-gated to owner/admin/manager/dispatcher/office —
+ * both client-side (via usePermissions().hasRole) and server-side (each write
+ * endpoint re-checks via hasRole(authUser, ASSET_WRITE_ROLES)). Hiding the
+ * buttons here is just UX; the real gate is the API.
+ */
+
+// Roles allowed to assign / return assets. Mirrors the ASSET_WRITE_ROLES list
+// in src/app/api/inventory/assets/route.ts (and the assign/return routes).
+const EQUIPMENT_WRITE_ROLES = ['owner', 'admin', 'manager', 'dispatcher', 'office'];
+
+interface EquipmentInventoryItem {
+  id: string;
+  name: string;
+  sku: string | null;
+}
+
+/** Minimal asset shape returned by /api/inventory/assets (and by the
+ *  `assigned` array of /api/employees/[id]/equipment). */
+interface InventoryAsset {
+  id: string;
+  name: string;
+  serialNumber: string | null;
+  assetTag: string | null;
+  description: string | null;
+  status: string;
+  condition: string;
+  notes: string | null;
+  assignedEmployeeId: string | null;
+  assignedAt: string | null;
+  assignmentStatus: string | null;
+  inventoryItem: EquipmentInventoryItem | null;
+  [key: string]: unknown;
+}
+
+/** Subset of InventoryAsset attached to each history row by the equipment endpoint. */
+interface InventoryAssetSummary {
+  id: string;
+  name: string;
+  serialNumber: string | null;
+  assetTag: string | null;
+  inventoryItemId: string | null;
+}
+
+interface InventoryAssetAssignment {
+  id: string;
+  assetId: string;
+  employeeId: string;
+  assignedAt: string;
+  returnedAt: string | null;
+  assignmentStatus: string;
+  notes: string | null;
+  asset: InventoryAssetSummary | null;
+  [key: string]: unknown;
+}
+
+interface EquipmentResponse {
+  employee: { id: string; name: string; role: string };
+  assigned: InventoryAsset[];
+  history: InventoryAssetAssignment[];
+}
+
+interface AvailableAssetsResponse {
+  assets: InventoryAsset[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+/** Color-coded badge classes for the asset's current operational status. */
+function assetStatusBadgeClass(status: string): string {
+  switch (status) {
+    case 'available':
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400';
+    case 'assigned':
+      return 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400';
+    case 'in_maintenance':
+      return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400';
+    case 'retired':
+      return 'bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-900/30 dark:text-zinc-400';
+    case 'lost':
+      return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400';
+    case 'damaged':
+      return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400';
+    default:
+      return 'bg-muted text-muted-foreground border-border';
+  }
+}
+
+/** Color-coded badge classes for the asset's physical condition. */
+function assetConditionBadgeClass(condition: string): string {
+  switch (condition) {
+    case 'new':
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400';
+    case 'good':
+      return 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400';
+    case 'fair':
+      return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400';
+    case 'poor':
+      return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400';
+    case 'broken':
+      return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400';
+    default:
+      return 'bg-muted text-muted-foreground border-border';
+  }
+}
+
+/** Color-coded badge classes for an assignment's lifecycle status. */
+function assignmentStatusBadgeClass(status: string): string {
+  switch (status) {
+    case 'assigned':
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400';
+    case 'returned':
+      return 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400';
+    case 'lost':
+      return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400';
+    case 'damaged':
+      return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400';
+    default:
+      return 'bg-muted text-muted-foreground border-border';
+  }
+}
+
+function EquipmentTab({
+  employeeId,
+  employeeName,
+}: {
+  employeeId: string;
+  employeeName: string;
+}) {
+  const perms = usePermissions();
+  const queryClient = useQueryClient();
+  // Gate the assign/return action buttons. The underlying endpoints re-check
+  // this server-side — hiding here is just UX, not a security boundary.
+  const canManage = perms.hasRole(EQUIPMENT_WRITE_ROLES);
+
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [returnTarget, setReturnTarget] = useState<InventoryAsset | null>(null);
+
+  const queryKey = useMemo(() => ['employee-equipment', employeeId] as const, [employeeId]);
+
+  const { data, isLoading, error, refetch, isFetching } = useQuery<EquipmentResponse>({
+    queryKey,
+    queryFn: async () => {
+      const res = await authFetch(apiUrl(`/api/employees/${employeeId}/equipment`));
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as PayrollError;
+        throw new Error(body.error || `Failed to load equipment (HTTP ${res.status})`);
+      }
+      return res.json();
+    },
+  });
+
+  const assigned = data?.assigned ?? [];
+  const history = data?.history ?? [];
+
+  // Invalidate the equipment query on assign/return success — this forces the
+  // assigned list + history table to refresh from the server so the user sees
+  // the new state immediately.
+  const invalidate = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey });
+  }, [queryClient, queryKey]);
+
   return (
     <div className="space-y-4">
-      <Card className="border-dashed">
-        <CardContent className="p-8 text-center">
-          <div className="size-14 rounded-full bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center mx-auto mb-3">
-            <WrenchIcon className="size-7 text-emerald-600" />
+      {/* Header */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Package className="size-4 text-emerald-600" /> Equipment
+                <Badge variant="secondary" className="text-[10px] ml-1">
+                  {assigned.length} assigned
+                </Badge>
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Assets currently held by {employeeName} and recent assignment history.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => refetch()}
+                disabled={isFetching}
+              >
+                <RotateCcw className={cn('size-3.5 mr-1', isFetching && 'animate-spin')} />
+                Refresh
+              </Button>
+              {canManage && (
+                <Button
+                  size="sm"
+                  className="h-8 bg-emerald-600 hover:bg-emerald-700"
+                  onClick={() => setAssignOpen(true)}
+                >
+                  <PackagePlus className="size-3.5 mr-1" /> Assign Equipment
+                </Button>
+              )}
+            </div>
           </div>
-          <h3 className="text-base font-semibold">Equipment Tracking Coming Soon</h3>
-          <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-            Assign toolkits, vehicles, and devices to this employee. Track barcode, condition, maintenance, and warranty status.
-          </p>
-          <Button className="bg-emerald-600 hover:bg-emerald-700 mt-4" disabled>
-            <Package className="size-4 mr-1.5" /> Assign Equipment
-          </Button>
+        </CardHeader>
+      </Card>
+
+      {/* Currently Assigned */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Package className="size-4 text-emerald-600" /> Currently Assigned
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Assets this employee is responsible for right now.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-4 space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="p-4">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="size-4 text-red-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-red-700 dark:text-red-400">
+                    Failed to load equipment
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {(error as Error).message}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : assigned.length === 0 ? (
+            <div className="p-8 text-center">
+              <div className="size-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+                <Package className="size-6 text-muted-foreground" />
+              </div>
+              <h3 className="text-sm font-semibold">No equipment assigned to this employee yet.</h3>
+              <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                {canManage
+                  ? `${employeeName} does not currently hold any assets. Assign equipment to track custody.`
+                  : `${employeeName} does not currently hold any assets.`}
+              </p>
+              {canManage && (
+                <Button
+                  size="sm"
+                  className="mt-3 h-8 bg-emerald-600 hover:bg-emerald-700"
+                  onClick={() => setAssignOpen(true)}
+                >
+                  <PackagePlus className="size-3.5 mr-1" /> Assign Equipment
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Asset</TableHead>
+                    <TableHead className="text-xs">Item</TableHead>
+                    <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs">Condition</TableHead>
+                    <TableHead className="text-xs">Assigned</TableHead>
+                    {canManage && <TableHead className="text-xs text-right">Action</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {assigned.map((asset) => (
+                    <TableRow key={asset.id}>
+                      <TableCell className="text-xs">
+                        <div className="font-medium text-foreground">{asset.name}</div>
+                        <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <QrCode className="size-2.5" />
+                          {asset.serialNumber || asset.assetTag || 'No serial / tag'}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {asset.inventoryItem ? (
+                          <Badge variant="outline" className="text-[10px] bg-muted/40">
+                            {asset.inventoryItem.name}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-[10px]">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-[10px] capitalize',
+                            assetStatusBadgeClass(asset.status),
+                          )}
+                        >
+                          {asset.status.replace('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-[10px] capitalize',
+                            assetConditionBadgeClass(asset.condition),
+                          )}
+                        >
+                          {asset.condition}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {asset.assignedAt ? formatDate(asset.assignedAt) : '—'}
+                      </TableCell>
+                      {canManage && (
+                        <TableCell className="text-xs text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-[11px]"
+                            onClick={() => setReturnTarget(asset)}
+                          >
+                            <RotateCcw className="size-3 mr-1" /> Return
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Placeholder example equipment card layout (UI only) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 opacity-50 pointer-events-none">
-        {[
-          { name: 'AC Toolkit', barcode: 'TKT-001', condition: 'Good', assigned: 'Jan 12, 2025', maintenance: 'Mar 1, 2025', warranty: 'Dec 31, 2025' },
-          { name: 'Multi-meter', barcode: 'MMT-014', condition: 'Fair', assigned: 'Feb 5, 2025', maintenance: 'Feb 28, 2025', warranty: 'Jun 30, 2025' },
-        ].map((eq) => (
-          <Card key={eq.barcode}>
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="size-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center">
-                    <WrenchIcon className="size-4 text-emerald-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">{eq.name}</p>
-                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                      <QrCode className="size-2.5" /> {eq.barcode}
-                    </p>
-                  </div>
-                </div>
-                <Badge variant="outline" className={cn(
-                  'text-[10px]',
-                  eq.condition === 'Good' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                  eq.condition === 'Fair' && 'bg-amber-50 text-amber-700 border-amber-200',
-                  eq.condition === 'Poor' && 'bg-red-50 text-red-700 border-red-200',
-                )}>{eq.condition}</Badge>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground pt-2 border-t">
-                <div><p>Assigned</p><p className="text-foreground font-medium">{eq.assigned}</p></div>
-                <div><p>Maintenance</p><p className="text-foreground font-medium">{eq.maintenance}</p></div>
-                <div><p>Warranty</p><p className="text-foreground font-medium">{eq.warranty}</p></div>
-                <div><p>Status</p><p className="text-foreground font-medium">In Use</p></div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Assignment History — hidden entirely when empty (per spec). */}
+      {history.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Clock className="size-4 text-emerald-600" /> Assignment History
+              <Badge variant="secondary" className="text-[10px] ml-1">
+                {history.length}
+              </Badge>
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Last {history.length} assignment record{history.length === 1 ? '' : 's'} (active + returned).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Asset</TableHead>
+                    <TableHead className="text-xs">Assigned</TableHead>
+                    <TableHead className="text-xs">Returned</TableHead>
+                    <TableHead className="text-xs">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {history.map((h) => (
+                    <TableRow key={h.id}>
+                      <TableCell className="text-xs">
+                        <div className="font-medium text-foreground">
+                          {h.asset?.name ?? (
+                            <span className="text-muted-foreground">Unknown asset</span>
+                          )}
+                        </div>
+                        {h.asset && (h.asset.serialNumber || h.asset.assetTag) && (
+                          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <QrCode className="size-2.5" />
+                            {h.asset.serialNumber || h.asset.assetTag}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatDate(h.assignedAt)}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {h.returnedAt ? (
+                          formatDate(h.returnedAt)
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400"
+                          >
+                            Active
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-[10px] capitalize',
+                            assignmentStatusBadgeClass(h.assignmentStatus),
+                          )}
+                        >
+                          {h.assignmentStatus}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Assign Dialog */}
+      <AssignEquipmentDialog
+        open={assignOpen}
+        onOpenChange={setAssignOpen}
+        employeeId={employeeId}
+        employeeName={employeeName}
+        onSuccess={invalidate}
+      />
+
+      {/* Return Dialog */}
+      <ReturnAssetDialog
+        open={returnTarget !== null}
+        onOpenChange={(o) => {
+          if (!o) setReturnTarget(null);
+        }}
+        asset={returnTarget}
+        employeeName={employeeName}
+        onSuccess={invalidate}
+      />
     </div>
+  );
+}
+
+/**
+ * Assign Equipment dialog.
+ *
+ * Fetches the pool of available assets (status='available', assignedEmployeeId=null)
+ * from /api/inventory/assets with a 300ms-debounced search input. The user picks
+ * one asset (radio-style click-to-select), optionally enters notes, and submits
+ * — which POSTs to /api/inventory/assets/[id]/assign with { employeeId, notes }.
+ *
+ * On success: closes the dialog, invalidates the employee-equipment query so the
+ * assigned list refreshes, and shows a success toast. The dialog itself
+ * re-fetches the available pool every time it opens (because the query key
+ * includes the debounced search, which resets to '' on open).
+ */
+function AssignEquipmentDialog({
+  open,
+  onOpenChange,
+  employeeId,
+  employeeName,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  employeeId: string;
+  employeeName: string;
+  onSuccess: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Reset dialog state whenever it closes so the next open starts fresh
+  // (no stale search query / selected asset / notes carried across sessions).
+  useEffect(() => {
+    if (!open) {
+      setSearch('');
+      setDebouncedSearch('');
+      setSelectedAssetId(null);
+      setNotes('');
+    }
+  }, [open]);
+
+  // Debounce search input by 300ms before triggering a refetch.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Fetch available assets. Disabled when the dialog is closed so we don't
+  // fire a request on initial page load (the Equipment tab may be visible but
+  // the user hasn't opened the assign dialog yet).
+  const { data, isLoading: loadingAssets } = useQuery<AvailableAssetsResponse>({
+    queryKey: ['inventory-assets-available', debouncedSearch],
+    queryFn: async () => {
+      const params = new URLSearchParams({ status: 'available', limit: '50' });
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      const res = await authFetch(apiUrl(`/api/inventory/assets?${params.toString()}`));
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as PayrollError;
+        throw new Error(body.error || `Failed to load assets (HTTP ${res.status})`);
+      }
+      return res.json();
+    },
+    enabled: open,
+  });
+
+  const assets = data?.assets ?? [];
+
+  const handleAssign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAssetId) {
+      toast.error('Select an asset to assign');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await authFetch(apiUrl(`/api/inventory/assets/${selectedAssetId}/assign`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId, notes: notes.trim() || null }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as PayrollError;
+        throw new Error(body.error || `Assign failed (HTTP ${res.status})`);
+      }
+      toast.success(`Asset assigned to ${employeeName}`);
+      onSuccess();
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Assign failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <PackagePlus className="size-4 text-emerald-600" /> Assign Equipment to {employeeName}
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Search for available assets (status: available, not currently assigned) and assign one to this employee.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleAssign} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="asset-search" className="text-xs font-medium">
+              Search available assets
+            </Label>
+            <div className="relative">
+              <Search className="size-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <Input
+                id="asset-search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name, serial number, or asset tag…"
+                className="pl-8 h-9"
+                disabled={submitting}
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <div className="border rounded-md max-h-72 overflow-y-auto">
+            {loadingAssets ? (
+              <div className="p-3 space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            ) : assets.length === 0 ? (
+              <div className="p-6 text-center">
+                <p className="text-xs text-muted-foreground">
+                  No available assets{debouncedSearch ? ` matching “${debouncedSearch}”.` : '.'}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Add new assets in the Inventory view.
+                </p>
+              </div>
+            ) : (
+              assets.map((asset) => {
+                const selected = selectedAssetId === asset.id;
+                return (
+                  <button
+                    type="button"
+                    key={asset.id}
+                    onClick={() => setSelectedAssetId(asset.id)}
+                    className={cn(
+                      'w-full text-left p-3 border-b last:border-b-0 hover:bg-accent transition-colors flex items-start gap-2',
+                      selected && 'bg-emerald-50/60 dark:bg-emerald-950/20',
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'mt-0.5 size-4 rounded-full border flex items-center justify-center shrink-0',
+                        selected ? 'border-emerald-600 bg-emerald-600' : 'border-border',
+                      )}
+                    >
+                      {selected && <CheckCircle2 className="size-3 text-white" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-medium text-foreground truncate">{asset.name}</div>
+                      <div className="text-[10px] text-muted-foreground flex items-center gap-2 flex-wrap">
+                        {asset.serialNumber && (
+                          <span className="flex items-center gap-1">
+                            <QrCode className="size-2.5" /> {asset.serialNumber}
+                          </span>
+                        )}
+                        {asset.assetTag && (
+                          <span className="flex items-center gap-1">
+                            <Package className="size-2.5" /> {asset.assetTag}
+                          </span>
+                        )}
+                        {!asset.serialNumber && !asset.assetTag && <span>No serial / tag</span>}
+                      </div>
+                      {asset.inventoryItem && (
+                        <Badge variant="outline" className="mt-1 text-[10px] bg-muted/40">
+                          {asset.inventoryItem.name}
+                        </Badge>
+                      )}
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={cn('text-[10px] capitalize', assetConditionBadgeClass(asset.condition))}
+                    >
+                      {asset.condition}
+                    </Badge>
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="assign-notes" className="text-xs font-medium">
+              Notes (optional)
+            </Label>
+            <Textarea
+              id="assign-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. kit issued for Project X, condition verified at handover"
+              rows={2}
+              disabled={submitting}
+            />
+          </div>
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={submitting || !selectedAssetId}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="size-3.5 mr-1 animate-spin" /> Assigning…
+                </>
+              ) : (
+                <>
+                  <PackagePlus className="size-3.5 mr-1" /> Assign
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Return Asset dialog.
+ *
+ * Opens with a single asset (the row the user clicked "Return" on). The user
+ * chooses a return status (returned / lost / damaged, default 'returned') and
+ * optionally enters notes for the audit trail. Submits via POST
+ * /api/inventory/assets/[id]/return with { status, notes }.
+ *
+ * On success: closes the dialog, invalidates the equipment query, shows a
+ * success toast.
+ */
+function ReturnAssetDialog({
+  open,
+  onOpenChange,
+  asset,
+  employeeName,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  asset: InventoryAsset | null;
+  employeeName: string;
+  onSuccess: () => void;
+}) {
+  const [status, setStatus] = useState<'returned' | 'lost' | 'damaged'>('returned');
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Reset on close so the next return action starts with the default status.
+  useEffect(() => {
+    if (!open) {
+      setStatus('returned');
+      setNotes('');
+    }
+  }, [open]);
+
+  if (!asset) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const res = await authFetch(apiUrl(`/api/inventory/assets/${asset.id}/return`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, notes: notes.trim() || null }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as PayrollError;
+        throw new Error(body.error || `Return failed (HTTP ${res.status})`);
+      }
+      toast.success(`Asset returned from ${employeeName}`);
+      onSuccess();
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Return failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <RotateCcw className="size-4 text-emerald-600" /> Return Asset — {asset.name}
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Mark this asset as returned, lost, or damaged. The employee&apos;s assignment will be closed.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="rounded-md border bg-muted/30 p-3 space-y-1">
+            <div className="text-xs font-medium text-foreground">{asset.name}</div>
+            <div className="text-[10px] text-muted-foreground flex items-center gap-3 flex-wrap">
+              {asset.serialNumber && (
+                <span className="flex items-center gap-1">
+                  <QrCode className="size-2.5" /> {asset.serialNumber}
+                </span>
+              )}
+              {asset.assetTag && (
+                <span className="flex items-center gap-1">
+                  <Package className="size-2.5" /> {asset.assetTag}
+                </span>
+              )}
+              <span className="flex items-center gap-1">
+                <User className="size-2.5" /> {employeeName}
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="return-status" className="text-xs font-medium">
+              Return status
+            </Label>
+            <Select
+              value={status}
+              onValueChange={(v) => setStatus(v as 'returned' | 'lost' | 'damaged')}
+              disabled={submitting}
+            >
+              <SelectTrigger id="return-status" className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="returned">Returned (asset back in pool)</SelectItem>
+                <SelectItem value="lost">Lost (asset unrecoverable)</SelectItem>
+                <SelectItem value="damaged">Damaged (needs repair / write-off)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="return-notes" className="text-xs font-medium">
+              Notes (optional)
+            </Label>
+            <Textarea
+              id="return-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder={
+                status === 'returned'
+                  ? 'e.g. handover condition verified'
+                  : 'e.g. explain loss / damage for the audit trail'
+              }
+              rows={3}
+              disabled={submitting}
+            />
+          </div>
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting} className="bg-emerald-600 hover:bg-emerald-700">
+              {submitting ? (
+                <>
+                  <Loader2 className="size-3.5 mr-1 animate-spin" /> Confirming…
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="size-3.5 mr-1" /> Confirm Return
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -3025,10 +4390,45 @@ function LocationTab({ employee }: { employee: Employee }) {
     enabled: !!(employee.latitude || employee.longitude),
   });
 
+  // Fetch the employee's jobs so we can identify the current active job
+  // (status 'assigned' or 'in_progress') and compute ETA from the
+  // employee's GPS coordinates to the job's geocoded destination lat/lng.
+  const jobsQuery = useQuery<{ employee: { id: string; name: string; status: string }; jobs: EmployeeJob[] }>({
+    queryKey: ['employee-location-jobs', employee.id],
+    queryFn: async () => {
+      const res = await authFetch(apiUrl(`/api/employees/${employee.id}/jobs`));
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+  });
+
   const hasCoords = !!(employee.latitude && employee.longitude);
   const totalDistanceKm = data?.summary?.totalDistanceKm ?? 0;
   const totalDurationMin = data?.summary?.totalDurationMinutes ?? 0;
   const routes = data?.routes ?? [];
+
+  // Identify the employee's current active job: the first one in
+  // 'assigned' or 'in_progress' status. Sorted by scheduledAt desc on the
+  // server, so the most-recent assignment wins.
+  const currentJob = useMemo(() => {
+    const all = jobsQuery.data?.jobs ?? [];
+    return all.find((j) => j.status === 'assigned' || j.status === 'in_progress') ?? null;
+  }, [jobsQuery.data]);
+
+  // Compute straight-line haversine distance + estimated travel time
+  // (40 km/h urban average — per Phase 2 spec for LocationTab ETA).
+  // Both the employee's current GPS and the job's geocoded destination
+  // must be present to compute; otherwise we show the appropriate empty state.
+  const eta = useMemo(() => {
+    if (!employee.latitude || !employee.longitude) return null;
+    if (!currentJob) return null;
+    const jobLat = currentJob.latitude;
+    const jobLng = currentJob.longitude;
+    if (typeof jobLat !== 'number' || typeof jobLng !== 'number' || !jobLat || !jobLng) return null;
+    const distKm = haversineDistanceKm(employee.latitude, employee.longitude, jobLat, jobLng);
+    const travelMin = estimateTravelMinutes(distKm);
+    return { distKm, travelMin, jobTitle: currentJob.title, customerName: currentJob.customer?.name || currentJob.customerName || null };
+  }, [employee.latitude, employee.longitude, currentJob]);
 
   const mapSrc = hasCoords
     ? `https://www.openstreetmap.org/export/embed.html?bbox=${(employee.longitude! - 0.01)}%2C${(employee.latitude! - 0.01)}%2C${(employee.longitude! + 0.01)}%2C${(employee.latitude! + 0.01)}&layer=mapnik&marker=${employee.latitude}%2C${employee.longitude}`
@@ -3036,6 +4436,79 @@ function LocationTab({ employee }: { employee: Employee }) {
 
   return (
     <div className="space-y-4">
+      {/* ETA Card — straight-line distance + rough travel time */}
+      <Card className="border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/30 dark:bg-emerald-950/10">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Navigation className="size-4 text-emerald-600" /> ETA to Current Job
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Straight-line distance · 40 km/h urban estimate
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {jobsQuery.isLoading ? (
+            <Skeleton className="h-16 w-full" />
+          ) : !hasCoords ? (
+            <div className="flex items-center gap-3 py-2">
+              <div className="size-9 rounded-lg bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center shrink-0">
+                <AlertCircle className="size-4 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">No GPS data</p>
+                <p className="text-xs text-muted-foreground">
+                  The employee hasn&apos;t shared their current location.
+                </p>
+              </div>
+            </div>
+          ) : !currentJob ? (
+            <div className="flex items-center gap-3 py-2">
+              <div className="size-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                <Briefcase className="size-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">No active job</p>
+                <p className="text-xs text-muted-foreground">
+                  No job is currently assigned or in progress.
+                </p>
+              </div>
+            </div>
+          ) : !eta ? (
+            <div className="flex items-center gap-3 py-2">
+              <div className="size-9 rounded-lg bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center shrink-0">
+                <MapPin className="size-4 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Job site coordinates unavailable</p>
+                <p className="text-xs text-muted-foreground">
+                  {currentJob.title} ({currentJob.customer?.name || currentJob.customerName || 'no customer'})
+                  &nbsp;has no geocoded lat/lng — cannot compute ETA.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl font-bold text-emerald-700 dark:text-emerald-400">{eta.distKm.toFixed(1)}</span>
+                <span className="text-xs text-muted-foreground font-medium">km away</span>
+              </div>
+              <span className="text-muted-foreground/40">·</span>
+              <div className="flex items-baseline gap-1.5">
+                <Clock className="size-3.5 text-emerald-600 self-center" />
+                <span className="text-lg font-semibold">~{eta.travelMin} min</span>
+                <span className="text-xs text-muted-foreground font-medium">ETA</span>
+              </div>
+              <div className="ml-auto text-right min-w-0">
+                <p className="text-xs font-medium truncate">{eta.jobTitle}</p>
+                <p className="text-[10px] text-muted-foreground truncate">
+                  {eta.customerName ? `${eta.customerName}` : 'No customer'}
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Map + Current Location */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
@@ -3142,56 +4615,305 @@ function LocationTab({ employee }: { employee: Employee }) {
   );
 }
 
-// ─── Payroll Tab (Future) ────────────────────────────────────────────────────
+// ─── Payroll Tab ─────────────────────────────────────────────────────────────
 
-function PayrollTab({ employeeName }: { employeeName: string }) {
-  return (
-    <div className="space-y-4">
+type PayrollPeriod = '7d' | '14d' | 'current_month' | 'last_month';
+
+const PAYROLL_PERIOD_OPTIONS: { value: PayrollPeriod; label: string }[] = [
+  { value: '7d', label: 'Last 7 days' },
+  { value: '14d', label: 'Last 14 days' },
+  { value: 'current_month', label: 'Current month' },
+  { value: 'last_month', label: 'Last month' },
+];
+
+/**
+ * Compute the { from, to } YYYY-MM-DD pair for a given payroll period preset.
+ * - 7d / 14d: from = today - N days, to = today.
+ * - current_month: from = 1st of current month, to = today.
+ * - last_month: from = 1st of last month, to = last day of last month.
+ */
+function payrollPeriodRange(period: PayrollPeriod): { from: string; to: string } {
+  const now = new Date();
+  const to = toYMD(now);
+  if (period === '7d') {
+    const from = new Date(now);
+    from.setDate(from.getDate() - 6); // 7 days inclusive of today
+    return { from: toYMD(from), to };
+  }
+  if (period === '14d') {
+    const from = new Date(now);
+    from.setDate(from.getDate() - 13);
+    return { from: toYMD(from), to };
+  }
+  if (period === 'current_month') {
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { from: toYMD(from), to };
+  }
+  // last_month
+  const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastDayOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+  return { from: toYMD(from), to: toYMD(lastDayOfLastMonth) };
+}
+
+function PayrollTab({ employeeName, employeeId }: { employeeName: string; employeeId: string }) {
+  const perms = usePermissions();
+  const [period, setPeriod] = useState<PayrollPeriod>('current_month');
+  const range = useMemo(() => payrollPeriodRange(period), [period]);
+
+  const { data, isLoading, error } = useQuery<PayrollResponse>({
+    queryKey: ['employee-payroll', employeeId, range.from, range.to],
+    queryFn: async () => {
+      const res = await authFetch(
+        apiUrl(`/api/time-tracking/payroll?from=${range.from}&to=${range.to}`),
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as PayrollError;
+        const err = new Error(body.error || `Failed to load payroll (HTTP ${res.status})`);
+        // Attach the HTTP status so the renderer can distinguish 403 (permission)
+        // from a generic 500.
+        (err as Error & { status?: number }).status = res.status;
+        throw err;
+      }
+      return res.json();
+    },
+    // Don't auto-refetch on window focus — payroll data is slow to settle and
+    // a refetch while the user is mid-read is jarring.
+    refetchOnWindowFocus: false,
+    // Only fetch when the user has the payroll permission. Defense-in-depth:
+    // the parent TabsContent already gates the tab, but if the user lands here
+    // via stale state we want to avoid a useless 403 round-trip.
+    enabled: perms.canAccessEmployeeTab('payroll'),
+  });
+
+  // Defense-in-depth: the parent TabsContent for `payroll` already wraps this
+  // component in `perms.canAccessEmployeeTab('payroll') ? <PayrollTab/> :
+  // <ForbiddenNotice/>`. The check here catches the case where the user lands
+  // on the tab via stale URL hash or devtools `setActiveTab('payroll')`.
+  if (!perms.canAccessEmployeeTab('payroll')) {
+    return (
       <Card className="border-dashed">
         <CardContent className="p-8 text-center">
-          <div className="size-14 rounded-full bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center mx-auto mb-3">
-            <Wallet className="size-7 text-emerald-600" />
+          <div className="size-14 rounded-full bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center mx-auto mb-3">
+            <Shield className="size-7 text-amber-600" />
           </div>
-          <h3 className="text-base font-semibold">Payroll Module Coming Soon</h3>
+          <h3 className="text-base font-semibold">You don&apos;t have permission to view payroll</h3>
           <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-            Manage {employeeName}&apos;s salary, pay slips, tax deductions, and bank details. The payroll module is currently under development.
+            Payroll data is restricted to owners, admins, and accountants.
+            Contact an administrator if you believe this is an error.
           </p>
-          <div className="flex items-center justify-center gap-1.5 mt-3 text-xs text-muted-foreground">
-            <Sparkles className="size-3 text-amber-500" />
-            <span>Track this space for updates</span>
-          </div>
         </CardContent>
+      </Card>
+    );
+  }
+
+  // Handle the 403 specifically — show the permission message rather than
+  // a generic error toast / blank state. The endpoint returns 403 for users
+  // below the payroll tier (manager/dispatcher/employee/viewer/etc), which
+  // shouldn't happen here because of the gate above, but this guards against
+  // race conditions (user's role revoked between page-load and fetch).
+  const httpStatus = (error as Error & { status?: number } | null)?.status;
+  if (error && httpStatus === 403) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="p-8 text-center">
+          <div className="size-14 rounded-full bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center mx-auto mb-3">
+            <Shield className="size-7 text-amber-600" />
+          </div>
+          <h3 className="text-base font-semibold">You don&apos;t have permission to view payroll</h3>
+          <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+            Your role doesn&apos;t include permission to view payroll information.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const payroll = data?.payroll ?? [];
+  // Filter to the selected employee (the endpoint returns ALL tenant employees
+  // with shifts in the range; we want only this employee's row). If no row
+  // exists for this employee, show an empty-state with the period selector.
+  const employeeRow = payroll.find((p) => p.employee.id === employeeId);
+  const allRows = payroll; // also show the full team for context (sorted desc by working minutes, server-side)
+
+  return (
+    <div className="space-y-4">
+      {/* Period Selector + Header */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Wallet className="size-4 text-emerald-600" /> Payroll Summary
+              </CardTitle>
+              <CardDescription className="text-xs">
+                {employeeName} · {range.from} → {range.to}
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="payroll-period" className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Period</Label>
+              <Select value={period} onValueChange={(v) => setPeriod(v as PayrollPeriod)}>
+                <SelectTrigger id="payroll-period" className="h-8 w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYROLL_PERIOD_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
       </Card>
 
-      {/* Placeholder salary card (UI only) */}
-      <Card className="opacity-50 pointer-events-none">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <IndianRupee className="size-4 text-emerald-600" /> Salary Information
-          </CardTitle>
-          <CardDescription className="text-xs">Basic payroll details (preview)</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Basic Salary</p>
-              <p className="text-lg font-bold">—</p>
+      {isLoading ? (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </CardContent>
+        </Card>
+      ) : error ? (
+        <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="size-4 text-red-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-red-700 dark:text-red-400">Failed to load payroll</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {error.message}. Try a different period or contact an administrator.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Pay Cycle</p>
-              <p className="text-lg font-bold">—</p>
+          </CardContent>
+        </Card>
+      ) : !employeeRow ? (
+        <Card className="border-dashed">
+          <CardContent className="p-8 text-center">
+            <div className="size-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+              <Clock className="size-7 text-muted-foreground" />
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Bank Account</p>
-              <p className="text-lg font-bold">—</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Last Paid</p>
-              <p className="text-lg font-bold">—</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            <h3 className="text-base font-semibold">No payroll entries in this period</h3>
+            <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+              {employeeName} has no completed shifts between {range.from} and {range.to}.
+              Try a wider period or assign work to see entries appear.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Selected Employee Summary */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <IndianRupee className="size-4 text-emerald-600" /> {employeeName}&apos;s Summary
+              </CardTitle>
+              <CardDescription className="text-xs">Hours worked in the selected period</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <PayrollStat
+                  label="Total time"
+                  value={formatMinutes(employeeRow.totalMinutes)}
+                  hint={`${employeeRow.entriesCount} entr${employeeRow.entriesCount === 1 ? 'y' : 'ies'}`}
+                />
+                <PayrollStat
+                  label="Working"
+                  value={formatMinutes(employeeRow.workingMinutes)}
+                  hint="On-the-clock time"
+                />
+                <PayrollStat
+                  label="Break"
+                  value={formatMinutes(employeeRow.breakMinutes)}
+                  hint="Breaks taken"
+                />
+                <PayrollStat
+                  label="Travel"
+                  value={formatMinutes(employeeRow.travelMinutes)}
+                  hint="Driving/transit"
+                />
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t">
+                <PayrollStat
+                  label="Approved entries"
+                  value={String(employeeRow.approvedCount)}
+                  hint={`${employeeRow.entriesCount} total`}
+                />
+                <PayrollStat
+                  label="Pending entries"
+                  value={String(employeeRow.pendingCount)}
+                  hint="Awaiting approval"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Full Team Payroll Table (context) */}
+          {allRows.length > 1 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Clock3 className="size-4 text-emerald-600" /> Team Payroll
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  All employees with shifts in this period (for context)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Employee</TableHead>
+                        <TableHead className="text-xs text-right">Total</TableHead>
+                        <TableHead className="text-xs text-right">Working</TableHead>
+                        <TableHead className="text-xs text-right">Break</TableHead>
+                        <TableHead className="text-xs text-right">Travel</TableHead>
+                        <TableHead className="text-xs text-right">Entries</TableHead>
+                        <TableHead className="text-xs text-right">Approved</TableHead>
+                        <TableHead className="text-xs text-right">Pending</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {allRows.map((row) => (
+                        <TableRow
+                          key={row.employee.id}
+                          className={cn(row.employee.id === employeeId && 'bg-emerald-50/50 dark:bg-emerald-950/20')}
+                        >
+                          <TableCell className="text-xs font-medium">
+                            {row.employee.name}
+                            {row.employee.id === employeeId && (
+                              <Badge variant="secondary" className="ml-1.5 text-[9px] bg-emerald-100 text-emerald-700">Selected</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-right font-mono">{formatMinutes(row.totalMinutes)}</TableCell>
+                          <TableCell className="text-xs text-right font-mono">{formatMinutes(row.workingMinutes)}</TableCell>
+                          <TableCell className="text-xs text-right font-mono">{formatMinutes(row.breakMinutes)}</TableCell>
+                          <TableCell className="text-xs text-right font-mono">{formatMinutes(row.travelMinutes)}</TableCell>
+                          <TableCell className="text-xs text-right">{row.entriesCount}</TableCell>
+                          <TableCell className="text-xs text-right text-emerald-600 font-medium">{row.approvedCount}</TableCell>
+                          <TableCell className="text-xs text-right text-amber-600 font-medium">{row.pendingCount}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function PayrollStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
+      <p className="text-xl font-bold mt-1">{value}</p>
+      {hint && <p className="text-[10px] text-muted-foreground mt-0.5">{hint}</p>}
     </div>
   );
 }

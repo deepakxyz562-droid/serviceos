@@ -1401,6 +1401,18 @@ model Employee {
   documents       Document[]
   invitations     Invitation[]
 
+  // ── Equipment (Phase 3) ──
+  // Asset-level (serialised) equipment currently assigned to this employee.
+  // Distinct from InventoryItem (SKU/quantity-level stock). Uses named relation
+  // "AssignedAssets" because Employee also has many other relations pointing
+  // at asset-like tables; the explicit name disambiguates the FK.
+  assignedAssets InventoryAsset[] @relation("AssignedAssets")
+  // Full assignment history (every assignment row, current + past). Separate
+  // from `assignedAssets` (which is only the *current* asset via the FK on
+  // InventoryAsset itself) because an employee may have returned an asset but
+  // the assignment record persists for audit.
+  assetAssignments InventoryAssetAssignment[]
+
   // ── Enterprise Invitation Management ──
   invitationStatus String   @default("none")  // none | pending | accepted | suspended
 
@@ -5434,11 +5446,84 @@ model InventoryItem {
   tenant   Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   supplier Supplier? @relation("SupplierItems", fields: [supplierId], references: [id], onDelete: SetNull)
   stockTransactions StockTransaction[]
+  // ── Equipment (Phase 3) ──
+  // Asset-level instances of this SKU. Each row in InventoryAsset represents
+  // ONE physical tracked item (with its own serial number / asset tag), as
+  // opposed to InventoryItem which tracks aggregate quantity in stock.
+  assets    InventoryAsset[]
 
   @@index([tenantId])
   @@index([branchId])
   @@index([category])
   @@index([isActive])
+}
+
+// ==========================================
+// EQUIPMENT — ASSET-LEVEL TRACKING (Phase 3)
+// ==========================================
+// InventoryItem above tracks SKU-level stock (quantities). InventoryAsset
+// tracks individual physical items — each one has its own serial number,
+// asset tag, condition, and assignment history. Use this model for any
+// equipment that needs to be tracked per-instance (e.g. "iPhone 15 SN-12345
+// assigned to John" vs. "we have 12 iPhone 15s in stock").
+
+model InventoryAsset {
+  id           String   @id @default(cuid())
+  tenantId     String
+  inventoryItemId String?  // link to the SKU/InventoryItem this asset is an instance of (nullable: standalone assets allowed)
+  serialNumber String?  // unique serial number (e.g. "SN-12345")
+  assetTag     String?  // company asset tag (e.g. "ASSET-001")
+  name         String
+  description  String?
+  status       String   @default("available")  // available | assigned | in_maintenance | retired | lost | damaged
+  condition    String   @default("good")  // new | good | fair | poor | broken
+  purchaseDate DateTime?
+  purchaseCost Float?
+  notes        String?
+
+  // Current assignment (nullable — null means unassigned)
+  assignedEmployeeId String?
+  assignedAt         DateTime?
+  assignmentStatus   String?  // assigned | returned | lost | damaged — last known state
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  inventoryItem  InventoryItem?  @relation(fields: [inventoryItemId], references: [id])
+  assignedEmployee Employee?     @relation("AssignedAssets", fields: [assignedEmployeeId], references: [id])
+  assignments    InventoryAssetAssignment[]
+
+  @@index([tenantId])
+  @@index([assignedEmployeeId])
+  @@index([inventoryItemId])
+}
+
+model InventoryAssetAssignment {
+  id           String   @id @default(cuid())
+  tenantId     String
+  assetId      String
+  employeeId   String
+
+  assignedAt   DateTime @default(now())
+  returnedAt   DateTime?
+  assignmentStatus String @default("assigned")  // assigned | returned | lost | damaged
+
+  // Audit fields
+  assignedById String?  // user id who assigned
+  returnedById String?  // user id who received return
+  notes        String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  asset    InventoryAsset @relation(fields: [assetId], references: [id])
+  employee Employee       @relation(fields: [employeeId], references: [id])
+
+  @@index([tenantId])
+  @@index([assetId])
+  @@index([employeeId])
 }
 
 model Warehouse {

@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { hasRole } from '@/lib/auth/permissions';
 
 /**
  * GET /api/time-tracking/payroll?from=YYYY-MM-DD&to=YYYY-MM-DD
  * -----------------------------------------------------------
  * Returns a payroll summary for the given date range, grouped by employee.
  *
- * Auth: owner / admin / manager only (NOT employees, NOT customers).
+ * PERMISSION GATE (Phase 1.4): allow-list (owner / admin / accountant).
+ * Replaces the prior deny-list (`role !== 'employee' && role !== 'customer'`)
+ * which accidentally allowed `dispatcher` and any future role. The user's
+ * confirmed spec for the Payroll tab is exactly these three roles — manager
+ * is intentionally EXCLUDED because payroll is sensitive financial data.
  *
  * Response shape:
  *   {
@@ -45,9 +50,9 @@ interface ShiftRow {
   approvalStatus: string;
 }
 
-function requireManager(role: string | undefined): boolean {
-  return role !== 'employee' && role !== 'customer';
-}
+// Allow-list — the only roles that may read payroll data.
+// Mirrors EMPLOYEE_DETAIL_TAB_ROLES.payroll in @/lib/auth/permissions.
+const PAYROLL_ALLOWED_ROLES = ['owner', 'admin', 'accountant'];
 
 export async function GET(request: NextRequest) {
   try {
@@ -55,9 +60,9 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-    if (!requireManager(user.role)) {
+    if (!hasRole(user, PAYROLL_ALLOWED_ROLES)) {
       return NextResponse.json(
-        { error: 'Forbidden — only owners, admins and managers can view payroll' },
+        { error: 'Forbidden — only owners, admins and accountants can view payroll' },
         { status: 403 },
       );
     }

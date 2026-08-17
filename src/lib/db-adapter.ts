@@ -122,6 +122,27 @@ const RELATION_MAP: Record<string, Record<string, RelationConfig>> = {
     invitation: { table: 'Invitation', fk: 'employeeId', type: 'one-to-one' },
     collectedPayments: { table: 'Job', fk: 'collectedById', type: 'one-to-many' },
     bookings: { table: 'Booking', fk: 'employeeId', type: 'one-to-many' },
+    // ── Equipment (Phase 3) ──
+    // Named relation "AssignedAssets" → InventoryAsset.assignedEmployeeId.
+    // Without this entry the db-adapter's fallback `getTableName('assignedAssets')`
+    // would produce `AssignedAssets` (wrong table name) and break the include.
+    assignedAssets: { table: 'InventoryAsset', fk: 'assignedEmployeeId', type: 'one-to-many' },
+  },
+  inventoryItem: {
+    // Explicit entries only for relations whose names don't match the target
+    // table name. Other relations (e.g. `supplier`) continue to use the
+    // PostgREST auto-detection fallback.
+    assets: { table: 'InventoryAsset', fk: 'inventoryItemId', type: 'one-to-many' },
+  },
+  inventoryAsset: {
+    inventoryItem: { table: 'InventoryItem', fk: 'inventoryItemId', type: 'many-to-one' },
+    // Named relation "AssignedAssets" — relation name doesn't match table name.
+    assignedEmployee: { table: 'Employee', fk: 'assignedEmployeeId', type: 'many-to-one' },
+    assignments: { table: 'InventoryAssetAssignment', fk: 'assetId', type: 'one-to-many' },
+  },
+  inventoryAssetAssignment: {
+    asset: { table: 'InventoryAsset', fk: 'assetId', type: 'many-to-one' },
+    employee: { table: 'Employee', fk: 'employeeId', type: 'many-to-one' },
   },
   customer: {
     workspace: { table: 'Workspace', fk: 'workspaceId', type: 'many-to-one' },

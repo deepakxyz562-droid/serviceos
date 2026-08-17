@@ -1094,6 +1094,14 @@ export function JobsView() {
   // Read + consume the lead→job prefill handed off from the Leads view.
   const pendingJobPrefill = useAppStore((s) => s.pendingJobPrefill);
   const setPendingJobPrefill = useAppStore((s) => s.setPendingJobPrefill);
+
+  // ── Cross-view "open entity detail" signal (Customer 360 → Jobs deep-link) ──
+  // When the user clicks a Job row inside the Customer 360 detail panel
+  // (crm-view.tsx), the signal carries the job id; we fetch it (or reuse the
+  // local copy) and open the detail panel, then clear the signal so a refresh
+  // doesn't re-open it.
+  const pendingOpenEntity = useAppStore((s) => s.pendingOpenEntity);
+  const setPendingOpenEntity = useAppStore((s) => s.setPendingOpenEntity);
   // Cross-view "New Job" create signal — when the sidebar's "+ Create"
   // dropdown or the dashboard's "Create Job" quick action sets
   // pendingCreate to 'job', we open the New Job form and clear the signal.
@@ -1628,6 +1636,36 @@ export function JobsView() {
       setPendingCreate(null);
     }
   }, [pendingCreate]);
+
+  // ── Consume the cross-view "open job detail" signal (Customer 360 deep-link) ──
+  // Mirrors the pendingCreate consumer above. The signal is set by crm-view.tsx
+  // when the user clicks a Job row inside the Customer 360 detail panel. We:
+  //   1. clear it immediately (so a re-render doesn't re-trigger),
+  //   2. reuse the local job if it's already in the list,
+  //   3. otherwise fetch it via /api/jobs/lifecycle?jobId= (the canonical
+  //      single-job endpoint used by openJobDetail).
+  // If the fetch fails (404 / network), we log + don't open anything rather
+  // than risk rendering a broken detail panel with a stub object.
+  useEffect(() => {
+    if (!pendingOpenEntity || pendingOpenEntity.kind !== 'job') return;
+    const targetId = pendingOpenEntity.id;
+    setPendingOpenEntity(null);
+    const local = jobs.find((j) => j.id === targetId);
+    if (local) {
+      openJobDetail(local);
+      return;
+    }
+    fetch(`/api/jobs/lifecycle?jobId=${encodeURIComponent(targetId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((job) => {
+        if (!job || job.error) {
+          console.error('[jobs-view] pendingOpenEntity: job not found for id', targetId);
+          return;
+        }
+        openJobDetail(job as Job);
+      })
+      .catch((err) => console.error('[jobs-view] pendingOpenEntity fetch failed:', err));
+  }, [pendingOpenEntity]);
 
   // ─── Stats ──────────────────────────────────────────────────────────────
 

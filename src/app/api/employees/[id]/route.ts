@@ -1,8 +1,15 @@
 import { db } from '@/lib/db';
 import { getAuthUser, hashPassword } from '@/lib/auth';
+import { canSeeEmployeeHourlyRate } from '@/lib/auth/permissions';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/employees/[id] — Get a single employee
+//
+// PERMISSION GATE (Phase 1.4): the `hourlyRate` field is sensitive
+// payroll-adjacent data (used for job costing / profitability). It is
+// stripped from the response for callers below the Payroll-tab tier
+// (owner/admin/accountant). All other fields are returned as before —
+// the operational data (jobs, performance, contact info) is not sensitive.
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -37,6 +44,17 @@ export async function GET(
         { error: 'Access denied' },
         { status: 403 }
       );
+    }
+
+    // Strip `hourlyRate` for callers below the payroll tier. The field is
+    // a Float so a clean delete is fine — no JSON serialization artifacts.
+    // Self-access is allowed: an employee reading their own record may see
+    // their own hourly rate (mirrors the documents/reviews self-access rule).
+    const isSelf = user.employeeId === id;
+    if (!isSelf && !canSeeEmployeeHourlyRate(user)) {
+      const { hourlyRate: _stripped, ...safeEmployee } = employee;
+      void _stripped;
+      return NextResponse.json(safeEmployee);
     }
 
     return NextResponse.json(employee);

@@ -40,6 +40,7 @@ import {
   type AiGeneratedQuote,
 } from '@/components/quotes/ai-quote-generator-dialog';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/store/app-store';
 
 // ============================================================
 // Types
@@ -303,6 +304,14 @@ function WhatsAppPreview({ quote }: { quote: Quote | null }) {
 // ============================================================
 
 export function QuotesView() {
+  // ── Cross-view "open entity detail" signal (Customer 360 → Quotes deep-link) ──
+  // When the user clicks a Quote row inside the Customer 360 detail panel
+  // (crm-view.tsx), the signal carries the quote id; we fetch it (or reuse the
+  // local copy) and open the detail panel, then clear the signal so a refresh
+  // doesn't re-open it.
+  const pendingOpenEntity = useAppStore((s) => s.pendingOpenEntity);
+  const setPendingOpenEntity = useAppStore((s) => s.setPendingOpenEntity);
+
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [tenantId, setTenantId] = useState<string | null>(null);
@@ -528,6 +537,38 @@ export function QuotesView() {
     setFormMode('detail');
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
   };
+
+  // ── Consume the cross-view "open quote detail" signal (Customer 360 deep-link) ──
+  // Mirrors the pendingCreate consumer pattern. The signal is set by crm-view.tsx
+  // when the user clicks a Quote row inside the Customer 360 detail panel. We:
+  //   1. clear it immediately (so a re-render doesn't re-trigger),
+  //   2. reuse the local quote if it's already in the list,
+  //   3. otherwise fetch it via /api/quotes/[id] — Phase 4a updated this endpoint
+  //      to expose the full `customer` object alongside the flat fields, so the
+  //      detail panel can render correctly without an extra fetch.
+  // If the fetch fails (404 / network), we log + don't open anything.
+  useEffect(() => {
+    if (!pendingOpenEntity || pendingOpenEntity.kind !== 'quote') return;
+    const targetId = pendingOpenEntity.id;
+    setPendingOpenEntity(null);
+    const local = quotes.find((q) => q.id === targetId);
+    if (local) {
+      openQuoteDetail(local);
+      return;
+    }
+    authFetch(`/api/quotes/${encodeURIComponent(targetId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((raw) => {
+        if (!raw || raw.error) {
+          console.error('[quotes-view] pendingOpenEntity: quote not found for id', targetId);
+          return;
+        }
+        // normalizeQuote derives customerName/Phone from the embedded customer
+        // relation when the flat fields are missing (Phase 4a fallback path).
+        openQuoteDetail(normalizeQuote(raw, customers));
+      })
+      .catch((err) => console.error('[quotes-view] pendingOpenEntity fetch failed:', err));
+  }, [pendingOpenEntity]);
 
   const closeQuoteDetail = () => {
     setFormMode('list');

@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { CI } from '@/lib/db-utils';
 import { getAuthUser } from '@/lib/auth';
+import { hasRole } from '@/lib/auth/permissions';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/reviews — List reviews with filters
@@ -9,6 +10,12 @@ import { NextRequest, NextResponse } from 'next/server';
 // (where.customerId = user.id). tenantId is skipped for customers — if
 // Customer.workspaceId is null (broken Customer→Workspace→Tenant chain),
 // tenantId can't be resolved and the review list would return empty.
+//
+// PERMISSION GATE (Phase 1.4): when a non-customer caller passes
+// `?employeeId=X`, they must hold one of the Reviews-tab roles
+// (owner/admin/manager). Without this gate, any tenant member could read
+// any other employee's reviews by simply passing `?employeeId=...`.
+// Self-access (an employee reading their own reviews) is allowed.
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
@@ -55,6 +62,23 @@ export async function GET(request: NextRequest) {
     if (source) where.source = source;
     if (employeeId) where.employeeId = employeeId;
     if (minRating) where.rating = { gte: parseInt(minRating) };
+
+    // PERMISSION GATE: cross-employee review reads require the Reviews-tab
+    // role lane (owner/admin/manager). Self-access is allowed — an employee
+    // reading their own reviews via ?employeeId=<their own id> is permitted.
+    // Customer sessions are scoped by `where.customerId = user.id` above, so
+    // they cannot read other employees' reviews regardless of this gate.
+    if (
+      employeeId &&
+      user.role !== 'customer' &&
+      employeeId !== user.employeeId &&
+      !hasRole(user, ['owner', 'admin', 'manager'])
+    ) {
+      return NextResponse.json(
+        { error: 'Forbidden — insufficient role to read other employees\' reviews' },
+        { status: 403 }
+      );
+    }
 
     if (search) {
       where.OR = [

@@ -23,6 +23,13 @@ export async function GET(
       id: quote.id,
       title: quote.title,
       description: quote.description,
+      // Full customer object for consumers that need address/email/etc.
+      // (e.g. the Quotes view's detail panel, opened via the Customer 360
+      // pendingOpenEntity signal — it doesn't have the customer in local
+      // state, so it relies on this endpoint to provide it.)
+      customer: quote.customer ?? null,
+      // Flat fields kept for backward compatibility with existing callers
+      // that read `customerName` / `customerId` / `customerPhone` directly.
       customerName: quote.customer?.name || 'Unknown',
       customerId: quote.customerId || '',
       customerPhone: quote.customer?.phone,
