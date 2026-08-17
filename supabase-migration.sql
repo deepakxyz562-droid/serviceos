@@ -111,9 +111,16 @@ CREATE TABLE IF NOT EXISTS "Tenant" (
   "postalCode" TEXT,
   "latitude" DOUBLE PRECISION,
   "longitude" DOUBLE PRECISION,
+  "serviceRadiusKm" DOUBLE PRECISION NOT NULL DEFAULT 25,
   "listingTier" TEXT NOT NULL DEFAULT 'none',
   "claimed" BOOLEAN NOT NULL DEFAULT false,
   "claimedAt" TIMESTAMP(3),
+  "claimedById" TEXT,
+  "signupMode" TEXT,
+  "googleBusinessProfileUrl" TEXT DEFAULT '',
+  "googleBusinessVerified" BOOLEAN NOT NULL DEFAULT false,
+  "googlePlaceId" TEXT UNIQUE,
+  "website" TEXT,
   "tagline" TEXT,
   "description" TEXT,
   "coverImage" TEXT,
@@ -583,6 +590,8 @@ CREATE TABLE IF NOT EXISTS "Quote" (
   "validUntil" TIMESTAMP(3),
   "whatsappSent" BOOLEAN NOT NULL DEFAULT false,
   "whatsappSentAt" TIMESTAMP(3),
+  "emailSent" BOOLEAN NOT NULL DEFAULT false,
+  "emailSentAt" TIMESTAMP(3),
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
   "updatedAt" TIMESTAMP(3) NOT NULL
 );
@@ -817,6 +826,21 @@ CREATE TABLE IF NOT EXISTS "Template" (
 );
 
 
+CREATE TABLE IF NOT EXISTS "Team" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "name" TEXT NOT NULL,
+  "description" TEXT,
+  "color" TEXT NOT NULL DEFAULT '#0d9488',
+  "icon" TEXT NOT NULL DEFAULT 'Users',
+  "leadId" TEXT UNIQUE,
+  "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "tenantId" TEXT NOT NULL,
+  "workspaceId" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
 CREATE TABLE IF NOT EXISTS "Employee" (
   "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
   "name" TEXT NOT NULL,
@@ -833,6 +857,7 @@ CREATE TABLE IF NOT EXISTS "Employee" (
   "latitude" DOUBLE PRECISION,
   "longitude" DOUBLE PRECISION,
   "workspaceId" TEXT,
+  "teamId" TEXT,
   "lastSeenAt" TIMESTAMP(3),
   "currentJobId" TEXT UNIQUE,
   "userId" TEXT UNIQUE,
@@ -884,7 +909,16 @@ CREATE TABLE IF NOT EXISTS "Customer" (
   "address" TEXT,
   "whatsappId" TEXT,
   "preferredCurrency" TEXT NOT NULL DEFAULT 'USD',
+  "normalizedPhone" TEXT,
+  "normalizedEmail" TEXT,
+  "title" TEXT,
+  "firstName" TEXT,
+  "lastName" TEXT,
+  "companyName" TEXT,
+  "leadSource" TEXT,
+  "notificationSettingsJson" TEXT NOT NULL DEFAULT '{}',
   "workspaceId" TEXT,
+  "tenantId" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
   "updatedAt" TIMESTAMP(3) NOT NULL,
   "passwordHash" TEXT,
@@ -894,7 +928,12 @@ CREATE TABLE IF NOT EXISTS "Customer" (
   "lastLoginAt" TIMESTAMP(3),
   "invitationSentAt" TIMESTAMP(3),
   "portalEnabled" BOOLEAN NOT NULL DEFAULT false,
-  "invitationStatus" TEXT NOT NULL DEFAULT 'none'
+  "invitationStatus" TEXT NOT NULL DEFAULT 'none',
+  "marketingConsent" BOOLEAN,
+  "marketingConsentAt" TIMESTAMP(3),
+  "marketingConsentSource" TEXT,
+  "marketingConsentIp" TEXT,
+  "unsubscribedAt" TIMESTAMP(3)
 );
 
 
@@ -944,6 +983,8 @@ CREATE TABLE IF NOT EXISTS "Job" (
   "assigneePhone" TEXT,
   "resourceId" TEXT,
   "serviceId" TEXT,
+  "latitude" DOUBLE PRECISION,
+  "longitude" DOUBLE PRECISION,
   "checkInLat" DOUBLE PRECISION,
   "checkInLng" DOUBLE PRECISION,
   "checkOutLat" DOUBLE PRECISION,
@@ -975,6 +1016,8 @@ CREATE TABLE IF NOT EXISTS "Job" (
   "workspaceId" TEXT,
   "recurringScheduleId" TEXT,
   "deletedAt" TIMESTAMP(3),
+  "cancelledAt" TIMESTAMP(3),
+  "verificationPin" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
   "updatedAt" TIMESTAMP(3) NOT NULL
 );
@@ -1176,8 +1219,30 @@ CREATE TABLE IF NOT EXISTS "ChannelConfig" (
   "totalMessages" INTEGER NOT NULL DEFAULT 0,
   "lastActivityAt" TIMESTAMP(3),
   "lastError" TEXT,
+  "channelType" TEXT,
+  "tier" TEXT,
+  "setupCompleted" BOOLEAN NOT NULL DEFAULT false,
+  "setupStep" INTEGER NOT NULL DEFAULT 0,
+  "lastTestedAt" TIMESTAMP(3),
+  "lastTestStatus" TEXT,
   "tenantId" TEXT,
   "workspaceId" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "IntegrationCredential" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "provider" TEXT NOT NULL,
+  "displayName" TEXT NOT NULL,
+  "clientId" TEXT NOT NULL,
+  "clientSecret" TEXT NOT NULL,
+  "scopes" TEXT NOT NULL DEFAULT '',
+  "redirectUri" TEXT,
+  "additionalConfigJson" TEXT NOT NULL DEFAULT '{}',
+  "status" TEXT NOT NULL DEFAULT 'active',
+  "createdBy" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
   "updatedAt" TIMESTAMP(3) NOT NULL
 );
@@ -1485,6 +1550,7 @@ CREATE TABLE IF NOT EXISTS "CampaignMessage" (
   "recipientPhone" TEXT NOT NULL,
   "recipientName" TEXT,
   "recipientId" TEXT,
+  "recipientEmail" TEXT,
   "status" TEXT NOT NULL DEFAULT 'pending',
   "externalId" TEXT,
   "sentAt" TIMESTAMP(3),
@@ -1493,7 +1559,54 @@ CREATE TABLE IF NOT EXISTS "CampaignMessage" (
   "repliedAt" TIMESTAMP(3),
   "clickedAt" TIMESTAMP(3),
   "convertedAt" TIMESTAMP(3),
+  "bouncedAt" TIMESTAMP(3),
+  "complainedAt" TIMESTAMP(3),
+  "unsubscribedAt" TIMESTAMP(3),
   "error" TEXT,
+  "metadataJson" TEXT NOT NULL DEFAULT '{}',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now()
+);
+
+
+CREATE TABLE IF NOT EXISTS "EmailUnsubscribeToken" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "token" TEXT NOT NULL UNIQUE,
+  "campaignId" TEXT,
+  "recipientEmail" TEXT NOT NULL,
+  "recipientRefId" TEXT,
+  "recipientSource" TEXT,
+  "tenantId" TEXT,
+  "usedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now()
+);
+
+
+CREATE TABLE IF NOT EXISTS "EmailEvent" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "type" TEXT NOT NULL,
+  "campaignId" TEXT,
+  "recipientEmail" TEXT NOT NULL,
+  "token" TEXT,
+  "url" TEXT,
+  "userAgent" TEXT,
+  "ipAddress" TEXT,
+  "metadataJson" TEXT NOT NULL DEFAULT '{}',
+  "tenantId" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now()
+);
+
+
+CREATE TABLE IF NOT EXISTS "MarketingConsentEvent" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "action" TEXT NOT NULL,
+  "source" TEXT NOT NULL,
+  "recipientEmail" TEXT NOT NULL,
+  "recipientRefId" TEXT,
+  "recipientSource" TEXT,
+  "campaignId" TEXT,
+  "tenantId" TEXT,
+  "ipAddress" TEXT,
+  "userAgent" TEXT,
   "metadataJson" TEXT NOT NULL DEFAULT '{}',
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now()
 );
@@ -1779,6 +1892,8 @@ CREATE TABLE IF NOT EXISTS "Deal" (
   "closedAt" TIMESTAMP(3),
   "lossReason" TEXT,
   "convertedJobId" TEXT,
+  "archivedAt" TIMESTAMP(3),
+  "jobCancelledAt" TIMESTAMP(3),
   "tenantId" TEXT,
   "workspaceId" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
@@ -1975,6 +2090,11 @@ CREATE TABLE IF NOT EXISTS "Contact" (
   "status" TEXT NOT NULL DEFAULT 'active',
   "emailVerified" BOOLEAN NOT NULL DEFAULT false,
   "phoneVerified" BOOLEAN NOT NULL DEFAULT false,
+  "marketingConsent" BOOLEAN,
+  "marketingConsentAt" TIMESTAMP(3),
+  "marketingConsentSource" TEXT,
+  "marketingConsentIp" TEXT,
+  "unsubscribedAt" TIMESTAMP(3),
   "customFieldsJson" TEXT NOT NULL DEFAULT '{}',
   "avatarUrl" TEXT,
   "lastActivityAt" TIMESTAMP(3),
@@ -2912,7 +3032,8 @@ CREATE TABLE IF NOT EXISTS "CustomerTimelineEntry" (
   "eventDate" TIMESTAMP(3) NOT NULL DEFAULT now(),
   "isInternal" BOOLEAN NOT NULL DEFAULT false,
   "isPinned" BOOLEAN NOT NULL DEFAULT false,
-  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now()
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 
@@ -3002,6 +3123,14 @@ CREATE TABLE IF NOT EXISTS "AiAgent" (
   "totalCalls" INTEGER NOT NULL DEFAULT 0,
   "totalSeconds" INTEGER NOT NULL DEFAULT 0,
   "lastCallAt" TIMESTAMP(3),
+  "afterHoursGreeting" TEXT,
+  "backgroundNoiseEnabled" BOOLEAN NOT NULL DEFAULT false,
+  "responseDelaySeconds" INTEGER NOT NULL DEFAULT 0,
+  "transferTarget" TEXT,
+  "smsSendBackEnabled" BOOLEAN NOT NULL DEFAULT false,
+  "smsSendBackTemplate" TEXT,
+  "knownCallerGreetingTpl" TEXT,
+  "trustedPhonesJson" TEXT NOT NULL DEFAULT '[]',
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
   "updatedAt" TIMESTAMP(3) NOT NULL
 );
@@ -3075,6 +3204,13 @@ CREATE TABLE IF NOT EXISTS "AiCall" (
   "leadId" TEXT,
   "functionCallsJson" TEXT NOT NULL DEFAULT '[]',
   "endedReason" TEXT,
+  "recordingUrl" TEXT,
+  "stereoRecordingUrl" TEXT,
+  "tagsJson" TEXT NOT NULL DEFAULT '[]',
+  "outcomeType" TEXT,
+  "timeSavedSec" INTEGER NOT NULL DEFAULT 0,
+  "aiDisabled" BOOLEAN NOT NULL DEFAULT false,
+  "callerIdentifiedAs" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
   "updatedAt" TIMESTAMP(3) NOT NULL
 );
@@ -3537,6 +3673,43 @@ CREATE TABLE IF NOT EXISTS "InventoryItem" (
 );
 
 
+CREATE TABLE IF NOT EXISTS "InventoryAsset" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "inventoryItemId" TEXT,
+  "serialNumber" TEXT,
+  "assetTag" TEXT,
+  "name" TEXT NOT NULL,
+  "description" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'available',
+  "condition" TEXT NOT NULL DEFAULT 'good',
+  "purchaseDate" TIMESTAMP(3),
+  "purchaseCost" DOUBLE PRECISION,
+  "notes" TEXT,
+  "assignedEmployeeId" TEXT,
+  "assignedAt" TIMESTAMP(3),
+  "assignmentStatus" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "InventoryAssetAssignment" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "assetId" TEXT NOT NULL,
+  "employeeId" TEXT NOT NULL,
+  "assignedAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "returnedAt" TIMESTAMP(3),
+  "assignmentStatus" TEXT NOT NULL DEFAULT 'assigned',
+  "assignedById" TEXT,
+  "returnedById" TEXT,
+  "notes" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
 CREATE TABLE IF NOT EXISTS "Warehouse" (
   "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
   "tenantId" TEXT,
@@ -3953,6 +4126,224 @@ CREATE TABLE IF NOT EXISTS "Referral" (
 );
 
 
+CREATE TABLE IF NOT EXISTS "AiIvrMenu" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT,
+  "agentId" TEXT NOT NULL,
+  "prompt" TEXT NOT NULL,
+  "entriesJson" TEXT NOT NULL DEFAULT '[]',
+  "active" BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "AiEscalationPolicy" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT,
+  "agentId" TEXT NOT NULL,
+  "triggerKeywords" TEXT NOT NULL,
+  "action" TEXT NOT NULL,
+  "transferTarget" TEXT,
+  "smsTemplate" TEXT,
+  "smsRecipientId" TEXT,
+  "cooldownMin" INTEGER NOT NULL DEFAULT 30,
+  "enabled" BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "AiCallTag" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT,
+  "callId" TEXT NOT NULL,
+  "label" TEXT NOT NULL,
+  "color" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now()
+);
+
+
+CREATE TABLE IF NOT EXISTS "AiBillingCounter" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL UNIQUE,
+  "monthStart" TIMESTAMP(3) NOT NULL,
+  "callsUsed" INTEGER NOT NULL DEFAULT 0,
+  "callsLimit" INTEGER NOT NULL DEFAULT 30,
+  "pausedAtLimit" BOOLEAN NOT NULL DEFAULT false,
+  "lastAlertAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "ClaimRequest" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "claimantUserId" TEXT NOT NULL DEFAULT '',
+  "claimantEmail" TEXT,
+  "completionToken" TEXT UNIQUE,
+  "completedAt" TIMESTAMP(3),
+  "verificationMethod" TEXT NOT NULL,
+  "verificationData" TEXT NOT NULL DEFAULT '{}',
+  "status" TEXT NOT NULL DEFAULT 'pending',
+  "reviewNote" TEXT,
+  "reviewedById" TEXT,
+  "reviewedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "DirectoryLocation" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "countryCode" TEXT NOT NULL,
+  "countryName" TEXT NOT NULL,
+  "city" TEXT NOT NULL,
+  "citySlug" TEXT NOT NULL,
+  "region" TEXT,
+  "latitude" DOUBLE PRECISION,
+  "longitude" DOUBLE PRECISION,
+  "timezone" TEXT,
+  "currency" TEXT,
+  "locale" TEXT,
+  "population" INTEGER NOT NULL DEFAULT 0,
+  "heroImageUrl" TEXT,
+  "description" TEXT,
+  "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "FeaturedLocation" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "key" TEXT NOT NULL DEFAULT 'current' UNIQUE,
+  "locationId" TEXT NOT NULL,
+  "hourBucket" TEXT NOT NULL,
+  "selectedAt" TIMESTAMP(3) NOT NULL DEFAULT now()
+);
+
+
+CREATE TABLE IF NOT EXISTS "BrandProfile" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL UNIQUE,
+  "businessName" TEXT NOT NULL,
+  "industry" TEXT NOT NULL,
+  "website" TEXT,
+  "location" TEXT,
+  "serviceArea" TEXT,
+  "targetCustomer" TEXT,
+  "customerPainPoints" TEXT,
+  "tone" TEXT,
+  "voiceDescription" TEXT,
+  "forbiddenPhrases" TEXT,
+  "defaultCta" TEXT,
+  "services" TEXT,
+  "products" TEXT,
+  "usps" TEXT,
+  "currentOffers" TEXT,
+  "competitors" TEXT,
+  "aiGeneratedSummary" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "SocialAccount" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "platform" TEXT NOT NULL,
+  "accountId" TEXT NOT NULL,
+  "accountName" TEXT NOT NULL,
+  "accessToken" TEXT NOT NULL,
+  "refreshToken" TEXT,
+  "tokenExpiry" TIMESTAMP(3),
+  "scopes" TEXT NOT NULL,
+  "metadata" TEXT,
+  "connectedById" TEXT NOT NULL,
+  "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "SocialPost" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'draft',
+  "content" TEXT NOT NULL,
+  "mediaUrls" TEXT NOT NULL DEFAULT '[]',
+  "linkUrl" TEXT,
+  "publishTargets" TEXT NOT NULL DEFAULT '[]',
+  "scheduledAt" TIMESTAMP(3),
+  "publishedAt" TIMESTAMP(3),
+  "failureReason" TEXT,
+  "gbpPostType" TEXT,
+  "gbpOfferData" TEXT,
+  "pinterestBoard" TEXT,
+  "createdById" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "SocialPostMetric" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "socialPostId" TEXT NOT NULL,
+  "platform" TEXT NOT NULL,
+  "likes" INTEGER NOT NULL DEFAULT 0,
+  "comments" INTEGER NOT NULL DEFAULT 0,
+  "shares" INTEGER NOT NULL DEFAULT 0,
+  "impressions" INTEGER NOT NULL DEFAULT 0,
+  "reach" INTEGER NOT NULL DEFAULT 0,
+  "clicks" INTEGER NOT NULL DEFAULT 0,
+  "extraMetrics" TEXT,
+  "fetchedAt" TIMESTAMP(3) NOT NULL DEFAULT now()
+);
+
+
+CREATE TABLE IF NOT EXISTS "Property" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "customerId" TEXT NOT NULL,
+  "label" TEXT,
+  "street1" TEXT NOT NULL,
+  "street2" TEXT,
+  "city" TEXT,
+  "province" TEXT,
+  "postalCode" TEXT,
+  "country" TEXT,
+  "isPrimary" BOOLEAN NOT NULL DEFAULT false,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "PropertyContact" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "propertyId" TEXT NOT NULL,
+  "name" TEXT NOT NULL,
+  "phone" TEXT,
+  "email" TEXT,
+  "role" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "CustomerContact" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "customerId" TEXT NOT NULL,
+  "name" TEXT NOT NULL,
+  "phone" TEXT,
+  "email" TEXT,
+  "role" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
 -- ##########################################
 -- PHASE 2: BACKPORT COLUMNS
 -- (ensures pre-existing tables get any missing columns)
@@ -4016,9 +4407,16 @@ ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "state" TEXT;
 ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "postalCode" TEXT;
 ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "latitude" DOUBLE PRECISION;
 ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "longitude" DOUBLE PRECISION;
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "serviceRadiusKm" DOUBLE PRECISION DEFAULT 25;
 ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "listingTier" TEXT DEFAULT 'none';
 ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "claimed" BOOLEAN DEFAULT false;
 ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "claimedAt" TIMESTAMP(3);
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "claimedById" TEXT;
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "signupMode" TEXT;
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "googleBusinessProfileUrl" TEXT DEFAULT '';
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "googleBusinessVerified" BOOLEAN DEFAULT false;
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "googlePlaceId" TEXT;
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "website" TEXT;
 ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "tagline" TEXT;
 ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "description" TEXT;
 ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "coverImage" TEXT;
@@ -4434,6 +4832,8 @@ ALTER TABLE "Quote" ADD COLUMN IF NOT EXISTS "jobId" TEXT;
 ALTER TABLE "Quote" ADD COLUMN IF NOT EXISTS "validUntil" TIMESTAMP(3);
 ALTER TABLE "Quote" ADD COLUMN IF NOT EXISTS "whatsappSent" BOOLEAN DEFAULT false;
 ALTER TABLE "Quote" ADD COLUMN IF NOT EXISTS "whatsappSentAt" TIMESTAMP(3);
+ALTER TABLE "Quote" ADD COLUMN IF NOT EXISTS "emailSent" BOOLEAN DEFAULT false;
+ALTER TABLE "Quote" ADD COLUMN IF NOT EXISTS "emailSentAt" TIMESTAMP(3);
 ALTER TABLE "Quote" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "Quote" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 
@@ -4618,6 +5018,18 @@ ALTER TABLE "Template" ADD COLUMN IF NOT EXISTS "rating" DOUBLE PRECISION DEFAUL
 ALTER TABLE "Template" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "Template" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 
+ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "description" TEXT;
+ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "color" TEXT DEFAULT '#0d9488';
+ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "icon" TEXT DEFAULT 'Users';
+ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "leadId" TEXT;
+ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT true;
+ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "workspaceId" TEXT;
+ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
 ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
 ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL DEFAULT '';
 ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "phone" TEXT NOT NULL DEFAULT '';
@@ -4633,6 +5045,7 @@ ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "location" TEXT;
 ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "latitude" DOUBLE PRECISION;
 ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "longitude" DOUBLE PRECISION;
 ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "workspaceId" TEXT;
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "teamId" TEXT;
 ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "lastSeenAt" TIMESTAMP(3);
 ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "currentJobId" TEXT;
 ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "userId" TEXT;
@@ -4675,7 +5088,16 @@ ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "email" TEXT;
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "address" TEXT;
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "whatsappId" TEXT;
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "preferredCurrency" TEXT DEFAULT 'USD';
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "normalizedPhone" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "normalizedEmail" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "title" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "firstName" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "lastName" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "companyName" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "leadSource" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "notificationSettingsJson" TEXT DEFAULT '{}';
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "workspaceId" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "tenantId" TEXT;
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "passwordHash" TEXT;
@@ -4686,6 +5108,11 @@ ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "lastLoginAt" TIMESTAMP(3);
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "invitationSentAt" TIMESTAMP(3);
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "portalEnabled" BOOLEAN DEFAULT false;
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "invitationStatus" TEXT DEFAULT 'none';
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "marketingConsent" BOOLEAN;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "marketingConsentAt" TIMESTAMP(3);
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "marketingConsentSource" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "marketingConsentIp" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "unsubscribedAt" TIMESTAMP(3);
 
 ALTER TABLE "Resource" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
 ALTER TABLE "Resource" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL DEFAULT '';
@@ -4729,6 +5156,8 @@ ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "assigneeName" TEXT;
 ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "assigneePhone" TEXT;
 ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "resourceId" TEXT;
 ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "serviceId" TEXT;
+ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "latitude" DOUBLE PRECISION;
+ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "longitude" DOUBLE PRECISION;
 ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "checkInLat" DOUBLE PRECISION;
 ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "checkInLng" DOUBLE PRECISION;
 ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "checkOutLat" DOUBLE PRECISION;
@@ -4760,6 +5189,8 @@ ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "metadataJson" TEXT DEFAULT '{}';
 ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "workspaceId" TEXT;
 ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "recurringScheduleId" TEXT;
 ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3);
+ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "cancelledAt" TIMESTAMP(3);
+ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "verificationPin" TEXT;
 ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 
@@ -4928,10 +5359,29 @@ ALTER TABLE "ChannelConfig" ADD COLUMN IF NOT EXISTS "totalLeads" INTEGER DEFAUL
 ALTER TABLE "ChannelConfig" ADD COLUMN IF NOT EXISTS "totalMessages" INTEGER DEFAULT 0;
 ALTER TABLE "ChannelConfig" ADD COLUMN IF NOT EXISTS "lastActivityAt" TIMESTAMP(3);
 ALTER TABLE "ChannelConfig" ADD COLUMN IF NOT EXISTS "lastError" TEXT;
+ALTER TABLE "ChannelConfig" ADD COLUMN IF NOT EXISTS "channelType" TEXT;
+ALTER TABLE "ChannelConfig" ADD COLUMN IF NOT EXISTS "tier" TEXT;
+ALTER TABLE "ChannelConfig" ADD COLUMN IF NOT EXISTS "setupCompleted" BOOLEAN DEFAULT false;
+ALTER TABLE "ChannelConfig" ADD COLUMN IF NOT EXISTS "setupStep" INTEGER DEFAULT 0;
+ALTER TABLE "ChannelConfig" ADD COLUMN IF NOT EXISTS "lastTestedAt" TIMESTAMP(3);
+ALTER TABLE "ChannelConfig" ADD COLUMN IF NOT EXISTS "lastTestStatus" TEXT;
 ALTER TABLE "ChannelConfig" ADD COLUMN IF NOT EXISTS "tenantId" TEXT;
 ALTER TABLE "ChannelConfig" ADD COLUMN IF NOT EXISTS "workspaceId" TEXT;
 ALTER TABLE "ChannelConfig" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "ChannelConfig" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "IntegrationCredential" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "IntegrationCredential" ADD COLUMN IF NOT EXISTS "provider" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "IntegrationCredential" ADD COLUMN IF NOT EXISTS "displayName" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "IntegrationCredential" ADD COLUMN IF NOT EXISTS "clientId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "IntegrationCredential" ADD COLUMN IF NOT EXISTS "clientSecret" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "IntegrationCredential" ADD COLUMN IF NOT EXISTS "scopes" TEXT DEFAULT '';
+ALTER TABLE "IntegrationCredential" ADD COLUMN IF NOT EXISTS "redirectUri" TEXT;
+ALTER TABLE "IntegrationCredential" ADD COLUMN IF NOT EXISTS "additionalConfigJson" TEXT DEFAULT '{}';
+ALTER TABLE "IntegrationCredential" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'active';
+ALTER TABLE "IntegrationCredential" ADD COLUMN IF NOT EXISTS "createdBy" TEXT;
+ALTER TABLE "IntegrationCredential" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "IntegrationCredential" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 
 ALTER TABLE "CustomerJourney" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
 ALTER TABLE "CustomerJourney" ADD COLUMN IF NOT EXISTS "customerId" TEXT;
@@ -5189,6 +5639,7 @@ ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "campaignId" TEXT NOT NUL
 ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "recipientPhone" TEXT NOT NULL DEFAULT '';
 ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "recipientName" TEXT;
 ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "recipientId" TEXT;
+ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "recipientEmail" TEXT;
 ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'pending';
 ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "externalId" TEXT;
 ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "sentAt" TIMESTAMP(3);
@@ -5197,9 +5648,47 @@ ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "readAt" TIMESTAMP(3);
 ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "repliedAt" TIMESTAMP(3);
 ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "clickedAt" TIMESTAMP(3);
 ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "convertedAt" TIMESTAMP(3);
+ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "bouncedAt" TIMESTAMP(3);
+ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "complainedAt" TIMESTAMP(3);
+ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "unsubscribedAt" TIMESTAMP(3);
 ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "error" TEXT;
 ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "metadataJson" TEXT DEFAULT '{}';
 ALTER TABLE "CampaignMessage" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+
+ALTER TABLE "EmailUnsubscribeToken" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "EmailUnsubscribeToken" ADD COLUMN IF NOT EXISTS "token" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "EmailUnsubscribeToken" ADD COLUMN IF NOT EXISTS "campaignId" TEXT;
+ALTER TABLE "EmailUnsubscribeToken" ADD COLUMN IF NOT EXISTS "recipientEmail" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "EmailUnsubscribeToken" ADD COLUMN IF NOT EXISTS "recipientRefId" TEXT;
+ALTER TABLE "EmailUnsubscribeToken" ADD COLUMN IF NOT EXISTS "recipientSource" TEXT;
+ALTER TABLE "EmailUnsubscribeToken" ADD COLUMN IF NOT EXISTS "tenantId" TEXT;
+ALTER TABLE "EmailUnsubscribeToken" ADD COLUMN IF NOT EXISTS "usedAt" TIMESTAMP(3);
+ALTER TABLE "EmailUnsubscribeToken" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+
+ALTER TABLE "EmailEvent" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "EmailEvent" ADD COLUMN IF NOT EXISTS "type" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "EmailEvent" ADD COLUMN IF NOT EXISTS "campaignId" TEXT;
+ALTER TABLE "EmailEvent" ADD COLUMN IF NOT EXISTS "recipientEmail" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "EmailEvent" ADD COLUMN IF NOT EXISTS "token" TEXT;
+ALTER TABLE "EmailEvent" ADD COLUMN IF NOT EXISTS "url" TEXT;
+ALTER TABLE "EmailEvent" ADD COLUMN IF NOT EXISTS "userAgent" TEXT;
+ALTER TABLE "EmailEvent" ADD COLUMN IF NOT EXISTS "ipAddress" TEXT;
+ALTER TABLE "EmailEvent" ADD COLUMN IF NOT EXISTS "metadataJson" TEXT DEFAULT '{}';
+ALTER TABLE "EmailEvent" ADD COLUMN IF NOT EXISTS "tenantId" TEXT;
+ALTER TABLE "EmailEvent" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+
+ALTER TABLE "MarketingConsentEvent" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "MarketingConsentEvent" ADD COLUMN IF NOT EXISTS "action" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "MarketingConsentEvent" ADD COLUMN IF NOT EXISTS "source" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "MarketingConsentEvent" ADD COLUMN IF NOT EXISTS "recipientEmail" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "MarketingConsentEvent" ADD COLUMN IF NOT EXISTS "recipientRefId" TEXT;
+ALTER TABLE "MarketingConsentEvent" ADD COLUMN IF NOT EXISTS "recipientSource" TEXT;
+ALTER TABLE "MarketingConsentEvent" ADD COLUMN IF NOT EXISTS "campaignId" TEXT;
+ALTER TABLE "MarketingConsentEvent" ADD COLUMN IF NOT EXISTS "tenantId" TEXT;
+ALTER TABLE "MarketingConsentEvent" ADD COLUMN IF NOT EXISTS "ipAddress" TEXT;
+ALTER TABLE "MarketingConsentEvent" ADD COLUMN IF NOT EXISTS "userAgent" TEXT;
+ALTER TABLE "MarketingConsentEvent" ADD COLUMN IF NOT EXISTS "metadataJson" TEXT DEFAULT '{}';
+ALTER TABLE "MarketingConsentEvent" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 
 ALTER TABLE "CampaignTemplate" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
 ALTER TABLE "CampaignTemplate" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL DEFAULT '';
@@ -5438,6 +5927,8 @@ ALTER TABLE "Deal" ADD COLUMN IF NOT EXISTS "expectedCloseDate" TIMESTAMP(3);
 ALTER TABLE "Deal" ADD COLUMN IF NOT EXISTS "closedAt" TIMESTAMP(3);
 ALTER TABLE "Deal" ADD COLUMN IF NOT EXISTS "lossReason" TEXT;
 ALTER TABLE "Deal" ADD COLUMN IF NOT EXISTS "convertedJobId" TEXT;
+ALTER TABLE "Deal" ADD COLUMN IF NOT EXISTS "archivedAt" TIMESTAMP(3);
+ALTER TABLE "Deal" ADD COLUMN IF NOT EXISTS "jobCancelledAt" TIMESTAMP(3);
 ALTER TABLE "Deal" ADD COLUMN IF NOT EXISTS "tenantId" TEXT;
 ALTER TABLE "Deal" ADD COLUMN IF NOT EXISTS "workspaceId" TEXT;
 ALTER TABLE "Deal" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
@@ -5601,6 +6092,11 @@ ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "source" TEXT;
 ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'active';
 ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "emailVerified" BOOLEAN DEFAULT false;
 ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "phoneVerified" BOOLEAN DEFAULT false;
+ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "marketingConsent" BOOLEAN;
+ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "marketingConsentAt" TIMESTAMP(3);
+ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "marketingConsentSource" TEXT;
+ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "marketingConsentIp" TEXT;
+ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "unsubscribedAt" TIMESTAMP(3);
 ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "customFieldsJson" TEXT DEFAULT '{}';
 ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "avatarUrl" TEXT;
 ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "lastActivityAt" TIMESTAMP(3);
@@ -6392,6 +6888,7 @@ ALTER TABLE "CustomerTimelineEntry" ADD COLUMN IF NOT EXISTS "eventDate" TIMESTA
 ALTER TABLE "CustomerTimelineEntry" ADD COLUMN IF NOT EXISTS "isInternal" BOOLEAN DEFAULT false;
 ALTER TABLE "CustomerTimelineEntry" ADD COLUMN IF NOT EXISTS "isPinned" BOOLEAN DEFAULT false;
 ALTER TABLE "CustomerTimelineEntry" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "CustomerTimelineEntry" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 
 ALTER TABLE "EmployeePerformance" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
 ALTER TABLE "EmployeePerformance" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
@@ -6466,6 +6963,14 @@ ALTER TABLE "AiAgent" ADD COLUMN IF NOT EXISTS "active" BOOLEAN DEFAULT false;
 ALTER TABLE "AiAgent" ADD COLUMN IF NOT EXISTS "totalCalls" INTEGER DEFAULT 0;
 ALTER TABLE "AiAgent" ADD COLUMN IF NOT EXISTS "totalSeconds" INTEGER DEFAULT 0;
 ALTER TABLE "AiAgent" ADD COLUMN IF NOT EXISTS "lastCallAt" TIMESTAMP(3);
+ALTER TABLE "AiAgent" ADD COLUMN IF NOT EXISTS "afterHoursGreeting" TEXT;
+ALTER TABLE "AiAgent" ADD COLUMN IF NOT EXISTS "backgroundNoiseEnabled" BOOLEAN DEFAULT false;
+ALTER TABLE "AiAgent" ADD COLUMN IF NOT EXISTS "responseDelaySeconds" INTEGER DEFAULT 0;
+ALTER TABLE "AiAgent" ADD COLUMN IF NOT EXISTS "transferTarget" TEXT;
+ALTER TABLE "AiAgent" ADD COLUMN IF NOT EXISTS "smsSendBackEnabled" BOOLEAN DEFAULT false;
+ALTER TABLE "AiAgent" ADD COLUMN IF NOT EXISTS "smsSendBackTemplate" TEXT;
+ALTER TABLE "AiAgent" ADD COLUMN IF NOT EXISTS "knownCallerGreetingTpl" TEXT;
+ALTER TABLE "AiAgent" ADD COLUMN IF NOT EXISTS "trustedPhonesJson" TEXT DEFAULT '[]';
 ALTER TABLE "AiAgent" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "AiAgent" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 
@@ -6530,6 +7035,13 @@ ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "customerId" TEXT;
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "leadId" TEXT;
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "functionCallsJson" TEXT DEFAULT '[]';
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "endedReason" TEXT;
+ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "recordingUrl" TEXT;
+ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "stereoRecordingUrl" TEXT;
+ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "tagsJson" TEXT DEFAULT '[]';
+ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "outcomeType" TEXT;
+ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "timeSavedSec" INTEGER DEFAULT 0;
+ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "aiDisabled" BOOLEAN DEFAULT false;
+ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "callerIdentifiedAs" TEXT;
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 
@@ -6924,6 +7436,37 @@ ALTER TABLE "InventoryItem" ADD COLUMN IF NOT EXISTS "metadataJson" TEXT DEFAULT
 ALTER TABLE "InventoryItem" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "InventoryItem" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "inventoryItemId" TEXT;
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "serialNumber" TEXT;
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "assetTag" TEXT;
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "description" TEXT;
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'available';
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "condition" TEXT DEFAULT 'good';
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "purchaseDate" TIMESTAMP(3);
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "purchaseCost" DOUBLE PRECISION;
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "notes" TEXT;
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "assignedEmployeeId" TEXT;
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "assignedAt" TIMESTAMP(3);
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "assignmentStatus" TEXT;
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "InventoryAsset" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "InventoryAssetAssignment" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "InventoryAssetAssignment" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "InventoryAssetAssignment" ADD COLUMN IF NOT EXISTS "assetId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "InventoryAssetAssignment" ADD COLUMN IF NOT EXISTS "employeeId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "InventoryAssetAssignment" ADD COLUMN IF NOT EXISTS "assignedAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "InventoryAssetAssignment" ADD COLUMN IF NOT EXISTS "returnedAt" TIMESTAMP(3);
+ALTER TABLE "InventoryAssetAssignment" ADD COLUMN IF NOT EXISTS "assignmentStatus" TEXT DEFAULT 'assigned';
+ALTER TABLE "InventoryAssetAssignment" ADD COLUMN IF NOT EXISTS "assignedById" TEXT;
+ALTER TABLE "InventoryAssetAssignment" ADD COLUMN IF NOT EXISTS "returnedById" TEXT;
+ALTER TABLE "InventoryAssetAssignment" ADD COLUMN IF NOT EXISTS "notes" TEXT;
+ALTER TABLE "InventoryAssetAssignment" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "InventoryAssetAssignment" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
 ALTER TABLE "Warehouse" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
 ALTER TABLE "Warehouse" ADD COLUMN IF NOT EXISTS "tenantId" TEXT;
 ALTER TABLE "Warehouse" ADD COLUMN IF NOT EXISTS "branchId" TEXT;
@@ -7280,6 +7823,182 @@ ALTER TABLE "Referral" ADD COLUMN IF NOT EXISTS "metadataJson" TEXT DEFAULT '{}'
 ALTER TABLE "Referral" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "Referral" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 
+ALTER TABLE "AiIvrMenu" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "AiIvrMenu" ADD COLUMN IF NOT EXISTS "tenantId" TEXT;
+ALTER TABLE "AiIvrMenu" ADD COLUMN IF NOT EXISTS "agentId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiIvrMenu" ADD COLUMN IF NOT EXISTS "prompt" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiIvrMenu" ADD COLUMN IF NOT EXISTS "entriesJson" TEXT DEFAULT '[]';
+ALTER TABLE "AiIvrMenu" ADD COLUMN IF NOT EXISTS "active" BOOLEAN DEFAULT true;
+ALTER TABLE "AiIvrMenu" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "AiIvrMenu" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "AiEscalationPolicy" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "AiEscalationPolicy" ADD COLUMN IF NOT EXISTS "tenantId" TEXT;
+ALTER TABLE "AiEscalationPolicy" ADD COLUMN IF NOT EXISTS "agentId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiEscalationPolicy" ADD COLUMN IF NOT EXISTS "triggerKeywords" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiEscalationPolicy" ADD COLUMN IF NOT EXISTS "action" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiEscalationPolicy" ADD COLUMN IF NOT EXISTS "transferTarget" TEXT;
+ALTER TABLE "AiEscalationPolicy" ADD COLUMN IF NOT EXISTS "smsTemplate" TEXT;
+ALTER TABLE "AiEscalationPolicy" ADD COLUMN IF NOT EXISTS "smsRecipientId" TEXT;
+ALTER TABLE "AiEscalationPolicy" ADD COLUMN IF NOT EXISTS "cooldownMin" INTEGER DEFAULT 30;
+ALTER TABLE "AiEscalationPolicy" ADD COLUMN IF NOT EXISTS "enabled" BOOLEAN DEFAULT true;
+ALTER TABLE "AiEscalationPolicy" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "AiEscalationPolicy" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "AiCallTag" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "AiCallTag" ADD COLUMN IF NOT EXISTS "tenantId" TEXT;
+ALTER TABLE "AiCallTag" ADD COLUMN IF NOT EXISTS "callId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiCallTag" ADD COLUMN IF NOT EXISTS "label" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiCallTag" ADD COLUMN IF NOT EXISTS "color" TEXT;
+ALTER TABLE "AiCallTag" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+
+ALTER TABLE "AiBillingCounter" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "AiBillingCounter" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiBillingCounter" ADD COLUMN IF NOT EXISTS "monthStart" TIMESTAMP(3) NOT NULL DEFAULT now();
+ALTER TABLE "AiBillingCounter" ADD COLUMN IF NOT EXISTS "callsUsed" INTEGER DEFAULT 0;
+ALTER TABLE "AiBillingCounter" ADD COLUMN IF NOT EXISTS "callsLimit" INTEGER DEFAULT 30;
+ALTER TABLE "AiBillingCounter" ADD COLUMN IF NOT EXISTS "pausedAtLimit" BOOLEAN DEFAULT false;
+ALTER TABLE "AiBillingCounter" ADD COLUMN IF NOT EXISTS "lastAlertAt" TIMESTAMP(3);
+ALTER TABLE "AiBillingCounter" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "AiBillingCounter" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "ClaimRequest" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "ClaimRequest" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "ClaimRequest" ADD COLUMN IF NOT EXISTS "claimantUserId" TEXT DEFAULT '';
+ALTER TABLE "ClaimRequest" ADD COLUMN IF NOT EXISTS "claimantEmail" TEXT;
+ALTER TABLE "ClaimRequest" ADD COLUMN IF NOT EXISTS "completionToken" TEXT;
+ALTER TABLE "ClaimRequest" ADD COLUMN IF NOT EXISTS "completedAt" TIMESTAMP(3);
+ALTER TABLE "ClaimRequest" ADD COLUMN IF NOT EXISTS "verificationMethod" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "ClaimRequest" ADD COLUMN IF NOT EXISTS "verificationData" TEXT DEFAULT '{}';
+ALTER TABLE "ClaimRequest" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'pending';
+ALTER TABLE "ClaimRequest" ADD COLUMN IF NOT EXISTS "reviewNote" TEXT;
+ALTER TABLE "ClaimRequest" ADD COLUMN IF NOT EXISTS "reviewedById" TEXT;
+ALTER TABLE "ClaimRequest" ADD COLUMN IF NOT EXISTS "reviewedAt" TIMESTAMP(3);
+ALTER TABLE "ClaimRequest" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "ClaimRequest" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "countryCode" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "countryName" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "city" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "citySlug" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "region" TEXT;
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "latitude" DOUBLE PRECISION;
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "longitude" DOUBLE PRECISION;
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "timezone" TEXT;
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "currency" TEXT;
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "locale" TEXT;
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "population" INTEGER DEFAULT 0;
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "heroImageUrl" TEXT;
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "description" TEXT;
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT true;
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "DirectoryLocation" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "FeaturedLocation" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "FeaturedLocation" ADD COLUMN IF NOT EXISTS "key" TEXT DEFAULT 'current';
+ALTER TABLE "FeaturedLocation" ADD COLUMN IF NOT EXISTS "locationId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "FeaturedLocation" ADD COLUMN IF NOT EXISTS "hourBucket" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "FeaturedLocation" ADD COLUMN IF NOT EXISTS "selectedAt" TIMESTAMP(3) DEFAULT now();
+
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "businessName" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "industry" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "website" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "location" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "serviceArea" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "targetCustomer" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "customerPainPoints" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "tone" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "voiceDescription" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "forbiddenPhrases" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "defaultCta" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "services" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "products" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "usps" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "currentOffers" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "competitors" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "aiGeneratedSummary" TEXT;
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "BrandProfile" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "platform" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "accountId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "accountName" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "accessToken" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "refreshToken" TEXT;
+ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "tokenExpiry" TIMESTAMP(3);
+ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "scopes" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "metadata" TEXT;
+ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "connectedById" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT true;
+ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'draft';
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "content" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "mediaUrls" TEXT DEFAULT '[]';
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "linkUrl" TEXT;
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "publishTargets" TEXT DEFAULT '[]';
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "scheduledAt" TIMESTAMP(3);
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "publishedAt" TIMESTAMP(3);
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "failureReason" TEXT;
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "gbpPostType" TEXT;
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "gbpOfferData" TEXT;
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "pinterestBoard" TEXT;
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "createdById" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "SocialPost" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "SocialPostMetric" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "SocialPostMetric" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "SocialPostMetric" ADD COLUMN IF NOT EXISTS "socialPostId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "SocialPostMetric" ADD COLUMN IF NOT EXISTS "platform" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "SocialPostMetric" ADD COLUMN IF NOT EXISTS "likes" INTEGER DEFAULT 0;
+ALTER TABLE "SocialPostMetric" ADD COLUMN IF NOT EXISTS "comments" INTEGER DEFAULT 0;
+ALTER TABLE "SocialPostMetric" ADD COLUMN IF NOT EXISTS "shares" INTEGER DEFAULT 0;
+ALTER TABLE "SocialPostMetric" ADD COLUMN IF NOT EXISTS "impressions" INTEGER DEFAULT 0;
+ALTER TABLE "SocialPostMetric" ADD COLUMN IF NOT EXISTS "reach" INTEGER DEFAULT 0;
+ALTER TABLE "SocialPostMetric" ADD COLUMN IF NOT EXISTS "clicks" INTEGER DEFAULT 0;
+ALTER TABLE "SocialPostMetric" ADD COLUMN IF NOT EXISTS "extraMetrics" TEXT;
+ALTER TABLE "SocialPostMetric" ADD COLUMN IF NOT EXISTS "fetchedAt" TIMESTAMP(3) DEFAULT now();
+
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "customerId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "label" TEXT;
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "street1" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "street2" TEXT;
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "city" TEXT;
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "province" TEXT;
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "postalCode" TEXT;
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "country" TEXT;
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "isPrimary" BOOLEAN DEFAULT false;
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "PropertyContact" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "PropertyContact" ADD COLUMN IF NOT EXISTS "propertyId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "PropertyContact" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "PropertyContact" ADD COLUMN IF NOT EXISTS "phone" TEXT;
+ALTER TABLE "PropertyContact" ADD COLUMN IF NOT EXISTS "email" TEXT;
+ALTER TABLE "PropertyContact" ADD COLUMN IF NOT EXISTS "role" TEXT;
+ALTER TABLE "PropertyContact" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "PropertyContact" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "CustomerContact" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "CustomerContact" ADD COLUMN IF NOT EXISTS "customerId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "CustomerContact" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "CustomerContact" ADD COLUMN IF NOT EXISTS "phone" TEXT;
+ALTER TABLE "CustomerContact" ADD COLUMN IF NOT EXISTS "email" TEXT;
+ALTER TABLE "CustomerContact" ADD COLUMN IF NOT EXISTS "role" TEXT;
+ALTER TABLE "CustomerContact" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "CustomerContact" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
 -- ##########################################
 -- PHASE 3: UNIQUE CONSTRAINTS
 -- (drops orphaned indexes first to avoid name collisions)
@@ -7301,6 +8020,15 @@ DROP INDEX IF EXISTS "Tenant_publicSlug_key";
 DO $$ BEGIN
   IF NOT _constraint_exists('Tenant_publicSlug_key', 'u') THEN
     ALTER TABLE "Tenant" ADD CONSTRAINT "Tenant_publicSlug_key" UNIQUE ("publicSlug");
+  END IF;
+END $$;
+
+-- Tenant.googlePlaceId unique
+ALTER TABLE "Tenant" DROP CONSTRAINT IF EXISTS "Tenant_googlePlaceId_key";
+DROP INDEX IF EXISTS "Tenant_googlePlaceId_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('Tenant_googlePlaceId_key', 'u') THEN
+    ALTER TABLE "Tenant" ADD CONSTRAINT "Tenant_googlePlaceId_key" UNIQUE ("googlePlaceId");
   END IF;
 END $$;
 
@@ -7421,6 +8149,24 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- Team.leadId unique
+ALTER TABLE "Team" DROP CONSTRAINT IF EXISTS "Team_leadId_key";
+DROP INDEX IF EXISTS "Team_leadId_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('Team_leadId_key', 'u') THEN
+    ALTER TABLE "Team" ADD CONSTRAINT "Team_leadId_key" UNIQUE ("leadId");
+  END IF;
+END $$;
+
+-- Team @@unique [workspaceId, name]
+ALTER TABLE "Team" DROP CONSTRAINT IF EXISTS "Team_workspaceId_name_key";
+DROP INDEX IF EXISTS "Team_workspaceId_name_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('Team_workspaceId_name_key', 'u') THEN
+    ALTER TABLE "Team" ADD CONSTRAINT "Team_workspaceId_name_key" UNIQUE ("workspaceId", "name");
+  END IF;
+END $$;
+
 -- Employee.currentJobId unique
 ALTER TABLE "Employee" DROP CONSTRAINT IF EXISTS "Employee_currentJobId_key";
 DROP INDEX IF EXISTS "Employee_currentJobId_key";
@@ -7436,6 +8182,24 @@ DROP INDEX IF EXISTS "Employee_userId_key";
 DO $$ BEGIN
   IF NOT _constraint_exists('Employee_userId_key', 'u') THEN
     ALTER TABLE "Employee" ADD CONSTRAINT "Employee_userId_key" UNIQUE ("userId");
+  END IF;
+END $$;
+
+-- Customer @@unique [tenantId, normalizedPhone]
+ALTER TABLE "Customer" DROP CONSTRAINT IF EXISTS "Customer_tenantId_normalizedPhone_key";
+DROP INDEX IF EXISTS "Customer_tenantId_normalizedPhone_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('Customer_tenantId_normalizedPhone_key', 'u') THEN
+    ALTER TABLE "Customer" ADD CONSTRAINT "Customer_tenantId_normalizedPhone_key" UNIQUE ("tenantId", "normalizedPhone");
+  END IF;
+END $$;
+
+-- Customer @@unique [tenantId, normalizedEmail]
+ALTER TABLE "Customer" DROP CONSTRAINT IF EXISTS "Customer_tenantId_normalizedEmail_key";
+DROP INDEX IF EXISTS "Customer_tenantId_normalizedEmail_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('Customer_tenantId_normalizedEmail_key', 'u') THEN
+    ALTER TABLE "Customer" ADD CONSTRAINT "Customer_tenantId_normalizedEmail_key" UNIQUE ("tenantId", "normalizedEmail");
   END IF;
 END $$;
 
@@ -7544,6 +8308,15 @@ DROP INDEX IF EXISTS "ConversationLabel_conversationId_labelId_key";
 DO $$ BEGIN
   IF NOT _constraint_exists('ConversationLabel_conversationId_labelId_key', 'u') THEN
     ALTER TABLE "ConversationLabel" ADD CONSTRAINT "ConversationLabel_conversationId_labelId_key" UNIQUE ("conversationId", "labelId");
+  END IF;
+END $$;
+
+-- EmailUnsubscribeToken.token unique
+ALTER TABLE "EmailUnsubscribeToken" DROP CONSTRAINT IF EXISTS "EmailUnsubscribeToken_token_key";
+DROP INDEX IF EXISTS "EmailUnsubscribeToken_token_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('EmailUnsubscribeToken_token_key', 'u') THEN
+    ALTER TABLE "EmailUnsubscribeToken" ADD CONSTRAINT "EmailUnsubscribeToken_token_key" UNIQUE ("token");
   END IF;
 END $$;
 
@@ -7889,6 +8662,69 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- AiBillingCounter.tenantId unique
+ALTER TABLE "AiBillingCounter" DROP CONSTRAINT IF EXISTS "AiBillingCounter_tenantId_key";
+DROP INDEX IF EXISTS "AiBillingCounter_tenantId_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('AiBillingCounter_tenantId_key', 'u') THEN
+    ALTER TABLE "AiBillingCounter" ADD CONSTRAINT "AiBillingCounter_tenantId_key" UNIQUE ("tenantId");
+  END IF;
+END $$;
+
+-- ClaimRequest.completionToken unique
+ALTER TABLE "ClaimRequest" DROP CONSTRAINT IF EXISTS "ClaimRequest_completionToken_key";
+DROP INDEX IF EXISTS "ClaimRequest_completionToken_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('ClaimRequest_completionToken_key', 'u') THEN
+    ALTER TABLE "ClaimRequest" ADD CONSTRAINT "ClaimRequest_completionToken_key" UNIQUE ("completionToken");
+  END IF;
+END $$;
+
+-- DirectoryLocation @@unique [countryCode, citySlug]
+ALTER TABLE "DirectoryLocation" DROP CONSTRAINT IF EXISTS "DirectoryLocation_countryCode_citySlug_key";
+DROP INDEX IF EXISTS "DirectoryLocation_countryCode_citySlug_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('DirectoryLocation_countryCode_citySlug_key', 'u') THEN
+    ALTER TABLE "DirectoryLocation" ADD CONSTRAINT "DirectoryLocation_countryCode_citySlug_key" UNIQUE ("countryCode", "citySlug");
+  END IF;
+END $$;
+
+-- FeaturedLocation.key unique
+ALTER TABLE "FeaturedLocation" DROP CONSTRAINT IF EXISTS "FeaturedLocation_key_key";
+DROP INDEX IF EXISTS "FeaturedLocation_key_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('FeaturedLocation_key_key', 'u') THEN
+    ALTER TABLE "FeaturedLocation" ADD CONSTRAINT "FeaturedLocation_key_key" UNIQUE ("key");
+  END IF;
+END $$;
+
+-- BrandProfile.tenantId unique
+ALTER TABLE "BrandProfile" DROP CONSTRAINT IF EXISTS "BrandProfile_tenantId_key";
+DROP INDEX IF EXISTS "BrandProfile_tenantId_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('BrandProfile_tenantId_key', 'u') THEN
+    ALTER TABLE "BrandProfile" ADD CONSTRAINT "BrandProfile_tenantId_key" UNIQUE ("tenantId");
+  END IF;
+END $$;
+
+-- SocialAccount @@unique [tenantId, platform, accountId]
+ALTER TABLE "SocialAccount" DROP CONSTRAINT IF EXISTS "SocialAccount_tenantId_platform_accountId_key";
+DROP INDEX IF EXISTS "SocialAccount_tenantId_platform_accountId_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('SocialAccount_tenantId_platform_accountId_key', 'u') THEN
+    ALTER TABLE "SocialAccount" ADD CONSTRAINT "SocialAccount_tenantId_platform_accountId_key" UNIQUE ("tenantId", "platform", "accountId");
+  END IF;
+END $$;
+
+-- SocialPostMetric @@unique [socialPostId, platform, fetchedAt]
+ALTER TABLE "SocialPostMetric" DROP CONSTRAINT IF EXISTS "SocialPostMetric_socialPostId_platform_fetchedAt_key";
+DROP INDEX IF EXISTS "SocialPostMetric_socialPostId_platform_fetchedAt_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('SocialPostMetric_socialPostId_platform_fetchedAt_key', 'u') THEN
+    ALTER TABLE "SocialPostMetric" ADD CONSTRAINT "SocialPostMetric_socialPostId_platform_fetchedAt_key" UNIQUE ("socialPostId", "platform", "fetchedAt");
+  END IF;
+END $$;
+
 -- ##########################################
 -- PHASE 4: FOREIGN KEY CONSTRAINTS
 -- ##########################################
@@ -8225,8 +9061,26 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
+  IF NOT _fk_exists('Team_workspaceId_fkey') THEN
+    ALTER TABLE "Team" ADD CONSTRAINT "Team_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE SET NULL;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('Team_leadId_fkey') THEN
+    ALTER TABLE "Team" ADD CONSTRAINT "Team_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Employee"("id") ON DELETE SET NULL;
+  END IF;
+END $$;
+
+DO $$ BEGIN
   IF NOT _fk_exists('Employee_workspaceId_fkey') THEN
     ALTER TABLE "Employee" ADD CONSTRAINT "Employee_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('Employee_teamId_fkey') THEN
+    ALTER TABLE "Employee" ADD CONSTRAINT "Employee_teamId_fkey" FOREIGN KEY ("teamId") REFERENCES "Team"("id") ON DELETE SET NULL;
   END IF;
 END $$;
 
@@ -8281,6 +9135,12 @@ END $$;
 DO $$ BEGIN
   IF NOT _fk_exists('Customer_workspaceId_fkey') THEN
     ALTER TABLE "Customer" ADD CONSTRAINT "Customer_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('Customer_tenantId_fkey') THEN
+    ALTER TABLE "Customer" ADD CONSTRAINT "Customer_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id");
   END IF;
 END $$;
 
@@ -8771,6 +9631,30 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
+  IF NOT _fk_exists('InventoryAsset_inventoryItemId_fkey') THEN
+    ALTER TABLE "InventoryAsset" ADD CONSTRAINT "InventoryAsset_inventoryItemId_fkey" FOREIGN KEY ("inventoryItemId") REFERENCES "InventoryItem"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('InventoryAsset_assignedEmployeeId_fkey') THEN
+    ALTER TABLE "InventoryAsset" ADD CONSTRAINT "InventoryAsset_assignedEmployeeId_fkey" FOREIGN KEY ("assignedEmployeeId") REFERENCES "Employee"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('InventoryAssetAssignment_assetId_fkey') THEN
+    ALTER TABLE "InventoryAssetAssignment" ADD CONSTRAINT "InventoryAssetAssignment_assetId_fkey" FOREIGN KEY ("assetId") REFERENCES "InventoryAsset"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('InventoryAssetAssignment_employeeId_fkey') THEN
+    ALTER TABLE "InventoryAssetAssignment" ADD CONSTRAINT "InventoryAssetAssignment_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
   IF NOT _fk_exists('Warehouse_tenantId_fkey') THEN
     ALTER TABLE "Warehouse" ADD CONSTRAINT "Warehouse_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE;
   END IF;
@@ -8890,6 +9774,60 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+DO $$ BEGIN
+  IF NOT _fk_exists('ClaimRequest_tenantId_fkey') THEN
+    ALTER TABLE "ClaimRequest" ADD CONSTRAINT "ClaimRequest_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('FeaturedLocation_locationId_fkey') THEN
+    ALTER TABLE "FeaturedLocation" ADD CONSTRAINT "FeaturedLocation_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "DirectoryLocation"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('BrandProfile_tenantId_fkey') THEN
+    ALTER TABLE "BrandProfile" ADD CONSTRAINT "BrandProfile_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('SocialAccount_tenantId_fkey') THEN
+    ALTER TABLE "SocialAccount" ADD CONSTRAINT "SocialAccount_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('SocialPost_tenantId_fkey') THEN
+    ALTER TABLE "SocialPost" ADD CONSTRAINT "SocialPost_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('SocialPostMetric_socialPostId_fkey') THEN
+    ALTER TABLE "SocialPostMetric" ADD CONSTRAINT "SocialPostMetric_socialPostId_fkey" FOREIGN KEY ("socialPostId") REFERENCES "SocialPost"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('Property_customerId_fkey') THEN
+    ALTER TABLE "Property" ADD CONSTRAINT "Property_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('PropertyContact_propertyId_fkey') THEN
+    ALTER TABLE "PropertyContact" ADD CONSTRAINT "PropertyContact_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('CustomerContact_customerId_fkey') THEN
+    ALTER TABLE "CustomerContact" ADD CONSTRAINT "CustomerContact_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
 -- ##########################################
 -- PHASE 5: INDEXES
 -- ##########################################
@@ -8898,9 +9836,19 @@ END $$;
 CREATE INDEX IF NOT EXISTS "Tenant_slug_idx" ON "Tenant"("slug");
 CREATE INDEX IF NOT EXISTS "Tenant_plan_idx" ON "Tenant"("plan");
 CREATE INDEX IF NOT EXISTS "Tenant_planStatus_idx" ON "Tenant"("planStatus");
+CREATE INDEX IF NOT EXISTS "Tenant_city_idx" ON "Tenant"("city");
+CREATE INDEX IF NOT EXISTS "Tenant_industry_idx" ON "Tenant"("industry");
+CREATE INDEX IF NOT EXISTS "Tenant_country_idx" ON "Tenant"("country");
+CREATE INDEX IF NOT EXISTS "Tenant_rating_reviewCount_id_idx" ON "Tenant"("rating", "reviewCount", "id");
+CREATE INDEX IF NOT EXISTS "Tenant_publicProfileEnabled_marketplaceOptIn_suspendedAt_idx" ON "Tenant"("publicProfileEnabled", "marketplaceOptIn", "suspendedAt");
+CREATE INDEX IF NOT EXISTS "Tenant_country_publicProfileEnabled_marketplaceOptIn_suspendedAt_idx" ON "Tenant"("country", "publicProfileEnabled", "marketplaceOptIn", "suspendedAt");
+CREATE INDEX IF NOT EXISTS "Tenant_country_city_idx" ON "Tenant"("country", "city");
+CREATE INDEX IF NOT EXISTS "Tenant_country_industry_idx" ON "Tenant"("country", "industry");
+CREATE INDEX IF NOT EXISTS "Tenant_country_rating_reviewCount_id_idx" ON "Tenant"("country", "rating", "reviewCount", "id");
 
 CREATE INDEX IF NOT EXISTS "Subscription_tenantId_idx" ON "Subscription"("tenantId");
 CREATE INDEX IF NOT EXISTS "Subscription_status_idx" ON "Subscription"("status");
+CREATE INDEX IF NOT EXISTS "Subscription_tenantId_createdAt_idx" ON "Subscription"("tenantId", "createdAt");
 
 CREATE INDEX IF NOT EXISTS "SubscriptionPayment_tenantId_idx" ON "SubscriptionPayment"("tenantId");
 CREATE INDEX IF NOT EXISTS "SubscriptionPayment_status_idx" ON "SubscriptionPayment"("status");
@@ -8948,6 +9896,7 @@ CREATE INDEX IF NOT EXISTS "Service_tenantId_idx" ON "Service"("tenantId");
 CREATE INDEX IF NOT EXISTS "Service_category_idx" ON "Service"("category");
 CREATE INDEX IF NOT EXISTS "Service_checklistId_idx" ON "Service"("checklistId");
 CREATE INDEX IF NOT EXISTS "Service_isPublic_idx" ON "Service"("isPublic");
+CREATE INDEX IF NOT EXISTS "Service_tenantId_isActive_isPublic_idx" ON "Service"("tenantId", "isActive", "isPublic");
 
 CREATE INDEX IF NOT EXISTS "Lead_tenantId_idx" ON "Lead"("tenantId");
 CREATE INDEX IF NOT EXISTS "Lead_status_idx" ON "Lead"("status");
@@ -8979,6 +9928,7 @@ CREATE INDEX IF NOT EXISTS "Review_employeeId_idx" ON "Review"("employeeId");
 CREATE INDEX IF NOT EXISTS "Review_rating_idx" ON "Review"("rating");
 CREATE INDEX IF NOT EXISTS "Review_status_idx" ON "Review"("status");
 CREATE INDEX IF NOT EXISTS "Review_source_idx" ON "Review"("source");
+CREATE INDEX IF NOT EXISTS "Review_tenantId_status_createdAt_idx" ON "Review"("tenantId", "status", "createdAt");
 
 CREATE INDEX IF NOT EXISTS "Notification_userId_idx" ON "Notification"("userId");
 CREATE INDEX IF NOT EXISTS "Notification_tenantId_idx" ON "Notification"("tenantId");
@@ -9016,6 +9966,7 @@ CREATE INDEX IF NOT EXISTS "Workflow_active_idx" ON "Workflow"("active");
 CREATE INDEX IF NOT EXISTS "WorkflowVersion_workflowId_idx" ON "WorkflowVersion"("workflowId");
 
 CREATE INDEX IF NOT EXISTS "Credential_workspaceId_idx" ON "Credential"("workspaceId");
+CREATE INDEX IF NOT EXISTS "Credential_type_idx" ON "Credential"("type");
 
 CREATE INDEX IF NOT EXISTS "Execution_workflowId_idx" ON "Execution"("workflowId");
 CREATE INDEX IF NOT EXISTS "Execution_status_idx" ON "Execution"("status");
@@ -9034,9 +9985,14 @@ CREATE INDEX IF NOT EXISTS "Folder_workspaceId_idx" ON "Folder"("workspaceId");
 
 CREATE INDEX IF NOT EXISTS "Template_category_idx" ON "Template"("category");
 
+CREATE INDEX IF NOT EXISTS "Team_tenantId_idx" ON "Team"("tenantId");
+CREATE INDEX IF NOT EXISTS "Team_workspaceId_idx" ON "Team"("workspaceId");
+CREATE INDEX IF NOT EXISTS "Team_isActive_idx" ON "Team"("isActive");
+
 CREATE INDEX IF NOT EXISTS "Employee_role_idx" ON "Employee"("role");
 CREATE INDEX IF NOT EXISTS "Employee_status_idx" ON "Employee"("status");
 CREATE INDEX IF NOT EXISTS "Employee_workspaceId_idx" ON "Employee"("workspaceId");
+CREATE INDEX IF NOT EXISTS "Employee_teamId_idx" ON "Employee"("teamId");
 CREATE INDEX IF NOT EXISTS "Employee_lastSeenAt_idx" ON "Employee"("lastSeenAt");
 CREATE INDEX IF NOT EXISTS "Employee_currentJobId_idx" ON "Employee"("currentJobId");
 CREATE INDEX IF NOT EXISTS "Employee_userId_idx" ON "Employee"("userId");
@@ -9056,6 +10012,7 @@ CREATE INDEX IF NOT EXISTS "NotificationLog_createdAt_idx" ON "NotificationLog"(
 CREATE INDEX IF NOT EXISTS "Customer_phone_idx" ON "Customer"("phone");
 CREATE INDEX IF NOT EXISTS "Customer_email_idx" ON "Customer"("email");
 CREATE INDEX IF NOT EXISTS "Customer_workspaceId_idx" ON "Customer"("workspaceId");
+CREATE INDEX IF NOT EXISTS "Customer_tenantId_idx" ON "Customer"("tenantId");
 CREATE INDEX IF NOT EXISTS "Customer_portalEnabled_idx" ON "Customer"("portalEnabled");
 CREATE INDEX IF NOT EXISTS "Customer_invitationStatus_idx" ON "Customer"("invitationStatus");
 
@@ -9068,6 +10025,7 @@ CREATE INDEX IF NOT EXISTS "Job_customerId_idx" ON "Job"("customerId");
 CREATE INDEX IF NOT EXISTS "Job_scheduledAt_idx" ON "Job"("scheduledAt");
 CREATE INDEX IF NOT EXISTS "Job_workspaceId_idx" ON "Job"("workspaceId");
 CREATE INDEX IF NOT EXISTS "Job_recurringScheduleId_idx" ON "Job"("recurringScheduleId");
+CREATE INDEX IF NOT EXISTS "Job_cancelledAt_idx" ON "Job"("cancelledAt");
 
 CREATE INDEX IF NOT EXISTS "ContactList_type_idx" ON "ContactList"("type");
 CREATE INDEX IF NOT EXISTS "ContactList_workspaceId_idx" ON "ContactList"("workspaceId");
@@ -9111,6 +10069,9 @@ CREATE INDEX IF NOT EXISTS "Conversation_channel_idx" ON "Conversation"("channel
 CREATE INDEX IF NOT EXISTS "ChannelConfig_channel_idx" ON "ChannelConfig"("channel");
 CREATE INDEX IF NOT EXISTS "ChannelConfig_status_idx" ON "ChannelConfig"("status");
 CREATE INDEX IF NOT EXISTS "ChannelConfig_tenantId_idx" ON "ChannelConfig"("tenantId");
+
+CREATE INDEX IF NOT EXISTS "IntegrationCredential_provider_idx" ON "IntegrationCredential"("provider");
+CREATE INDEX IF NOT EXISTS "IntegrationCredential_status_idx" ON "IntegrationCredential"("status");
 
 CREATE INDEX IF NOT EXISTS "CustomerJourney_customerId_idx" ON "CustomerJourney"("customerId");
 CREATE INDEX IF NOT EXISTS "CustomerJourney_jobId_idx" ON "CustomerJourney"("jobId");
@@ -9187,6 +10148,22 @@ CREATE INDEX IF NOT EXISTS "Campaign_scheduledAt_idx" ON "Campaign"("scheduledAt
 CREATE INDEX IF NOT EXISTS "CampaignMessage_campaignId_idx" ON "CampaignMessage"("campaignId");
 CREATE INDEX IF NOT EXISTS "CampaignMessage_status_idx" ON "CampaignMessage"("status");
 CREATE INDEX IF NOT EXISTS "CampaignMessage_recipientPhone_idx" ON "CampaignMessage"("recipientPhone");
+CREATE INDEX IF NOT EXISTS "CampaignMessage_recipientEmail_idx" ON "CampaignMessage"("recipientEmail");
+CREATE INDEX IF NOT EXISTS "CampaignMessage_externalId_idx" ON "CampaignMessage"("externalId");
+
+CREATE INDEX IF NOT EXISTS "EmailUnsubscribeToken_token_idx" ON "EmailUnsubscribeToken"("token");
+CREATE INDEX IF NOT EXISTS "EmailUnsubscribeToken_recipientEmail_idx" ON "EmailUnsubscribeToken"("recipientEmail");
+CREATE INDEX IF NOT EXISTS "EmailUnsubscribeToken_campaignId_idx" ON "EmailUnsubscribeToken"("campaignId");
+
+CREATE INDEX IF NOT EXISTS "EmailEvent_campaignId_idx" ON "EmailEvent"("campaignId");
+CREATE INDEX IF NOT EXISTS "EmailEvent_type_idx" ON "EmailEvent"("type");
+CREATE INDEX IF NOT EXISTS "EmailEvent_recipientEmail_idx" ON "EmailEvent"("recipientEmail");
+CREATE INDEX IF NOT EXISTS "EmailEvent_createdAt_idx" ON "EmailEvent"("createdAt");
+
+CREATE INDEX IF NOT EXISTS "MarketingConsentEvent_recipientEmail_idx" ON "MarketingConsentEvent"("recipientEmail");
+CREATE INDEX IF NOT EXISTS "MarketingConsentEvent_action_idx" ON "MarketingConsentEvent"("action");
+CREATE INDEX IF NOT EXISTS "MarketingConsentEvent_tenantId_idx" ON "MarketingConsentEvent"("tenantId");
+CREATE INDEX IF NOT EXISTS "MarketingConsentEvent_createdAt_idx" ON "MarketingConsentEvent"("createdAt");
 
 CREATE INDEX IF NOT EXISTS "CampaignTemplate_category_idx" ON "CampaignTemplate"("category");
 CREATE INDEX IF NOT EXISTS "CampaignTemplate_tenantId_idx" ON "CampaignTemplate"("tenantId");
@@ -9248,6 +10225,7 @@ CREATE INDEX IF NOT EXISTS "Deal_assigneeId_idx" ON "Deal"("assigneeId");
 CREATE INDEX IF NOT EXISTS "Deal_customerId_idx" ON "Deal"("customerId");
 CREATE INDEX IF NOT EXISTS "Deal_tenantId_idx" ON "Deal"("tenantId");
 CREATE INDEX IF NOT EXISTS "Deal_convertedJobId_idx" ON "Deal"("convertedJobId");
+CREATE INDEX IF NOT EXISTS "Deal_archivedAt_idx" ON "Deal"("archivedAt");
 
 CREATE INDEX IF NOT EXISTS "PipelineStage_tenantId_sortOrder_idx" ON "PipelineStage"("tenantId", "sortOrder");
 
@@ -9517,6 +10495,7 @@ CREATE INDEX IF NOT EXISTS "AiCall_tenantId_createdAt_idx" ON "AiCall"("tenantId
 CREATE INDEX IF NOT EXISTS "AiCall_assistantId_idx" ON "AiCall"("assistantId");
 CREATE INDEX IF NOT EXISTS "AiCall_status_idx" ON "AiCall"("status");
 CREATE INDEX IF NOT EXISTS "AiCall_customerPhone_idx" ON "AiCall"("customerPhone");
+CREATE INDEX IF NOT EXISTS "AiCall_outcomeType_idx" ON "AiCall"("outcomeType");
 
 CREATE INDEX IF NOT EXISTS "MarketplaceTransaction_tenantId_idx" ON "MarketplaceTransaction"("tenantId");
 CREATE INDEX IF NOT EXISTS "MarketplaceTransaction_status_idx" ON "MarketplaceTransaction"("status");
@@ -9531,6 +10510,8 @@ CREATE INDEX IF NOT EXISTS "FeaturedListing_tenantId_idx" ON "FeaturedListing"("
 CREATE INDEX IF NOT EXISTS "FeaturedListing_type_idx" ON "FeaturedListing"("type");
 CREATE INDEX IF NOT EXISTS "FeaturedListing_isActive_idx" ON "FeaturedListing"("isActive");
 CREATE INDEX IF NOT EXISTS "FeaturedListing_endDate_idx" ON "FeaturedListing"("endDate");
+CREATE INDEX IF NOT EXISTS "FeaturedListing_isActive_endDate_idx" ON "FeaturedListing"("isActive", "endDate");
+CREATE INDEX IF NOT EXISTS "FeaturedListing_tenantId_isActive_endDate_idx" ON "FeaturedListing"("tenantId", "isActive", "endDate");
 
 CREATE INDEX IF NOT EXISTS "AICredit_tenantId_idx" ON "AICredit"("tenantId");
 
@@ -9602,6 +10583,14 @@ CREATE INDEX IF NOT EXISTS "InventoryItem_tenantId_idx" ON "InventoryItem"("tena
 CREATE INDEX IF NOT EXISTS "InventoryItem_branchId_idx" ON "InventoryItem"("branchId");
 CREATE INDEX IF NOT EXISTS "InventoryItem_category_idx" ON "InventoryItem"("category");
 CREATE INDEX IF NOT EXISTS "InventoryItem_isActive_idx" ON "InventoryItem"("isActive");
+
+CREATE INDEX IF NOT EXISTS "InventoryAsset_tenantId_idx" ON "InventoryAsset"("tenantId");
+CREATE INDEX IF NOT EXISTS "InventoryAsset_assignedEmployeeId_idx" ON "InventoryAsset"("assignedEmployeeId");
+CREATE INDEX IF NOT EXISTS "InventoryAsset_inventoryItemId_idx" ON "InventoryAsset"("inventoryItemId");
+
+CREATE INDEX IF NOT EXISTS "InventoryAssetAssignment_tenantId_idx" ON "InventoryAssetAssignment"("tenantId");
+CREATE INDEX IF NOT EXISTS "InventoryAssetAssignment_assetId_idx" ON "InventoryAssetAssignment"("assetId");
+CREATE INDEX IF NOT EXISTS "InventoryAssetAssignment_employeeId_idx" ON "InventoryAssetAssignment"("employeeId");
 
 CREATE INDEX IF NOT EXISTS "Warehouse_tenantId_idx" ON "Warehouse"("tenantId");
 CREATE INDEX IF NOT EXISTS "Warehouse_branchId_idx" ON "Warehouse"("branchId");
@@ -9676,6 +10665,45 @@ CREATE INDEX IF NOT EXISTS "LoyaltyPoint_customerId_idx" ON "LoyaltyPoint"("cust
 
 CREATE INDEX IF NOT EXISTS "Referral_tenantId_idx" ON "Referral"("tenantId");
 CREATE INDEX IF NOT EXISTS "Referral_status_idx" ON "Referral"("status");
+
+CREATE INDEX IF NOT EXISTS "AiIvrMenu_tenantId_agentId_idx" ON "AiIvrMenu"("tenantId", "agentId");
+
+CREATE INDEX IF NOT EXISTS "AiEscalationPolicy_tenantId_agentId_idx" ON "AiEscalationPolicy"("tenantId", "agentId");
+
+CREATE INDEX IF NOT EXISTS "AiCallTag_tenantId_callId_idx" ON "AiCallTag"("tenantId", "callId");
+CREATE INDEX IF NOT EXISTS "AiCallTag_label_idx" ON "AiCallTag"("label");
+
+CREATE INDEX IF NOT EXISTS "AiBillingCounter_tenantId_idx" ON "AiBillingCounter"("tenantId");
+
+CREATE INDEX IF NOT EXISTS "ClaimRequest_tenantId_idx" ON "ClaimRequest"("tenantId");
+CREATE INDEX IF NOT EXISTS "ClaimRequest_claimantUserId_idx" ON "ClaimRequest"("claimantUserId");
+CREATE INDEX IF NOT EXISTS "ClaimRequest_status_idx" ON "ClaimRequest"("status");
+CREATE INDEX IF NOT EXISTS "ClaimRequest_completionToken_idx" ON "ClaimRequest"("completionToken");
+
+CREATE INDEX IF NOT EXISTS "DirectoryLocation_countryCode_idx" ON "DirectoryLocation"("countryCode");
+CREATE INDEX IF NOT EXISTS "DirectoryLocation_citySlug_idx" ON "DirectoryLocation"("citySlug");
+CREATE INDEX IF NOT EXISTS "DirectoryLocation_isActive_idx" ON "DirectoryLocation"("isActive");
+CREATE INDEX IF NOT EXISTS "DirectoryLocation_population_idx" ON "DirectoryLocation"("population");
+
+CREATE INDEX IF NOT EXISTS "FeaturedLocation_selectedAt_idx" ON "FeaturedLocation"("selectedAt");
+
+CREATE INDEX IF NOT EXISTS "BrandProfile_tenantId_idx" ON "BrandProfile"("tenantId");
+
+CREATE INDEX IF NOT EXISTS "SocialAccount_tenantId_platform_idx" ON "SocialAccount"("tenantId", "platform");
+CREATE INDEX IF NOT EXISTS "SocialAccount_tenantId_isActive_idx" ON "SocialAccount"("tenantId", "isActive");
+
+CREATE INDEX IF NOT EXISTS "SocialPost_tenantId_status_idx" ON "SocialPost"("tenantId", "status");
+CREATE INDEX IF NOT EXISTS "SocialPost_scheduledAt_idx" ON "SocialPost"("scheduledAt");
+CREATE INDEX IF NOT EXISTS "SocialPost_tenantId_createdAt_idx" ON "SocialPost"("tenantId", "createdAt");
+
+CREATE INDEX IF NOT EXISTS "SocialPostMetric_tenantId_platform_idx" ON "SocialPostMetric"("tenantId", "platform");
+CREATE INDEX IF NOT EXISTS "SocialPostMetric_socialPostId_idx" ON "SocialPostMetric"("socialPostId");
+
+CREATE INDEX IF NOT EXISTS "Property_customerId_idx" ON "Property"("customerId");
+
+CREATE INDEX IF NOT EXISTS "PropertyContact_propertyId_idx" ON "PropertyContact"("propertyId");
+
+CREATE INDEX IF NOT EXISTS "CustomerContact_customerId_idx" ON "CustomerContact"("customerId");
 
 
 -- ##########################################

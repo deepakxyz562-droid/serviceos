@@ -69,6 +69,7 @@ import {
   CreditCard,
   Wrench as WrenchIcon,
   PenSquare,
+  Package,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -145,6 +146,14 @@ const ownerNavSections: NavSection[] = [
       { view: 'dispatch', label: 'Live Dispatch', icon: Radio },
       { view: 'employees', label: 'Employees', icon: UserCog },
       { view: 'recurringJobs', label: 'Recurring Jobs', icon: Repeat },
+      // ── Inventory (Phase 3 audit fix) ──
+      // Catalog entry exists in MENU_CATALOG (key='inventory', minPlan='business')
+      // and the view is mapped in app-layout.tsx, but the sidebar nav item was
+      // missing — making the entire Inventory module unreachable from the UI.
+      // Plan gating is auto-applied by checkMenuAccess() (Lock icon for trial,
+      // hidden for paid starter/growth). Menu-visibility toggle (superadmin
+      // Menu Management) also honours this entry.
+      { view: 'inventory', label: 'Inventory', icon: Package },
     ],
   },
   {
@@ -305,6 +314,10 @@ const superadminNavSections: NavSection[] = [
       { view: 'booking', label: 'Booking', icon: CalendarCheck },
       { view: 'employees', label: 'Employees', icon: UserCog },
       { view: 'recurringJobs', label: 'Recurring Jobs', icon: Repeat },
+      // ── Inventory (Phase 3 audit fix) ──
+      // Mirrors the ownerNavSections entry. Superadmins bypass plan gating
+      // so they always see the item unlocked.
+      { view: 'inventory', label: 'Inventory', icon: Package },
     ],
   },
   {

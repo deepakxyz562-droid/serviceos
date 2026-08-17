@@ -83,6 +83,13 @@ const MODEL_TABLE_MAP: Record<string, string> = {
   waFormResponse: 'WaFormResponse',
   adCampaign: 'AdCampaign',
   marketplaceTemplate: 'MarketplaceTemplate',
+  // ── Equipment (Phase 3) ──
+  // Explicit entries — the PascalCase fallback would also produce these
+  // names, but adding them explicitly matches the convention used for every
+  // other model in this map (defensive + discoverable).
+  inventoryItem: 'InventoryItem',
+  inventoryAsset: 'InventoryAsset',
+  inventoryAssetAssignment: 'InventoryAssetAssignment',
 }
 
 // ==========================================
