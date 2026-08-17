@@ -8,7 +8,7 @@ import {
   Send, Copy, Check, UserPlus, RotateCw, Ban,
   ArrowLeft, Upload, Download, FolderTree, Tag as TagIcon,
   Filter, BarChart3, FileText, Receipt, CreditCard,
-  FolderOpen, Wrench, MessageSquare,
+  Wrench, MessageSquare,
   Calendar, Briefcase, Clock, DollarSign, Star,
   Building2, Home, Crown, ShieldCheck,
   LayoutGrid, List, ArrowRight,
@@ -80,6 +80,79 @@ interface AssetRef {
   brand?: string;
   model?: string;
   status: string;
+}
+
+interface QuoteRef {
+  id: string;
+  title: string;
+  status: string;
+  total: number;
+  currency?: string;
+  subtotal?: number;
+  tax?: number;
+  discount?: number;
+  itemsJson?: string;
+  addOnsJson?: string;
+  validUntil?: string;
+  jobId?: string | null;
+  customerId?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+interface InvoiceRef {
+  id: string;
+  number: string;
+  status: string;
+  amount: number;
+  tax?: number;
+  discount?: number;
+  total: number;
+  currency?: string;
+  invoiceType?: string;
+  dueDate?: string;
+  sentAt?: string;
+  paidAt?: string;
+  jobId?: string | null;
+  customerId?: string | null;
+  createdAt: string;
+}
+
+// ─── Status configs (single source of truth for tab badges + grouping) ──────
+// Mirrors customer-360-view.tsx so both views render identically. NO fake
+// statuses — only the 5 real Invoice statuses (draft/sent/paid/pending_approval/
+// cancelled) plus legacy pending/overdue for data safety.
+const invoiceStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
+  draft: { label: 'Draft', color: 'text-muted-foreground', bg: 'bg-muted border-border' },
+  sent: { label: 'Sent', color: 'text-sky-700', bg: 'bg-sky-100 border-sky-200' },
+  pending: { label: 'Pending', color: 'text-amber-700', bg: 'bg-amber-100 border-amber-200' },
+  pending_approval: { label: 'Pending Approval', color: 'text-amber-700', bg: 'bg-amber-100 border-amber-200' },
+  paid: { label: 'Paid', color: 'text-emerald-700', bg: 'bg-emerald-100 border-emerald-200' },
+  overdue: { label: 'Overdue', color: 'text-red-700', bg: 'bg-red-100 border-red-200' },
+  cancelled: { label: 'Cancelled', color: 'text-muted-foreground', bg: 'bg-muted border-border' },
+};
+
+// Canonical display order for invoice status groups. Invoices are bucketed
+// by status, then rendered in this order. Unknown statuses fall through to
+// a trailing "Other" group so no invoice is silently dropped (the previous
+// hardcoded 4-bucket renderer dropped sent/pending_approval/cancelled).
+const INVOICE_STATUS_ORDER = ['paid', 'sent', 'pending_approval', 'pending', 'overdue', 'draft', 'cancelled'];
+
+const quoteStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
+  draft: { label: 'Draft', color: 'text-muted-foreground', bg: 'bg-muted border-border' },
+  sent: { label: 'Sent', color: 'text-sky-700', bg: 'bg-sky-100 border-sky-200' },
+  accepted: { label: 'Accepted', color: 'text-emerald-700', bg: 'bg-emerald-100 border-emerald-200' },
+  rejected: { label: 'Rejected', color: 'text-red-700', bg: 'bg-red-100 border-red-200' },
+  expired: { label: 'Expired', color: 'text-muted-foreground', bg: 'bg-muted border-border' },
+};
+
+function formatMoney(amount: number, currency = 'USD') {
+  try {
+    const sym = currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '';
+    return `${sym}${(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  } catch {
+    return `${amount}`;
+  }
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -190,6 +263,14 @@ export function CrmView() {
   const [jobsLoading, setJobsLoading] = useState(false);
   const [assets, setAssets] = useState<AssetRef[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(false);
+  // ─── Quotes + Invoices (Customer 360 fetch) ───────────────────────────
+  // Fetched from /api/customers/[id] (returns the full profile incl. nested
+  // quotes[] + invoices[]). Previously these tabs were hardcoded "No quotes
+  // yet" / "No invoices yet" placeholders — the data was never loaded.
+  const [quotes, setQuotes] = useState<QuoteRef[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceRef[]>([]);
+  const [quotesLoading, setQuotesLoading] = useState(false);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [notes, setNotes] = useState('');
   const [notesLoading, setNotesLoading] = useState(false);
 
@@ -324,11 +405,13 @@ export function CrmView() {
     setTimeline([]);
     setJobs([]);
     setAssets([]);
+    setQuotes([]);
+    setInvoices([]);
     setNotes('');
 
-    // C-0 perf: fire all three independent detail requests in parallel.
+    // C-0 perf: fire all independent detail requests in parallel.
     // Previously these ran sequentially (timeline → jobs → assets), so the
-    // detail panel waited for the sum of three round-trips. All three depend
+    // detail panel waited for the sum of three round-trips. All four depend
     // only on `customer.id` (already known) and none consumes another's
     // result, so they are safe to parallelize.
     //
@@ -340,9 +423,11 @@ export function CrmView() {
     setTimelineLoading(true);
     setJobsLoading(true);
     setAssetsLoading(true);
+    setQuotesLoading(true);
+    setInvoicesLoading(true);
 
     try {
-      const [timelineRes, jobsRes, assetsRes] = await Promise.allSettled([
+      const [timelineRes, jobsRes, assetsRes, customerRes] = await Promise.allSettled([
         authFetch(`/api/customers/${customer.id}/timeline`).then((r) =>
           r.ok ? r.json() : Promise.reject(new Error(`timeline ${r.status}`)),
         ),
@@ -351,6 +436,11 @@ export function CrmView() {
         ),
         authFetch(`/api/customers/${customer.id}/assets`).then((r) =>
           r.ok ? r.json() : Promise.reject(new Error(`assets ${r.status}`)),
+        ),
+        // Customer 360 profile — returns { quotes: [...], invoices: [...], ... }
+        // Single source of truth for the Quotes + Invoices + Payments tabs.
+        authFetch(`/api/customers/${customer.id}`).then((r) =>
+          r.ok ? r.json() : Promise.reject(new Error(`customer ${r.status}`)),
         ),
       ]);
 
@@ -377,12 +467,24 @@ export function CrmView() {
       } else {
         setAssets([]);
       }
+
+      // Quotes + Invoices (from the customer profile fetch)
+      if (customerRes.status === 'fulfilled') {
+        const data = customerRes.value || {};
+        setQuotes(Array.isArray(data.quotes) ? data.quotes : []);
+        setInvoices(Array.isArray(data.invoices) ? data.invoices : []);
+      } else {
+        setQuotes([]);
+        setInvoices([]);
+      }
     } finally {
       // Single finally guarantees every loading flag is cleared even if the
       // Promise.allSettled itself threw (it shouldn't, but defensive).
       setTimelineLoading(false);
       setJobsLoading(false);
       setAssetsLoading(false);
+      setQuotesLoading(false);
+      setInvoicesLoading(false);
     }
   }, []);
 
@@ -597,8 +699,6 @@ export function CrmView() {
               <TabsTrigger value="quotes" className="gap-1.5">Quotes</TabsTrigger>
               <TabsTrigger value="invoices" className="gap-1.5">Invoices</TabsTrigger>
               <TabsTrigger value="payments" className="gap-1.5">Payments</TabsTrigger>
-              <TabsTrigger value="documents" className="gap-1.5">Documents</TabsTrigger>
-              <TabsTrigger value="assets" className="gap-1.5">Assets</TabsTrigger>
               <TabsTrigger value="communication" className="gap-1.5">Communication</TabsTrigger>
               <TabsTrigger value="notes" className="gap-1.5">Notes</TabsTrigger>
             </TabsList>
@@ -767,83 +867,212 @@ export function CrmView() {
           </TabsContent>
 
           {/* Quotes Tab */}
-          <TabsContent value="quotes">
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                <Receipt className="size-10 mb-2 opacity-20" />
-                <p>No quotes yet</p>
-                <p className="text-xs">Quotes created for this customer will appear here</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Invoices Tab */}
-          <TabsContent value="invoices">
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                <FileText className="size-10 mb-2 opacity-20" />
-                <p>No invoices yet</p>
-                <p className="text-xs">Invoices for this customer will appear here</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Payments Tab */}
-          <TabsContent value="payments">
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                <CreditCard className="size-10 mb-2 opacity-20" />
-                <p>No payments recorded</p>
-                <p className="text-xs">Payment history will appear here</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Documents Tab */}
-          <TabsContent value="documents">
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                <FolderOpen className="size-10 mb-2 opacity-20" />
-                <p>No documents</p>
-                <p className="text-xs">Upload documents to keep them linked to this customer</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Assets Tab */}
-          <TabsContent value="assets" className="space-y-3">
+          <TabsContent value="quotes" className="space-y-3">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Equipment & Assets</CardTitle>
-                <CardDescription>Customer assets and service history</CardDescription>
+                <CardTitle className="text-base">Quotes</CardTitle>
+                <CardDescription>Quotes created for this customer</CardDescription>
               </CardHeader>
               <CardContent>
-                {assetsLoading ? (
-                  <div className="space-y-2">{[1, 2].map(i => <div key={i} className="animate-pulse h-16 bg-muted rounded" />)}</div>
-                ) : assets.length === 0 ? (
+                {quotesLoading ? (
+                  <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="animate-pulse h-16 bg-muted rounded" />)}</div>
+                ) : quotes.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                    <Wrench className="size-10 mb-2 opacity-20" />
-                    <p>No assets tracked</p>
-                    <p className="text-xs">Add equipment to track service history and warranties</p>
+                    <Receipt className="size-10 mb-2 opacity-20" />
+                    <p>No quotes yet</p>
+                    <p className="text-xs">Quotes created for this customer will appear here</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {assets.map(asset => (
-                      <div key={asset.id} className="flex items-center gap-3 p-3 rounded-lg border">
-                        <div className="size-10 shrink-0 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center">
-                          <Wrench className="size-5" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm">{asset.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {asset.assetType}{asset.brand ? ` · ${asset.brand}` : ''}{asset.model ? ` · ${asset.model}` : ''}
-                          </p>
-                        </div>
-                        <Badge variant="outline" className="text-xs capitalize">{asset.status}</Badge>
+                    {/* Summary */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="rounded-lg border p-3 text-center">
+                        <p className="text-lg font-bold">{quotes.length}</p>
+                        <p className="text-[10px] text-muted-foreground">Total Quotes</p>
                       </div>
-                    ))}
+                      <div className="rounded-lg border p-3 text-center">
+                        <p className="text-lg font-bold text-emerald-600">{quotes.filter(q => q.status === 'accepted').length}</p>
+                        <p className="text-[10px] text-muted-foreground">Accepted</p>
+                      </div>
+                      <div className="rounded-lg border p-3 text-center">
+                        <p className="text-lg font-bold">{formatMoney(quotes.reduce((s, q) => s + (q.total || 0), 0))}</p>
+                        <p className="text-[10px] text-muted-foreground">Total Value</p>
+                      </div>
+                    </div>
+                    {/* Quote rows */}
+                    <div className="max-h-[500px] overflow-auto space-y-2">
+                      {quotes.map(quote => {
+                        const cfg = quoteStatusConfig[quote.status] || { label: quote.status, color: 'text-muted-foreground', bg: 'bg-muted border-border' };
+                        const items = (() => { try { return JSON.parse(quote.itemsJson || '[]'); } catch { return []; } })();
+                        return (
+                          <div key={quote.id} className="rounded-lg border p-3 hover:shadow-sm transition-shadow">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="size-8 shrink-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                                  <Receipt className="size-4" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium truncate">{quote.title || 'Untitled Quote'}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {formatDate(quote.createdAt)}
+                                    {items.length > 0 && ` · ${items.length} item${items.length === 1 ? '' : 's'}`}
+                                    {quote.validUntil && ` · valid until ${formatDate(quote.validUntil)}`}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Badge variant="outline" className={cn('text-xs', cfg.color, cfg.bg)}>{cfg.label}</Badge>
+                                <span className="text-sm font-semibold">{formatMoney(quote.total, quote.currency)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Invoices Tab — dynamic status grouping */}
+          <TabsContent value="invoices" className="space-y-3">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Invoices</CardTitle>
+                <CardDescription>Invoices issued to this customer</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {invoicesLoading ? (
+                  <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="animate-pulse h-16 bg-muted rounded" />)}</div>
+                ) : invoices.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <FileText className="size-10 mb-2 opacity-20" />
+                    <p>No invoices yet</p>
+                    <p className="text-xs">Invoices for this customer will appear here</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Summary */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="rounded-lg border p-3 text-center">
+                        <p className="text-lg font-bold">{invoices.length}</p>
+                        <p className="text-[10px] text-muted-foreground">Total Invoices</p>
+                      </div>
+                      <div className="rounded-lg border p-3 text-center">
+                        <p className="text-lg font-bold text-emerald-600">{formatMoney(invoices.filter(i => i.status === 'paid').reduce((s, i) => s + (i.total || 0), 0))}</p>
+                        <p className="text-[10px] text-muted-foreground">Paid</p>
+                      </div>
+                      <div className="rounded-lg border p-3 text-center">
+                        <p className="text-lg font-bold text-amber-600">{formatMoney(invoices.filter(i => ['sent', 'pending_approval', 'pending', 'overdue'].includes(i.status)).reduce((s, i) => s + (i.total || 0), 0))}</p>
+                        <p className="text-[10px] text-muted-foreground">Outstanding</p>
+                      </div>
+                    </div>
+                    {/* Group by status — canonical order, no invoice dropped */}
+                    {(() => {
+                      const groups = new Map<string, InvoiceRef[]>();
+                      for (const inv of invoices) {
+                        const arr = groups.get(inv.status) || [];
+                        arr.push(inv);
+                        groups.set(inv.status, arr);
+                      }
+                      const orderedStatuses = [
+                        ...INVOICE_STATUS_ORDER.filter(s => groups.has(s)),
+                        ...Array.from(groups.keys()).filter(s => !INVOICE_STATUS_ORDER.includes(s)),
+                      ];
+                      return orderedStatuses.map(status => {
+                        const cfg = invoiceStatusConfig[status] || { label: status.charAt(0).toUpperCase() + status.slice(1), color: 'text-muted-foreground', bg: 'bg-muted border-border' };
+                        const rows = groups.get(status)!;
+                        return (
+                          <div key={status} className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Badge variant="outline" className={cn('text-xs', cfg.color, cfg.bg)}>{cfg.label}</Badge>
+                              <span className="text-xs text-muted-foreground">{rows.length} invoice{rows.length === 1 ? '' : 's'}</span>
+                            </div>
+                            <div className="space-y-2">
+                              {rows.map(inv => (
+                                <div key={inv.id} className="rounded-lg border p-3 hover:shadow-sm transition-shadow">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div className="size-8 shrink-0 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center">
+                                        <FileText className="size-4" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-medium truncate">{inv.number}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {formatDate(inv.createdAt)}
+                                          {inv.invoiceType && inv.invoiceType !== 'standard' && ` · ${inv.invoiceType}`}
+                                          {inv.dueDate && ` · due ${formatDate(inv.dueDate)}`}
+                                          {inv.status === 'paid' && inv.paidAt && ` · paid ${formatDate(inv.paidAt)}`}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <span className="text-sm font-semibold shrink-0">{formatMoney(inv.total, inv.currency)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Payments Tab — derived from paid invoices */}
+          <TabsContent value="payments" className="space-y-3">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Payments</CardTitle>
+                <CardDescription>Payment history (derived from paid invoices)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {invoicesLoading ? (
+                  <div className="space-y-2">{[1, 2].map(i => <div key={i} className="animate-pulse h-16 bg-muted rounded" />)}</div>
+                ) : (() => {
+                  const paidInvoices = invoices.filter(i => i.status === 'paid');
+                  if (paidInvoices.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                        <CreditCard className="size-10 mb-2 opacity-20" />
+                        <p>No payments recorded</p>
+                        <p className="text-xs">Payment history will appear here</p>
+                      </div>
+                    );
+                  }
+                  const totalPaid = paidInvoices.reduce((s, i) => s + (i.total || 0), 0);
+                  return (
+                    <div className="space-y-3">
+                      <div className="rounded-lg border p-3 text-center">
+                        <p className="text-lg font-bold text-emerald-600">{formatMoney(totalPaid, paidInvoices[0]?.currency)}</p>
+                        <p className="text-[10px] text-muted-foreground">Total Paid ({paidInvoices.length} invoice{paidInvoices.length === 1 ? '' : 's'})</p>
+                      </div>
+                      <div className="max-h-[500px] overflow-auto space-y-2">
+                        {paidInvoices.map(inv => (
+                          <div key={inv.id} className="rounded-lg border p-3 hover:shadow-sm transition-shadow">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="size-8 shrink-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                                  <CreditCard className="size-4" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium truncate">{inv.number}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {inv.paidAt ? `Paid on ${formatDate(inv.paidAt)}` : formatDate(inv.createdAt)}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="text-sm font-semibold text-emerald-700 shrink-0">{formatMoney(inv.total, inv.currency)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>
