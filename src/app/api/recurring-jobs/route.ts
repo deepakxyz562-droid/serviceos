@@ -133,6 +133,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Compute the first nextRunAt ─────────────────────────────────────
+    const timezone = body.timezone ?? null;
     const nextRunAt = computeNextOccurrence(
       {
         frequency,
@@ -141,6 +142,7 @@ export async function POST(request: NextRequest) {
         weekOfMonth,
         timeOfDay: body.timeOfDay ?? null,
         endDate,
+        timezone,
       },
       // Start the search from "the day before startDate" so the first
       // occurrence can land on startDate itself.
@@ -189,6 +191,11 @@ export async function POST(request: NextRequest) {
         visitInstructions: body.visitInstructions?.trim() || null,
         checklistIdsJson,
         lineItemsJson,
+        // ── Phase C: Optional billing ──
+        generateInvoice: body.generateInvoice === true,
+        invoiceTiming: body.invoiceTiming === 'on_generation' ? 'on_generation' : 'on_completion',
+        // ── Phase F: Timezone ──
+        timezone,
         active: true,
       },
       include: {

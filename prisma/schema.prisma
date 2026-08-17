@@ -522,7 +522,16 @@ model RecurringJobSchedule {
   branchId        String?
   visitInstructions String?
   checklistIdsJson String  @default("[]")
-  lineItemsJson   String   @default("[]") // for auto-quoting
+  lineItemsJson   String   @default("[]") // line items copied to generated Job (NOT used for auto-quoting — see Phase C)
+  // ── Phase C: Optional billing ──
+  // generateInvoice: when true, the engine creates an Invoice alongside each generated Job.
+  // invoiceTiming: 'on_generation' (draft invoice at job creation) | 'on_completion' (relies on autoCreateInvoiceFromJob)
+  generateInvoice Boolean @default(false)
+  invoiceTiming   String  @default("on_completion") // on_generation | on_completion
+  // ── Phase F: Timezone ──
+  // IANA timezone name (e.g. "Asia/Kolkata"). When set, nextRunAt + scheduledAt are
+  // computed in this timezone. When null, server local time is used (legacy behavior).
+  timezone        String?
   active          Boolean  @default(true)
   pausedAt        DateTime?
   createdAt       DateTime @default(now())
@@ -755,6 +764,11 @@ model Invoice {
   milestoneIndex Int?                        // 1-based index for milestone invoices (1=30%, 2=40%, 3=30%)
   parentInvoiceId String?                    // For milestone splits → the originating job's first invoice
   recurrenceId String?                       // FK to RecurringInvoice schedule that generated this (recurring type)
+  // ── Phase A2: Idempotency ──
+  // occurrenceDate: the date this invoice was generated for (the schedule's nextRunAt at generation time).
+  // Paired with recurrenceId in a UNIQUE constraint so the same schedule cannot generate
+  // two invoices for the same occurrence (cron double-fire protection).
+  occurrenceDate DateTime?
   dueDate     DateTime?
   sentAt      DateTime?
   paidAt      DateTime?
@@ -777,6 +791,10 @@ model Invoice {
   @@index([bookingId])
   @@index([recurrenceId])
   @@index([parentInvoiceId])
+  // ── Phase A2: Unique constraint for recurring-invoice idempotency ──
+  // Prevents the same RecurringInvoice from generating two Invoices for the same occurrence.
+  // NULL recurrenceId (manual invoices) are excluded — Postgres treats NULLs as distinct in UNIQUE.
+  @@unique([recurrenceId, occurrenceDate], map: "invoice_recurrence_occurrencedate_unique")
 
   // ── C-3 (E1): composite index for invoices list page 1 ──────────────────
   // Query: WHERE "tenantId" = ? ORDER BY "createdAt" DESC LIMIT 200
@@ -812,8 +830,12 @@ model RecurringInvoice {
   active          Boolean  @default(true)
   executionCount  Int      @default(0)
   createdById     String?
-  autoChargeEnabled Boolean @default(false)             // auto-charge saved payment method on generation
-  paymentMethodId String?                              // saved PaymentMethod.id to charge
+  autoChargeEnabled Boolean @default(false)             // auto-charge saved payment method on generation (Phase D: dead schema — kept for forward compat, not yet enforced)
+  paymentMethodId String?                              // saved PaymentMethod.id to charge (Phase D: dead schema — kept for forward compat)
+  // ── Phase D1: Pause/Resume parity with RecurringJobSchedule ──
+  pausedAt        DateTime?
+  // ── Phase F: Timezone ──
+  timezone        String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1704,6 +1726,10 @@ model Job {
   @@index([workspaceId])
   @@index([recurringScheduleId])
   @@index([cancelledAt])
+  // ── Phase A1: Unique constraint for recurring-job idempotency ──
+  // Prevents the same RecurringJobSchedule from generating two Jobs for the same occurrence.
+  // NULL recurringScheduleId (manual jobs) are excluded — Postgres treats NULLs as distinct in UNIQUE.
+  @@unique([recurringScheduleId, scheduledAt], map: "job_recurring_schedule_scheduledat_unique")
 
   // ── C-3: PARTIAL index for the hottest CRM query (jobs list page 1) ──
   // Query: WHERE "workspaceId" = ? AND "deletedAt" IS NULL

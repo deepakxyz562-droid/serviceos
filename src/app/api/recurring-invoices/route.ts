@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
       endDate: body.endDate || null,
       tenantId: user.tenantId,
       createdById: user.id,
+      timezone: body.timezone || null,
     });
 
     if (!result.success) {

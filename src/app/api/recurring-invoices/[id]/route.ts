@@ -72,12 +72,15 @@ export async function PUT(
     if (body.notes !== undefined) updateData.notes = body.notes || null;
     if (body.endDate !== undefined) updateData.endDate = body.endDate ? new Date(body.endDate) : null;
     if (body.active !== undefined) updateData.active = body.active;
+    if (body.timezone !== undefined) updateData.timezone = body.timezone || null;
+    if (body.pausedAt !== undefined) updateData.pausedAt = body.pausedAt ? new Date(body.pausedAt) : null;
 
-    // Recompute nextRunAt if frequency or dayOfMonth changed and the schedule is active
-    if ((body.frequency !== undefined || body.dayOfMonth !== undefined) && (updateData.active ?? existing.active)) {
+    // Recompute nextRunAt if frequency, dayOfMonth, or timezone changed and the schedule is active
+    if ((body.frequency !== undefined || body.dayOfMonth !== undefined || body.timezone !== undefined) && (updateData.active ?? existing.active)) {
       const freq = (updateData.frequency as string) || existing.frequency;
-      const dom = (updateData.dayOfMonth as number) || existing.dayOfMonth
-      updateData.nextRunAt = computeNextRun(new Date(), freq, dom)
+      const dom = (updateData.dayOfMonth as number) || existing.dayOfMonth;
+      const tz = updateData.timezone !== undefined ? (updateData.timezone as string | null) : existing.timezone;
+      updateData.nextRunAt = computeNextRun(new Date(), freq, dom, tz);
     }
 
     const schedule = await db.recurringInvoice.update({

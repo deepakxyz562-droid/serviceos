@@ -34,6 +34,7 @@ import {
   CalendarClock,
   ShieldCheck,
   Play,
+  Pause,
   Power,
   Sparkles,
   Pencil,
@@ -53,7 +54,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -78,6 +79,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { authFetch } from '@/lib/client-auth';
+// Phase F: shared IANA timezone list (Europe-first, grouped for optgroups).
+import { CAMPAIGN_TIMEZONES_GROUPED } from '@/lib/timezones';
 import { FormSectionCard } from '@/components/shared/form-section-card';
 import { useAppStore } from '@/store/app-store';
 
@@ -255,6 +258,10 @@ interface RecurringSchedule {
   nextRunAt?: string;
   lastRunAt?: string;
   lastInvoiceId?: string;
+  // Phase F: IANA tz key (e.g. "Asia/Kolkata"). null = legacy server-local behavior.
+  timezone?: string | null;
+  // Phase D3: timestamp when the schedule was paused (null when active or fully deactivated).
+  pausedAt?: string | null;
   active: boolean;
   executionCount: number;
   createdAt: string;
@@ -271,6 +278,8 @@ interface RecurringScheduleForm {
   taxPercent: number;
   currency: string;
   notes: string;
+  // Phase F: optional IANA timezone; '' = server-local (backward compat).
+  timezone: string;
 }
 
 const EMPTY_RECURRING_FORM = (): RecurringScheduleForm => ({
@@ -282,6 +291,7 @@ const EMPTY_RECURRING_FORM = (): RecurringScheduleForm => ({
   taxPercent: 0,
   currency: 'USD',
   notes: '',
+  timezone: '',
 });
 
 // ============================================================
@@ -1153,6 +1163,8 @@ export function InvoicesView() {
         taxPercent: recurringForm.taxPercent,
         currency: recurringForm.currency || 'USD',
         notes: recurringForm.notes || undefined,
+        // Phase F: pass timezone (or null for legacy server-local behavior).
+        timezone: recurringForm.timezone || null,
       };
       const res = await authFetch('/api/recurring-invoices', {
         method: 'POST',
@@ -1221,6 +1233,67 @@ export function InvoicesView() {
     }
   };
 
+  // ── Phase D3: Pause / Resume handlers ─────────────────────────────────
+  // Pause sets active=false + pausedAt=now() (server route). Resume clears
+  // pausedAt + recomputes nextRunAt from now (so we don't fire immediately for
+  // a stale past nextRunAt). Both endpoints return { success, schedule } and
+  // include the customer relation so we can update local state in-place without
+  // a refetch. Mirrors the recurring-jobs pause/resume UI pattern.
+  const handlePauseRecurring = async (scheduleId: string) => {
+    setRecurringActionLoading((prev) => ({ ...prev, [`pause-${scheduleId}`]: true }));
+    try {
+      const res = await authFetch(`/api/recurring-invoices/${scheduleId}/pause`, {
+        method: 'POST',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || 'Failed to pause schedule');
+      }
+      const updated = (data as { schedule: RecurringSchedule }).schedule;
+      // Update the specific row in-place; preserve any customer/job relation
+      // the API doesn't return (the pause route only includes customer).
+      setRecurringSchedules((prev) =>
+        prev.map((s) => (s.id === scheduleId ? { ...s, ...updated } : s)),
+      );
+      toast.success('Schedule paused — no new invoices will be generated until resumed');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to pause schedule');
+    } finally {
+      setRecurringActionLoading((prev) => {
+        const next = { ...prev };
+        delete next[`pause-${scheduleId}`];
+        return next;
+      });
+    }
+  };
+
+  const handleResumeRecurring = async (scheduleId: string) => {
+    setRecurringActionLoading((prev) => ({ ...prev, [`resume-${scheduleId}`]: true }));
+    try {
+      const res = await authFetch(`/api/recurring-invoices/${scheduleId}/resume`, {
+        method: 'POST',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || 'Failed to resume schedule');
+      }
+      const updated = (data as { schedule: RecurringSchedule }).schedule;
+      setRecurringSchedules((prev) =>
+        prev.map((s) => (s.id === scheduleId ? { ...s, ...updated } : s)),
+      );
+      const nextLabel = updated?.nextRunAt ? formatShortDate(updated.nextRunAt) : 'soon';
+      toast.success(`Schedule resumed — next run ${nextLabel}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to resume schedule');
+    } finally {
+      setRecurringActionLoading((prev) => {
+        const next = { ...prev };
+        delete next[`resume-${scheduleId}`];
+        return next;
+      });
+    }
+  };
+
   // Open the recurring form panel pre-filled with an existing schedule's values,
   // switching the dialog into "edit" mode. The same form panel is reused for
   // create — only the title, submit button label and submit handler differ.
@@ -1235,6 +1308,9 @@ export function InvoicesView() {
       taxPercent: schedule.taxPercent ?? 0,
       currency: schedule.currency || 'USD',
       notes: schedule.notes || '',
+      // Phase F: populate the timezone field with the schedule's stored value
+      // (null → '' so the Select falls back to its placeholder).
+      timezone: schedule.timezone || '',
     });
     setShowRecurringForm(true);
   };
@@ -1284,6 +1360,10 @@ export function InvoicesView() {
         taxPercent: recurringForm.taxPercent,
         currency: recurringForm.currency || 'USD',
         notes: recurringForm.notes || undefined,
+        // Phase F: pass timezone (or null for legacy server-local behavior).
+        // Server route treats `undefined` as "no change" and `null` as "clear";
+        // we always send one of those two values so the field can be unset.
+        timezone: recurringForm.timezone || null,
       };
       const res = await authFetch(`/api/recurring-invoices/${editingRecurringId}`, {
         method: 'PUT',
@@ -3074,6 +3154,50 @@ export function InvoicesView() {
                     className="h-8 text-sm"
                   />
                 </div>
+                {/* Phase F: Timezone picker — empty = server local (backward compat) */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    Timezone <span className="text-muted-foreground">(optional)</span>
+                  </Label>
+                  <Select
+                    // Radix Select treats `value=""` as "no selection" so we use a
+                    // sentinel '__server_local__' to represent the legacy
+                    // server-local (empty-string) state. Map back/forth in onChange.
+                    value={recurringForm.timezone || '__server_local__'}
+                    onValueChange={(val) =>
+                      setRecurringForm((prev) => ({
+                        ...prev,
+                        timezone: val === '__server_local__' ? '' : val,
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Server local time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {/* "Clear" option → server-local legacy behavior */}
+                      <SelectItem value="__server_local__" className="text-xs italic text-muted-foreground">
+                        Server local time (default)
+                      </SelectItem>
+                      <SelectSeparator />
+                      {CAMPAIGN_TIMEZONES_GROUPED.map((group) => (
+                        <SelectGroup key={group.group}>
+                          <SelectLabel className="text-[10px] font-semibold uppercase tracking-wide">
+                            {group.group}
+                          </SelectLabel>
+                          {group.options.map((tz) => (
+                            <SelectItem key={tz.value} value={tz.value} className="text-xs">
+                              {tz.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">
+                    IANA tz key (e.g. Asia/Kolkata). Used to compute next-run in the customer&apos;s local time.
+                  </p>
+                </div>
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label className="text-xs">Notes</Label>
                   <Textarea
@@ -3127,12 +3251,21 @@ export function InvoicesView() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <h4 className="text-sm font-semibold">{schedule.name}</h4>
-                            <Badge variant="outline" className={`text-[9px] h-4 ${schedule.active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
-                              {schedule.active ? 'Active' : 'Inactive'}
+                            {/* Phase D3: status badge — Active (green) / Paused (amber). */}
+                            <Badge variant="outline" className={`text-[9px] h-4 ${schedule.active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                              {schedule.active ? 'Active' : 'Paused'}
                             </Badge>
                             <Badge variant="outline" className="text-[9px] h-4 bg-blue-50 text-blue-700 border-blue-200 capitalize">
                               {schedule.frequency}
                             </Badge>
+                            {/* Phase F: show the schedule's IANA tz key (if any) so users
+                                can see at-a-glance which schedules use customer-local
+                                time vs the legacy server-local default. */}
+                            {schedule.timezone ? (
+                              <Badge variant="outline" className="text-[9px] h-4 bg-purple-50 text-purple-700 border-purple-200 font-mono">
+                                {schedule.timezone}
+                              </Badge>
+                            ) : null}
                           </div>
                           <p className="text-xs text-muted-foreground mt-1">
                             {schedule.customer?.name || '—'}
@@ -3159,18 +3292,54 @@ export function InvoicesView() {
                             variant="outline"
                             size="sm"
                             className="h-7 text-xs"
-                            disabled={!!recurringSaving || !!recurringActionLoading[`run-${schedule.id}`] || !!recurringActionLoading[`deactivate-${schedule.id}`]}
+                            disabled={!!recurringSaving || !!recurringActionLoading[`run-${schedule.id}`] || !!recurringActionLoading[`deactivate-${schedule.id}`] || !!recurringActionLoading[`pause-${schedule.id}`] || !!recurringActionLoading[`resume-${schedule.id}`]}
                             onClick={() => openEditRecurring(schedule)}
                             title="Edit schedule"
                           >
                             <Pencil className="size-3 mr-1" />
                             <span className="hidden sm:inline">Edit</span>
                           </Button>
+                          {/* Phase D3: Pause (when active) or Resume (when paused) button.
+                              Pause hits POST /api/recurring-invoices/[id]/pause;
+                              Resume hits POST /api/recurring-invoices/[id]/resume. */}
+                          {schedule.active ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs text-amber-700 hover:text-amber-800 hover:bg-amber-50 border-amber-200"
+                              disabled={!!recurringActionLoading[`pause-${schedule.id}`] || !!recurringActionLoading[`run-${schedule.id}`] || !!recurringActionLoading[`deactivate-${schedule.id}`]}
+                              onClick={() => handlePauseRecurring(schedule.id)}
+                              title="Pause schedule — no new invoices until resumed"
+                            >
+                              {recurringActionLoading[`pause-${schedule.id}`] ? (
+                                <Loader2 className="size-3 mr-1 animate-spin" />
+                              ) : (
+                                <Pause className="size-3 mr-1" />
+                              )}
+                              <span className="hidden sm:inline">Pause</span>
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200"
+                              disabled={!!recurringActionLoading[`resume-${schedule.id}`] || !!recurringActionLoading[`deactivate-${schedule.id}`]}
+                              onClick={() => handleResumeRecurring(schedule.id)}
+                              title="Resume schedule — recomputes next run from now"
+                            >
+                              {recurringActionLoading[`resume-${schedule.id}`] ? (
+                                <Loader2 className="size-3 mr-1 animate-spin" />
+                              ) : (
+                                <RotateCcw className="size-3 mr-1" />
+                              )}
+                              <span className="hidden sm:inline">Resume</span>
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
                             className="h-7 text-xs"
-                            disabled={!!recurringActionLoading[`run-${schedule.id}`] || !schedule.active}
+                            disabled={!!recurringActionLoading[`run-${schedule.id}`] || !schedule.active || !!recurringActionLoading[`pause-${schedule.id}`] || !!recurringActionLoading[`resume-${schedule.id}`]}
                             onClick={() => handleRunRecurring(schedule.id)}
                           >
                             {recurringActionLoading[`run-${schedule.id}`] ? (
@@ -3184,7 +3353,7 @@ export function InvoicesView() {
                             variant="outline"
                             size="sm"
                             className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                            disabled={!!recurringActionLoading[`deactivate-${schedule.id}`] || !schedule.active}
+                            disabled={!!recurringActionLoading[`deactivate-${schedule.id}`] || !!recurringActionLoading[`pause-${schedule.id}`] || !!recurringActionLoading[`resume-${schedule.id}`]}
                             onClick={() => handleDeactivateRecurring(schedule.id)}
                           >
                             {recurringActionLoading[`deactivate-${schedule.id}`] ? (

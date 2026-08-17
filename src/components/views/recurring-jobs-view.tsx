@@ -31,6 +31,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Select,
   SelectContent,
@@ -120,6 +122,11 @@ interface Schedule {
   visitInstructions: string | null;
   checklistIdsJson: string;
   lineItemsJson: string;
+  // ── Phase C: Billing controls (auto-invoice generation per occurrence) ──
+  generateInvoice?: boolean | null;
+  invoiceTiming?: string | null;
+  // ── Phase F: Timezone for cron scheduling (null = server local) ──
+  timezone?: string | null;
   active: boolean;
   pausedAt: string | null;
   createdAt: string;
@@ -145,6 +152,11 @@ interface ScheduleForm {
   endDate: string;
   useWeekOfMonth: boolean;
   lineItems: Array<{ description: string; quantity: string; rate: string }>;
+  // ── Phase C: Billing (generateInvoice + invoiceTiming) ──
+  generateInvoice: boolean;
+  invoiceTiming: 'on_generation' | 'on_completion';
+  // ── Phase F: Timezone (server local when empty) ──
+  timezone: string;
 }
 
 const EMPTY_FORM: ScheduleForm = {
@@ -164,6 +176,11 @@ const EMPTY_FORM: ScheduleForm = {
   endDate: '',
   useWeekOfMonth: false,
   lineItems: [],
+  // Phase C: billing controls — default: no auto-invoice.
+  generateInvoice: false,
+  invoiceTiming: 'on_completion',
+  // Phase F: timezone — empty = server local (backward compat).
+  timezone: '',
 };
 
 const FREQUENCIES = [
@@ -190,6 +207,21 @@ const WEEK_OF_MONTH = [
   { value: '3', label: 'Third' },
   { value: '4', label: 'Fourth' },
   { value: '5', label: 'Fifth (when exists)' },
+];
+
+// ── Phase F: Timezone picker (empty value = server local time) ──
+const TIMEZONES = [
+  { value: '', label: 'Other (server local time)' },
+  { value: 'UTC', label: 'UTC' },
+  { value: 'Asia/Kolkata', label: 'Asia/Kolkata (India)' },
+  { value: 'Asia/Dubai', label: 'Asia/Dubai (UAE)' },
+  { value: 'Asia/Singapore', label: 'Asia/Singapore' },
+  { value: 'Europe/London', label: 'Europe/London (UK)' },
+  { value: 'Europe/Berlin', label: 'Europe/Berlin (Germany)' },
+  { value: 'America/New_York', label: 'America/New_York (Eastern US)' },
+  { value: 'America/Chicago', label: 'America/Chicago (Central US)' },
+  { value: 'America/Los_Angeles', label: 'America/Los_Angeles (Pacific US)' },
+  { value: 'Australia/Sydney', label: 'Australia/Sydney' },
 ];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -450,6 +482,11 @@ export function RecurringJobsView() {
       endDate: s.endDate ? new Date(s.endDate).toISOString().slice(0, 10) : '',
       useWeekOfMonth: Boolean(s.weekOfMonth),
       lineItems,
+      // Phase C+F: populate billing + timezone from existing schedule.
+      generateInvoice: Boolean(s.generateInvoice),
+      invoiceTiming:
+        s.invoiceTiming === 'on_generation' ? 'on_generation' : 'on_completion',
+      timezone: s.timezone || '',
     });
     setEditingId(s.id);
     setDialogOpen(true);
@@ -514,6 +551,11 @@ export function RecurringJobsView() {
         lineItemsJson: JSON.stringify(
           form.lineItems.filter((li) => li.description.trim()),
         ),
+        // Phase C: billing controls — always sent (create + edit).
+        generateInvoice: form.generateInvoice,
+        invoiceTiming: form.generateInvoice ? form.invoiceTiming : 'on_completion',
+        // Phase F: timezone (null = server local).
+        timezone: form.timezone || null,
       };
 
       if (editingId) {
@@ -869,6 +911,35 @@ export function RecurringJobsView() {
           </>
         )}
 
+        {/* Phase F — Timezone picker (near time-of-day, optional) */}
+        <div className="grid gap-2">
+          <Label htmlFor="timezone">Timezone (optional)</Label>
+          <Select
+            value={form.timezone || '__server_local__'}
+            onValueChange={(v) =>
+              setForm({ ...form, timezone: v === '__server_local__' ? '' : v })
+            }
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Other (server local)" />
+            </SelectTrigger>
+            <SelectContent>
+              {TIMEZONES.map((tz) => (
+                <SelectItem
+                  key={tz.value || '__server_local__'}
+                  value={tz.value || '__server_local__'}
+                >
+                  {tz.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            When empty, the server&apos;s local timezone is used to evaluate the
+            schedule&apos;s time-of-day.
+          </p>
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div className="grid gap-2">
             <Label htmlFor="startDate">Start date</Label>
@@ -937,7 +1008,7 @@ export function RecurringJobsView() {
         {/* Line items */}
         <div className="grid gap-2">
           <div className="flex items-center justify-between">
-            <Label>Line items (optional, for auto-quoting)</Label>
+            <Label>Line items (copied to generated job)</Label>
             <Button
               type="button"
               variant="outline"
@@ -949,8 +1020,8 @@ export function RecurringJobsView() {
           </div>
           {form.lineItems.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              No line items. The generated job will be created without an
-              auto-quote.
+              No line items. The generated job will have an empty line-items
+              list.
             </p>
           ) : (
             <div className="grid gap-2">
@@ -993,6 +1064,60 @@ export function RecurringJobsView() {
                   </Button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Phase C — Billing / Invoice generation */}
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="grid gap-0.5">
+              <Label htmlFor="generateInvoice">Invoice generation</Label>
+              <p className="text-xs text-muted-foreground">
+                Optionally create a draft invoice for each generated job.
+              </p>
+            </div>
+            <Switch
+              id="generateInvoice"
+              checked={form.generateInvoice}
+              onCheckedChange={(checked) =>
+                setForm({ ...form, generateInvoice: checked })
+              }
+            />
+          </div>
+          {form.generateInvoice && (
+            <div className="rounded-md border bg-muted/20 p-3 grid gap-2">
+              <Label>When should the draft invoice be created?</Label>
+              <RadioGroup
+                value={form.invoiceTiming}
+                onValueChange={(v) =>
+                  setForm({
+                    ...form,
+                    invoiceTiming: v as 'on_generation' | 'on_completion',
+                  })
+                }
+                className="grid gap-2"
+              >
+                <label className="flex items-start gap-2 text-sm cursor-pointer">
+                  <RadioGroupItem value="on_generation" className="mt-0.5" />
+                  <div>
+                    <span className="font-medium">On job generation</span>
+                    <p className="text-xs text-muted-foreground">
+                      Create a draft invoice when the job is generated.
+                    </p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-2 text-sm cursor-pointer">
+                  <RadioGroupItem value="on_completion" className="mt-0.5" />
+                  <div>
+                    <span className="font-medium">On job completion</span>
+                    <p className="text-xs text-muted-foreground">
+                      Create a draft invoice when the technician marks the job
+                      complete.
+                    </p>
+                  </div>
+                </label>
+              </RadioGroup>
             </div>
           )}
         </div>

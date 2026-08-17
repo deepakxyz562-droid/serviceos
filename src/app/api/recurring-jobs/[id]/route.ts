@@ -112,6 +112,13 @@ export async function PUT(
           : JSON.stringify(body.lineItemsJson ?? []);
     }
     if (body.active !== undefined) updateData.active = Boolean(body.active);
+    // ── Phase C: Optional billing fields ──
+    if (body.generateInvoice !== undefined) updateData.generateInvoice = Boolean(body.generateInvoice);
+    if (body.invoiceTiming !== undefined) {
+      updateData.invoiceTiming = body.invoiceTiming === 'on_generation' ? 'on_generation' : 'on_completion';
+    }
+    // ── Phase F: Timezone ──
+    if (body.timezone !== undefined) updateData.timezone = body.timezone || null;
 
     // Recompute nextRunAt if any scheduling field changed AND the schedule
     // is currently active (or being reactivated). Paused schedules get their
@@ -122,7 +129,8 @@ export async function PUT(
       body.dayOfMonth !== undefined ||
       body.weekOfMonth !== undefined ||
       body.timeOfDay !== undefined ||
-      body.endDate !== undefined;
+      body.endDate !== undefined ||
+      body.timezone !== undefined;
 
     const effectiveActive = body.active !== undefined ? Boolean(body.active) : existing.active;
     if (schedulingFieldsChanged && effectiveActive) {
@@ -132,9 +140,10 @@ export async function PUT(
       const wom = updateData.weekOfMonth !== undefined ? (updateData.weekOfMonth as number | null) : existing.weekOfMonth;
       const tod = updateData.timeOfDay !== undefined ? (updateData.timeOfDay as string | null) : existing.timeOfDay;
       const endDate = updateData.endDate !== undefined ? (updateData.endDate as Date | null) : existing.endDate;
+      const tz = updateData.timezone !== undefined ? (updateData.timezone as string | null) : existing.timezone;
 
       const next = computeNextOccurrence(
-        { frequency: freq, dayOfWeek: dow, dayOfMonth: dom, weekOfMonth: wom, timeOfDay: tod, endDate },
+        { frequency: freq, dayOfWeek: dow, dayOfMonth: dom, weekOfMonth: wom, timeOfDay: tod, endDate, timezone: tz },
         new Date(),
       );
       if (next) {

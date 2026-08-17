@@ -10,6 +10,8 @@ import { logActivity } from '@/lib/activity-log'
 import { EventBus } from '@/lib/event-bus'
 import { geocodeAddressOrNull as geocodeAddress } from '@/lib/geocode'
 import { requireCrmTenant } from '@/lib/require-crm-tenant'
+import { requirePlanFeature } from '@/lib/plan-gate'
+import { computeNextOccurrence, nextVisitNumber } from '@/lib/recurring-jobs'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -381,67 +383,197 @@ export async function POST(request: NextRequest) {
     })()
     if (body.assetId) baseMetadata.assetId = body.assetId
 
-    const job = await db.job.create({
-      data: {
-        title: body.title,
-        description: body.description,
-        status: body.status || 'pending',
-        priority: body.priority || 'medium',
-        type: body.type || 'delivery',
-        address: body.address,
-        pickup: body.pickup,
-        dropoff: body.dropoff,
-        scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : undefined,
-        notes: body.notes,
-        customerId: body.customerId,
-        customerName: body.customerName,
-        customerPhone: body.customerPhone,
-        customerEmail: body.customerEmail,
-        assigneeId: body.assigneeId,
-        assigneeName: body.assigneeName,
-        assigneePhone: body.assigneePhone,
-        resourceId: body.resourceId,
-        externalId: body.externalId,
-        externalSource: body.externalSource,
-        serviceId: body.serviceId || null,
-        estimatedDuration:
-          body.estimatedDuration !== undefined && body.estimatedDuration !== null && body.estimatedDuration !== ''
-            ? Number(body.estimatedDuration)
-            : undefined,
-        quotedAmount:
-          body.quotedAmount !== undefined && body.quotedAmount !== null && body.quotedAmount !== ''
-            ? Number(body.quotedAmount)
-            : undefined,
-        // ── Jobber-style itemized billing + on-site instructions ──
-        lineItemsJson: typeof body.lineItemsJson === 'string' ? body.lineItemsJson : JSON.stringify(body.lineItemsJson ?? []),
-        visitInstructions: body.visitInstructions || null,
-        scheduledTime: body.scheduledTime || null,
-        // ── "#job" Customize / Attach files & photos / Linked checklists / Link to related ──
-        customFieldsJson:
-          typeof body.customFieldsJson === 'string'
-            ? body.customFieldsJson
-            : JSON.stringify(body.customFieldsJson ?? []),
-        attachmentsJson:
-          typeof body.attachmentsJson === 'string'
-            ? body.attachmentsJson
-            : JSON.stringify(body.attachmentsJson ?? []),
-        linkedChecklistsJson:
-          typeof body.linkedChecklistsJson === 'string'
-            ? body.linkedChecklistsJson
-            : JSON.stringify(body.linkedChecklistsJson ?? []),
-        linkToRelatedJson:
-          typeof body.linkToRelatedJson === 'string'
-            ? body.linkToRelatedJson
-            : JSON.stringify(body.linkToRelatedJson ?? []),
-        metadataJson: JSON.stringify(baseMetadata),
-        workspaceId,
-      },
-      include: {
-        assignee: true,
-        customer: true,
-        resource: true,
-      },
-    })
+    // ── Build the job data object (shared between recurring + non-recurring paths) ──
+    // Phase B: when body.recurring is present, we wrap schedule-create + job-create
+    // + visit-create in a single transaction below. The job data is built once here.
+    const jobData: Record<string, unknown> = {
+      title: body.title,
+      description: body.description,
+      status: body.status || 'pending',
+      priority: body.priority || 'medium',
+      type: body.type || 'delivery',
+      address: body.address,
+      pickup: body.pickup,
+      dropoff: body.dropoff,
+      scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : undefined,
+      notes: body.notes,
+      customerId: body.customerId,
+      customerName: body.customerName,
+      customerPhone: body.customerPhone,
+      customerEmail: body.customerEmail,
+      assigneeId: body.assigneeId,
+      assigneeName: body.assigneeName,
+      assigneePhone: body.assigneePhone,
+      resourceId: body.resourceId,
+      externalId: body.externalId,
+      externalSource: body.externalSource,
+      serviceId: body.serviceId || null,
+      estimatedDuration:
+        body.estimatedDuration !== undefined && body.estimatedDuration !== null && body.estimatedDuration !== ''
+          ? Number(body.estimatedDuration)
+          : undefined,
+      quotedAmount:
+        body.quotedAmount !== undefined && body.quotedAmount !== null && body.quotedAmount !== ''
+          ? Number(body.quotedAmount)
+          : undefined,
+      lineItemsJson: typeof body.lineItemsJson === 'string' ? body.lineItemsJson : JSON.stringify(body.lineItemsJson ?? []),
+      visitInstructions: body.visitInstructions || null,
+      scheduledTime: body.scheduledTime || null,
+      customFieldsJson:
+        typeof body.customFieldsJson === 'string'
+          ? body.customFieldsJson
+          : JSON.stringify(body.customFieldsJson ?? []),
+      attachmentsJson:
+        typeof body.attachmentsJson === 'string'
+          ? body.attachmentsJson
+          : JSON.stringify(body.attachmentsJson ?? []),
+      linkedChecklistsJson:
+        typeof body.linkedChecklistsJson === 'string'
+          ? body.linkedChecklistsJson
+          : JSON.stringify(body.linkedChecklistsJson ?? []),
+      linkToRelatedJson:
+        typeof body.linkToRelatedJson === 'string'
+          ? body.linkToRelatedJson
+          : JSON.stringify(body.linkToRelatedJson ?? []),
+      metadataJson: JSON.stringify(baseMetadata),
+      workspaceId,
+    }
+
+    // ── Phase B: Recurring schedule creation (optional) ──────────────
+    // When body.recurring is present, create a RecurringJobSchedule + the first
+    // Job + the first JobVisit in a single transaction. The schedule's nextRunAt
+    // is set to the NEXT future occurrence (NOT today) — today's job is the one
+    // the user just created manually. Cron will generate future jobs.
+    let recurringSchedule: { id: string; generateInvoice: boolean; invoiceTiming: string } | null = null
+
+    if (body.recurring && typeof body.recurring === 'object') {
+      const gate = await requirePlanFeature('recurring_jobs')
+      if (!gate.ok) {
+        return NextResponse.json({ error: gate.reason }, { status: gate.status })
+      }
+
+      const recurring = body.recurring as Record<string, unknown>
+      const frequency = (recurring.frequency as string) || 'weekly'
+      const VALID_FREQ = ['weekly', 'biweekly', 'monthly', 'quarterly', 'annually']
+      if (!VALID_FREQ.includes(frequency)) {
+        return NextResponse.json({ error: `Invalid recurring frequency: ${frequency}` }, { status: 400 })
+      }
+
+      const dayOfWeek = recurring.dayOfWeek != null ? Number(recurring.dayOfWeek) : null
+      const dayOfMonth = recurring.dayOfMonth != null ? Number(recurring.dayOfMonth) : null
+      const weekOfMonth = recurring.weekOfMonth != null ? Number(recurring.weekOfMonth) : null
+      const timeOfDay = (recurring.timeOfDay as string) || null
+      const timezone = (recurring.timezone as string) || null
+      const endDate = recurring.endDate ? new Date(recurring.endDate as string) : null
+
+      const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : new Date()
+      const nextRunAt = computeNextOccurrence(
+        { frequency, dayOfWeek, dayOfMonth, weekOfMonth, timeOfDay, endDate, timezone },
+        scheduledAt,
+      )
+      if (!nextRunAt) {
+        return NextResponse.json(
+          { error: 'The first recurring occurrence is already past the end date.' },
+          { status: 400 },
+        )
+      }
+
+      const assigneeIds = Array.isArray(recurring.assigneeIds)
+        ? (recurring.assigneeIds as string[])
+        : (body.assigneeId ? [body.assigneeId] : [])
+      const checklistIds = Array.isArray(recurring.checklistIds) ? (recurring.checklistIds as string[]) : []
+      const lineItemsJson =
+        typeof body.lineItemsJson === 'string' ? body.lineItemsJson : JSON.stringify(body.lineItemsJson ?? [])
+      const visitInstructions = (recurring.visitInstructions as string) || body.visitInstructions || null
+
+      // Wrap schedule + job + visit creation in a single transaction.
+      const result = await db.$transaction(async (tx) => {
+        const schedule = await tx.recurringJobSchedule.create({
+          data: {
+            tenantId: authUser!.tenantId!,
+            customerId: body.customerId || null,
+            title: body.title,
+            description: body.description || null,
+            frequency,
+            dayOfWeek,
+            dayOfMonth,
+            weekOfMonth,
+            timeOfDay,
+            durationMins: Number(recurring.durationMins) || 60,
+            startDate: scheduledAt,
+            endDate,
+            nextRunAt,
+            assigneeIdsJson: JSON.stringify(assigneeIds),
+            serviceId: body.serviceId || null,
+            branchId: (recurring.branchId as string) || null,
+            visitInstructions,
+            checklistIdsJson: JSON.stringify(checklistIds),
+            lineItemsJson,
+            generateInvoice: recurring.generateInvoice === true,
+            invoiceTiming: recurring.invoiceTiming === 'on_generation' ? 'on_generation' : 'on_completion',
+            timezone,
+            active: true,
+          },
+        })
+
+        const createdJob = await tx.job.create({
+          data: {
+            ...jobData,
+            type: 'recurring',
+            recurringScheduleId: schedule.id,
+          } as Parameters<typeof tx.job.create>[0]['data'],
+          include: { assignee: true, customer: true, resource: true },
+        })
+
+        // Create the first JobVisit (mirrors processSingleSchedule).
+        const visitTitle = createdJob.customerName
+          ? `${createdJob.customerName} - ${createdJob.title}`
+          : createdJob.title
+        const visitNumber = await nextVisitNumber(tx, createdJob.id)
+        await tx.jobVisit.create({
+          data: {
+            jobVisitNumber: visitNumber,
+            tenantId: authUser!.tenantId!,
+            jobId: createdJob.id,
+            title: visitTitle,
+            visitType: 'maintenance',
+            instructions: visitInstructions,
+            scheduledDate: scheduledAt,
+            scheduledTime: timeOfDay,
+            anytime: !timeOfDay,
+            assigneeIdsJson: JSON.stringify(assigneeIds),
+            assigneeNamesJson: JSON.stringify(createdJob.assigneeName ? [createdJob.assigneeName] : []),
+            checklistIdsJson: JSON.stringify(checklistIds),
+            teamReminder: '24h',
+            status: 'scheduled',
+          },
+        })
+
+        return { schedule, job: createdJob }
+      })
+
+      recurringSchedule = {
+        id: result.schedule.id,
+        generateInvoice: result.schedule.generateInvoice,
+        invoiceTiming: result.schedule.invoiceTiming,
+      }
+      // Use the job from the transaction as the response object.
+      // Reassign the `job` const below via the non-recurring create path is skipped.
+      // We cast to any because the transaction's job type is compatible but TS infers a union.
+      ;(jobData as Record<string, unknown>).__recurringJob = result.job
+    }
+
+    // ── Create the job (non-recurring path) OR pull from transaction result ──
+    const job =
+      (jobData as Record<string, unknown>).__recurringJob as Awaited<ReturnType<typeof db.job.create>> | undefined
+        ?? await db.job.create({
+            data: jobData as Parameters<typeof db.job.create>[0]['data'],
+            include: {
+              assignee: true,
+              customer: true,
+              resource: true,
+            },
+          })
 
     // ─── Background side-effects (don't block the response) ──────
     // Send WhatsApp notifications + event webhooks detached so the user
@@ -581,6 +713,21 @@ export async function POST(request: NextRequest) {
     // Bust jobs cache for this tenant (new job changes all lists)
     if (authUser?.tenantId) {
       cache.invalidateByPrefix(`jobs:${authUser.tenantId}:`);
+    }
+
+    // ── Phase C: Optional billing on generation ──────────────────────
+    // If the job was created from a recurring schedule with generateInvoice=true
+    // and invoiceTiming='on_generation', create a draft invoice linked to the job.
+    // This runs OUTSIDE the transaction (autoCreateInvoiceFromJob has its own
+    // per-job in-memory lock + does its own transaction). Failures are logged
+    // but don't fail the job creation — the schedule advance already succeeded.
+    if (recurringSchedule?.generateInvoice && recurringSchedule.invoiceTiming === 'on_generation') {
+      try {
+        const { autoCreateInvoiceFromJob } = await import('@/lib/invoice-automation');
+        await autoCreateInvoiceFromJob(job.id, { force: true });
+      } catch (invoiceErr) {
+        console.error('[Jobs POST] auto-invoice on recurring generation failed:', invoiceErr);
+      }
     }
 
     return NextResponse.json(job, { status: 201 })

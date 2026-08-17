@@ -60,6 +60,18 @@ export interface RecurringJobSchedule {
   visitInstructions: string | null;
   checklistIdsJson: string;
   lineItemsJson: string;
+  // ── Phase C: Optional billing ──
+  // When true, the engine creates an Invoice alongside each generated Job.
+  // invoiceTiming: 'on_generation' (draft invoice at job creation) |
+  //                'on_completion' (relies on autoCreateInvoiceFromJob firing
+  //                from the job-completion lifecycle).
+  generateInvoice: boolean;
+  invoiceTiming: string; // 'on_generation' | 'on_completion'
+  // ── Phase F: Timezone ──
+  // IANA timezone name (e.g. "Asia/Kolkata"). When set, nextRunAt +
+  // scheduledAt are computed in this timezone. When null, server local time
+  // is used (legacy behavior).
+  timezone: string | null;
   active: boolean;
   pausedAt: Date | null;
   createdAt: Date;
@@ -104,6 +116,76 @@ function applyTimeOfDay(date: Date, time: string | null | undefined): Date {
   }
   d.setHours(Number(m[1]), Number(m[2]), 0, 0);
   return d;
+}
+
+/**
+ * Detect whether a thrown error is a unique-constraint violation.
+ * Covers both Prisma's P2002 code and the underlying PostgreSQL 23505, plus
+ * a defensive message-substring check for drivers that wrap the original.
+ *
+ * Used by the idempotency fallback in `processSingleSchedule` — if two
+ * concurrent cron runs race to create the same `[recurringScheduleId,
+ * scheduledAt]` occurrence, the loser treats the error as a duplicate and
+ * silently advances `nextRunAt` instead of surfacing the failure.
+ */
+function isUniqueViolation(err: any): boolean {
+  if (!err) return false;
+  if (err.code === 'P2002') return true;  // Prisma unique-constraint error
+  if (err.code === '23505') return true; // PostgreSQL unique_violation
+  const msg = (err.message || '').toLowerCase();
+  return msg.includes('unique') && (msg.includes('violat') || msg.includes('constraint'));
+}
+
+/**
+ * Get the UTC offset (in minutes) for a given IANA timezone at a specific
+ * instant. Returns 0 if the timezone is invalid or null/undefined (falls back
+ * to UTC).
+ *
+ * Implementation: we use `Intl.DateTimeFormat.formatToParts` with the target
+ * `timeZone` to extract wall-clock (Y/M/D/H/M/S) components, then re-interpret
+ * those as UTC. The difference between that fake-UTC instant and the actual
+ * UTC instant is the timezone offset (in ms → minutes).
+ */
+function getTimezoneOffsetMinutes(timezone: string | null | undefined, date: Date): number {
+  if (!timezone) return 0;
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(date);
+    const get = (type: string) => Number(parts.find(p => p.type === type)?.value ?? '0');
+    const hour = get('hour') % 24; // '24' can appear for midnight in en-US
+    const wallClockAsUtc = new Date(Date.UTC(
+      get('year'), get('month') - 1, get('day'),
+      hour, get('minute'), get('second'),
+    ));
+    return Math.round((wallClockAsUtc.getTime() - date.getTime()) / 60000);
+  } catch {
+    return 0; // invalid timezone → treat as UTC
+  }
+}
+
+/**
+ * Convert a wall-clock time in a given timezone to a UTC Date.
+ * If timezone is null/undefined, returns `new Date(year, month0, day, hours,
+ * minutes, seconds)` (server-local) — matching the legacy `applyTimeOfDay`
+ * behavior so callers that don't opt into timezone see no change.
+ */
+function zonedTimeToUtc(
+  timezone: string | null | undefined,
+  year: number, month0: number, day: number,
+  hours: number, minutes: number, seconds: number = 0,
+): Date {
+  if (!timezone) {
+    return new Date(year, month0, day, hours, minutes, seconds);
+  }
+  // Pretend the wall-clock time is UTC, then subtract the timezone offset.
+  const fakeUtc = new Date(Date.UTC(year, month0, day, hours, minutes, seconds));
+  const offsetMinutes = getTimezoneOffsetMinutes(timezone, fakeUtc);
+  return new Date(fakeUtc.getTime() - offsetMinutes * 60000);
 }
 
 /**
@@ -162,6 +244,7 @@ export function computeNextOccurrence(
     | 'weekOfMonth'
     | 'timeOfDay'
     | 'endDate'
+    | 'timezone'
   >,
   afterDate: Date,
 ): Date | null {
@@ -218,7 +301,32 @@ export function computeNextOccurrence(
   }
 
   // Apply the time-of-day (defaults to 00:00 if unset).
-  result = applyTimeOfDay(result, schedule.timeOfDay);
+  //
+  // Phase F (timezone): when `schedule.timezone` is set, re-interpret the
+  // wall-clock time in that IANA zone and produce the corresponding UTC
+  // instant. The day arithmetic above ran in server-local but only used the
+  // DATE component, so the timezone conversion is the only step that needs
+  // the zone. When `timezone` is null/undefined, fall back to the legacy
+  // server-local `applyTimeOfDay` behavior — this preserves EXACT prior output
+  // for schedules that don't opt into the timezone feature.
+  if (schedule.timezone) {
+    const m = schedule.timeOfDay
+      ? /^(\d{1,2}):(\d{2})$/.exec(schedule.timeOfDay.trim())
+      : null;
+    const hours = m ? Number(m[1]) : 0;
+    const minutes = m ? Number(m[2]) : 0;
+    result = zonedTimeToUtc(
+      schedule.timezone,
+      result.getFullYear(),
+      result.getMonth(),
+      result.getDate(),
+      hours,
+      minutes,
+      0,
+    );
+  } else {
+    result = applyTimeOfDay(result, schedule.timeOfDay);
+  }
 
   // End-date guard.
   if (schedule.endDate && result > schedule.endDate) {
@@ -351,32 +459,91 @@ async function processSingleSchedule(scheduleId: string): Promise<void> {
 
   // ── Transaction: create Job + JobVisit + update Schedule ──────────────
   const result = await db.$transaction(async (tx) => {
-    // 1. Create the Job.
-    const job = await tx.job.create({
-      data: {
-        title: schedule.title,
-        description: schedule.description ?? null,
-        status: 'scheduled',
-        priority: 'medium',
-        type: 'recurring',
-        scheduledAt,
-        scheduledTime,
-        estimatedDuration: schedule.durationMins,
-        customerId: schedule.customerId ?? null,
-        customerName: customerName ?? null,
-        customerPhone: customerPhone ?? null,
-        customerEmail: customerEmail ?? null,
-        assigneeId: firstAssigneeId,
-        assigneeName,
-        assigneePhone,
-        serviceId: schedule.serviceId ?? null,
-        lineItemsJson: schedule.lineItemsJson || '[]',
-        visitInstructions: schedule.visitInstructions ?? null,
-        linkedChecklistsJson: JSON.stringify(checklistIds),
-        workspaceId,
+    // 0. Phase A1 — Idempotency pre-check.
+    // If a Job already exists for this `[recurringScheduleId, scheduledAt]`
+    // occurrence (e.g. the cron ran twice in close succession, or a prior run
+    // committed the Job but crashed before advancing nextRunAt), skip the
+    // create path entirely and just advance nextRunAt. The unique constraint
+    // `@@unique([recurringScheduleId, scheduledAt])` on Job is the safety net;
+    // this findFirst is the fast path that avoids throwing.
+    const existingJob = await tx.job.findFirst({
+      where: {
         recurringScheduleId: schedule.id,
+        scheduledAt: schedule.nextRunAt,
       },
+      select: { id: true },
     });
+    if (existingJob) {
+      // Already generated for this occurrence — just advance nextRunAt
+      // without creating a duplicate.
+      const nextRunAt = computeNextOccurrence(schedule, schedule.nextRunAt);
+      const willDeactivate = nextRunAt === null;
+      await tx.recurringJobSchedule.update({
+        where: { id: schedule.id },
+        data: {
+          lastRunAt: new Date(),
+          lastJobId: existingJob.id,
+          executionCount: { increment: 1 },
+          nextRunAt: nextRunAt ?? schedule.nextRunAt,
+          active: willDeactivate ? false : true,
+          pausedAt: willDeactivate ? new Date() : schedule.pausedAt,
+        },
+      });
+      return { skipped: true as const, existingJobId: existingJob.id };
+    }
+
+    // 1. Create the Job. Wrapped in try/catch for the unique-constraint race:
+    // if another concurrent process created the same occurrence between our
+    // findFirst above and our create here, the DB will throw P2002 (Prisma) /
+    // 23505 (Postgres). Treat that as a duplicate and advance nextRunAt
+    // without surfacing the error to the caller.
+    let job: { id: string; title: string };
+    try {
+      job = await tx.job.create({
+        data: {
+          title: schedule.title,
+          description: schedule.description ?? null,
+          status: 'scheduled',
+          priority: 'medium',
+          type: 'recurring',
+          scheduledAt,
+          scheduledTime,
+          estimatedDuration: schedule.durationMins,
+          customerId: schedule.customerId ?? null,
+          customerName: customerName ?? null,
+          customerPhone: customerPhone ?? null,
+          customerEmail: customerEmail ?? null,
+          assigneeId: firstAssigneeId,
+          assigneeName,
+          assigneePhone,
+          serviceId: schedule.serviceId ?? null,
+          lineItemsJson: schedule.lineItemsJson || '[]',
+          visitInstructions: schedule.visitInstructions ?? null,
+          linkedChecklistsJson: JSON.stringify(checklistIds),
+          workspaceId,
+          recurringScheduleId: schedule.id,
+        },
+      });
+    } catch (err: any) {
+      if (isUniqueViolation(err)) {
+        // Another concurrent process created the Job for this occurrence
+        // between our findFirst and create. Advance nextRunAt without
+        // creating a duplicate.
+        const nextRunAt = computeNextOccurrence(schedule, schedule.nextRunAt);
+        const willDeactivate = nextRunAt === null;
+        await tx.recurringJobSchedule.update({
+          where: { id: schedule.id },
+          data: {
+            lastRunAt: new Date(),
+            nextRunAt: nextRunAt ?? schedule.nextRunAt,
+            active: willDeactivate ? false : true,
+            pausedAt: willDeactivate ? new Date() : schedule.pausedAt,
+          },
+        });
+        return { skipped: true as const, conflict: true as const };
+      }
+      throw err;
+    }
 
     // 2. Create the linked JobVisit.
     // Set teamReminder='24h' so the appointment-reminders cron picks it up
@@ -425,6 +592,33 @@ async function processSingleSchedule(scheduleId: string): Promise<void> {
 
     return { job, updated, nextRunAt, willDeactivate };
   });
+
+  // Phase A1 — if we skipped (dedup hit on pre-check or P2002 race), there's
+  // no new Job to log or to notify the customer about. The original job's
+  // lifecycle (activity log + WhatsApp/SMS) was handled by whichever run
+  // actually created the Job. Just return silently.
+  if ('skipped' in result) {
+    return;
+  }
+
+  // Phase C — Optional billing on generation.
+  // When `generateInvoice=true` AND `invoiceTiming='on_generation'`, create a
+  // draft Invoice from the freshly-generated Job. This is OUTSIDE the schedule
+  // transaction on purpose: `autoCreateInvoiceFromJob` takes its own lock +
+  // opens its own transaction, and a failure here must NOT roll back the
+  // schedule advance (the Job was created successfully).
+  // Dynamic import avoids a circular dependency at module-load time
+  // (`invoice-automation` does not import from `recurring-jobs` today, but
+  // keeping it dynamic is safer for future refactors).
+  if (schedule.generateInvoice && schedule.invoiceTiming === 'on_generation') {
+    try {
+      const { autoCreateInvoiceFromJob } = await import('@/lib/invoice-automation');
+      await autoCreateInvoiceFromJob(result.job.id, { force: true });
+    } catch (invoiceErr) {
+      console.error('[RecurringJobs] auto-invoice on generation failed:', invoiceErr);
+      // Don't fail the schedule advance — the Job was created successfully.
+    }
+  }
 
   // 4. Activity log (best-effort, outside the transaction).
   try {
@@ -501,7 +695,7 @@ async function processSingleSchedule(scheduleId: string): Promise<void> {
  * Mirrors the logic in `/api/jobs/[id]/visits/route.ts` so manual +
  * generated visits share a single counter.
  */
-async function nextVisitNumber(
+export async function nextVisitNumber(
   tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
   jobId: string,
 ): Promise<number> {

@@ -21,6 +21,7 @@
  */
 
 import { db } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 import { sendEmail } from '@/lib/email-send'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 import { sendSmsMessage } from '@/lib/sms-send'
@@ -1441,6 +1442,214 @@ export async function approveInvoice(
 
 // ─── Core: recurring invoice schedules ───────────────────────────────────────
 
+// ── Phase A2: idempotency helper ──────────────────────────────────────────────
+//
+// Detects Prisma's P2002 (unique constraint violation) so the recurring
+// generator can gracefully swallow a concurrent duplicate-invoice attempt
+// instead of bubbling it up as a hard error.
+//
+// We accept both the structured `PrismaClientKnownRequestError` and a
+// duck-typed `{ code: 'P2002' }` check so this still works if the error gets
+// wrapped by a higher-level try/catch (e.g. in the API route layer).
+function isUniqueViolation(err: unknown): boolean {
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    return err.code === 'P2002'
+  }
+  if (err && typeof err === 'object') {
+    const e = err as { code?: string }
+    return e.code === 'P2002'
+  }
+  return false
+}
+
+// ── Phase F: timezone helpers ─────────────────────────────────────────────────
+//
+// The project does NOT depend on `date-fns-tz` (only `date-fns` is installed —
+// see package.json). To support per-schedule timezones without adding a new
+// runtime dependency, we implement the two helpers below using the native
+// `Intl.DateTimeFormat` API, which understands IANA tz keys (e.g.
+// "Europe/Berlin", "Asia/Kolkata") and handles DST correctly.
+//
+// These mirror the documented `getTimezoneOffsetMinutes` + `zonedTimeToUtc`
+// pattern used by recurring-jobs.ts (Phase F): copied locally into this file
+// rather than imported from a shared location to avoid coupling the two
+// feature modules.
+
+/**
+ * Return the offset (in minutes) of `timezone` from UTC at the given instant.
+ *
+ * Positive = behind UTC (e.g. America/New_York at -300 returns +300 — this
+ * matches the convention of `Date.prototype.getTimezoneOffset()`).
+ * Negative = ahead of UTC (e.g. Asia/Kolkata at +5:30 returns -330).
+ *
+ * When `timezone` is null/undefined/invalid, returns the SERVER's local
+ * offset at that instant — preserving legacy behavior when no tz is set.
+ */
+function getTimezoneOffsetMinutes(
+  timezone: string | null | undefined,
+  instant: Date = new Date(),
+): number {
+  if (!timezone) {
+    // Server local offset (legacy behavior). `getTimezoneOffset()` returns
+    // "UTC - local" (e.g. +300 for UTC-5), which is the same sign convention
+    // used below for the Intl-based path.
+    return -instant.getTimezoneOffset()
+  }
+  try {
+    // Format the instant in the target tz and parse the wall-clock parts back
+    // as if they were UTC. The difference between that pseudo-UTC instant and
+    // the true instant is the tz's offset (in minutes).
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    })
+    const parts = dtf.formatToParts(instant)
+    const get = (t: string): number => {
+      const v = parts.find(p => p.type === t)?.value
+      return v ? Number(v) : 0
+    }
+    let hour = get('hour')
+    // Some Node versions return "24" instead of "00" for midnight when
+    // `hour12: false` is set — normalize to 0 so Date.UTC below isn't off.
+    if (hour === 24) hour = 0
+    const asUtcMs = Date.UTC(
+      get('year'),
+      get('month') - 1, // 0-indexed month
+      get('day'),
+      hour,
+      get('minute'),
+      get('second'),
+    )
+    const diffMin = Math.round((asUtcMs - instant.getTime()) / 60000)
+    return diffMin
+  } catch {
+    // Invalid tz key — fall back to server-local.
+    return -instant.getTimezoneOffset()
+  }
+}
+
+/**
+ * Convert a "wall-clock" Date in `timezone` to the corresponding UTC instant.
+ *
+ * The input Date's Y/M/D/H/M/S/ms fields are interpreted as the wall-clock
+ * time the customer sees in `timezone` (e.g. 09:00 in "Asia/Kolkata"). The
+ * returned Date is the actual UTC instant that corresponds to that
+ * wall-clock.
+ *
+ * Uses the standard 2-pass DST algorithm: compute the offset at the
+ * "pseudo-UTC" instant, build a candidate UTC instant, then re-evaluate the
+ * offset at that candidate. If they differ (meaning a DST boundary lies
+ * between the wall-clock and the resulting UTC), recompute with the
+ * corrected offset.
+ *
+ * When `timezone` is null/undefined, returns a clone of the input unchanged
+ * (legacy behavior — wall-clock fields are already server-local UTC instants).
+ */
+function zonedTimeToUtc(
+  wallClockDate: Date,
+  timezone: string | null | undefined,
+): Date {
+  if (!timezone) return new Date(wallClockDate)
+  // Build the wall-clock fields as if they were UTC.
+  const wallAsUtcMs = Date.UTC(
+    wallClockDate.getFullYear(),
+    wallClockDate.getMonth(),
+    wallClockDate.getDate(),
+    wallClockDate.getHours(),
+    wallClockDate.getMinutes(),
+    wallClockDate.getSeconds(),
+    wallClockDate.getMilliseconds(),
+  )
+  // Pass 1: offset at the pseudo-UTC instant.
+  let offsetMin = getTimezoneOffsetMinutes(timezone, new Date(wallAsUtcMs))
+  let utcMs = wallAsUtcMs - offsetMin * 60000
+  // Pass 2: re-evaluate at the candidate UTC instant. If the offset changed,
+  // a DST boundary lies in between — use the corrected offset.
+  const offsetAtUtc = getTimezoneOffsetMinutes(timezone, new Date(utcMs))
+  if (offsetAtUtc !== offsetMin) {
+    offsetMin = offsetAtUtc
+    utcMs = wallAsUtcMs - offsetMin * 60000
+  }
+  return new Date(utcMs)
+}
+
+/**
+ * Extract the wall-clock fields (year, month0, day, dayOfWeek 0-6,
+ * hour, minute, second) of `date` in `timezone`. When `timezone` is null,
+ * uses the server-local getters (legacy behavior).
+ */
+function getWallClockParts(
+  date: Date,
+  timezone: string | null | undefined,
+): {
+  year: number
+  month: number // 0-indexed
+  day: number
+  dayOfWeek: number // 0-6 (Sun-Sat)
+  hour: number
+  minute: number
+  second: number
+} {
+  if (!timezone) {
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth(),
+      day: date.getDate(),
+      dayOfWeek: date.getDay(),
+      hour: date.getHours(),
+      minute: date.getMinutes(),
+      second: date.getSeconds(),
+    }
+  }
+  try {
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    })
+    const parts = dtf.formatToParts(date)
+    const get = (t: string): string | undefined =>
+      parts.find(p => p.type === t)?.value
+    const weekdayMap: Record<string, number> = {
+      Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+    }
+    let hour = parseInt(get('hour') || '0', 10)
+    if (hour === 24) hour = 0 // Intl can return "24" with hour12:false
+    return {
+      year: parseInt(get('year') || '0', 10),
+      month: parseInt(get('month') || '0', 10) - 1, // 0-indexed
+      day: parseInt(get('day') || '0', 10),
+      dayOfWeek: weekdayMap[get('weekday') || 'Sun'] ?? 0,
+      hour,
+      minute: parseInt(get('minute') || '0', 10),
+      second: parseInt(get('second') || '0', 10),
+    }
+  } catch {
+    // Invalid tz key — fall back to server-local fields.
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth(),
+      day: date.getDate(),
+      dayOfWeek: date.getDay(),
+      hour: date.getHours(),
+      minute: date.getMinutes(),
+      second: date.getSeconds(),
+    }
+  }
+}
+
 export interface RecurringInvoiceInput {
   name: string
   customerId?: string | null
@@ -1456,6 +1665,14 @@ export interface RecurringInvoiceInput {
   endDate?: string | Date | null
   tenantId: string
   createdById?: string
+  /**
+   * ── Phase F: Timezone ──
+   * IANA tz key (e.g. "Europe/Berlin", "Asia/Kolkata"). When set, the
+   * schedule's wall-clock 09:00 occurrence time is interpreted in this
+   * timezone, then converted to UTC for storage. When null/undefined, the
+   * legacy server-local-time behavior is used (unchanged for existing rows).
+   */
+  timezone?: string | null
 }
 
 /**
@@ -1469,7 +1686,11 @@ export async function createRecurringInvoiceSchedule(input: RecurringInvoiceInpu
     const dayOfMonth = input.dayOfMonth || 1
     const startDate = input.startDate ? new Date(input.startDate) : new Date()
 
-    const nextRunAt = computeNextRun(startDate, frequency, dayOfMonth)
+    // ── Phase F: pass the per-schedule timezone (if any) to computeNextRun so
+    // the initial `nextRunAt` is the wall-clock 09:00 in the customer's tz,
+    // converted to UTC. When `timezone` is null, behavior is identical to the
+    // legacy server-local implementation.
+    const nextRunAt = computeNextRun(startDate, frequency, dayOfMonth, input.timezone)
 
     const schedule = await db.recurringInvoice.create({
       data: {
@@ -1489,6 +1710,9 @@ export async function createRecurringInvoiceSchedule(input: RecurringInvoiceInpu
         nextRunAt,
         active: true,
         createdById: input.createdById || null,
+        // ── Phase F: persist the tz so the cron generator can re-evaluate it
+        // on every occurrence (DST may change between runs).
+        timezone: input.timezone || null,
       },
     })
     return { success: true, scheduleId: schedule.id }
@@ -1502,8 +1726,67 @@ export async function createRecurringInvoiceSchedule(input: RecurringInvoiceInpu
  * Compute the next run date for a recurring schedule.
  * For monthly/quarterly/yearly: dayOfMonth of the next occurrence.
  * For weekly: the next occurrence of dayOfWeek (dayOfMonth used as 0-6).
+ *
+ * ── Phase F: Timezone ──
+ * When `timezone` is provided (IANA key, e.g. "Europe/Berlin"), the
+ * wall-clock 09:00 is interpreted in that timezone and then converted to a
+ * UTC instant for storage. When null/undefined, the legacy server-local
+ * implementation is used — behavior is byte-for-byte identical to the
+ * pre-Phase-F version (verified by preserving the same `setHours/setDate/
+ * setMonth` calls on a `new Date(from)` clone).
  */
-export function computeNextRun(from: Date, frequency: string, dayOfMonth: number): Date {
+export function computeNextRun(
+  from: Date,
+  frequency: string,
+  dayOfMonth: number,
+  timezone?: string | null,
+): Date {
+  // Legacy path — MUST be unchanged when no timezone is set.
+  if (!timezone) {
+    return computeNextRunLegacy(from, frequency, dayOfMonth)
+  }
+
+  // ── Timezone-aware path ──
+  // 1. Extract wall-clock fields of `from` in the customer's tz.
+  // 2. Compute the next-occurrence wall-clock fields (Y/M/D 09:00:00).
+  // 3. Convert the wall-clock fields to a UTC instant via zonedTimeToUtc.
+  const parts = getWallClockParts(from, timezone)
+  let year = parts.year
+  let month = parts.month // 0-indexed
+  let day = parts.day
+
+  if (frequency === 'weekly') {
+    const target = dayOfMonth % 7
+    let diff = (target - parts.dayOfWeek + 7) % 7
+    if (diff === 0) diff = 7 // next week if today is the day
+    // Add `diff` days using UTC arithmetic (we're working in wall-clock frame).
+    const shifted = new Date(Date.UTC(year, month, day) + diff * 86400000)
+    year = shifted.getUTCFullYear()
+    month = shifted.getUTCMonth()
+    day = shifted.getUTCDate()
+  } else {
+    // monthly / quarterly / yearly
+    const monthStep = frequency === 'quarterly' ? 3 : frequency === 'yearly' ? 12 : 1
+    month += monthStep
+    while (month > 11) {
+      month -= 12
+      year += 1
+    }
+    const dom = Math.min(dayOfMonth, 28) // clamp to avoid month-length issues
+    day = dom
+  }
+
+  // Build wall-clock 09:00:00 in the target tz, then convert to UTC.
+  const wallClock = new Date(Date.UTC(year, month, day, 9, 0, 0, 0))
+  return zonedTimeToUtc(wallClock, timezone)
+}
+
+/**
+ * Legacy `computeNextRun` implementation (server-local time).
+ * Kept verbatim from the pre-Phase-F version so the no-timezone path is
+ * byte-for-byte identical to before. See `computeNextRun` above.
+ */
+function computeNextRunLegacy(from: Date, frequency: string, dayOfMonth: number): Date {
   const d = new Date(from)
   if (frequency === 'weekly') {
     const target = dayOfMonth % 7
@@ -1526,9 +1809,29 @@ export function computeNextRun(from: Date, frequency: string, dayOfMonth: number
 
 /**
  * Generate a single invoice from a recurring schedule (called by the cron runner).
- * - Marks the schedule's lastRunAt + lastInvoiceId + executionCount
- * - Computes the next run date
- * - Auto-sends the invoice via email + WhatsApp (recurring invoices are always sent)
+ *
+ * Flow:
+ *   1. Load schedule. Bail if inactive / past endDate (auto-deactivate).
+ *   2. ── Phase A2: Idempotency pre-check ──
+ *      Look for an existing invoice with the same (recurrenceId, occurrenceDate).
+ *      If found → skip creation, just advance nextRunAt. This is an optimization
+ *      to avoid spinning up a transaction for an already-generated occurrence;
+ *      the UNIQUE constraint on [recurrenceId, occurrenceDate] is the real
+ *      safety net for the race window between this findFirst and the create.
+ *   3. ── Phase A3: Atomic create + advance ──
+ *      Both `invoice.create` and `recurringInvoice.update` run inside a single
+ *      `db.$transaction` so a crash between them can't leave the schedule's
+ *      nextRunAt stale (which would cause a duplicate on the next tick).
+ *      The new invoice carries `occurrenceDate = schedule.nextRunAt` so the
+ *      unique constraint can detect concurrent attempts.
+ *   4. If the transaction throws P2002 (unique violation) — a concurrent
+ *      process won the race — fetch the existing invoice and advance the
+ *      schedule. Treat as success-with-skip, not an error.
+ *   5. ── Auto-send (OUTSIDE the transaction) ──
+ *      Email + WhatsApp is a side-effect and must not roll back if it fails;
+ *      failures are logged but do not affect the invoice record.
+ *
+ * Returns `nextRunAt` so the cron endpoint can include it in the response.
  */
 export async function generateRecurringInvoice(scheduleId: string): Promise<AutoInvoiceResult & { nextRunAt?: Date }> {
   try {
@@ -1549,6 +1852,43 @@ export async function generateRecurringInvoice(scheduleId: string): Promise<Auto
       return { success: false, skipped: true, reason: 'Schedule ended — auto-deactivated' }
     }
 
+    // The occurrenceDate for this run is the schedule's current nextRunAt —
+    // this is the idempotency key used in both the pre-check and the unique
+    // constraint.
+    const occurrenceDate = schedule.nextRunAt
+
+    // ── Phase A2: Pre-check (outside the transaction) ──────────────────────
+    // If we already generated an invoice for this occurrence, skip creation
+    // and just advance the schedule. The findFirst is best-effort; the UNIQUE
+    // constraint on [recurrenceId, occurrenceDate] is the authoritative guard.
+    const existing = await db.invoice.findFirst({
+      where: { recurrenceId: schedule.id, occurrenceDate },
+    })
+    if (existing) {
+      const nextRunAt = computeNextRun(
+        new Date(),
+        schedule.frequency,
+        schedule.dayOfMonth,
+        schedule.timezone,
+      )
+      await db.recurringInvoice.update({
+        where: { id: scheduleId },
+        data: {
+          lastRunAt: new Date(),
+          lastInvoiceId: existing.id,
+          executionCount: { increment: 1 },
+          nextRunAt,
+        },
+      })
+      return {
+        success: true,
+        skipped: true,
+        invoiceId: existing.id,
+        reason: 'Already generated for this occurrence',
+        nextRunAt,
+      }
+    }
+
     const settings = await getInvoiceSettings(schedule.tenantId)
     const taxPercent = schedule.taxPercent || settings.defaultTaxPercent || 0
     const subtotal = schedule.amount
@@ -1561,48 +1901,110 @@ export async function generateRecurringInvoice(scheduleId: string): Promise<Auto
 
     const items = safeParse(schedule.itemsJson, []) as Array<{ description: string; quantity: number; rate: number }>
 
-    const invoice = await db.invoice.create({
-      data: {
-        number,
-        tenantId: schedule.tenantId,
-        customerId: schedule.customerId || null,
-        jobId: schedule.jobId || null,
-        recurrenceId: schedule.id,
-        amount: subtotal,
-        tax,
-        discount: 0,
-        total,
-        currency: schedule.currency,
-        exchangeRate: 1,
-        baseCurrency: schedule.currency,
-        baseAmount: total,
-        status: 'sent',
-        invoiceType: 'recurring',
-        sentAt: new Date(),
-        dueDate,
-        itemsJson: JSON.stringify(items),
-        notes: schedule.notes || `Recurring invoice: ${schedule.name}`,
-      },
-    })
+    // ── Phase A3: Transaction — invoice.create + recurringInvoice.update ──
+    // Atomic so a crash between the two can't leave nextRunAt stale (which
+    // would cause the next cron tick to either duplicate-invoice or skip).
+    // The new invoice's `occurrenceDate` is set so the unique constraint on
+    // [recurrenceId, occurrenceDate] is the safety net for the race window
+    // between the pre-check above and the create below.
+    let invoice: { id: string; number: string; total: number }
+    let nextRunAt: Date
+    try {
+      const result = await db.$transaction(async (tx) => {
+        const inv = await tx.invoice.create({
+          data: {
+            number,
+            tenantId: schedule.tenantId,
+            customerId: schedule.customerId || null,
+            jobId: schedule.jobId || null,
+            recurrenceId: schedule.id,
+            // ── Phase A2: idempotency key ──
+            occurrenceDate,
+            amount: subtotal,
+            tax,
+            discount: 0,
+            total,
+            currency: schedule.currency,
+            exchangeRate: 1,
+            baseCurrency: schedule.currency,
+            baseAmount: total,
+            status: 'sent',
+            invoiceType: 'recurring',
+            sentAt: new Date(),
+            dueDate,
+            itemsJson: JSON.stringify(items),
+            notes: schedule.notes || `Recurring invoice: ${schedule.name}`,
+          },
+        })
+        // ── Phase F: pass schedule.timezone so the next occurrence is computed
+        // in the customer's wall-clock tz (e.g. "Europe/Berlin" 09:00 →
+        // correct UTC instant even across DST transitions). When null, the
+        // legacy server-local path is used (unchanged).
+        const nr = computeNextRun(
+          new Date(),
+          schedule.frequency,
+          schedule.dayOfMonth,
+          schedule.timezone,
+        )
+        await tx.recurringInvoice.update({
+          where: { id: scheduleId },
+          data: {
+            lastRunAt: new Date(),
+            lastInvoiceId: inv.id,
+            executionCount: { increment: 1 },
+            nextRunAt: nr,
+          },
+        })
+        return { invoice: inv, nextRunAt: nr }
+      })
+      invoice = result.invoice
+      nextRunAt = result.nextRunAt
+    } catch (err) {
+      // ── Phase A2: P2002 = concurrent generation won the race ──
+      // Another process (or a retry of this same cron tick) inserted an
+      // invoice for this (recurrenceId, occurrenceDate) between our pre-check
+      // and our create. Fetch the winner and advance the schedule so we don't
+      // get stuck re-trying the same occurrence forever.
+      if (isUniqueViolation(err)) {
+        const winner = await db.invoice.findFirst({
+          where: { recurrenceId: schedule.id, occurrenceDate },
+        })
+        const nr = computeNextRun(
+          new Date(),
+          schedule.frequency,
+          schedule.dayOfMonth,
+          schedule.timezone,
+        )
+        await db.recurringInvoice.update({
+          where: { id: scheduleId },
+          data: {
+            lastRunAt: new Date(),
+            lastInvoiceId: winner?.id,
+            executionCount: { increment: 1 },
+            nextRunAt: nr,
+          },
+        })
+        return {
+          success: true,
+          skipped: true,
+          invoiceId: winner?.id,
+          reason: 'Concurrent generation detected — skipped',
+          nextRunAt: nr,
+        }
+      }
+      throw err
+    }
 
-    // Auto-send email + WhatsApp
+    // ── Auto-send (OUTSIDE the transaction) ─────────────────────────────────
+    // Email/WhatsApp is a side-effect — failures must NOT roll back the
+    // invoice.create + schedule.advance above. The invoice is already created
+    // with status='sent'; a send failure here just means the customer didn't
+    // get the email immediately (a manual re-send is still possible).
     try {
       await sendInvoice(invoice.id, { sendEmail: true, sendWhatsApp: true, sendSms: false }) // Rule 5b: invoice creation = email only
     } catch (sendErr) {
       console.error('[InvoiceAutomation] recurring send error:', sendErr)
     }
-
-    // Advance the schedule
-    const nextRunAt = computeNextRun(new Date(), schedule.frequency, schedule.dayOfMonth)
-    await db.recurringInvoice.update({
-      where: { id: scheduleId },
-      data: {
-        lastRunAt: new Date(),
-        lastInvoiceId: invoice.id,
-        executionCount: { increment: 1 },
-        nextRunAt,
-      },
-    })
 
     return { success: true, invoiceId: invoice.id, number: invoice.number, total: invoice.total, nextRunAt }
   } catch (err) {

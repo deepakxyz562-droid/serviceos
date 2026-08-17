@@ -30,6 +30,7 @@ import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -299,6 +300,15 @@ interface JobFormData {
   assetId: string;
   // ── V1.6: linked quote id (when "Quotes" is checked in Link to related) ──
   linkedQuoteId: string;
+  // ── Phase B: "Make this recurring?" toggle + recurring block (New Job only) ──
+  recurring: {
+    enabled: boolean;
+    frequency: 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annually';
+    dayOfWeek: string; // '0'-'6' (Sun-Sat) — used by weekly/biweekly
+    dayOfMonth: string; // '1'-'31' — used by monthly/quarterly/annually
+    endDate: string; // ISO date (YYYY-MM-DD) or ''
+    timezone: string; // '' = server local
+  };
 }
 
 const EMPTY_JOB_FORM: JobFormData = {
@@ -327,6 +337,14 @@ const EMPTY_JOB_FORM: JobFormData = {
   linkToRelated: [],
   assetId: '',
   linkedQuoteId: '',
+  recurring: {
+    enabled: false,
+    frequency: 'weekly',
+    dayOfWeek: '1',
+    dayOfMonth: '1',
+    endDate: '',
+    timezone: '',
+  },
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -1759,6 +1777,8 @@ export function JobsView() {
       linkToRelated: parseStringArray(job.linkToRelatedJson),
       assetId: parseAssetIdFromMetadata(job.metadataJson),
       linkedQuoteId: '',
+      // Phase B: recurring toggle is hidden in Edit mode — default value.
+      recurring: { ...EMPTY_JOB_FORM.recurring },
     });
     setCustomerQuery('');
     setCustomerPickerOpen(false);
@@ -1973,6 +1993,32 @@ export function JobsView() {
         // V1.5: linked equipment (CustomerAsset) — stored in job.metadataJson
         assetId: jobForm.assetId || undefined,
       };
+
+      // ── Phase B: optional `recurring` block (New Job only) ──
+      // When the user enables the "Make this recurring?" toggle on the Create
+      // Job form, attach a recurring block to the POST /api/jobs body. The
+      // server will create a RecurringJobSchedule + first Job + first JobVisit
+      // in a transaction. (PUT /api/jobs/[id] flow is unaffected — we only
+      // attach the block when creating, never when editing.)
+      if (!editingJob && jobForm.recurring.enabled) {
+        const recFreq = jobForm.recurring.frequency;
+        payload.recurring = {
+          frequency: recFreq,
+          dayOfWeek: ['weekly', 'biweekly'].includes(recFreq)
+            ? Number(jobForm.recurring.dayOfWeek)
+            : null,
+          dayOfMonth: ['monthly', 'quarterly', 'annually'].includes(recFreq)
+            ? Number(jobForm.recurring.dayOfMonth) || 1
+            : null,
+          endDate: jobForm.recurring.endDate || null,
+          timezone: jobForm.recurring.timezone || null,
+          assigneeIds: assignee ? [assignee.id] : [],
+          // Billing: default to no auto-invoice — the user can configure
+          // generateInvoice + invoiceTiming later from the Recurring Jobs page.
+          generateInvoice: false,
+          invoiceTiming: 'on_completion',
+        };
+      }
 
       let createdJobId: string | null = null;
       if (editingJob) {
@@ -3130,6 +3176,185 @@ export function JobsView() {
             )}
           </div>
         </FormSectionCard>
+
+        {/* ─── Phase B: "Make this recurring?" (New Job only) ────── */}
+        {!editingJob && (
+          <FormSectionCard icon={Repeat} title="Make this recurring?">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="grid gap-0.5">
+                  <Label htmlFor="recurring-enabled">Recurring schedule</Label>
+                  <p className="text-xs text-muted-foreground">
+                    When enabled, a Recurring Job Schedule is created alongside
+                    this job and future occurrences auto-generate on the chosen
+                    cadence.
+                  </p>
+                </div>
+                <Switch
+                  id="recurring-enabled"
+                  checked={jobForm.recurring.enabled}
+                  onCheckedChange={(checked) =>
+                    setJobForm((prev) => ({
+                      ...prev,
+                      recurring: { ...prev.recurring, enabled: checked },
+                    }))
+                  }
+                />
+              </div>
+
+              {jobForm.recurring.enabled && (
+                <div className="rounded-md border bg-muted/20 p-3 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="rec-frequency">Frequency</Label>
+                      <Select
+                        value={jobForm.recurring.frequency}
+                        onValueChange={(v) =>
+                          setJobForm((prev) => ({
+                            ...prev,
+                            recurring: {
+                              ...prev.recurring,
+                              frequency: v as JobFormData['recurring']['frequency'],
+                            },
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="form-input h-10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="biweekly">
+                            Biweekly (every 2 weeks)
+                          </SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                          <SelectItem value="quarterly">Quarterly</SelectItem>
+                          <SelectItem value="annually">Annually</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {['weekly', 'biweekly'].includes(jobForm.recurring.frequency) ? (
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="rec-day-of-week">Day of week</Label>
+                        <Select
+                          value={jobForm.recurring.dayOfWeek}
+                          onValueChange={(v) =>
+                            setJobForm((prev) => ({
+                              ...prev,
+                              recurring: { ...prev.recurring, dayOfWeek: v },
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="form-input h-10">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">Sunday</SelectItem>
+                            <SelectItem value="1">Monday</SelectItem>
+                            <SelectItem value="2">Tuesday</SelectItem>
+                            <SelectItem value="3">Wednesday</SelectItem>
+                            <SelectItem value="4">Thursday</SelectItem>
+                            <SelectItem value="5">Friday</SelectItem>
+                            <SelectItem value="6">Saturday</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="rec-day-of-month">
+                          Day of month (1-31)
+                        </Label>
+                        <Input
+                          id="rec-day-of-month"
+                          className="form-input h-10"
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={jobForm.recurring.dayOfMonth}
+                          onChange={(e) =>
+                            setJobForm((prev) => ({
+                              ...prev,
+                              recurring: {
+                                ...prev.recurring,
+                                dayOfMonth: e.target.value,
+                              },
+                            }))
+                          }
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Months without this day roll to the last day.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="rec-end-date">End date (optional)</Label>
+                      <Input
+                        id="rec-end-date"
+                        className="form-input h-10"
+                        type="date"
+                        value={jobForm.recurring.endDate}
+                        onChange={(e) =>
+                          setJobForm((prev) => ({
+                            ...prev,
+                            recurring: { ...prev.recurring, endDate: e.target.value },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="rec-timezone">Timezone (optional)</Label>
+                      <Select
+                        value={jobForm.recurring.timezone || '__server_local__'}
+                        onValueChange={(v) =>
+                          setJobForm((prev) => ({
+                            ...prev,
+                            recurring: {
+                              ...prev.recurring,
+                              timezone: v === '__server_local__' ? '' : v,
+                            },
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="form-input h-10">
+                          <SelectValue placeholder="Other (server local)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__server_local__">
+                            Other (server local)
+                          </SelectItem>
+                          <SelectItem value="UTC">UTC</SelectItem>
+                          <SelectItem value="Asia/Kolkata">Asia/Kolkata</SelectItem>
+                          <SelectItem value="Asia/Dubai">Asia/Dubai</SelectItem>
+                          <SelectItem value="Asia/Singapore">Asia/Singapore</SelectItem>
+                          <SelectItem value="Europe/London">Europe/London</SelectItem>
+                          <SelectItem value="Europe/Berlin">Europe/Berlin</SelectItem>
+                          <SelectItem value="America/New_York">America/New_York</SelectItem>
+                          <SelectItem value="America/Chicago">America/Chicago</SelectItem>
+                          <SelectItem value="America/Los_Angeles">
+                            America/Los_Angeles
+                          </SelectItem>
+                          <SelectItem value="Australia/Sydney">
+                            Australia/Sydney
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-muted-foreground">
+                    The first job runs immediately using the scheduled date/time
+                    above. Billing (invoice generation) for occurrences can be
+                    configured later from the Recurring Jobs page.
+                  </p>
+                </div>
+              )}
+            </div>
+          </FormSectionCard>
+        )}
 
         {/* ─── Bottom action bar ────────────────────────────────── */}
         <div className="flex items-center justify-end gap-2 pb-4">
