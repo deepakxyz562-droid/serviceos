@@ -1,18 +1,42 @@
 # Daily cron jobs — runs 8 daily jobs staggered across early morning UTC.
+#
+# ⚠️  PHASE 7 — DISABLED. Vercel is the authoritative cron scheduler.
+#
+# This workflow is KEPT on disk for reference / rollback safety, but the
+# `on.schedule` block is commented out below. The workflow can still be
+# triggered manually via `workflow_dispatch` for testing.
+#
+# Per the user's architectural directive:
+#   "ONE scheduler. Don't rely on unique constraints as your scheduling strategy.
+#    The unique constraints are your safety net, not your scheduler coordination
+#    mechanism."
+#
+# Triple-cron risk: Vercel (02:00 UTC) + Netlify (09:00 UTC) + GitHub Actions
+# (6 separate UTC times) all targeted the same daily cron endpoints. Even with
+# the DB unique constraints preventing duplicate Job/Invoice generation, this
+# caused 3x API calls + log spam. Vercel is now the single source of truth
+# (see /vercel.json — `0 2 * * *` → /api/cron/master which fans out to all).
+#
+# To re-enable (NOT recommended while Vercel cron is active):
+#   1. Uncomment the `on.schedule` block below.
+#   2. Remove the `crons` block from /vercel.json.
+#   3. Re-enable the schedule in /netlify/functions/cron-daily.js.
+#
 # Required repo secrets: APP_URL, CRON_SECRET
 
 name: Cron Daily Jobs
 
 on:
-  schedule:
-    # Staggered to avoid all-at-once load:
-    - cron: '0 1 * * *'   # 01:00 UTC — recurring-invoices
-    - cron: '0 2 * * *'   # 02:00 UTC — marketplace-settlement
-    - cron: '30 0 * * *'  # 00:30 UTC — trial-expire
-    - cron: '0 3 * * *'   # 03:00 UTC — renewal
-    - cron: '0 6 * * *'   # 06:00 UTC — recurring-jobs
-    - cron: '0 8 * * *'   # 08:00 UTC — pre-charge-reminder + overdue-detector
-    - cron: '0 9 * * *'   # 09:00 UTC — trial-reminders
+  # ── PHASE 7: schedule triggers DISABLED. Vercel is authoritative. ────────
+  # Uncomment the `schedule:` block below ONLY if you switch off Vercel cron.
+  # schedule:
+  #   - cron: '0 1 * * *'   # 01:00 UTC — recurring-invoices
+  #   - cron: '0 2 * * *'   # 02:00 UTC — marketplace-settlement
+  #   - cron: '30 0 * * *'  # 00:30 UTC — trial-expire
+  #   - cron: '0 3 * * *'   # 03:00 UTC — renewal
+  #   - cron: '0 6 * * *'   # 06:00 UTC — recurring-jobs
+  #   - cron: '0 8 * * *'   # 08:00 UTC — pre-charge-reminder + overdue-detector
+  #   - cron: '0 9 * * *'   # 09:00 UTC — trial-reminders
   workflow_dispatch: {}
 
 jobs:
