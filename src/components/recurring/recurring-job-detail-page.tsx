@@ -348,7 +348,7 @@ export function RecurringJobDetailPage({ scheduleId }: RecurringJobDetailPagePro
   // ─── Loading state ──────────────────────────────────────────────────────
   if (loading) {
     return (
-      <main className="p-4 sm:p-6 max-w-5xl mx-auto w-full space-y-6">
+      <main className="p-4 sm:p-6 w-full space-y-6">
         <DetailHeaderSkeleton />
         <Skeleton className="h-10 w-full max-w-md" />
         <Card>
@@ -369,7 +369,7 @@ export function RecurringJobDetailPage({ scheduleId }: RecurringJobDetailPagePro
   const status = deriveStatus(schedule);
 
   return (
-    <main className="p-4 sm:p-6 max-w-5xl mx-auto w-full space-y-6">
+    <main className="p-4 sm:p-6 w-full space-y-6">
       {/* ─── Header ─────────────────────────────────────────────────────── */}
       <header className="space-y-3">
         <Button
@@ -479,7 +479,7 @@ export function RecurringJobDetailPage({ scheduleId }: RecurringJobDetailPagePro
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as typeof activeTab)}
       >
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 max-w-2xl">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5">
           <TabsTrigger value="overview">
             <CalendarIcon className="size-3.5 mr-1" /> Overview
           </TabsTrigger>
@@ -724,10 +724,13 @@ function OverviewTab({
         if (!res.ok) return;
         const d = await res.json();
         const list = Array.isArray(d) ? d : d.employees || [];
-        if (!cancelled)
+        if (!cancelled) {
+          const targetSet = new Set(assigneeIds);
+          const matched = list.filter((e: { id: string; name: string }) => targetSet.has(e.id));
           setAssignees(
-            list.map((e: { id: string; name: string }) => ({ id: e.id, name: e.name })),
+            matched.map((e: { id: string; name: string }) => ({ id: e.id, name: e.name })),
           );
+        }
       } catch {
         // silent — names just won't resolve
       } finally {

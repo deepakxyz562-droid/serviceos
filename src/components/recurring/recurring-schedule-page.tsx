@@ -397,7 +397,7 @@ export function RecurringSchedulePage({ mode, scheduleId }: RecurringSchedulePag
   // ─── Loading state (edit mode loads the schedule first) ─────────────────
   if (loadingSchedule) {
     return (
-      <main className="p-4 sm:p-6 max-w-4xl mx-auto w-full space-y-6">
+      <main className="p-4 sm:p-6 w-full space-y-6">
         <SchedulePageHeaderSkeleton />
         <Card>
           <CardContent className="p-6 space-y-4">
@@ -413,7 +413,7 @@ export function RecurringSchedulePage({ mode, scheduleId }: RecurringSchedulePag
 
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
-    <main className="p-4 sm:p-6 max-w-4xl mx-auto w-full space-y-6">
+    <main className="p-4 sm:p-6 w-full space-y-6">
       {/* ─── Header ─────────────────────────────────────────────────────── */}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">

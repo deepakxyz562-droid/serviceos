@@ -593,6 +593,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       // Real route — navigate via Next.js router. The (app) layout will auth
       // the user server-side; if they're somehow logged out, they bounce to `/`.
       if (view === 'recurringJobs') {
+        setCurrentView('recurringJobs');
         router.push('/recurring-jobs');
       }
     } else {
@@ -623,10 +624,10 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     // so the active item tracks list/new/[id]/edit sub-routes. For SPA views,
     // fall back to the Zustand `currentView` (which is also set when navigating
     // back to `/` via ?view=...).
-    const isActive =
-      item.view === 'recurringJobs'
-        ? !!pathname?.startsWith('/recurring-jobs')
-        : currentView === item.view;
+    const isRecurringRoute = !!pathname?.startsWith('/recurring-jobs');
+    const isActive = isRecurringRoute
+      ? item.view === 'recurringJobs'
+      : currentView === item.view;
 
     // ── Plan-gated access (trial=LOCK, paid=HIDE) ─────────────────────────
     // Behaviour matrix per spec:

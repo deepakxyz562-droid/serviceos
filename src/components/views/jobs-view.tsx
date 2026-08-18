@@ -3174,9 +3174,9 @@ export function JobsView() {
               <SelectTrigger id="job-assignee" className="form-input h-10"><SelectValue placeholder="Select employee (optional)" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No assignee</SelectItem>
-                {employees.filter((e) => e.status === 'available').map((emp) => (
+                {employees.filter((e) => e.status !== 'inactive').map((emp) => (
                   <SelectItem key={emp.id} value={emp.id}>
-                    {emp.name} — {emp.role} ({emp.rating.toFixed(1)} ★)
+                    {emp.name} — {emp.role}{typeof emp.rating === 'number' ? ` (${emp.rating.toFixed(1)} ★)` : ''}
                   </SelectItem>
                 ))}
               </SelectContent>
