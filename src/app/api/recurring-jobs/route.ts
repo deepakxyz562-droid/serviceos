@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { requirePlanFeature } from '@/lib/plan-gate';
-import { computeNextOccurrence } from '@/lib/recurring-jobs';
+import { createRecurringSchedule } from '@/lib/recurring-jobs';
 import { logActivity } from '@/lib/activity-log';
+import {
+  calculateOccurrences,
+  formatSchedulePreview,
+  validateSchedule,
+  type RecurrenceInput,
+} from '@/lib/recurrence-engine';
 
 // GET /api/recurring-jobs — List recurring job schedules for the tenant.
 //   Query: active=true|false, customerId=...
@@ -51,10 +57,76 @@ export async function GET(request: NextRequest) {
       : [];
     const lastJobById = new Map(lastJobs.map((j) => [j.id, j]));
 
-    const enriched = schedules.map((s) => ({
-      ...s,
-      lastJob: s.lastJobId ? lastJobById.get(s.lastJobId) ?? null : null,
-    }));
+    // Also count generated jobs per schedule (for the "Generated" column).
+    const scheduleIds = schedules.map((s) => s.id);
+    const generatedCounts = scheduleIds.length
+      ? await db.job.groupBy({
+          by: ['recurringScheduleId'],
+          where: { recurringScheduleId: { in: scheduleIds } },
+          _count: { _all: true },
+        })
+      : [];
+    const countById = new Map(
+      generatedCounts.map((c) => [c.recurringScheduleId, c._count._all]),
+    );
+
+    // Resolve primary assignee name for each schedule (best-effort, in-memory).
+    const allAssigneeIds = schedules.flatMap((s) => {
+      try {
+        const arr = JSON.parse(s.assigneeIdsJson || '[]');
+        return Array.isArray(arr) ? (arr as string[]).slice(0, 1) : [];
+      } catch {
+        return [];
+      }
+    });
+    const assigneeIds = Array.from(new Set(allAssigneeIds));
+    const employees = assigneeIds.length
+      ? await db.employee.findMany({
+          where: { id: { in: assigneeIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const empById = new Map(employees.map((e) => [e.id, e.name]));
+
+    const enriched = schedules.map((s) => {
+      let assigneeIdsArr: string[] = [];
+      try {
+        const parsed = JSON.parse(s.assigneeIdsJson || '[]');
+        if (Array.isArray(parsed)) assigneeIdsArr = parsed as string[];
+      } catch {
+        // ignore
+      }
+      const primaryAssigneeId = assigneeIdsArr[0] ?? null;
+      const primaryAssigneeName = primaryAssigneeId ? empById.get(primaryAssigneeId) ?? null : null;
+
+      // Compute a preview using the shared engine (for the schedule card summary).
+      const recurrenceInput: RecurrenceInput = {
+        frequency: s.frequency,
+        dayOfWeek: s.dayOfWeek,
+        dayOfMonth: s.dayOfMonth,
+        weekOfMonth: s.weekOfMonth,
+        weekdaysJson: (s as any).weekdaysJson ?? '[]',
+        interval: (s as any).interval ?? 1,
+        nthWeekdayJson: (s as any).nthWeekdayJson ?? null,
+        timeOfDay: s.timeOfDay,
+        durationMins: s.durationMins,
+        startDate: s.startDate,
+        endDate: s.endDate,
+        endAfterOccurrences: (s as any).endAfterOccurrences ?? null,
+        asNeeded: (s as any).asNeeded ?? false,
+        timezone: s.timezone,
+      };
+      const preview = formatSchedulePreview(recurrenceInput);
+
+      return {
+        ...s,
+        lastJob: s.lastJobId ? lastJobById.get(s.lastJobId) ?? null : null,
+        generatedCount: countById.get(s.id) ?? 0,
+        primaryAssigneeId,
+        primaryAssigneeName,
+        recurrencePreview: preview,
+      };
+    });
 
     return NextResponse.json({ schedules: enriched });
   } catch (error) {
@@ -65,6 +137,19 @@ export async function GET(request: NextRequest) {
 
 // POST /api/recurring-jobs — Create a new recurring job schedule.
 // Plan-gated: requires `recurring_jobs` (Business tier and above).
+//
+// Phase 3: BOTH /api/jobs (recurring block) and /api/recurring-jobs now call
+// the SAME shared domain service `createRecurringSchedule()`. This guarantees
+// identical DB state regardless of entry point.
+//
+// Request body fields (all new Phase 1 fields supported):
+//   title, customerId, templateJobId, description,
+//   frequency (daily|weekly|biweekly|monthly|quarterly|annually|as_needed|custom),
+//   dayOfWeek, dayOfMonth, weekOfMonth, weekdaysJson, interval, nthWeekdayJson,
+//   timeOfDay, durationMins, startDate, endDate, endAfterOccurrences, asNeeded, timezone,
+//   assigneeIds[], serviceId, branchId, visitInstructions, checklistIds[], lineItemsJson,
+//   generateInvoice, invoiceTiming ('on_generation'|'on_completion'),
+//   generateFirstJob (default true)
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthUser();
@@ -79,50 +164,16 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    // ── Validation ──────────────────────────────────────────────────────
+    // ── Basic validation ───────────────────────────────────────────────
     if (!body.title || typeof body.title !== 'string' || !body.title.trim()) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
 
-    const frequency = body.frequency || 'weekly';
-    const VALID_FREQ = ['weekly', 'biweekly', 'monthly', 'quarterly', 'annually'];
-    if (!VALID_FREQ.includes(frequency)) {
-      return NextResponse.json({ error: `Invalid frequency: ${frequency}` }, { status: 400 });
+    if (!body.startDate) {
+      return NextResponse.json({ error: 'startDate is required' }, { status: 400 });
     }
 
-    const dayOfWeek =
-      body.dayOfWeek !== undefined && body.dayOfWeek !== null
-        ? Number(body.dayOfWeek)
-        : null;
-    const dayOfMonth =
-      body.dayOfMonth !== undefined && body.dayOfMonth !== null
-        ? Number(body.dayOfMonth)
-        : null;
-    const weekOfMonth =
-      body.weekOfMonth !== undefined && body.weekOfMonth !== null
-        ? Number(body.weekOfMonth)
-        : null;
-
-    if (
-      dayOfWeek != null &&
-      (Number.isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6)
-    ) {
-      return NextResponse.json({ error: 'dayOfWeek must be 0-6' }, { status: 400 });
-    }
-    if (
-      dayOfMonth != null &&
-      (Number.isNaN(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 31)
-    ) {
-      return NextResponse.json({ error: 'dayOfMonth must be 1-31' }, { status: 400 });
-    }
-    if (
-      weekOfMonth != null &&
-      (Number.isNaN(weekOfMonth) || weekOfMonth < 1 || weekOfMonth > 5)
-    ) {
-      return NextResponse.json({ error: 'weekOfMonth must be 1-5' }, { status: 400 });
-    }
-
-    const startDate = body.startDate ? new Date(body.startDate) : new Date();
+    const startDate = new Date(body.startDate);
     if (Number.isNaN(startDate.getTime())) {
       return NextResponse.json({ error: 'Invalid startDate' }, { status: 400 });
     }
@@ -132,72 +183,76 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid endDate' }, { status: 400 });
     }
 
-    // ── Compute the first nextRunAt ─────────────────────────────────────
-    const timezone = body.timezone ?? null;
-    const nextRunAt = computeNextOccurrence(
-      {
-        frequency,
-        dayOfWeek,
-        dayOfMonth,
-        weekOfMonth,
-        timeOfDay: body.timeOfDay ?? null,
-        endDate,
-        timezone,
-      },
-      // Start the search from "the day before startDate" so the first
-      // occurrence can land on startDate itself.
-      new Date(startDate.getTime() - 24 * 60 * 60 * 1000),
-    );
-
-    if (!nextRunAt) {
+    // ── Validate recurrence via the shared engine ─────────────────────
+    const recurrenceInput: RecurrenceInput = {
+      frequency: body.frequency || 'weekly',
+      dayOfWeek: body.dayOfWeek != null ? Number(body.dayOfWeek) : null,
+      dayOfMonth: body.dayOfMonth != null ? Number(body.dayOfMonth) : null,
+      weekOfMonth: body.weekOfMonth != null ? Number(body.weekOfMonth) : null,
+      weekdaysJson: body.weekdaysJson || null,
+      interval: body.interval != null ? Number(body.interval) : 1,
+      nthWeekdayJson: body.nthWeekdayJson || null,
+      timeOfDay: body.timeOfDay || null,
+      durationMins: body.durationMins != null ? Number(body.durationMins) : 60,
+      startDate,
+      endDate,
+      endAfterOccurrences: body.endAfterOccurrences != null ? Number(body.endAfterOccurrences) : null,
+      asNeeded: body.asNeeded === true,
+      timezone: body.timezone || null,
+    };
+    const validation = validateSchedule(recurrenceInput);
+    if (!validation.valid) {
       return NextResponse.json(
-        { error: 'The first occurrence is already past the end date.' },
+        { error: 'Invalid recurrence configuration', details: validation.errors },
         { status: 400 },
       );
     }
 
-    // ── JSON-encoded fields ─────────────────────────────────────────────
-    const assigneeIdsJson = JSON.stringify(
-      Array.isArray(body.assigneeIds) ? body.assigneeIds : [],
-    );
-    const checklistIdsJson = JSON.stringify(
-      Array.isArray(body.checklistIds) ? body.checklistIds : [],
-    );
+    // ── Normalize lineItemsJson ───────────────────────────────────────
     const lineItemsJson =
       typeof body.lineItemsJson === 'string'
         ? body.lineItemsJson
         : JSON.stringify(Array.isArray(body.lineItems) ? body.lineItems : []);
 
-    // ── Persist ─────────────────────────────────────────────────────────
-    const schedule = await db.recurringJobSchedule.create({
-      data: {
-        tenantId: user.tenantId,
-        customerId: body.customerId || null,
-        templateJobId: body.templateJobId || null,
-        title: body.title.trim(),
-        description: body.description?.trim() || null,
-        frequency,
-        dayOfWeek,
-        dayOfMonth,
-        weekOfMonth,
-        timeOfDay: body.timeOfDay || null,
-        durationMins: Number(body.durationMins) || 60,
-        startDate,
-        endDate,
-        nextRunAt,
-        assigneeIdsJson,
-        serviceId: body.serviceId || null,
-        branchId: body.branchId || null,
-        visitInstructions: body.visitInstructions?.trim() || null,
-        checklistIdsJson,
-        lineItemsJson,
-        // ── Phase C: Optional billing ──
-        generateInvoice: body.generateInvoice === true,
-        invoiceTiming: body.invoiceTiming === 'on_generation' ? 'on_generation' : 'on_completion',
-        // ── Phase F: Timezone ──
-        timezone,
-        active: true,
-      },
+    // ── Call the shared domain service ────────────────────────────────
+    // This is the SAME function POST /api/jobs calls — both entry points
+    // converge here. Transactional: schedule + first job + first visit are
+    // created atomically. If first-job creation fails, the schedule is NOT
+    // created.
+    const result = await createRecurringSchedule({
+      tenantId: user.tenantId,
+      customerId: body.customerId || null,
+      templateJobId: body.templateJobId || null,
+      title: body.title,
+      description: body.description || null,
+      frequency: body.frequency || 'weekly',
+      dayOfWeek: body.dayOfWeek != null ? Number(body.dayOfWeek) : null,
+      dayOfMonth: body.dayOfMonth != null ? Number(body.dayOfMonth) : null,
+      weekOfMonth: body.weekOfMonth != null ? Number(body.weekOfMonth) : null,
+      weekdaysJson: body.weekdaysJson || '[]',
+      interval: body.interval != null ? Number(body.interval) : 1,
+      nthWeekdayJson: body.nthWeekdayJson || null,
+      timeOfDay: body.timeOfDay || null,
+      durationMins: body.durationMins != null ? Number(body.durationMins) : 60,
+      startDate,
+      endDate: endDate || null,
+      endAfterOccurrences: body.endAfterOccurrences != null ? Number(body.endAfterOccurrences) : null,
+      asNeeded: body.asNeeded === true,
+      timezone: body.timezone || null,
+      assigneeIds: Array.isArray(body.assigneeIds) ? body.assigneeIds : [],
+      serviceId: body.serviceId || null,
+      branchId: body.branchId || null,
+      visitInstructions: body.visitInstructions || null,
+      checklistIds: Array.isArray(body.checklistIds) ? body.checklistIds : [],
+      lineItemsJson,
+      generateInvoice: body.generateInvoice === true,
+      invoiceTiming: body.invoiceTiming === 'on_generation' ? 'on_generation' : 'on_completion',
+      generateFirstJob: body.generateFirstJob !== false, // default true
+    });
+
+    // ── Fetch the full schedule row for the response ──────────────────
+    const schedule = await db.recurringJobSchedule.findUnique({
+      where: { id: result.schedule.id },
       include: {
         customer: { select: { id: true, name: true, phone: true, email: true } },
       },
@@ -212,14 +267,17 @@ export async function POST(request: NextRequest) {
         actorType: 'user',
         action: 'create',
         entityType: 'recurringJobSchedule',
-        entityId: schedule.id,
-        entityName: schedule.title,
-        description: `Created recurring job schedule "${schedule.title}" (${frequency})`,
+        entityId: result.schedule.id,
+        entityName: result.schedule.title,
+        description: `Created recurring schedule "${result.schedule.title}" (${result.schedule.frequency})${
+          result.firstJobCreated ? ' + first job generated' : ''
+        }`,
         metadataJson: JSON.stringify({
-          frequency,
-          customerId: schedule.customerId,
-          nextRunAt,
-          durationMins: schedule.durationMins,
+          frequency: result.schedule.frequency,
+          customerId: body.customerId || null,
+          nextRunAt: result.schedule.nextRunAt,
+          firstJobCreated: result.firstJobCreated,
+          firstJobId: result.firstJobId,
         }),
         severity: 'info',
       });
@@ -227,10 +285,22 @@ export async function POST(request: NextRequest) {
       console.error('[RecurringJobs POST] activity log failed:', logErr);
     }
 
-    return NextResponse.json({ schedule }, { status: 201 });
-  } catch (error) {
+    return NextResponse.json(
+      {
+        schedule,
+        firstJobCreated: result.firstJobCreated,
+        firstJobId: result.firstJobId,
+        recurrencePreview: formatSchedulePreview(recurrenceInput),
+      },
+      { status: 201 },
+    );
+  } catch (error: any) {
     console.error('Create recurring job error:', error);
     const message = error instanceof Error ? error.message : String(error);
+    // Distinguish validation errors (400) from server errors (500).
+    if (message.startsWith('Invalid recurring schedule:') || message.startsWith('The first recurring occurrence')) {
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
     return NextResponse.json(
       { error: 'Failed to create recurring job schedule', message },
       { status: 500 },

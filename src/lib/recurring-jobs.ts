@@ -772,3 +772,395 @@ export function formatFrequencyLabel(schedule: {
   }
   return `${step}${time}`;
 }
+
+// ─── Phase 2: Shared domain service for schedule creation ─────────────────
+//
+// This is the SINGLE entry point both POST /api/jobs (Create Job → Recurring)
+// and POST /api/recurring-jobs (Recurring Jobs → New Schedule) MUST call.
+// Both paths produce identical DB state — same schedule shape, same first-job
+// behavior, same transactional guarantees.
+//
+// Per the user's architectural directive:
+//   - ONE RecurringJobSchedule, ONE recurrence engine, ONE scheduler,
+//     MULTIPLE entry points/UI surfaces.
+//
+// Transactional boundary: schedule create + first job create + first visit
+// create + schedule advance are all in `db.$transaction`. If first-job
+// generation fails, the schedule is NOT created (atomic).
+//
+// `firstJobCreated` is RESPONSE state, NOT persistent state — querying
+// generatedJobs(scheduledAt=startDate) determines whether the first job
+// exists, avoiding denormalized-boolean drift.
+
+import {
+  calculateNextOccurrence as engineCalculateNextOccurrence,
+  validateSchedule as engineValidateSchedule,
+  type RecurrenceInput,
+} from '@/lib/recurrence-engine';
+
+export interface CreateRecurringScheduleInput {
+  tenantId: string;
+  customerId?: string | null;
+  templateJobId?: string | null;
+  title: string;
+  description?: string | null;
+  // ── Recurrence rules ──
+  frequency: string;            // daily | weekly | biweekly | monthly | quarterly | annually | as_needed | custom
+  dayOfWeek?: number | null;    // 0-6
+  dayOfMonth?: number | null;   // 1-31
+  weekOfMonth?: number | null;  // 1-5 (legacy nth-weekday pattern)
+  weekdaysJson?: string | null; // JSON array [1,3,5] for multi-day weekly
+  interval?: number | null;     // "Every N <unit>" multiplier (default 1)
+  nthWeekdayJson?: string | null; // {"week":1|2|3|4|5|-1,"weekday":0-6} for nth-weekday-of-month
+  timeOfDay?: string | null;    // "09:30" 24h start time
+  durationMins?: number | null; // visit duration (default 60)
+  startDate: Date;              // first occurrence ≥ this date
+  endDate?: Date | null;        // null = open-ended (Never)
+  endAfterOccurrences?: number | null; // stop after N jobs
+  asNeeded?: boolean | null;    // FLEXIBLE: no auto-cron
+  timezone?: string | null;     // IANA zone (null = server local)
+  // ── Team ──
+  assigneeIds?: string[];       // first = primary assignee
+  serviceId?: string | null;
+  branchId?: string | null;    // also used as workspaceId fallback
+  // ── On-site execution ──
+  visitInstructions?: string | null;
+  checklistIds?: string[];      // applied to every generated visit
+  lineItemsJson?: string;      // copied to each generated Job
+  // ── Billing ──
+  generateInvoice?: boolean;   // default false
+  invoiceTiming?: string;      // 'on_generation' | 'on_completion' (default)
+  // ── First-job behavior ──
+  // When true (default), creates the first Job + JobVisit immediately in the
+  // same transaction. nextRunAt is set to the NEXT future occurrence.
+  // When false, only creates the schedule; cron will create the first job.
+  generateFirstJob?: boolean;
+}
+
+export interface CreateRecurringScheduleResult {
+  schedule: {
+    id: string;
+    title: string;
+    frequency: string;
+    nextRunAt: Date;
+    active: boolean;
+    generateInvoice: boolean;
+    invoiceTiming: string;
+  };
+  firstJobCreated: boolean;
+  firstJobId?: string;
+}
+
+/**
+ * Create a RecurringJobSchedule, optionally with the first Job + JobVisit.
+ *
+ * This is the canonical entry point — both POST /api/jobs (recurring block)
+ * and POST /api/recurring-jobs call this. Wraps everything in `db.$transaction`
+ * so a failure in first-job creation rolls back the schedule creation.
+ *
+ * Behavior:
+ *   1. Validates the recurrence configuration (throws on invalid).
+ *   2. Creates RecurringJobSchedule row.
+ *   3. If `generateFirstJob` is true (default):
+ *      - Creates a Job (status='scheduled', type='recurring') with the schedule's
+ *        title, customer, assignees, service, line items, instructions.
+ *      - Creates a JobVisit linked to the job.
+ *      - Sets nextRunAt to the NEXT future occurrence (computed via the engine).
+ *   4. If `generateFirstJob` is false:
+ *      - Sets nextRunAt to the FIRST occurrence (= startDate if it matches the
+ *        pattern, or the next matching date after startDate).
+ *      - Cron will create the first job when nextRunAt falls due.
+ *   5. Returns `{ schedule, firstJobCreated, firstJobId }`.
+ *
+ * `firstJobCreated` is RESPONSE state — the caller can use it for the API
+ * response, but it is NOT persisted as a denormalized boolean (avoids drift
+ * if the Job is later deleted).
+ *
+ * Throws on validation failure or DB error.
+ */
+export async function createRecurringSchedule(
+  input: CreateRecurringScheduleInput,
+): Promise<CreateRecurringScheduleResult> {
+  // ── Validate via the shared engine ──
+  const recurrenceInput: RecurrenceInput = {
+    frequency: input.frequency,
+    dayOfWeek: input.dayOfWeek,
+    dayOfMonth: input.dayOfMonth,
+    weekOfMonth: input.weekOfMonth,
+    weekdaysJson: input.weekdaysJson,
+    interval: input.interval,
+    nthWeekdayJson: input.nthWeekdayJson,
+    timeOfDay: input.timeOfDay,
+    durationMins: input.durationMins,
+    startDate: input.startDate,
+    endDate: input.endDate,
+    endAfterOccurrences: input.endAfterOccurrences,
+    asNeeded: input.asNeeded,
+    timezone: input.timezone,
+  };
+  const validation = engineValidateSchedule(recurrenceInput);
+  if (!validation.valid) {
+    throw new Error(`Invalid recurring schedule: ${validation.errors.join('; ')}`);
+  }
+
+  // ── Normalize defaults ──
+  const generateFirstJob = input.generateFirstJob !== false; // default true
+  const frequency = input.frequency.toLowerCase();
+  const asNeeded = input.asNeeded === true || frequency === 'as_needed';
+  const interval = Math.max(1, Number(input.interval) || 1);
+  const durationMins = Number(input.durationMins) || 60;
+  const assigneeIds = Array.isArray(input.assigneeIds) ? input.assigneeIds : [];
+  const checklistIds = Array.isArray(input.checklistIds) ? input.checklistIds : [];
+  const lineItemsJson = input.lineItemsJson || '[]';
+  const generateInvoice = input.generateInvoice === true;
+  const invoiceTiming = input.invoiceTiming === 'on_generation' ? 'on_generation' : 'on_completion';
+
+  // ── Compute the first occurrence (for first-job scheduledAt if generateFirstJob=true,
+  //     OR for nextRunAt if generateFirstJob=false). ──
+  // Use inclusiveFirst=true so startDate itself is the first occurrence if it matches.
+  const firstOccurrence = engineCalculateNextOccurrence(recurrenceInput, input.startDate, {
+    inclusiveFirst: true,
+  });
+  if (!firstOccurrence) {
+    throw new Error('The first recurring occurrence is already past the end date.');
+  }
+
+  // ── Run the schedule create + first-job create + visit create in a single transaction ──
+  const result = await db.$transaction(async (tx) => {
+    // 1. Create the schedule.
+    const schedule = await tx.recurringJobSchedule.create({
+      data: {
+        tenantId: input.tenantId,
+        customerId: input.customerId || null,
+        templateJobId: input.templateJobId || null,
+        title: input.title.trim(),
+        description: input.description || null,
+        frequency,
+        dayOfWeek: input.dayOfWeek ?? null,
+        dayOfMonth: input.dayOfMonth ?? null,
+        weekOfMonth: input.weekOfMonth ?? null,
+        weekdaysJson: input.weekdaysJson || '[]',
+        interval,
+        nthWeekdayJson: input.nthWeekdayJson || null,
+        timeOfDay: input.timeOfDay || null,
+        durationMins,
+        startDate: input.startDate,
+        endDate: input.endDate || null,
+        endAfterOccurrences: input.endAfterOccurrences ?? null,
+        asNeeded,
+        nextRunAt: firstOccurrence, // tentative — updated below if first job created
+        assigneeIdsJson: JSON.stringify(assigneeIds),
+        serviceId: input.serviceId || null,
+        branchId: input.branchId || null,
+        visitInstructions: input.visitInstructions || null,
+        checklistIdsJson: JSON.stringify(checklistIds),
+        lineItemsJson,
+        generateInvoice,
+        invoiceTiming,
+        timezone: input.timezone || null,
+        active: true,
+      },
+    });
+
+    // 2. Optionally create the first Job + JobVisit.
+    if (!generateFirstJob || asNeeded) {
+      // Skip first-job creation — cron will handle it (or never, for as_needed).
+      // nextRunAt stays at firstOccurrence (for cron-based schedules).
+      return { schedule, firstJobCreated: false, firstJobId: undefined };
+    }
+
+    // Resolve customer for denormalized Job fields.
+    let customerName: string | null = null;
+    let customerPhone: string | null = null;
+    let customerEmail: string | null = null;
+    if (input.customerId) {
+      try {
+        const c = await tx.customer.findUnique({
+          where: { id: input.customerId },
+          select: { name: true, phone: true, email: true },
+        });
+        customerName = c?.name ?? null;
+        customerPhone = c?.phone ?? null;
+        customerEmail = c?.email ?? null;
+      } catch {
+        // ignore
+      }
+    }
+
+    // Resolve primary assignee for denormalized Job fields.
+    const firstAssigneeId = assigneeIds[0] ?? null;
+    let assigneeName: string | null = null;
+    let assigneePhone: string | null = null;
+    if (firstAssigneeId) {
+      try {
+        const emp = await tx.employee.findUnique({
+          where: { id: firstAssigneeId },
+          select: { name: true, phone: true },
+        });
+        assigneeName = emp?.name ?? null;
+        assigneePhone = emp?.phone ?? null;
+      } catch {
+        // ignore
+      }
+    }
+
+    // Resolve workspaceId (Job has no tenantId column — links via workspaceId).
+    let workspaceId: string | null = input.branchId ?? null;
+    if (!workspaceId) {
+      try {
+        const ws = await tx.workspace.findFirst({
+          where: { tenantId: input.tenantId },
+          select: { id: true },
+        });
+        workspaceId = ws?.id ?? null;
+      } catch {
+        // ignore — Job.workspaceId is nullable
+      }
+    }
+
+    // Create the first Job.
+    let job: { id: string; title: string };
+    try {
+      job = await tx.job.create({
+        data: {
+          title: input.title.trim(),
+          description: input.description || null,
+          status: 'scheduled',
+          priority: 'medium',
+          type: 'recurring',
+          scheduledAt: firstOccurrence,
+          scheduledTime: input.timeOfDay ?? null,
+          estimatedDuration: durationMins,
+          customerId: input.customerId || null,
+          customerName,
+          customerPhone,
+          customerEmail,
+          assigneeId: firstAssigneeId,
+          assigneeName,
+          assigneePhone,
+          serviceId: input.serviceId || null,
+          lineItemsJson,
+          visitInstructions: input.visitInstructions || null,
+          linkedChecklistsJson: JSON.stringify(checklistIds),
+          workspaceId,
+          recurringScheduleId: schedule.id,
+        },
+      });
+    } catch (err: any) {
+      if (isUniqueViolation(err)) {
+        // A job already exists for this (scheduleId, scheduledAt) — possible if
+        // the user clicked "Create" twice quickly. Treat as success without
+        // creating a duplicate, then advance nextRunAt.
+        const nextRunAt = engineCalculateNextOccurrence(recurrenceInput, firstOccurrence);
+        const willDeactivate = nextRunAt === null;
+        await tx.recurringJobSchedule.update({
+          where: { id: schedule.id },
+          data: {
+            nextRunAt: nextRunAt ?? firstOccurrence,
+            active: willDeactivate ? false : true,
+            pausedAt: willDeactivate ? new Date() : null,
+          },
+        });
+        return { schedule, firstJobCreated: false, firstJobId: undefined };
+      }
+      throw err;
+    }
+
+    // Create the first JobVisit.
+    const visitTitle = customerName
+      ? `${customerName} - ${schedule.title}`
+      : schedule.title;
+    const visitNumber = await nextVisitNumber(tx, job.id);
+    await tx.jobVisit.create({
+      data: {
+        jobVisitNumber: visitNumber,
+        tenantId: input.tenantId,
+        jobId: job.id,
+        title: visitTitle,
+        visitType: 'maintenance',
+        instructions: input.visitInstructions || null,
+        scheduledDate: firstOccurrence,
+        scheduledTime: input.timeOfDay ?? null,
+        anytime: !input.timeOfDay,
+        assigneeIdsJson: JSON.stringify(assigneeIds),
+        assigneeNamesJson: JSON.stringify(assigneeName ? [assigneeName] : []),
+        checklistIdsJson: JSON.stringify(checklistIds),
+        teamReminder: '24h',
+        status: 'scheduled',
+      },
+    });
+
+    // 3. Advance nextRunAt to the NEXT future occurrence.
+    const nextRunAt = engineCalculateNextOccurrence(recurrenceInput, firstOccurrence);
+    const willDeactivate = nextRunAt === null;
+
+    await tx.recurringJobSchedule.update({
+      where: { id: schedule.id },
+      data: {
+        lastRunAt: new Date(),
+        lastJobId: job.id,
+        executionCount: { increment: 1 },
+        nextRunAt: nextRunAt ?? firstOccurrence,
+        active: willDeactivate ? false : true,
+        pausedAt: willDeactivate ? new Date() : null,
+      },
+    });
+
+    return { schedule, firstJobCreated: true, firstJobId: job.id };
+  });
+
+  // ── Post-transaction side effects (best-effort, outside the transaction) ──
+
+  // Phase C: Optional billing on generation.
+  if (result.firstJobCreated && generateInvoice && invoiceTiming === 'on_generation' && result.firstJobId) {
+    try {
+      const { autoCreateInvoiceFromJob } = await import('@/lib/invoice-automation');
+      await autoCreateInvoiceFromJob(result.firstJobId, { force: true });
+    } catch (invoiceErr) {
+      console.error('[createRecurringSchedule] auto-invoice on generation failed:', invoiceErr);
+      // Don't fail the schedule creation — the Job was created successfully.
+    }
+  }
+
+  // Activity log (best-effort).
+  try {
+    await logActivity({
+      tenantId: input.tenantId,
+      actorId: null,
+      actorName: 'Recurring Schedule Service',
+      actorType: 'system',
+      action: 'create',
+      entityType: 'recurringJobSchedule',
+      entityId: result.schedule.id,
+      entityName: result.schedule.title,
+      description: `Created recurring schedule "${result.schedule.title}" (${frequency})${
+        result.firstJobCreated ? ' + first job' : ''
+      }`,
+      metadataJson: JSON.stringify({
+        frequency,
+        customerId: input.customerId,
+        nextRunAt: result.schedule.nextRunAt,
+        durationMins,
+        firstJobCreated: result.firstJobCreated,
+        firstJobId: result.firstJobId,
+      }),
+      severity: 'info',
+    });
+  } catch (logErr) {
+    console.error('[createRecurringSchedule] activity log failed:', logErr);
+  }
+
+  return {
+    schedule: {
+      id: result.schedule.id,
+      title: result.schedule.title,
+      frequency: result.schedule.frequency,
+      nextRunAt: result.schedule.nextRunAt,
+      active: result.schedule.active,
+      generateInvoice: result.schedule.generateInvoice,
+      invoiceTiming: result.schedule.invoiceTiming,
+    },
+    firstJobCreated: result.firstJobCreated,
+    firstJobId: result.firstJobId,
+  };
+}

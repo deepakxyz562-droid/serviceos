@@ -505,19 +505,46 @@ model RecurringJobSchedule {
   templateJobId   String?  // optional template job to clone details from
   title           String
   description     String?
-  frequency       String   @default("weekly") // weekly | biweekly | monthly | quarterly | annually
-  dayOfWeek       Int?     // 0-6 for weekly/biweekly
+  frequency       String   @default("weekly") // daily | weekly | biweekly | monthly | quarterly | annually | as_needed | custom
+  dayOfWeek       Int?     // 0-6 for weekly/biweekly (single-day; superseded by weekdaysJson for multi-day)
   dayOfMonth      Int?     // 1-31 for monthly/quarterly/annually
   weekOfMonth     Int?     // 1-5 (for "second Tuesday" patterns)
-  timeOfDay       String?  // "09:30" 24h format
+  // ── Recurrence UX (Phase 1+3): multi-day + interval ──
+  // weekdaysJson: JSON array of 0-6 weekday ints for multi-day weekly (e.g. [1,3,5] = Mon/Wed/Fri).
+  //   Empty array "[]" means use single dayOfWeek. Non-empty takes precedence.
+  weekdaysJson     String   @default("[]")
+  // interval: "Every N <unit>" multiplier (e.g. interval=2 + frequency=weekly → "Every 2 weeks").
+  //   Default 1 = standard weekly/monthly/etc.
+  interval         Int      @default(1)
+  // nthWeekdayJson: JSON for nth-weekday-of-month patterns.
+  //   Structure: {"week": 1|2|3|4|5|-1, "weekday": 0-6}
+  //   where week=-1 means "last" (e.g. {"week":-1,"weekday":0} = last Sunday of the month).
+  //   Used when frequency=monthly and user picks "First Monday of every month".
+  nthWeekdayJson   String?
+  // ── End conditions (Phase 1+3): support Never / After N / On date ──
+  // endDate: null = open-ended (Never). When set, cron stops generating after this date.
+  endDate         DateTime?  // null = open-ended
+  // endAfterOccurrences: when set, cron stops after N generated jobs (regardless of date).
+  //   Combined with executionCount — when executionCount >= endAfterOccurrences, schedule auto-pauses.
+  endAfterOccurrences Int?
+  // ── As-needed mode (Phase 1+3) ──
+  // asNeeded: when true, NO automatic cron generation. User manually clicks "Generate next visit"
+  //   from the Recurring Jobs page. Distinct from paused (which is a temporary hold).
+  //   NOTE: this is a V1 simplification. The cleaner model would be a `scheduleType` enum
+  //   (RECURRING | FLEXIBLE) but that's a larger refactor. For now, asNeeded=true implies
+  //   the schedule is FLEXIBLE regardless of the frequency field.
+  asNeeded        Boolean  @default(false)
+  // NOTE: Whether the first Job has been generated is determined by querying
+  //   generatedJobs(scheduledAt = startDate) — NOT by a denormalized boolean.
+  //   A boolean like `firstJobCreated` would drift out of sync if the Job is deleted.
+  timeOfDay       String?  // "09:30" 24h format (start time only — end is computed as start + durationMins)
   durationMins    Int      @default(60)
   startDate       DateTime @default(now())
-  endDate         DateTime?  // null = open-ended
   nextRunAt       DateTime @default(now())
   lastRunAt       DateTime?
   lastJobId       String?
   executionCount  Int      @default(0)
-  assigneeIdsJson String   @default("[]") // array of employee IDs
+  assigneeIdsJson String   @default("[]") // array of employee IDs (first = primary assignee)
   serviceId       String?
   branchId        String?
   visitInstructions String?
@@ -534,12 +561,16 @@ model RecurringJobSchedule {
   timezone        String?
   active          Boolean  @default(true)
   pausedAt        DateTime?
+  // pausedUntil: scheduled auto-resume timestamp. When set, a cron tick after this time
+  //   will clear pausedAt + pausedUntil and resume normal generation.
+  pausedUntil     DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   tenant   Tenant?  @relation(fields: [tenantId], references: [id])
   customer Customer? @relation("CustomerRecurringJobs", fields: [customerId], references: [id])
   generatedJobs Job[] @relation("RecurringJobGeneratedJobs")
+  generatedInvoices Invoice[] @relation("RecurringScheduleGeneratedInvoices")
 
   @@index([tenantId])
   @@index([active])
@@ -769,6 +800,12 @@ model Invoice {
   // Paired with recurrenceId in a UNIQUE constraint so the same schedule cannot generate
   // two invoices for the same occurrence (cron double-fire protection).
   occurrenceDate DateTime?
+  // ── Phase C (Phase 1 schema addition): direct FK to RecurringJobSchedule ──
+  // When invoiceTiming='on_generation', the engine creates an Invoice linked directly to
+  // the RecurringJobSchedule (NOT via the Job). Paired with occurrenceDate in a UNIQUE
+  // constraint for direct idempotency. Distinct from recurrenceId (which points to
+  // RecurringInvoice, the standalone subscription model).
+  recurringScheduleId String?
   dueDate     DateTime?
   sentAt      DateTime?
   paidAt      DateTime?
@@ -783,6 +820,7 @@ model Invoice {
   employee  Employee?        @relation(fields: [employeeId], references: [id])
   booking   Booking?         @relation("BookingInvoices", fields: [bookingId], references: [id])
   recurrence RecurringInvoice? @relation(fields: [recurrenceId], references: [id])
+  recurringSchedule RecurringJobSchedule? @relation("RecurringScheduleGeneratedInvoices", fields: [recurringScheduleId], references: [id])
 
   @@index([tenantId])
   @@index([status])
@@ -790,11 +828,16 @@ model Invoice {
   @@index([invoiceType])
   @@index([bookingId])
   @@index([recurrenceId])
+  @@index([recurringScheduleId])
   @@index([parentInvoiceId])
   // ── Phase A2: Unique constraint for recurring-invoice idempotency ──
   // Prevents the same RecurringInvoice from generating two Invoices for the same occurrence.
   // NULL recurrenceId (manual invoices) are excluded — Postgres treats NULLs as distinct in UNIQUE.
   @@unique([recurrenceId, occurrenceDate], map: "invoice_recurrence_occurrencedate_unique")
+  // ── Phase C (Phase 1 schema addition): Unique constraint for recurring-job invoice idempotency ──
+  // Prevents the same RecurringJobSchedule from generating two Invoices for the same occurrence
+  // (cron double-fire protection for the on_generation billing mode).
+  @@unique([recurringScheduleId, occurrenceDate], map: "invoice_recurring_schedule_occurrencedate_unique")
 
   // ── C-3 (E1): composite index for invoices list page 1 ──────────────────
   // Query: WHERE "tenantId" = ? ORDER BY "createdAt" DESC LIMIT 200
@@ -834,6 +877,8 @@ model RecurringInvoice {
   paymentMethodId String?                              // saved PaymentMethod.id to charge (Phase D: dead schema — kept for forward compat)
   // ── Phase D1: Pause/Resume parity with RecurringJobSchedule ──
   pausedAt        DateTime?
+  // pausedUntil: scheduled auto-resume timestamp (parity with RecurringJobSchedule.pausedUntil).
+  pausedUntil     DateTime?
   // ── Phase F: Timezone ──
   timezone        String?
   createdAt       DateTime @default(now())

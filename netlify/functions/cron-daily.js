@@ -1,48 +1,38 @@
 /**
- * Netlify Scheduled Function — Daily Cron Master (OPTIONAL)
+ * Netlify Scheduled Function — Daily Cron Master (DISABLED)
  * ===============================================
  *
- * ⚠️  NOTE: This file is ONLY relevant if you deploy to Netlify.
- * If you deploy elsewhere (Vercel, Render, etc.), ignore this file and use
- * the 3rd-party cron configs in `/cron-configs/` instead (cron-job.org or
- * GitHub Actions).
+ * ⚠️  PHASE 7 — DISABLED. Vercel is the authoritative cron scheduler.
  *
- * Runs every day at 09:00 UTC (~2:30 PM IST) and triggers ALL cron endpoints
- * on the deployed Next.js site as a daily safety-net.
+ * This file is KEPT on disk for reference / rollback safety, but its schedule
+ * is commented out below. If you deploy to Netlify in the future, uncomment
+ * the `schedule` export and ensure Vercel's `crons` block in vercel.json is
+ * removed (to avoid double-fire).
  *
- * IMPORTANT: This daily run is a SAFETY-NET only. The 4 high-frequency jobs
- * (campaigns, scheduled-messages, scheduled-executions, appointment-reminders)
- * need 15-min / 6-hour cadence. For those, use cron-job.org or GitHub Actions
- * with the schedules defined in `/cron-configs/cron-job-org-import.json`.
+ * Per the user's architectural directive:
+ *   "ONE scheduler. Don't rely on unique constraints as your scheduling strategy.
+ *    The unique constraints are your safety net, not your scheduler coordination
+ *    mechanism."
  *
- * Why a single master function?
- *   - One cold start per day (cheaper, faster)
- *   - One place to configure the schedule
- *   - Each endpoint runs independently — if one fails, the others still run
- *   - Full results are returned in the response body for Netlify logs
+ * Triple-cron risk: Vercel (02:00 UTC) + Netlify (09:00 UTC) + GitHub Actions
+ * (6 separate UTC times) all targeted the same daily cron endpoints. Even with
+ * the DB unique constraints preventing duplicate Job/Invoice generation, this
+ * caused 3x API calls + log spam. Vercel is now the single source of truth.
+ *
+ * To re-enable (NOT recommended while Vercel cron is active):
+ *   1. Uncomment the `schedule` export below.
+ *   2. Remove the `crons` block from /vercel.json.
+ *   3. Disable the .github/workflows/cron-daily.yml workflow.
  *
  * REQUIRED ENV VARS (set in Netlify Dashboard → Site settings → Environment variables):
  *   - CRON_SECRET  → must match the CRON_SECRET the Next.js app expects
  *   - SITE_URL     → your Netlify site URL (e.g. https://your-site.netlify.app)
- *                    (Netlify auto-sets process.env.URL, but we use SITE_URL
- *                     as an explicit override in case URL is a deploy-specific
- *                     URL that isn't stable.)
- *
- * HOW TO CHANGE THE SCHEDULE:
- *   Edit the `schedule` export below. Cron syntax: MIN HOUR DOM MON DOW (UTC).
- *   Examples:
- *     "0 9 * * *"     → 09:00 UTC daily
- *     "0 4 * * *"     → 04:00 UTC daily (~9:30 AM IST)
- *     "0 */6 * * *"   → every 6 hours
- *     "0 0 * * 1"     → every Monday 00:00 UTC
- *
- * LOCAL TESTING:
- *   netlify functions:serve   (then POST to the local function URL)
- *   Or trigger via Netlify dashboard after deploy.
  */
 
-// ── Schedule: 09:00 UTC every day ──────────────────────────────────────────
-export const schedule = '0 9 * * *';
+// ── Schedule: 09:00 UTC every day — DISABLED per Phase 7 ───────────────────
+// Uncomment the line below ONLY if you switch off Vercel cron.
+// export const schedule = '0 9 * * *';
+export const schedule = '';  // empty = disabled
 
 // ── The 5 Fieseros daily cron endpoints ───────────────────────────────────
 const CRON_ENDPOINTS = [

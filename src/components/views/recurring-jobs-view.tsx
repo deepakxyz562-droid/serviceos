@@ -68,6 +68,13 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { authFetch, apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
 
+// ── Phase 5: Shared recurrence editor (same component used by Create Job form) ──
+import {
+  RecurringScheduleEditor,
+  EMPTY_RECURRING_VALUE,
+  type RecurringScheduleValue,
+} from '@/components/recurring/recurring-schedule-editor';
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 interface Customer {
@@ -139,48 +146,30 @@ interface ScheduleForm {
   title: string;
   customerId: string;
   description: string;
-  frequency: string;
-  dayOfWeek: string;
-  dayOfMonth: string;
-  weekOfMonth: string;
-  timeOfDay: string;
-  durationMins: string;
+  visitInstructions: string;
   assigneeIds: string[];
   serviceId: string;
-  visitInstructions: string;
-  startDate: string;
-  endDate: string;
-  useWeekOfMonth: boolean;
   lineItems: Array<{ description: string; quantity: string; rate: string }>;
-  // ── Phase C: Billing (generateInvoice + invoiceTiming) ──
-  generateInvoice: boolean;
-  invoiceTiming: 'on_generation' | 'on_completion';
-  // ── Phase F: Timezone (server local when empty) ──
-  timezone: string;
+  // ── Phase 5: Recurrence + billing + first-job behavior ──
+  // All recurrence fields now come from the SHARED <RecurringScheduleEditor />.
+  // This guarantees the Recurring Jobs New Schedule dialog and the Create Job
+  // recurring section produce identical request payloads.
+  recurring: RecurringScheduleValue;
+  // ── Legacy fields kept for backward-compat with existing schedules ──
+  // (loaded from DB when editing; mapped to/from `recurring` on save).
+  useWeekOfMonth: boolean;
 }
 
 const EMPTY_FORM: ScheduleForm = {
   title: '',
   customerId: '',
   description: '',
-  frequency: 'weekly',
-  dayOfWeek: '1', // Monday
-  dayOfMonth: '1',
-  weekOfMonth: '1',
-  timeOfDay: '09:00',
-  durationMins: '60',
+  visitInstructions: '',
   assigneeIds: [],
   serviceId: '',
-  visitInstructions: '',
-  startDate: new Date().toISOString().slice(0, 10),
-  endDate: '',
-  useWeekOfMonth: false,
   lineItems: [],
-  // Phase C: billing controls — default: no auto-invoice.
-  generateInvoice: false,
-  invoiceTiming: 'on_completion',
-  // Phase F: timezone — empty = server local (backward compat).
-  timezone: '',
+  recurring: { ...EMPTY_RECURRING_VALUE },
+  useWeekOfMonth: false,
 };
 
 const FREQUENCIES = [
@@ -469,24 +458,32 @@ export function RecurringJobsView() {
       title: s.title,
       customerId: s.customerId || '',
       description: s.description || '',
-      frequency: s.frequency,
-      dayOfWeek: s.dayOfWeek != null ? String(s.dayOfWeek) : '1',
-      dayOfMonth: s.dayOfMonth != null ? String(s.dayOfMonth) : '1',
-      weekOfMonth: s.weekOfMonth != null ? String(s.weekOfMonth) : '1',
-      timeOfDay: s.timeOfDay || '09:00',
-      durationMins: String(s.durationMins),
+      visitInstructions: s.visitInstructions || '',
       assigneeIds,
       serviceId: s.serviceId || '',
-      visitInstructions: s.visitInstructions || '',
-      startDate: s.startDate ? new Date(s.startDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-      endDate: s.endDate ? new Date(s.endDate).toISOString().slice(0, 10) : '',
-      useWeekOfMonth: Boolean(s.weekOfMonth),
       lineItems,
-      // Phase C+F: populate billing + timezone from existing schedule.
-      generateInvoice: Boolean(s.generateInvoice),
-      invoiceTiming:
-        s.invoiceTiming === 'on_generation' ? 'on_generation' : 'on_completion',
-      timezone: s.timezone || '',
+      useWeekOfMonth: Boolean(s.weekOfMonth),
+      // ── Phase 5: Load recurrence config into the shared editor's state shape ──
+      recurring: {
+        enabled: true,
+        frequency: s.frequency || 'weekly',
+        dayOfWeek: s.dayOfWeek ?? null,
+        dayOfMonth: s.dayOfMonth ?? null,
+        weekOfMonth: s.weekOfMonth ?? null,
+        weekdaysJson: (s as any).weekdaysJson || '[]',
+        interval: (s as any).interval ?? 1,
+        nthWeekdayJson: (s as any).nthWeekdayJson ?? null,
+        timeOfDay: s.timeOfDay ?? null,
+        durationMins: s.durationMins ?? 60,
+        startDate: s.startDate ? new Date(s.startDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+        endDate: s.endDate ? new Date(s.endDate).toISOString().slice(0, 10) : null,
+        endAfterOccurrences: (s as any).endAfterOccurrences ?? null,
+        asNeeded: (s as any).asNeeded ?? false,
+        timezone: s.timezone || null,
+        generateFirstJob: true, // default for edit (no-op if first job already exists)
+        generateInvoice: Boolean(s.generateInvoice),
+        invoiceTiming: s.invoiceTiming === 'on_generation' ? 'on_generation' : 'on_completion',
+      },
     });
     setEditingId(s.id);
     setDialogOpen(true);
@@ -525,45 +522,52 @@ export function RecurringJobsView() {
 
     try {
       setSubmitting(true);
+      const r = form.recurring;
+      // ── Phase 5: payload now uses the SHARED RecurringScheduleValue shape ──
+      // Both Create Job and Recurring Jobs send the same fields to the same
+      // createRecurringSchedule() domain service.
       const payload = {
         title: form.title.trim(),
         customerId: form.customerId || null,
         description: form.description.trim() || null,
-        frequency: form.frequency,
-        dayOfWeek: ['weekly', 'biweekly'].includes(form.frequency)
-          ? Number(form.dayOfWeek)
-          : form.useWeekOfMonth
-            ? Number(form.dayOfWeek)
-            : null,
-        dayOfMonth: ['monthly', 'quarterly', 'annually'].includes(form.frequency)
-          ? form.useWeekOfMonth
-            ? null
-            : Number(form.dayOfMonth)
-          : null,
-        weekOfMonth: form.useWeekOfMonth ? Number(form.weekOfMonth) : null,
-        timeOfDay: form.timeOfDay || null,
-        durationMins: Number(form.durationMins) || 60,
+        visitInstructions: form.visitInstructions.trim() || null,
         assigneeIds: form.assigneeIds,
         serviceId: form.serviceId || null,
-        visitInstructions: form.visitInstructions.trim() || null,
-        startDate: form.startDate,
-        endDate: form.endDate || null,
         lineItemsJson: JSON.stringify(
           form.lineItems.filter((li) => li.description.trim()),
         ),
-        // Phase C: billing controls — always sent (create + edit).
-        generateInvoice: form.generateInvoice,
-        invoiceTiming: form.generateInvoice ? form.invoiceTiming : 'on_completion',
-        // Phase F: timezone (null = server local).
-        timezone: form.timezone || null,
+        // ── Recurrence rules (from the shared editor) ──
+        frequency: r.frequency,
+        dayOfWeek: r.dayOfWeek,
+        dayOfMonth: r.dayOfMonth,
+        weekOfMonth: r.weekOfMonth,
+        weekdaysJson: r.weekdaysJson,
+        interval: r.interval,
+        nthWeekdayJson: r.nthWeekdayJson,
+        timeOfDay: r.timeOfDay,
+        durationMins: r.durationMins,
+        startDate: r.startDate,
+        endDate: r.endDate || null,
+        endAfterOccurrences: r.endAfterOccurrences,
+        asNeeded: r.asNeeded,
+        timezone: r.timezone,
+        // ── First-job behavior ──
+        generateFirstJob: r.generateFirstJob,
+        // ── Billing ──
+        generateInvoice: r.generateInvoice,
+        invoiceTiming: r.invoiceTiming,
       };
 
       if (editingId) {
         await apiPut(`/api/recurring-jobs/${editingId}`, payload);
         toast.success('Schedule updated');
       } else {
-        await apiPost('/api/recurring-jobs', payload);
-        toast.success('Schedule created');
+        const result = await apiPost<{ firstJobCreated?: boolean }>('/api/recurring-jobs', payload);
+        toast.success(
+          result?.firstJobCreated
+            ? 'Schedule created + first job generated'
+            : 'Schedule created',
+        );
       }
       setDialogOpen(false);
       setEditingId(null);
@@ -675,11 +679,6 @@ export function RecurringJobsView() {
   // ─── Render: Form ──────────────────────────────────────────────────────
 
   const renderForm = () => {
-    const isWeeklyLike = ['weekly', 'biweekly'].includes(form.frequency);
-    const isMonthlyLike = ['monthly', 'quarterly', 'annually'].includes(
-      form.frequency,
-    );
-
     return (
       <div className="grid gap-4 py-2 max-h-[70vh] overflow-y-auto pr-1">
         <div className="grid gap-2">
@@ -745,220 +744,20 @@ export function RecurringJobsView() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="frequency">Frequency</Label>
-            <Select
-              value={form.frequency}
-              onValueChange={(v) => setForm({ ...form, frequency: v })}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FREQUENCIES.map((f) => (
-                  <SelectItem key={f.value} value={f.value}>
-                    {f.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="durationMins">Duration (minutes)</Label>
-            <Input
-              id="durationMins"
-              type="number"
-              min="1"
-              value={form.durationMins}
-              onChange={(e) =>
-                setForm({ ...form, durationMins: e.target.value })
-              }
-            />
-          </div>
-        </div>
-
-        {/* Schedule pattern */}
-        {isWeeklyLike && (
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="dayOfWeek">Day of week</Label>
-              <Select
-                value={form.dayOfWeek}
-                onValueChange={(v) => setForm({ ...form, dayOfWeek: v })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {WEEKDAYS.map((d) => (
-                    <SelectItem key={d.value} value={d.value}>
-                      {d.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="timeOfDay">Time of day</Label>
-              <Input
-                id="timeOfDay"
-                type="time"
-                value={form.timeOfDay}
-                onChange={(e) =>
-                  setForm({ ...form, timeOfDay: e.target.value })
-                }
-              />
-            </div>
-          </div>
-        )}
-
-        {isMonthlyLike && (
-          <>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={form.useWeekOfMonth}
-                onCheckedChange={(checked) =>
-                  setForm({ ...form, useWeekOfMonth: Boolean(checked) })
-                }
-              />
-              Use &quot;Nth weekday of month&quot; pattern (e.g. 2nd Tuesday)
-            </label>
-
-            {form.useWeekOfMonth ? (
-              <div className="grid grid-cols-3 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="weekOfMonth">Week</Label>
-                  <Select
-                    value={form.weekOfMonth}
-                    onValueChange={(v) =>
-                      setForm({ ...form, weekOfMonth: v })
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {WEEK_OF_MONTH.map((w) => (
-                        <SelectItem key={w.value} value={w.value}>
-                          {w.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="dayOfWeekMonth">Weekday</Label>
-                  <Select
-                    value={form.dayOfWeek}
-                    onValueChange={(v) => setForm({ ...form, dayOfWeek: v })}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {WEEKDAYS.map((d) => (
-                        <SelectItem key={d.value} value={d.value}>
-                          {d.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="timeOfDayM">Time of day</Label>
-                  <Input
-                    id="timeOfDayM"
-                    type="time"
-                    value={form.timeOfDay}
-                    onChange={(e) =>
-                      setForm({ ...form, timeOfDay: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="dayOfMonth">Day of month (1-31)</Label>
-                  <Input
-                    id="dayOfMonth"
-                    type="number"
-                    min="1"
-                    max="31"
-                    value={form.dayOfMonth}
-                    onChange={(e) =>
-                      setForm({ ...form, dayOfMonth: e.target.value })
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Months without this day roll to the last day.
-                  </p>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="timeOfDayD">Time of day</Label>
-                  <Input
-                    id="timeOfDayD"
-                    type="time"
-                    value={form.timeOfDay}
-                    onChange={(e) =>
-                      setForm({ ...form, timeOfDay: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Phase F — Timezone picker (near time-of-day, optional) */}
-        <div className="grid gap-2">
-          <Label htmlFor="timezone">Timezone (optional)</Label>
-          <Select
-            value={form.timezone || '__server_local__'}
-            onValueChange={(v) =>
-              setForm({ ...form, timezone: v === '__server_local__' ? '' : v })
-            }
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Other (server local)" />
-            </SelectTrigger>
-            <SelectContent>
-              {TIMEZONES.map((tz) => (
-                <SelectItem
-                  key={tz.value || '__server_local__'}
-                  value={tz.value || '__server_local__'}
-                >
-                  {tz.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            When empty, the server&apos;s local timezone is used to evaluate the
-            schedule&apos;s time-of-day.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="startDate">Start date</Label>
-            <Input
-              id="startDate"
-              type="date"
-              value={form.startDate}
-              onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="endDate">End date (optional)</Label>
-            <Input
-              id="endDate"
-              type="date"
-              value={form.endDate}
-              onChange={(e) => setForm({ ...form, endDate: e.target.value })}
-            />
-          </div>
+        {/* ─── Phase 5: Recurrence configuration via SHARED editor ─── */}
+        {/* Same component used by Create Job form. Both entry points produce
+            identical request payloads that hit the same createRecurringSchedule()
+            domain service on the backend. */}
+        <div className="rounded-md border bg-muted/10 p-3">
+          <RecurringScheduleEditor
+            value={form.recurring}
+            onChange={(next) => setForm({ ...form, recurring: next })}
+            showSwitch={false}
+            showGenerateFirstJob
+            showBilling
+            showTimezone
+            compact
+          />
         </div>
 
         {/* Assignees */}
@@ -989,6 +788,7 @@ export function RecurringJobsView() {
           </div>
           <p className="text-xs text-muted-foreground">
             First selected assignee becomes the job&apos;s primary assignee.
+            The full list is copied to every generated Job/JobVisit.
           </p>
         </div>
 
@@ -1064,60 +864,6 @@ export function RecurringJobsView() {
                   </Button>
                 </div>
               ))}
-            </div>
-          )}
-        </div>
-
-        {/* Phase C — Billing / Invoice generation */}
-        <div className="grid gap-2">
-          <div className="flex items-center justify-between gap-3">
-            <div className="grid gap-0.5">
-              <Label htmlFor="generateInvoice">Invoice generation</Label>
-              <p className="text-xs text-muted-foreground">
-                Optionally create a draft invoice for each generated job.
-              </p>
-            </div>
-            <Switch
-              id="generateInvoice"
-              checked={form.generateInvoice}
-              onCheckedChange={(checked) =>
-                setForm({ ...form, generateInvoice: checked })
-              }
-            />
-          </div>
-          {form.generateInvoice && (
-            <div className="rounded-md border bg-muted/20 p-3 grid gap-2">
-              <Label>When should the draft invoice be created?</Label>
-              <RadioGroup
-                value={form.invoiceTiming}
-                onValueChange={(v) =>
-                  setForm({
-                    ...form,
-                    invoiceTiming: v as 'on_generation' | 'on_completion',
-                  })
-                }
-                className="grid gap-2"
-              >
-                <label className="flex items-start gap-2 text-sm cursor-pointer">
-                  <RadioGroupItem value="on_generation" className="mt-0.5" />
-                  <div>
-                    <span className="font-medium">On job generation</span>
-                    <p className="text-xs text-muted-foreground">
-                      Create a draft invoice when the job is generated.
-                    </p>
-                  </div>
-                </label>
-                <label className="flex items-start gap-2 text-sm cursor-pointer">
-                  <RadioGroupItem value="on_completion" className="mt-0.5" />
-                  <div>
-                    <span className="font-medium">On job completion</span>
-                    <p className="text-xs text-muted-foreground">
-                      Create a draft invoice when the technician marks the job
-                      complete.
-                    </p>
-                  </div>
-                </label>
-              </RadioGroup>
             </div>
           )}
         </div>

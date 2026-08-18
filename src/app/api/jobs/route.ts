@@ -11,7 +11,7 @@ import { EventBus } from '@/lib/event-bus'
 import { geocodeAddressOrNull as geocodeAddress } from '@/lib/geocode'
 import { requireCrmTenant } from '@/lib/require-crm-tenant'
 import { requirePlanFeature } from '@/lib/plan-gate'
-import { computeNextOccurrence, nextVisitNumber } from '@/lib/recurring-jobs'
+import { computeNextOccurrence, nextVisitNumber, createRecurringSchedule } from '@/lib/recurring-jobs'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -439,12 +439,15 @@ export async function POST(request: NextRequest) {
       workspaceId,
     }
 
-    // ── Phase B: Recurring schedule creation (optional) ──────────────
+    // ── Phase B/3: Recurring schedule creation (optional) ────────────
     // When body.recurring is present, create a RecurringJobSchedule + the first
-    // Job + the first JobVisit in a single transaction. The schedule's nextRunAt
-    // is set to the NEXT future occurrence (NOT today) — today's job is the one
-    // the user just created manually. Cron will generate future jobs.
-    let recurringSchedule: { id: string; generateInvoice: boolean; invoiceTiming: string } | null = null
+    // Job + the first JobVisit in a single transaction via the SHARED domain
+    // service `createRecurringSchedule()`. This is the SAME function POST
+    // /api/recurring-jobs calls — both entry points converge here.
+    //
+    // Per architectural directive: ONE RecurringJobSchedule, ONE recurrence
+    // engine, ONE scheduler, MULTIPLE entry points/UI surfaces.
+    let recurringSchedule: { id: string; generateInvoice: boolean; invoiceTiming: string; firstJobId?: string } | null = null
 
     if (body.recurring && typeof body.recurring === 'object') {
       const gate = await requirePlanFeature('recurring_jobs')
@@ -454,29 +457,10 @@ export async function POST(request: NextRequest) {
 
       const recurring = body.recurring as Record<string, unknown>
       const frequency = (recurring.frequency as string) || 'weekly'
-      const VALID_FREQ = ['weekly', 'biweekly', 'monthly', 'quarterly', 'annually']
-      if (!VALID_FREQ.includes(frequency)) {
-        return NextResponse.json({ error: `Invalid recurring frequency: ${frequency}` }, { status: 400 })
-      }
-
-      const dayOfWeek = recurring.dayOfWeek != null ? Number(recurring.dayOfWeek) : null
-      const dayOfMonth = recurring.dayOfMonth != null ? Number(recurring.dayOfMonth) : null
-      const weekOfMonth = recurring.weekOfMonth != null ? Number(recurring.weekOfMonth) : null
-      const timeOfDay = (recurring.timeOfDay as string) || null
-      const timezone = (recurring.timezone as string) || null
-      const endDate = recurring.endDate ? new Date(recurring.endDate as string) : null
 
       const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : new Date()
-      const nextRunAt = computeNextOccurrence(
-        { frequency, dayOfWeek, dayOfMonth, weekOfMonth, timeOfDay, endDate, timezone },
-        scheduledAt,
-      )
-      if (!nextRunAt) {
-        return NextResponse.json(
-          { error: 'The first recurring occurrence is already past the end date.' },
-          { status: 400 },
-        )
-      }
+      const endDate = recurring.endDate ? new Date(recurring.endDate as string) : null
+      const timezone = (recurring.timezone as string) || null
 
       const assigneeIds = Array.isArray(recurring.assigneeIds)
         ? (recurring.assigneeIds as string[])
@@ -486,81 +470,62 @@ export async function POST(request: NextRequest) {
         typeof body.lineItemsJson === 'string' ? body.lineItemsJson : JSON.stringify(body.lineItemsJson ?? [])
       const visitInstructions = (recurring.visitInstructions as string) || body.visitInstructions || null
 
-      // Wrap schedule + job + visit creation in a single transaction.
-      const result = await db.$transaction(async (tx) => {
-        const schedule = await tx.recurringJobSchedule.create({
-          data: {
-            tenantId: authUser!.tenantId!,
-            customerId: body.customerId || null,
-            title: body.title,
-            description: body.description || null,
-            frequency,
-            dayOfWeek,
-            dayOfMonth,
-            weekOfMonth,
-            timeOfDay,
-            durationMins: Number(recurring.durationMins) || 60,
-            startDate: scheduledAt,
-            endDate,
-            nextRunAt,
-            assigneeIdsJson: JSON.stringify(assigneeIds),
-            serviceId: body.serviceId || null,
-            branchId: (recurring.branchId as string) || null,
-            visitInstructions,
-            checklistIdsJson: JSON.stringify(checklistIds),
-            lineItemsJson,
-            generateInvoice: recurring.generateInvoice === true,
-            invoiceTiming: recurring.invoiceTiming === 'on_generation' ? 'on_generation' : 'on_completion',
-            timezone,
-            active: true,
-          },
-        })
-
-        const createdJob = await tx.job.create({
-          data: {
-            ...jobData,
-            type: 'recurring',
-            recurringScheduleId: schedule.id,
-          } as Parameters<typeof tx.job.create>[0]['data'],
-          include: { assignee: true, customer: true, resource: true },
-        })
-
-        // Create the first JobVisit (mirrors processSingleSchedule).
-        const visitTitle = createdJob.customerName
-          ? `${createdJob.customerName} - ${createdJob.title}`
-          : createdJob.title
-        const visitNumber = await nextVisitNumber(tx, createdJob.id)
-        await tx.jobVisit.create({
-          data: {
-            jobVisitNumber: visitNumber,
-            tenantId: authUser!.tenantId!,
-            jobId: createdJob.id,
-            title: visitTitle,
-            visitType: 'maintenance',
-            instructions: visitInstructions,
-            scheduledDate: scheduledAt,
-            scheduledTime: timeOfDay,
-            anytime: !timeOfDay,
-            assigneeIdsJson: JSON.stringify(assigneeIds),
-            assigneeNamesJson: JSON.stringify(createdJob.assigneeName ? [createdJob.assigneeName] : []),
-            checklistIdsJson: JSON.stringify(checklistIds),
-            teamReminder: '24h',
-            status: 'scheduled',
-          },
-        })
-
-        return { schedule, job: createdJob }
+      // ── Call the shared domain service ──
+      // generateFirstJob defaults to true — the first Job is created immediately
+      // in the same transaction as the schedule. nextRunAt is set to the NEXT
+      // future occurrence (NOT today).
+      const recurringResult = await createRecurringSchedule({
+        tenantId: authUser!.tenantId!,
+        customerId: body.customerId || null,
+        title: body.title,
+        description: body.description || null,
+        frequency,
+        dayOfWeek: recurring.dayOfWeek != null ? Number(recurring.dayOfWeek) : null,
+        dayOfMonth: recurring.dayOfMonth != null ? Number(recurring.dayOfMonth) : null,
+        weekOfMonth: recurring.weekOfMonth != null ? Number(recurring.weekOfMonth) : null,
+        weekdaysJson: typeof recurring.weekdaysJson === 'string' ? recurring.weekdaysJson : JSON.stringify(recurring.weekdaysJson ?? []),
+        interval: recurring.interval != null ? Number(recurring.interval) : 1,
+        nthWeekdayJson: typeof recurring.nthWeekdayJson === 'string' ? recurring.nthWeekdayJson : null,
+        timeOfDay: (recurring.timeOfDay as string) || null,
+        durationMins: Number(recurring.durationMins) || 60,
+        startDate: scheduledAt,
+        endDate,
+        endAfterOccurrences: recurring.endAfterOccurrences != null ? Number(recurring.endAfterOccurrences) : null,
+        asNeeded: recurring.asNeeded === true,
+        timezone,
+        assigneeIds,
+        serviceId: body.serviceId || null,
+        branchId: (recurring.branchId as string) || null,
+        visitInstructions,
+        checklistIds,
+        lineItemsJson,
+        generateInvoice: recurring.generateInvoice === true,
+        invoiceTiming: recurring.invoiceTiming === 'on_generation' ? 'on_generation' : 'on_completion',
+        generateFirstJob: true,
       })
 
+      // Fetch the created schedule + first job for the response.
+      const createdSchedule = await db.recurringJobSchedule.findUnique({
+        where: { id: recurringResult.schedule.id },
+        select: { id: true, generateInvoice: true, invoiceTiming: true },
+      })
       recurringSchedule = {
-        id: result.schedule.id,
-        generateInvoice: result.schedule.generateInvoice,
-        invoiceTiming: result.schedule.invoiceTiming,
+        id: recurringResult.schedule.id,
+        generateInvoice: createdSchedule?.generateInvoice ?? recurring.generateInvoice === true,
+        invoiceTiming: createdSchedule?.invoiceTiming ?? 'on_completion',
+        firstJobId: recurringResult.firstJobId,
       }
-      // Use the job from the transaction as the response object.
-      // Reassign the `job` const below via the non-recurring create path is skipped.
-      // We cast to any because the transaction's job type is compatible but TS infers a union.
-      ;(jobData as Record<string, unknown>).__recurringJob = result.job
+
+      // If the shared service created the first Job, fetch it for the response.
+      if (recurringResult.firstJobId) {
+        const firstJob = await db.job.findUnique({
+          where: { id: recurringResult.firstJobId },
+          include: { assignee: true, customer: true, resource: true },
+        })
+        if (firstJob) {
+          ;(jobData as Record<string, unknown>).__recurringJob = firstJob
+        }
+      }
     }
 
     // ── Create the job (non-recurring path) OR pull from transaction result ──
