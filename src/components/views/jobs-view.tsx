@@ -15,6 +15,10 @@ import {
   Archive,
   // Phase 1: Smart Assign/Reassign Workspace icons
   MessageSquare, ShieldAlert, Clock3,
+  // Issue 1: More menu conditional items (Create Similar, Text Booking,
+  // Collect Signature, Email Job Costs CSV, Create Invoice already imported
+  // as FileText/DollarSign/PenLine/Send).
+  Copy, FileSpreadsheet,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -116,6 +120,9 @@ import {
 import { AIAssistantPanel } from '@/components/job/ai-assistant-panel';
 import { CommunicationComposer } from '@/components/communication/composer';
 import { JobHistoryTab } from '@/components/views/history-view';
+// Issue 1: Close Job + Stop Recurring Schedule dialogs (AlertDialog-based).
+import { CloseJobDialog } from '@/components/job/close-job-dialog';
+import { StopScheduleDialog } from '@/components/job/stop-schedule-dialog';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -160,6 +167,12 @@ interface Job {
   metadataJson?: string;
   // V1.5: AI-generated completion notes (written by the AI Field Assistant)
   completionNotes?: string | null;
+  // ── Issue 1 (Close Job / Stop Schedule): FK back to the RecurringJobSchedule
+  // that generated this job. Null for manually-created one-off jobs. Set by
+  // the recurrence engine when it generates a Job from a schedule. Used by
+  // the More menu to decide whether to show Pause/Resume/Stop Recurring
+  // Schedule actions, and by CloseJobDialog to branch on close-vs-visit copy.
+  recurringScheduleId?: string | null;
   // Soft-delete timestamp — when set, job is hidden from active list (in History)
   deletedAt?: string | null;
   createdAt: string;
@@ -1205,6 +1218,24 @@ export function JobsView() {
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
   const [deletingJob, setDeletingJob] = useState<Job | null>(null);
   const [deleteSaving, setDeleteSaving] = useState(false);
+
+  // ── Issue 1: Close Job + Stop Recurring Schedule dialogs ──────────────
+  // `closeJobTarget` holds the job the CloseJobDialog is acting on (null =
+  // dialog closed). `stopScheduleTarget` holds the schedule ID + title for
+  // the StopScheduleDialog. Both are opened from the More menu (list view
+  // + detail page) so we use a single shared pair of state slots regardless
+  // of which menu launched them — the dialogs themselves are rendered once
+  // at the bottom of the main return.
+  const [closeJobTarget, setCloseJobTarget] = useState<Job | null>(null);
+  const [stopScheduleTarget, setStopScheduleTarget] = useState<{ id: string; title: string } | null>(null);
+
+  // Per-schedule derived state cache: 'active' | 'paused' | 'stopped' |
+  // 'unknown'. Used by the More menu to decide whether to render
+  // "Pause Recurring Schedule" or "Resume Recurring Schedule".
+  // Populated lazily — when the More menu opens for a recurring job, we
+  // fetch GET /api/recurring-jobs/[id] and stash the derived state here so
+  // subsequent menu opens for the same schedule don't re-fetch.
+  const [scheduleStateCache, setScheduleStateCache] = useState<Record<string, 'active' | 'paused' | 'stopped' | 'unknown'>>({});
 
   // Smart-match candidates fetched from POST /api/dispatch/smart whenever
   // the Assign dialog opens. Rendered ABOVE the manual employee list as
@@ -2419,6 +2450,11 @@ export function JobsView() {
   };
 
   const handleCancelJob = async (jobId: string) => {
+    // ── Issue 1: this legacy handler is now superseded by CloseJobDialog ──
+    // Kept for backward-compat with any external callers (none in this file
+    // after the refactor — the old "Cancel Job" button was rewired to open
+    // CloseJobDialog). The dialog itself does the PUT /api/jobs/[id] call.
+    // If you call this directly, it still does the old behaviour.
     setCancellingJobId(jobId);
     try {
       const res = await fetch(`/api/jobs/${jobId}`, {
@@ -2438,6 +2474,122 @@ export function JobsView() {
     } finally {
       setCancellingJobId(null);
     }
+  };
+
+  // ── Issue 1: Close Job + Stop Recurring Schedule handlers ──────────────
+  // The dialog components own the API call (PUT /api/jobs/[id] for Close;
+  // POST /api/recurring-jobs/[id]/stop for Stop). These handlers just open
+  // the dialogs from the More menu, plus handle the Pause/Resume schedule
+  // side-effects that don't need a confirmation dialog.
+  const handleCloseJobClick = (job: Job) => {
+    setCloseJobTarget(job);
+  };
+
+  const handleStopScheduleClick = (job: Job) => {
+    if (!job.recurringScheduleId) return;
+    setStopScheduleTarget({ id: job.recurringScheduleId, title: job.title });
+  };
+
+  // Derive 'active' | 'paused' | 'stopped' from a RecurringJobSchedule row.
+  // Mirrors the derivations documented in worklog.md scaffold-T0-T3-app-shell:
+  //   active     → schedule.active === true
+  //   paused     → active=false AND pausedAt != null AND (endDate is null OR endDate > now)
+  //   stopped    → active=false AND endDate <= now (permanent — resume() 400s)
+  //   unknown    → active=false AND no pausedAt (never started, edge case)
+  const deriveScheduleState = (schedule: {
+    active: boolean;
+    pausedAt?: string | null;
+    endDate?: string | null;
+  }): 'active' | 'paused' | 'stopped' | 'unknown' => {
+    if (schedule.active) return 'active';
+    if (!schedule.pausedAt) return 'unknown';
+    if (schedule.endDate && new Date(schedule.endDate).getTime() <= Date.now()) {
+      return 'stopped';
+    }
+    return 'paused';
+  };
+
+  // Lazily fetch the schedule for a recurring job + cache its derived state.
+  // Called when the More menu opens for a recurring job. If the schedule is
+  // already cached, this is a no-op (avoids an N+1 of API calls).
+  const ensureScheduleState = useCallback(
+    (scheduleId: string) => {
+      if (scheduleStateCache[scheduleId]) return;
+      // Mark as 'unknown' immediately to dedupe concurrent calls.
+      setScheduleStateCache((prev) => ({ ...prev, [scheduleId]: 'unknown' }));
+      fetch(`/api/recurring-jobs/${scheduleId}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: { schedule?: { active: boolean; pausedAt?: string | null; endDate?: string | null } } | null) => {
+          if (!data?.schedule) return;
+          const state = deriveScheduleState(data.schedule);
+          setScheduleStateCache((prev) => ({ ...prev, [scheduleId]: state }));
+        })
+        .catch(() => {
+          // Leave as 'unknown' — the menu will fall back to "Pause".
+        });
+    },
+    [scheduleStateCache],
+  );
+
+  const handlePauseSchedule = async (scheduleId: string, title?: string) => {
+    try {
+      const res = await fetch(`/api/recurring-jobs/${scheduleId}/pause`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        toast.success(
+          `Recurring schedule paused${title ? ` — ${title}` : ''}. New visits will not be generated until resumed.`,
+        );
+        setScheduleStateCache((prev) => ({ ...prev, [scheduleId]: 'paused' }));
+        fetchJobs();
+      } else {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(err.error || 'Failed to pause recurring schedule');
+      }
+    } catch {
+      toast.error('Network error — please try again');
+    }
+  };
+
+  const handleResumeSchedule = async (scheduleId: string, title?: string) => {
+    try {
+      const res = await fetch(`/api/recurring-jobs/${scheduleId}/resume`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        const data = (await res.json().catch(() => null)) as {
+          schedule?: { nextRunAt?: string };
+        } | null;
+        const nextRun = data?.schedule?.nextRunAt;
+        const nextLabel = nextRun
+          ? ` — next visit ${new Date(nextRun).toLocaleDateString()}`
+          : '';
+        toast.success(`Recurring schedule resumed${title ? ` — ${title}` : ''}${nextLabel}`);
+        setScheduleStateCache((prev) => ({ ...prev, [scheduleId]: 'active' }));
+        fetchJobs();
+      } else if (res.status === 400) {
+        // Resume returns 400 when the schedule end date has passed
+        // (i.e. the schedule was STOPPED, not just paused). Surface that
+        // distinction so the user understands why the resume failed.
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(
+          err.error || 'Cannot resume — the schedule end date has passed. The schedule was permanently stopped.',
+        );
+        setScheduleStateCache((prev) => ({ ...prev, [scheduleId]: 'stopped' }));
+      } else {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(err.error || 'Failed to resume recurring schedule');
+      }
+    } catch {
+      toast.error('Network error — please try again');
+    }
+  };
+
+  // Stubs for the secondary More-menu actions (Issue 1 spec marks these as
+  // "stub: toast Coming soon for now"). Each returns a function bound to the
+  // given job so the DropdownMenuItem onClick can call it directly.
+  const stubComingSoon = (featureName: string) => () => {
+    toast.info(`${featureName} — coming soon.`);
   };
 
   const handleDeleteJob = async () => {
@@ -2530,25 +2682,169 @@ export function JobsView() {
     setShowComposer(true);
   };
 
+  // ── Issue 1: More menu — shared items builder ──────────────────────────
+  // Used by BOTH the list view per-row MoreVertical button (getMoreActionsMenu)
+  // and the Job Detail page MoreHorizontal button. Each call site wraps this
+  // in its own <DropdownMenu> + <DropdownMenuTrigger>. This builder returns
+  // the <DropdownMenuContent> with all conditional items per the spec.
+  //
+  // Spec structure (per the user-confirmed design):
+  //   Close Job
+  //   ───
+  //   Create Similar Job (stub)
+  //   Send Job Follow-up Email (stub)
+  //   Text Booking Confirmation (stub)
+  //   ───
+  //   Create Invoice (stub)
+  //   ───
+  //   Collect Signature (stub)
+  //   Email Job Costs CSV (stub)
+  //   Print or Save PDF (stub)
+  //   ───
+  //   [Pause | Resume] Recurring Schedule   ← only for recurring jobs
+  //   Stop Recurring Schedule                ← only for recurring jobs
+  //   ───
+  //   Delete
+  //
+  // `ctx` carries per-call-site flags (e.g. whether to include "View Details"
+  // and "Edit Job" — the list view shows them, the detail page already has
+  // Edit + Back buttons so it doesn't need them).
+  const renderMoreMenuItems = (
+    job: Job,
+    ctx: { includeViewEdit?: boolean } = { includeViewEdit: true },
+  ) => {
+    const isRecurring = !!job.recurringScheduleId;
+    const isClosed = job.status === 'completed' || job.status === 'cancelled';
+    const scheduleState = isRecurring && job.recurringScheduleId
+      ? scheduleStateCache[job.recurringScheduleId]
+      : undefined;
+    const showPause = isRecurring && scheduleState !== 'paused' && scheduleState !== 'stopped';
+    const showResume = isRecurring && (scheduleState === 'paused' || scheduleState === 'unknown');
+    const showStop = isRecurring && scheduleState !== 'stopped';
+
+    return (
+      <DropdownMenuContent
+        align="end"
+        onClick={(e) => e.stopPropagation()}
+        className="w-56 max-h-[80vh] overflow-y-auto"
+      >
+        {ctx.includeViewEdit && (
+          <>
+            <DropdownMenuItem onClick={() => openJobDetail(job)}>
+              <Eye className="size-4 mr-2" /> View Details
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openEditJob(job)}>
+              <Pencil className="size-4 mr-2" /> Edit Job
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+
+        {/* Close Job — primary "close this occurrence" action. */}
+        {/* Disabled for already-closed jobs (completed / cancelled). */}
+        <DropdownMenuItem
+          disabled={isClosed}
+          onClick={() => handleCloseJobClick(job)}
+        >
+          <CheckCircle2 className="size-4 mr-2" /> Close Job
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        {/* Booking / follow-up stubs. */}
+        <DropdownMenuItem onClick={stubComingSoon('Create Similar Job')}>
+          <Copy className="size-4 mr-2" /> Create Similar Job
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={stubComingSoon('Send Job Follow-up Email')}>
+          <Send className="size-4 mr-2" /> Send Job Follow-up Email
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={stubComingSoon('Text Booking Confirmation')}>
+          <MessageSquare className="size-4 mr-2" /> Text Booking Confirmation
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        {/* Billing stub. */}
+        <DropdownMenuItem onClick={stubComingSoon('Create Invoice')}>
+          <DollarSign className="size-4 mr-2" /> Create Invoice
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        {/* On-site documentation stubs. */}
+        <DropdownMenuItem onClick={stubComingSoon('Collect Signature')}>
+          <PenLine className="size-4 mr-2" /> Collect Signature
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={stubComingSoon('Email Job Costs CSV')}>
+          <FileSpreadsheet className="size-4 mr-2" /> Email Job Costs CSV
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handlePrintJob}>
+          <Printer className="size-4 mr-2" /> Print or Save PDF
+        </DropdownMenuItem>
+
+        {/* Recurring schedule controls — only for jobs generated by a
+            RecurringJobSchedule (Job.recurringScheduleId set). Pause/Resume
+            is mutually exclusive; Stop is permanent so it disappears once
+            the schedule is already stopped. */}
+        {(showPause || showResume || showStop) && (
+          <>
+            <DropdownMenuSeparator />
+            {showPause && job.recurringScheduleId && (
+              <DropdownMenuItem
+                onClick={() => handlePauseSchedule(job.recurringScheduleId!, job.title)}
+              >
+                <Pause className="size-4 mr-2" /> Pause Recurring Schedule
+              </DropdownMenuItem>
+            )}
+            {showResume && job.recurringScheduleId && (
+              <DropdownMenuItem
+                onClick={() => handleResumeSchedule(job.recurringScheduleId!, job.title)}
+              >
+                <PlayCircle className="size-4 mr-2" /> Resume Recurring Schedule
+              </DropdownMenuItem>
+            )}
+            {showStop && job.recurringScheduleId && (
+              <DropdownMenuItem
+                className="text-amber-700 focus:text-amber-800 focus:bg-amber-50"
+                onClick={() => handleStopScheduleClick(job)}
+              >
+                <StopCircle className="size-4 mr-2" /> Stop Recurring Schedule
+              </DropdownMenuItem>
+            )}
+          </>
+        )}
+
+        <DropdownMenuSeparator />
+
+        {/* Existing delete action. */}
+        <DropdownMenuItem
+          className="text-red-600 focus:text-red-700 focus:bg-red-50"
+          onClick={() => setDeletingJob(job)}
+        >
+          <Trash2 className="size-4 mr-2" /> Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    );
+  };
+
+  // List-view More menu — wraps the shared items in a DropdownMenu with a
+  // compact ghost-icon trigger. The onOpenChange hook lazily fetches the
+  // schedule state for recurring jobs so the Pause/Resume/Stop items render
+  // correctly without an N+1 of API calls on initial list render.
   const getMoreActionsMenu = (job: Job) => (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open && job.recurringScheduleId) {
+          ensureScheduleState(job.recurringScheduleId);
+        }
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="h-9 w-9 min-h-[44px]" onClick={(e) => e.stopPropagation()} title="More actions">
           <MoreVertical className="size-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-        <DropdownMenuItem onClick={() => openJobDetail(job)}>
-          <Eye className="size-4 mr-2" /> View Details
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => openEditJob(job)}>
-          <Pencil className="size-4 mr-2" /> Edit Job
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-red-600 focus:text-red-700 focus:bg-red-50" onClick={() => setDeletingJob(job)}>
-          <Trash2 className="size-4 mr-2" /> Delete Job
-        </DropdownMenuItem>
-      </DropdownMenuContent>
+      {renderMoreMenuItems(job, { includeViewEdit: true })}
     </DropdownMenu>
   );
 
@@ -3353,9 +3649,30 @@ export function JobsView() {
               <button onClick={() => openEditJob(job)} className="inline-flex items-center justify-center min-h-[44px] px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
                 <Pencil className="size-4 mr-1.5" /> Edit
               </button>
-              <button title="More actions" className="inline-flex items-center justify-center size-9 rounded-lg text-foreground border border-border bg-background hover:bg-muted transition-colors">
-                <MoreHorizontal className="size-4" />
-              </button>
+              {/* ── Issue 1: Detail page More menu ────────────────────────
+                  Mirrors the list view's MoreVertical menu structure via the
+                  shared renderMoreMenuItems builder. Detail page hides the
+                  "View Details" + "Edit Job" items (already on the page) —
+                  passes includeViewEdit:false so the menu opens straight to
+                  "Close Job". */}
+              <DropdownMenu
+                onOpenChange={(open) => {
+                  if (open && job.recurringScheduleId) {
+                    ensureScheduleState(job.recurringScheduleId);
+                  }
+                }}
+              >
+                <DropdownMenuTrigger asChild>
+                  <button
+                    title="More actions"
+                    aria-label="More actions"
+                    className="inline-flex items-center justify-center size-9 min-h-[44px] rounded-lg text-foreground border border-border bg-background hover:bg-muted transition-colors"
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                {renderMoreMenuItems(job, { includeViewEdit: false })}
+              </DropdownMenu>
             </div>
           </div>
         </div>
@@ -3961,11 +4278,20 @@ export function JobsView() {
               </div>
             </FormSectionCard>
 
-            {/* Danger actions */}
+            {/* Danger actions
+                ── Issue 1: the legacy "Cancel Job" button was replaced by the
+                "Close Job" item in the More menu. The More menu's Close Job
+                action opens CloseJobDialog, which branches on recurring vs
+                non-recurring and surfaces a confirmation. We keep the inline
+                "Delete" shortcut on the detail page since destructive actions
+                benefit from being visible + persistent (not buried in a menu). */}
             {!['completed', 'cancelled'].includes(job.status) && (
               <div className="flex flex-wrap gap-2 pt-2">
-                <button onClick={() => handleCancelJob(job.id)} disabled={cancellingJobId === job.id} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-medium text-red-600 border border-red-200 bg-background hover:bg-red-50 disabled:opacity-60 transition-colors">
-                  {cancellingJobId === job.id ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <XCircle className="size-4 mr-1.5" />} Cancel Job
+                <button
+                  onClick={() => handleCloseJobClick(job)}
+                  className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-medium text-emerald-700 border border-emerald-300 bg-background hover:bg-emerald-50 transition-colors"
+                >
+                  <CheckCircle2 className="size-4 mr-1.5" /> Close Job
                 </button>
                 <button onClick={() => setDeletingJob(job)} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-medium text-red-600 border border-red-200 bg-background hover:bg-red-50 transition-colors">
                   <Trash2 className="size-4 mr-1.5" /> Delete
@@ -5047,6 +5373,57 @@ export function JobsView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ─── Issue 1: Close Job + Stop Recurring Schedule dialogs ─────────
+          Both are mounted once at the root of the Jobs view (regardless of
+          list/detail formMode) and controlled by `closeJobTarget` /
+          `stopScheduleTarget` state. Any More menu — list view per-row OR
+          Job Detail page header — can open them by setting the target.
+
+          CloseJobDialog branches on job.recurringScheduleId to show either
+          "Close job with incomplete visits?" (normal) or "Close this
+          visit?" (recurring — explicitly NOT stopping the schedule).
+
+          StopScheduleDialog fetches the schedule's recentJobs on open to
+          show the future-visit count, then calls POST /stop with the
+          user's keep/remove choice. */}
+      <CloseJobDialog
+        job={closeJobTarget}
+        open={!!closeJobTarget}
+        onOpenChange={(open) => { if (!open) setCloseJobTarget(null); }}
+        onClosed={() => {
+          // Refresh the list + the open detail page (if any) so the status
+          // badge flips to "completed" immediately.
+          fetchJobs();
+          if (selectedJob && closeJobTarget && selectedJob.id === closeJobTarget.id) {
+            // Best-effort refresh of the detail page's selectedJob.
+            fetch(`/api/jobs/${closeJobTarget.id}`)
+              .then((r) => (r.ok ? r.json() : null))
+              .then((data: { job?: Job } | null) => {
+                if (data?.job) setSelectedJob(data.job);
+              })
+              .catch(() => {});
+          }
+        }}
+      />
+      <StopScheduleDialog
+        scheduleId={stopScheduleTarget?.id ?? null}
+        scheduleTitle={stopScheduleTarget?.title}
+        open={!!stopScheduleTarget}
+        onOpenChange={(open) => { if (!open) setStopScheduleTarget(null); }}
+        onStopped={() => {
+          // Refresh the list so any cancelled future jobs drop off the
+          // active list immediately. Also invalidate the schedule-state
+          // cache so the More menu re-evaluates Pause/Resume/Stop on the
+          // next open (the schedule is now 'stopped' — Stop should be
+          // hidden, Pause should be hidden, Resume should also be hidden
+          // since resume() will 400 with "end date has passed").
+          if (stopScheduleTarget?.id) {
+            setScheduleStateCache((prev) => ({ ...prev, [stopScheduleTarget.id]: 'stopped' }));
+          }
+          fetchJobs();
+        }}
+      />
 
       {/* ─── V1.5: Job Completion Dialog (photos + signatures + notes) ──── */}
       {completionJob && (

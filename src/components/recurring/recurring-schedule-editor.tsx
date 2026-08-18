@@ -121,7 +121,14 @@ const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
 const DAY_FULL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 const TIMEZONES = [
-  { value: '', label: 'Server local' },
+  // IMPORTANT: Radix UI <SelectItem> forbids empty-string `value` props (throws
+  // "A <Select.Item /> must have a value prop that is not an empty string").
+  // The previous `{ value: '', label: 'Server local' }` crashed the editor the
+  // moment a user toggled "Recurring" ON (the Timezone Select mounted with an
+  // empty-value item → React error boundary → "Something went wrong").
+  // Fix: use a sentinel string 'server-local' for the UI, and map it back to
+  // `null` (the backend's "server local" representation) in `onValueChange`.
+  { value: 'server-local', label: 'Server local' },
   { value: 'UTC', label: 'UTC' },
   { value: 'Asia/Kolkata', label: 'Asia/Kolkata (IST)' },
   { value: 'Asia/Dubai', label: 'Asia/Dubai (GST)' },
@@ -697,8 +704,8 @@ export function RecurringScheduleEditor({
                 Timezone
               </Label>
               <Select
-                value={value.timezone ?? ''}
-                onValueChange={(v) => set('timezone', v || null)}
+                value={value.timezone ? value.timezone : 'server-local'}
+                onValueChange={(v) => set('timezone', v === 'server-local' ? null : v)}
               >
                 <SelectTrigger className="form-input h-9">
                   <SelectValue placeholder="Server local" />
