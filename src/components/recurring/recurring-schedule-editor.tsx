@@ -46,7 +46,6 @@ import {
 import { cn } from '@/lib/utils';
 import {
   calculateOccurrences,
-  formatSchedulePreview,
   formatScheduleSummary,
   parseWeekdaysJson,
   type RecurrenceInput,
@@ -77,6 +76,29 @@ export interface RecurringScheduleValue {
   // Billing
   generateInvoice: boolean;
   invoiceTiming: 'on_generation' | 'on_completion';
+  /**
+   * UI-only: which "Ends" radio is selected.
+   *
+   * This field drives the radio's selected state INDEPENDENTLY of the
+   * `endAfterOccurrences` / `endDate` data fields. Previously `endMode` was
+   * purely derived from data (`endAfterOccurrences != null ? 'after' : ...`),
+   * which caused two bugs:
+   *
+   *  1. Stale-closure bug in `setEndMode`: it called `set()` twice in a row,
+   *     and each `set()` used the closure's captured `value` — so the second
+   *     call OVERWROTE the first call's change. Clicking "After N visits"
+   *     appeared to do nothing (the radio snapped back to "Never").
+   *
+   *  2. The radio's selected state depended on whether `endAfterOccurrences`
+   *     had a value, rather than reflecting the user's explicit choice.
+   *
+   * Making `endMode` a real (optional) field on the value fixes both: the radio
+   * reflects the user's intent, and `setEndMode` is a single `onChange` call.
+   *
+   * For backward compat with schedules created before this field existed,
+   * `endMode` falls back to data-based inference when undefined.
+   */
+  endMode?: 'never' | 'after' | 'on';
 }
 
 export const EMPTY_RECURRING_VALUE: RecurringScheduleValue = {
@@ -98,7 +120,35 @@ export const EMPTY_RECURRING_VALUE: RecurringScheduleValue = {
   generateFirstJob: true,
   generateInvoice: false,
   invoiceTiming: 'on_completion',
+  endMode: 'never',
 };
+
+// ─── Preview formatting helpers (presentation-only) ─────────────────────
+// These produce the human-readable strings used in the Schedule Preview
+// block at the bottom of the editor. They do NOT touch occurrence-generation
+// logic — that lives in `calculateOccurrences` / `calculateNextOccurrence`
+// in `recurrence-engine.ts`.
+
+const PREVIEW_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+
+function formatPreviewDate(dateStr: string | null): string {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return '—';
+  return `${PREVIEW_MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+function formatPreviewTime(time: string | null): string {
+  if (!time) return '—';
+  const parts = time.split(':');
+  if (parts.length < 2) return time;
+  const h = Number(parts[0]);
+  const m = Number(parts[1]);
+  if (Number.isNaN(h) || Number.isNaN(m)) return time;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
+}
 
 export interface RecurringScheduleEditorProps {
   value: RecurringScheduleValue;
@@ -156,32 +206,6 @@ export function RecurringScheduleEditor({
   const set = <K extends keyof RecurringScheduleValue>(key: K, val: RecurringScheduleValue[K]) => {
     onChange({ ...value, [key]: val });
   };
-
-  // Compute the recurrence preview using the shared engine (same logic as backend).
-  const preview = useMemo(() => {
-    const input: RecurrenceInput = {
-      frequency: value.frequency,
-      dayOfWeek: value.dayOfWeek,
-      dayOfMonth: value.dayOfMonth,
-      weekOfMonth: value.weekOfMonth,
-      weekdaysJson: value.weekdaysJson,
-      interval: value.interval,
-      nthWeekdayJson: value.nthWeekdayJson,
-      timeOfDay: value.timeOfDay,
-      durationMins: value.durationMins,
-      startDate: value.startDate ? new Date(value.startDate) : new Date(),
-      endDate: value.endDate ? new Date(value.endDate) : null,
-      endAfterOccurrences: value.endAfterOccurrences,
-      asNeeded: value.asNeeded,
-      timezone: value.timezone,
-    };
-    return formatSchedulePreview(input);
-  }, [
-    value.frequency, value.dayOfWeek, value.dayOfMonth, value.weekOfMonth,
-    value.weekdaysJson, value.interval, value.nthWeekdayJson, value.timeOfDay,
-    value.durationMins, value.startDate, value.endDate, value.endAfterOccurrences,
-    value.asNeeded, value.timezone,
-  ]);
 
   // For "After N visits" counter — compute expected visits from engine.
   const expectedVisits = useMemo(() => {
@@ -255,24 +279,46 @@ export function RecurringScheduleEditor({
   };
 
   // ── End condition ──
+  // `endMode` is now an explicit field on the value (not just derived from
+  // data). This fixes the stale-closure bug where clicking "After N visits"
+  // appeared to do nothing because `set()` was called twice in a row, each
+  // using the closure's stale `value`, so the second call OVERWROTE the first.
+  //
+  // We still fall back to data-based inference for backward compat with
+  // schedules created before `endMode` was added.
   const endMode: 'never' | 'after' | 'on' =
-    value.endAfterOccurrences != null ? 'after' : value.endDate ? 'on' : 'never';
+    value.endMode ??
+    (value.endAfterOccurrences != null ? 'after' : value.endDate ? 'on' : 'never');
+
   const setEndMode = (mode: 'never' | 'after' | 'on') => {
+    // CRITICAL: single onChange call. Do NOT call set() multiple times —
+    // set() uses the closure's `value`, so successive calls overwrite each
+    // other (the classic stale-closure bug that previously made the "Ends"
+    // radio snap back to "Never" on every click).
+    const next: RecurringScheduleValue = { ...value, endMode: mode };
     if (mode === 'never') {
-      set('endAfterOccurrences', null);
-      set('endDate', null);
+      // "Never" means no end — null both data fields so the backend / cron
+      // runner treats the schedule as ongoing.
+      next.endAfterOccurrences = null;
+      next.endDate = null;
     } else if (mode === 'after') {
-      set('endAfterOccurrences', 10); // default 10
-      set('endDate', null);
+      // Preserve an existing endAfterOccurrences if the user previously typed
+      // one; only default to 10 on the first switch into "after".
+      next.endAfterOccurrences = value.endAfterOccurrences ?? 10;
+      // Null out endDate so the backend uses endAfterOccurrences as the limit.
+      next.endDate = null;
     } else if (mode === 'on') {
-      set('endAfterOccurrences', null);
+      // Null out endAfterOccurrences so the backend uses endDate as the limit.
+      next.endAfterOccurrences = null;
+      // Preserve an existing endDate if the user previously picked one; only
+      // default to start+6mo on the first switch into "on".
       if (!value.endDate) {
-        // Default end date = 6 months from start
         const d = new Date(value.startDate);
         d.setMonth(d.getMonth() + 6);
-        set('endDate', d.toISOString().substring(0, 10));
+        next.endDate = d.toISOString().substring(0, 10);
       }
     }
+    onChange(next);
   };
 
   // ── Render ──
@@ -305,29 +351,6 @@ export function RecurringScheduleEditor({
       {/* If showSwitch=true and not enabled, render nothing else */}
       {showSwitch && !value.enabled ? null : (
         <>
-          {/* ─── Schedule preview summary (always visible) ─── */}
-          <div className="rounded-md border bg-emerald-50/50 dark:bg-emerald-950/20 px-3 py-2.5">
-            <div className="flex items-start gap-2">
-              <Calendar className="size-4 mt-0.5 text-emerald-600 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
-                  {preview}
-                </p>
-                {!value.asNeeded && expectedVisits > 0 && (
-                  <p className="text-[11px] text-emerald-700/70 dark:text-emerald-400/70 mt-0.5">
-                    {expectedVisits} planned visit{expectedVisits === 1 ? '' : 's'}
-                    {value.generateFirstJob ? ' · First job created immediately' : ' · First job via cron'}
-                  </p>
-                )}
-                {value.asNeeded && (
-                  <p className="text-[11px] text-emerald-700/70 dark:text-emerald-400/70 mt-0.5">
-                    Flexible schedule · No automatic generation
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
           {/* ─── Start date + Time range ─── */}
           <div className={cn('grid gap-3', compact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3')}>
             <div className="grid gap-1.5">
@@ -723,6 +746,69 @@ export function RecurringScheduleEditor({
               </p>
             </div>
           )}
+
+          {/* ─── Schedule Preview (live summary, at the end) ─── */}
+          {/* Per UX decision: positioned AFTER the recurrence controls so the
+              relationship between inputs → result is obvious. NOT sticky —
+              just a normal block at the bottom of the editor. */}
+          <div className="rounded-md border bg-emerald-50/50 dark:bg-emerald-950/20 px-4 py-3 space-y-1.5">
+            <div className="flex items-center gap-2 mb-1">
+              <Calendar className="size-4 text-emerald-600 shrink-0" />
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                Schedule Preview
+              </p>
+            </div>
+            {value.asNeeded ? (
+              <>
+                <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+                  Starting {formatPreviewDate(value.startDate)}
+                </p>
+                <p className="text-sm text-emerald-800 dark:text-emerald-100">
+                  As needed · Flexible schedule
+                </p>
+                <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 pt-1 border-t border-emerald-200/50 dark:border-emerald-800/50 mt-1">
+                  No automatic generation · First job created manually
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+                  Starting {formatPreviewDate(value.startDate)}
+                </p>
+                <p className="text-sm text-emerald-800 dark:text-emerald-100">
+                  {frequencyLabel}
+                  {' · '}
+                  {formatPreviewTime(value.timeOfDay)}
+                  {' · '}
+                  {value.durationMins} min
+                  {' · '}
+                  {(() => {
+                    if (endMode === 'never') return 'Ongoing';
+                    if (endMode === 'after') return `Ends after ${value.endAfterOccurrences ?? 10} visits`;
+                    return value.endDate ? `Through ${formatPreviewDate(value.endDate)}` : 'Ongoing';
+                  })()}
+                </p>
+                <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 pt-1 border-t border-emerald-200/50 dark:border-emerald-800/50 mt-1">
+                  {(() => {
+                    const firstJobSuffix = value.generateFirstJob
+                      ? ' · First job created immediately'
+                      : ' · First job via cron';
+                    if (endMode === 'never') {
+                      return `Ongoing schedule${firstJobSuffix}`;
+                    }
+                    if (endMode === 'after') {
+                      const n = value.endAfterOccurrences ?? 10;
+                      return `${n} visit${n === 1 ? '' : 's'} scheduled${firstJobSuffix}`;
+                    }
+                    // endMode === 'on'
+                    const n = expectedVisits;
+                    const dateStr = value.endDate ? formatPreviewDate(value.endDate) : '';
+                    return `${n} visit${n === 1 ? '' : 's'} scheduled through ${dateStr}${firstJobSuffix}`;
+                  })()}
+                </p>
+              </>
+            )}
+          </div>
         </>
       )}
     </div>

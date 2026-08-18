@@ -15,7 +15,11 @@ import { requirePlanFeature } from '@/lib/plan-gate';
 // Query params:
 //   page     — 1-indexed page number (default 1)
 //   limit    — page size, capped at 100 (default 20)
-//   status   — optional exact status match (e.g. 'pending', 'completed')
+//   status   — optional status filter. Accepts either:
+//                • a single exact status string ('pending', 'completed', …)
+//                • the special value 'upcoming' → expands to
+//                  status IN (pending, assigned, accepted, in_progress),
+//                  matching the Generated Jobs tab's filter dropdown.
 //
 // Response shape:
 //   {
@@ -65,9 +69,17 @@ export async function GET(
     const limit = Math.min(Math.max(1, limitRaw), 100);
     const skip = (page - 1) * limit;
 
-    // Optional status filter (exact match — single value only; multi-value
-    // filters aren't needed by the detail tab's status dropdown).
+    // Optional status filter. Two forms are accepted:
+    //   1. The literal token 'upcoming' → expands to status IN
+    //      (pending, assigned, accepted, in_progress) — matches the
+    //      Generated Jobs tab's "Upcoming" filter option.
+    //   2. Any other string → treated as an exact status match.
     const status = searchParams.get('status')?.trim() || null;
+    const statusFilter: Record<string, unknown> | null = status
+      ? status === 'upcoming'
+        ? { status: { in: ['pending', 'assigned', 'accepted', 'in_progress'] } }
+        : { status }
+      : null;
 
     // The Job model lives under `workspaceId` (NOT `tenantId` directly — see
     // prisma/schema.prisma). To stay tenant-scoped, we restrict to workspaces
@@ -84,7 +96,7 @@ export async function GET(
 
     const where: Record<string, unknown> = {
       recurringScheduleId: id,
-      ...(status ? { status } : {}),
+      ...(statusFilter ?? {}),
       ...(workspaceIds.length > 0 ? { workspaceId: { in: workspaceIds } } : {}),
     };
 

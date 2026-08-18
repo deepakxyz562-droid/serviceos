@@ -52,7 +52,53 @@ export async function GET(
       },
     });
 
-    return NextResponse.json({ schedule, recentJobs });
+    // ── Schedule-level metrics for the Overview tab. ───────────────────────
+    //
+    // The Overview tab now shows compact counts (total / completed / upcoming
+    // / cancelled) + the most-recently-generated job's scheduled date. We
+    // compute these server-side so the UI doesn't have to issue a second
+    // call to /jobs and so the "Last generated" label can be derived from
+    // the actual generated Job's scheduledAt (NOT schedule.lastRunAt, which
+    // is the schedule's processing timestamp and misleading as a "last
+    // visit" indicator).
+    //
+    // Definitions match the Generated Jobs tab filter:
+    //   upcoming = status IN (pending, assigned, accepted, in_progress)
+    //   completed = status = 'completed'
+    //   cancelled = status = 'cancelled'
+    //
+    // "Last generated" = the most-recently-CREATED job's scheduledAt
+    // (ordered by createdAt desc, NOT scheduledAt desc — the latter would
+    // surface the furthest-future visit, which doesn't match the user's
+    // mental model of "the last visit we generated just now").
+    const baseWhere = { recurringScheduleId: schedule.id };
+    const [total, completed, cancelled, upcoming, lastGenerated] = await Promise.all([
+      db.job.count({ where: baseWhere }),
+      db.job.count({ where: { ...baseWhere, status: 'completed' } }),
+      db.job.count({ where: { ...baseWhere, status: 'cancelled' } }),
+      db.job.count({
+        where: {
+          ...baseWhere,
+          status: { in: ['pending', 'assigned', 'accepted', 'in_progress'] },
+        },
+      }),
+      db.job.findFirst({
+        where: baseWhere,
+        orderBy: { createdAt: 'desc' },
+        select: { scheduledAt: true, createdAt: true },
+      }),
+    ]);
+
+    const metrics = {
+      total,
+      completed,
+      cancelled,
+      upcoming,
+      lastJobScheduledAt: lastGenerated?.scheduledAt ?? null,
+      lastJobCreatedAt: lastGenerated?.createdAt ?? null,
+    };
+
+    return NextResponse.json({ schedule, recentJobs, metrics });
   } catch (error) {
     console.error('Get recurring job error:', error);
     return NextResponse.json({ error: 'Failed to fetch recurring job schedule' }, { status: 500 });

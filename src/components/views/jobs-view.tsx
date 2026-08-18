@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Briefcase, Plus, Search, RefreshCw, Filter, Clock, MapPin, User,
@@ -13,6 +14,9 @@ import {
   UserCheck, Check, Navigation, Wrench, Pause, Route as RouteIcon,
   Timer, PlayCircle, PauseCircle, StopCircle, ExternalLink, MapPinned,
   Archive,
+  // Recurring Jobs UX: UserCircle for individual employee assignment
+  // (reserve `Users` for multi-assignee teams later).
+  UserCircle,
   // Phase 1: Smart Assign/Reassign Workspace icons
   MessageSquare, ShieldAlert, Clock3,
   // Issue 1: More menu conditional items (Create Similar, Text Booking,
@@ -1236,6 +1240,14 @@ export function JobsView() {
   // fetch GET /api/recurring-jobs/[id] and stash the derived state here so
   // subsequent menu opens for the same schedule don't re-fetch.
   const [scheduleStateCache, setScheduleStateCache] = useState<Record<string, 'active' | 'paused' | 'stopped' | 'unknown'>>({});
+
+  // Parallel cache of recurring-schedule metadata (just the title for now).
+  // The Job detail page uses this to render the "Part of recurring schedule"
+  // back-link banner above the job title — without it, the user landing on a
+  // generated Job has no obvious way to navigate back to the schedule detail
+  // page. Populated by `ensureScheduleState` (which already fetches the full
+  // schedule row, including `title`).
+  const [scheduleMetaCache, setScheduleMetaCache] = useState<Record<string, { title?: string }>>({});
 
   // Smart-match candidates fetched from POST /api/dispatch/smart whenever
   // the Assign dialog opens. Rendered ABOVE the manual employee list as
@@ -2520,10 +2532,16 @@ export function JobsView() {
       setScheduleStateCache((prev) => ({ ...prev, [scheduleId]: 'unknown' }));
       fetch(`/api/recurring-jobs/${scheduleId}`)
         .then((r) => (r.ok ? r.json() : null))
-        .then((data: { schedule?: { active: boolean; pausedAt?: string | null; endDate?: string | null } } | null) => {
+        .then((data: { schedule?: { title?: string; active: boolean; pausedAt?: string | null; endDate?: string | null } } | null) => {
           if (!data?.schedule) return;
           const state = deriveScheduleState(data.schedule);
           setScheduleStateCache((prev) => ({ ...prev, [scheduleId]: state }));
+          // Side-cache the title so the Job detail banner can render the
+          // parent schedule's name without a second network call.
+          setScheduleMetaCache((prev) => ({
+            ...prev,
+            [scheduleId]: { title: data.schedule!.title },
+          }));
         })
         .catch(() => {
           // Leave as 'unknown' — the menu will fall back to "Pause".
@@ -2531,6 +2549,16 @@ export function JobsView() {
     },
     [scheduleStateCache],
   );
+
+  // When the Job detail page opens for a recurring-generated job, eagerly
+  // fetch the parent schedule's title so the back-link banner renders
+  // promptly. This wraps `ensureScheduleState` so the cache stays the single
+  // source of truth — if the More menu already populated it, we don't
+  // re-fetch. Safe to call on every selectedJob change; it self-dedupes.
+  useEffect(() => {
+    if (!selectedJob?.recurringScheduleId) return;
+    ensureScheduleState(selectedJob.recurringScheduleId);
+  }, [selectedJob?.recurringScheduleId, ensureScheduleState]);
 
   const handlePauseSchedule = async (scheduleId: string, title?: string) => {
     try {
@@ -3022,7 +3050,12 @@ export function JobsView() {
           </div>
         </FormSectionCard>
 
-        {/* ─── Job Type & Schedule (merged into one box) ────────── */}
+        {/* ─── Job Type & Schedule ────────────────────────────────── */}
+        {/* Slimmed per UX decision: this section now contains ONLY the Type
+            toggle, plus (when One-off) the Start date / Start time / End time
+            row. For Recurring jobs, the scheduling fields live inside the
+            RecurringScheduleEditor below — one source of scheduling truth per
+            mode, so the user never sees two competing schedules. */}
         <FormSectionCard icon={CalendarDays} title="Job Type & Schedule">
           <div className="space-y-4">
             {/* Job type toggle — SINGLE source of truth.
@@ -3064,131 +3097,47 @@ export function JobsView() {
               </div>
             </div>
 
-            <div className="border-t border-border/40" />
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="grid gap-2">
-                <Label htmlFor="job-date">Start date</Label>
-                <Input
-                  id="job-date"
-                  type="date"
-                  className="form-input h-10"
-                  value={jobForm.scheduledDate}
-                  onChange={(e) => setJobForm({ ...jobForm, scheduledDate: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="job-start">Start time</Label>
-                <Input
-                  id="job-start"
-                  type="time"
-                  className="form-input h-10"
-                  value={jobForm.scheduledTime}
-                  onChange={(e) => setJobForm({ ...jobForm, scheduledTime: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="job-end">End time</Label>
-                <Input
-                  id="job-end"
-                  type="time"
-                  className="form-input h-10"
-                  value={jobForm.endTime}
-                  onChange={(e) => setJobForm({ ...jobForm, endTime: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="job-assignee">Assigned to</Label>
-              <Select value={jobForm.assigneeId} onValueChange={(v) => setJobForm({ ...jobForm, assigneeId: v })}>
-                <SelectTrigger id="job-assignee" className="form-input h-10"><SelectValue placeholder="Select employee (optional)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No assignee</SelectItem>
-                  {employees.filter((e) => e.status === 'available').map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id}>
-                      {emp.name} — {emp.role} ({emp.rating.toFixed(1)} ★)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="job-instructions">Visit instructions</Label>
-              <Textarea
-                id="job-instructions"
-                rows={3}
-                className="form-input"
-                placeholder="Visit instructions (shown to the assigned employee on-site)"
-                value={jobForm.visitInstructions}
-                onChange={(e) => setJobForm({ ...jobForm, visitInstructions: e.target.value })}
-              />
-            </div>
-            {/* ── Capture on-site details: checklists ── */}
-            <div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-3">
-              <div className="flex items-start gap-2">
-                <ClipboardList className="size-4 mt-0.5 shrink-0 text-emerald-600" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-foreground/90 text-sm">CAPTURE ON-SITE DETAILS</p>
-                  <p className="text-xs text-muted-foreground">
-                    Attach custom-built checklists so that nothing gets missed.
-                  </p>
+            {/* Start date / Start time / End time — ONLY for One-off jobs.
+                For Recurring jobs, the schedule lives inside the
+                RecurringScheduleEditor (Start date + Start time + Duration).
+                Showing both would create two competing scheduling sources. */}
+            {jobForm.jobType === 'one-off' && (
+              <>
+                <div className="border-t border-border/40" />
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="job-date">Start date</Label>
+                    <Input
+                      id="job-date"
+                      type="date"
+                      className="form-input h-10"
+                      value={jobForm.scheduledDate}
+                      onChange={(e) => setJobForm({ ...jobForm, scheduledDate: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="job-start">Start time</Label>
+                    <Input
+                      id="job-start"
+                      type="time"
+                      className="form-input h-10"
+                      value={jobForm.scheduledTime}
+                      onChange={(e) => setJobForm({ ...jobForm, scheduledTime: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="job-end">End time</Label>
+                    <Input
+                      id="job-end"
+                      type="time"
+                      className="form-input h-10"
+                      value={jobForm.endTime}
+                      onChange={(e) => setJobForm({ ...jobForm, endTime: e.target.value })}
+                    />
+                  </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="link"
-                  size="sm"
-                  className="text-emerald-700 hover:text-emerald-800 px-0 h-auto"
-                  onClick={() => openChecklistBuilder(undefined, true)}
-                >
-                  + Create a Checklist
-                </Button>
-              </div>
-              {/* Attached / attach-existing picker */}
-              {jobForm.linkedChecklists.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {jobForm.linkedChecklists.map((cid) => {
-                    const cl = checklists.find((c) => c.id === cid);
-                    if (!cl) return null;
-                    return (
-                      <Badge
-                        key={cid}
-                        variant="secondary"
-                        className="bg-emerald-50 text-emerald-800 border-emerald-200 gap-1 pr-1 cursor-pointer hover:bg-emerald-100"
-                        onClick={() => openChecklistBuilder(cl, true)}
-                        title="Click to edit"
-                      >
-                        <ClipboardList className="size-3" />
-                        {cl.title}
-                        <button
-                          type="button"
-                          className="ml-0.5 hover:text-red-600"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setJobForm((prev) => ({
-                              ...prev,
-                              linkedChecklists: prev.linkedChecklists.filter((x) => x !== cid),
-                            }));
-                          }}
-                        >
-                          <X className="size-3" />
-                        </button>
-                      </Badge>
-                    );
-                  })}
-                </div>
-              )}
-              <ChecklistAttachPicker
-                checklists={checklists.filter((c) => !jobForm.linkedChecklists.includes(c.id))}
-                selectedIds={[]}
-                onChange={(ids) => {
-                  // For the picker, any checked id gets ADDED to linkedChecklists
-                  setJobForm((prev) => ({
-                    ...prev,
-                    linkedChecklists: [...new Set([...prev.linkedChecklists, ...ids])],
-                  }));
-                }}
-                onCreateNew={() => openChecklistBuilder(undefined, true)}
-              />
-            </div>
+              </>
+            )}
           </div>
         </FormSectionCard>
 
@@ -3211,6 +3160,118 @@ export function JobsView() {
             />
           </FormSectionCard>
         )}
+
+        {/* ─── Assigned To ─────────────────────────────────────────── */}
+        {/* Extracted from "Job Type & Schedule" per UX decision: assignment
+            is a separate concern from scheduling. Using UserCircle icon
+            (individual employee assignment; reserve `Users` for multi-assignee
+            teams later). This separation also prepares for future
+            technician-rotation features (e.g. Every Monday → Team A). */}
+        <FormSectionCard icon={UserCircle} title="Assigned To">
+          <div className="grid gap-2">
+            <Label htmlFor="job-assignee">Employee</Label>
+            <Select value={jobForm.assigneeId} onValueChange={(v) => setJobForm({ ...jobForm, assigneeId: v })}>
+              <SelectTrigger id="job-assignee" className="form-input h-10"><SelectValue placeholder="Select employee (optional)" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No assignee</SelectItem>
+                {employees.filter((e) => e.status === 'available').map((emp) => (
+                  <SelectItem key={emp.id} value={emp.id}>
+                    {emp.name} — {emp.role} ({emp.rating.toFixed(1)} ★)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </FormSectionCard>
+
+        {/* ─── Visit Details ───────────────────────────────────────── */}
+        {/* Visit instructions extracted into its own section per UX decision:
+            Schedule / Assignment / Visit details / Capture — four distinct
+            logical groupings instead of one monolithic "Job Type & Schedule". */}
+        <FormSectionCard icon={StickyNote} title="Visit Details">
+          <div className="grid gap-2">
+            <Label htmlFor="job-instructions">Visit instructions</Label>
+            <Textarea
+              id="job-instructions"
+              rows={3}
+              className="form-input"
+              placeholder="Visit instructions (shown to the assigned employee on-site)"
+              value={jobForm.visitInstructions}
+              onChange={(e) => setJobForm({ ...jobForm, visitInstructions: e.target.value })}
+            />
+          </div>
+        </FormSectionCard>
+
+        {/* ─── Capture On-Site Details (checklists) ────────────────── */}
+        {/* Extracted from "Job Type & Schedule" into its own section.
+            ONE primary action ("+ Create checklist") in the header — the
+            picker's own empty state / bottom button were consolidated to
+            avoid duplicate actions. */}
+        <FormSectionCard
+          icon={ClipboardList}
+          title="Capture On-Site Details"
+          description="Attach custom-built checklists so that nothing gets missed."
+          action={
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="text-emerald-700 hover:text-emerald-800 px-0 h-auto"
+              onClick={() => openChecklistBuilder(undefined, true)}
+            >
+              + Create checklist
+            </Button>
+          }
+        >
+          <div className="space-y-3">
+            {/* Attached checklists (clickable to edit, X to remove) */}
+            {jobForm.linkedChecklists.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {jobForm.linkedChecklists.map((cid) => {
+                  const cl = checklists.find((c) => c.id === cid);
+                  if (!cl) return null;
+                  return (
+                    <Badge
+                      key={cid}
+                      variant="secondary"
+                      className="bg-emerald-50 text-emerald-800 border-emerald-200 gap-1 pr-1 cursor-pointer hover:bg-emerald-100"
+                      onClick={() => openChecklistBuilder(cl, true)}
+                      title="Click to edit"
+                    >
+                      <ClipboardList className="size-3" />
+                      {cl.title}
+                      <button
+                        type="button"
+                        className="ml-0.5 hover:text-red-600"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setJobForm((prev) => ({
+                            ...prev,
+                            linkedChecklists: prev.linkedChecklists.filter((x) => x !== cid),
+                          }));
+                        }}
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  );
+                })}
+              </div>
+            )}
+            <ChecklistAttachPicker
+              checklists={checklists.filter((c) => !jobForm.linkedChecklists.includes(c.id))}
+              selectedIds={[]}
+              onChange={(ids) => {
+                // For the picker, any checked id gets ADDED to linkedChecklists
+                setJobForm((prev) => ({
+                  ...prev,
+                  linkedChecklists: [...new Set([...prev.linkedChecklists, ...ids])],
+                }));
+              }}
+              onCreateNew={() => openChecklistBuilder(undefined, true)}
+            />
+          </div>
+        </FormSectionCard>
 
         {/* ─── Billing ──────────────────────────────────────────── */}
         <FormSectionCard icon={FileText} title="Billing">
@@ -3580,6 +3641,41 @@ export function JobsView() {
 
     return (
       <div className="w-full space-y-6">
+        {/* ─── Recurring-schedule back-link banner ─────────────────────────
+            Shows above the sticky page header when this Job was generated by
+            a recurring schedule. Lets the user navigate from an individual
+            generated Job back to its parent schedule — the inverse of the
+            "Generated Jobs" tab on the schedule detail page.
+
+            Title comes from `scheduleMetaCache`, populated lazily by
+            `ensureScheduleState` when this detail page mounts (see the
+            useEffect in the parent component). If the title hasn't loaded
+            yet (or the schedule was deleted), we still render the banner
+            with a generic label so the navigation affordance is always
+            visible. */}
+        {job.recurringScheduleId && (
+          <Link
+            href={`/recurring-jobs/${job.recurringScheduleId}`}
+            className="group flex items-center justify-between gap-3 rounded-lg border border-emerald-600/30 bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-600/50 px-4 py-2.5 transition-colors"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Repeat className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground leading-none mb-0.5">
+                  Recurring schedule
+                </p>
+                <p className="text-sm font-medium text-foreground truncate">
+                  {scheduleMetaCache[job.recurringScheduleId]?.title || 'View recurring schedule'}
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300 shrink-0 group-hover:gap-1.5 transition-all">
+              View schedule
+              <ExternalLink className="size-3.5" />
+            </span>
+          </Link>
+        )}
+
         {/* ─── Sticky page header (Back + title + actions) ────────── */}
         <div className="form-page-header -mx-3 px-3 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 py-3 mb-2">
           <div className="flex items-center justify-between gap-3 flex-wrap">

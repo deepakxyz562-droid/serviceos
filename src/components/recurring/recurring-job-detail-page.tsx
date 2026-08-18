@@ -62,6 +62,7 @@ import {
   Trash2,
   User,
   Users,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -93,9 +94,9 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { apiGet, apiPost } from '@/lib/api';
 import {
+  calculateOccurrences,
   DAY_NAMES,
   DAY_NAMES_FULL,
-  formatSchedulePreview,
   formatScheduleSummary,
   parseNthWeekdayJson,
   parseWeekdaysJson,
@@ -196,6 +197,15 @@ interface ActivityLogRow {
   createdAt: string;
 }
 
+interface ScheduleMetrics {
+  total: number;
+  completed: number;
+  cancelled: number;
+  upcoming: number;
+  lastJobScheduledAt: string | null;
+  lastJobCreatedAt: string | null;
+}
+
 export interface RecurringJobDetailPageProps {
   scheduleId: string;
 }
@@ -225,6 +235,7 @@ export function RecurringJobDetailPage({ scheduleId }: RecurringJobDetailPagePro
 
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [recentJobs, setRecentJobs] = useState<GeneratedJob[]>([]);
+  const [metrics, setMetrics] = useState<ScheduleMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState(false);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
@@ -236,11 +247,14 @@ export function RecurringJobDetailPage({ scheduleId }: RecurringJobDetailPagePro
   const loadSchedule = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await apiGet<{ schedule: Schedule; recentJobs: GeneratedJob[] }>(
-        `/api/recurring-jobs/${scheduleId}`,
-      );
+      const data = await apiGet<{
+        schedule: Schedule;
+        recentJobs: GeneratedJob[];
+        metrics?: ScheduleMetrics;
+      }>(`/api/recurring-jobs/${scheduleId}`);
       setSchedule(data.schedule);
       setRecentJobs(data.recentJobs || []);
+      setMetrics(data.metrics ?? null);
     } catch (err) {
       console.error('[RecurringJobDetailPage] fetch failed:', err);
       toast.error('Failed to load schedule. It may have been deleted.');
@@ -484,7 +498,7 @@ export function RecurringJobDetailPage({ scheduleId }: RecurringJobDetailPagePro
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 space-y-4">
-          <OverviewTab schedule={schedule} />
+          <OverviewTab schedule={schedule} metrics={metrics} />
         </TabsContent>
 
         <TabsContent value="schedule" className="mt-4">
@@ -495,7 +509,7 @@ export function RecurringJobDetailPage({ scheduleId }: RecurringJobDetailPagePro
           <GeneratedJobsTab
             scheduleId={schedule.id}
             initialJobs={recentJobs}
-            executionCount={schedule.executionCount}
+            metrics={metrics}
           />
         </TabsContent>
 
@@ -613,8 +627,38 @@ export function RecurringJobDetailPage({ scheduleId }: RecurringJobDetailPagePro
 }
 
 // ─── Tab: Overview ──────────────────────────────────────────────────────────
+//
+// Operational summary — answers "what's the state of this schedule right now?"
+// without duplicating the recurrence rule (that lives on the Schedule tab) or
+// the full generated-jobs list (that lives on the Generated Jobs tab).
+//
+// Layout:
+//   Card 1: Status & Visits
+//     - Status badge (Active / Paused / Stopped)
+//     - First visit     ← from calculateOccurrences(input)[0] (the actual first
+//                         occurrence date, NOT schedule.startDate which is the
+//                         raw user input and may diverge from the first visit)
+//     - Next visit      ← schedule.nextRunAt (the next time the cron will fire
+//                         to create a new job)
+//     - Last generated  ← from metrics.lastJobScheduledAt (the most-recently-
+//                         CREATED job's scheduledAt — NOT schedule.lastRunAt
+//                         which is the schedule's processing timestamp)
+//     - Schedule last processed ← schedule.lastRunAt (clarified label)
+//
+//   Card 2: Generated Jobs (compact counts, NOT large KPI cards)
+//     - Total / Completed / Upcoming / Cancelled
+//
+//   Card 3: Customer & Team (unchanged — customer + assignees)
+//
+//   Card 4: Visit Instructions (only if non-empty)
 
-function OverviewTab({ schedule }: { schedule: Schedule }) {
+function OverviewTab({
+  schedule,
+  metrics,
+}: {
+  schedule: Schedule;
+  metrics: ScheduleMetrics | null;
+}) {
   const recurrenceInput: RecurrenceInput = useMemo(
     () => ({
       frequency: schedule.frequency,
@@ -635,17 +679,25 @@ function OverviewTab({ schedule }: { schedule: Schedule }) {
     [schedule],
   );
 
-  const summary = useMemo(
-    () => formatScheduleSummary(recurrenceInput),
-    [recurrenceInput],
-  );
+  // First ACTUAL occurrence — uses inclusiveFirst=true so it equals startDate
+  // when startDate matches the pattern, otherwise the next matching date.
+  // This is the source of truth for the "First visit" label and matches what
+  // the Generated Jobs tab shows for the first generated job's scheduledAt.
+  const firstVisit = useMemo<Date | null>(() => {
+    try {
+      const occurrences = calculateOccurrences(recurrenceInput, { max: 1 });
+      return occurrences[0] ?? null;
+    } catch {
+      return null;
+    }
+  }, [recurrenceInput]);
 
   const status = deriveStatus(schedule);
 
-  const nextRunLabel = useMemo(() => {
+  const nextVisitLabel = useMemo(() => {
     if (status === 'stopped') return 'Stopped';
     if (status === 'paused') return 'Paused';
-    return schedule.nextRunAt ? formatShortDate(schedule.nextRunAt) : '—';
+    return schedule.nextRunAt ? formatVisitLabel(schedule.nextRunAt) : '—';
   }, [status, schedule.nextRunAt]);
 
   // Assignees — try to resolve names client-side. assigneeIdsJson holds an
@@ -687,35 +739,95 @@ function OverviewTab({ schedule }: { schedule: Schedule }) {
     };
   }, [assigneeIds]);
 
+  // Render metrics compactly: small grid of stat cells, NOT big KPI cards
+  // (per user direction: "don't necessarily show all these as large KPI
+  // cards. Keep them compact so the page doesn't become dashboard-heavy.").
+  const metricsCells = useMemo(() => {
+    const m = metrics ?? {
+      total: 0,
+      completed: 0,
+      cancelled: 0,
+      upcoming: 0,
+      lastJobScheduledAt: null,
+      lastJobCreatedAt: null,
+    };
+    return [
+      { label: 'Generated', value: m.total, tone: 'neutral' as const },
+      { label: 'Upcoming', value: m.upcoming, tone: 'info' as const },
+      { label: 'Completed', value: m.completed, tone: 'success' as const },
+      { label: 'Cancelled', value: m.cancelled, tone: 'muted' as const },
+    ];
+  }, [metrics]);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* ── Card 1: Status & Visits ──────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <CalendarClock className="size-4" /> Schedule Summary
+          <CardTitle className="text-base flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <CalendarClock className="size-4" /> Status &amp; Visits
+            </span>
+            <StatusBadge status={status} />
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          <Row label="Frequency" value={summary} />
           <Row
-            label="Date range"
+            label="First visit"
+            value={firstVisit ? formatVisitLabel(firstVisit.toISOString()) : '—'}
+          />
+          <Row label="Next visit" value={nextVisitLabel} />
+          <Row
+            label="Last generated"
             value={
-              schedule.endDate
-                ? `${formatShortDate(schedule.startDate)} → ${formatShortDate(schedule.endDate)}`
-                : `${formatShortDate(schedule.startDate)} · Open-ended`
+              metrics?.lastJobScheduledAt
+                ? formatShortDate(metrics.lastJobScheduledAt)
+                : '—'
             }
           />
-          <Row label="Next run" value={nextRunLabel} />
           <Row
-            label="Last run"
+            label="Schedule last processed"
             value={schedule.lastRunAt ? formatShortDate(schedule.lastRunAt) : '—'}
           />
-          <Row label="Execution count" value={String(schedule.executionCount)} />
-          <Row label="Duration" value={`${schedule.durationMins} min`} />
-          {schedule.timezone && <Row label="Timezone" value={schedule.timezone} />}
         </CardContent>
       </Card>
 
+      {/* ── Card 2: Generated Jobs (compact counts) ────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <CheckCircle2 className="size-4" /> Generated Jobs
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {metricsCells.map((cell) => (
+              <div
+                key={cell.label}
+                className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5"
+              >
+                <p
+                  className={cn(
+                    'text-2xl font-semibold leading-none tabular-nums',
+                    cell.tone === 'success' && 'text-emerald-600 dark:text-emerald-400',
+                    cell.tone === 'info' && 'text-blue-600 dark:text-blue-400',
+                    cell.tone === 'muted' && 'text-muted-foreground',
+                  )}
+                >
+                  {cell.value}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{cell.label}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            See the <span className="font-medium text-foreground">Generated Jobs</span> tab
+            for the full list with filters and per-job actions.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* ── Card 3: Customer & Team ──────────────────────────────────────── */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -786,6 +898,7 @@ function OverviewTab({ schedule }: { schedule: Schedule }) {
         </CardContent>
       </Card>
 
+      {/* ── Card 4: Visit Instructions (only if non-empty) ─────────────── */}
       {schedule.visitInstructions && (
         <Card className="md:col-span-2">
           <CardHeader>
@@ -808,6 +921,23 @@ function OverviewTab({ schedule }: { schedule: Schedule }) {
 }
 
 // ─── Tab: Schedule (read-only recurrence rules) ─────────────────────────────
+//
+// The complete recurrence configuration, as the schedule engine understands it.
+// Distinct from the Overview tab which is the OPERATIONAL summary (status,
+// next/last visit, counts). Here we show:
+//   - Cadence (the rule itself: "Weekly on Monday", "Monthly on the 18th", …)
+//   - Start time + Duration
+//   - First visit (the actual first occurrence, NOT the raw user-input start)
+//   - End condition (Never / After N / On date)
+//   - Timezone
+//   - "Originally configured from" — the raw user-input startDate, surfaced as
+//     secondary info so dispatchers can understand why the first occurrence
+//     may differ from the configured start date (e.g. user picked Tuesday
+//     for a "Weekly on Monday" schedule → first visit is the next Monday).
+//
+// Lifecycle card holds admin metadata: created / updated / paused / resumed.
+// We do NOT duplicate "Next run" / "Last run" / "Execution count" from the
+// Overview tab — those are operational concerns and live there.
 
 function ScheduleTab({ schedule }: { schedule: Schedule }) {
   const recurrenceInput: RecurrenceInput = useMemo(
@@ -830,23 +960,41 @@ function ScheduleTab({ schedule }: { schedule: Schedule }) {
     [schedule],
   );
 
-  const preview = useMemo(() => {
+  const summary = useMemo(
+    () => formatScheduleSummary(recurrenceInput),
+    [recurrenceInput],
+  );
+
+  const firstVisit = useMemo<Date | null>(() => {
     try {
-      return formatSchedulePreview(recurrenceInput);
+      const occurrences = calculateOccurrences(recurrenceInput, { max: 1 });
+      return occurrences[0] ?? null;
     } catch {
-      return schedule.frequency;
+      return null;
     }
-  }, [recurrenceInput, schedule.frequency]);
+  }, [recurrenceInput]);
 
   const weekdays = parseWeekdaysJson(schedule.weekdaysJson);
   const nthWeekday = parseNthWeekdayJson(schedule.nthWeekdayJson);
 
   const endMode =
     schedule.endAfterOccurrences != null
-      ? `After ${schedule.endAfterOccurrences} occurrences`
+      ? `After ${schedule.endAfterOccurrences} visits`
       : schedule.endDate
         ? `On ${formatShortDate(schedule.endDate)}`
-        : 'Never (open-ended)';
+        : 'Never ends';
+
+  // Whether the user's raw startDate differs from the computed first
+  // occurrence. If they're the same date, we collapse the "Originally
+  // configured from" row into nothing — no need to surface it. If they
+  // differ, show it as secondary info so dispatchers can troubleshoot
+  // "why is the first visit Aug 24 when I picked Aug 18?".
+  const configuredStartDate = schedule.startDate ? new Date(schedule.startDate) : null;
+  const firstVisitDate = firstVisit;
+  const datesDiffer =
+    configuredStartDate &&
+    firstVisitDate &&
+    configuredStartDate.toDateString() !== firstVisitDate.toDateString();
 
   return (
     <div className="space-y-4">
@@ -857,11 +1005,14 @@ function ScheduleTab({ schedule }: { schedule: Schedule }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* Highlighted cadence summary */}
           <div className="rounded-md border bg-emerald-50/60 dark:bg-emerald-950/20 px-3 py-2.5">
             <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
-              {preview}
+              {summary}
             </p>
           </div>
+
+          {/* Core rule rows */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <Row label="Frequency" value={humanizeFrequency(schedule.frequency)} />
             {schedule.interval > 1 && (
@@ -899,18 +1050,42 @@ function ScheduleTab({ schedule }: { schedule: Schedule }) {
                 <Row label="Day of month" value={String(schedule.dayOfMonth)} />
               )}
             {schedule.timeOfDay && (
-              <Row label="Start time" value={schedule.timeOfDay} />
+              <Row
+                label="Start time"
+                value={schedule.timeOfDay}
+              />
             )}
             <Row label="Duration" value={`${schedule.durationMins} min`} />
             {schedule.asNeeded && (
               <Row label="Mode" value="As-needed (no auto-generation)" />
             )}
+            <Row
+              label="First visit"
+              value={firstVisit ? formatShortDate(firstVisit.toISOString()) : '—'}
+            />
             <Row label="Ends" value={endMode} />
             <Row
               label="Timezone"
               value={schedule.timezone ?? 'Server local time'}
             />
           </div>
+
+          {/* Secondary info: the raw user-input start date, surfaced only
+              when it differs from the computed first occurrence. This is
+              intentionally muted (muted foreground, small text) so it
+              reads as troubleshooting context, not as the primary schedule
+              information. */}
+          {datesDiffer && configuredStartDate && (
+            <div className="mt-2 pt-2 border-t border-border/40">
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium">Originally configured from:</span>{' '}
+                {formatShortDate(configuredStartDate.toISOString())}
+              </p>
+              <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+                The first visit is the next pattern-matching date on or after this date.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -923,16 +1098,6 @@ function ScheduleTab({ schedule }: { schedule: Schedule }) {
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <Row label="Created" value={formatShortDate(schedule.createdAt)} />
           <Row label="Last updated" value={formatShortDate(schedule.updatedAt)} />
-          <Row label="Start date" value={formatShortDate(schedule.startDate)} />
-          <Row
-            label="Next run"
-            value={schedule.active ? formatShortDate(schedule.nextRunAt) : '—'}
-          />
-          <Row
-            label="Last run"
-            value={schedule.lastRunAt ? formatShortDate(schedule.lastRunAt) : '—'}
-          />
-          <Row label="Execution count" value={String(schedule.executionCount)} />
           {schedule.pausedAt && (
             <Row label="Paused at" value={formatShortDate(schedule.pausedAt)} />
           )}
@@ -950,28 +1115,46 @@ function ScheduleTab({ schedule }: { schedule: Schedule }) {
 function GeneratedJobsTab({
   scheduleId,
   initialJobs,
-  executionCount,
+  metrics,
 }: {
   scheduleId: string;
   initialJobs: GeneratedJob[];
-  executionCount: number;
+  metrics: ScheduleMetrics | null;
 }) {
+  // Accumulated list across all loaded pages. Initial seed comes from the
+  // parent's `recentJobs` (the last 10 from GET /api/recurring-jobs/[id]) so
+  // the user sees something immediately; we then re-fetch page 1 from the
+  // dedicated /jobs endpoint to get the canonical, filter-respecting view.
   const [jobs, setJobs] = useState<GeneratedJob[]>(initialJobs);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(executionCount);
+  const [total, setTotal] = useState(metrics?.total ?? 0);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  // Load generated jobs (paginated, server-side).
+  // Refresh the total count whenever metrics refresh (e.g. after a
+  // generate-now click bumps the count). This keeps the "{N} jobs generated"
+  // header in sync with the Overview tab.
+  useEffect(() => {
+    if (metrics?.total != null) setTotal(metrics.total);
+  }, [metrics?.total]);
+
+  // Whether the user has loaded all available rows. We compute this from
+  // (jobs.length < total) — once they've loaded everything for the current
+  // filter, the "Load more" button disappears.
+  const hasMore = jobs.length < total;
+
+  // Load (or reload) page 1 — used on initial mount and whenever the status
+  // filter changes. Replaces the accumulated list with the new page.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setLoading(true);
+        setPage(1);
         const params = new URLSearchParams({
-          page: String(page),
-          limit: '20',
+          page: '1',
+          limit: '10',
         });
         if (statusFilter !== 'all') params.set('status', statusFilter);
         const d = await apiGet<{
@@ -983,12 +1166,9 @@ function GeneratedJobsTab({
         if (!cancelled) {
           setJobs(d.jobs || []);
           setTotal(d.total ?? 0);
-          setTotalPages(Math.max(1, d.totalPages ?? 1));
         }
       } catch {
-        if (!cancelled) {
-          // Keep showing whatever we had — better than an empty list.
-        }
+        // Keep showing whatever we had — better than an empty list.
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -996,13 +1176,50 @@ function GeneratedJobsTab({
     return () => {
       cancelled = true;
     };
-  }, [scheduleId, page, statusFilter]);
+  }, [scheduleId, statusFilter]);
 
-  // Reset page to 1 when the status filter changes (otherwise the user could
-  // end up on a page that doesn't exist for the new filter).
-  useEffect(() => {
-    setPage(1);
-  }, [statusFilter]);
+  // Load the NEXT page and APPEND to the existing list (Load More pattern,
+  // per user direction: "I would personally choose Load more"). Page size is
+  // 10 — small enough that each load is fast even for schedules with 200+
+  // occurrences, and matches the user's mockup ("Showing 1–10 of 27" →
+  // "Load 10 more" → "Showing 1–20 of 27" → "Load 7 more").
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    try {
+      setLoadingMore(true);
+      const nextPage = page + 1;
+      const params = new URLSearchParams({
+        page: String(nextPage),
+        limit: '10',
+      });
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      const d = await apiGet<{
+        jobs: GeneratedJob[];
+        total: number;
+        page: number;
+        totalPages: number;
+      }>(`/api/recurring-jobs/${scheduleId}/jobs?${params.toString()}`);
+      // Deduplicate by job id — defensive against any pagination glitch.
+      setJobs((prev) => {
+        const seen = new Set(prev.map((j) => j.id));
+        const merged = [...prev, ...(d.jobs || []).filter((j) => !seen.has(j.id))];
+        return merged;
+      });
+      setPage(nextPage);
+      if (d.total != null) setTotal(d.total);
+    } catch {
+      // Silent — user can retry.
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, page, scheduleId, statusFilter]);
+
+  // How many more rows are available beyond what's currently shown. Drives
+  // the "Load N more" button label — caps at the page size (10) so the
+  // label doesn't read "Load 187 more" when the user is on page 1 of a
+  // 200-occurrence schedule.
+  const remaining = Math.max(0, total - jobs.length);
+  const nextLoadCount = Math.min(10, remaining);
 
   return (
     <Card>
@@ -1012,7 +1229,8 @@ function GeneratedJobsTab({
             <CheckCircle2 className="size-4" /> Generated Jobs
           </CardTitle>
           <CardDescription>
-            {total} job{total === 1 ? '' : 's'} generated by this schedule.
+            {total} job{total === 1 ? '' : 's'} generated by this schedule. Each row
+            is a real Job — click to view, edit, reassign, or complete it independently.
           </CardDescription>
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -1021,10 +1239,7 @@ function GeneratedJobsTab({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="assigned">Assigned</SelectItem>
-            <SelectItem value="accepted">Accepted</SelectItem>
-            <SelectItem value="in_progress">In progress</SelectItem>
+            <SelectItem value="upcoming">Upcoming</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
@@ -1095,32 +1310,32 @@ function GeneratedJobsTab({
               </table>
             </div>
 
-            {/* Pagination controls. */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between gap-2 border-t px-4 py-3 text-sm">
-                <span className="text-xs text-muted-foreground">
-                  Page {page} of {totalPages}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page <= 1 || loading}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page >= totalPages || loading}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
+            {/* Footer: "Showing 1–N of M" + Load More button (replaces
+                Previous/Next pagination per user direction). Button only
+                renders when there are more rows available. */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t px-4 py-3 text-sm">
+              <span className="text-xs text-muted-foreground">
+                Showing 1–{jobs.length} of {total}
+              </span>
+              {hasMore && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? (
+                    <>
+                      <Loader2 className="size-3.5 mr-1.5 animate-spin" /> Loading…
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="size-3.5 mr-1.5" /> Load {nextLoadCount} more
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </>
         )}
       </CardContent>
@@ -1276,6 +1491,14 @@ function ActivityTab({ scheduleId }: { scheduleId: string }) {
     };
   }, [scheduleId]);
 
+  // IMPORTANT: useMemo MUST be called before any early return — otherwise
+  // the hook count differs between renders (loading=true returns early,
+  // skipping this useMemo; the next render with loading=false would call
+  // it, causing "Rendered more hooks than during the previous render").
+  // Pre-existing latent bug surfaced during this session's runtime
+  // verification; fixed here.
+  const groups = useMemo(() => groupActivitiesByDate(activities), [activities]);
+
   if (loading) {
     return (
       <Card>
@@ -1299,11 +1522,6 @@ function ActivityTab({ scheduleId }: { scheduleId: string }) {
     );
   }
 
-  // Group by date (YYYY-MM-DD) so the timeline shows date headers when there
-  // are entries spanning multiple days. Within each group, preserve the
-  // server's already-descending order.
-  const groups = useMemo(() => groupActivitiesByDate(activities), [activities]);
-
   return (
     <Card>
       <CardHeader>
@@ -1311,8 +1529,9 @@ function ActivityTab({ scheduleId }: { scheduleId: string }) {
           <ActivityIcon className="size-4" /> Activity Timeline
         </CardTitle>
         <CardDescription>
-          Last {activities.length} event{activities.length === 1 ? '' : 's'} for this schedule
-          and its generated jobs.
+          Schedule-level audit events — created, edited, paused, resumed, stopped,
+          and generated-jobs. Individual job lifecycle (assigned, started, completed)
+          lives on each Job&apos;s own detail page.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -1324,7 +1543,8 @@ function ActivityTab({ scheduleId }: { scheduleId: string }) {
               </p>
               <ol className="relative border-l ml-3 space-y-4">
                 {group.items.map((a) => {
-                  const Icon = activityIcon(a.action);
+                  const Icon = activityIcon(a.action, a.entityType);
+                  const label = activityLabel(a);
                   return (
                     <li key={a.id} className="ml-4">
                       <span
@@ -1332,14 +1552,13 @@ function ActivityTab({ scheduleId }: { scheduleId: string }) {
                       />
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                         <Icon className="size-3.5 text-muted-foreground inline" />
-                        <p className="text-sm font-medium">{a.description}</p>
+                        <p className="text-sm font-medium">{label}</p>
                         {severityBadge(a.severity)}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {a.actorName ||
                           (a.actorType === 'system' ? 'System' : 'Unknown')}{' '}
-                        · {relativeTime(a.createdAt)} · {a.action.replace(/_/g, ' ')}
-                        {a.entityType === 'job' && ' · job event'}
+                        · {relativeTime(a.createdAt)}
                       </p>
                     </li>
                   );
@@ -1419,6 +1638,30 @@ function formatShortDate(iso: string | null): string {
     });
   } catch {
     return '—';
+  }
+}
+
+// Format a visit datetime as "Aug 24, 2026 · 09:00" (date + 24h time).
+// Used for "First visit" and "Next visit" rows on the Overview tab where
+// the time-of-day is part of what the user cares about. Falls back to the
+// short date alone if time extraction fails (e.g. a Date-only value).
+function formatVisitLabel(iso: string | null): string {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    const datePart = d.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const timePart = d.toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    return `${datePart} · ${timePart}`;
+  } catch {
+    return formatShortDate(iso);
   }
 }
 
@@ -1519,10 +1762,15 @@ function severityBadge(severity: string) {
   );
 }
 
-// Pick an icon based on the action verb. Falls back to ActivityIcon for
-// unknown actions. Returns a lucide-react component reference (NOT an element
-// so the caller can render it with the right size class).
-function activityIcon(action: string) {
+// Pick an icon based on the action verb AND entity type. Falls back to
+// ActivityIcon for unknown actions. Returns a lucide-react component reference
+// (NOT an element so the caller can render it with the right size class).
+//
+// Per the user's mental model, "Job generated" is a schedule-level event
+// (the schedule produced a new occurrence) — so we map job+create → Zap
+// rather than the generic Plus icon used for create-schedule.
+function activityIcon(action: string, entityType?: string) {
+  if (entityType === 'job' && action === 'create') return Zap;
   switch (action) {
     case 'create':
       return Plus;
@@ -1534,6 +1782,60 @@ function activityIcon(action: string) {
     default:
       return ActivityIcon;
   }
+}
+
+// Convert an ActivityLog row into a clean, schedule-scoped label. The raw
+// activityLog.description is sometimes verbose ("Recurring schedule
+// "monthly landscaping" generated job abc123") — we shorten + standardize
+// here so the timeline reads cleanly:
+//
+//   create (recurringJobSchedule) → "Schedule created"
+//   update                        → "Schedule edited"
+//   status_change (paused)        → "Schedule paused"
+//   status_change (resumed)       → "Schedule resumed"
+//   status_change (stopped)       → "Schedule stopped"
+//   delete                        → "Schedule deleted"
+//   create (job)                  → "Job generated"
+//
+// We fall back to the raw description if we can't categorize the row — that
+// keeps the timeline honest for any future event types we haven't mapped.
+function activityLabel(a: ActivityLogRow): string {
+  // Try to parse metadataJson for status_change events so we can distinguish
+  // paused/resumed/stopped (all three log as action='status_change').
+  if (a.action === 'status_change' && a.entityType === 'recurringJobSchedule') {
+    try {
+      const meta = JSON.parse(
+        // The activity-log helper stores metadataJson as a JSON string. If
+        // it's missing or malformed, the catch below falls back gracefully.
+        (a as ActivityLogRow & { metadataJson?: string }).metadataJson || '{}',
+      );
+      const toStatus: string | undefined = meta?.toStatus;
+      if (toStatus === 'paused') return 'Schedule paused';
+      if (toStatus === 'active') return 'Schedule resumed';
+      if (toStatus === 'stopped') return 'Schedule stopped';
+    } catch {
+      // fall through to the description-based heuristic below
+    }
+    // Fallback: inspect the description text.
+    if (/paused/i.test(a.description)) return 'Schedule paused';
+    if (/resumed/i.test(a.description)) return 'Schedule resumed';
+    if (/stopped/i.test(a.description)) return 'Schedule stopped';
+    return a.description;
+  }
+
+  if (a.action === 'create' && a.entityType === 'recurringJobSchedule') {
+    return 'Schedule created';
+  }
+  if (a.action === 'create' && a.entityType === 'job') {
+    return 'Job generated';
+  }
+  if (a.action === 'update') {
+    return 'Schedule edited';
+  }
+  if (a.action === 'delete') {
+    return 'Schedule deleted';
+  }
+  return a.description;
 }
 
 interface ActivityGroup {

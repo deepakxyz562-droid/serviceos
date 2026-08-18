@@ -683,7 +683,7 @@ export function ChecklistAttachPicker({
     <div className="space-y-2">
       {checklists.length === 0 ? (
         <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-          No checklists yet. <button type="button" className="text-emerald-700 font-medium hover:underline" onClick={onCreateNew}>Create your first checklist →</button>
+          No checklist attached yet.
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -703,9 +703,6 @@ export function ChecklistAttachPicker({
           ))}
         </div>
       )}
-      <Button type="button" variant="outline" size="sm" onClick={onCreateNew} className="w-full border-dashed">
-        <Plus className="size-4 mr-1" /> Create a new checklist
-      </Button>
     </div>
   );
 }
