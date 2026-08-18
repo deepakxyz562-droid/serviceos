@@ -2022,8 +2022,9 @@ export function JobsView() {
       };
 
       // ── Phase 4: optional `recurring` block (New Job only) ──
-      // When the user enables the "Make this recurring?" toggle on the Create
-      // Job form, attach a recurring block to the POST /api/jobs body. The
+      // When the user selects "Recurring" from the Type toggle in the
+      // "Job Type & Schedule" section (which syncs `jobForm.recurring.enabled`
+      // = true), attach a recurring block to the POST /api/jobs body. The
       // server calls the SHARED createRecurringSchedule() domain service —
       // the same one POST /api/recurring-jobs uses. Both entry points
       // produce identical DB state.
@@ -3024,13 +3025,21 @@ export function JobsView() {
         {/* ─── Job Type & Schedule (merged into one box) ────────── */}
         <FormSectionCard icon={CalendarDays} title="Job Type & Schedule">
           <div className="space-y-4">
-            {/* Job type toggle */}
+            {/* Job type toggle — SINGLE source of truth.
+                Clicking One-off/Recurring here sets BOTH `jobType` (the job
+                payload field) AND `recurring.enabled` (the editor's internal
+                flag). The editor below is rendered with `showSwitch={false}`
+                so it has no toggle of its own — this toggle is the only one. */}
             <div className="flex items-center gap-3">
               <Label className="text-sm text-muted-foreground shrink-0">Type</Label>
               <div className="inline-flex rounded-lg border p-0.5">
                 <button
                   type="button"
-                  onClick={() => setJobForm({ ...jobForm, jobType: 'one-off' })}
+                  onClick={() => setJobForm((prev) => ({
+                    ...prev,
+                    jobType: 'one-off',
+                    recurring: { ...prev.recurring, enabled: false },
+                  }))}
                   className={cn(
                     'px-4 py-1.5 text-sm rounded-md transition-colors',
                     jobForm.jobType === 'one-off' ? 'bg-emerald-600 text-white' : 'text-muted-foreground hover:text-foreground'
@@ -3040,7 +3049,11 @@ export function JobsView() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setJobForm({ ...jobForm, jobType: 'recurring' })}
+                  onClick={() => setJobForm((prev) => ({
+                    ...prev,
+                    jobType: 'recurring',
+                    recurring: { ...prev.recurring, enabled: true },
+                  }))}
                   className={cn(
                     'px-4 py-1.5 text-sm rounded-md transition-colors',
                     jobForm.jobType === 'recurring' ? 'bg-emerald-600 text-white' : 'text-muted-foreground hover:text-foreground'
@@ -3178,6 +3191,26 @@ export function JobsView() {
             </div>
           </div>
         </FormSectionCard>
+
+        {/* ─── Recurring Schedule (New Job only, only when Type = Recurring) ── */}
+        {/* Single source of truth: the Type toggle above drives both
+            `jobForm.jobType` and `jobForm.recurring.enabled`. The editor is
+            rendered with `showSwitch={false}` so it has NO toggle of its own.
+            The save handler reads `jobForm.recurring.enabled` and attaches
+            the recurring block to the POST /api/jobs body — no backend
+            changes needed. */}
+        {!editingJob && jobForm.jobType === 'recurring' && (
+          <FormSectionCard icon={Repeat} title="Recurring Schedule">
+            <RecurringScheduleEditor
+              value={jobForm.recurring}
+              onChange={(next) => setJobForm((prev) => ({ ...prev, recurring: next }))}
+              showSwitch={false}
+              showGenerateFirstJob
+              showBilling
+              showTimezone
+            />
+          </FormSectionCard>
+        )}
 
         {/* ─── Billing ──────────────────────────────────────────── */}
         <FormSectionCard icon={FileText} title="Billing">
@@ -3475,23 +3508,6 @@ export function JobsView() {
             )}
           </div>
         </FormSectionCard>
-
-        {/* ─── Phase 4: "Make this recurring?" (New Job only) ────── */}
-        {/* Uses the SHARED <RecurringScheduleEditor /> component — same one
-            used by the Recurring Jobs New Schedule dialog. Both entry points
-            converge on the same createRecurringSchedule() domain service. */}
-        {!editingJob && (
-          <FormSectionCard icon={Repeat} title="Make this recurring?">
-            <RecurringScheduleEditor
-              value={jobForm.recurring}
-              onChange={(next) => setJobForm((prev) => ({ ...prev, recurring: next }))}
-              showSwitch
-              showGenerateFirstJob
-              showBilling
-              showTimezone
-            />
-          </FormSectionCard>
-        )}
 
         {/* ─── Bottom action bar ────────────────────────────────── */}
         <div className="flex items-center justify-end gap-2 pb-4">
