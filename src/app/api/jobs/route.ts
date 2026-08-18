@@ -509,15 +509,11 @@ export async function POST(request: NextRequest) {
         generateFirstJob: true,
       })
 
-      // Fetch the created schedule + first job for the response.
-      const createdSchedule = await db.recurringJobSchedule.findUnique({
-        where: { id: recurringResult.schedule.id },
-        select: { id: true, generateInvoice: true, invoiceTiming: true },
-      })
+      // Use created schedule values directly from the domain service result.
       recurringSchedule = {
         id: recurringResult.schedule.id,
-        generateInvoice: createdSchedule?.generateInvoice ?? recurring.generateInvoice === true,
-        invoiceTiming: createdSchedule?.invoiceTiming ?? 'on_completion',
+        generateInvoice: recurringResult.schedule.generateInvoice ?? recurring.generateInvoice === true,
+        invoiceTiming: recurringResult.schedule.invoiceTiming ?? 'on_completion',
         firstJobId: recurringResult.firstJobId,
       }
 

@@ -271,16 +271,17 @@ export async function POST(
       status: 'scheduled',
     }));
 
-    // Create each row individually so we can return them to the client.
-    // Acceptable for ≤60 rows (the expansion cap).
-    const created: Array<Awaited<ReturnType<typeof db.jobVisit.create>>> = [];
-    for (const row of visitRows) {
-      try {
-        const v = await db.jobVisit.create({ data: row });
-        created.push(v);
-      } catch (err) {
-        console.error('[Visits POST] create failed for row', row.jobVisitNumber, err);
-      }
+    // Batch insert all visit rows in a single DB operation
+    let created: Array<Awaited<ReturnType<typeof db.jobVisit.create>>> = [];
+    try {
+      created = await db.jobVisit.createManyAndReturn({ data: visitRows });
+    } catch (batchErr) {
+      console.error('[Visits POST] batch createManyAndReturn failed, falling back to createMany:', batchErr);
+      await db.jobVisit.createMany({ data: visitRows });
+      created = (await db.jobVisit.findMany({
+        where: { jobId, jobVisitNumber: { gte: baseVisitNumber } },
+        orderBy: { jobVisitNumber: 'asc' },
+      })) as any;
     }
 
     // If this is the first visit for the job, mirror it onto Job.scheduledAt /

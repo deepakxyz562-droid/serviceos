@@ -59,7 +59,7 @@ export async function GET(
     const generatedJobs = await db.job.findMany({
       where: { recurringScheduleId: id },
       orderBy: { createdAt: 'desc' },
-      take: 200,
+      take: 50,
       select: { id: true },
     });
     const generatedJobIds = generatedJobs.map((j) => j.id);

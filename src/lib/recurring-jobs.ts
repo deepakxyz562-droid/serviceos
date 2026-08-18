@@ -370,13 +370,19 @@ export async function processDueRecurringJobSchedules(): Promise<{
   let processed = 0;
   let errors = 0;
 
-  for (const s of due) {
-    try {
-      await processSingleSchedule(s.id);
-      processed++;
-    } catch (err) {
-      console.error('[RecurringJobs] processSingleSchedule failed for', s.id, err);
-      errors++;
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < due.length; i += BATCH_SIZE) {
+    const chunk = due.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      chunk.map((s) => processSingleSchedule(s.id)),
+    );
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        processed++;
+      } else {
+        console.error('[RecurringJobs] processSingleSchedule failed:', r.reason);
+        errors++;
+      }
     }
   }
 
@@ -387,7 +393,7 @@ export async function processDueRecurringJobSchedules(): Promise<{
  * Process a single schedule: generate the next job + visit, then advance.
  * Wrapped in a transaction so the job + visit + schedule-update are atomic.
  */
-async function processSingleSchedule(scheduleId: string): Promise<void> {
+async function processSingleSchedule(scheduleId: string): Promise<string | null> {
   const schedule = await db.recurringJobSchedule.findUnique({
     where: { id: scheduleId },
   });
@@ -395,7 +401,7 @@ async function processSingleSchedule(scheduleId: string): Promise<void> {
     throw new Error(`Schedule ${scheduleId} not found`);
   }
   if (!schedule.active) {
-    return; // someone paused it between pickup and processing
+    return null; // someone paused it between pickup and processing
   }
 
   // Parse JSON fields.
@@ -688,6 +694,8 @@ async function processSingleSchedule(scheduleId: string): Promise<void> {
       console.error('[RecurringJobs] customer SMS notification failed:', smsErr);
     }
   }
+
+  return result.job.id;
 }
 
 /**
@@ -727,13 +735,8 @@ export async function generateScheduleNow(
   scheduleId: string,
 ): Promise<{ success: boolean; jobId?: string; error?: string }> {
   try {
-    await processSingleSchedule(scheduleId);
-    // Read back the last job id for the response.
-    const sched = await db.recurringJobSchedule.findUnique({
-      where: { id: scheduleId },
-      select: { lastJobId: true },
-    });
-    return { success: true, jobId: sched?.lastJobId ?? undefined };
+    const jobId = await processSingleSchedule(scheduleId);
+    return { success: true, jobId: jobId ?? undefined };
   } catch (err) {
     console.error('[RecurringJobs] generateScheduleNow error:', err);
     return { success: false, error: String(err) };

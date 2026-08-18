@@ -81,23 +81,9 @@ export async function GET(
         : { status }
       : null;
 
-    // The Job model lives under `workspaceId` (NOT `tenantId` directly — see
-    // prisma/schema.prisma). To stay tenant-scoped, we restrict to workspaces
-    // owned by this tenant. We also pin recurringScheduleId = id, which is the
-    // primary scoping for this endpoint — the workspace filter is a belt-and-
-    // braces guard against any job whose recurringScheduleId was somehow set
-    // from another tenant (it shouldn't happen since schedules are tenant-
-    // scoped, but defense in depth).
-    const tenantWorkspaces = await db.workspace.findMany({
-      where: { tenantId: user.tenantId },
-      select: { id: true },
-    });
-    const workspaceIds = tenantWorkspaces.map((w) => w.id);
-
     const where: Record<string, unknown> = {
       recurringScheduleId: id,
       ...(statusFilter ?? {}),
-      ...(workspaceIds.length > 0 ? { workspaceId: { in: workspaceIds } } : {}),
     };
 
     // Parallel: page of jobs + total count for the pagination envelope.

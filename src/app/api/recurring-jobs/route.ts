@@ -29,6 +29,22 @@ export async function GET(request: NextRequest) {
     if (activeFilter === 'false') where.active = false;
     if (customerId) where.customerId = customerId;
 
+    // Fast-path: Postgres RPC (1 DB round trip for schedule list + customer + last job + counts)
+    try {
+      const rpcRes = await db.$queryRawUnsafe<Array<{ get_recurring_jobs: { schedules: any[] } }>>(
+        `SELECT get_recurring_jobs($1, $2, $3);`,
+        user.tenantId,
+        activeFilter || '',
+        customerId || ''
+      );
+      const rpcData = rpcRes?.[0]?.get_recurring_jobs;
+      if (rpcData && Array.isArray(rpcData.schedules)) {
+        return NextResponse.json({ schedules: rpcData.schedules });
+      }
+    } catch {
+      // Fallback to optimized Prisma query below
+    }
+
     const schedules = await db.recurringJobSchedule.findMany({
       where,
       include: {
@@ -42,33 +58,9 @@ export async function GET(request: NextRequest) {
     const lastJobIds = schedules
       .map((s) => s.lastJobId)
       .filter((id): id is string => Boolean(id));
-    const lastJobs = lastJobIds.length
-      ? await db.job.findMany({
-          where: { id: { in: lastJobIds } },
-          select: {
-            id: true,
-            jobNumber: true,
-            title: true,
-            status: true,
-            scheduledAt: true,
-            createdAt: true,
-          },
-        })
-      : [];
-    const lastJobById = new Map(lastJobs.map((j) => [j.id, j]));
 
     // Also count generated jobs per schedule (for the "Generated" column).
     const scheduleIds = schedules.map((s) => s.id);
-    const generatedCounts = scheduleIds.length
-      ? await db.job.groupBy({
-          by: ['recurringScheduleId'],
-          where: { recurringScheduleId: { in: scheduleIds } },
-          _count: { _all: true },
-        })
-      : [];
-    const countById = new Map(
-      generatedCounts.map((c) => [c.recurringScheduleId, c._count._all]),
-    );
 
     // Resolve primary assignee name for each schedule (best-effort, in-memory).
     const allAssigneeIds = schedules.flatMap((s) => {
@@ -80,12 +72,41 @@ export async function GET(request: NextRequest) {
       }
     });
     const assigneeIds = Array.from(new Set(allAssigneeIds));
-    const employees = assigneeIds.length
-      ? await db.employee.findMany({
-          where: { id: { in: assigneeIds } },
-          select: { id: true, name: true },
-        })
-      : [];
+
+    // Execute secondary queries in parallel via Promise.all
+    const [lastJobs, generatedCounts, employees] = await Promise.all([
+      lastJobIds.length
+        ? db.job.findMany({
+            where: { id: { in: lastJobIds } },
+            select: {
+              id: true,
+              jobNumber: true,
+              title: true,
+              status: true,
+              scheduledAt: true,
+              createdAt: true,
+            },
+          })
+        : Promise.resolve([]),
+      scheduleIds.length
+        ? db.job.groupBy({
+            by: ['recurringScheduleId'],
+            where: { recurringScheduleId: { in: scheduleIds } },
+            _count: { _all: true },
+          })
+        : Promise.resolve([]),
+      assigneeIds.length
+        ? db.employee.findMany({
+            where: { id: { in: assigneeIds } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const lastJobById = new Map(lastJobs.map((j) => [j.id, j]));
+    const countById = new Map(
+      generatedCounts.map((c) => [c.recurringScheduleId, c._count._all]),
+    );
     const empById = new Map(employees.map((e) => [e.id, e.name]));
 
     const enriched = schedules.map((s) => {
@@ -257,33 +278,6 @@ export async function POST(request: NextRequest) {
         customer: { select: { id: true, name: true, phone: true, email: true } },
       },
     });
-
-    // Activity log (best-effort)
-    try {
-      await logActivity({
-        tenantId: user.tenantId,
-        actorId: user.id,
-        actorName: user.name || user.email,
-        actorType: 'user',
-        action: 'create',
-        entityType: 'recurringJobSchedule',
-        entityId: result.schedule.id,
-        entityName: result.schedule.title,
-        description: `Created recurring schedule "${result.schedule.title}" (${result.schedule.frequency})${
-          result.firstJobCreated ? ' + first job generated' : ''
-        }`,
-        metadataJson: JSON.stringify({
-          frequency: result.schedule.frequency,
-          customerId: body.customerId || null,
-          nextRunAt: result.schedule.nextRunAt,
-          firstJobCreated: result.firstJobCreated,
-          firstJobId: result.firstJobId,
-        }),
-        severity: 'info',
-      });
-    } catch (logErr) {
-      console.error('[RecurringJobs POST] activity log failed:', logErr);
-    }
 
     return NextResponse.json(
       {

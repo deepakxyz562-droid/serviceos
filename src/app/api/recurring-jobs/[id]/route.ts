@@ -18,6 +18,25 @@ export async function GET(
     }
 
     const { id } = await params;
+
+    // Fast-path: Postgres RPC (1 DB round trip for schedule + customer + recent 10 jobs + consolidated metrics)
+    try {
+      const rpcRes = await db.$queryRawUnsafe<Array<{ get_recurring_job_details: any }>>(
+        `SELECT get_recurring_job_details($1, $2);`,
+        user.tenantId,
+        id
+      );
+      const data = rpcRes?.[0]?.get_recurring_job_details;
+      if (data && !data.error) {
+        return NextResponse.json(data);
+      }
+      if (data?.error && data?.status === 404) {
+        return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });
+      }
+    } catch {
+      // Fallback to optimized Prisma query below
+    }
+
     const schedule = await db.recurringJobSchedule.findUnique({
       where: { id },
       include: {
@@ -71,23 +90,27 @@ export async function GET(
     // (ordered by createdAt desc, NOT scheduledAt desc — the latter would
     // surface the furthest-future visit, which doesn't match the user's
     // mental model of "the last visit we generated just now").
-    const baseWhere = { recurringScheduleId: schedule.id };
-    const [total, completed, cancelled, upcoming, lastGenerated] = await Promise.all([
-      db.job.count({ where: baseWhere }),
-      db.job.count({ where: { ...baseWhere, status: 'completed' } }),
-      db.job.count({ where: { ...baseWhere, status: 'cancelled' } }),
-      db.job.count({
-        where: {
-          ...baseWhere,
-          status: { in: ['pending', 'assigned', 'accepted', 'in_progress'] },
-        },
-      }),
-      db.job.findFirst({
-        where: baseWhere,
-        orderBy: { createdAt: 'desc' },
-        select: { scheduledAt: true, createdAt: true },
-      }),
-    ]);
+    const statusCounts = await db.job.groupBy({
+      by: ['status'],
+      where: { recurringScheduleId: schedule.id },
+      _count: { _all: true },
+    });
+
+    let total = 0;
+    let completed = 0;
+    let cancelled = 0;
+    let upcoming = 0;
+    const upcomingStatuses = new Set(['pending', 'assigned', 'accepted', 'in_progress']);
+
+    for (const sc of statusCounts) {
+      const c = sc._count._all;
+      total += c;
+      if (sc.status === 'completed') completed += c;
+      else if (sc.status === 'cancelled') cancelled += c;
+      else if (upcomingStatuses.has(sc.status)) upcoming += c;
+    }
+
+    const lastGenerated = recentJobs[0] ?? null;
 
     const metrics = {
       total,

@@ -294,9 +294,15 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
     assignee: { targetTable: 'Employee', fkColumn: 'assigneeId' },
     customer: { targetTable: 'Customer', fkColumn: 'customerId' },
     resource: { targetTable: 'Resource', fkColumn: 'resourceId' },
+    recurringSchedule: { targetTable: 'RecurringJobSchedule', fkColumn: 'recurringScheduleId' },
     lead: { targetTable: 'Lead', targetFkColumn: 'jobId', isMany: false },
     conversation: { targetTable: 'Conversation', targetFkColumn: 'jobId', isMany: false },
     journey: { targetTable: 'CustomerJourney', targetFkColumn: 'jobId', isMany: false },
+  },
+  RecurringJobSchedule: {
+    customer: { targetTable: 'Customer', fkColumn: 'customerId' },
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    lastJob: { targetTable: 'Job', fkColumn: 'lastJobId' },
   },
   Employee: {
     workspace: { targetTable: 'Workspace', fkColumn: 'workspaceId' },

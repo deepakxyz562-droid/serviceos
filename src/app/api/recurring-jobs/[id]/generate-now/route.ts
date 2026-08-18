@@ -40,28 +40,6 @@ export async function POST(
       );
     }
 
-    try {
-      await logActivity({
-        tenantId: user.tenantId,
-        actorId: user.id,
-        actorName: user.name || user.email,
-        actorType: 'user',
-        action: 'create',
-        entityType: 'job',
-        entityId: result.jobId ?? null,
-        entityName: existing.title,
-        description: `Manually triggered recurring job schedule "${existing.title}"`,
-        metadataJson: JSON.stringify({
-          scheduleId: id,
-          jobId: result.jobId,
-          manuallyTriggered: true,
-        }),
-        severity: 'info',
-      });
-    } catch (logErr) {
-      console.error('[RecurringJobs generate-now] activity log failed:', logErr);
-    }
-
     return NextResponse.json(
       { success: true, jobId: result.jobId },
       { status: 201 },
