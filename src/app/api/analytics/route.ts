@@ -47,14 +47,44 @@ export async function GET(request: NextRequest) {
       tenantFilter = { tenantId: '__NO_TENANT__' }
     }
 
+    // ─── Resolve tenantId → workspaceIds ─────────────────────────────
+    // Job and Employee have NO `tenantId` column (only `workspaceId`).
+    // Spreading `{ tenantId }` into a Job/Employee query throws
+    // "Unknown argument `tenantId`" → 500 → entire handler returns
+    // { error: 'Internal server error' }. To fix this we resolve the
+    // tenant's Workspaces ONCE here and pass a separate `workspaceFilter`
+    // into each handler, then use it for Job/Employee queries.
+    //
+    // Pattern mirrors `/api/dashboard/bootstrap/route.ts` lines 138-144.
+    let workspaceIds: string[] = []
+    const tenantIdForLookup = typeof tenantFilter.tenantId === 'string' ? tenantFilter.tenantId : null
+    if (tenantIdForLookup) {
+      try {
+        const tenantWorkspaces = await db.workspace.findMany({
+          where: { tenantId: tenantIdForLookup },
+          select: { id: true },
+        })
+        workspaceIds = tenantWorkspaces.map((w: { id: string }) => w.id)
+      } catch (err) {
+        console.error('[analytics] workspace.findMany failed:', err)
+      }
+    }
+    // Filter used for Job and Employee queries. If the tenant has no
+    // Workspaces registered, `{ id: '__NO_WORKSPACE__' }` is a never-match
+    // sentinel (preserves the response shape — handlers still get arrays/zeros).
+    const workspaceFilter: Record<string, unknown> =
+      workspaceIds.length > 0
+        ? { workspaceId: { in: workspaceIds } }
+        : { id: '__NO_WORKSPACE__' }
+
     // Route to different metric handlers
     switch (metric) {
       case 'revenue_trends':
-        return await handleRevenueTrends(dateFilter, tenantFilter, groupBy)
+        return await handleRevenueTrends(dateFilter, tenantFilter, workspaceFilter, groupBy)
       case 'job_stats':
-        return await handleJobStats(dateFilter, tenantFilter)
+        return await handleJobStats(dateFilter, tenantFilter, workspaceFilter)
       case 'employee_productivity':
-        return await handleEmployeeProductivity(dateFilter, tenantFilter)
+        return await handleEmployeeProductivity(dateFilter, tenantFilter, workspaceFilter)
       case 'lead_conversion':
         return await handleLeadConversion(dateFilter, tenantFilter)
       case 'whatsapp_analytics':
@@ -63,7 +93,7 @@ export async function GET(request: NextRequest) {
         return await handleJourneyAnalytics(dateFilter, tenantFilter)
       case 'overview':
       default:
-        return await handleOverview(dateFilter, tenantFilter)
+        return await handleOverview(dateFilter, tenantFilter, workspaceFilter)
     }
   } catch (error) {
     console.error('Error fetching analytics:', error)
@@ -76,8 +106,18 @@ export async function GET(request: NextRequest) {
  */
 async function handleOverview(
   dateFilter: Record<string, unknown>,
-  tenantFilter: Record<string, unknown>
+  tenantFilter: Record<string, unknown>,
+  workspaceFilter: Record<string, unknown>
 ) {
+  // ─── Per-query isolation ───────────────────────────────────────────
+  // Mirror the bootstrap pattern: each query is wrapped so a single
+  // failure (e.g. Supabase adapter missing `_sum` in groupBy) doesn't
+  // kill the entire Overview response. Errors are logged with the
+  // query name so they surface in dev.log.
+  const safe = async <T>(name: string, q: Promise<T>, fallback: T): Promise<T> => {
+    try { return await q } catch (err) { console.error(`[analytics/overview] query "${name}" failed:`, err); return fallback }
+  }
+
   const [
     totalJobs,
     completedJobs,
@@ -87,21 +127,30 @@ async function handleOverview(
     totalEmployees,
     recentJobs,
   ] = await Promise.all([
-    db.job.count({ where: { ...tenantFilter, ...(Object.keys(dateFilter).length ? { createdAt: dateFilter } : {}) } }),
-    db.job.count({ where: { ...tenantFilter, status: 'completed', ...(Object.keys(dateFilter).length ? { createdAt: dateFilter } : {}) } }),
-    db.lead.count({ where: { ...tenantFilter, status: { in: ['new', 'contacted', 'qualified'] } } }),
-    db.invoice.aggregate({
+    // Job has only `workspaceId` (no `tenantId`) → must use workspaceFilter.
+    safe('job.count', db.job.count({ where: { ...workspaceFilter, ...(Object.keys(dateFilter).length ? { createdAt: dateFilter } : {}) } }), 0),
+    safe('job.count.completed', db.job.count({ where: { ...workspaceFilter, status: 'completed', ...(Object.keys(dateFilter).length ? { createdAt: dateFilter } : {}) } }), 0),
+    // Lead has `tenantId` → use tenantFilter.
+    safe('lead.count.active', db.lead.count({ where: { ...tenantFilter, status: { in: ['new', 'contacted', 'qualified'] } } }), 0),
+    safe('invoice.aggregate.paid', db.invoice.aggregate({
       where: { ...tenantFilter, status: 'paid', ...(Object.keys(dateFilter).length ? { paidAt: dateFilter } : {}) },
       _sum: { total: true },
-    }),
-    db.customer.count({ where: tenantFilter.workspaceId ? { workspaceId: tenantFilter.workspaceId as string } : {} }),
-    db.employee.count(),
-    db.job.findMany({
-      where: { ...tenantFilter, ...(Object.keys(dateFilter).length ? { createdAt: dateFilter } : {}) },
+    }), { _sum: { total: 0 } as { _sum: { total: number | null } } }),
+    // Customer has BOTH tenantId and workspaceId; tenantId is canonical.
+    // (Previously this used `tenantFilter.workspaceId` which was always
+    // undefined → returned `{}` → leaked ALL customers across tenants.)
+    safe('customer.count', db.customer.count({ where: { ...tenantFilter, ...(Object.keys(dateFilter).length ? { createdAt: dateFilter } : {}) } }), 0),
+    // Employee has only `workspaceId` (no `tenantId`) → must use workspaceFilter.
+    // (Previously this had NO `where` clause at all → returned a GLOBAL count
+    // across ALL tenants — a cross-tenant data leak. The "129 team members"
+    // symptom was this count being global.)
+    safe('employee.count', db.employee.count({ where: workspaceFilter }), 0),
+    safe('job.findMany.recent', db.job.findMany({
+      where: { ...workspaceFilter, ...(Object.keys(dateFilter).length ? { createdAt: dateFilter } : {}) },
       take: 10,
       orderBy: { createdAt: 'desc' },
       select: { id: true, title: true, status: true, customerName: true, createdAt: true },
-    }),
+    }), [] as { id: string; title: string; status: string; customerName: string | null; createdAt: Date | string }[]),
   ])
 
   return NextResponse.json({
@@ -109,7 +158,8 @@ async function handleOverview(
     totalJobs,
     completedJobs,
     activeLeads,
-    totalRevenue: totalRevenue._sum.total || 0,
+    // Defensive access — adapter may drop `_sum`.
+    totalRevenue: totalRevenue._sum?.total ?? 0,
     totalCustomers,
     totalEmployees,
     completionRate: totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 0,
@@ -123,6 +173,7 @@ async function handleOverview(
 async function handleRevenueTrends(
   dateFilter: Record<string, unknown>,
   tenantFilter: Record<string, unknown>,
+  _workspaceFilter: Record<string, unknown>,
   groupBy: string
 ) {
   // Try to get data from AnalyticsSnapshot first
@@ -147,7 +198,7 @@ async function handleRevenueTrends(
     })
   }
 
-  // Fallback: compute from invoices
+  // Fallback: compute from invoices (Invoice has `tenantId` → tenantFilter is correct)
   const invoices = await db.invoice.findMany({
     where: {
       status: 'paid',
@@ -186,10 +237,12 @@ async function handleRevenueTrends(
  */
 async function handleJobStats(
   dateFilter: Record<string, unknown>,
-  tenantFilter: Record<string, unknown>
+  _tenantFilter: Record<string, unknown>,
+  workspaceFilter: Record<string, unknown>
 ) {
+  // Job has only `workspaceId` (no `tenantId`) → use workspaceFilter.
   const where = {
-    ...tenantFilter,
+    ...workspaceFilter,
     ...(Object.keys(dateFilter).length ? { createdAt: dateFilter } : {}),
   }
 
@@ -257,9 +310,13 @@ async function handleJobStats(
  */
 async function handleEmployeeProductivity(
   dateFilter: Record<string, unknown>,
-  tenantFilter: Record<string, unknown>
+  _tenantFilter: Record<string, unknown>,
+  workspaceFilter: Record<string, unknown>
 ) {
+  // Employee has only `workspaceId` (no `tenantId`) → must use workspaceFilter.
+  // (Previously this had NO `where` clause → leaked ALL employees across tenants.)
   const employees = await db.employee.findMany({
+    where: workspaceFilter,
     select: {
       id: true,
       name: true,
@@ -270,13 +327,14 @@ async function handleEmployeeProductivity(
     },
   })
 
-  // Get completed jobs per employee in the date range
+  // Get completed jobs per employee in the date range.
+  // Job has only `workspaceId` → use workspaceFilter here too.
   const jobCounts = await db.job.groupBy({
     by: ['assigneeId'],
     where: {
       status: 'completed',
       assigneeId: { in: employees.map(e => e.id) },
-      ...tenantFilter,
+      ...workspaceFilter,
       ...(Object.keys(dateFilter).length ? { createdAt: dateFilter } : {}),
     },
     _count: { id: true },
@@ -327,7 +385,7 @@ async function handleLeadConversion(
     leadsByStatus,
   ] = await Promise.all([
     db.lead.count({ where }),
-    db.lead.count({ where: { ...where, status: 'converted' } }),
+    db.lead.count({ where: { ...where, status: 'won' } }),
     db.lead.groupBy({
       by: ['source'],
       where,

@@ -67,10 +67,24 @@ export async function GET() {
     // ── Run all 3 data fetches in parallel ──────────────────────────────
     // Each fetch is independent, so Promise.all runs them concurrently.
     // Net effect: 3 sequential round-trips → 1 parallel window.
+    //
+    // Each fetch is wrapped in its own try/catch so a failure in one
+    // (e.g. a single malformed Prisma query) does NOT silently zero-out
+    // the entire bootstrap. Errors are logged with their source label so
+    // they surface in dev.log instead of being swallowed.
     const [stats, employees, unreadCount] = await Promise.all([
-      fetchSaasStats(authUser, tenantId, isSuperAdmin),
-      fetchEmployees(authUser, tenantId, isSuperAdmin),
-      fetchUnreadCount(authUser, tenantId),
+      fetchSaasStats(authUser, tenantId, isSuperAdmin).catch((err) => {
+        console.error('[dashboard/bootstrap] fetchSaasStats failed:', err);
+        return getZeroStats();
+      }),
+      fetchEmployees(authUser, tenantId, isSuperAdmin).catch((err) => {
+        console.error('[dashboard/bootstrap] fetchEmployees failed:', err);
+        return [];
+      }),
+      fetchUnreadCount(authUser, tenantId).catch((err) => {
+        console.error('[dashboard/bootstrap] fetchUnreadCount failed:', err);
+        return 0;
+      }),
     ]);
 
     const result = { stats, employees, unreadCount };
@@ -82,6 +96,24 @@ export async function GET() {
   } catch (error) {
     console.error('[dashboard/bootstrap] error:', error);
     return cachedJson(getEmptyBootstrap());
+  }
+}
+
+// ─── Per-query isolation helper ─────────────────────────────────────────────
+// Wraps a single Prisma promise: on rejection, logs the query name + error
+// and returns the provided fallback so the rest of the bootstrap can still
+// populate. This is what surfaces the REAL root cause to dev.log instead of
+// the outer try/catch swallowing it into getEmptyBootstrap().
+async function safeQuery<T>(
+  name: string,
+  query: Promise<T>,
+  fallback: T,
+): Promise<T> {
+  try {
+    return await query;
+  } catch (err) {
+    console.error(`[dashboard/bootstrap] query "${name}" failed:`, err);
+    return fallback;
   }
 }
 
@@ -101,65 +133,94 @@ async function fetchSaasStats(
     leadsByStatus,
     leadsBySource,
     paidInvoices,
-    leadsWon,
     lastMonthLeads,
     lastMonthRevenue,
     monthlyRevenueData,
     recentLeads,
   ] = await Promise.all([
-    db.lead.count({ where: tenantFilter }),
-    db.lead.groupBy({
-      by: ['status'],
-      where: tenantFilter,
-      _count: { status: true },
-      _sum: { value: true },
-    }),
-    db.lead.groupBy({
-      by: ['source'],
-      where: tenantFilter,
-      _count: { source: true },
-    }),
-    db.invoice.aggregate({
-      where: { ...tenantFilter, status: 'paid' },
-      _sum: { total: true },
-    }),
-    db.lead.count({ where: { ...tenantFilter, status: 'won' } }),
-    tenantId ? getLastMonthLeadsCount(tenantId) : Promise.resolve(0),
-    tenantId ? getLastMonthRevenue(tenantId) : Promise.resolve(0),
-    tenantId ? getMonthlyRevenue(tenantId) : Promise.resolve([]),
-    db.lead.findMany({
-      where: tenantFilter,
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      select: { id: true, name: true, source: true, status: true, value: true, createdAt: true },
-    }),
+    safeQuery('lead.count', db.lead.count({ where: tenantFilter }), 0),
+    safeQuery(
+      'lead.groupBy.status',
+      db.lead.groupBy({
+        by: ['status'],
+        where: tenantFilter,
+        _count: { status: true },
+        _sum: { value: true },
+      }),
+      [] as { status: string; _count: { status: number }; _sum?: { value: number | null } }[],
+    ),
+    safeQuery(
+      'lead.groupBy.source',
+      db.lead.groupBy({
+        by: ['source'],
+        where: tenantFilter,
+        _count: { source: true },
+      }),
+      [] as { source: string; _count: { source: number } }[],
+    ),
+    safeQuery(
+      'invoice.aggregate.paid',
+      db.invoice.aggregate({
+        where: { ...tenantFilter, status: 'paid' },
+        _sum: { total: true },
+      }),
+      { _sum: { total: 0 } as { _sum: { total: number | null } } },
+    ),
+    safeQuery('getLastMonthLeadsCount', tenantId ? getLastMonthLeadsCount(tenantId) : Promise.resolve(0), 0),
+    safeQuery('getLastMonthRevenue', tenantId ? getLastMonthRevenue(tenantId) : Promise.resolve(0), 0),
+    safeQuery('getMonthlyRevenue', tenantId ? getMonthlyRevenue(tenantId) : Promise.resolve([]), [] as { month: string; label: string; revenue: number }[]),
+    safeQuery(
+      'lead.findMany.recent',
+      db.lead.findMany({
+        where: tenantFilter,
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: { id: true, name: true, source: true, status: true, value: true, createdAt: true },
+      }),
+      [] as { id: string; name: string; source: string; status: string; value: number | null; createdAt: Date | string }[],
+    ),
   ]);
 
-  const tenantWorkspaces = await db.workspace.findMany({
-    where: isSuperAdmin && !tenantId ? {} : { tenantId },
-    select: { id: true },
-  });
+  const tenantWorkspaces = await safeQuery(
+    'workspace.findMany',
+    db.workspace.findMany({
+      where: isSuperAdmin && !tenantId ? {} : { tenantId },
+      select: { id: true },
+    }),
+    [] as { id: string }[],
+  );
   const workspaceIds = tenantWorkspaces.map((w: { id: string }) => w.id);
   const hasWorkspaces = workspaceIds.length > 0;
   const workspaceFilter = hasWorkspaces ? { workspaceId: { in: workspaceIds } } : { id: 'none' };
 
   const [totalJobsCount, jobsByStatus, totalEmployees, recentJobs] = await Promise.all([
-    db.job.count({ where: workspaceFilter }),
-    db.job.groupBy({ by: ['status'], where: workspaceFilter, _count: { status: true } }),
-    db.employee.count({ where: workspaceFilter }),
-    db.job.findMany({
-      where: workspaceFilter,
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      select: { id: true, title: true, assigneeName: true, status: true, scheduledAt: true },
-    }),
+    safeQuery('job.count', db.job.count({ where: workspaceFilter }), 0),
+    safeQuery(
+      'job.groupBy.status',
+      db.job.groupBy({ by: ['status'], where: workspaceFilter, _count: { status: true } }),
+      [] as { status: string; _count: { status: number } }[],
+    ),
+    safeQuery('employee.count', db.employee.count({ where: workspaceFilter }), 0),
+    safeQuery(
+      'job.findMany.recent',
+      db.job.findMany({
+        where: workspaceFilter,
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: { id: true, title: true, assigneeName: true, status: true, scheduledAt: true },
+      }),
+      [] as { id: string; title: string; assigneeName: string | null; status: string; scheduledAt: Date | string | null }[],
+    ),
   ]);
 
+  // Defensive access: if the adapter dropped `_sum` (Supabase REST adapter
+  // doesn't implement _sum in groupBy), fall back to 0 instead of throwing
+  // a TypeError that would kill the entire bootstrap.
   const leadPipeline = leadsByStatus.map(
-    (item: { status: string; _count: { status: number }; _sum: { value: number | null } }) => ({
+    (item: { status: string; _count: { status: number }; _sum?: { value: number | null } }) => ({
       stage: item.status,
       count: item._count.status,
-      value: item._sum.value || 0,
+      value: item._sum?.value ?? 0,
     }),
   );
 
@@ -180,7 +241,8 @@ async function fetchSaasStats(
       ? Math.round(((totalLeadsCount - lastMonthLeads) / lastMonthLeads) * 100)
       : totalLeadsCount > 0 ? 100 : 0;
 
-  const currentRevenue = paidInvoices._sum.total || 0;
+  // Defensive access for the same reason as leadPipeline.
+  const currentRevenue = paidInvoices._sum?.total ?? 0;
   const revenueTrend =
     lastMonthRevenue > 0
       ? Math.round(((currentRevenue - lastMonthRevenue) / lastMonthRevenue) * 100)
@@ -326,7 +388,8 @@ async function getLastMonthRevenue(tenantId: string) {
     where: { tenantId, status: 'paid', paidAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
     _sum: { total: true },
   });
-  return result._sum.total || 0;
+  // Defensive access — Supabase REST adapter may drop `_sum`.
+  return result._sum?.total ?? 0;
 }
 
 async function getMonthlyRevenue(tenantId: string) {
