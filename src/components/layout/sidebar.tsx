@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
 import { useAppStore } from '@/store/app-store';
 import { useBelowLg } from '@/hooks/use-mobile';
 import { prefetchView } from '@/lib/view-prefetch';
@@ -461,9 +460,6 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     auth,
   } = useAppStore();
 
-  const router = useRouter();
-  const pathname = usePathname();
-
   const [disabledMenus, setDisabledMenus] = useState<string[]>([]);
   // User-explicit overrides of each section's collapsed state. The effective
   // collapsed state is derived: override wins if present, otherwise the
@@ -575,37 +571,8 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     return sections;
   }, [isSuperAdmin, isEmployee, isListingOnly, disabledMenus]);
 
-  // ── Hybrid nav: SPA views vs real routes ─────────────────────────────────
-  // Most views (jobs, customers, dashboard, etc.) live inside the SPA shell at
-  // `/` and switch via Zustand `setCurrentView`. Recurring Jobs has graduated
-  // to real Next.js routes under `/recurring-jobs/*` (Approach A routing
-  // refactor) — clicking that nav item must `router.push('/recurring-jobs')`
-  // instead of toggling the SPA state.
-  //
-  // The active-state check is also hybrid: for SPA views we check `currentView`
-  // (the persisted Zustand state); for `/recurring-jobs/*` routes we check
-  // `pathname.startsWith('/recurring-jobs')` so the highlight follows the user
-  // as they navigate list → new → detail → edit.
-  const ROUTE_VIEWS = new Set<ViewType>(['recurringJobs']);
-
   const handleNavClick = (view: ViewType) => {
-    if (ROUTE_VIEWS.has(view)) {
-      // Real route — navigate via Next.js router. The (app) layout will auth
-      // the user server-side; if they're somehow logged out, they bounce to `/`.
-      if (view === 'recurringJobs') {
-        setCurrentView('recurringJobs');
-        router.push('/recurring-jobs');
-      }
-    } else {
-      // SPA view — set Zustand state. If we're currently on a /recurring-jobs/*
-      // route, we also need to navigate back to `/` so HomePageClient mounts.
-      if (pathname?.startsWith('/recurring-jobs')) {
-        setCurrentView(view);
-        router.push(`/?view=${view}`);
-      } else {
-        setCurrentView(view);
-      }
-    }
+    setCurrentView(view);
     if (isMobile) setMobileSidebarOpen(false);
   };
 
@@ -619,15 +586,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
 
   const renderNavItem = (item: NavItem) => {
     const Icon = item.icon;
-    // Hybrid active state: for views backed by real Next.js routes (currently
-    // just recurringJobs → /recurring-jobs/*), highlight based on `pathname`
-    // so the active item tracks list/new/[id]/edit sub-routes. For SPA views,
-    // fall back to the Zustand `currentView` (which is also set when navigating
-    // back to `/` via ?view=...).
-    const isRecurringRoute = !!pathname?.startsWith('/recurring-jobs');
-    const isActive = isRecurringRoute
-      ? item.view === 'recurringJobs'
-      : currentView === item.view;
+    const isActive = currentView === item.view;
 
     // ── Plan-gated access (trial=LOCK, paid=HIDE) ─────────────────────────
     // Behaviour matrix per spec:
