@@ -4,6 +4,8 @@ import { getAuthUser } from '@/lib/auth';
 import { requirePlanFeature } from '@/lib/plan-gate';
 import { createRecurringSchedule } from '@/lib/recurring-jobs';
 import { logActivity } from '@/lib/activity-log';
+import { shouldUseSupabaseDB } from '@/lib/supabase-db';
+import { getRecurringJobs } from '@/lib/supabase-rpc';
 import {
   calculateOccurrences,
   formatSchedulePreview,
@@ -29,20 +31,20 @@ export async function GET(request: NextRequest) {
     if (activeFilter === 'false') where.active = false;
     if (customerId) where.customerId = customerId;
 
-    // Fast-path: Postgres RPC (1 DB round trip for schedule list + customer + last job + counts)
-    try {
-      const rpcRes = await db.$queryRawUnsafe<Array<{ get_recurring_jobs: { schedules: any[] } }>>(
-        `SELECT get_recurring_jobs($1, $2, $3);`,
-        user.tenantId,
-        activeFilter || '',
-        customerId || ''
-      );
-      const rpcData = rpcRes?.[0]?.get_recurring_jobs;
-      if (rpcData && Array.isArray(rpcData.schedules)) {
-        return NextResponse.json({ schedules: rpcData.schedules });
+    // Fast-path: Postgres RPC via Supabase PostgREST client (1 DB round trip)
+    if (shouldUseSupabaseDB()) {
+      try {
+        const rpcData = await getRecurringJobs(
+          user.tenantId,
+          activeFilter || undefined,
+          customerId || undefined
+        );
+        if (rpcData && Array.isArray(rpcData.schedules)) {
+          return NextResponse.json({ schedules: rpcData.schedules });
+        }
+      } catch {
+        // Fallback to Prisma query below
       }
-    } catch {
-      // Fallback to optimized Prisma query below
     }
 
     const schedules = await db.recurringJobSchedule.findMany({

@@ -4,6 +4,8 @@ import { getAuthUser } from '@/lib/auth';
 import { requirePlanFeature } from '@/lib/plan-gate';
 import { computeNextOccurrence } from '@/lib/recurring-jobs';
 import { logActivity } from '@/lib/activity-log';
+import { shouldUseSupabaseDB } from '@/lib/supabase-db';
+import { getRecurringJobDetails } from '@/lib/supabase-rpc';
 
 // GET /api/recurring-jobs/[id] — Get a single schedule with customer +
 // last 10 generated jobs.
@@ -19,22 +21,16 @@ export async function GET(
 
     const { id } = await params;
 
-    // Fast-path: Postgres RPC (1 DB round trip for schedule + customer + recent 10 jobs + consolidated metrics)
-    try {
-      const rpcRes = await db.$queryRawUnsafe<Array<{ get_recurring_job_details: any }>>(
-        `SELECT get_recurring_job_details($1, $2);`,
-        user.tenantId,
-        id
-      );
-      const data = rpcRes?.[0]?.get_recurring_job_details;
-      if (data && !data.error) {
-        return NextResponse.json(data);
+    // Fast-path: Postgres RPC via Supabase PostgREST client (1 DB round trip)
+    if (shouldUseSupabaseDB()) {
+      try {
+        const data = await getRecurringJobDetails(id, user.tenantId);
+        if (data && data.schedule) {
+          return NextResponse.json(data);
+        }
+      } catch {
+        // Fallback to Prisma query below
       }
-      if (data?.error && data?.status === 404) {
-        return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });
-      }
-    } catch {
-      // Fallback to optimized Prisma query below
     }
 
     const schedule = await db.recurringJobSchedule.findUnique({

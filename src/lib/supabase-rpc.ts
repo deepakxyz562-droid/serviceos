@@ -722,3 +722,54 @@ export async function getCustomerAssets(
     tenantResolved: row.tenantResolved !== false,
   };
 }
+
+/**
+ * Fetch recurring job schedules for a tenant via Postgres RPC.
+ */
+export async function getRecurringJobs(
+  tenantId: string,
+  activeFilter?: string,
+  customerId?: string
+): Promise<{ schedules: any[] } | null> {
+  try {
+    const client = getAdminClient();
+    const { data, error } = await client.rpc('get_recurring_jobs', {
+      p_tenant_id: tenantId,
+      p_active_filter: activeFilter || '',
+      p_customer_id: customerId || '',
+    });
+    if (error || !data) return null;
+    const res = typeof data === 'string' ? JSON.parse(data) : data;
+    if (res && Array.isArray(res.schedules)) {
+      return res;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch recurring job schedule details for a schedule ID via Postgres RPC.
+ */
+export async function getRecurringJobDetails(
+  scheduleId: string,
+  tenantId: string
+): Promise<{ schedule: any; recentJobs: any[]; metrics: any } | null> {
+  try {
+    const client = getAdminClient();
+    const { data, error } = await client.rpc('get_recurring_job_details', {
+      p_tenant_id: tenantId,
+      p_schedule_id: scheduleId,
+    });
+    if (error || !data) return null;
+    const res = typeof data === 'string' ? JSON.parse(data) : data;
+    if (res && res.schedule) {
+      return res;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
