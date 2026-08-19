@@ -135,7 +135,7 @@ interface AppState {
 
 // Shape of the cross-view "open detail" signal.
 export interface PendingOpenEntity {
-  kind: 'job' | 'quote' | 'invoice' | 'recurringSchedule';
+  kind: 'job' | 'quote' | 'invoice' | 'recurringSchedule' | 'customer';
   id: string;
   /** Optional: originating customer id, useful for back-navigation. */
   fromCustomerId?: string;

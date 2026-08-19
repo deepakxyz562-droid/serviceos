@@ -247,6 +247,25 @@ export function CrmView() {
   }, [pendingCreate]);
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const pendingOpenEntity = useAppStore((s) => s.pendingOpenEntity);
+
+  // Consume cross-view "open customer detail" signal
+  useEffect(() => {
+    if (!pendingOpenEntity || pendingOpenEntity.kind !== 'customer') return;
+    const targetId = pendingOpenEntity.id;
+    setPendingOpenEntity(null);
+    authFetch(`/api/customers/${targetId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const cust = data?.customer || data;
+        if (cust?.id) {
+          setSelectedCustomer(cust);
+          setFormMode('detail');
+        }
+      })
+      .catch((err) => console.error('[crm-view] pendingOpenEntity customer fetch failed:', err));
+  }, [pendingOpenEntity, setPendingOpenEntity]);
+
   const [customerSort, setCustomerSort] = useState<'name' | 'createdAt'>('name');
   const [customerSortDir, setCustomerSortDir] = useState<'asc' | 'desc'>('asc');
 

@@ -92,6 +92,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { apiGet, apiPost } from '@/lib/api';
+import { useAppStore } from '@/store/app-store';
 import {
   calculateOccurrences,
   DAY_NAMES,
@@ -232,6 +233,7 @@ function deriveStatus(s: {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: RecurringJobDetailPageProps) {
+  const { setActiveView, setPendingOpenEntity } = useAppStore();
 
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [recentJobs, setRecentJobs] = useState<GeneratedJob[]>([]);
@@ -841,12 +843,18 @@ function OverviewTab({
               <Row
                 label="Customer"
                 value={
-                  <Link
-                    href={`/?view=customers&customer=${schedule.customer.id}`}
-                    className="font-medium text-foreground hover:underline"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (schedule.customer?.id) {
+                        setPendingOpenEntity({ kind: 'customer', id: schedule.customer.id });
+                        setActiveView('customers');
+                      }
+                    }}
+                    className="font-medium text-foreground hover:underline text-left"
                   >
                     {schedule.customer.name}
-                  </Link>
+                  </button>
                 }
               />
               {schedule.customer.phone && (
@@ -1279,12 +1287,16 @@ function GeneratedJobsTab({
                   {jobs.map((j) => (
                     <tr key={j.id} className="border-b last:border-b-0 hover:bg-muted/30">
                       <td className="px-4 py-3">
-                        <Link
-                          href={`/?view=jobs&job=${j.id}`}
-                          className="font-medium hover:underline"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingOpenEntity({ kind: 'job', id: j.id });
+                            setActiveView('jobs');
+                          }}
+                          className="font-medium hover:underline text-left"
                         >
                           {j.jobNumber || j.title || 'Untitled job'}
-                        </Link>
+                        </button>
                         {j.title && j.jobNumber && (
                           <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
                             {j.title}
@@ -1299,10 +1311,15 @@ function GeneratedJobsTab({
                         {j.assignee?.name || j.assigneeName || '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button asChild variant="ghost" size="sm">
-                          <Link href={`/?view=jobs&job=${j.id}`}>
-                            <ArrowLeft className="size-3.5 mr-1 rotate-180" /> Open
-                          </Link>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setPendingOpenEntity({ kind: 'job', id: j.id });
+                            setActiveView('jobs');
+                          }}
+                        >
+                          <ArrowLeft className="size-3.5 mr-1 rotate-180" /> Open
                         </Button>
                       </td>
                     </tr>
@@ -1448,10 +1465,15 @@ function BillingTab({ schedule }: { schedule: Schedule }) {
                         {inv.dueDate ? formatShortDate(inv.dueDate) : '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button asChild variant="ghost" size="sm">
-                          <Link href={`/?view=invoices&invoice=${inv.id}`}>
-                            <ArrowLeft className="size-3.5 mr-1 rotate-180" /> Open
-                          </Link>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setPendingOpenEntity({ kind: 'invoice', id: inv.id });
+                            setActiveView('invoices');
+                          }}
+                        >
+                          <ArrowLeft className="size-3.5 mr-1 rotate-180" /> Open
                         </Button>
                       </td>
                     </tr>
