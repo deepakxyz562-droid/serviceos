@@ -556,10 +556,8 @@ function EligibilityCard({
   onNavigate?: (view: string) => void;
   compact?: boolean;
 }) {
-  const pct = eligibility?.profileCompletionPct ?? 0;
-  const profileComplete = eligibility?.checks?.profileComplete ?? false;
-  const missingRequirements = eligibility?.missingRequirements || [];
-  const checks = eligibility?.checks || ({} as any);
+  const pct = eligibility.profileCompletionPct;
+  const profileComplete = eligibility.checks.profileComplete;
   const pctColor = pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-rose-500';
 
   return (
@@ -575,13 +573,13 @@ function EligibilityCard({
               Pass all 9 gates to receive marketplace leads.
             </CardDescription>
           </div>
-          {eligibility?.eligible ? (
+          {eligibility.eligible ? (
             <Badge className="bg-emerald-600 text-white gap-1">
               <CheckCircle2 className="size-3" /> Eligible
             </Badge>
           ) : (
             <Badge variant="outline" className="bg-amber-500/10 text-amber-700 border-amber-300 gap-1">
-              <AlertTriangle className="size-3" /> {missingRequirements.length} missing
+              <AlertTriangle className="size-3" /> {eligibility.missingRequirements.length} missing
             </Badge>
           )}
         </div>
@@ -609,7 +607,7 @@ function EligibilityCard({
         {/* 9-gate checklist */}
         <div className={cn('grid gap-2', compact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2')}>
           {GATE_META.map((g) => {
-            const ok = checks[g.key];
+            const ok = eligibility.checks[g.key];
             return (
               <div
                 key={g.key}
@@ -758,11 +756,11 @@ function OverviewTab({ onNavigate, onOptInNeeded }: {
     );
   }
 
-  if (error || !eligibility || !eligibility.checks) {
+  if (error || !eligibility) {
     return <ErrorState message={error || 'Failed to load overview'} onRetry={load} />;
   }
 
-  const showOptInCTA = !eligibility.checks?.marketplaceOptIn || !eligibility.checks?.termsAccepted;
+  const showOptInCTA = !eligibility.checks.marketplaceOptIn || !eligibility.checks.termsAccepted;
 
   return (
     <div className="space-y-4">
