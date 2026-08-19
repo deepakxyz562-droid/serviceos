@@ -3842,9 +3842,13 @@ export function JobsView() {
             with a generic label so the navigation affordance is always
             visible. */}
         {job.recurringScheduleId && (
-          <Link
-            href={`/recurring-jobs/${job.recurringScheduleId}`}
-            className="group flex items-center justify-between gap-3 rounded-lg border border-emerald-600/30 bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-600/50 px-4 py-2.5 transition-colors"
+          <button
+            type="button"
+            onClick={() => {
+              setPendingOpenEntity({ kind: 'recurringSchedule', id: job.recurringScheduleId! });
+              setActiveView('recurringJobs');
+            }}
+            className="group w-full flex items-center justify-between gap-3 rounded-lg border border-emerald-600/30 bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-600/50 px-4 py-2.5 transition-colors text-left"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <Repeat className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -3861,7 +3865,7 @@ export function JobsView() {
               View schedule
               <ExternalLink className="size-3.5" />
             </span>
-          </Link>
+          </button>
         )}
 
         {/* ─── Sticky page header (Back + title + actions) ────────── */}

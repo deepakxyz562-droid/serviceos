@@ -38,6 +38,7 @@
 //     which transparently append XTransformPort for the gateway).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   Activity as ActivityIcon,
   ArrowLeft,

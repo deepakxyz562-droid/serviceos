@@ -19,7 +19,8 @@
 //
 // No API, Prisma schema, or backend changes required.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useAppStore } from '@/store/app-store';
 import { RecurringJobsListPage } from '@/components/recurring/recurring-jobs-list-page';
 import { RecurringJobDetailPage } from '@/components/recurring/recurring-job-detail-page';
 import { RecurringSchedulePage } from '@/components/recurring/recurring-schedule-page';
@@ -36,6 +37,21 @@ type Screen =
 
 export function RecurringJobsView() {
   const [screen, setScreen] = useState<Screen>({ name: 'list' });
+
+  // ── Consume cross-view "open detail" signal ──────────────────────────────
+  // Jobs-view fires: setPendingOpenEntity({ kind: 'recurringSchedule', id })
+  //                  + setCurrentView('recurringJobs')
+  // We consume it here, switch to detail screen, then clear the signal so a
+  // re-render doesn't re-open it. Mirrors how jobs-view handles kind='job'.
+  const pendingOpenEntity = useAppStore((s) => s.pendingOpenEntity);
+  const setPendingOpenEntity = useAppStore((s) => s.setPendingOpenEntity);
+
+  useEffect(() => {
+    if (!pendingOpenEntity || pendingOpenEntity.kind !== 'recurringSchedule') return;
+    const id = pendingOpenEntity.id;
+    setPendingOpenEntity(null);
+    setScreen({ name: 'detail', scheduleId: id });
+  }, [pendingOpenEntity, setPendingOpenEntity]);
 
   // ── List screen navigation ───────────────────────────────────────────────
   const goToDetail = (id: string) => setScreen({ name: 'detail', scheduleId: id });
