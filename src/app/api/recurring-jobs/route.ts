@@ -4,14 +4,14 @@ import { getAuthUser } from '@/lib/auth';
 import { requirePlanFeature } from '@/lib/plan-gate';
 import { createRecurringSchedule } from '@/lib/recurring-jobs';
 import { logActivity } from '@/lib/activity-log';
-import { shouldUseSupabaseDB } from '@/lib/supabase-db';
-import { getRecurringJobs } from '@/lib/supabase-rpc';
 import {
   calculateOccurrences,
   formatSchedulePreview,
   validateSchedule,
   type RecurrenceInput,
 } from '@/lib/recurrence-engine';
+import { shouldUseSupabaseDB } from '@/lib/supabase-db';
+import { getRecurringJobs, RpcFunctionNotFoundError } from '@/lib/supabase-rpc';
 
 // GET /api/recurring-jobs — List recurring job schedules for the tenant.
 //   Query: active=true|false, customerId=...
@@ -31,19 +31,33 @@ export async function GET(request: NextRequest) {
     if (activeFilter === 'false') where.active = false;
     if (customerId) where.customerId = customerId;
 
-    // Fast-path: Postgres RPC via Supabase PostgREST client (1 DB round trip)
+    // ── Fast-path: Supabase RPC (1 PostgREST round-trip for the full list) ──
+    // The `get_recurring_jobs` SQL function consolidates schedule list +
+    // customer + last job + counts into a single call. Only available when
+    // running against Supabase (USE_SUPABASE_DB=true) AND the SQL function
+    // has been applied. If the function doesn't exist (PGRST202), falls
+    // through to the Prisma query below.
+    //
+    // CRITICAL: This uses the Supabase `.rpc()` HTTP method via supabase-rpc.ts,
+    // NOT Prisma's `$queryRawUnsafe`. When USE_SUPABASE_DB=true, `db` is a
+    // Proxy around the Supabase client — `$queryRawUnsafe` is NOT a method
+    // the Proxy implements, so calling `db.$queryRawUnsafe(...)` would return
+    // a SupabaseModel object (not callable) and hang the API.
     if (shouldUseSupabaseDB()) {
       try {
-        const rpcData = await getRecurringJobs(
+        const rpcResult = await getRecurringJobs(
           user.tenantId,
-          activeFilter || undefined,
-          customerId || undefined
+          activeFilter || '',
+          customerId || '',
         );
-        if (rpcData && Array.isArray(rpcData.schedules)) {
-          return NextResponse.json({ schedules: rpcData.schedules });
+        if (rpcResult && Array.isArray(rpcResult.schedules)) {
+          return NextResponse.json({ schedules: rpcResult.schedules });
         }
-      } catch {
-        // Fallback to Prisma query below
+      } catch (err) {
+        if (!(err instanceof RpcFunctionNotFoundError)) {
+          console.error('[recurring-jobs] RPC error, falling back to Prisma:', err);
+        }
+        // Fall through to the Prisma query below
       }
     }
 

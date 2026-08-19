@@ -723,53 +723,149 @@ export async function getCustomerAssets(
   };
 }
 
+// ── Recurring Jobs RPC ─────────────────────────────────────────────────────
+//
+// Two SQL functions consolidate the recurring-jobs list + detail queries into
+// a single PostgREST round-trip each (replacing N sequential queries with 1).
+//
+// IMPORTANT: These use the Supabase `.rpc()` HTTP method (PostgREST), NOT
+// Prisma's `$queryRawUnsafe`. When `USE_SUPABASE_DB=true`, `db` is a Proxy
+// around the Supabase client — `$queryRawUnsafe` is NOT a method the Proxy
+// implements, so calling `db.$queryRawUnsafe(...)` returns a `SupabaseModel`
+// object (not callable) → throws TypeError → the API hangs. Using `.rpc()`
+// via these functions is the correct pattern (matches `getJobDetail`).
+
 /**
- * Fetch recurring job schedules for a tenant via Postgres RPC.
+ * Raw shape returned by the `get_recurring_jobs` SQL function.
+ * The function returns jsonb with a `schedules` array (each schedule includes
+ * nested customer + lastJob + generatedCount + primaryAssigneeName +
+ * recurrencePreview).
+ */
+export interface RecurringJobsListResult {
+  schedules: Record<string, unknown>[];
+}
+
+interface RawRecurringJobsResult {
+  get_recurring_jobs: RecurringJobsListResult | null;
+}
+
+/**
+ * getRecurringJobs — fetch the recurring job schedules list in a single RPC.
+ *
+ * Calls the `get_recurring_jobs(p_tenant_id, p_active, p_customer_id)` SQL
+ * function via PostgREST. The function returns `{ schedules: [...] }`.
+ *
+ * @returns The list result, or throws RpcFunctionNotFoundError if the SQL
+ *          function hasn't been applied to the database yet.
+ *
+ * Parameter names (`p_tenant_id`, `p_active`, `p_customer_id`) follow the
+ * codebase convention (`p_` + snake_case). If the SQL function was defined
+ * with different parameter names, PostgREST returns PGRST202 and the caller
+ * falls back to the Prisma query path.
  */
 export async function getRecurringJobs(
   tenantId: string,
-  activeFilter?: string,
-  customerId?: string
-): Promise<{ schedules: any[] } | null> {
-  try {
-    const client = getAdminClient();
-    const { data, error } = await client.rpc('get_recurring_jobs', {
-      p_tenant_id: tenantId,
-      p_active_filter: activeFilter || '',
-      p_customer_id: customerId || '',
-    });
-    if (error || !data) return null;
-    const res = typeof data === 'string' ? JSON.parse(data) : data;
-    if (res && Array.isArray(res.schedules)) {
-      return res;
+  activeFilter: string,
+  customerId: string,
+): Promise<RecurringJobsListResult | null> {
+  const client = getAdminClient();
+  const { data, error } = await client.rpc('get_recurring_jobs', {
+    p_tenant_id: tenantId,
+    p_active: activeFilter,
+    p_customer_id: customerId,
+  });
+
+  if (error) {
+    const msg = error.message || '';
+    if (
+      error.code === 'PGRST202' ||
+      msg.includes('Could not find the function') ||
+      (msg.includes('function') && msg.includes('does not exist'))
+    ) {
+      throw new RpcFunctionNotFoundError('get_recurring_jobs');
     }
-    return null;
-  } catch {
-    return null;
+    throw new Error(
+      `[supabase-rpc] get_recurring_jobs failed: ${msg} (code: ${error.code ?? 'n/a'})`,
+    );
   }
+
+  // PostgREST returns RPC results as either a single object or an array
+  // with one element, depending on the function's return type. The
+  // `get_recurring_jobs` function returns a single jsonb object.
+  const row: RawRecurringJobsResult | undefined = Array.isArray(data)
+    ? (data[0] as RawRecurringJobsResult | undefined)
+    : (data as RawRecurringJobsResult | undefined);
+
+  if (!row || !row.get_recurring_jobs) {
+    throw new RpcFunctionNotFoundError('get_recurring_jobs');
+  }
+
+  return row.get_recurring_jobs;
 }
 
 /**
- * Fetch recurring job schedule details for a schedule ID via Postgres RPC.
+ * Raw shape returned by the `get_recurring_job_details` SQL function.
+ * The function returns jsonb with the schedule + customer + recent jobs +
+ * consolidated metrics. When the schedule doesn't exist, it returns
+ * `{ error: 'not_found', status: 404 }`.
  */
-export async function getRecurringJobDetails(
-  scheduleId: string,
-  tenantId: string
-): Promise<{ schedule: any; recentJobs: any[]; metrics: any } | null> {
-  try {
-    const client = getAdminClient();
-    const { data, error } = await client.rpc('get_recurring_job_details', {
-      p_tenant_id: tenantId,
-      p_schedule_id: scheduleId,
-    });
-    if (error || !data) return null;
-    const res = typeof data === 'string' ? JSON.parse(data) : data;
-    if (res && res.schedule) {
-      return res;
-    }
-    return null;
-  } catch {
-    return null;
-  }
+export interface RecurringJobDetailsResult {
+  schedule?: Record<string, unknown>;
+  customer?: Record<string, unknown> | null;
+  recentJobs?: Record<string, unknown>[];
+  metrics?: Record<string, unknown>;
+  error?: string;
+  status?: number;
 }
 
+interface RawRecurringJobDetailsResult {
+  get_recurring_job_details: RecurringJobDetailsResult | null;
+}
+
+/**
+ * getRecurringJobDetails — fetch a single recurring job schedule + its
+ * related data (customer, recent jobs, metrics) in a single RPC.
+ *
+ * Calls the `get_recurring_job_details(p_tenant_id, p_schedule_id)` SQL
+ * function via PostgREST. Returns the full detail object, or an object
+ * with `{ error: 'not_found', status: 404 }` if the schedule doesn't exist.
+ *
+ * @returns The detail result, or throws RpcFunctionNotFoundError if the SQL
+ *          function hasn't been applied to the database yet.
+ */
+export async function getRecurringJobDetails(
+  tenantId: string,
+  scheduleId: string,
+): Promise<RecurringJobDetailsResult | null> {
+  const client = getAdminClient();
+  const { data, error } = await client.rpc('get_recurring_job_details', {
+    p_tenant_id: tenantId,
+    p_schedule_id: scheduleId,
+  });
+
+  if (error) {
+    const msg = error.message || '';
+    if (
+      error.code === 'PGRST202' ||
+      msg.includes('Could not find the function') ||
+      (msg.includes('function') && msg.includes('does not exist'))
+    ) {
+      throw new RpcFunctionNotFoundError('get_recurring_job_details');
+    }
+    throw new Error(
+      `[supabase-rpc] get_recurring_job_details failed: ${msg} (code: ${error.code ?? 'n/a'})`,
+    );
+  }
+
+  // PostgREST returns RPC results as either a single object or an array
+  // with one element, depending on the function's return type.
+  const row: RawRecurringJobDetailsResult | undefined = Array.isArray(data)
+    ? (data[0] as RawRecurringJobDetailsResult | undefined)
+    : (data as RawRecurringJobDetailsResult | undefined);
+
+  if (!row || !row.get_recurring_job_details) {
+    throw new RpcFunctionNotFoundError('get_recurring_job_details');
+  }
+
+  return row.get_recurring_job_details;
+}

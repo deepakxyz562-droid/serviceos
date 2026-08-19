@@ -5,7 +5,7 @@ import { requirePlanFeature } from '@/lib/plan-gate';
 import { computeNextOccurrence } from '@/lib/recurring-jobs';
 import { logActivity } from '@/lib/activity-log';
 import { shouldUseSupabaseDB } from '@/lib/supabase-db';
-import { getRecurringJobDetails } from '@/lib/supabase-rpc';
+import { getRecurringJobDetails, RpcFunctionNotFoundError } from '@/lib/supabase-rpc';
 
 // GET /api/recurring-jobs/[id] — Get a single schedule with customer +
 // last 10 generated jobs.
@@ -21,15 +21,32 @@ export async function GET(
 
     const { id } = await params;
 
-    // Fast-path: Postgres RPC via Supabase PostgREST client (1 DB round trip)
+    // ── Fast-path: Supabase RPC (1 PostgREST round-trip for schedule + customer + recent jobs + metrics) ──
+    // The `get_recurring_job_details` SQL function consolidates the full
+    // detail query into a single call. Only available when running against
+    // Supabase (USE_SUPABASE_DB=true) AND the SQL function has been applied.
+    // If the function doesn't exist (PGRST202), falls through to the Prisma
+    // query below.
+    //
+    // CRITICAL: Uses the Supabase `.rpc()` HTTP method via supabase-rpc.ts,
+    // NOT Prisma's `$queryRawUnsafe`. When USE_SUPABASE_DB=true, `db` is a
+    // Proxy — `$queryRawUnsafe` is NOT callable and would hang the API.
     if (shouldUseSupabaseDB()) {
       try {
-        const data = await getRecurringJobDetails(id, user.tenantId);
-        if (data && data.schedule) {
-          return NextResponse.json(data);
+        const rpcResult = await getRecurringJobDetails(user.tenantId, id);
+        if (rpcResult) {
+          if (rpcResult.error && rpcResult.status === 404) {
+            return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });
+          }
+          if (!rpcResult.error) {
+            return NextResponse.json(rpcResult);
+          }
         }
-      } catch {
-        // Fallback to Prisma query below
+      } catch (err) {
+        if (!(err instanceof RpcFunctionNotFoundError)) {
+          console.error('[recurring-jobs/[id]] RPC error, falling back to Prisma:', err);
+        }
+        // Fall through to the Prisma query below
       }
     }
 
