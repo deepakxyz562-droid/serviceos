@@ -1,13 +1,30 @@
 import { db } from '@/lib/db'
+import { getAuthUser } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
  * GET /api/notification-logs
  * Fetch recent notification logs for the dispatch dashboard.
  * Query params: type, status, limit (default 50), jobId, employeeId
+ *
+ * Auth required. Non-super-admins only see logs for their own tenant;
+ * super_admin can see all (for platform support).
+ *
+ * SECURITY NOTE: notification log rows contain `subject`, `message`, and
+ * `metadataJson` which may include sensitive content such as the customer
+ * verification PIN (when a PIN notification was sent, the PIN is embedded
+ * in the message text). This endpoint is therefore restricted to
+ * authenticated tenant members — never expose it publicly.
  */
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
+    // Tenant filter: non-super-admins can only see their own tenant's logs.
+    // super_admin can see all (for platform support).
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
     const status = searchParams.get('status')
@@ -16,6 +33,9 @@ export async function GET(request: NextRequest) {
     const employeeId = searchParams.get('employeeId')
 
     const where: Record<string, unknown> = {}
+    if (!user.isSuperAdmin && user.tenantId) {
+      where.tenantId = user.tenantId
+    }
     if (type) where.type = type
     if (status) where.status = status
     if (jobId) where.jobId = jobId
@@ -39,82 +59,27 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/notification-logs
- * Create a new notification log entry or resend a failed notification.
- * Body: { id? (for resend), type, recipient, recipientName, message, jobId?, employeeId?, status }
+ *
+ * DEPRECATED (410 Gone) — as of the PIN notification pipeline refactor.
+ *
+ * The previous "resend" action (body.id) was a no-op: it created a new log
+ * row with status 'sent' without actually re-sending any notification.
+ * Real resends now go through the dedicated endpoint:
+ *   POST /api/jobs/[id]/resend-pin  (returns { ok: true, channel } only)
+ *
+ * Creating raw notification log rows is now an internal-only operation
+ * performed by the notification pipeline itself (notifyCustomerVerificationPin
+ * and related functions write to NotificationLog directly).
+ *
+ * This endpoint is kept as a 410 to avoid breaking old clients while
+ * signalling that the contract has changed.
  */
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-
-    // Resend mode: if id is provided, update status to 'sent' and create new log
-    if (body.id) {
-      const existing = await db.notificationLog.findUnique({
-        where: { id: body.id },
-      })
-      if (!existing) {
-        return NextResponse.json(
-          { error: 'Notification log not found' },
-          { status: 404 }
-        )
-      }
-
-      // Create a new log entry for the resend
-      const resent = await db.notificationLog.create({
-        data: {
-          type: existing.type,
-          recipient: existing.recipient,
-          recipientName: existing.recipientName,
-          recipientRole: existing.recipientRole,
-          subject: existing.subject,
-          message: existing.message,
-          status: 'sent',
-          jobId: existing.jobId,
-          employeeId: existing.employeeId,
-          customerId: existing.customerId,
-          tenantId: existing.tenantId,
-          metadataJson: JSON.stringify({
-            ...((() => { try { return JSON.parse(existing.metadataJson || '{}'); } catch { return {}; } })()),
-            resentFrom: existing.id,
-            resentAt: new Date().toISOString(),
-          }),
-        },
-      })
-
-      return NextResponse.json(resent, { status: 201 })
-    }
-
-    // Create new notification log
-    const { type, recipient, recipientName, recipientRole, subject, message, status, jobId, employeeId, customerId, tenantId } = body
-
-    if (!recipient || !message) {
-      return NextResponse.json(
-        { error: 'recipient and message are required' },
-        { status: 400 }
-      )
-    }
-
-    const log = await db.notificationLog.create({
-      data: {
-        type: type || 'whatsapp',
-        recipient,
-        recipientName: recipientName || null,
-        recipientRole: recipientRole || null,
-        subject: subject || null,
-        message,
-        status: status || 'sent',
-        jobId: jobId || null,
-        employeeId: employeeId || null,
-        customerId: customerId || null,
-        tenantId: tenantId || null,
-      },
-    })
-
-    return NextResponse.json(log, { status: 201 })
-  } catch (error) {
-    console.error('Error creating/resending notification log:', error)
-    return NextResponse.json(
-      { error: 'Failed to create notification log' },
-      { status: 500 }
-    )
-  }
+  return NextResponse.json(
+    {
+      error: 'This endpoint is deprecated. Use POST /api/jobs/[id]/resend-pin for PIN resends.',
+      deprecated: true,
+    },
+    { status: 410 }
+  )
 }

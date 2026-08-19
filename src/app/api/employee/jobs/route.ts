@@ -229,11 +229,15 @@ export async function GET(request: NextRequest) {
       const serviceId = (job as { serviceId?: string | null }).serviceId;
       const service = serviceId ? serviceMap.get(serviceId) ?? null : null;
 
-      // Destructure out metadataJson so it's NOT spread into the response.
-      const { metadataJson: _metadataJson, ...jobWithoutMetadata } = job as typeof job & { metadataJson?: unknown };
+      // Destructure out metadataJson AND verificationPin so they're NOT spread
+      // into the response. metadataJson is a heavy payload optimization;
+      // verificationPin is a security requirement — technicians must NEVER see
+      // the PIN (it is sent to the customer and entered by the technician at
+      // arrival, so revealing it would defeat the verification step).
+      const { metadataJson: _metadataJson, verificationPin: _pin, ...jobWithoutSensitive } = job as typeof job & { metadataJson?: unknown; verificationPin?: string };
 
       return {
-        ...jobWithoutMetadata,
+        ...jobWithoutSensitive,
         lifecycleTimestamps,
         lifecycleState,
         service,

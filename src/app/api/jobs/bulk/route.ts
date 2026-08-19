@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { reopenDealOnJobCancel } from '@/lib/deal-archive';
+import { generateVerificationPin } from '@/lib/pin';
+import { notifyCustomerVerificationPin } from '@/lib/whatsapp-notifications';
 
 type BulkAction = 'delete' | 'softDelete' | 'updateStatus' | 'updatePriority' | 'assign';
 
@@ -181,7 +183,7 @@ export async function POST(request: NextRequest) {
           // Verify the employee belongs to this tenant
           const emp = await db.employee.findFirst({
             where: { id: body.assigneeId!, tenantId: user.tenantId! },
-            select: { id: true, name: true },
+            select: { id: true, name: true, phone: true },
           });
           if (!emp) {
             return NextResponse.json(
@@ -189,14 +191,76 @@ export async function POST(request: NextRequest) {
               { status: 404 }
             );
           }
-          const res = await db.job.updateMany({
-            where: { id: { in: ownedIds } },
-            data: {
-              assigneeId: body.assigneeId!,
-              assigneeName: emp.name,
-            },
-          });
-          success = res.count;
+
+          // ── Per-job assign (NOT updateMany) ──────────────────────────
+          // Each job needs:
+          //   1. Its assignee set
+          //   2. A verification PIN (generated if missing — older jobs created
+          //      before the PIN feature may not have one)
+          //   3. A customer PIN notification via the canonical pipeline
+          //
+          // We use a per-job loop instead of updateMany so we can generate
+          // per-job PINs and fire per-job notifications. The loop is
+          // sequential (not Promise.all) to avoid overwhelming the SMS/WhatsApp
+          // provider with concurrent sends.
+          let assignedCount = 0;
+          for (const jobId of ownedIds) {
+            try {
+              // Fetch the job to check if it has a PIN + get customer details
+              const existingJob = await db.job.findUnique({
+                where: { id: jobId },
+                select: {
+                  id: true,
+                  title: true,
+                  jobNumber: true,
+                  verificationPin: true,
+                  customerName: true,
+                  customerPhone: true,
+                  customerEmail: true,
+                  customerId: true,
+                  scheduledAt: true,
+                  scheduledTime: true,
+                  workspaceId: true,
+                },
+              });
+              if (!existingJob) continue;
+
+              // Generate a PIN if the job doesn't have one yet
+              const pin = existingJob.verificationPin || generateVerificationPin();
+
+              // Update the job with assignee + PIN (if newly generated)
+              await db.job.update({
+                where: { id: jobId },
+                data: {
+                  assigneeId: body.assigneeId!,
+                  assigneeName: emp.name,
+                  ...(existingJob.verificationPin ? {} : { verificationPin: pin }),
+                },
+              });
+              assignedCount++;
+
+              // Send the customer PIN notification (best-effort, per-job)
+              // Fire asynchronously — don't block the loop for each notification
+              notifyCustomerVerificationPin(
+                {
+                  ...existingJob,
+                  verificationPin: pin,
+                  assigneeName: emp.name,
+                  scheduledAt: existingJob.scheduledAt?.toISOString(),
+                  tenantId: existingJob.workspaceId,
+                },
+                {
+                  actorUserId: user.id,
+                },
+              ).catch((e) =>
+                console.error(`[bulk assign] Failed to send PIN notification for job ${jobId}:`, e)
+              );
+            } catch (jobErr) {
+              console.error(`[bulk assign] Failed to assign job ${jobId}:`, jobErr);
+              // Continue with the next job — one failure shouldn't block the rest
+            }
+          }
+          success = assignedCount;
           break;
         }
       }

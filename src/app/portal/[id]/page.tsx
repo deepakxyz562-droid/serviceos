@@ -29,7 +29,13 @@ interface PublicJobData {
   assigneeName?: string;
   lineItemsJson?: string;
   quotedAmount?: number;
-  verificationPin?: string;
+  branding?: {
+    businessName: string;
+    logoUrl: string | null;
+    primaryColor: string;
+    accentColor: string;
+    hideFieserosBranding: boolean;
+  } | null;
 }
 
 export default function CustomerPortalJobPage() {
@@ -43,17 +49,16 @@ export default function CustomerPortalJobPage() {
   useEffect(() => {
     if (!id) return;
 
-    fetch(`/api/jobs/${id}`)
+    fetch(`/api/public/jobs/${id}`)
       .then((res) => {
         if (!res.ok) throw new Error('Job details not found');
         return res.json();
       })
       .then((data) => {
-        // /api/jobs/[id] GET returns { job: {...} } (the job wrapped in a
-        // `job` key). Unwrap it here so the rest of the component can read
-        // job.status / job.id / job.title directly — otherwise job.id is
-        // undefined and `job.id.slice(0, 8)` throws a TypeError.
-        setJob(data?.job ?? data);
+        // /api/public/jobs/[id] returns a FLAT DTO (not wrapped in { job })
+        // and never includes verificationPin (the PIN is sent to the customer
+        // via SMS/WhatsApp/email, not displayed on the tracking page).
+        setJob(data);
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : 'Failed to load tracking details');
@@ -107,11 +112,24 @@ export default function CustomerPortalJobPage() {
         {/* Header Branding */}
         <div className="flex items-center justify-between bg-card border border-border p-4 rounded-2xl shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="size-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-lg">
-              F
-            </div>
+            {job.branding?.logoUrl ? (
+              <img
+                src={job.branding.logoUrl}
+                alt={job.branding.businessName}
+                className="size-10 rounded-xl object-contain"
+              />
+            ) : (
+              <div
+                className="size-10 rounded-xl flex items-center justify-center font-bold text-lg text-white"
+                style={{ backgroundColor: job.branding?.primaryColor || '#0f766e' }}
+              >
+                {(job.branding?.businessName || 'F').charAt(0).toUpperCase()}
+              </div>
+            )}
             <div>
-              <h1 className="font-bold text-foreground">Fieseros Customer Portal</h1>
+              <h1 className="font-bold text-foreground">
+                {job.branding?.businessName || 'Customer Portal'}
+              </h1>
               <p className="text-xs text-muted-foreground">Live Job Tracking & Appointment Status</p>
             </div>
           </div>
@@ -119,7 +137,7 @@ export default function CustomerPortalJobPage() {
             isCompleted
               ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
               : isInProgress
-              ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20'
+              ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
               : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
           }`}>
             {statusText}
@@ -183,6 +201,20 @@ export default function CustomerPortalJobPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Powered by Fieseros footer (hidden for white-label tenants) */}
+        {job.branding && !job.branding.hideFieserosBranding && (
+          <div className="text-center text-xs text-muted-foreground pt-4">
+            Powered by{' '}
+            <a
+              href="https://fieseros.com"
+              className="font-semibold hover:underline"
+              style={{ color: job.branding.accentColor }}
+            >
+              Fieseros
+            </a>
           </div>
         )}
       </div>

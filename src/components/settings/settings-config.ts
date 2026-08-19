@@ -81,32 +81,24 @@ export const SETTINGS_GROUP_ORDER: SettingsGroup[] = [
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
   // ─── Business Management ────────────────────────────────────────────────
+  // Company is the unified Company surface — 4 horizontal tabs:
+  //   1. Company Information  (CompanySettings + BusinessProfileSettings)
+  //   2. Branding             (BrandingSettings — colors, font, footer, white-label)
+  //   3. Brand Brain           (BrandBrainView)
+  //   4. Marketplace           (MarketplaceSettings)
+  //
+  // The old `business-profile`, `brand-brain`, and `marketplace` sidebar
+  // entries have been removed — their functionality now lives under the
+  // Company tabs. Deep links (e.g. ?section=brand-brain) still work via
+  // alias cases in settings-view.tsx → CompanySettingsTabs initialTab.
   {
     id: 'company',
-    label: 'Company Settings',
+    label: 'Company',
     icon: 'Building2',
-    description: 'Business profile, branding, hours, locations, branches',
+    description: 'Company information, branding, brand brain, and marketplace profile',
     group: 'business',
     existingTab: 'company',
-    keywords: ['profile', 'name', 'industry', 'currency', 'address', 'phone', 'email', 'whatsapp', 'branding', 'company settings'],
-  },
-  {
-    id: 'business-profile',
-    label: 'Business Profile',
-    icon: 'Building2',
-    description: 'Public business profile, logo, tagline, public contact details',
-    group: 'business',
-    comingSoon: true,
-    keywords: ['profile', 'logo', 'tagline', 'public', 'branding'],
-  },
-  {
-    id: 'marketplace',
-    label: 'Marketplace',
-    icon: 'Store',
-    description: 'Marketplace profile, visibility, pricing, eligibility, terms',
-    group: 'business',
-    existingTab: 'hub',
-    keywords: ['public hub', 'public page', 'visibility', 'seo', 'gallery', 'hours', 'faq'],
+    keywords: ['profile', 'name', 'industry', 'currency', 'address', 'phone', 'email', 'whatsapp', 'branding', 'logo', 'tagline', 'public', 'colors', 'font', 'brand brain', 'voice', 'tone', 'audience', 'competitors', 'marketplace', 'visibility', 'white label', 'company settings'],
   },
   {
     id: 'products-services',
@@ -174,14 +166,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     description: 'Create or connect your Google Business Profile to reach 3x more leads',
     group: 'business',
     keywords: ['google', 'business profile', 'leads', 'seo', 'local search', 'ranking'],
-  },
-  {
-    id: 'brand-brain',
-    label: 'Brand Brain',
-    icon: 'Brain',
-    description: 'Define your brand identity, voice, audience, and competitors — powers AI content generation',
-    group: 'business',
-    keywords: ['brand', 'voice', 'tone', 'audience', 'competitors', 'identity', 'ai', 'content', 'persona', 'messaging'],
   },
   {
     id: 'finance',

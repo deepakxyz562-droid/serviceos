@@ -284,6 +284,33 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     industries: ['ecommerce', 'retail', 'delivery'],
     exampleValues: ['John', 'ORD-10234', 'Shipped', 'In transit - arriving tomorrow', 'https://track.fieseros.com/ORD-10234'],
   },
+  {
+    key: 'utility_visit_scheduled',
+    name: 'Visit Scheduled (with PIN)',
+    metaCategory: 'UTILITY',
+    businessCategory: 'job_assignment',
+    description: 'Sent to the customer when a technician is assigned to their job. Includes the verification PIN, scheduled date/time, technician name, and a tracking link.',
+    language: 'en_US',
+    templateType: 'TEXT',
+    headerText: 'Your service visit has been scheduled',
+    bodyText: 'Hi {{1}}, your service visit with {{2}} has been scheduled.\n\nJob: {{3}}\nDate: {{4}}\nTime: {{5}}\nTechnician: {{6}}\n\nYour verification PIN: {{7}}\n\nTrack your appointment here: {{8}}',
+    footerText: 'Fieseros',
+    buttons: [
+      { type: 'URL', text: 'Track Appointment', url: '{{8}}', example: ['https://track.fieseros.com/v/10234'] },
+    ],
+    essential: true,
+    industries: ['field_service', 'home_services', 'maintenance'],
+    exampleValues: [
+      'John',
+      'Fieseros Plumbing',
+      'Pipe Repair',
+      'Mon, Jan 15',
+      '10:00 AM',
+      'Raj Kumar',
+      '4829',
+      'https://track.fieseros.com/v/10234',
+    ],
+  },
 
   // ═══════════════════════════════════════════
   // MARKETING TEMPLATES — Promotional messages

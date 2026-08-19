@@ -57,12 +57,10 @@ import { SettingsSearch } from '@/components/settings/settings-search';
 import { getSettingsSection, SETTINGS_SECTIONS } from '@/components/settings/settings-config';
 import { getSettingsIcon } from '@/components/settings/settings-icons';
 
-import { CompanySettings } from '@/components/settings/sections/company-settings';
-import { MarketplaceSettings } from '@/components/settings/sections/marketplace-settings';
+import { CompanySettingsTabs } from '@/components/settings/sections/company-settings-tabs';
 import { CrmSettings } from '@/components/settings/sections/crm-settings';
 import { JobsSchedulingSettings } from '@/components/settings/sections/jobs-scheduling-settings';
 import { FinanceSettings } from '@/components/settings/sections/finance-settings';
-import { BrandBrainView } from '@/components/views/tenant/brand-brain-view';
 import { TeamSettings } from '@/components/settings/sections/team-settings';
 import { CustomersSettings } from '@/components/settings/sections/customers-settings';
 import { CommunicationSettings } from '@/components/settings/sections/communication-settings';
@@ -78,7 +76,6 @@ import { WorkSettings } from '@/components/settings/sections/work-settings';
 import { TimesheetSettings } from '@/components/settings/sections/timesheet-settings';
 import { AiAutoReplySettings } from '@/components/settings/sections/ai-auto-reply-settings';
 import { PaymentIntegrationsSettings } from '@/components/settings/sections/payment-integrations-settings';
-import { BusinessProfileSettings } from '@/components/settings/sections/business-profile-section';
 import { GenericPlaceholder } from '@/components/settings/sections/generic-placeholder';
 
 // Embed full developed views inside Settings (single source of truth pattern).
@@ -498,18 +495,18 @@ export function SettingsView() {
   const renderActiveSection = () => {
     switch (activeSection) {
       // ─── Real, wired sections ────────────────────────────────────────────
+      // Company is the unified surface — 4 horizontal tabs (Information,
+      // Branding, Brand Brain, Marketplace). Old section IDs (`business-profile`,
+      // `brand-brain`, `marketplace`) are aliased to the same wrapper with a
+      // different initialTab, so deep links continue to work.
       case 'company':
-        return <CompanySettings onSaved={refreshTenant} />;
+        return <CompanySettingsTabs initialTab="information" onSaved={refreshTenant} />;
+      case 'business-profile':
+        return <CompanySettingsTabs initialTab="information" onSaved={refreshTenant} />;
+      case 'brand-brain':
+        return <CompanySettingsTabs initialTab="brand-brain" onSaved={refreshTenant} />;
       case 'marketplace':
-        return (
-          <MarketplaceSettings
-            tenantId={tenant.id}
-            industry={tenant.industry}
-            slug={tenant.slug}
-            loading={tenantLoading}
-            isPlatformAdmin={isPlatformAdmin}
-          />
-        );
+        return <CompanySettingsTabs initialTab="marketplace" onSaved={refreshTenant} />;
       case 'crm':
         return <CrmSettings />;
       case 'jobs-scheduling':
@@ -536,8 +533,6 @@ export function SettingsView() {
         return <BillingSettings />;
       case 'google-business-profile':
         return <GoogleBusinessProfileSettings />;
-      case 'brand-brain':
-        return <BrandBrainView />;
       case 'dedicated-phone':
         return <DedicatedPhoneSettings onNavigateSection={setActiveSection} />;
 
@@ -588,10 +583,6 @@ export function SettingsView() {
       case 'payment-integrations':
         return <PaymentIntegrationsSettings />;
 
-      // ─── Business Profile (real UI — was a placeholder until ISSUE-4) ──
-      case 'business-profile':
-        return <BusinessProfileSettings onSaved={refreshTenant} />;
-
       // ─── Placeholder sections (Coming Soon) ─────────────────────────────
       default: {
         const config = PLACEHOLDER_CONFIGS[activeSection];
@@ -607,7 +598,7 @@ export function SettingsView() {
           );
         }
         // Fallback to Company if section not found
-        return <CompanySettings onSaved={refreshTenant} />;
+        return <CompanySettingsTabs initialTab="information" onSaved={refreshTenant} />;
       }
     }
   };

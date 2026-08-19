@@ -14,6 +14,7 @@ import { shouldUseSupabaseDB } from '@/lib/supabase-db';
 import { getJobDetail, RpcFunctionNotFoundError } from '@/lib/supabase-rpc';
 import { canTransition } from '@/lib/job-lifecycle';
 import { geocodeAddressOrNull } from '@/lib/geocode';
+import { canSeeJobVerificationPin } from '@/lib/auth/permissions';
 
 // ── A3 fix (2025-08-15): State machine enforcement for PATCH /api/jobs/[id] ──
 // Maps a target Job.status to the lifecycle action that would produce it.
@@ -91,6 +92,11 @@ async function _GET(
   try {
     const { id } = await params;
 
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     // ── C-2B.2: Try the get_job_detail RPC first (6 → 1 call) ──────
     // The SQL function (supabase-rpc-job-detail.sql) consolidates the Job
     // row + Customer JOIN + Employee JOIN + Resource LEFT JOIN + 3 COUNT
@@ -135,9 +141,15 @@ async function _GET(
           jobForLifecycle.notificationLogJson ?? '',
         );
         const lifecycleState = deriveLifecycleState(jobForLifecycle, lifecycleTimestamps);
+        // Strip verificationPin unless the caller is authorized to see it.
+        // The RPC returns the full Job row (including verificationPin), so we
+        // destructure it out and conditionally re-add it based on RBAC.
+        const canSeePin = canSeeJobVerificationPin(user);
+        const { verificationPin: _rpcPin, ...rpcJobWithoutPin } = rpcJob as typeof rpcJob & { verificationPin?: string };
         return NextResponse.json({
           job: {
-            ...rpcJob,
+            ...rpcJobWithoutPin,
+            ...(canSeePin ? { verificationPin: rpcJob.verificationPin } : {}),
             lifecycleTimestamps,
             lifecycleState,
           },
@@ -250,9 +262,16 @@ async function _GET(
     const lifecycleTimestamps = parseLifecycleTimestamps(job.notificationLogJson);
     const lifecycleState = deriveLifecycleState(job, lifecycleTimestamps);
 
+    // Strip verificationPin unless the caller is authorized to see it.
+    // Allowed: owner, admin, manager, dispatcher, office (+ super_admin).
+    // Technicians (employee), viewers, customers NEVER see the PIN.
+    const canSeePin = canSeeJobVerificationPin(user);
+    const { verificationPin: _pin, ...jobWithoutPin } = job as typeof job & { verificationPin?: string };
+
     return NextResponse.json({
       job: {
-        ...job,
+        ...jobWithoutPin,
+        ...(canSeePin ? { verificationPin: job.verificationPin } : {}),
         lifecycleTimestamps,
         lifecycleState,
         _counts: {

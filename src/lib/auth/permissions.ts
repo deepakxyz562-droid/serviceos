@@ -216,6 +216,19 @@ export function canSeeEmployeeHourlyRate(user: RoleBearer | null | undefined): b
 }
 
 /**
+ * Returns true if the user is allowed to see the `verificationPin` field on
+ * Job records. The PIN is sent to the customer and entered by the technician
+ * at arrival — it must NEVER be visible to the technician themselves, to
+ * viewers, or to public/unauthenticated callers.
+ *
+ * Allowed: owner, admin, manager, dispatcher, office (+ super_admin bypass).
+ * Denied: employee (technician), viewer, customer, null.
+ */
+export function canSeeJobVerificationPin(user: RoleBearer | null | undefined): boolean {
+  return hasRole(user, ['owner', 'admin', 'manager', 'dispatcher', 'office']);
+}
+
+/**
  * Convenience: list of all secondary Employee Detail tabs (those that live
  * behind the "More ▾" dropdown).
  */

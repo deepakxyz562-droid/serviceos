@@ -4,7 +4,7 @@ import { withCrmTrace } from '@/lib/crm-perf-trace'
 import { getAuthUser } from '@/lib/auth'
 import { cache } from '@/lib/cache'
 import { cachedJson } from '@/lib/cache-headers'
-import { notifyEmployeeJobAssigned, notifyCustomerBookingConfirmed } from '@/lib/whatsapp-notifications'
+import { notifyEmployeeJobAssigned, notifyCustomerBookingConfirmed, notifyCustomerVerificationPin } from '@/lib/whatsapp-notifications'
 import { dispatchJobEvent } from '@/lib/event-webhook-dispatcher'
 import { logActivity } from '@/lib/activity-log'
 import { EventBus } from '@/lib/event-bus'
@@ -12,6 +12,7 @@ import { geocodeAddressOrNull as geocodeAddress } from '@/lib/geocode'
 import { requireCrmTenant } from '@/lib/require-crm-tenant'
 import { requirePlanFeature } from '@/lib/plan-gate'
 import { computeNextOccurrence, nextVisitNumber, createRecurringSchedule } from '@/lib/recurring-jobs'
+import { generateVerificationPin } from '@/lib/pin'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -442,6 +443,11 @@ export async function POST(request: NextRequest) {
           : JSON.stringify(body.linkToRelatedJson ?? []),
       metadataJson: JSON.stringify(baseMetadata),
       workspaceId,
+      // ── PIN pipeline (Phase 4): generate the 4-digit verification PIN
+      // upfront on job creation so it's available immediately for display
+      // in the Job Detail UI and for the customer notification. The PIN is
+      // immutable unless an authorized user explicitly "Regenerates" it.
+      verificationPin: generateVerificationPin(),
     }
 
     // ── Phase B/3: Recurring schedule creation (optional) ────────────
@@ -584,6 +590,19 @@ export async function POST(request: NextRequest) {
         if (employee) {
           notifyEmployeeJobAssigned(job, employee).catch((e) =>
             console.error('Failed to send employee notification:', e)
+          )
+        }
+        // ── PIN pipeline (Phase 4): fire customer PIN notification when a
+        // job is created WITH an assignee. This covers the "create + assign
+        // in one action" flow that the lifecycle route (which only fires on
+        // explicit Assign/Re-assign button clicks) does not cover.
+        // Guarded by `!recurringSchedule` because the recurring path's first
+        // visit notification is handled inside createRecurringSchedule() —
+        // without this guard we'd send a duplicate PIN SMS for the first
+        // recurring visit.
+        if (job.assigneeId && employee && !recurringSchedule) {
+          notifyCustomerVerificationPin(job, { actorUserId: authUser?.id }).catch((e) =>
+            console.error('Failed to send customer PIN notification:', e)
           )
         }
         // Fire job.created webhook (n8n, Zapier, etc.)

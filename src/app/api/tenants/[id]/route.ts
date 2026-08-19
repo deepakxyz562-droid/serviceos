@@ -114,6 +114,9 @@ export async function GET(
         // Provider service radius in km — powers marketplace "near me" search.
         // 0 / null = "will travel anywhere". Default 25 (see schema).
         serviceRadiusKm: tenant.serviceRadiusKm,
+        // White-label config (JSON string). Parsed by loadTenantEmailBranding()
+        // and the BrandingSettings UI toggle. Shape: { hideFieserosBranding: boolean }
+        whiteLabelJson: tenant.whiteLabelJson,
         // Computed canonical public URL (for the "Preview" button)
         publicUrl: tenant.publicProfileEnabled
           ? `/${mapIndustryToUrlSlug(tenant.industry)}/${slugifyCity(tenant.city)}/${tenant.publicSlug || tenant.slug}`
@@ -195,6 +198,14 @@ export async function PUT(
       // Provider service radius (km) — powers marketplace "near me" search.
       // 0 / null = "will travel anywhere". Default 25 (see schema).
       serviceRadiusKm,
+      // ── White-label config ────────────────────────────────────────────
+      // JSON string stored on Tenant.whiteLabelJson. Shape:
+      //   { hideFieserosBranding: boolean }
+      // Controls whether "Powered by Fieseros" footer appears in customer-
+      // facing emails + portal. Plan-gated by the `white_label` feature
+      // (enterprise tier only). The PUT handler validates the plan before
+      // persisting the toggle — see updateData below.
+      whiteLabelJson,
     } = body;
 
     // ── Detect onboarding completion transition ─────────────────────────
@@ -267,6 +278,17 @@ export async function PUT(
       if (!isNaN(n)) {
         updateData.serviceRadiusKm = Math.min(500, Math.max(0, n));
       }
+    }
+
+    // White-label config JSON. Accept either a JSON string or an object.
+    // Plan-gating is enforced server-side by loadTenantEmailBranding()
+    // (which checks isFeatureEnabledForPlan('white_label', planTier)) so even
+    // if a non-enterprise tenant sets hideFieserosBranding=true, the resolver
+    // still returns false. Defense in depth.
+    if (whiteLabelJson !== undefined) {
+      updateData.whiteLabelJson = typeof whiteLabelJson === 'string'
+        ? whiteLabelJson
+        : JSON.stringify(whiteLabelJson || {});
     }
 
     const tenant = await db.tenant.update({

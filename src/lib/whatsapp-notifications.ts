@@ -12,6 +12,8 @@ import {
   renderJobAssignmentEmail,
   JOB_ASSIGNMENT_EMAIL_SUBJECT,
 } from '@/lib/email-templates/job-assignment'
+import { loadTenantEmailBranding, type TenantEmailBranding } from '@/lib/tenant-branding'
+import { renderPinEmailHtml } from '@/lib/email-templates/render-pin-email'
 import { getAppUrl } from '@/lib/brand'
 
 // ==========================================
@@ -1602,8 +1604,18 @@ export async function notifyCustomerBookingConfirmed(
  *             `tenantId` or `workspaceId`, `jobNumber`, `title`,
  *             `assigneeName`).
  */
+export interface NotifyCustomerPinOpts {
+  /** Restrict delivery to a specific channel. If omitted, the full cascade runs (SMS → WhatsApp → Email). */
+  channel?: 'sms' | 'whatsapp' | 'email';
+  /** Marks this as a resend of an existing PIN (not a new PIN). Recorded in metadataJson for audit. */
+  isResend?: boolean;
+  /** The user ID of the person triggering the notification (for audit trail). */
+  actorUserId?: string;
+}
+
 export async function notifyCustomerVerificationPin(
   job: Record<string, unknown>,
+  opts?: NotifyCustomerPinOpts,
 ): Promise<void> {
   const customerPhone = (job.customerPhone as string) || ''
   const customerEmail = (job.customerEmail as string) || ''
@@ -1634,6 +1646,17 @@ export async function notifyCustomerVerificationPin(
     resolvedTenantId = await resolveTenantId(raw)
   } catch {
     // leave null — providers fall back to platform default
+  }
+
+  // ── Load tenant branding for the email ──
+  // Falls back to safe defaults on error (see loadTenantEmailBranding).
+  let branding: TenantEmailBranding | null = null
+  try {
+    if (resolvedTenantId) {
+      branding = await loadTenantEmailBranding(resolvedTenantId)
+    }
+  } catch {
+    // Non-fatal — the email will use default branding
   }
 
   // Consolidated customer assignment message: technician name + scheduled
@@ -1675,6 +1698,25 @@ export async function notifyCustomerVerificationPin(
     `Your technician ${assigneeName} is scheduled for ${scheduledDate} at ${scheduledTime}. ` +
     `Verification PIN: ${pin}. Track: ${trackingUrl}`
 
+  // ── Render branded email HTML ──
+  // Uses the tenant's BrandKit (logo, colors, font, footer) via the
+  // renderPinEmailHtml helper. When branding is unavailable we leave
+  // `emailHtml` undefined and sendEmailChannel falls back to its default
+  // rendering (the `message` field wrapped in <pre>).
+  const emailHtml = branding
+    ? renderPinEmailHtml(branding, {
+        customerName: (job.customerName as string) || '',
+        assigneeName,
+        jobTitle: (job.title as string) || 'your service',
+        jobNumber,
+        scheduledDate,
+        scheduledTime,
+        pin,
+        trackingUrl,
+        isResend: opts?.isResend,
+      })
+    : undefined // fall back to sendEmailChannel's default rendering
+
   try {
     const result = await sendJobNotification({
       to: customerPhone,
@@ -1682,7 +1724,10 @@ export async function notifyCustomerVerificationPin(
       type: 'text',
       recipientName: (job.customerName as string) || undefined,
       recipientRole: 'customer',
-      subject: `Technician Assigned • PIN ${pin}`,
+      // SECURITY: the PIN value is intentionally NOT included in the subject
+      // line — email subjects are often visible in lock-screen previews
+      // and inbox lists. The subject identifies the technician only.
+      subject: `Technician Assigned • ${assigneeName}`,
       jobId: job.id as string,
       customerId: (job.customerId as string) || undefined,
       tenantId: resolvedTenantId || undefined,
@@ -1693,16 +1738,22 @@ export async function notifyCustomerVerificationPin(
       // from customerId on its own — it only looks at Employee/User).
       ...(customerEmail ? { emailTo: customerEmail } : {}),
       emailPriority: 'operational',
-      pushTitle: `Technician Assigned • PIN ${pin}`,
+      pushTitle: `Technician Assigned • ${assigneeName}`,
       pushBody: `${assigneeName} • ${scheduledDate} ${scheduledTime}`,
-      actionUrl: `/portal/${job.id as string}`,
+      actionUrl: trackingUrl, // absolute URL (getAppUrl() + /portal/{jobId})
+      // Branded email HTML (uses BrandedLayout with tenant colors/logo/font)
+      ...(emailHtml ? { emailHtml } : {}),
+      // If a specific channel is requested, restrict the cascade to it
+      ...(opts?.channel ? { channels: [opts.channel] } : {}),
     })
 
     // Audit log entry summarising the cascade outcome. The individual
     // channel helpers (sendSmsChannel / sendEmailChannel) already write
     // their own NotificationLog rows; this extra row gives operators a
     // single "verification PIN dispatch" record with the full channel
-    // breakdown + the PIN itself (useful for support debugging).
+    // breakdown + audit metadata (resend / actor / channels). The PIN
+    // VALUE itself is intentionally NOT recorded here (security: the
+    // audit log records the EVENT of a PIN dispatch, not the secret).
     try {
       const channelSummary = (result.channels || []).map((c) => ({
         channel: c.channel,
@@ -1716,7 +1767,9 @@ export async function notifyCustomerVerificationPin(
           recipient: customerPhone || customerEmail,
           recipientName: (job.customerName as string) || undefined,
           recipientRole: 'customer',
-          subject: `Job Verification PIN: ${pin}`,
+          subject: opts?.isResend
+            ? 'Job Verification PIN (Resend)'
+            : 'Job Verification PIN',
           message,
           status: result.success ? 'sent' : 'failed',
           jobId: job.id as string,
@@ -1724,13 +1777,20 @@ export async function notifyCustomerVerificationPin(
           tenantId: resolvedTenantId || undefined,
           metadataJson: JSON.stringify({
             eventType: 'customer.verification_pin',
+            isResend: opts?.isResend === true,
+            actorUserId: opts?.actorUserId || null,
             jobId: job.id,
             jobNumber,
-            pin,
+            // SECURITY: the PIN value is intentionally NOT stored in the audit
+            // log. The log records that a PIN notification was dispatched,
+            // but not the PIN itself — the PIN is sensitive and can be
+            // re-read from Job.verificationPin by authorized roles only.
             dispatchSuccess: result.success,
             dispatchError: result.error,
             channels: channelSummary,
             customerEmailProvided: !!customerEmail,
+            customerPhoneProvided: !!customerPhone,
+            brandedEmailUsed: !!emailHtml,
           }),
         },
       })
