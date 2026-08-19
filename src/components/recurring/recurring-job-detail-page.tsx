@@ -38,8 +38,6 @@
 //     which transparently append XTransformPort for the gateway).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import {
   Activity as ActivityIcon,
   ArrowLeft,
@@ -208,6 +206,8 @@ interface ScheduleMetrics {
 
 export interface RecurringJobDetailPageProps {
   scheduleId: string;
+  onBack: () => void;
+  onEdit: (id: string) => void;
 }
 
 // ─── Status derivation ─────────────────────────────────────────────────────
@@ -230,8 +230,7 @@ function deriveStatus(s: {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function RecurringJobDetailPage({ scheduleId }: RecurringJobDetailPageProps) {
-  const router = useRouter();
+export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: RecurringJobDetailPageProps) {
 
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [recentJobs, setRecentJobs] = useState<GeneratedJob[]>([]);
@@ -258,11 +257,11 @@ export function RecurringJobDetailPage({ scheduleId }: RecurringJobDetailPagePro
     } catch (err) {
       console.error('[RecurringJobDetailPage] fetch failed:', err);
       toast.error('Failed to load schedule. It may have been deleted.');
-      router.push('/recurring-jobs');
+      onBack();
     } finally {
       setLoading(false);
     }
-  }, [scheduleId, router]);
+  }, [scheduleId, onBack]);
 
   useEffect(() => {
     loadSchedule();
@@ -373,15 +372,13 @@ export function RecurringJobDetailPage({ scheduleId }: RecurringJobDetailPagePro
       {/* ─── Header ─────────────────────────────────────────────────────── */}
       <header className="space-y-3">
         <Button
-          asChild
           variant="ghost"
           size="sm"
           className="-ml-2 text-muted-foreground hover:text-foreground"
+          onClick={onBack}
         >
-          <Link href="/recurring-jobs">
-            <ArrowLeft className="size-4 mr-1.5" />
-            Recurring Jobs
-          </Link>
+          <ArrowLeft className="size-4 mr-1.5" />
+          Recurring Jobs
         </Button>
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -414,7 +411,7 @@ export function RecurringJobDetailPage({ scheduleId }: RecurringJobDetailPagePro
           <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="outline"
-              onClick={() => router.push(`/recurring-jobs/${schedule.id}/edit`)}
+              onClick={() => onEdit(schedule.id)}
               disabled={actioning}
             >
               <Pencil className="size-4 mr-1.5" /> Edit Schedule

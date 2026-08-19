@@ -28,7 +28,6 @@
 //   - Uses existing shadcn/ui components only.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Calendar as CalendarIcon,
   Eye,
@@ -199,10 +198,17 @@ function StatusBadge({ status }: { status: Status }) {
   );
 }
 
+// ─── Props ──────────────────────────────────────────────────────────────────
+
+export interface RecurringJobsListPageProps {
+  onViewDetail: (id: string) => void;
+  onCreateNew: () => void;
+  onEdit: (id: string) => void;
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function RecurringJobsListPage() {
-  const router = useRouter();
+export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: RecurringJobsListPageProps) {
 
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
@@ -412,7 +418,7 @@ export function RecurringJobsListPage() {
         </div>
         <Button
           className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto"
-          onClick={() => router.push('/recurring-jobs/new')}
+          onClick={onCreateNew}
         >
           <Plus className="size-4 mr-1.5" /> New Schedule
         </Button>
@@ -491,7 +497,7 @@ export function RecurringJobsListPage() {
             {schedules.length === 0 && (
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700"
-                onClick={() => router.push('/recurring-jobs/new')}
+                onClick={onCreateNew}
               >
                 <Plus className="size-4 mr-1.5" /> New Schedule
               </Button>
@@ -512,11 +518,11 @@ export function RecurringJobsListPage() {
                 key={s.id}
                 role="button"
                 tabIndex={0}
-                onClick={() => router.push(`/recurring-jobs/${s.id}`)}
+                onClick={() => onViewDetail(s.id)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    router.push(`/recurring-jobs/${s.id}`);
+                    onViewDetail(s.id);
                   }
                 }}
                 className="group cursor-pointer hover:border-emerald-400/60 hover:shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
@@ -580,11 +586,11 @@ export function RecurringJobsListPage() {
                         align="end"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <DropdownMenuItem onClick={() => router.push(`/recurring-jobs/${s.id}`)}>
+                        <DropdownMenuItem onClick={() => onViewDetail(s.id)}>
                           <Eye className="size-4 mr-2" /> View
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => router.push(`/recurring-jobs/${s.id}/edit`)}
+                          onClick={() => onEdit(s.id)}
                         >
                           <Pencil className="size-4 mr-2" /> Edit
                         </DropdownMenuItem>

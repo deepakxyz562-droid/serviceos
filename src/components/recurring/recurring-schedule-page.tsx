@@ -23,8 +23,6 @@
 // the POST endpoint does). See `scheduleToForm()` below.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import {
   ArrowLeft,
   CalendarClock,
@@ -125,12 +123,13 @@ const EMPTY_FORM: ScheduleForm = {
 export interface RecurringSchedulePageProps {
   mode: 'create' | 'edit';
   scheduleId?: string;
+  onBack: () => void;
+  onSaved: (id?: string) => void;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function RecurringSchedulePage({ mode, scheduleId }: RecurringSchedulePageProps) {
-  const router = useRouter();
+export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: RecurringSchedulePageProps) {
   const isEdit = mode === 'edit';
 
   const [form, setForm] = useState<ScheduleForm>(EMPTY_FORM);
@@ -201,11 +200,11 @@ export function RecurringSchedulePage({ mode, scheduleId }: RecurringSchedulePag
       const message =
         err instanceof Error ? err.message : 'Failed to load schedule. It may have been deleted.';
       toast.error(message);
-      router.push('/recurring-jobs');
+      onBack();
     } finally {
       setLoadingSchedule(false);
     }
-  }, [isEdit, scheduleId, router]);
+  }, [isEdit, scheduleId, onBack]);
 
   useEffect(() => {
     loadSupporting();
@@ -349,7 +348,7 @@ export function RecurringSchedulePage({ mode, scheduleId }: RecurringSchedulePag
           throw new Error(message);
         }
         toast.success('Schedule updated');
-        router.push(`/recurring-jobs/${scheduleId}`);
+        onSaved(scheduleId);
       } else {
         const res = await authFetch('/api/recurring-jobs', {
           method: 'POST',
@@ -378,7 +377,7 @@ export function RecurringSchedulePage({ mode, scheduleId }: RecurringSchedulePag
             : 'Schedule created',
         );
         const newId = result?.schedule?.id || result?.id;
-        router.push(newId ? `/recurring-jobs/${newId}` : '/recurring-jobs');
+        onSaved(newId);
       }
     } catch (err) {
       console.error('[RecurringSchedulePage] save failed:', err);
@@ -418,15 +417,13 @@ export function RecurringSchedulePage({ mode, scheduleId }: RecurringSchedulePag
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <Button
-            asChild
             variant="ghost"
             size="sm"
             className="-ml-2 text-muted-foreground hover:text-foreground"
+            onClick={onBack}
           >
-            <Link href={isEdit && scheduleId ? `/recurring-jobs/${scheduleId}` : '/recurring-jobs'}>
-              <ArrowLeft className="size-4 mr-1.5" />
-              Recurring Jobs
-            </Link>
+            <ArrowLeft className="size-4 mr-1.5" />
+            Recurring Jobs
           </Button>
           <h1 className="text-2xl font-bold tracking-tight">
             {isEdit ? 'Edit Recurring Job Schedule' : 'New Recurring Job Schedule'}
@@ -438,11 +435,7 @@ export function RecurringSchedulePage({ mode, scheduleId }: RecurringSchedulePag
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={() =>
-              router.push(
-                isEdit && scheduleId ? `/recurring-jobs/${scheduleId}` : '/recurring-jobs',
-              )
-            }
+            onClick={onBack}
             disabled={submitting}
           >
             <X className="size-4 mr-1.5" />
@@ -774,11 +767,7 @@ export function RecurringSchedulePage({ mode, scheduleId }: RecurringSchedulePag
         <div className="flex items-center gap-2 ml-auto">
           <Button
             variant="outline"
-            onClick={() =>
-              router.push(
-                isEdit && scheduleId ? `/recurring-jobs/${scheduleId}` : '/recurring-jobs',
-              )
-            }
+            onClick={onBack}
             disabled={submitting}
           >
             Cancel
