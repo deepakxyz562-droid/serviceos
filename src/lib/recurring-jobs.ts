@@ -27,6 +27,8 @@ import { db } from '@/lib/db';
 import { logActivity } from '@/lib/activity-log';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { sendSmsMessage } from '@/lib/sms-send';
+import { generateVerificationPin } from '@/lib/pin';
+import { notifyCustomerVerificationPin } from '@/lib/whatsapp-notifications';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -503,6 +505,13 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
     // findFirst above and our create here, the DB will throw P2002 (Prisma) /
     // 23505 (Postgres). Treat that as a duplicate and advance nextRunAt
     // without surfacing the error to the caller.
+    //
+    // ── PIN pipeline (Phase 3): generate the 4-digit verification PIN
+    // BEFORE the create so it can be stored on the Job AND passed to the
+    // post-commit notification. Each recurring visit gets its own unique
+    // PIN (not shared across visits) so a customer can verify each visit
+    // independently.
+    const generatedPin = generateVerificationPin();
     let job: { id: string; title: string };
     try {
       job = await tx.job.create({
@@ -528,6 +537,7 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
           linkedChecklistsJson: JSON.stringify(checklistIds),
           workspaceId,
           recurringScheduleId: schedule.id,
+          verificationPin: generatedPin,
         },
       });
     } catch (err: any) {
@@ -655,43 +665,34 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
   }
 
   // 5. Customer notification (best-effort, outside the transaction).
-  // Send a "your service visit is scheduled" message via WhatsApp + SMS so the
-  // customer knows about the upcoming recurring visit. Previously the customer
-  // received NO notification at job-generation time.
-  if (customerPhone) {
-    const visitDate = scheduledAt
-      ? new Date(scheduledAt).toLocaleDateString('en-US', {
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric',
-        })
-      : 'soon';
-    const visitTimeStr = scheduledTime
-      ? ` at ${scheduledTime}`
-      : '';
-    const assigneeLine = assigneeName ? ` Technician: ${assigneeName}.` : '';
-    const messageText = `Hi${customerName ? ` ${customerName}` : ''}, your service visit "${schedule.title}" has been scheduled for ${visitDate}${visitTimeStr}.${assigneeLine} — ${schedule.tenantId ? 'We will see you then!' : ''}`;
-
-    // WhatsApp (best-effort)
+  // ── PIN pipeline (Phase 3): replaced the inline WhatsApp + SMS calls with
+  // the unified `notifyCustomerVerificationPin()` dispatcher. This routes
+  // through the multi-channel cascade (SMS → WhatsApp → Email) with proper
+  // tenant branding + audit logging, and includes the 4-digit verification
+  // PIN + tracking link. Previously the customer received a plain text
+  // message with NO PIN — now they receive the full verification notification
+  // identical to what normal job assignments send.
+  if (customerPhone || customerEmail) {
     try {
-      await sendWhatsAppMessage({
-        to: customerPhone,
-        message: messageText,
-        tenantId: schedule.tenantId,
-      });
-    } catch (waErr) {
-      console.error('[RecurringJobs] customer WhatsApp notification failed:', waErr);
-    }
-
-    // SMS (best-effort — only if WhatsApp fails or as a secondary channel)
-    try {
-      await sendSmsMessage({
-        to: customerPhone,
-        message: messageText,
-        tenantId: schedule.tenantId,
-      });
-    } catch (smsErr) {
-      console.error('[RecurringJobs] customer SMS notification failed:', smsErr);
+      await notifyCustomerVerificationPin(
+        {
+          id: result.job.id,
+          title: result.job.title,
+          customerName,
+          customerPhone,
+          customerEmail,
+          customerId: schedule.customerId,
+          assigneeName,
+          scheduledAt,
+          scheduledTime,
+          verificationPin: generatedPin,
+          workspaceId,
+          tenantId: schedule.tenantId,
+        },
+        { actorUserId: null },
+      );
+    } catch (notifErr) {
+      console.error('[RecurringJobs] customer PIN notification failed:', notifErr);
     }
   }
 
@@ -1022,6 +1023,11 @@ export async function createRecurringSchedule(
     }
 
     // Create the first Job.
+    // ── PIN pipeline (Phase 3): generate the 4-digit verification PIN
+    // BEFORE the create so it can be stored on the Job AND passed to the
+    // post-commit notification. Each recurring visit (including the first)
+    // gets its own unique PIN.
+    const firstJobPin = generateVerificationPin();
     let job: { id: string; title: string };
     try {
       job = await tx.job.create({
@@ -1047,6 +1053,7 @@ export async function createRecurringSchedule(
           linkedChecklistsJson: JSON.stringify(checklistIds),
           workspaceId,
           recurringScheduleId: schedule.id,
+          verificationPin: firstJobPin,
         },
       });
     } catch (err: any) {
@@ -1122,6 +1129,35 @@ export async function createRecurringSchedule(
     } catch (invoiceErr) {
       console.error('[createRecurringSchedule] auto-invoice on generation failed:', invoiceErr);
       // Don't fail the schedule creation — the Job was created successfully.
+    }
+  }
+
+  // ── PIN pipeline (Phase 3): customer PIN notification for the first visit.
+  // Fires the unified `notifyCustomerVerificationPin()` dispatcher so the
+  // customer receives the branded SMS/WhatsApp/Email with their 4-digit PIN
+  // + tracking link immediately when the recurring schedule is created.
+  // Previously the first visit sent NO customer notification (only
+  // subsequent visits did via generateNextVisit).
+  if (result.firstJobCreated && result.firstJobId && (customerPhone || customerEmail)) {
+    try {
+      await notifyCustomerVerificationPin(
+        {
+          id: result.firstJobId,
+          title: input.title.trim(),
+          customerName,
+          customerPhone,
+          customerEmail,
+          customerId: input.customerId || null,
+          assigneeName,
+          scheduledAt: firstOccurrence,
+          scheduledTime: input.timeOfDay ?? null,
+          verificationPin: firstJobPin,
+          tenantId: input.tenantId,
+        },
+        { actorUserId: null },
+      );
+    } catch (notifErr) {
+      console.error('[createRecurringSchedule] customer PIN notification failed:', notifErr);
     }
   }
 
