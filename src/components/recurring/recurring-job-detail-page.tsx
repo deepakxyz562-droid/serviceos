@@ -659,6 +659,7 @@ function OverviewTab({
   schedule: Schedule;
   metrics: ScheduleMetrics | null;
 }) {
+  const { setActiveView, setPendingOpenEntity } = useAppStore();
   const recurrenceInput: RecurrenceInput = useMemo(
     () => ({
       frequency: schedule.frequency,
@@ -1130,6 +1131,7 @@ function GeneratedJobsTab({
   initialJobs: GeneratedJob[];
   metrics: ScheduleMetrics | null;
 }) {
+  const { setActiveView, setPendingOpenEntity } = useAppStore();
   // Accumulated list across all loaded pages. Initial seed comes from the
   // parent's `recentJobs` (the last 10 from GET /api/recurring-jobs/[id]) so
   // the user sees something immediately; we then re-fetch page 1 from the
@@ -1364,6 +1366,7 @@ function GeneratedJobsTab({
 // ─── Tab: Billing ───────────────────────────────────────────────────────────
 
 function BillingTab({ schedule }: { schedule: Schedule }) {
+  const { setActiveView, setPendingOpenEntity } = useAppStore();
   const [invoices, setInvoices] = useState<GeneratedInvoice[]>([]);
   const [loading, setLoading] = useState(true);
 
