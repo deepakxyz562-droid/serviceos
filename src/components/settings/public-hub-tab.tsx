@@ -195,18 +195,42 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
       const data = await res.json();
       const t = data.tenant;
 
-      // Parse JSON fields safely
+      // Parse JSON fields safely.
+      // CRITICAL: each JSON.parse result MUST be type-checked before assignment.
+      // If the DB column contains `"null"`, `"\"some string\""`, or a JSON
+      // object instead of an array, JSON.parse succeeds but returns a non-array
+      // value — and the later `.map()` call crashes the entire Settings view
+      // (TypeError: serviceAreas.map is not a function → Error Boundary).
       let gallery: GalleryItem[] = [];
       let businessHours: BusinessHours = defaultBusinessHours();
       let serviceAreas: string[] = [];
       let socialLinks: SocialLinks = {};
       let faqs: FaqItem[] = [];
 
-      try { gallery = JSON.parse(t.galleryJson || '[]'); } catch {}
-      try { businessHours = { ...defaultBusinessHours(), ...JSON.parse(t.businessHoursJson || '{}') }; } catch {}
-      try { serviceAreas = JSON.parse(t.serviceAreasJson || '[]'); } catch {}
-      try { socialLinks = JSON.parse(t.socialLinksJson || '{}'); } catch {}
-      try { faqs = JSON.parse(t.faqsJson || '[]'); } catch {}
+      try {
+        const parsed = JSON.parse(t.galleryJson || '[]');
+        if (Array.isArray(parsed)) gallery = parsed as GalleryItem[];
+      } catch {}
+      try {
+        const parsed = JSON.parse(t.businessHoursJson || '{}');
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          businessHours = { ...defaultBusinessHours(), ...(parsed as BusinessHours) };
+        }
+      } catch {}
+      try {
+        const parsed = JSON.parse(t.serviceAreasJson || '[]');
+        if (Array.isArray(parsed)) serviceAreas = parsed.filter((x) => typeof x === 'string');
+      } catch {}
+      try {
+        const parsed = JSON.parse(t.socialLinksJson || '{}');
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          socialLinks = parsed as SocialLinks;
+        }
+      } catch {}
+      try {
+        const parsed = JSON.parse(t.faqsJson || '[]');
+        if (Array.isArray(parsed)) faqs = parsed as FaqItem[];
+      } catch {}
 
       setForm({
         publicProfileEnabled: t.publicProfileEnabled ?? false,
@@ -639,9 +663,9 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
                 <Plus className="size-3.5" /> Add
               </Button>
             </div>
-            {form.serviceAreas.length > 0 && (
+            {(Array.isArray(form.serviceAreas) ? form.serviceAreas : []).length > 0 && (
               <div className="flex flex-wrap gap-2 pt-1">
-                {form.serviceAreas.map((area, i) => (
+                {(Array.isArray(form.serviceAreas) ? form.serviceAreas : []).map((area, i) => (
                   <Badge key={i} variant="secondary" className="gap-1 pl-2.5 pr-1 py-1">
                     {area}
                     <button
@@ -873,7 +897,7 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
                 <p className="text-xs">No gallery photos yet. Add photos of your work, team, or storefront.</p>
               </div>
             )}
-            {form.gallery.map((item, i) => (
+            {(Array.isArray(form.gallery) ? form.gallery : []).map((item, i) => (
               <div key={i} className="flex gap-3 items-start p-3 rounded-lg border bg-muted/20">
                 <div className="relative size-16 rounded-md overflow-hidden border bg-muted shrink-0 flex items-center justify-center">
                   {item.url ? (
@@ -1080,10 +1104,10 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          {form.faqs.length === 0 && (
+          {(Array.isArray(form.faqs) ? form.faqs : []).length === 0 && (
             <p className="text-xs text-muted-foreground">No FAQs yet. Common questions: &quot;Do you offer emergency service?&quot;, &quot;What areas do you cover?&quot;, &quot;Do you offer free estimates?&quot;</p>
           )}
-          {form.faqs.map((faq, i) => (
+          {(Array.isArray(form.faqs) ? form.faqs : []).map((faq, i) => (
             <div key={i} className="space-y-2 p-3 rounded-lg border bg-muted/20">
               <div className="flex gap-2">
                 <Input
