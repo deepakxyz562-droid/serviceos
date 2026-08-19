@@ -413,39 +413,9 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   // ViewErrorBoundary + Suspense (with the rich ViewLoader that has chunk-
   // error detection + reload button). ViewCache itself is boundary-agnostic.
 
-  // ── Approach B1: Intercepting Routes for /recurring-jobs/* ──────────────
-  // When the user navigates to /recurring-jobs/* via a client-side link
-  // (sidebar click), Next.js intercepts the navigation and renders the
-  // intercepted page in the `@recurring` parallel-route slot. That content
-  // flows through RouteContentContext to this component.
-  //
-  // We detect the intercepted route via usePathname() and render the route
-  // content as a special '__route__' view inside ViewCache. This keeps the
-  // SPA shell mounted — all previously-visited views stay alive in
-  // ViewCache (hidden via display:none), so switching back to Dashboard /
-  // Leads / Jobs is instant with state preserved.
-  //
-  // When usePathname() does NOT start with /recurring-jobs, we render the
-  // normal SPA view from currentView (Zustand state).
-  const pathname = usePathname();
-  const routeContent = useRouteContent();
-  const isOnRecurringRoute = !!pathname?.startsWith('/recurring-jobs');
-  // The effective view ID for ViewCache: '__route__' when on an intercepted
-  // /recurring-jobs/* route, otherwise the Zustand currentView.
-  const effectiveView = isOnRecurringRoute ? '__route__' : currentView;
-
   // Helper: render a view by ID. Handles the special marketplaceDashboard
-  // case (uses a router component, not a lazy component) AND the '__route__'
-  // case (renders the intercepted route content from RouteContentContext).
+  // case (uses a router component, not a lazy component).
   const renderView = (viewId: string) => {
-    // ── Approach B1: intercepted /recurring-jobs/* route content ──
-    // Render the content from the @recurring parallel slot (passed via
-    // RouteContentContext). This is the intercepted page component
-    // (RecurringJobsListPage / RecurringSchedulePage / etc.) rendered by
-    // Next.js in the @recurring/(.)recurring-jobs/* directory.
-    if (viewId === '__route__') {
-      return <>{routeContent}</>;
-    }
     if (viewId === 'marketplaceDashboard') {
       return <MarketplaceDashboardRouter />;
     }
@@ -522,7 +492,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
               whether to show the Suspense loader (active) or null (hidden,
               silent load). */}
           <ViewCache
-            currentView={effectiveView}
+            currentView={currentView}
             isViewFullHeight={isViewFullHeight}
             renderView={(viewId, isActive) => (
               <ViewErrorBoundary>

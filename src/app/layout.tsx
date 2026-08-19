@@ -226,14 +226,7 @@ export default function RootLayout({
           data={[getOrganizationSchema(), getWebsiteSchema()]}
         />
         <QueryProvider>
-          {/* ── Approach B1: Intercepting Routes ───────────────────────────
-              Wrap children in RouteContentProvider so the `recurring` parallel
-              slot (populated when an intercepting route matches) is available
-              to the deeply-nested AppLayout/ViewCache via useRouteContent().
-              When no interception is active, `recurring` is null (default.tsx). */}
-          <RouteContentProvider routeContent={recurring}>
-            {children}
-          </RouteContentProvider>
+          {children}
           <Toaster position="top-center" />
           <PwaProvider />
           <CookieConsentBanner />
