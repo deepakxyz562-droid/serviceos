@@ -125,10 +125,12 @@ interface SidebarListProps {
 
 function SidebarList({ activeSectionId, onSelect }: SidebarListProps) {
   // Group sections by their `group` field, in the canonical group order.
+  // Filter out `comingSoon` sections — they're hidden from the sidebar until
+  // their UI is ready (remove the `!s.comingSoon` filter to activate).
   const grouped = SETTINGS_GROUP_ORDER.map((group) => ({
     group,
     label: SETTINGS_GROUP_LABELS[group],
-    sections: SETTINGS_SECTIONS.filter((s) => s.group === group),
+    sections: SETTINGS_SECTIONS.filter((s) => s.group === group && !s.comingSoon),
   })).filter((g) => g.sections.length > 0);
 
   return (

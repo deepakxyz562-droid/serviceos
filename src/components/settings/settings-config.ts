@@ -4,16 +4,18 @@
  * Drives the sidebar layout in `settings-view.tsx`, the search box in
  * `settings-search.tsx`, and the section routing in the same view.
  *
- * Enterprise-level grouping (7 groups):
- *   - 'business'    → Business Management (company, profile, products, automations, etc.)
- *   - 'team'        → Team (organization, manage team, activity, work settings)
- *   - 'schedule'    → Schedule (location services, checklists)
- *   - 'client'      → Client (client hub, emails, requests, connected apps)
- *   - 'communication' → Communication (phone, SMS, WhatsApp, email, AI auto-reply)
- *   - 'integrations' → Integrations & Channels (integrations, credentials, payments, connections)
- *   - 'ai'          → AI (AI agent, auto message/call reply)
- *   - 'billing'     → Account & Billing (subscription, invoices, expenses, payment methods)
- *   - 'system'      → System (audit logs, history, security, developer, help)
+ * Consolidated grouping (7 groups):
+ *   - 'business'       → Business (company, products, CRM, custom fields, automations, workflows)
+ *   - 'team'            → Team (manage team, work settings, timesheets)
+ *   - 'operations'      → Operations (checklists; + scheduling/client-hub/requests when ready)
+ *   - 'communication'   → Communication (phone, email, channels & credentials, AI auto-reply)
+ *   - 'ai'              → AI (AI configuration — Vapi, dispatcher, assistant, pricing, KB)
+ *   - 'integrations'    → Integrations (integrations, Google Business Profile, payment integrations)
+ *   - 'account-system'  → Account & System (subscription, expenses, audit logs, history, security, developer, help)
+ *
+ * `comingSoon` sections are kept in the codebase but HIDDEN from the sidebar
+ * + search until their UI is ready. Remove the `comingSoon: true` flag to
+ * activate a section.
  *
  * When you add a new section:
  *   1. Append to SETTINGS_SECTIONS below.
@@ -24,13 +26,11 @@
 export type SettingsGroup =
   | 'business'
   | 'team'
-  | 'schedule'
-  | 'client'
+  | 'operations'        // NEW: absorbs old 'schedule' + 'client' operational sections (Checklists, Client Hub, etc.)
   | 'communication'
+  | 'ai'                // Dedicated group — AI is a platform capability, not a messaging channel
   | 'integrations'
-  | 'ai'
-  | 'billing'
-  | 'system';
+  | 'account-system';   // NEW: merges old 'billing' + 'system' (admin/system config)
 
 export interface SettingsSection {
   /** Stable unique id used for routing + active state. */
@@ -56,27 +56,23 @@ export interface SettingsSection {
 }
 
 export const SETTINGS_GROUP_LABELS: Record<SettingsGroup, string> = {
-  business: 'Business Management',
+  business: 'Business',
   team: 'Team',
-  schedule: 'Schedule',
-  client: 'Client',
+  operations: 'Operations',
   communication: 'Communication',
-  integrations: 'Integrations & Channels',
   ai: 'AI',
-  billing: 'Account & Billing',
-  system: 'System',
+  integrations: 'Integrations',
+  'account-system': 'Account & System',
 };
 
 export const SETTINGS_GROUP_ORDER: SettingsGroup[] = [
   'business',
   'team',
-  'schedule',
-  'client',
+  'operations',
   'communication',
-  'integrations',
   'ai',
-  'billing',
-  'system',
+  'integrations',
+  'account-system',
 ];
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
@@ -122,7 +118,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: 'Jobs & Scheduling',
     icon: 'Calendar',
     description: 'Job types, visit types, dispatch rules, SLA, priority levels, checklists',
-    group: 'business',
+    group: 'operations',
     comingSoon: true,
     keywords: ['jobs', 'scheduling', 'dispatch', 'sla', 'priority', 'checklist', 'visits'],
   },
@@ -164,7 +160,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: 'Google Business Profile',
     icon: 'Search',
     description: 'Create or connect your Google Business Profile to reach 3x more leads',
-    group: 'business',
+    group: 'integrations',
     keywords: ['google', 'business profile', 'leads', 'seo', 'local search', 'ranking'],
   },
   {
@@ -224,13 +220,15 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     keywords: ['timesheet', 'time tracking', 'duration format', 'payroll', 'timers', 'break', 'driving', 'office', 'supplies', 'clock in', 'clock out'],
   },
 
-  // ─── Schedule ───────────────────────────────────────────────────────────
+  // ─── Operations (was Schedule + Client operational sections) ─────────
+  // Checklists is the only visible section here today — the rest are
+  // comingSoon placeholders hidden from the sidebar until ready.
   {
     id: 'location-services',
     label: 'Location Services',
     icon: 'MapPin',
     description: 'Service zones, geo-fencing, travel radius, service area mapping',
-    group: 'schedule',
+    group: 'operations',
     comingSoon: true,
     keywords: ['location', 'service zones', 'geo-fencing', 'travel', 'service area'],
   },
@@ -239,48 +237,51 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: 'Checklists',
     icon: 'ListChecks',
     description: 'Job checklists, visit checklists, inspection forms, completion rules',
-    group: 'schedule',
+    group: 'operations',
     keywords: ['checklist', 'inspection', 'job', 'visit', 'completion'],
   },
-
-  // ─── Client ─────────────────────────────────────────────────────────────
   {
     id: 'client-hub',
     label: 'Client Hub',
     icon: 'Globe',
     description: 'Customer portal config, online booking rules, self-service options',
-    group: 'client',
+    group: 'operations',
     comingSoon: true,
     keywords: ['client hub', 'customer portal', 'online booking', 'self-service'],
-  },
-  {
-    id: 'emails',
-    label: 'Emails',
-    icon: 'Mail',
-    description: 'Email templates, sender identity, signature, notification rules',
-    group: 'client',
-    keywords: ['email', 'templates', 'sender', 'signature', 'notification'],
   },
   {
     id: 'requests-bookings',
     label: 'Requests and Bookings',
     icon: 'CalendarCheck',
     description: 'Request intake forms, booking rules, approval workflow, auto-assignment',
-    group: 'client',
+    group: 'operations',
     comingSoon: true,
     keywords: ['requests', 'bookings', 'intake', 'approval', 'assignment'],
   },
+
   {
     id: 'connected-apps',
     label: 'Connected Apps',
     icon: 'Plug',
     description: 'Client-facing integrations, embeddable widgets, booking links',
-    group: 'client',
+    group: 'integrations',
     comingSoon: true,
     keywords: ['connected apps', 'widgets', 'embed', 'booking link', 'client'],
   },
 
   // ─── Communication ──────────────────────────────────────────────────────
+  // Emails moved here from the old 'client' group (it's a communication
+  // channel, not a client-facing feature). Channels & Credentials moved here
+  // from the old 'integrations' group (it's where SMS/WhatsApp/Email
+  // providers are configured — communication, not third-party integrations).
+  {
+    id: 'emails',
+    label: 'Emails',
+    icon: 'Mail',
+    description: 'Email templates, sender identity, signature, notification rules',
+    group: 'communication',
+    keywords: ['email', 'templates', 'sender', 'signature', 'notification'],
+  },
   {
     id: 'dedicated-phone',
     label: 'Dedicated Phone Number',
@@ -304,7 +305,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     keywords: ['ai', 'auto reply', 'offline', 'message', 'call reply', 'bot'],
   },
 
-  // ─── Integrations & Channels ────────────────────────────────────────────
+  // ─── Integrations ─────────────────────────────────────────────────────
   {
     id: 'integrations',
     label: 'Integrations',
@@ -320,7 +321,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: 'Channels & Credentials',
     icon: 'KeyRound',
     description: 'SMS, WhatsApp, Email provider config, API keys, secure vault for all channel configs',
-    group: 'integrations',
+    group: 'communication',
     fullWidth: true,
     keywords: ['credentials', 'api keys', 'secrets', 'vault', 'channels', 'sms', 'whatsapp', 'email', 'provider', 'twilio'],
   },
@@ -353,13 +354,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     keywords: ['ai', 'assistant', 'dispatcher', 'pricing', 'quote', 'email writer', 'knowledge base', 'voice', 'vapi', 'agent', 'configuration', 'receptionist'],
   },
 
-  // ─── Account & Billing ──────────────────────────────────────────────────
+  // ─── Account & System (merged old 'billing' + 'system') ─────────────────
   {
     id: 'subscription',
     label: 'Subscription',
     icon: 'CreditCard',
     description: 'Current plan, upgrade/downgrade, billing cycle, plan features',
-    group: 'billing',
+    group: 'account-system',
     keywords: ['subscription', 'plan', 'upgrade', 'downgrade', 'billing cycle'],
   },
   {
@@ -367,7 +368,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: 'Invoices & Payments',
     icon: 'Receipt',
     description: 'Billing history, invoice download, payment receipts, tax documents',
-    group: 'billing',
+    group: 'account-system',
     comingSoon: true,
     keywords: ['invoices', 'payments', 'history', 'receipts', 'tax', 'billing'],
   },
@@ -376,7 +377,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: 'Expenses',
     icon: 'Wallet',
     description: 'Business expenses, receipt upload, categorization, export for tax',
-    group: 'billing',
+    group: 'account-system',
     keywords: ['expenses', 'receipts', 'upload', 'categorize', 'export', 'tax'],
   },
   {
@@ -384,18 +385,16 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: 'Payment Methods',
     icon: 'CreditCard',
     description: 'Saved cards, bank accounts, default payment method, auto-pay',
-    group: 'billing',
+    group: 'account-system',
     comingSoon: true,
     keywords: ['payment method', 'card', 'bank', 'auto-pay', 'default'],
   },
-
-  // ─── System ─────────────────────────────────────────────────────────────
   {
     id: 'audit-logs',
     label: 'Audit Logs',
     icon: 'ScrollText',
     description: 'System audit trail, admin actions, config changes, compliance log',
-    group: 'system',
+    group: 'account-system',
     keywords: ['audit', 'logs', 'trail', 'admin actions', 'compliance'],
   },
   {
@@ -403,16 +402,19 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: 'History',
     icon: 'History',
     description: 'Activity history, record changes, undo log, timeline view',
-    group: 'system',
+    group: 'account-system',
     keywords: ['history', 'activity', 'changes', 'undo', 'timeline'],
   },
+  // NOTE: `comingSoon: true` removed from Security + Developer — both have
+  // real, wired components (<SecuritySettings>, <DeveloperSettings>) in
+  // settings-view.tsx. The flag was incorrect metadata, not a reflection of
+  // implementation status.
   {
     id: 'security',
     label: 'Security',
     icon: 'Shield',
     description: 'Two-factor auth, sessions, devices, API keys, audit logs, password policy, IP restrictions, data retention',
-    group: 'system',
-    comingSoon: true,
+    group: 'account-system',
     keywords: ['2fa', 'mfa', 'sessions', 'devices', 'api keys', 'audit', 'password', 'ip', 'retention'],
   },
   {
@@ -420,8 +422,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: 'Developer',
     icon: 'Code',
     description: 'API keys, webhooks, OAuth, marketplace apps, custom integrations, developer docs',
-    group: 'system',
-    comingSoon: true,
+    group: 'account-system',
     keywords: ['api keys', 'webhooks', 'oauth', 'marketplace apps', 'docs'],
   },
   {
@@ -429,7 +430,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: 'Help & Support',
     icon: 'LifeBuoy',
     description: 'Support tickets, knowledge base, contact support, system status',
-    group: 'system',
+    group: 'account-system',
     keywords: ['help', 'support', 'tickets', 'knowledge base', 'contact', 'status'],
   },
 ];
@@ -452,12 +453,16 @@ export function getSectionsByGroup(group: SettingsGroup): SettingsSection[] {
  * Search across label, description, and keywords. Case-insensitive,
  * token-aware (every whitespace-separated query token must match
  * somewhere in the section's searchable text).
+ *
+ * Hides `comingSoon` sections — they're not ready for users to discover
+ * via search. Remove the `!s.comingSoon` filter when a section is activated.
  */
 export function searchSettingsSections(query: string): SettingsSection[] {
   const q = query.trim().toLowerCase();
-  if (!q) return SETTINGS_SECTIONS;
+  const pool = SETTINGS_SECTIONS.filter((s) => !s.comingSoon);
+  if (!q) return pool;
   const tokens = q.split(/\s+/);
-  return SETTINGS_SECTIONS.filter((section) => {
+  return pool.filter((section) => {
     const haystack = [
       section.label,
       section.description,
