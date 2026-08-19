@@ -111,39 +111,10 @@ export const metadata: Metadata = {
 const IS_DEV = process.env.NODE_ENV !== 'production';
 const SW_URL = IS_DEV ? '/sw.js?dev=1' : '/sw.js';
 
-// ─── Approach B1: Intercepting Routes for /recurring-jobs/* ──────────────
-// The root layout now accepts a `recurring` parallel-route slot. When a
-// client-side navigation to /recurring-jobs/* is intercepted (via the
-// @recurring/(.)recurring-jobs/* directory), the intercepted page renders
-// in this slot INSTEAD of navigating to the real (app)/recurring-jobs/*
-// route. The main `children` (the SPA shell at /) stays mounted — preserving
-// ViewCache + all SPA view state (scroll, filters, form drafts).
-//
-// The slot content is passed to <RouteContentProvider> which makes it
-// available via React Context to the deeply-nested <AppLayout> → <ViewCache>,
-// which renders it as a special '__route__' view when usePathname() indicates
-// we're on /recurring-jobs/*.
-//
-// Direct visits (hard refresh, external link) to /recurring-jobs/* bypass
-// the intercepting route and hit the real (app)/recurring-jobs/* page +
-// (app)/layout.tsx auth gate (renders <AppShell>). This is the correct
-// behaviour for SEO + deep-linking.
-//
-// DEV NOTE: On low-memory dev sandboxes (4GB RAM), Turbopack may OOM during
-// the first compilation of `/` because the parallel slot forces the entire
-// intercepting graph to be evaluated. Production builds (Vercel/Netlify)
-// compile at build time with ample RAM and are unaffected.
-import { RouteContentProvider } from '@/components/layout/route-content-context';
-
 export default function RootLayout({
   children,
-  recurring,
 }: Readonly<{
   children: React.ReactNode;
-  // The `recurring` prop is the parallel-route slot populated by Next.js
-  // when an intercepting route matches. When no interception is active,
-  // Next.js renders `@recurring/default.tsx` (which returns null).
-  recurring?: React.ReactNode;
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>

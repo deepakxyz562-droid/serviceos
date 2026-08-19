@@ -582,8 +582,30 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
   // refactor) — clicking that nav item must `router.push('/recurring-jobs')`
   // instead of toggling the SPA state.
   //
+  // The active-state check is also hybrid: for SPA views we check `currentView`
+  // (the persisted Zustand state); for `/recurring-jobs/*` routes we check
+  // `pathname.startsWith('/recurring-jobs')` so the highlight follows the user
+  // as they navigate list → new → detail → edit.
+  const ROUTE_VIEWS = new Set<ViewType>(['recurringJobs']);
+
   const handleNavClick = (view: ViewType) => {
-    setCurrentView(view);
+    if (ROUTE_VIEWS.has(view)) {
+      // Real route — navigate via Next.js router. The (app) layout will auth
+      // the user server-side; if they're somehow logged out, they bounce to `/`.
+      if (view === 'recurringJobs') {
+        setCurrentView('recurringJobs');
+        router.push('/recurring-jobs');
+      }
+    } else {
+      // SPA view — set Zustand state. If we're currently on a /recurring-jobs/*
+      // route, we also need to navigate back to `/` so HomePageClient mounts.
+      if (pathname?.startsWith('/recurring-jobs')) {
+        setCurrentView(view);
+        router.push(`/?view=${view}`);
+      } else {
+        setCurrentView(view);
+      }
+    }
     if (isMobile) setMobileSidebarOpen(false);
   };
 

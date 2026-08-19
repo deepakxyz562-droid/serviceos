@@ -1,7 +1,6 @@
 'use client';
 
 import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AppSidebar } from '@/components/layout/sidebar';
@@ -9,7 +8,6 @@ import { AppHeader } from '@/components/layout/header';
 import { MobileBottomNav } from '@/components/layout/mobile-bottom-nav';
 import { TrialBanner } from '@/components/layout/trial-banner';
 import { UpgradeModal } from '@/components/layout/upgrade-modal';
-import { useRouteContent } from '@/components/layout/route-content-context';
 // A7: Reusable ViewCache component extracted from this file. The view-history
 // logic + display:none toggling now lives in view-cache.tsx and can be shared
 // with the employee + customer portal layouts.
