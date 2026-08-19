@@ -598,7 +598,10 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       }
     } else {
       // SPA view — set Zustand state. If we're currently on a /recurring-jobs/*
-      // route, we also need to navigate back to `/` so HomePageClient mounts.
+      // route (intercepted via the @recurring parallel slot), we navigate
+      // back to `/` so the intercepted route exits + HomePageClient's ?view=
+      // effect switches to the requested SPA view. ViewCache stays mounted
+      // throughout — no remount, no state loss.
       if (pathname?.startsWith('/recurring-jobs')) {
         setCurrentView(view);
         router.push(`/?view=${view}`);
