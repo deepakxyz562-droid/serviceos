@@ -331,7 +331,7 @@ function BusinessDetailsCard({
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground">
-              Sets the first part of your public URL: <code className="text-[10px]">/{industry || 'industry'}/{tenant.city || 'city'}/{tenant.slug}</code>
+              Sets the first part of your public URL: <code className="text-[10px]">/{industry || 'industry'}/{tenant?.city || 'city'}/{tenant?.slug || 'slug'}</code>
             </p>
           </div>
 
