@@ -81,9 +81,14 @@ export async function runPhase9_7StagingValidation() {
     },
   });
 
+  const testNum = `+1984351${Math.floor(1000 + Math.random() * 9000)}`;
+
+  // Clean up any stale test numbers
+  await db.phoneNumber.deleteMany({ where: { number: testNum } });
+
   const phoneA = await db.phoneNumber.create({
     data: {
-      number: `+19843517779`, // Match staging number
+      number: testNum,
       tenantId,
       status: 'active',
     },
@@ -105,7 +110,7 @@ export async function runPhase9_7StagingValidation() {
       requestedSeconds: 600,
     });
 
-    const isAdmitted = admission.admitted && !!admission.reservationId;
+    const isAdmitted = admission.allowed && !!admission.reservationId;
 
     // Finalize 180 seconds usage
     const finalize1 = await finalizeUsage({
@@ -163,7 +168,7 @@ export async function runPhase9_7StagingValidation() {
       requestedSeconds: 600,
     });
 
-    const release3 = await releaseReservation(tenantId, admission3.reservationId!);
+    const release3 = await releaseReservation(admission3.reservationId!);
     const reservation3 = await db.usageReservation.findUnique({
       where: { id: admission3.reservationId! },
     });
@@ -223,8 +228,8 @@ export async function runPhase9_7StagingValidation() {
     report(
       6,
       'Cross-Tenant AI Access Isolation',
-      !admissionTenantB.admitted && admissionTenantB.reason === 'NO_ACTIVE_SUBSCRIPTION',
-      `Admitted=${admissionTenantB.admitted}, Reason=${admissionTenantB.reason}`,
+      !admissionTenantB.allowed && admissionTenantB.reason === 'SUBSCRIPTION_INACTIVE',
+      `Admitted=${admissionTenantB.allowed}, Reason=${admissionTenantB.reason}`,
     );
 
     // ── Test 7: Released Number Invariant ──

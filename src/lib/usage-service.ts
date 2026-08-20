@@ -263,14 +263,14 @@ export async function finalizeUsage(
       //    Uses updateMany (not update) because externalCallId is not unique —
       //    there could be 0 or 1 reservation matching. If 0 (defensive: call
       //    started before Phase 2), this is a no-op.
+      const reservationWhere = params.reservationId
+        ? { id: params.reservationId }
+        : { entitlementId, externalCallId, status: 'ACTIVE' };
+
       await tx.usageReservation.updateMany({
-        where: {
-          entitlementId,
-          externalCallId,
-          status: 'ACTIVE',
-        },
+        where: reservationWhere,
         data: {
-          status: 'CONSUMED',
+          status: billableSeconds === 0 ? 'RELEASED' : 'CONSUMED',
           consumedSeconds: billableSeconds,
           releasedAt: new Date(),
         },
@@ -448,8 +448,12 @@ export async function releaseReservationByCallId(externalCallId: string): Promis
  * We check for the code field.
  */
 function isPrismaUniqueViolation(err: unknown): boolean {
-  if (err && typeof err === 'object' && 'code' in err) {
-    return (err as { code: string }).code === 'P2002';
+  if (err && typeof err === 'object') {
+    if ('code' in err && (err as any).code === 'P2002') return true;
+    if ('message' in err && typeof (err as any).message === 'string') {
+      const msg = (err as any).message.toLowerCase();
+      return msg.includes('unique constraint') || msg.includes('p2002') || msg.includes('already exists');
+    }
   }
   return false;
 }

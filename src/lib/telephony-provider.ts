@@ -113,15 +113,16 @@ export interface TelephonyProvider {
  * Twilio/Telnyx directly.
  */
 export async function getTelephonyProvider(): Promise<TelephonyProvider | null> {
-  // Dynamic import to avoid circular dependency at module load time
   const { getTwilioTelephonyProvider } = await import('@/lib/twilio-telephony-provider');
-  const { getDecryptedApiKey } = await import('@/lib/ai-provider-config-service');
-
-  // Check if Twilio is configured + active
-  const apiKey = await getDecryptedApiKey('TWILIO');
-  if (!apiKey) {
-    return null; // Twilio not configured
+  if (process.env.TWILIO_ACCOUNT_SID) {
+    return getTwilioTelephonyProvider();
   }
-
-  return getTwilioTelephonyProvider();
+  try {
+    const { getDecryptedApiKey } = await import('@/lib/ai-provider-config-service');
+    const apiKey = await getDecryptedApiKey('TWILIO');
+    if (!apiKey) return null;
+    return getTwilioTelephonyProvider();
+  } catch {
+    return null;
+  }
 }

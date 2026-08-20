@@ -260,6 +260,10 @@ const TABLES_WITHOUT_UPDATED_AT = new Set<string>([
   // does not exist") → the resilient retry loop strips it and retries, but
   // that doubles the latency of every single 15-second ping and floods the
   // logs. Listing it here makes inserts single-round-trip.
+  // ── AI Receptionist Ledger ──
+  // UsageLedger is an append-only financial ledger: schema declares createdAt
+  // but NO updatedAt column. Listing it here prevents auto-adding updatedAt.
+  'UsageLedger',
   'GPSLocation',
 ]);
 
@@ -333,6 +337,15 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
     conversations: { targetTable: 'Conversation', targetFkColumn: 'customerId', isMany: true },
     quotes: { targetTable: 'Quote', targetFkColumn: 'customerId', isMany: true },
     leads: { targetTable: 'Lead', targetFkColumn: 'customerId', isMany: true },
+  },
+  TenantAddonSubscription: {
+    addonPlan: { targetTable: 'AddonPlan', fkColumn: 'addonPlanId' },
+    addonProduct: { targetTable: 'AddonProduct', fkColumn: 'addonProductId' },
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    entitlements: { targetTable: 'AddonEntitlement', targetFkColumn: 'tenantAddonSubscriptionId', isMany: true },
+  },
+  PhoneNumber: {
+    phoneConnections: { targetTable: 'PhoneConnection', targetFkColumn: 'phoneNumberId', isMany: true },
   },
   Property: {
     customer: { targetTable: 'Customer', fkColumn: 'customerId' },

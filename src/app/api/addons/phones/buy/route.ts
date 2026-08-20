@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     // ── 2. Entitlement check (skip if resuming an existing saga) ──
     const isResuming = existingAttempt?.status === 'TWILIO_PURCHASED' || existingAttempt?.status === 'VAPI_IMPORTED';
-    const attempt = existingAttempt || null;
+    let attempt = existingAttempt || null;
     // Check how many phone numbers the tenant already owns
     const existingNumbers = await db.phoneNumber.count({
       where: {
