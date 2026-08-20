@@ -105,6 +105,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true, eventType: event.type, kind: 'phone_number' });
     }
 
+    // ── AI Receptionist add-on subscriptions ──────────────────────────────
+    // Add-on checkout sets metadata.kind = 'addon' + metadata.addonPlanCode.
+    // These route to the AddonBillingService (Phase 1 commercial foundation),
+    // NOT the core SaaS subscription handlers below.
+    if (event.metadata.kind === 'addon' || event.metadata.addonPlanCode) {
+      const { handleCreemSubscriptionEvent } = await import('@/lib/addon-billing-service');
+      await handleCreemSubscriptionEvent({
+        eventType: event.type,
+        creemSubscriptionId: (event.object.id as string) || (event.object.subscription_id as string) || '',
+        creemCustomerId: (event.object.customer_id as string) || (event.object.customer as string) || undefined,
+        creemProductId: (event.object.product_id as string) || (event.metadata.creemProductId as string) || undefined,
+        creemPriceId: (event.object.price_id as string) || (event.metadata.creemPriceId as string) || undefined,
+        currentPeriodStart: event.object.current_period_start
+          ? new Date(event.object.current_period_start as string)
+          : undefined,
+        currentPeriodEnd: event.object.current_period_end
+          ? new Date(event.object.current_period_end as string)
+          : undefined,
+        tenantId: (event.metadata.tenantId as string) || '',
+        addonPlanCode: (event.metadata.addonPlanCode as string) || undefined,
+        metadata: event.metadata,
+      });
+      return NextResponse.json({ received: true, eventType: event.type, kind: 'addon' });
+    }
+
     switch (event.type) {
       case 'checkout.session.completed':
       case 'checkout.session.paid':

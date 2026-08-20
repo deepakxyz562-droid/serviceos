@@ -210,6 +210,8 @@ model Tenant {
   pricingRules       PricingRule[]
   // New billing/automation relations
   addonSubscriptions  AddonSubscription[]
+  // AI Receptionist add-on (Phase 1 commercial foundation)
+  tenantAddonSubscriptions TenantAddonSubscription[]
   recurringJobSchedules RecurringJobSchedule[]
   scheduledMessages   ScheduledMessage[]
   scheduledExecutions ScheduledExecution[]
@@ -6571,3 +6573,142 @@ model CustomerContact {
 
   @@index([customerId])
 }
+
+// ==========================================
+// AI RECEPTIONIST ADD-ON — COMMERCIAL FOUNDATION (Phase 1)
+// ==========================================
+// These models implement the commercial layer of the AI Receptionist add-on
+// product, per the Architecture Contract (docs/AI_RECEPTIONIST_ARCHITECTURE_CONTRACT.md).
+//
+// Phase 1 adds ONLY the commercial/billing foundation:
+//   - AddonProduct  (the add-on SKU catalog: AI_RECEPTIONIST, AI_PHONE_NUMBER, etc.)
+//   - AddonPlan     (per-addon price tiers: Starter $29, Pro $59, Business $129)
+//   - TenantAddonSubscription  (tenant's active subscription, Creem-linked)
+//
+// Entitlements (AddonEntitlement) + Usage (UsageLedger, UsageReservation) come
+// in Phase 2. AI Domain models (AiReceptionist, AiAgentVersion, AiProviderDeployment)
+// come in Phase 4.
+//
+// IMPORTANT: The existing `AddonSubscription` model (line 472) is the LEGACY
+// flat-table approach. It stays in place during migration and is removed in
+// Phase 11 after all callers are migrated to `TenantAddonSubscription`.
+// Do NOT write new code against `AddonSubscription` — use `TenantAddonSubscription`.
+
+// ─── AddonProduct: the add-on SKU catalog ───────────────────────────────────
+// Represents a sellable add-on product (distinct from the Fieseros Core SaaS
+// subscription). Each AddonProduct has one or more AddonPlans (price tiers).
+//
+// Examples:
+//   AI_RECEPTIONIST  — the AI Receptionist add-on (has Starter/Pro/Business tiers)
+//   AI_PHONE_NUMBER  — additional AI phone number ($5/mo, separate from AI minutes)
+//   SOCIAL_CONNECT   — future add-on (placeholder)
+model AddonProduct {
+  id          String   @id @default(cuid())
+  code        String   @unique // 'AI_RECEPTIONIST' | 'AI_PHONE_NUMBER' | 'SOCIAL_CONNECT'
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  plans       AddonPlan[]
+
+  @@index([isActive])
+}
+
+// ─── AddonPlan: per-addon price tiers ───────────────────────────────────────
+// Defines the commercial terms for a specific tier of an add-on product.
+// All pricing + quota values live HERE in the DB, not hardcoded in application
+// logic. Changing $29 → $39 or 50 min → 75 min is a DB update.
+//
+// For AI Receptionist:
+//   AI_RECEPTIONIST_STARTER  — $29/mo, 3000 sec (50 min), 1 concurrent, 1 number
+//   AI_RECEPTIONIST_PRO      — $59/mo, 12000 sec (200 min), 3 concurrent, 1 number
+//   AI_RECEPTIONIST_BUSINESS — $129/mo, 30000 sec (500 min), 10 concurrent, 1 number
+//   AI_RECEPTIONIST_ENTERPRISE — custom
+//
+// NOTE: The 200-minute Pro plan is PROVISIONAL until actual Vapi/telephony
+// economics are validated in production (see Architecture Contract Appendix A).
+model AddonPlan {
+  id                      String   @id @default(cuid())
+  addonProductId          String
+  code                    String   @unique // 'AI_RECEPTIONIST_STARTER' | 'AI_RECEPTIONIST_PRO' | ...
+  name                    String   // 'AI Receptionist Starter'
+  description             String?
+  price                   Float    @default(0) // 29.00
+  currency                String   @default("USD")
+  billingCycle            String   @default("monthly") // monthly | yearly
+  // ── Quota / entitlement configuration (snapshotted to AddonEntitlement at purchase) ──
+  includedSeconds         Int      @default(0) // 3000 for Starter (50 min × 60)
+  maxCallDurationSeconds   Int      @default(600) // 10 min hard limit per call
+  maxConcurrentCalls      Int      @default(1) // Starter=1, Pro=3, Business=10
+  includedNumbers         Int      @default(1) // phone numbers included with the plan
+  // ── Creem integration ──
+  creemProductId          String?  // Creem product ID
+  creemPriceId            String?  // Creem price ID (monthly/yearly variants)
+  // ── Lifecycle ──
+  isActive                Boolean  @default(true)
+  sortOrder               Int      @default(0)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  addonProduct   AddonProduct @relation(fields: [addonProductId], references: [id], onDelete: Cascade)
+  subscriptions  TenantAddonSubscription[]
+
+  @@index([addonProductId])
+  @@index([isActive])
+}
+
+// ─── TenantAddonSubscription: tenant's active add-on subscription ──────────
+// Replaces the legacy `AddonSubscription` model (line 472) with a properly
+// structured subscription that links to AddonPlan (not a flat addonCode string)
+// and tracks the full subscription lifecycle state machine.
+//
+// State machine (per Architecture Contract §3):
+//   PENDING → ACTIVE → PAST_DUE → SUSPENDED → CANCELLED → EXPIRED
+//
+// Creem is the payment authority — this model's state is driven by Creem
+// webhook events. The AI runtime NEVER calls Creem directly; it reads
+// subscription state from this model via the AdmissionController (Phase 2).
+model TenantAddonSubscription {
+  id                      String   @id @default(cuid())
+  tenantId                String
+  addonPlanId             String
+  // ── Subscription state ──
+  status                  String   @default("PENDING")
+  // PENDING | ACTIVE | PAST_DUE | SUSPENDED | CANCELLED | EXPIRED
+  // See Architecture Contract §3 for state transitions.
+  // Payment failure does NOT delete AI data — only disables access.
+  // ── Creem integration ──
+  creemSubscriptionId     String?  @unique // Creem's subscription ID (unique per subscription)
+  creemCustomerId         String?  // Creem customer ID
+  // ── Billing period ──
+  currentPeriodStart     DateTime?
+  currentPeriodEnd        DateTime?
+  // ── Cancellation ──
+  cancelAtPeriodEnd      Boolean  @default(false) // AI continues until period end
+  cancelledAt            DateTime?
+  endedAt                DateTime? // set when fully expired
+  // ── Trial (if applicable) ──
+  trialEndsAt             DateTime?
+  // ── Grace period (payment failure) ──
+  gracePeriodEndsAt      DateTime? // when PAST_DUE transitions to SUSPENDED
+  // ── Metadata ──
+  metadataJson            String   @default("{}") // extensible (e.g. discount codes, proration)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  addonPlan AddonPlan @relation(fields: [addonPlanId], references: [id])
+
+  @@index([tenantId])
+  @@index([addonPlanId])
+  @@index([status])
+  @@index([creemSubscriptionId])
+}
+
+// ─── Tenant relation: add add-on subscriptions to Tenant ────────────────────
+// (Added as a back-relation on the existing Tenant model via Prisma's
+// relation syntax. The Tenant model already has `addonSubscriptions AddonSubscription[]`
+// for the legacy model — this adds the new one alongside.)
