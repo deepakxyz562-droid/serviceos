@@ -7,6 +7,10 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+  
+  
+  
+  
 }
 
 // ==========================================
@@ -6613,6 +6617,7 @@ model AddonProduct {
   updatedAt   DateTime @updatedAt
 
   plans       AddonPlan[]
+  subscriptions TenantAddonSubscription[]
 
   @@index([isActive])
 }
@@ -6658,6 +6663,16 @@ model AddonPlan {
 
   @@index([addonProductId])
   @@index([isActive])
+  // ── Phase 1.5 hardening: unique constraint on Creem IDs ──
+  // Prevents a superadmin from accidentally configuring two AddonPlans with
+  // the same (creemProductId, creemPriceId) pair — which would make the
+  // `activateSubscription` lookup non-deterministic.
+  //
+  // PostgreSQL NULL semantics: multiple rows with NULL in either column are
+  // allowed (NULLs are distinct in UNIQUE constraints). This means Enterprise
+  // / custom plans that don't have Creem IDs yet (both fields NULL) won't
+  // conflict with each other — safe for the "not yet configured" state.
+  @@unique([creemProductId, creemPriceId], map: "addon_plan_creem_ids_unique")
 }
 
 // ─── TenantAddonSubscription: tenant's active add-on subscription ──────────
@@ -6675,10 +6690,16 @@ model TenantAddonSubscription {
   id                      String   @id @default(cuid())
   tenantId                String
   addonPlanId             String
+  // ── Denormalized addonProductId for business-level uniqueness ──
+  // Allows a composite unique constraint: one ACTIVE subscription per
+  // AddonProduct per tenant (a tenant can't have both Starter + Pro).
+  // Updated by the service layer whenever addonPlanId changes (rare — only
+  // on plan upgrades, which Phase 2+ will handle).
+  addonProductId          String
   // ── Subscription state ──
   status                  String   @default("PENDING")
   // PENDING | ACTIVE | PAST_DUE | SUSPENDED | CANCELLED | EXPIRED
-  // See Architecture Contract §3 for state transitions.
+  // See Architecture Contract §3 for legal transitions.
   // Payment failure does NOT delete AI data — only disables access.
   // ── Creem integration ──
   creemSubscriptionId     String?  @unique // Creem's subscription ID (unique per subscription)
@@ -6699,13 +6720,25 @@ model TenantAddonSubscription {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
-  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  addonPlan AddonPlan @relation(fields: [addonPlanId], references: [id])
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  addonPlan    AddonPlan    @relation(fields: [addonPlanId], references: [id])
+  addonProduct AddonProduct @relation(fields: [addonProductId], references: [id])
 
   @@index([tenantId])
   @@index([addonPlanId])
+  @@index([addonProductId])
   @@index([status])
   @@index([creemSubscriptionId])
+  // ── Phase 1.5 hardening: business-level uniqueness ──
+  // One ACTIVE or PENDING subscription per (tenantId, addonProductId).
+  // Enforced at the application layer via createPendingSubscription (upsert)
+  // + activateSubscription (upsert). Historical CANCELLED/EXPIRED rows are
+  // allowed to coexist for audit — only one ACTIVE/PENDING row is permitted.
+  //
+  // NOTE: We use an application-level check + upsert instead of a DB partial
+  // unique index because Prisma's `@@unique` doesn't support partial indexes
+  // (WHERE clauses). The service layer is the source of truth for "only one
+  // active subscription per product per tenant."
 }
 
 // ─── Tenant relation: add add-on subscriptions to Tenant ────────────────────

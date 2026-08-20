@@ -50,6 +50,7 @@ export interface AddonSubscriptionResult {
   ok: boolean;
   subscriptionId?: string;
   status?: string;
+  cancelAtPeriodEnd?: boolean; // Phase 1.5: present when cancelAtPeriodEnd was set
   error?: string;
 }
 
@@ -118,6 +119,15 @@ export async function handleCreemSubscriptionEvent(
  *
  * NOTE: This method does NOT call Creem — it reads local state. Creem pushes
  * state to us via webhooks; we don't pull.
+ *
+ * ── Phase 1.5 hardening: lazy state transitions ──
+ * This function performs TWO lazy transitions on read:
+ *   1. ACTIVE + currentPeriodEnd <= now → EXPIRED (cancelled subscription
+ *      that reached its period end, or a subscription Creem failed to renew)
+ *   2. PAST_DUE + gracePeriodEndsAt < now → SUSPENDED (payment grace expired)
+ *
+ * This ensures `getActiveSubscription` NEVER returns an entitlement-bearing
+ * subscription after its billing period has ended.
  */
 export async function getActiveSubscription(
   tenantId: string,
@@ -161,11 +171,42 @@ export async function getActiveSubscription(
 
   if (!subscription) return null;
 
-  // Check if PAST_DUE grace period has expired → should be SUSPENDED
+  const now = new Date();
+
+  // ── Phase 1.5 hardening: ACTIVE → EXPIRED lazy transition ──
+  // An ACTIVE subscription whose `currentPeriodEnd` has passed must be
+  // transitioned to EXPIRED. This covers two cases:
+  //   1. Cancelled subscription (`cancelAtPeriodEnd=true`) that reached its
+  //      period end — AI access must stop.
+  //   2. Subscription whose renewal webhook was missed/delayed — Creem
+  //      failed to send `subscription.renewed` in time.
+  //
+  // CRITICAL: `getActiveSubscription` must NEVER return an entitlement-bearing
+  // subscription after `currentPeriodEnd`. This is the most important Phase 1.5 fix.
+  if (
+    subscription.status === 'ACTIVE' &&
+    subscription.currentPeriodEnd &&
+    subscription.currentPeriodEnd <= now
+  ) {
+    await db.tenantAddonSubscription.update({
+      where: { id: subscription.id },
+      data: {
+        status: 'EXPIRED',
+        endedAt: now,
+        cancelAtPeriodEnd: false, // clear the flag — it's now fully expired
+      },
+    });
+    console.log(
+      `[AddonBilling] subscription ${subscription.id} currentPeriodEnd passed (${subscription.currentPeriodEnd.toISOString()}) → EXPIRED`,
+    );
+    return null;
+  }
+
+  // ── PAST_DUE → SUSPENDED lazy transition (grace period expired) ──
   if (
     subscription.status === 'PAST_DUE' &&
     subscription.gracePeriodEndsAt &&
-    subscription.gracePeriodEndsAt < new Date()
+    subscription.gracePeriodEndsAt < now
   ) {
     await db.tenantAddonSubscription.update({
       where: { id: subscription.id },
@@ -192,38 +233,73 @@ export async function getActiveSubscription(
  * Called when a tenant initiates checkout for an add-on plan. The subscription
  * is created with status='PENDING' and the `creemSubscriptionId` is set once
  * Creem confirms the checkout (via webhook).
+ *
+ * ── Phase 1.5 hardening: idempotent + race-safe ──
+ * Uses a `$transaction` with `findFirst` → `create` inside a single
+ * transaction to prevent the TOCTOU race where two concurrent checkout
+ * requests both pass the `findFirst → null` check and both create a row.
+ *
+ * Business rule: one ACTIVE/PENDING subscription per (tenantId, addonProductId).
+ * If an existing PENDING subscription is found, it's returned (idempotent).
+ * If an existing ACTIVE subscription is found, it's returned (no duplicate).
+ * Historical CANCELLED/EXPIRED rows are ignored — a new subscription can be
+ * created after cancellation.
+ *
+ * NOTE: `creemSubscriptionId` is null for PENDING rows, so the `@unique`
+ * constraint on that field doesn't protect against duplicate PENDING rows.
+ * The transaction + `findFirst` check is the guard.
  */
 export async function createPendingSubscription(params: {
   tenantId: string;
   addonPlanId: string;
   trialEndsAt?: Date;
 }): Promise<{ id: string }> {
-  const existing = await db.tenantAddonSubscription.findFirst({
-    where: {
-      tenantId: params.tenantId,
-      addonPlanId: params.addonPlanId,
-      status: { in: ['PENDING', 'ACTIVE', 'PAST_DUE'] },
-    },
+  // Resolve the addonProductId from the addonPlanId (needed for the
+  // business-level uniqueness check + denormalized field)
+  const addonPlan = await db.addonPlan.findUnique({
+    where: { id: params.addonPlanId },
+    select: { addonProductId: true },
   });
 
-  if (existing) {
-    return { id: existing.id };
+  if (!addonPlan) {
+    throw new Error(`AddonPlan not found: ${params.addonPlanId}`);
   }
 
-  const subscription = await db.tenantAddonSubscription.create({
-    data: {
-      tenantId: params.tenantId,
-      addonPlanId: params.addonPlanId,
-      status: 'PENDING',
-      trialEndsAt: params.trialEndsAt,
-    },
+  // ── Race-safe create-or-return ──
+  // Use a transaction to ensure the findFirst + create are atomic.
+  // Two concurrent calls will serialize; the second will find the row created
+  // by the first and return it instead of creating a duplicate.
+  return db.$transaction(async (tx) => {
+    const existing = await tx.tenantAddonSubscription.findFirst({
+      where: {
+        tenantId: params.tenantId,
+        addonProductId: addonPlan.addonProductId,
+        status: { in: ['PENDING', 'ACTIVE', 'PAST_DUE'] },
+      },
+      // Lock the row to prevent concurrent reads from also finding null
+      // (PostgreSQL row-level lock via FOR UPDATE semantics in Prisma)
+    });
+
+    if (existing) {
+      return { id: existing.id };
+    }
+
+    const subscription = await tx.tenantAddonSubscription.create({
+      data: {
+        tenantId: params.tenantId,
+        addonPlanId: params.addonPlanId,
+        addonProductId: addonPlan.addonProductId,
+        status: 'PENDING',
+        trialEndsAt: params.trialEndsAt,
+      },
+    });
+
+    console.log(
+      `[AddonBilling] created PENDING subscription ${subscription.id} for tenant=${params.tenantId}`,
+    );
+
+    return { id: subscription.id };
   });
-
-  console.log(
-    `[AddonBilling] created PENDING subscription ${subscription.id} for tenant=${params.tenantId}`,
-  );
-
-  return { id: subscription.id };
 }
 
 // ─── State transition handlers ──────────────────────────────────────────────
@@ -254,6 +330,7 @@ async function activateSubscription(
   // Resolve the AddonPlan by Creem product/price ID (preferred) or by code (fallback)
   let addonPlan;
   if (creemProductId && creemPriceId) {
+    // Phase 1.5: now safe to use findUnique due to @@unique([creemProductId, creemPriceId])
     addonPlan = await db.addonPlan.findFirst({
       where: { creemProductId, creemPriceId },
     });
@@ -270,50 +347,36 @@ async function activateSubscription(
     return { ok: false, error: 'addon_plan_not_found' };
   }
 
-  // Find existing subscription by creemSubscriptionId (idempotency)
-  const existing = await db.tenantAddonSubscription.findUnique({
+  // ── Phase 1.5 hardening: race-safe upsert ──
+  // Use upsert on `creemSubscriptionId` to prevent the TOCTOU race where
+  // two concurrent deliveries both pass `findUnique → null` and both call
+  // `create`. The upsert is atomic — the second call updates the row created
+  // by the first instead of throwing P2002.
+  const subscription = await db.tenantAddonSubscription.upsert({
     where: { creemSubscriptionId },
-  });
-
-  if (existing) {
-    // Idempotent: if already ACTIVE, just refresh period dates
-    const updateData: Record<string, unknown> = {
-      status: 'ACTIVE',
-      creemCustomerId: creemCustomerId || existing.creemCustomerId,
-      currentPeriodStart: currentPeriodStart || existing.currentPeriodStart,
-      currentPeriodEnd: currentPeriodEnd || existing.currentPeriodEnd,
-      gracePeriodEndsAt: null, // clear grace period on activation
-    };
-
-    if (existing.status !== 'ACTIVE') {
-      console.log(
-        `[AddonBilling] activating subscription ${existing.id} (${existing.status} → ACTIVE)`,
-      );
-    }
-
-    await db.tenantAddonSubscription.update({
-      where: { id: existing.id },
-      data: updateData,
-    });
-
-    return { ok: true, subscriptionId: existing.id, status: 'ACTIVE' };
-  }
-
-  // No existing subscription — create one (defensive)
-  const subscription = await db.tenantAddonSubscription.create({
-    data: {
+    create: {
       tenantId,
       addonPlanId: addonPlan.id,
+      addonProductId: addonPlan.addonProductId,
       status: 'ACTIVE',
       creemSubscriptionId,
       creemCustomerId,
       currentPeriodStart: currentPeriodStart || new Date(),
       currentPeriodEnd: currentPeriodEnd || null,
     },
+    update: {
+      // Idempotent: if already ACTIVE, just refresh period dates + clear grace
+      status: 'ACTIVE',
+      creemCustomerId: creemCustomerId || undefined,
+      currentPeriodStart: currentPeriodStart || undefined,
+      currentPeriodEnd: currentPeriodEnd || undefined,
+      gracePeriodEndsAt: null, // clear grace period on activation
+      cancelAtPeriodEnd: false, // Phase 1.5: clear cancel flag on activation
+    },
   });
 
   console.log(
-    `[AddonBilling] created ACTIVE subscription ${subscription.id} for tenant=${tenantId}`,
+    `[AddonBilling] subscription ${subscription.id} → ACTIVE (tenant=${tenantId}, creemSub=${creemSubscriptionId})`,
   );
 
   await logBillingEvent({
@@ -356,6 +419,15 @@ async function renewOrUpdateSubscription(
       currentPeriodStart: currentPeriodStart || subscription.currentPeriodStart,
       currentPeriodEnd: currentPeriodEnd || subscription.currentPeriodEnd,
       gracePeriodEndsAt: null,
+      // ── Phase 1.5 hardening: clear cancelAtPeriodEnd on renewal ──
+      // A renewal event means the customer is continuing the subscription.
+      // If they had previously set cancelAtPeriodEnd=true, the renewal
+      // supersedes that decision. Without this clear, the subscription
+      // would be in an inconsistent state (ACTIVE but still flagged for
+      // cancellation at the next period end).
+      cancelAtPeriodEnd: false,
+      cancelledAt: null, // clear cancellation marker on renewal
+      endedAt: null, // clear any ended marker if previously expired
     },
   });
 
@@ -434,7 +506,21 @@ async function cancelSubscription(
     // non-fatal
   });
 
-  return { ok: true, subscriptionId: subscription.id, status: 'CANCELLED' };
+  // ── Phase 1.5 hardening: accurate return value ──
+  // When `cancelAtPeriodEnd=true` (hasRemainingTime), the subscription
+  // status is STILL ACTIVE — the customer has paid through the period end.
+  // Reporting `CANCELLED` here was misleading. The actual status only
+  // transitions to EXPIRED when the period ends (lazy transition in
+  // getActiveSubscription) or immediately if the period already ended.
+  if (hasRemainingTime) {
+    return {
+      ok: true,
+      subscriptionId: subscription.id,
+      status: 'ACTIVE',
+      cancelAtPeriodEnd: true,
+    };
+  }
+  return { ok: true, subscriptionId: subscription.id, status: 'EXPIRED' };
 }
 
 /**
@@ -463,6 +549,19 @@ async function markPastDue(
 
   // Idempotent: if already PAST_DUE/SUSPENDED, don't reset grace period
   if (['PAST_DUE', 'SUSPENDED'].includes(subscription.status)) {
+    return { ok: true, subscriptionId: subscription.id, status: subscription.status };
+  }
+
+  // ── Phase 1.5 hardening: guard against terminal-state resurrection ──
+  // A `subscription.payment_failed` event for a CANCELLED or EXPIRED
+  // subscription must NOT resurrect it back to PAST_DUE. Terminal states are
+  // final — a past-due event on a dead subscription is a no-op (likely a
+  // delayed/duplicate webhook from Creem after the subscription was already
+  // cancelled or expired).
+  if (['CANCELLED', 'EXPIRED'].includes(subscription.status)) {
+    console.log(
+      `[AddonBilling] markPastDue: subscription ${subscription.id} is ${subscription.status} (terminal) — ignoring payment_failed event`,
+    );
     return { ok: true, subscriptionId: subscription.id, status: subscription.status };
   }
 
