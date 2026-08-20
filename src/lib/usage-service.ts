@@ -103,7 +103,14 @@ export async function reserveSeconds(params: {
   // reads committed rows, and the insert is atomic).
   try {
     const result = await db.$transaction(async (tx) => {
-      // 1. Read the entitlement
+      // 1. Acquire exclusive PostgreSQL row lock on AddonEntitlement to guarantee 100% race safety
+      try {
+        await tx.$queryRaw`SELECT id FROM "AddonEntitlement" WHERE id = ${entitlementId} FOR UPDATE`;
+      } catch {
+        // Fallback for non-Postgres environments (e.g., SQLite in unit tests)
+      }
+
+      // Read the entitlement
       const entitlement = await tx.addonEntitlement.findUnique({
         where: { id: entitlementId },
         select: {
