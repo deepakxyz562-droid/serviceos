@@ -4,15 +4,19 @@
  * AI Receptionist Settings Wrapper
  * ================================
  *
- * Conditionally renders:
- *   - Onboarding wizard (if no subscription or incomplete setup)
- *   - Dashboard (if subscription + receptionist + phone all configured)
+ * The single entry point for Settings → AI Configuration.
  *
- * This is the single entry point for Settings → AI.
+ * Conditionally renders:
+ *   - Onboarding wizard (if no subscription, no receptionist, or no phone)
+ *   - AI Receptionist Workspace (if subscription + receptionist + phone configured)
+ *
+ * The workspace is the PERMANENT home for the AI Receptionist — the wizard
+ * is only for initial setup. After activation, the tenant always lands in
+ * the workspace.
  */
 
 import { useState, useEffect } from 'react';
-import { AiReceptionistDashboard } from './ai-receptionist-dashboard';
+import { AiReceptionistWorkspace } from './workspace/ai-receptionist-workspace';
 import { AiReceptionistOnboarding } from './ai-receptionist-onboarding';
 import { Loader2 } from 'lucide-react';
 
@@ -67,11 +71,11 @@ export function AiReceptionistSettings() {
     );
   }
 
-  // If everything is set up → show dashboard
+  // If everything is set up → show the permanent workspace
   if (hasSubscription && hasReceptionist && hasPhone) {
-    return <AiReceptionistDashboard />;
+    return <AiReceptionistWorkspace />;
   }
 
-  // Otherwise → show onboarding wizard
+  // Otherwise → show the onboarding wizard
   return <AiReceptionistOnboarding />;
 }

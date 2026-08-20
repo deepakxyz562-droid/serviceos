@@ -1565,8 +1565,26 @@ class SupabaseModel {
     //   "Could not find the `createdAt` column of `Execution` in the schema cache"  (older PostgREST)
     //   'column "updatedAt" of relation "Execution" does not exist'  (PostgreSQL)
     let retryCount = 0;
-    while (error && retryCount < 4) {
+    while (error && retryCount < 15) {
       const msg = error.message || '';
+      if (
+        error.code === 'PGRST002' ||
+        msg.includes('schema cache') ||
+        msg.includes('timeout') ||
+        msg.includes('fetch failed')
+      ) {
+        console.log(`[SupabaseDB] PostgREST temporary network/schema delay ("${msg}"), retrying in 1s (attempt ${retryCount + 1})...`);
+        await new Promise((r) => setTimeout(r, 1000));
+        retryCount++;
+        const retry = await this.client
+          .from(this.tableName)
+          .insert(serialized)
+          .select('*')
+          .single();
+        result = retry.data;
+        error = retry.error;
+        continue;
+      }
       const missingColMatch = msg.match(
         /(?:Could not find the ['`"]?(\w+)['`"]? column of|column "(\w+)" of relation)/
       );

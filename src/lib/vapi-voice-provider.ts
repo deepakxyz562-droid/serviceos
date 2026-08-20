@@ -295,6 +295,50 @@ class VapiVoiceProviderImpl implements VoiceProvider {
     return await response.json();
   }
 
+  /**
+   * Create an outbound call (used by the Test Call feature).
+   *
+   * This calls the tenant's AI Receptionist from a customer-provided number.
+   * Vapi dials the customer and connects them to the assistant.
+   *
+   * The `assistantId` and `phoneNumberId` come from the active AiProviderDeployment
+   * and the PhoneNumber.vapiNumberId respectively — both are resolved by the
+   * caller (the test-call API route) before invoking this method.
+   *
+   * Returns the Vapi call ID so the caller can poll for status / link to AiCall.
+   */
+  async createOutboundCall(params: {
+    assistantId: string; // Vapi assistant ID (from AiProviderDeployment.externalAssistantId)
+    phoneNumberId: string; // Vapi phone-number ID (from PhoneNumber.vapiNumberId)
+    customerNumber: string; // E.164 number to dial
+  }): Promise<{ callId: string; status: string }> {
+    const auth = await this.getAuthHeader();
+
+    const response = await fetch(`${this.baseUrl}/call`, {
+      method: 'POST',
+      headers: {
+        Authorization: auth,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        assistantId: params.assistantId,
+        phoneNumberId: params.phoneNumberId,
+        customer: { number: params.customerNumber },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Vapi createOutboundCall failed: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+    return {
+      callId: data.id,
+      status: data.status || 'queued',
+    };
+  }
+
   // ── Phase 9A: Vapi phone-number management ──────────────────────────────
 
   /**
