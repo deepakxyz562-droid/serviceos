@@ -17,6 +17,8 @@ datasource db {
   
   
   
+  
+  
 }
 
 // ==========================================
@@ -225,6 +227,8 @@ model Tenant {
   // Phase 3: phone infrastructure
   externalPhoneNumbers ExternalPhoneNumber[]
   phoneConnections     PhoneConnection[]
+  // Phase 4: AI Receptionist domain
+  aiReceptionists      AiReceptionist[]
   recurringJobSchedules RecurringJobSchedule[]
   scheduledMessages   ScheduledMessage[]
   scheduledExecutions ScheduledExecution[]
@@ -7093,6 +7097,23 @@ model AiProviderConfig {
   // Decrypted at runtime using AI_PROVIDER_ENCRYPTION_KEY from the environment.
   // Never stored in plaintext. Never exposed via API responses.
   encryptedApiKey String?
+  // ── Provider capabilities (Phase 4 hardening — explicit, not a generic secret bucket) ──
+  // Defines what this provider can do. Prevents AiProviderConfig from becoming
+  // a loose collection of credentials.
+  //
+  // Capability values:
+  //   VOICE_RUNTIME     → can handle AI voice conversations (Vapi)
+  //   AI_ASSISTANT      → can create/manage AI assistants (Vapi)
+  //   PHONE_NUMBERS     → can provision phone numbers (Twilio, Telnyx)
+  //   INBOUND_CALLS     → can receive inbound calls (Twilio)
+  //   OUTBOUND_CALLS    → can make outbound calls (Twilio)
+  //   SMS               → can send/receive SMS (Twilio)
+  //   TELEPHONY         → general telephony capabilities (Telnyx)
+  //   VOICE_SYNTHESIS   → can generate speech (ElevenLabs)
+  //
+  // Stored as a CSV string (e.g. "VOICE_RUNTIME,AI_ASSISTANT" for Vapi).
+  // Parsed by the application into an array.
+  capabilities    String   @default("")
   // ── Public configuration (non-secret) ──
   // Provider-specific metadata that's safe to expose (e.g. Vapi org ID, base URL).
   configJson      String   @default("{}")
@@ -7106,4 +7127,178 @@ model AiProviderConfig {
   updatedAt       DateTime @updatedAt
 
   @@index([provider, status])
+}
+
+// ==========================================
+// AI RECEPTIONIST ADD-ON — AI DOMAIN (Phase 4)
+// ==========================================
+// These models implement the AI Receptionist domain layer per the
+// Architecture Contract (docs/AI_RECEPTIONIST_ARCHITECTURE_CONTRACT.md §7-§9).
+//
+// Phase 4 adds:
+//   - AiReceptionist      (tenant-facing receptionist config)
+//   - AiAgentVersion      (versioned agent config: prompt, voice, model)
+//   - AiProviderDeployment (per-provider deployment record: Vapi assistant ID)
+//
+// The hierarchy is:
+//   AiReceptionist (tenant-scoped, 1 per tenant per AddonProduct)
+//       └── currentVersionId → AiAgentVersion (the active version)
+//              └── AiProviderDeployment (Vapi assistant mapping)
+//
+// VERSIONING: Configuration changes create a new AiAgentVersion, deploy to
+// Vapi (Phase 5), and only on success update `currentVersionId`. If deployment
+// fails, the previous version remains active. Rollback = switch currentVersionId.
+//
+// PROVIDER SEPARATION: Tenant configuration (AiReceptionist + AiAgentVersion)
+// is completely separate from platform credentials (AiProviderConfig). The
+// AiProviderDeployment links a specific AiAgentVersion to a specific provider
+// (Vapi), but the API key lives in AiProviderConfig (platform-level, encrypted).
+
+// ─── AiReceptionist: tenant-facing receptionist config ──────────────────────
+// One per tenant per AddonProduct (e.g., one AI Receptionist per tenant).
+// Owns the operational settings (greeting, handoff policy, business hours).
+// The agent-level config (prompt, voice, model) lives in AiAgentVersion.
+model AiReceptionist {
+  id                      String   @id @default(cuid())
+  tenantId                String
+  // ── Identity ──
+  name                    String   @default("Sarah") // receptionist display name
+  status                  String   @default("DRAFT")
+  // DRAFT | ACTIVE | PAUSED | ARCHIVED
+  // DRAFT: created but not yet activated (no Vapi assistant deployed)
+  // ACTIVE: Vapi assistant deployed, calls being handled
+  // PAUSED: temporarily disabled (subscription suspended, manual pause)
+  // ARCHIVED: subscription expired + grace passed. Data retained read-only.
+  // ── Current version (the active agent config) ──
+  currentVersionId        String?  @unique // FK → AiAgentVersion.id (the active version)
+  // ── Operational config (split from old AiAgent) ──
+  greeting                String?  // "Thanks for calling {business}..."
+  afterHoursGreeting      String?
+  businessHoursMode       String   @default("use_tenant_hours")
+  // use_tenant_hours | custom
+  customHoursJson         String?  // JSON: {mon: {open, close, closed}, ...}
+  // ── Handoff policy ──
+  handoffEnabled          Boolean  @default(true)
+  handoffTransferTarget   String?  // E.164 number for human transfer
+  handoffFallbackMode     String   @default("VOICEMAIL")
+  // VOICEMAIL | HANGUP (what to do if human doesn't answer)
+  // ── SMS send-back (post-call SMS to caller) ──
+  smsSendBackEnabled      Boolean  @default(false)
+  smsSendBackTemplate     String?
+  // ── Known caller handling ──
+  trustedPhonesJson       String   @default("[]") // JSON array of E.164 numbers
+  knownCallerGreetingTemplate String?
+  // ── Audio behavior ──
+  backgroundNoiseEnabled  Boolean  @default(false)
+  responseDelaySeconds    Int      @default(0) // artificial delay before AI responds
+  // ── Knowledge config (which KB entries to inject) ──
+  knowledgeConfigJson     String   @default("{}")
+  // {faqIds: [...], documentIds: [...], businessInfoScope: "all" | "selected"}
+  // ── Metadata ──
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  versions    AiAgentVersion[]
+  currentVersion AiAgentVersion? @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+// ─── AiAgentVersion: versioned agent config ────────────────────────────────
+// Each version is an immutable snapshot of the agent configuration (prompt,
+// voice, model, personality, behavior). Created when the tenant edits settings.
+// Deployed to Vapi via AiProviderDeployment.
+//
+// VERSIONING FLOW:
+//   1. Tenant edits settings → create AiAgentVersion (status=DRAFT)
+//   2. Deploy → create AiProviderDeployment (status=PENDING → DEPLOYING → ACTIVE)
+//   3. Deploy succeeds → AiAgentVersion.status = PUBLISHED, AiReceptionist.currentVersionId = new version
+//   4. Deploy fails → AiProviderDeployment.status = FAILED, previous version stays active
+//
+// ROLLBACK:
+//   AiReceptionist.currentVersionId = old version ID
+//   old version.status = PUBLISHED (reactivated)
+//   new version.status = SUPERSEDED
+model AiAgentVersion {
+  id                      String   @id @default(cuid())
+  aiReceptionistId       String
+  versionNumber           Int      // 1, 2, 3... (auto-increment per receptionist)
+  status                  String   @default("DRAFT")
+  // DRAFT | PUBLISHED | SUPERSEDED | FAILED
+  // DRAFT: created but not yet deployed
+  // PUBLISHED: deployed successfully, is the current active version
+  // SUPERSEDED: was PUBLISHED but replaced by a newer version
+  // FAILED: deployment failed (previous version stays active)
+  // ── Agent configuration (immutable once PUBLISHED) ──
+  systemPrompt            String   // the full system prompt (injected with tenant KB)
+  voice                   String   @default("rachel") // Vapi voice name
+  voiceProvider           String   @default("elevenlabs") // elevenlabs | deepgram
+  model                   String   @default("gpt-4o-mini") // LLM model
+  temperature             Float    @default(0.7)
+  maxTokens               Int      @default(500)
+  greeting                String?  // "Hi, thanks for calling {business}..."
+  personality             String   @default("professional")
+  // professional | friendly | warm
+  responseStyle           String   @default("concise")
+  // concise | conversational
+  // ── Vapi hard limits (enforced at deployment) ──
+  maxDurationSeconds      Int      @default(600) // 10 min
+  silenceTimeoutSeconds  Int      @default(120) // 2 min
+  // ── Knowledge snapshot (at version creation time) ──
+  knowledgeConfigSnapshot String   @default("{}")
+  // ── Metadata ──
+  publishedAt             DateTime?
+  createdBy               String?  // user ID who created this version
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  reception    AiReceptionist       @relation(fields: [aiReceptionistId], references: [id], onDelete: Cascade)
+  deployments  AiProviderDeployment[]
+  // Back-relation: the receptionist that has THIS version as its current version
+  activeForReceptionist AiReceptionist? @relation("CurrentVersion")
+
+  @@index([aiReceptionistId])
+  @@index([status])
+}
+
+// ─── AiProviderDeployment: per-provider deployment record ──────────────────
+// Links an AiAgentVersion to a specific provider (Vapi). Tracks the Vapi
+// assistant ID + deployment status.
+//
+// DEPLOYMENT STATES:
+//   PENDING → DEPLOYING → ACTIVE
+//                   │         │
+//                   │         ├─ (pause) → DISABLED
+//                   │         │
+//                   │         └─ (resume) → ACTIVE
+//                   │
+//                   └─ (failure) → FAILED
+//                                    │
+//                                    └─ (retry) → DEPLOYING
+model AiProviderDeployment {
+  id                      String   @id @default(cuid())
+  aiAgentVersionId        String
+  // ── Provider ──
+  provider                String   @default("VAPI")
+  // VAPI (only Vapi for V1; the boundary exists for future Retell/ElevenLabs)
+  // ── External IDs (populated by Phase 5 VapiVoiceProvider) ──
+  externalAssistantId     String?  // Vapi assistant ID
+  externalPhoneNumberId   String?  // Vapi phone number ID (if attached)
+  // ── Deployment state ──
+  status                  String   @default("PENDING")
+  // PENDING | DEPLOYING | ACTIVE | FAILED | DISABLED
+  deploymentConfigJson    String   @default("{}")
+  // {model, voice, transcriber, etc.} — snapshot of what was sent to Vapi
+  lastSyncedAt            DateTime?
+  lastError               String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  agentVersion AiAgentVersion @relation(fields: [aiAgentVersionId], references: [id], onDelete: Cascade)
+
+  @@index([aiAgentVersionId])
+  @@index([provider, status])
+  @@index([externalAssistantId])
 }
