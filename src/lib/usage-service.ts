@@ -109,8 +109,7 @@ export async function reserveSeconds(params: {
       } catch {
         // Fallback for non-Postgres environments (e.g., SQLite in unit tests)
       }
-
-      // Read the entitlement
+      // 1. Read the entitlement
       const entitlement = await tx.addonEntitlement.findUnique({
         where: { id: entitlementId },
         select: {
@@ -372,6 +371,72 @@ export async function countActiveCalls(tenantId: string): Promise<number> {
     _count: { id: true },
   });
   return result._count.id;
+}
+
+// ─── Stale reservation reconciliation (Phase 5.1 hardening #4) ──────────────
+
+/**
+ * Release stale ACTIVE reservations.
+ *
+ * Phase 5.1 hardening: abandoned reservations (calls that started but never
+ * received an end-of-call webhook) must be cleaned up, otherwise minutes
+ * become permanently stuck.
+ *
+ * This function should be called by a scheduled cron (Phase 8) or manually
+ * by the Superadmin. It finds ACTIVE reservations older than the timeout
+ * and releases them.
+ *
+ * @param maxAgeMinutes - reservations older than this are released (default: 30 min)
+ * @returns number of reservations released
+ */
+export async function releaseStaleReservations(maxAgeMinutes: number = 30): Promise<number> {
+  const cutoff = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
+
+  const result = await db.usageReservation.updateMany({
+    where: {
+      status: 'ACTIVE',
+      reservedAt: { lt: cutoff },
+    },
+    data: {
+      status: 'RELEASED',
+      releasedAt: new Date(),
+    },
+  });
+
+  if (result.count > 0) {
+    console.log(`[UsageService] released ${result.count} stale reservations (older than ${maxAgeMinutes} min)`);
+  }
+
+  return result.count;
+}
+
+/**
+ * Release a reservation by external call ID (for failure paths).
+ *
+ * Called when:
+ *   - Vapi API fails to create the call
+ *   - The call never connects
+ *   - The assistant creation succeeds but phone attachment fails
+ *   - The webhook sends an error event
+ *   - The call reports zero duration
+ */
+export async function releaseReservationByCallId(externalCallId: string): Promise<{ ok: boolean }> {
+  const result = await db.usageReservation.updateMany({
+    where: {
+      externalCallId,
+      status: 'ACTIVE',
+    },
+    data: {
+      status: 'RELEASED',
+      releasedAt: new Date(),
+    },
+  });
+
+  if (result.count > 0) {
+    console.log(`[UsageService] released reservation for call ${externalCallId} (failure path)`);
+  }
+
+  return { ok: result.count > 0 };
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
