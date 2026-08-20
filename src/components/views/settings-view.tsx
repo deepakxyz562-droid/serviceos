@@ -65,6 +65,7 @@ import { TeamSettings } from '@/components/settings/sections/team-settings';
 import { CustomersSettings } from '@/components/settings/sections/customers-settings';
 import { CommunicationSettings } from '@/components/settings/sections/communication-settings';
 import { AiSettings } from '@/components/settings/sections/ai-settings';
+import { AiReceptionistDashboard } from '@/components/ai-receptionist/ai-receptionist-dashboard';
 import { IntegrationsSettings } from '@/components/settings/sections/integrations-settings';
 import { AutomationsSettings } from '@/components/settings/sections/automations-settings';
 import { SecuritySettings } from '@/components/settings/sections/security-settings';
@@ -520,7 +521,12 @@ export function SettingsView() {
       case 'communication':
         return <CommunicationSettings />;
       case 'ai':
-        return <AiSettings />;
+        return (
+          <div className="space-y-6">
+            <AiReceptionistDashboard />
+            <AiSettings />
+          </div>
+        );
       case 'integrations':
         return <IntegrationsSettings />;
       case 'automations':
