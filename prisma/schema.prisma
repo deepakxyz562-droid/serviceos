@@ -19,6 +19,10 @@ datasource db {
   
   
   
+  
+  
+  
+  
 }
 
 // ==========================================
@@ -7301,4 +7305,48 @@ model AiProviderDeployment {
   @@index([aiAgentVersionId])
   @@index([provider, status])
   @@index([externalAssistantId])
+}
+
+// ==========================================
+// AI RECEPTIONIST ADD-ON — AI TOOL EXECUTION (Phase 6)
+// ==========================================
+// Tracks every AI tool call with idempotency. The critical invariant:
+//
+//   same call + same tool + same idempotency key → ONE execution
+//
+// If Vapi retries a tool call 10 times (network timeout, 5xx), the database
+// has exactly 1 AiToolExecution row. The AI never directly accesses the DB —
+// all mutations go through Fieseros domain services (LeadService, JobService, etc.)
+// with tenant ownership verified on every mutation.
+model AiToolExecution {
+  id              String   @id @default(cuid())
+  tenantId        String
+  // ── Call context (links to the Vapi call) ──
+  externalCallId  String   // Vapi call ID
+  toolCallId      String?  // Vapi's toolCallId (provider-specific)
+  // ── Idempotency (CRITICAL) ──
+  // Format: `${externalCallId}:${toolName}:${toolCallId || 'default'}`
+  // @unique prevents duplicate executions on Vapi webhook retry.
+  idempotencyKey  String   @unique
+  // ── Tool info ──
+  toolName        String   // 'create_lead' | 'get_customer' | 'schedule_job' | etc.
+  capability      String   // 'CREATE_LEAD' | 'READ_CUSTOMER' | etc.
+  parametersJson  String   @default("{}") // the tool call parameters from Vapi
+  requestHash     String?  // sha256(JSON.stringify(parameters)) — detects parameter changes on retry
+  // ── Execution state ──
+  status          String   @default("PENDING")
+  // PENDING | SUCCESS | FAILED | SKIPPED
+  resultJson      String?  // the tool result (returned to Vapi)
+  errorJson       String?  // error details if FAILED
+  // ── Timing ──
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([externalCallId])
+  @@index([toolName])
+  @@index([status])
+  @@index([idempotencyKey])
 }

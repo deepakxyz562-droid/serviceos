@@ -111,27 +111,61 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Could not resolve tenant' }, { status: 400 });
   }
 
-  // ── 4. Process tool calls ──
-  // Phase 6 will implement the full tool dispatcher with AiToolExecution (idempotent).
-  // For Phase 5, we acknowledge the calls and return a placeholder result.
-  const results = toolCalls.map((tc: { id: string; name: string; parameters: Record<string, unknown> }) => {
-    console.log(
-      `[vapi/function-call] tool call: ${tc.name} (id=${tc.id}, callId=${call?.id}, tenant=${tenantId})`,
-    );
+  // ── 4. Process tool calls via AiToolDispatcher ──
+  // Phase 6: full tool dispatcher with AiToolExecution (idempotent) + capability checks.
+  // Import the tool handlers (registers all handlers on module load)
+  await import('@/lib/ai-tool-handlers');
+  const { executeTool } = await import('@/lib/ai-tool-dispatcher');
 
-    // Phase 6 will route to the appropriate domain service:
-    //   create_lead → LeadService.createLead()
-    //   book_appointment → BookingService.createBooking()
-    //   check_availability → SchedulingService.getAvailableSlots()
-    //   transfer_call → VapiVoiceProvider.transferCall()
-    //   etc.
+  const executionContext = {
+    tenantId,
+    externalCallId: call?.id || '',
+    toolCallId: '',
+  };
 
-    // For now, return a placeholder acknowledgment
-    return {
-      toolCallId: tc.id,
-      result: `Tool "${tc.name}" received — Phase 6 will implement execution.`,
-    };
-  });
+  // Resolve receptionist/agent version/deployment from the assistantId (if available)
+  if (call?.assistantId) {
+    const deployment = await db.aiProviderDeployment.findFirst({
+      where: {
+        externalAssistantId: call.assistantId,
+        status: 'ACTIVE',
+      },
+      select: {
+        id: true,
+        agentVersion: {
+          select: {
+            id: true,
+            receptionist: {
+              select: { id: true, tenantId: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (deployment) {
+      executionContext.deploymentId = deployment.id;
+      executionContext.agentVersionId = deployment.agentVersion.id;
+      executionContext.receptionistId = deployment.agentVersion.receptionist.id;
+    }
+  }
+
+  const results = await Promise.all(
+    toolCalls.map(async (tc: { id: string; name: string; parameters: Record<string, unknown> }) => {
+      const ctx = {
+        ...executionContext,
+        toolCallId: tc.id,
+      };
+
+      const result = await executeTool(ctx, tc.name, tc.parameters || {});
+
+      return {
+        toolCallId: tc.id,
+        result: result.ok ? result.result : { error: result.error },
+        idempotent: result.idempotent || false,
+      };
+    }),
+  );
 
   return NextResponse.json({ results });
 }
