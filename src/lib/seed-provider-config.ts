@@ -23,6 +23,16 @@ export async function seedProviderConfig() {
       displayName: 'Vapi.ai Platform',
       apiKey: process.env.VAPI_API_KEY,
       capabilities: PROVIDER_CAPABILITIES.VAPI,
+      configJson: '{}',
+    },
+    {
+      provider: 'TWILIO' as const,
+      displayName: 'Twilio Telephony',
+      apiKey: process.env.TWILIO_AUTH_TOKEN, // Twilio Auth Token (the secret)
+      capabilities: PROVIDER_CAPABILITIES.TWILIO,
+      configJson: JSON.stringify({
+        accountSid: process.env.TWILIO_ACCOUNT_SID || '',
+      }),
     },
   ];
 
@@ -38,13 +48,14 @@ export async function seedProviderConfig() {
         encryptedApiKey,
         capabilities: capabilitiesStr,
         status: 'ACTIVE',
-        configJson: '{}',
+        configJson: p.configJson || '{}',
       },
       update: {
         displayName: p.displayName,
         encryptedApiKey,
         capabilities: capabilitiesStr,
         status: 'ACTIVE',
+        configJson: p.configJson || '{}',
       },
     });
 

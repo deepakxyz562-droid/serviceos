@@ -101,24 +101,27 @@ export interface TelephonyProvider {
   validateCredentials(): Promise<{ valid: boolean; error?: string }>;
 }
 
-// ─── Factory (Phase 5 will implement the concrete provider) ────────────────
+// ─── Factory (Phase 8.5: Twilio implementation wired) ──────────────────────
 
 /**
  * Get the active telephony provider for the platform.
  *
- * Phase 3.5: returns null (no provider implemented yet).
- * Phase 5: returns a TwilioTelephonyProvider instance (or whatever the
- * Superadmin has configured via AiProviderConfig).
+ * Phase 8.5: returns a TwilioTelephonyProvider if TWILIO is configured in
+ * AiProviderConfig and is ACTIVE. Returns null otherwise.
  *
  * The domain layer calls this to get a provider — it never imports
  * Twilio/Telnyx directly.
  */
 export async function getTelephonyProvider(): Promise<TelephonyProvider | null> {
-  // Phase 5 will implement this:
-  // 1. Read AiProviderConfig WHERE provider='TWILIO' AND status='ACTIVE'
-  // 2. Decrypt the API key
-  // 3. Return new TwilioTelephonyProvider(decryptedKey)
-  //
-  // For now, return null — phone provisioning is not yet wired to a real provider.
-  return null;
+  // Dynamic import to avoid circular dependency at module load time
+  const { getTwilioTelephonyProvider } = await import('@/lib/twilio-telephony-provider');
+  const { getDecryptedApiKey } = await import('@/lib/ai-provider-config-service');
+
+  // Check if Twilio is configured + active
+  const apiKey = await getDecryptedApiKey('TWILIO');
+  if (!apiKey) {
+    return null; // Twilio not configured
+  }
+
+  return getTwilioTelephonyProvider();
 }

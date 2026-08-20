@@ -24,6 +24,8 @@ datasource db {
   
   
   
+  
+  
 }
 
 // ==========================================
@@ -234,6 +236,8 @@ model Tenant {
   phoneConnections     PhoneConnection[]
   // Phase 4: AI Receptionist domain
   aiReceptionists      AiReceptionist[]
+  // Phase 8.6: tenant telephony accounts (subaccounts)
+  telephonyAccounts    TenantTelephonyAccount[]
   recurringJobSchedules RecurringJobSchedule[]
   scheduledMessages   ScheduledMessage[]
   scheduledExecutions ScheduledExecution[]
@@ -4805,13 +4809,15 @@ model PhoneNumber {
   subscriptionId  String?  // PayPal/Creem subscription ID for recurring billing
 
   // Twilio provider state
-  providerSid     String?  // Twilio PNxxx SID
+  providerSid     String?  @unique // Twilio PNxxx SID (Phase 8.5: unique — prevents same Twilio number on two tenants)
   smsWebhookUrl   String?
   voiceWebhookUrl String?
 
-  // Lifecycle
-  status          String   @default("pending") // pending | active | released
-  releasedAt      DateTime?
+  // Lifecycle (Phase 8.6: expanded)
+  status          String   @default("pending") // pending | active | suspended | release_pending | released
+  releasedAt      DateTime? // set when fully released
+  releaseScheduledAt DateTime? // Phase 8.6: when release was requested (30-day grace start)
+  releaseAfter    DateTime? // Phase 8.6: when the number should actually be released (now + 30 days)
   lastUsedAt      DateTime?
 
   // Voice forwarding / AI voice
@@ -7368,4 +7374,93 @@ model AiToolExecution {
   @@index([toolName])
   @@index([status])
   @@index([idempotencyKey])
+}
+
+// ==========================================
+// AI RECEPTIONIST ADD-ON — PHASE 8.6 PHONE LIFECYCLE HARDENING
+// ==========================================
+
+// ─── TenantTelephonyAccount: per-tenant telephony account (subaccounts) ────
+// Design for Twilio subaccounts NOW (even if V1 uses the master account).
+// V1: all tenants share the master Twilio account.
+// Scale: each tenant gets its own Twilio subaccount (isolation of numbers,
+// calls, messages, usage — but still billed to the parent account).
+//
+// This model makes the relationship explicit and avoids adding
+// `twilioSubaccountSid` directly to Tenant (which would couple Tenant
+// to Twilio specifically).
+model TenantTelephonyAccount {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  provider              String   @default("TWILIO")
+  providerAccountSid    String?  // Twilio subaccount ACxxx (null = using master account)
+  status                String   @default("ACTIVE")
+  // ACTIVE | SUSPENDED | CLOSED
+  // ACTIVE: can provision/manage numbers
+  // SUSPENDED: AI subscription suspended — numbers retained, new provisioning blocked
+  // CLOSED: subaccount closed (numbers released) — data retained for audit
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider])
+  @@index([tenantId])
+  @@index([provider, status])
+}
+
+// ─── PhoneProvisioningAttempt: idempotent purchase record ──────────────────
+// Prevents double-purchase if the frontend retries after a Twilio purchase
+// succeeds but the DB write times out.
+//
+// Flow:
+//   1. POST /phones/buy with Idempotency-Key header
+//   2. Create PhoneProvisioningAttempt (status=PENDING)
+//   3. Call Twilio provisionNumber()
+//   4. On success: create PhoneNumber + PhoneConnection, mark attempt SUCCESS
+//   5. On failure: mark attempt FAILED, return error
+//   6. On retry with same key: return existing attempt result
+model PhoneProvisioningAttempt {
+  id                String   @id @default(cuid())
+  tenantId          String
+  idempotencyKey    String   @unique
+  provider          String   @default("TWILIO")
+  requestedE164     String?  // the specific number the tenant selected (from search)
+  providerSid       String?  // Twilio PNxxx (set on success)
+  resultingPhoneNumberId String? // FK → PhoneNumber (set on success)
+  status            String   @default("PENDING")
+  // PENDING | SUCCESS | FAILED
+  error             String?
+  createdAt         DateTime @default(now())
+  completedAt       DateTime?
+
+  @@index([tenantId])
+  @@index([idempotencyKey])
+  @@index([status])
+}
+
+// ─── TwilioProviderConfig: Twilio-specific configuration ──────────────────
+// Separates Twilio-specific config from the generic AiProviderConfig.
+// Prevents AiProviderConfig.configJson from becoming a dumping ground.
+model TwilioProviderConfig {
+  id                    String   @id @default(cuid())
+  accountSid             String   @unique
+  messagingServiceSid   String?
+  defaultVoiceWebhook   String?
+  defaultSmsWebhook      String?
+  region                 String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([accountSid])
+}
+
+// ─── VapiProviderConfig: Vapi-specific configuration ──────────────────────
+model VapiProviderConfig {
+  id                    String   @id @default(cuid())
+  webhookSecret          String?
+  defaultServerUrl       String?
+  defaultWebhookUrl      String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 }

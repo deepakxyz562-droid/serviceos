@@ -60,6 +60,44 @@ export interface CallEndParams {
   timeSavedSec?: number;
 }
 
+// ─── Phase 8 hardening: centralized state machine ──────────────────────────
+// Legal transitions — prevents invalid state changes from out-of-order webhooks.
+// Invalid transitions are ignored (logged but not applied) rather than erroring,
+// so a stale webhook delivery doesn't crash the handler.
+
+const LEGAL_TRANSITIONS: Record<string, Set<string>> = {
+  queued: new Set(['ringing', 'in_progress', 'ended', 'failed']),
+  ringing: new Set(['in_progress', 'ended', 'failed']),
+  in_progress: new Set(['ended', 'failed']),
+  ended: new Set(),      // terminal — no transitions out
+  failed: new Set(),     // terminal — no transitions out
+};
+
+/**
+ * Check if a state transition is legal.
+ * @param currentStatus - the call's current status in the DB
+ * @param targetStatus - the desired new status from the webhook event
+ * @returns true if the transition is legal
+ */
+function isLegalTransition(currentStatus: string | null, targetStatus: string): boolean {
+  if (!currentStatus) return true; // new call — always allowed
+  const allowed = LEGAL_TRANSITIONS[currentStatus];
+  if (!allowed) return false; // unknown current status — block
+  return allowed.has(targetStatus);
+}
+
+/**
+ * Attempt a state transition. Returns false if the transition is illegal.
+ * Does NOT throw — the caller decides whether to ignore or error.
+ */
+function canTransition(currentStatus: string | null, targetStatus: string): boolean {
+  if (currentStatus === targetStatus) {
+    // Same status = idempotent (e.g. ringing → ringing on webhook redelivery) — allowed
+    return true;
+  }
+  return isLegalTransition(currentStatus, targetStatus);
+}
+
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 /**
@@ -74,6 +112,15 @@ export async function onCallStart(params: CallStartParams): Promise<{ callId: st
   });
 
   if (existing) {
+    // Phase 8 hardening: check if the transition is legal
+    // If the call is already ended/failed, a stale ringing webhook is ignored
+    if (!canTransition(existing.status, 'ringing')) {
+      console.warn(
+        `[CallLifecycle] onCallStart: ignoring illegal transition ${existing.status} → ringing for ${params.vapiCallId}`,
+      );
+      return { callId: existing.id, created: false };
+    }
+
     // Idempotent update — just refresh the status + timing
     await db.aiCall.update({
       where: { id: existing.id },
@@ -114,8 +161,12 @@ export async function onCallStart(params: CallStartParams): Promise<{ callId: st
  * Update call status to in_progress (Vapi status-update: in_progress).
  */
 export async function onCallInProgress(vapiCallId: string): Promise<void> {
+  // Phase 8 hardening: only transition from queued/ringing to in_progress
   await db.aiCall.updateMany({
-    where: { vapiCallId, status: { in: ['queued', 'ringing'] } },
+    where: {
+      vapiCallId,
+      status: { in: ['queued', 'ringing'] }, // only from non-terminal states
+    },
     data: { status: 'in_progress' },
   });
 }
@@ -133,6 +184,16 @@ export async function onCallFailed(vapiCallId: string, reason?: string): Promise
   });
 
   if (!call) return;
+
+  // Phase 8 hardening: don't transition from terminal states (ended → failed is illegal)
+  if (!canTransition(call.status, 'failed')) {
+    console.warn(
+      `[CallLifecycle] onCallFailed: ignoring illegal transition ${call.status} → failed for ${vapiCallId}`,
+    );
+    // Still release any reservation (defensive)
+    await releaseReservationByCallId(vapiCallId).catch(() => {});
+    return;
+  }
 
   // Update the call status
   await db.aiCall.update({
@@ -178,6 +239,25 @@ export async function onCallEnd(params: CallEndParams): Promise<{
   if (!call) {
     console.warn(`[CallLifecycle] onCallEnd: no AiCall found for ${params.vapiCallId}`);
     return { callId: null, usageFinalized: false, usageIdempotent: false };
+  }
+
+  // Phase 8 hardening: if the call is already ENDED, this is a duplicate webhook
+  // (or out-of-order delivery). Return the existing result — don't re-finalize.
+  if (call.status === 'ended') {
+    console.log(
+      `[CallLifecycle] onCallEnd: call ${params.vapiCallId} already ended — idempotent no-op`,
+    );
+    // The UsageLedger finalization is also idempotent (idempotencyKey @unique),
+    // but we skip the Vapi API call + AiCall update since they're unnecessary.
+    return { callId: call.id, usageFinalized: true, usageIdempotent: true };
+  }
+
+  // Phase 8 hardening: check legal transition
+  if (!canTransition(call.status, 'ended')) {
+    console.warn(
+      `[CallLifecycle] onCallEnd: ignoring illegal transition ${call.status} → ended for ${params.vapiCallId}`,
+    );
+    return { callId: call.id, usageFinalized: false, usageIdempotent: false };
   }
 
   // 2. Update the AiCall record (immutable after this — snapshot from Vapi)
