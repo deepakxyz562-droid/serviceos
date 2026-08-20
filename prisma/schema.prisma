@@ -14,6 +14,9 @@ datasource db {
   
   
   
+  
+  
+  
 }
 
 // ==========================================
@@ -219,6 +222,9 @@ model Tenant {
   addonSubscriptions  AddonSubscription[]
   // AI Receptionist add-on (Phase 1 commercial foundation)
   tenantAddonSubscriptions TenantAddonSubscription[]
+  // Phase 3: phone infrastructure
+  externalPhoneNumbers ExternalPhoneNumber[]
+  phoneConnections     PhoneConnection[]
   recurringJobSchedules RecurringJobSchedule[]
   scheduledMessages   ScheduledMessage[]
   scheduledExecutions ScheduledExecution[]
@@ -4810,6 +4816,9 @@ model PhoneNumber {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  // Phase 3: phone connections that route to this number
+  phoneConnections PhoneConnection[]
+
   @@index([tenantId, status])
   @@index([provider, status])
 }
@@ -6911,4 +6920,190 @@ model UsageLedger {
   @@index([usageType])
   @@index([occurredAt])
   @@index([periodStart, periodEnd])
+}
+
+// ==========================================
+// AI RECEPTIONIST ADD-ON — PHONE INFRASTRUCTURE (Phase 3)
+// ==========================================
+// These models implement the phone-number architecture per the Architecture
+// Contract (docs/AI_RECEPTIONIST_ARCHITECTURE_CONTRACT.md §6).
+//
+// Phase 3 adds:
+//   - ExternalPhoneNumber  (customer's existing business number, for forwarding)
+//   - PhoneConnection      (links External → PhoneNumber + routing policy)
+//
+// The existing `PhoneNumber` model (line 4776) stays as the canonical
+// Fieseros-managed number. We add a `phoneConnections` relation to it
+// (additive — doesn't change existing fields). The legacy `AiPhoneNumber`
+// (line 4817) stays untouched — removed in Phase 11.
+//
+// ARCHITECTURAL BOUNDARY (per user's Phase 3 directive):
+//   Phone infrastructure decides WHERE the call should go (routing).
+//   It does NOT decide WHETHER the tenant has AI minutes remaining.
+//   That remains the job of the AdmissionController (Phase 2).
+//
+//   Phone routing → AI Admission Controller → UsageReservation → AI Runtime
+//
+// The `PhoneConnection.routingMode` field controls routing:
+//   AI_RECEPTIONIST → call goes to AI (then AdmissionController checks capacity)
+//   HUMAN_FORWARD   → call forwards to a human number (bypasses AI entirely)
+//   VOICEMAIL       → call goes to voicemail (no AI, no human)
+
+// ─── ExternalPhoneNumber: customer's existing business number ──────────────
+// Represents a phone number the customer already owns (their public business
+// number). This is NOT a Fieseros-provisioned number — the customer configures
+// call forwarding from this number to a Fieseros PhoneNumber.
+//
+// Example:
+//   ExternalPhoneNumber: +442012345678 (customer's business line)
+//        ↓ forwards to
+//   PhoneNumber: +442098765432 (Fieseros-managed, AI-enabled)
+//        ↓ via
+//   PhoneConnection (connectionType=FORWARDING, routingMode=AI_RECEPTIONIST)
+model ExternalPhoneNumber {
+  id                String   @id @default(cuid())
+  tenantId          String
+  e164              String   // '+442012345678' — customer's existing number
+  label             String?  // 'Main business line'
+  country           String?  // 'GB'
+  // ── Verification ──
+  // The customer must verify they own this number before forwarding is
+  // activated. Fieseros sends a verification call with a code, or detects
+  // forwarding via a test call.
+  verificationStatus String  @default("PENDING")
+  // PENDING | VERIFIED | FAILED
+  verificationCode   String?  // 4-digit code entered by the customer
+  verificationExpiresAt DateTime? // code expires after 10 minutes
+  verifiedAt         DateTime?
+  // ── Lifecycle ──
+  status            String   @default("ACTIVE")
+  // ACTIVE | INACTIVE | REMOVED
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  connections PhoneConnection[]
+
+  @@index([tenantId])
+  @@index([e164])
+  @@index([verificationStatus])
+}
+
+// ─── PhoneConnection: links numbers + defines routing policy ───────────────
+// Connects a Fieseros PhoneNumber to (optionally) an ExternalPhoneNumber,
+// and defines the routing mode for incoming calls.
+//
+// Three scenarios:
+//   1. Buy Fieseros number:
+//      PhoneConnection(phoneNumberId=X, externalPhoneNumberId=null,
+//        connectionType=DIRECT, routingMode=AI_RECEPTIONIST)
+//
+//   2. Forward existing number:
+//      PhoneConnection(phoneNumberId=X, externalPhoneNumberId=Y,
+//        connectionType=FORWARDING, routingMode=AI_RECEPTIONIST)
+//
+//   3. Human forwarding (not AI):
+//      PhoneConnection(phoneNumberId=X, externalPhoneNumberId=null,
+//        connectionType=DIRECT, routingMode=HUMAN_FORWARD, routingTarget='+44...')
+//
+// The routingMode field is the key routing decision:
+//   AI_RECEPTIONIST → call goes to AI Receptionist (Phase 4/5)
+//                     → AdmissionController checks capacity before AI answers
+//   HUMAN_FORWARD   → call forwards to routingTarget (human number)
+//   VOICEMAIL       → call goes to voicemail (no AI, no human)
+model PhoneConnection {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  // ── Linked numbers ──
+  phoneNumberId         String   // FK → PhoneNumber (Fieseros-managed)
+  externalPhoneNumberId String?  // FK → ExternalPhoneNumber (customer's, if forwarding)
+  // ── Connection type ──
+  connectionType        String   @default("DIRECT")
+  // DIRECT | FORWARDING
+  // DIRECT: Fieseros number receives calls directly (no external number involved)
+  // FORWARDING: Customer's external number forwards to the Fieseros number
+  // ── Routing policy (WHERE the call goes) ──
+  routingMode           String   @default("AI_RECEPTIONIST")
+  // AI_RECEPTIONIST | HUMAN_FORWARD | VOICEMAIL
+  // AI_RECEPTIONIST: call goes to AI Receptionist → AdmissionController → Vapi
+  // HUMAN_FORWARD: call forwards to routingTarget (a human number)
+  // VOICEMAIL: call goes to voicemail (no AI, no human)
+  // ── Routing target (for HUMAN_FORWARD mode) ──
+  routingTarget         String?  // E.164 number for HUMAN_FORWARD (e.g. '+44...')
+  // ── Phase 3.5 hardening: AI-unavailable fallback routing ──
+  // When routingMode=AI_RECEPTIONIST but the AdmissionController rejects the
+  // call (subscription suspended, minutes exhausted, concurrency exceeded),
+  // the call falls back to this routing mode + target.
+  //
+  // If null, the call goes to VOICEMAIL (default fallback).
+  // If set to HUMAN_FORWARD, the call forwards to fallbackRoutingTarget.
+  //
+  // This ensures the customer never gets a "call failed" — they always get
+  // either AI, a human, or voicemail.
+  fallbackRoutingMode   String?  // HUMAN_FORWARD | VOICEMAIL (null = VOICEMAIL default)
+  fallbackRoutingTarget String? // E.164 number for HUMAN_FORWARD fallback
+  // ── Status ──
+  status                String   @default("PENDING")
+  // PENDING | ACTIVE | INACTIVE
+  // PENDING: created but not yet verified/activated
+  // ACTIVE: calls are being routed per routingMode
+  // INACTIVE: temporarily disabled (manual — NOT auto-deactivated on subscription
+  //           suspension; the AdmissionController handles AI availability)
+  verifiedAt            DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  phoneNumber         PhoneNumber          @relation(fields: [phoneNumberId], references: [id])
+  externalPhoneNumber ExternalPhoneNumber? @relation(fields: [externalPhoneNumberId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([phoneNumberId])
+  @@index([externalPhoneNumberId])
+  @@index([routingMode])
+  @@index([status])
+}
+
+// ==========================================
+// AI RECEPTIONIST ADD-ON — PLATFORM PROVIDER CONFIG (Phase 3.5)
+// ==========================================
+// Platform-level provider credentials for AI voice providers (Vapi, Twilio, etc.).
+// Managed by Superadmin — NOT tenant-specific.
+//
+// ARCHITECTURE (per user directive):
+//   - Provider secrets are ENCRYPTED at rest (AES-256-GCM via ai-key-crypto.ts).
+//   - The encryption key itself stays in the environment (AI_PROVIDER_ENCRYPTION_KEY).
+//   - Superadmin can create, rotate, validate, disable, and replace provider
+//     credentials WITHOUT application redeployment.
+//   - Tenant records NEVER contain the platform Vapi API key — they only
+//     reference the provider by name.
+//
+//   Superadmin → DB encrypted secret → AI_PROVIDER_ENCRYPTION_KEY (env)
+//      → ProviderConfigService decrypts in memory → Vapi API
+//
+// NOTE: The existing `AiProviderKey` model (line ~5055) is for LLM provider
+// keys (OpenRouter/OpenAI/Anthropic/Gemini) — used by ai-client.ts for text
+// features. This new `AiProviderConfig` is for VOICE/TELEPHONY providers
+// (Vapi, Twilio) — used by the AI Receptionist voice runtime.
+model AiProviderConfig {
+  id              String   @id @default(cuid())
+  provider        String   @unique // 'VAPI' | 'TWILIO' | 'TELNYX' | 'ELEVENLABS'
+  displayName     String   // 'Vapi.ai Platform'
+  // ── Encrypted secret (AES-256-GCM) ──
+  // Decrypted at runtime using AI_PROVIDER_ENCRYPTION_KEY from the environment.
+  // Never stored in plaintext. Never exposed via API responses.
+  encryptedApiKey String?
+  // ── Public configuration (non-secret) ──
+  // Provider-specific metadata that's safe to expose (e.g. Vapi org ID, base URL).
+  configJson      String   @default("{}")
+  // ── Status ──
+  status          String   @default("ACTIVE")
+  // ACTIVE | DISABLED | ERROR
+  lastValidatedAt DateTime?
+  lastError       String?
+  // ── Metadata ──
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([provider, status])
 }
