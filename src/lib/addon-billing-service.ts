@@ -30,6 +30,11 @@
 
 import { db } from '@/lib/db';
 import { logBillingEvent } from '@/lib/billing-events';
+// Phase 2: entitlement creation on activation/renewal
+import {
+  createEntitlementForSubscription,
+  refreshEntitlementForRenewal,
+} from '@/lib/entitlement-service';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -389,6 +394,28 @@ async function activateSubscription(
     // non-fatal
   });
 
+  // ── Phase 2: create the AddonEntitlement (snapshot of quota for this period) ──
+  // Non-blocking — if entitlement creation fails, the subscription is still ACTIVE,
+  // but AI calls will be denied (no entitlement → ENTITLEMENT_NOT_FOUND). The
+  // superadmin can manually re-trigger via a Phase 8 tool, or the next webhook
+  // retry will create it.
+  try {
+    await createEntitlementForSubscription({
+      tenantId,
+      subscriptionId: subscription.id,
+      addonPlanId: addonPlan.id,
+      periodStart: subscription.currentPeriodStart || new Date(),
+      periodEnd: subscription.currentPeriodEnd,
+    });
+  } catch (err) {
+    console.error(
+      `[AddonBilling] activate: failed to create entitlement for subscription ${subscription.id}:`,
+      err,
+    );
+    // Don't fail the activation — the subscription is ACTIVE, entitlement creation
+    // can be retried. AI calls will be denied until the entitlement exists.
+  }
+
   return { ok: true, subscriptionId: subscription.id, status: 'ACTIVE' };
 }
 
@@ -435,7 +462,26 @@ async function renewOrUpdateSubscription(
     `[AddonBilling] renewed subscription ${subscription.id} (period: ${currentPeriodStart?.toISOString()} → ${currentPeriodEnd?.toISOString()})`,
   );
 
-  // NOTE: Phase 2 will add AddonEntitlement creation here (new quota for new period)
+  // ── Phase 2: refresh the AddonEntitlement for the new billing period ──
+  // Creates a new entitlement snapshotting the CURRENT AddonPlan values
+  // (in case the plan was upgraded) and transitions the old entitlement to
+  // EXPIRED. Non-blocking — same pattern as activation.
+  try {
+    await refreshEntitlementForRenewal({
+      tenantId: subscription.tenantId,
+      subscriptionId: subscription.id,
+      addonPlanId: subscription.addonPlanId,
+      newPeriodStart: currentPeriodStart || subscription.currentPeriodStart || new Date(),
+      newPeriodEnd: currentPeriodEnd || subscription.currentPeriodEnd,
+    });
+  } catch (err) {
+    console.error(
+      `[AddonBilling] renew: failed to refresh entitlement for subscription ${subscription.id}:`,
+      err,
+    );
+    // Don't fail the renewal — the subscription is ACTIVE, entitlement refresh
+    // can be retried. AI calls will use the old entitlement until refreshed.
+  }
 
   return { ok: true, subscriptionId: subscription.id, status: 'ACTIVE' };
 }

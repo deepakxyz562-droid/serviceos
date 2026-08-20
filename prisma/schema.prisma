@@ -11,6 +11,9 @@ datasource db {
   
   
   
+  
+  
+  
 }
 
 // ==========================================
@@ -6723,6 +6726,8 @@ model TenantAddonSubscription {
   tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   addonPlan    AddonPlan    @relation(fields: [addonPlanId], references: [id])
   addonProduct AddonProduct @relation(fields: [addonProductId], references: [id])
+  // Phase 2: entitlements for this subscription (one per billing period)
+  entitlements AddonEntitlement[]
 
   @@index([tenantId])
   @@index([addonPlanId])
@@ -6745,3 +6750,165 @@ model TenantAddonSubscription {
 // (Added as a back-relation on the existing Tenant model via Prisma's
 // relation syntax. The Tenant model already has `addonSubscriptions AddonSubscription[]`
 // for the legacy model — this adds the new one alongside.)
+
+// ==========================================
+// AI RECEPTIONIST ADD-ON — ENTITLEMENTS + USAGE (Phase 2)
+// ==========================================
+// These models implement the usage accounting layer per the Architecture
+// Contract (docs/AI_RECEPTIONIST_ARCHITECTURE_CONTRACT.md §4-§5).
+//
+// Phase 2 adds:
+//   - AddonEntitlement  (snapshot of quota per billing period)
+//   - UsageReservation  (atomic hold on seconds at call start)
+//   - UsageLedger       (immutable finalized usage with idempotencyKey @unique)
+//
+// The AdmissionController (src/lib/ai-admission-controller.ts) uses these
+// models to decide whether an AI call is allowed before Vapi answers.
+//
+// CRITICAL DESIGN PRINCIPLE: UsageLedger is the IMMUTABLE source of truth.
+// `cachedRemainingSeconds` on AddonEntitlement is a performance cache only —
+// the authoritative remaining is always `includedSeconds - SUM(UsageLedger)
+// - SUM(active UsageReservation)`. Never trust the cache for billing decisions.
+//
+// IDEMPOTENCY: UsageLedger.idempotencyKey is @unique. A webhook retry that
+// tries to write a duplicate ledger entry for the same call will throw P2002
+// and the service layer treats that as a no-op (returns the existing entry).
+// This prevents the "double-charge on webhook retry" failure mode from day one.
+
+// ─── AddonEntitlement: snapshot of quota per billing period ────────────────
+// Created when a subscription is activated (Phase 1) or renewed (Phase 2
+// hooks into AddonBillingService). Snapshots the AddonPlan values at the
+// time of activation — if the AddonPlan later changes (e.g. Starter goes
+// from 50 → 75 min), existing entitlements are NOT affected.
+//
+// One AddonEntitlement per billing period. On renewal, a new AddonEntitlement
+// is created for the new period (the old one transitions to EXPIRED).
+model AddonEntitlement {
+  id                      String   @id @default(cuid())
+  tenantId                String
+  tenantAddonSubscriptionId String
+  // ── Quota snapshot (from AddonPlan at activation/renewal time) ──
+  includedSeconds         Int      // 3000 for Starter (50 min × 60)
+  maxCallDurationSeconds   Int      // 600 (10 min)
+  maxConcurrentCalls      Int      // 1 (Starter), 3 (Pro), 10 (Business)
+  includedNumbers         Int      // 1
+  // ── Billing period (matches the subscription's current period) ──
+  periodStart             DateTime
+  periodEnd               DateTime
+  // ── Status ──
+  status                  String   @default("ACTIVE")
+  // ACTIVE | EXHAUSTED | PAUSED | EXPIRED
+  // ACTIVE: calls allowed (subject to remaining capacity)
+  // EXHAUSTED: included seconds fully consumed (admission denies)
+  // PAUSED: temporarily paused (subscription PAST_DUE/SUSPENDED, or manual)
+  // EXPIRED: period ended — superseded by a new entitlement on renewal
+  // ── Cached remaining (performance — NOT source of truth) ──
+  // Source of truth: SUM(UsageLedger.quantitySeconds WHERE entitlementId, periodStart..periodEnd)
+  //                 + SUM(UsageReservation.reservedSeconds WHERE status='ACTIVE')
+  cachedRemainingSeconds  Int      @default(0)
+  lastCalculatedAt        DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  subscription   TenantAddonSubscription @relation(fields: [tenantAddonSubscriptionId], references: [id], onDelete: Cascade)
+  reservations   UsageReservation[]
+  ledgerEntries  UsageLedger[]
+
+  @@index([tenantId])
+  @@index([tenantAddonSubscriptionId])
+  @@index([status])
+  @@index([periodStart, periodEnd])
+}
+
+// ─── UsageReservation: temporary hold on seconds at call start ────────────
+// Created by the AdmissionController when a call is admitted. Holds
+// `reservedSeconds` (typically = maxCallDurationSeconds) until the call
+// ends and the actual billable seconds are finalized to UsageLedger.
+//
+// CRITICAL: This is a MUTABLE operational record, NOT the financial source
+// of truth. The UsageLedger is authoritative. Reservations exist only to
+// prevent over-admission from stale reads during a call.
+//
+// ATOMICITY: The reserve operation runs inside a $transaction that reads
+// the current remaining (includedSeconds - SUM(ledger) - SUM(active
+// reservations)) and creates the reservation only if remaining >= requested.
+// This is the DB-as-source-of-truth pattern from Architecture Contract §5.4.
+model UsageReservation {
+  id              String   @id @default(cuid())
+  tenantId        String
+  entitlementId   String
+  // aiCallId is nullable until Phase 4 (AiCall model). For now, calls are
+  // identified by the Vapi call ID passed in via the reservation reference.
+  aiCallId        String?
+  // External call reference (Vapi call ID) — used to match the reservation
+  // to the call when the end-of-call webhook fires.
+  externalCallId  String?
+  reservedSeconds Int      // 600 (max call duration)
+  status          String   @default("ACTIVE")
+  // ACTIVE | RELEASED | CONSUMED
+  // ACTIVE: hold in place (call in progress)
+  // CONSUMED: call ended, actual seconds written to UsageLedger, reservation
+  //           marked as consumed (kept for audit)
+  // RELEASED: call was rejected/failed before consuming; reservation released
+  reservedAt      DateTime @default(now())
+  releasedAt      DateTime?
+  consumedSeconds Int?     // actual billable seconds at call end
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  entitlement AddonEntitlement @relation(fields: [entitlementId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([entitlementId])
+  @@index([externalCallId])
+  @@index([status])
+}
+
+// ─── UsageLedger: IMMUTABLE finalized usage (financial source of truth) ────
+// One row per finalized usage event. Written once when a call ends (or when
+// a phone-number monthly charge is assessed). NEVER updated after creation —
+// corrections are made via compensating entries (not implemented in V1).
+//
+// IDEMPOTENCY: `idempotencyKey` is @unique. The key is derived from the
+// call's external ID (Vapi call ID) + a suffix per usage type. A webhook
+// retry that tries to insert a duplicate will throw P2002 → the service
+// layer catches it and returns the existing entry as a no-op.
+//
+// This is the critical idempotency guarantee: a call can NEVER produce
+// duplicate ledger entries, even if Vapi redelivers the end-of-call webhook
+// 10 times.
+model UsageLedger {
+  id              String   @id @default(cuid())
+  tenantId        String
+  entitlementId   String
+  // aiCallId is nullable until Phase 4 (AiCall model). For now, the link
+  // to the call is via idempotencyKey (which encodes the external call ID).
+  aiCallId        String?
+  // ── Idempotency (CRITICAL) ──
+  // Unique per (tenantId, usageType, externalCallId). Prevents duplicate
+  // ledger entries when Vapi redelivers the end-of-call webhook.
+  // Format: `${externalCallId}:${usageType}` (e.g. "call_abc123:VOICE_MINUTE")
+  idempotencyKey  String   @unique
+  // ── Usage type ──
+  usageType       String   // 'VOICE_MINUTE' | 'PHONE_NUMBER_MONTHLY' | 'OVERAGE'
+  // ── Quantity ──
+  quantitySeconds Int      // 183 (actual billable seconds for VOICE_MINUTE)
+  // ── Cost breakdown (optional — populated when Vapi reports costs) ──
+  providerCostUsd Float?   // 0.42 (Vapi + telephony cost)
+  revenueUsd     Float?   // 0.60 (what we charged the customer)
+  costBreakdownJson String? // {vapi: 0.05, telephony: 0.02, llm: 0.03, stt: 0.01, tts: 0.01}
+  // ── Billing period (matches the entitlement's period) ──
+  periodStart     DateTime
+  periodEnd       DateTime
+  // ── When the usage happened (vs when the ledger row was written) ──
+  occurredAt      DateTime
+  createdAt       DateTime @default(now())
+
+  entitlement AddonEntitlement @relation(fields: [entitlementId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([entitlementId])
+  @@index([usageType])
+  @@index([occurredAt])
+  @@index([periodStart, periodEnd])
+}
