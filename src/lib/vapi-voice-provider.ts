@@ -294,6 +294,200 @@ class VapiVoiceProviderImpl implements VoiceProvider {
 
     return await response.json();
   }
+
+  // ── Phase 9A: Vapi phone-number management ──────────────────────────────
+
+  /**
+   * Import a Twilio phone number into Vapi.
+   *
+   * This is the CRITICAL method for the Vapi number-binding gate.
+   * After Fieseros purchases a number on Twilio, this method imports
+   * that number into Vapi so Vapi can receive calls on it.
+   *
+   * Vapi creates its own phone-number resource (with its own ID) that
+   * references the Twilio number. The returned `vapiPhoneNumberId` is
+   * stored on `PhoneNumber.vapiNumberId` for reconciliation.
+   *
+   * Vapi API: POST /phone-number
+   * Body: { provider: "twilio", twilioAccountSid, twilioAuthToken,
+   *         twilioPhoneNumber, assistantId?, serverUrl?, name? }
+   */
+  async importTwilioNumber(params: {
+    twilioAccountSid: string;
+    twilioAuthToken: string;
+    twilioPhoneNumber: string; // E.164 format: +1xxxxxxxxxx
+    assistantId?: string; // Vapi assistant ID (if deployment exists)
+    serverUrl?: string; // Vapi server URL for webhook events → Fieseros
+    name?: string; // Friendly name
+  }): Promise<{ vapiPhoneNumberId: string }> {
+    const auth = await this.getAuthHeader();
+
+    const body: Record<string, unknown> = {
+      provider: 'twilio',
+      twilioAccountSid: params.twilioAccountSid,
+      twilioAuthToken: params.twilioAuthToken,
+      twilioPhoneNumber: params.twilioPhoneNumber,
+    };
+
+    if (params.assistantId) body.assistantId = params.assistantId;
+    if (params.serverUrl) body.serverUrl = params.serverUrl;
+    if (params.name) body.name = params.name;
+
+    const response = await fetch(`${this.baseUrl}/phone-number`, {
+      method: 'POST',
+      headers: {
+        Authorization: auth,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Vapi importTwilioNumber failed: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+    return { vapiPhoneNumberId: data.id };
+  }
+
+  /**
+   * Configure the server URL on a Vapi phone number.
+   *
+   * The server URL is where Vapi sends webhook events:
+   *   - status-update (call started/ringing/in_progress/ended)
+   *   - end-of-call-report (call completed → finalize usage)
+   *   - function-call (AI tool calls)
+   *   - transcript (real-time transcript updates)
+   *
+   * This should point to Fieseros' /api/vapi/webhook endpoint.
+   */
+  async configurePhoneNumberServerUrl(params: {
+    vapiPhoneNumberId: string;
+    serverUrl: string;
+  }): Promise<void> {
+    const auth = await this.getAuthHeader();
+
+    const response = await fetch(`${this.baseUrl}/phone-number/${params.vapiPhoneNumberId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: auth,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ serverUrl: params.serverUrl }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Vapi configurePhoneNumberServerUrl failed: ${response.status} ${errorText}`);
+    }
+  }
+
+  /**
+   * Assign a Vapi assistant to a Vapi phone number.
+   *
+   * Called when:
+   *   - A phone number is purchased + imported (if a deployment exists)
+   *   - The tenant changes the AI Receptionist version (re-deploy)
+   *   - The tenant activates AI routing on an existing number
+   */
+  async assignAssistantToPhoneNumber(params: {
+    vapiPhoneNumberId: string;
+    assistantId: string;
+  }): Promise<void> {
+    const auth = await this.getAuthHeader();
+
+    const response = await fetch(`${this.baseUrl}/phone-number/${params.vapiPhoneNumberId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: auth,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ assistantId: params.assistantId }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Vapi assignAssistantToPhoneNumber failed: ${response.status} ${errorText}`);
+    }
+  }
+
+  /**
+   * Remove the assistant from a Vapi phone number.
+   *
+   * Called when:
+   *   - The tenant switches routing mode away from AI_RECEPTIONIST
+   *   - The subscription is suspended (calls go to fallback)
+   *   - The number is being released
+   */
+  async detachAssistantFromPhoneNumber(vapiPhoneNumberId: string): Promise<void> {
+    const auth = await this.getAuthHeader();
+
+    const response = await fetch(`${this.baseUrl}/phone-number/${vapiPhoneNumberId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: auth,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ assistantId: null }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Vapi detachAssistantFromPhoneNumber failed: ${response.status} ${errorText}`);
+    }
+  }
+
+  /**
+   * Delete a Vapi phone number (removes the Vapi resource, NOT the Twilio number).
+   *
+   * Called when:
+   *   - The phone number is released (after the 30-day grace period)
+   *   - The number is being fully decommissioned
+   *
+   * NOTE: This only deletes the Vapi phone-number resource. The actual Twilio
+   * number is released separately via TwilioTelephonyProvider.releaseNumber().
+   */
+  async deleteVapiPhoneNumber(vapiPhoneNumberId: string): Promise<void> {
+    const auth = await this.getAuthHeader();
+
+    const response = await fetch(`${this.baseUrl}/phone-number/${vapiPhoneNumberId}`, {
+      method: 'DELETE',
+      headers: { Authorization: auth },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) return; // already deleted — treat as success
+      const errorText = await response.text();
+      throw new Error(`Vapi deleteVapiPhoneNumber failed: ${response.status} ${errorText}`);
+    }
+  }
+
+  /**
+   * Look up a Vapi phone number by ID (for reconciliation).
+   */
+  async lookupVapiPhoneNumber(vapiPhoneNumberId: string): Promise<{
+    id: string;
+    number: string;
+    assistantId: string | null;
+    serverUrl: string | null;
+    status: string;
+  } | null> {
+    const auth = await this.getAuthHeader();
+
+    const response = await fetch(`${this.baseUrl}/phone-number/${vapiPhoneNumberId}`, {
+      method: 'GET',
+      headers: { Authorization: auth },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      const errorText = await response.text();
+      throw new Error(`Vapi lookupVapiPhoneNumber failed: ${response.status} ${errorText}`);
+    }
+
+    return await response.json();
+  }
 }
 
 // ─── Singleton export ──────────────────────────────────────────────────────

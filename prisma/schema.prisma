@@ -26,6 +26,8 @@ datasource db {
   
   
   
+  
+  
 }
 
 // ==========================================
@@ -4813,11 +4815,12 @@ model PhoneNumber {
   smsWebhookUrl   String?
   voiceWebhookUrl String?
 
-  // Lifecycle (Phase 8.6: expanded)
-  status          String   @default("pending") // pending | active | suspended | release_pending | released
-  releasedAt      DateTime? // set when fully released
-  releaseScheduledAt DateTime? // Phase 8.6: when release was requested (30-day grace start)
-  releaseAfter    DateTime? // Phase 8.6: when the number should actually be released (now + 30 days)
+  // Lifecycle (Phase 8.6: expanded + Phase 9A: resumable release saga)
+  status          String   @default("pending") // pending | active | suspended | release_pending | vapi_released | released
+  releasedAt      DateTime? // set when fully released (Twilio + Vapi)
+  releaseScheduledAt DateTime? // when release was requested (30-day grace start)
+  releaseAfter    DateTime? // when the number should actually be released (now + 30 days)
+  vapiReleasedAt  DateTime? // Phase 9A: when Vapi resource was deleted (intermediate saga state)
   lastUsedAt      DateTime?
 
   // Voice forwarding / AI voice
@@ -7418,25 +7421,38 @@ model TenantTelephonyAccount {
 //   2. Create PhoneProvisioningAttempt (status=PENDING)
 //   3. Call Twilio provisionNumber()
 //   4. On success: create PhoneNumber + PhoneConnection, mark attempt SUCCESS
-//   5. On failure: mark attempt FAILED, return error
-//   6. On retry with same key: return existing attempt result
+//   5. On failure: mark attempt with specific failure state + IDs for recovery
+//   6. On retry with same key: return existing attempt result or resume from last step
 model PhoneProvisioningAttempt {
   id                String   @id @default(cuid())
   tenantId          String
   idempotencyKey    String   @unique
   provider          String   @default("TWILIO")
   requestedE164     String?  // the specific number the tenant selected (from search)
-  providerSid       String?  // Twilio PNxxx (set on success)
-  resultingPhoneNumberId String? // FK → PhoneNumber (set on success)
+  // ── External IDs (set as the saga progresses — machine-readable recovery state) ──
+  twilioProviderSid String?  // Twilio PNxxx (set after TWILIO_PURCHASED)
+  vapiNumberId      String?  // Vapi phone-number ID (set after VAPI_IMPORTED)
+  resultingPhoneNumberId String? // FK → PhoneNumber (set after DB_COMMITTED/SUCCESS)
+  // ── Saga state machine ──
   status            String   @default("PENDING")
-  // PENDING | SUCCESS | FAILED
-  error             String?
+  // PENDING                  — created, nothing purchased yet
+  // TWILIO_PURCHASED         — Twilio purchase succeeded, Vapi import not started
+  // VAPI_IMPORTED            — Vapi import succeeded, DB write not started
+  // SUCCESS                   — DB committed, PhoneNumber + PhoneConnection created
+  // TWILIO_PURCHASE_FAILED    — Twilio purchase failed (no external resources created)
+  // VAPI_IMPORT_FAILED        — Twilio succeeded but Vapi import failed (recovery: re-import)
+  // DB_COMMIT_FAILED          — Twilio + Vapi succeeded but DB failed (recovery: create DB record)
+  // RECONCILIATION_REQUIRED   — manual intervention needed
+  error             String?  // human-readable error message
   createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
   completedAt       DateTime?
 
   @@index([tenantId])
   @@index([idempotencyKey])
   @@index([status])
+  @@index([twilioProviderSid])
+  @@index([vapiNumberId])
 }
 
 // ─── TwilioProviderConfig: Twilio-specific configuration ──────────────────

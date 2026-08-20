@@ -75,20 +75,34 @@ export async function POST(request: NextRequest) {
           } : null,
         });
       }
-      if (existingAttempt.status === 'FAILED') {
+
+      // Phase 9A hardening: saga recovery — resume from the last successful step
+      if (existingAttempt.status === 'TWILIO_PURCHASED' || existingAttempt.status === 'VAPI_IMPORTED') {
+        // The attempt was interrupted after Twilio purchase (or after Vapi import).
+        // We need to continue from where we left off, NOT restart from scratch.
+        console.log(
+          `[phones/buy] resuming saga from ${existingAttempt.status} ` +
+            `(twilioSid=${existingAttempt.twilioProviderSid}, vapiId=${existingAttempt.vapiNumberId})`,
+        );
+        // Fall through to the provisioning logic, which will skip already-completed steps
+        // based on the existing attempt's state
+      } else if (existingAttempt.status === 'PENDING') {
+        return NextResponse.json(
+          { error: 'Purchase in progress — please wait', idempotent: true },
+          { status: 409 },
+        );
+      } else {
+        // FAILED / RECONCILIATION_REQUIRED states
         return NextResponse.json(
           { error: existingAttempt.error || 'Previous purchase attempt failed', idempotent: true },
           { status: 400 },
         );
       }
-      // PENDING — another request is in flight
-      return NextResponse.json(
-        { error: 'Purchase in progress — please wait', idempotent: true },
-        { status: 409 },
-      );
     }
 
-    // ── 2. Entitlement check ──
+    // ── 2. Entitlement check (skip if resuming an existing saga) ──
+    const isResuming = existingAttempt?.status === 'TWILIO_PURCHASED' || existingAttempt?.status === 'VAPI_IMPORTED';
+    const attempt = existingAttempt || null;
     // Check how many phone numbers the tenant already owns
     const existingNumbers = await db.phoneNumber.count({
       where: {
@@ -122,26 +136,61 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── 3. Create the provisioning attempt (PENDING) ──
-    const attempt = await db.phoneProvisioningAttempt.create({
-      data: {
-        tenantId: user.tenantId,
-        idempotencyKey,
-        provider: 'TWILIO',
-        requestedE164,
-        status: 'PENDING',
-      },
-    });
-
-    // ── 4. Call Twilio to purchase the specific number ──
-    const provider = await getTelephonyProvider();
-    if (!provider) {
-      await db.phoneProvisioningAttempt.update({
-        where: { id: attempt.id },
-        data: { status: 'FAILED', error: 'Telephony provider not configured', completedAt: new Date() },
+    // ── 3. Create the provisioning attempt (PENDING) if not resuming ──
+    if (!attempt) {
+      attempt = await db.phoneProvisioningAttempt.create({
+        data: {
+          tenantId: user.tenantId,
+          idempotencyKey,
+          provider: 'TWILIO',
+          requestedE164,
+          status: 'PENDING',
+        },
       });
-      return NextResponse.json(
-        { error: 'Telephony provider not configured' },
+    }
+
+    // ── 4. Call Twilio to purchase (skip if already purchased) ──
+    let provisionedNumber;
+    if (attempt.status === 'TWILIO_PURCHASED' || attempt.status === 'VAPI_IMPORTED') {
+      // Resume: Twilio already purchased — use the existing providerSid
+      if (!attempt.twilioProviderSid) {
+        await db.phoneProvisioningAttempt.update({
+          where: { id: attempt.id },
+          data: { status: 'RECONCILIATION_REQUIRED', error: 'TWILIO_PURCHASED but no twilioProviderSid', updatedAt: new Date() },
+        });
+        return NextResponse.json({ error: 'Inconsistent provisioning state — reconciliation required' }, { status: 500 });
+      }
+      // Look up the Twilio number to get its E.164 + capabilities
+      const telephonyProvider = await getTelephonyProvider();
+      if (telephonyProvider) {
+        const lookup = await telephonyProvider.lookupNumber(attempt.twilioProviderSid);
+        if (lookup) {
+          provisionedNumber = {
+            providerNumberId: attempt.twilioProviderSid,
+            e164: lookup.e164,
+            capabilities: lookup.capabilities,
+            monthlyCostUsd: 1.15,
+          };
+        }
+      }
+      if (!provisionedNumber) {
+        await db.phoneProvisioningAttempt.update({
+          where: { id: attempt.id },
+          data: { status: 'RECONCILIATION_REQUIRED', error: 'Cannot look up Twilio number during resume', updatedAt: new Date() },
+        });
+        return NextResponse.json({ error: 'Cannot look up Twilio number — reconciliation required' }, { status: 500 });
+      }
+      console.log(`[phones/buy] resumed: Twilio already purchased (SID=${attempt.twilioProviderSid})`);
+    } else {
+      // Fresh purchase: call Twilio to buy the specific number
+      const provider = await getTelephonyProvider();
+      if (!provider) {
+        await db.phoneProvisioningAttempt.update({
+          where: { id: attempt.id },
+          data: { status: 'TWILIO_PURCHASE_FAILED', error: 'Telephony provider not configured', completedAt: new Date(), updatedAt: new Date() },
+        });
+        return NextResponse.json(
+          { error: 'Telephony provider not configured' },
         { status: 503 },
       );
     }
@@ -179,22 +228,139 @@ export async function POST(request: NextRequest) {
       const errorMessage = err instanceof Error ? err.message : 'Twilio purchase failed';
       await db.phoneProvisioningAttempt.update({
         where: { id: attempt.id },
-        data: { status: 'FAILED', error: errorMessage, completedAt: new Date() },
+        data: { status: 'TWILIO_PURCHASE_FAILED', error: errorMessage, completedAt: new Date(), updatedAt: new Date() },
       });
       return NextResponse.json({ error: errorMessage }, { status: 502 });
     }
 
-    // ── 5. Create PhoneNumber + PhoneConnection atomically ──
+    // Mark saga: TWILIO_PURCHASED
+    await db.phoneProvisioningAttempt.update({
+      where: { id: attempt.id },
+      data: { status: 'TWILIO_PURCHASED', twilioProviderSid: provisionedNumber.providerNumberId, updatedAt: new Date() },
+    });
+    } // end of else (fresh purchase)
+
+    // ── 5. Phase 9A: Import the Twilio number into Vapi (skip if already imported) ──
+    //
+    // CRITICAL GATE: The purchased Twilio number must be imported into Vapi
+    // so Vapi can receive calls on it. Vapi creates its own phone-number
+    // resource (with its own ID) that references the Twilio number.
+    //
+    // Flow:
+    //   Twilio purchase → Vapi import → configure server URL → assign assistant
+    //
+    // If Vapi import fails, the Twilio number is purchased but NOT usable for
+    // AI calls. The provisioning attempt is marked with specific failure state + IDs for recovery.
+    let vapiNumberId: string | null = attempt.vapiNumberId || null;
+
+    // Skip Vapi import if already done (saga resume)
+    if (attempt.status === 'VAPI_IMPORTED' && vapiNumberId) {
+      console.log(`[phones/buy] resumed: Vapi already imported (vapiNumberId=${vapiNumberId})`);
+    } else {
+    try {
+      const { getVapiVoiceProvider } = await import('@/lib/vapi-voice-provider');
+      const { getDecryptedApiKey } = await import('@/lib/ai-provider-config-service');
+      const vapi = getVapiVoiceProvider();
+
+      // Get Twilio credentials for the Vapi import (Vapi needs them to reference the Twilio number)
+      const twilioAuthToken = await getDecryptedApiKey('TWILIO');
+      if (!twilioAuthToken) {
+        throw new Error('Twilio Auth Token not configured — cannot import number into Vapi');
+      }
+
+      // Get Twilio Account SID from TwilioProviderConfig or AiProviderConfig.configJson
+      const twilioConfig = await db.aiProviderConfig.findUnique({
+        where: { provider: 'TWILIO' },
+        select: { configJson: true },
+      });
+      let twilioAccountSid = '';
+      if (twilioConfig?.configJson) {
+        try {
+          twilioAccountSid = JSON.parse(twilioConfig.configJson).accountSid || '';
+        } catch { /* ignore */ }
+      }
+      if (!twilioAccountSid) {
+        throw new Error('Twilio Account SID not configured — cannot import number into Vapi');
+      }
+
+      // Get the active Vapi deployment (assistant ID) if it exists
+      const deployment = await db.aiProviderDeployment.findFirst({
+        where: {
+          provider: 'VAPI',
+          status: 'ACTIVE',
+          agentVersion: {
+            receptionist: { tenantId: user.tenantId },
+          },
+        },
+        select: { externalAssistantId: true },
+      });
+
+      // Build the Vapi webhook URL (where Vapi sends call events)
+      const vapiWebhookUrl = appUrl ? `${appUrl}/api/vapi/webhook` : undefined;
+
+      // Import the Twilio number into Vapi
+      const importResult = await vapi.importTwilioNumber({
+        twilioAccountSid,
+        twilioAuthToken,
+        twilioPhoneNumber: provisionedNumber.e164,
+        assistantId: deployment?.externalAssistantId || undefined,
+        serverUrl: vapiWebhookUrl,
+        name: friendlyName || `Fieseros Number (${user.tenantId.slice(-6)})`,
+      });
+
+      vapiNumberId = importResult.vapiPhoneNumberId;
+      console.log(
+        `[phones/buy] imported ${provisionedNumber.e164} into Vapi → vapiNumberId=${vapiNumberId}`,
+      );
+    } catch (vapiErr) {
+      // Vapi import failed AFTER Twilio purchase succeeded.
+      // Phase 9A hardening: store machine-readable state for recovery
+      const errorMessage = vapiErr instanceof Error ? vapiErr.message : 'Vapi import failed';
+      await db.phoneProvisioningAttempt.update({
+        where: { id: attempt.id },
+        data: {
+          status: 'VAPI_IMPORT_FAILED',
+          twilioProviderSid: attempt.twilioProviderSid || provisionedNumber.providerNumberId,
+          error: `Vapi import failed: ${errorMessage}. Twilio number ${provisionedNumber.e164} (SID=${provisionedNumber.providerNumberId}) exists but is not imported into Vapi. Reconciliation: re-import the number into Vapi.`,
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+
+      console.error(
+        `[phones/buy] CRITICAL: Twilio purchase succeeded but Vapi import failed. ` +
+          `Number: ${provisionedNumber.e164}, SID: ${provisionedNumber.providerNumberId}. ` +
+          `Error: ${errorMessage}`,
+      );
+
+      return NextResponse.json(
+        {
+          error: 'Phone number purchased on Twilio but failed to import into Vapi. Please contact support to reconcile.',
+          attemptId: attempt.id,
+        },
+        { status: 500 },
+      );
+    }
+
+    // Mark saga: VAPI_IMPORTED
+    await db.phoneProvisioningAttempt.update({
+      where: { id: attempt.id },
+      data: { status: 'VAPI_IMPORTED', vapiNumberId, updatedAt: new Date() },
+    });
+    } // end of else (Vapi import)
+
+    // ── 6. Create PhoneNumber + PhoneConnection atomically ──
     try {
       const result = await db.$transaction(async (tx) => {
-        // Create PhoneNumber
+        // Create PhoneNumber (with BOTH providerSid AND vapiNumberId)
         const phoneNumber = await tx.phoneNumber.create({
           data: {
             number: provisionedNumber.e164,
             displayName: friendlyName || `Fieseros Number`,
             provider: 'twilio',
             capabilities: provisionedNumber.capabilities.join(','),
-            providerSid: provisionedNumber.providerNumberId,
+            providerSid: provisionedNumber.providerNumberId, // Twilio PNxxx
+            vapiNumberId: vapiNumberId, // Phase 9A: Vapi phone-number ID
             voiceWebhookUrl,
             smsWebhookUrl,
             status: 'active',
@@ -234,7 +400,8 @@ export async function POST(request: NextRequest) {
       });
 
       console.log(
-        `[phones/buy] purchased ${provisionedNumber.e164} (SID=${provisionedNumber.providerNumberId}) ` +
+        `[phones/buy] purchased ${provisionedNumber.e164} ` +
+          `(Twilio SID=${provisionedNumber.providerNumberId}, Vapi ID=${vapiNumberId}) ` +
           `for tenant=${user.tenantId} → PhoneNumber ${result.phoneNumber.id} + PhoneConnection ${result.connection.id}`,
       );
 
@@ -254,29 +421,29 @@ export async function POST(request: NextRequest) {
         },
       }, { status: 201 });
     } catch (dbErr) {
-      // DB write failed AFTER Twilio purchase succeeded.
-      // The number is purchased on Twilio but not recorded in Fieseros.
-      // Mark the attempt as FAILED so the Superadmin can manually reconcile.
-      const errorMessage = dbErr instanceof Error ? dbErr.message : 'DB write failed after Twilio purchase';
+      // DB write failed AFTER both Twilio purchase AND Vapi import succeeded.
+      // Phase 9A hardening: machine-readable recovery state
+      const errorMessage = dbErr instanceof Error ? dbErr.message : 'DB write failed';
       await db.phoneProvisioningAttempt.update({
         where: { id: attempt.id },
         data: {
-          status: 'FAILED',
-          error: `DB write failed (but Twilio purchase succeeded — number ${provisionedNumber.e164} with SID ${provisionedNumber.providerNumberId} needs manual reconciliation). Error: ${errorMessage}`,
-          providerSid: provisionedNumber.providerNumberId,
+          status: 'DB_COMMIT_FAILED',
+          twilioProviderSid: attempt.twilioProviderSid || provisionedNumber.providerNumberId,
+          vapiNumberId,
+          error: `DB write failed: ${errorMessage}. Twilio SID=${provisionedNumber.providerNumberId}, Vapi ID=${vapiNumberId}. Reconciliation: create PhoneNumber record manually.`,
           completedAt: new Date(),
+          updatedAt: new Date(),
         },
       });
 
       console.error(
-        `[phones/buy] CRITICAL: Twilio purchase succeeded but DB failed. ` +
-          `Number: ${provisionedNumber.e164}, SID: ${provisionedNumber.providerNumberId}. ` +
-          `Superadmin must reconcile manually.`,
+        `[phones/buy] CRITICAL: Twilio + Vapi succeeded but DB failed. ` +
+          `Number: ${provisionedNumber.e164}, Twilio SID: ${provisionedNumber.providerNumberId}, Vapi ID: ${vapiNumberId}.`,
       );
 
       return NextResponse.json(
         {
-          error: 'Purchase succeeded on Twilio but failed to save. Please contact support to reconcile.',
+          error: 'Purchase succeeded on Twilio + Vapi but failed to save. Please contact support to reconcile.',
           attemptId: attempt.id,
         },
         { status: 500 },
