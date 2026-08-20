@@ -23,6 +23,7 @@ datasource db {
   
   
   
+  
 }
 
 // ==========================================
@@ -4856,7 +4857,7 @@ model AiPhoneNumber {
 model AiCall {
   id              String   @id @default(cuid())
   tenantId        String
-  vapiCallId      String?  // Vapi call ID
+  vapiCallId      String?  @unique // Vapi call ID (Phase 7: @unique for idempotency)
   callType        String   @default("inbound")  // inbound | outbound
   status          String   @default("queued")   // queued | ringing | in_progress | ended | failed
   // Parties
@@ -4869,7 +4870,12 @@ model AiCall {
   startedAt       DateTime?
   endedAt         DateTime?
   durationSec     Int      @default(0)
+  // Phase 7: billable duration (may differ from durationSec — excludes ringing/hold)
+  billableSeconds Int     @default(0)
   costUsd         Float    @default(0)
+  // Phase 7: cost breakdown (snapshot from Vapi at finalization — immutable)
+  revenueUsd      Float    @default(0) // Fieseros' internal attributed revenue
+  costBreakdownJson String @default("{}")
   // Content
   transcriptJson  String   @default("[]")  // [{role, content, timestamp}]
   summary         String?
@@ -4888,18 +4894,28 @@ model AiCall {
   timeSavedSec        Int      @default(0)
   aiDisabled          Boolean  @default(false)  // per-conversation disable toggle
   callerIdentifiedAs  String?  // customer | lead | unknown
+  // ── Phase 7: new domain relations (alongside legacy AiAgent/AiPhoneNumber) ──
+  receptionistId      String?  // FK → AiReceptionist (new domain model)
+  agentVersionId      String?  // FK → AiAgentVersion (new domain model)
+  deploymentId        String?  // FK → AiProviderDeployment (new domain model)
+  connectionId       String?  // FK → PhoneConnection (Phase 3 routing config)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   agent           AiAgent? @relation(fields: [assistantId], references: [id], onDelete: SetNull)
   number          AiPhoneNumber? @relation(fields: [phoneNumberId], references: [id], onDelete: SetNull)
+  // Phase 7: new domain relations
+  receptionist    AiReceptionist?       @relation(fields: [receptionistId], references: [id])
+  agentVersion    AiAgentVersion?        @relation(fields: [agentVersionId], references: [id])
+  deployment      AiProviderDeployment?  @relation(fields: [deploymentId], references: [id])
 
   @@index([tenantId, createdAt])
   @@index([assistantId])
   @@index([status])
   @@index([customerPhone])
   @@index([outcomeType])
+  @@index([receptionistId])
 }
 
 // ==========================================
@@ -7204,6 +7220,7 @@ model AiReceptionist {
 
   tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   versions    AiAgentVersion[]
+  aiCalls         AiCall[]
   currentVersion AiAgentVersion? @relation("CurrentVersion", fields: [currentVersionId], references: [id])
 
   @@index([tenantId])
@@ -7262,6 +7279,7 @@ model AiAgentVersion {
   deployments  AiProviderDeployment[]
   // Back-relation: the receptionist that has THIS version as its current version
   activeForReceptionist AiReceptionist? @relation("CurrentVersion")
+  aiCalls              AiCall[]
 
   @@index([aiReceptionistId])
   @@index([status])
@@ -7301,6 +7319,7 @@ model AiProviderDeployment {
   updatedAt               DateTime @updatedAt
 
   agentVersion AiAgentVersion @relation(fields: [aiAgentVersionId], references: [id], onDelete: Cascade)
+  aiCalls      AiCall[]
 
   @@index([aiAgentVersionId])
   @@index([provider, status])

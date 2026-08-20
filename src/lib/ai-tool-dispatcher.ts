@@ -80,6 +80,41 @@ export const RESTRICTED_CAPABILITIES = new Set<string>([
   'REFUND_PAYMENT',  // not available at all
 ]);
 
+// ── Phase 6.1 hardening: tool action classification ──
+// Stronger than just "capability" — defines the RISK LEVEL of the action.
+// This drives confirmation policies in Phase 9 (tenant UI).
+export type ToolActionType = 'READ' | 'WRITE_REVERSIBLE' | 'WRITE_IRREVERSIBLE' | 'EXTERNAL_SIDE_EFFECT';
+
+export const TOOL_ACTION_TYPES: Record<string, ToolActionType> = {
+  // Read tools
+  get_customer: 'READ',
+  get_customer_jobs: 'READ',
+  get_job: 'READ',
+  get_business_hours: 'READ',
+  get_service_options: 'READ',
+  check_availability: 'READ',
+
+  // Reversible write tools
+  create_lead: 'WRITE_REVERSIBLE',
+  create_customer: 'WRITE_REVERSIBLE',
+  create_job_request: 'WRITE_REVERSIBLE',
+  schedule_job: 'WRITE_REVERSIBLE',
+  reschedule_job: 'WRITE_REVERSIBLE',
+
+  // Irreversible write tools (should require confirmation)
+  cancel_job: 'WRITE_IRREVERSIBLE',
+
+  // External side effects (hardest to make idempotent)
+  send_sms: 'EXTERNAL_SIDE_EFFECT',
+  transfer_to_human: 'EXTERNAL_SIDE_EFFECT',
+};
+
+// Tools that require explicit confirmation before execution (Phase 9 will implement the UI)
+export const CONFIRMATION_REQUIRED_TOOLS = new Set<string>([
+  'cancel_job',
+  'reschedule_job', // changing a customer's appointment is significant
+]);
+
 // ─── Tool executor interface ────────────────────────────────────────────────
 
 type ToolHandler = (
@@ -186,19 +221,63 @@ export async function executeTool(
   }
 
   // 5. Create the AiToolExecution record (PENDING)
-  const execution = await db.aiToolExecution.create({
-    data: {
-      tenantId: ctx.tenantId,
-      externalCallId: ctx.externalCallId,
-      toolCallId: ctx.toolCallId || null,
-      idempotencyKey,
-      toolName,
-      capability,
-      parametersJson: JSON.stringify(params),
-      requestHash,
-      status: 'PENDING',
-    },
-  });
+  // Phase 6.1 hardening: handle P2002 (concurrent race)
+  // Two concurrent requests can both pass the findUnique check and both try to create.
+  // The @unique constraint on idempotencyKey prevents duplicates, but the second
+  // create throws P2002. We catch it and retrieve the winner's record.
+  let execution;
+  try {
+    execution = await db.aiToolExecution.create({
+      data: {
+        tenantId: ctx.tenantId,
+        externalCallId: ctx.externalCallId,
+        toolCallId: ctx.toolCallId || null,
+        idempotencyKey,
+        toolName,
+        capability,
+        parametersJson: JSON.stringify(params),
+        requestHash,
+        status: 'PENDING',
+      },
+    });
+  } catch (createErr: unknown) {
+    // P2002 = unique constraint violation — another concurrent request won the race
+    if (createErr && typeof createErr === 'object' && 'code' in createErr && (createErr as { code: string }).code === 'P2002') {
+      console.log(
+        `[AiToolDispatcher] concurrent race for ${toolName} (key=${idempotencyKey}) — retrieving winner`,
+      );
+      const winner = await db.aiToolExecution.findUnique({
+        where: { idempotencyKey },
+      });
+
+      if (winner) {
+        if (winner.status === 'SUCCESS') {
+          return {
+            ok: true,
+            result: winner.resultJson ? JSON.parse(winner.resultJson) : null,
+            idempotent: true,
+            executionId: winner.id,
+          };
+        }
+        if (winner.status === 'FAILED') {
+          return {
+            ok: false,
+            error: winner.errorJson ? JSON.parse(winner.errorJson).error : 'Previous execution failed',
+            idempotent: true,
+            executionId: winner.id,
+          };
+        }
+        // PENDING — the winner is still executing
+        return {
+          ok: false,
+          error: 'Tool execution is in progress — please retry',
+          idempotent: true,
+          executionId: winner.id,
+        };
+      }
+    }
+    throw createErr; // re-throw non-P2002 errors
+  }
 
   // 6. Execute the tool via its registered handler
   const handler = TOOL_HANDLERS[toolName];

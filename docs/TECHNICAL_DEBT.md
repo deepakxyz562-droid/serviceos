@@ -97,3 +97,45 @@ This means two concurrent `POST /api/addons/checkout` requests for the same
 ### Why it's not a blocker for [current phase]
 ...
 -->
+
+---
+
+## E9 — External side-effect idempotency (send_sms, transfer_to_human)
+
+**Introduced:** Phase 6 (AI Tools + Business Actions)
+**Target resolution:** Phase 9+ (after tenant UI)
+**Severity:** Medium (affects external systems, not billing)
+**Status:** ⚠️ Open
+
+### Description
+`AiToolExecution` provides idempotency at the Fieseros layer, but external
+side effects (SMS, call transfers) have a gap: if the process crashes after
+sending the SMS but before recording SUCCESS, a Vapi retry could send a
+duplicate SMS.
+
+### Recommended fix
+Add an intermediate "outbound message" table that the SMS provider
+deduplicates on (provider-specific idempotency key). Or wrap the SMS send +
+SUCCESS update in a single DB transaction (if the SMS provider supports
+transactional sends).
+
+---
+
+## E10 — Destructive tool confirmation flow
+
+**Introduced:** Phase 6 (AI Tools + Business Actions)
+**Target resolution:** Phase 9 (tenant UI)
+**Severity:** Medium (UX concern, not security)
+**Status:** ⚠️ Open
+
+### Description
+`cancel_job` is capability-blocked (RESTRICTED_CAPABILITIES) but should
+eventually become confirmation-based:
+  AI: "Would you like me to cancel your appointment?"
+  Customer: "Yes."
+  → create confirmation token → execute CANCEL_JOB
+
+The tool action classification (READ / WRITE_REVERSIBLE / WRITE_IRREVERSIBLE /
+EXTERNAL_SIDE_EFFECT) is already in place (Phase 6.1). Phase 9 will implement
+the confirmation UI flow based on this classification.
+

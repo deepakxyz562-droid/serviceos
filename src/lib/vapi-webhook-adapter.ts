@@ -26,6 +26,7 @@ import { getRoutingDecision } from '@/lib/phone-number-service';
 import { admitCall } from '@/lib/ai-admission-controller';
 import { reserveSeconds, finalizeUsage, releaseReservation } from '@/lib/usage-service';
 import { getVapiVoiceProvider } from '@/lib/vapi-voice-provider';
+import { onCallStart, onCallInProgress, onCallFailed, onCallEnd } from '@/lib/call-lifecycle-service';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -188,13 +189,23 @@ async function handleStatusUpdate(event: VapiWebhookEvent): Promise<NextResponse
         );
 
         // Phase 5.1 hardening #4: release any reservation that may have been created
-        // (AdmissionController may have created one before the rejection check failed
-        // due to a race — defensive cleanup)
         const { releaseReservationByCallId } = await import('@/lib/usage-service');
         await releaseReservationByCallId(call.id).catch(() => {});
 
-        // The telephony layer handles the actual fallback (forward/voicemail).
-        // Vapi should end the call or transfer to the fallback target.
+        // Phase 7: create/update the AiCall record (marked as AI disabled)
+        await onCallStart({
+          tenantId: routing.tenantId,
+          vapiCallId: call.id,
+          fromNumber: call.from,
+          toNumber: call.to,
+          customerPhone: call.from,
+          connectionId: routing.connectionId,
+          phoneNumberId: routing.phoneNumberId,
+        }).catch(() => {}); // non-fatal — call record is for audit, not billing
+
+        // Mark the call as failed (AI was rejected)
+        await onCallFailed(call.id, `admission_rejected: ${admission.reason}`).catch(() => {});
+
         return NextResponse.json({
           received: true,
           action: 'fallback',
@@ -208,6 +219,24 @@ async function handleStatusUpdate(event: VapiWebhookEvent): Promise<NextResponse
       console.log(
         `[vapi-webhook] call ${call.id} admitted (reservationId=${admission.reservationId})`,
       );
+
+      // Phase 7: create/update the AiCall record (linked to reservation + receptionist)
+      await onCallStart({
+        tenantId: routing.tenantId,
+        vapiCallId: call.id,
+        fromNumber: call.from,
+        toNumber: call.to,
+        customerPhone: call.from,
+        receptionistId: admission.entitlementId ? undefined : undefined, // resolved from deployment
+        connectionId: routing.connectionId,
+        phoneNumberId: routing.phoneNumberId,
+      }).catch(() => {}); // non-fatal
+
+      // Update to in_progress if applicable
+      if (status === 'in_progress') {
+        await onCallInProgress(call.id).catch(() => {});
+      }
+
       return NextResponse.json({
         received: true,
         action: 'admitted',
@@ -223,15 +252,12 @@ async function handleStatusUpdate(event: VapiWebhookEvent): Promise<NextResponse
     });
   }
 
-  // ── On call ended/failed: release reservation if no end-of-call-report follows ──
-  // Phase 5.1 hardening #4: if the call failed (not just ended normally), release
-  // the reservation immediately. The end-of-call-report handler will handle normal
-  // finalization (CONSUMED). This handles the failure path.
+  // ── On call failed: release reservation + mark AiCall as failed ──
   if (status === 'failed') {
     console.log(`[vapi-webhook] call ${call.id} FAILED — releasing reservation`);
-    const { releaseReservationByCallId } = await import('@/lib/usage-service');
-    await releaseReservationByCallId(call.id).catch(() => {});
-    return NextResponse.json({ received: true, status: 'failed', action: 'reservation_released' });
+    // Phase 7: call lifecycle service handles both AiCall update + reservation release
+    await onCallFailed(call.id, call.endedReason || 'failed').catch(() => {});
+    return NextResponse.json({ received: true, status: 'failed', action: 'call_failed' });
   }
 
   if (status === 'ended') {
@@ -273,62 +299,48 @@ async function handleEndOfCall(event: VapiWebhookEvent): Promise<NextResponse> {
     // Continue with whatever data we have from the webhook
   }
 
-  // 2. Identify the tenant + entitlement
-  const destinationNumber = callDetails.to;
-  if (!destinationNumber) {
-    console.warn('[vapi-webhook] end-of-call-report: no destination number');
-    return NextResponse.json({ received: true, error: 'no destination number' });
-  }
-
-  const routing = await getRoutingDecision(destinationNumber);
-  if (!routing?.tenantId) {
-    console.warn(`[vapi-webhook] end-of-call-report: no routing for ${destinationNumber}`);
-    return NextResponse.json({ received: true, error: 'no routing' });
-  }
-
-  // 3. Get the active entitlement for this tenant
-  const { getActiveEntitlement } = await import('@/lib/entitlement-service');
-  const entitlement = await getActiveEntitlement(routing.tenantId, 'AI_RECEPTIONIST');
-  if (!entitlement) {
-    console.warn(`[vapi-webhook] end-of-call-report: no active entitlement for tenant ${routing.tenantId}`);
-    return NextResponse.json({ received: true, error: 'no entitlement' });
-  }
-
-  // 4. Calculate billable seconds
-  const durationSeconds = callDetails.durationSeconds || 0;
-  const billableSeconds = Math.ceil(durationSeconds); // round up to nearest second
-
-  // 5. Finalize usage (idempotent — won't duplicate on webhook retry)
-  const result = await finalizeUsage({
-    tenantId: routing.tenantId,
-    entitlementId: entitlement.id,
-    externalCallId: call.id,
-    billableSeconds,
-    providerCostUsd: callDetails.costUsd || 0,
-    // revenueUsd is calculated by the billing layer (Phase 6+) — for now, leave null
-    costBreakdown: callDetails.costUsd
-      ? { vapi: callDetails.costUsd }
+  // 2. Phase 7: Call the CallLifecycleService to finalize the call
+  // This handles BOTH:
+  //   a. AiCall record update (duration, cost, transcript, summary — immutable snapshot)
+  //   b. UsageLedger finalization (idempotent via idempotencyKey @unique)
+  //   c. UsageReservation marked as CONSUMED
+  //
+  // If the end-of-call webhook is redelivered, the UsageLedger returns the existing
+  // entry (no duplicate charge). The AiCall update is also idempotent.
+  const result = await onCallEnd({
+    vapiCallId: call.id,
+    durationSec: callDetails.durationSeconds || 0,
+    billableSeconds: Math.ceil(callDetails.durationSeconds || 0),
+    costUsd: callDetails.costUsd || 0,
+    costBreakdown: callDetails.costUsd ? { vapi: callDetails.costUsd } : undefined,
+    endedReason: callDetails.endedReason,
+    recordingUrl: callDetails.recordingUrl,
+    stereoRecordingUrl: callDetails.stereoRecordingUrl,
+    transcript: callDetails.transcript,
+    summary: typeof callDetails.analysis === 'object' && callDetails.analysis
+      ? (callDetails.analysis as Record<string, unknown>).summary as string | undefined
       : undefined,
-    occurredAt: callDetails.endedAt ? new Date(callDetails.endedAt) : new Date(),
+    analysis: callDetails.analysis,
+    outcomeType: typeof callDetails.analysis === 'object' && callDetails.analysis
+      ? (callDetails.analysis as Record<string, unknown>).outcome as string | undefined
+      : undefined,
   });
 
-  if (result.ok) {
+  if (result.callId) {
     console.log(
-      `[vapi-webhook] finalized usage: ${billableSeconds}s for call ${call.id} ` +
-        `(ledger ${result.ledgerId}, idempotent=${result.idempotent})`,
+      `[vapi-webhook] call ${call.id} finalized: ` +
+        `callId=${result.callId}, usageFinalized=${result.usageFinalized}, ` +
+        `idempotent=${result.usageIdempotent}`,
     );
   } else {
-    console.error(`[vapi-webhook] finalizeUsage failed for call ${call.id}:`, result.reason);
+    console.warn(`[vapi-webhook] end-of-call-report: no AiCall found for ${call.id}`);
   }
 
-  // 6. If the call was rejected (no reservation created), release any stale reservation
-  // This handles the edge case where the call started but was rejected before the
-  // reservation was created (e.g., concurrency exceeded).
-  if (!result.ok && result.reason === 'ENTITLEMENT_NOT_FOUND') {
-    // No reservation to release — the call was never admitted
-  }
-
-  return NextResponse.json({ received: true, finalized: result.ok, idempotent: result.idempotent });
+  return NextResponse.json({
+    received: true,
+    finalized: result.usageFinalized,
+    idempotent: result.usageIdempotent,
+  });
 }
 
 /**

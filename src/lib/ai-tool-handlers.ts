@@ -175,6 +175,18 @@ registerToolHandler('get_service_options', async (ctx) => {
 });
 
 registerToolHandler('check_availability', async (ctx, params) => {
+  // Phase 6.1 hardening: the 9-5 placeholder is NOT production-ready.
+  // Until the real SchedulingService (Phase 4 of the original plan) is built,
+  // this tool returns NOT_IMPLEMENTED in production to prevent the AI from
+  // promising slots that don't match the actual scheduling system.
+  if (process.env.NODE_ENV === 'production') {
+    return {
+      available: false,
+      reason: 'NOT_IMPLEMENTED',
+      message: 'Availability checking is not yet available. Please schedule manually.',
+    };
+  }
+
   const dateStr = (params.date as string) || '';
   if (!dateStr) {
     return { error: 'date is required (YYYY-MM-DD)' };
