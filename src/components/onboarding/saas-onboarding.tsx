@@ -52,6 +52,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { PayPalCheckoutDialog, type PaypalCheckoutPlan } from '@/components/billing/paypal-checkout-dialog';
+import { PaymentMethodChooserDialog, type ChooserPlan } from '@/components/billing/payment-method-chooser-dialog';
 import {
   INDUSTRY_CATALOG,
   VERTICALS,
@@ -473,6 +474,12 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   // subscription end-to-end; on success we advance to step 4, on close we
   // advance with the "payment pending" banner visible.
   const [payCheckoutPlan, setPayCheckoutPlan] = useState<PaypalCheckoutPlan | null>(null);
+
+  // Phase 9.8: Payment method chooser (PayPal vs Card-via-Creem).
+  // When the user clicks "Subscribe & Pay Now", we show this chooser FIRST.
+  // If they pick PayPal → we open the existing PayPalCheckoutDialog.
+  // If they pick Creem → the chooser itself redirects to Creem's hosted checkout.
+  const [chooserPlan, setChooserPlan] = useState<ChooserPlan | null>(null);
   // Tracks whether the inline PayPal checkout (opened from Step 3) completed
   // successfully. Used on Step 4 to decide whether to show the "payment
   // pending" banner (cancelled) or a "payment successful" banner (paid).
@@ -885,7 +892,10 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
             plan: step3.plan,
           });
           setStep3((s) => ({ ...s, startMode: 'pay' }));
-          setPayCheckoutPlan({
+          // Phase 9.8: Show the payment method chooser first (PayPal vs Card-via-Creem).
+          // Previously this opened the PayPal dialog directly — now the user
+          // can choose PayPal or Creem, giving a consistent billing UX.
+          setChooserPlan({
             id: selectedPlan.id,
             name: selectedPlan.name,
             monthlyPrice: selectedPlan.monthlyPrice,
@@ -1865,7 +1875,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
       </div>
 
       <p className="text-center text-xs text-muted-foreground">
-        14-day free trial on all plans · No credit card required for trial · Cancel anytime · Yearly plans save ~17% (2 months free) · Subscribe &amp; Pay Now bills through PayPal recurring subscriptions
+        14-day free trial on all plans · No credit card required for trial · Cancel anytime · Yearly plans save ~17% (2 months free) · Subscribe &amp; Pay Now lets you choose PayPal or Card (via Creem)
       </p>
     </div>
   );
@@ -2215,6 +2225,30 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         {renderNavigation()}
       </DialogContent>
     </Dialog>
+
+    {/* ── Phase 9.8: Payment method chooser (PayPal vs Card-via-Creem) ─────
+        Opened FIRST when the user clicks "Subscribe & Pay Now". If they pick
+        PayPal → we open the existing PayPalCheckoutDialog below. If they pick
+        Creem → the chooser itself redirects to Creem's hosted checkout. */}
+    <PaymentMethodChooserDialog
+      plan={chooserPlan}
+      billingCycle={step3.billing}
+      onClose={() => {
+        setChooserPlan(null);
+        // If the user cancels the chooser, advance with the "payment pending" banner
+        // (same behavior as canceling the PayPal dialog).
+        goNext();
+      }}
+      onChoosePayPal={(p) => {
+        setChooserPlan(null);
+        setPayCheckoutPlan({
+          id: p.id,
+          name: p.name,
+          monthlyPrice: p.monthlyPrice,
+          yearlyPrice: p.yearlyPrice,
+        });
+      }}
+    />
 
     {/* ── Inline PayPal checkout ──────────────────────────────────────
         Opened from Step 2's "Subscribe & Pay Now" button. The dialog

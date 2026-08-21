@@ -282,8 +282,11 @@ function PlanCard({
         disabled={loading}
         variant={highlighted ? 'default' : 'outline'}
       >
-        {loading ? <Loader2 className="size-4 animate-spin" /> : `Choose ${name}`}
+        {loading ? <Loader2 className="size-4 animate-spin" /> : `Continue with Card`}
       </Button>
+      <p className="text-center text-[10px] text-muted-foreground">
+        Secure payment via Creem
+      </p>
     </div>
   );
 }

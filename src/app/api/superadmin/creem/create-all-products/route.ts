@@ -12,6 +12,7 @@ import { createAllCreemProducts } from '@/lib/creem';
  *   - growth   × (monthly + yearly)
  *   - business × (monthly + yearly)
  *   - sms_number (monthly only — $5/month add-on)
+ *   - AI_RECEPTIONIST_STARTER/PRO/BUSINESS (monthly — Phase 9.8 addon plans)
  *
  * Enterprise is contact-sales (monthlyPrice=0) so it is SKIPPED by
  * `createAllCreemProducts()`.

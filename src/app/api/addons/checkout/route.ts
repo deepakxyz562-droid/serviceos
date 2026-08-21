@@ -7,24 +7,31 @@ import { createPendingSubscription } from '@/lib/addon-billing-service';
 /**
  * POST /api/addons/checkout
  * ─────────────────────────────────────────────────────────────────────────
- * Initiates a Creem checkout session for an add-on plan.
+ * Phase 9.8: Initiates a Creem checkout session for an add-on plan.
  *
  * Body: { addonPlanCode: string, billingCycle?: 'monthly' | 'yearly' }
  *
  * Returns: { checkoutUrl: string } — the client redirects to this URL.
  *
- * Auth: owner only (same gate as core SaaS subscription checkout).
+ * Auth: owner only.
  *
  * Flow:
  *   1. Resolve the AddonPlan by code
- *   2. Verify it has a creemPriceId (superadmin must configure Creem products first)
+ *   2. Verify Creem is configured (DB-backed check)
  *   3. Create a PENDING TenantAddonSubscription (so the webhook can find it)
- *   4. Create a Creem checkout session with metadata:
- *        { kind: 'addon', tenantId, addonPlanCode }
+ *   4. Create a Creem checkout session using the SAME product catalog as SaaS:
+ *        RevenueFeatureToggle.configJson.products[addonPlanCode][cycle]
+ *      (NOT addonPlan.creemPriceId — that's a separate, unused field)
  *   5. Return the checkout URL
  *
  * When Creem confirms the checkout, the webhook fires → AddonBillingService
  * activates the subscription.
+ *
+ * Architecture note: The addon checkout uses the same createCreemCheckoutSession()
+ * function as the SaaS checkout. The function now supports both Plan and
+ * AddonPlan lookups (Phase 9.8 fix). The Creem product ID is resolved from
+ * the shared product catalog in RevenueFeatureToggle — NOT from a separate
+ * field on AddonPlan. This keeps one source of truth for Creem product mappings.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -40,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { addonPlanCode } = body;
+    const { addonPlanCode, billingCycle = 'monthly' } = body;
 
     if (!addonPlanCode) {
       return NextResponse.json(
@@ -62,23 +69,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Verify Creem is configured + the plan has a creemPriceId
+    // 2. Verify Creem is configured
     if (!(await isCreemConfigured())) {
       return NextResponse.json(
-        { error: 'Payment provider (Creem) is not configured' },
-        { status: 503 },
-      );
-    }
-
-    if (!addonPlan.creemPriceId) {
-      console.error(
-        `[addons/checkout] plan ${addonPlan.code} has no creemPriceId — superadmin must configure Creem product mapping`,
-      );
-      return NextResponse.json(
-        {
-          error:
-            'This add-on plan is not yet available for purchase. Please contact support.',
-        },
+        { error: 'Payment provider (Creem) is not configured. Please contact support.' },
         { status: 503 },
       );
     }
@@ -90,23 +84,32 @@ export async function POST(request: NextRequest) {
     });
 
     // 4. Create the Creem checkout session
+    //    Uses the SAME createCreemCheckoutSession as SaaS checkout.
+    //    The function looks up the price from AddonPlan (Phase 9.8 fix),
+    //    and resolves the Creem product_id from RevenueFeatureToggle.configJson.products.
     const appUrl = getAppUrl();
-    const result = await createCreemCheckoutSession({
-      priceId: addonPlan.creemPriceId,
-      successUrl: `${appUrl}/?view=settings&section=ai&addon_purchased=${addonPlan.code}`,
-      cancelUrl: `${appUrl}/?view=settings&section=ai&addon_cancelled=1`,
-      metadata: {
-        kind: 'addon',
+    let checkoutUrl: string;
+    try {
+      const result = await createCreemCheckoutSession({
+        planCode: addonPlan.code,
+        billingCycle,
         tenantId: authUser.tenantId,
-        addonPlanCode: addonPlan.code,
-        subscriptionId,
-        source: 'fieseros-addons',
-      },
-      customerEmail: authUser.email,
-    });
+        userEmail: authUser.email,
+        successUrl: `${appUrl}/?view=settings&section=ai&addon_purchased=${addonPlan.code}`,
+        cancelUrl: `${appUrl}/?view=settings&section=ai&addon_cancelled=1`,
+      });
+      checkoutUrl = result.checkoutUrl;
+    } catch (creemErr) {
+      console.error('[addons/checkout] createCreemCheckoutSession failed:', creemErr);
+      const msg = creemErr instanceof Error ? creemErr.message : 'Failed to create checkout session';
+      return NextResponse.json(
+        { error: msg },
+        { status: 502 },
+      );
+    }
 
-    if (!result.checkoutUrl) {
-      console.error('[addons/checkout] Creem returned no checkout URL', result);
+    if (!checkoutUrl) {
+      console.error('[addons/checkout] Creem returned no checkout URL');
       return NextResponse.json(
         { error: 'Failed to create checkout session' },
         { status: 502 },
@@ -118,7 +121,7 @@ export async function POST(request: NextRequest) {
     );
 
     return NextResponse.json({
-      checkoutUrl: result.checkoutUrl,
+      checkoutUrl,
       subscriptionId,
     });
   } catch (error) {

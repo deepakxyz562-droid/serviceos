@@ -176,13 +176,31 @@ export async function createCreemCheckoutSession(
     throw new Error('Creem is not configured. Ask the platform admin to add a Creem API key.');
   }
 
+  // Phase 9.8: Look up the plan from BOTH the main Plan table AND the AddonPlan table.
+  // This lets the same checkout function serve SaaS subscriptions AND addon purchases.
   const plan = await getPlanByCode(input.planCode);
-  if (!plan) {
-    throw new Error(`Plan "${input.planCode}" not found in the plan catalog.`);
+  let monthlyPrice = 0;
+  let yearlyPrice = 0;
+
+  if (plan) {
+    monthlyPrice = plan.monthlyPrice;
+    yearlyPrice = plan.yearlyPrice;
+  } else {
+    // Try AddonPlan (AI Receptionist, AI Phone Number, etc.)
+    const addonPlan = await db.addonPlan.findUnique({
+      where: { code: input.planCode },
+      select: { price: true, billingCycle: true },
+    });
+    if (addonPlan) {
+      monthlyPrice = addonPlan.price;
+      yearlyPrice = addonPlan.price * 12; // approximate yearly price
+    } else {
+      throw new Error(`Plan "${input.planCode}" not found in the plan catalog or addon catalog.`);
+    }
   }
 
   const cycle = input.billingCycle === 'yearly' ? 'yearly' : 'monthly';
-  const amount = cycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
+  const amount = cycle === 'yearly' ? yearlyPrice : monthlyPrice;
   if (amount <= 0) {
     throw new Error('Free plans do not require a Creem checkout session.');
   }
@@ -559,6 +577,11 @@ export interface CreateAllProductsResult {
  * Creem checkout flow, so creating Creem products for them would waste API
  * calls for IDs that are never read.
  *
+ * Phase 9.8: AI Receptionist AddonPlans (AI_RECEPTIONIST_STARTER/PRO/BUSINESS)
+ * are ALSO synced — they use the SAME RevenueFeatureToggle.configJson.products
+ * catalog as the SaaS plans. This function creates Creem products for all
+ * active, paid AddonPlans and returns the IDs for persistence.
+ *
  * This function ONLY reads the Plan catalog from the DB and calls Creem. It
  * does NOT write to the DB. The caller (admin route) is responsible for
  * persisting the returned product IDs into
@@ -660,6 +683,57 @@ export async function createAllCreemProducts(): Promise<CreateAllProductsResult>
       cycle: 'monthly',
       error: err instanceof Error ? err.message : String(err),
     });
+  }
+
+  // ── Phase 9.8: AI Receptionist add-on plans (AddonPlan table) ─────────────
+  // Create Creem products for all active, paid AddonPlans (e.g., AI Receptionist
+  // Starter/Pro/Business). These are stored in RevenueFeatureToggle.configJson.products
+  // under the addonPlan.code key — the SAME catalog the SaaS plans use.
+  //
+  // Idempotent: the idempotency key per addonPlan×cycle prevents duplicate
+  // products in the Creem dashboard on repeated runs.
+  const addonPlans = await db.addonPlan.findMany({
+    where: {
+      isActive: true,
+      price: { gt: 0 }, // skip free/Enterprise-style plans
+      addonProduct: { isActive: true },
+    },
+    include: { addonProduct: { select: { code: true, name: true } } },
+    orderBy: { sortOrder: 'asc' },
+  });
+
+  for (const addon of addonPlans) {
+    // Addon plans are monthly only (no yearly variant in the current schema)
+    const cycle = 'monthly' as const;
+    const billingPeriod: CreemBillingPeriod = 'every-month';
+    const name = `Fieseros ${addon.name} — Monthly`;
+    const description = addon.description || `Fieseros ${addon.name}, monthly subscription`;
+
+    try {
+      const result = await createCreemProduct({
+        name,
+        description,
+        billingType: 'recurring',
+        billingPeriod,
+        priceInDollars: addon.price,
+        currency: addon.currency || 'USD',
+        idempotencyKey: `${addon.code}-${cycle}`,
+      });
+      created.push({
+        key: `${addon.code}_${cycle}`,
+        planCode: addon.code,
+        cycle,
+        productId: result.productId,
+        name,
+      });
+    } catch (err) {
+      failed.push({
+        key: `${addon.code}_${cycle}`,
+        planCode: addon.code,
+        cycle,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   return { created, failed };
