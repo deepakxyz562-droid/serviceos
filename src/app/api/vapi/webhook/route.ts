@@ -31,11 +31,12 @@ export async function POST(request: NextRequest) {
     console.error('[vapi/webhook] Top-level handler error:', err);
     const contentType = request.headers.get('content-type') || '';
     if (contentType.includes('application/x-www-form-urlencoded')) {
+      // Phase 9.8: Generic fallback TwiML (no hardcoded business name)
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say voice="Polly.Joanna">Thank you for calling Singh Fabrication. Your call is connected to our AI receptionist.</Say>
+    <Say voice="Polly.Joanna">Thank you for calling. Please hold while we connect you.</Say>
     <Pause length="1"/>
-    <Say voice="Polly.Joanna">How can I help you with your fabrication order today?</Say>
+    <Say voice="Polly.Joanna">Our team will be with you shortly.</Say>
 </Response>`;
       return new Response(twiml, { status: 200, headers: { 'Content-Type': 'text/xml' } });
     }

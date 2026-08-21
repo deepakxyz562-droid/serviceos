@@ -582,8 +582,7 @@ export function AiAutoReplySettings() {
             <p className="text-[11px] text-muted-foreground flex items-start gap-1">
               <Sparkles className="size-3 mt-0.5 shrink-0 text-violet-500" />
               <span>
-                Uses platform-managed API keys (OPENROUTER_API_KEY, OPENAI_API_KEY, etc.).
-                Configure keys under <span className="font-medium">Settings → AI</span>.
+                Uses platform-managed AI model keys (OpenRouter, OpenAI, etc.) configured by the Superadmin.
               </span>
             </p>
           </div>
@@ -722,8 +721,8 @@ export function AiAutoReplySettings() {
             <div className="min-w-0">
               <Label className="text-sm font-medium">Enable AI call reply</Label>
               <p className="text-xs text-muted-foreground mt-0.5">
-                When on, missed inbound calls are answered by an AI voice agent (Vapi.ai).
-                Requires a configured Vapi API key under <span className="font-medium">Settings → AI</span>.
+                When on, missed inbound calls are answered by your AI Receptionist.
+                Requires an active AI Receptionist subscription (Settings → AI Receptionist).
               </p>
             </div>
             <Switch

@@ -344,14 +344,19 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   },
 
   // ─── AI ─────────────────────────────────────────────────────────────────
+  // Phase 9.8: The 'ai' section is now the platform-managed AI Receptionist
+  // workspace ONLY. The legacy BYOK Vapi configuration has been removed —
+  // Fieseros owns the Vapi/Twilio integrations (managed by Superadmin).
+  // Tenants configure their receptionist (name, greeting, hours, transfers,
+  // phone numbers, routing) but never see provider credentials.
   {
     id: 'ai',
-    label: 'AI Configuration',
+    label: 'AI Receptionist',
     icon: 'Sparkles',
-    description: 'AI Voice provider (Vapi.ai BYOK), AI Assistant, AI Dispatcher, AI Pricing, AI Quote Generator, AI Email Writer, AI Knowledge Base, usage & credits',
+    description: 'Your 24/7 AI voice receptionist — manage calls, phone numbers, greeting, business hours, transfers, usage, and test calls',
     group: 'ai',
     existingTab: 'aivoice',
-    keywords: ['ai', 'assistant', 'dispatcher', 'pricing', 'quote', 'email writer', 'knowledge base', 'voice', 'vapi', 'agent', 'configuration', 'receptionist'],
+    keywords: ['ai', 'receptionist', 'voice', 'calls', 'phone number', 'greeting', 'agent', 'assistant', 'call history', 'test call'],
   },
 
   // ─── Account & System (merged old 'billing' + 'system') ─────────────────

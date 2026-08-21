@@ -36,9 +36,11 @@ import {
   PhoneOutgoing,
   HeartPulse,
   Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import { useAiReceptionistData } from './use-ai-receptionist-data';
 import { OverviewTab } from './overview-tab';
 import { CallsTab } from './calls-tab';
@@ -92,6 +94,7 @@ export function AiReceptionistWorkspace() {
   // Lazy-init from URL so deep links work on first render (no effect needed).
   const [activeTab, setActiveTab] = useState<TabId>(() => getTabFromUrl());
   const [testCallOpen, setTestCallOpen] = useState(false);
+  const [deploying, setDeploying] = useState(false);
   const data = useAiReceptionistData();
 
   // Subscribe to back/forward navigation (only the event listener, not setState on mount)
@@ -104,6 +107,33 @@ export function AiReceptionistWorkspace() {
   const handleTabChange = (tab: TabId) => {
     setActiveTab(tab);
     setTabInUrl(tab);
+  };
+
+  // Phase 9.8: Redeploy the assistant to Vapi (refreshes tools + prompt).
+  // This is how an existing tenant picks up the 13 function-call tools —
+  // their assistant was created BEFORE the tools array was added.
+  const handleRedeploy = async () => {
+    setDeploying(true);
+    try {
+      const res = await fetch('/api/addons/receptionist/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const result = await res.json();
+      if (res.ok && result.ok) {
+        toast.success(result.action === 'created'
+          ? 'AI Receptionist deployed to Vapi'
+          : 'AI Receptionist updated — tools + prompt refreshed');
+        await data.refresh();
+      } else {
+        toast.error(result.error || 'Deployment failed');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setDeploying(false);
+    }
   };
 
   if (data.loading) {
@@ -150,14 +180,27 @@ export function AiReceptionistWorkspace() {
             </div>
           </div>
         </div>
-        <Button
-          onClick={() => setTestCallOpen(true)}
-          disabled={!isAiActive}
-          className="bg-emerald-600 hover:bg-emerald-700 gap-2 shrink-0"
-        >
-          <PhoneOutgoing className="size-4" />
-          Test Call
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRedeploy}
+            disabled={deploying || !data.receptionist}
+            className="gap-2"
+            title="Redeploy the Vapi assistant to refresh CRM tools (create_lead, schedule_job, etc.)"
+          >
+            {deploying ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+            <span className="hidden sm:inline">Redeploy</span>
+          </Button>
+          <Button
+            onClick={() => setTestCallOpen(true)}
+            disabled={!isAiActive}
+            className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+          >
+            <PhoneOutgoing className="size-4" />
+            Test Call
+          </Button>
+        </div>
       </div>
 
       {/* Layout: sidebar + content */}

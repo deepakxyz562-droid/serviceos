@@ -216,3 +216,51 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+/**
+ * GET /api/superadmin/ai-platform/reconcile
+ * ─────────────────────────────────────────────────────────────────────────
+ * List all phone numbers with their Twilio/Vapi/Fieseros binding status.
+ * Used by the Superadmin reconciliation dashboard to identify numbers that
+ * need repair (missing Vapi import, missing Twilio, etc.).
+ *
+ * Returns:
+ *   { phoneNumbers: [{ id, number, displayName, providerSid, vapiNumberId, status, tenantId, monthlyCost }] }
+ *
+ * Auth: superadmin only.
+ */
+export async function GET() {
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+    const isSuperAdmin =
+      (user as Record<string, unknown>).isSuperAdmin === true ||
+      user.role === 'superadmin' ||
+      user.role === 'super_admin';
+    if (!isSuperAdmin) {
+      return NextResponse.json({ error: 'Superadmin access required' }, { status: 403 });
+    }
+
+    const phoneNumbers = await db.phoneNumber.findMany({
+      select: {
+        id: true,
+        number: true,
+        displayName: true,
+        providerSid: true,
+        vapiNumberId: true,
+        status: true,
+        tenantId: true,
+        monthlyCost: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+
+    return NextResponse.json({ phoneNumbers });
+  } catch (error) {
+    console.error('[GET /api/superadmin/ai-platform/reconcile] error:', error);
+    return NextResponse.json({ error: 'Failed to fetch phone numbers' }, { status: 500 });
+  }
+}

@@ -64,7 +64,6 @@ import { FinanceSettings } from '@/components/settings/sections/finance-settings
 import { TeamSettings } from '@/components/settings/sections/team-settings';
 import { CustomersSettings } from '@/components/settings/sections/customers-settings';
 import { CommunicationSettings } from '@/components/settings/sections/communication-settings';
-import { AiSettings } from '@/components/settings/sections/ai-settings';
 import { AiReceptionistSettings } from '@/components/ai-receptionist/ai-receptionist-settings';
 import { IntegrationsSettings } from '@/components/settings/sections/integrations-settings';
 import { AutomationsSettings } from '@/components/settings/sections/automations-settings';
@@ -521,12 +520,11 @@ export function SettingsView() {
       case 'communication':
         return <CommunicationSettings />;
       case 'ai':
-        return (
-          <div className="space-y-6">
-            <AiReceptionistSettings />
-            <AiSettings />
-          </div>
-        );
+        // Phase 9.8: ONLY the platform-managed AI Receptionist workspace renders here.
+        // The legacy BYOK Vapi <AiSettings /> was removed — it conflicts with the
+        // frozen architecture (Fieseros owns the Vapi integration, not the tenant).
+        // Provider credentials are managed by Superadmin → AI Platform → Providers.
+        return <AiReceptionistSettings />;
       case 'integrations':
         return <IntegrationsSettings />;
       case 'automations':

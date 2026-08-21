@@ -64,6 +64,211 @@ class VapiVoiceProviderImpl implements VoiceProvider {
   }
 
   /**
+   * Phase 9.8: Build the OpenAI function-call tool schemas for the Vapi assistant.
+   *
+   * These tools map 1:1 to the handlers in ai-tool-handlers.ts. The LLM uses
+   * these schemas to decide when to emit function-call requests, which Vapi
+   * sends to our /api/vapi/function-call endpoint → AiToolDispatcher → handler.
+   *
+   * CRITICAL: Without these tool declarations, the LLM cannot emit function
+   * calls, so create_lead / schedule_job / transfer_to_human etc. are never
+   * invoked — the entire CRM action pipeline is dead code at runtime.
+   *
+   * The tools array includes all 13 non-restricted tools (cancel_job is
+   * excluded because it's in RESTRICTED_CAPABILITIES).
+   */
+  private getToolSchemas() {
+    return [
+      // ── Read tools ──
+      {
+        type: 'function',
+        function: {
+          name: 'get_customer',
+          description: 'Look up an existing customer by phone number or name. Use this when a caller identifies themselves or when you need to check if they are an existing customer.',
+          parameters: {
+            type: 'object',
+            properties: {
+              phone: { type: 'string', description: 'Phone number in E.164 or local format' },
+              name: { type: 'string', description: 'Customer name (partial match, case-insensitive)' },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_customer_jobs',
+          description: 'Get recent jobs/appointments for a customer. Use this when an existing customer asks about their appointment status or upcoming service.',
+          parameters: {
+            type: 'object',
+            properties: {
+              customerId: { type: 'string', description: 'Customer ID from get_customer result' },
+              phone: { type: 'string', description: 'Customer phone (alternative to customerId)' },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_job',
+          description: 'Get details of a specific job/appointment by ID.',
+          parameters: {
+            type: 'object',
+            properties: {
+              jobId: { type: 'string', description: 'Job ID' },
+            },
+            required: ['jobId'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_business_hours',
+          description: 'Get the business hours for this company. Use this when a caller asks about hours, when you are open, or when determining if the call is during or after business hours.',
+          parameters: { type: 'object', properties: {} },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_service_options',
+          description: 'Get the list of services this company offers, with prices and durations. Use this when a caller asks about services, pricing, or what the company does.',
+          parameters: { type: 'object', properties: {} },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'check_availability',
+          description: 'Check available appointment slots for a given date. Use this when a caller wants to book an appointment and needs to know what times are available.',
+          parameters: {
+            type: 'object',
+            properties: {
+              date: { type: 'string', description: 'Date in YYYY-MM-DD format' },
+            },
+            required: ['date'],
+          },
+        },
+      },
+      // ── Action tools (write/reversible) ──
+      {
+        type: 'function',
+        function: {
+          name: 'create_lead',
+          description: 'Create a new lead in the CRM. Use this when a caller expresses interest in a service, requests a quote, asks for a callback, or provides their contact information for follow-up. This is the primary action for capturing potential customers.',
+          parameters: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Caller name (required if phone is not provided)' },
+              phone: { type: 'string', description: 'Caller phone in E.164 or local format (required if name is not provided)' },
+              email: { type: 'string', description: 'Caller email (optional)' },
+              notes: { type: 'string', description: 'What the caller is interested in, any specific requests (optional)' },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'create_customer',
+          description: 'Create a new customer record in the CRM. Use this when a caller wants to become a customer (not just a lead) and provides their full contact information.',
+          parameters: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Customer name (required)' },
+              phone: { type: 'string', description: 'Customer phone (optional)' },
+              email: { type: 'string', description: 'Customer email (optional)' },
+              address: { type: 'string', description: 'Customer address (optional)' },
+            },
+            required: ['name'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'create_job_request',
+          description: 'Create a job/service request (unscheduled). Use this when a caller describes a problem or service need but has not committed to a specific appointment time.',
+          parameters: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'Short title for the job (required)' },
+              customerId: { type: 'string', description: 'Customer ID from get_customer or create_customer (required)' },
+              description: { type: 'string', description: 'Detailed description of the service request (optional)' },
+            },
+            required: ['title', 'customerId'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'schedule_job',
+          description: 'Schedule a job/appointment for a specific date and time. Use this when a caller agrees to a specific appointment slot. This creates a scheduled job in the system.',
+          parameters: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'Short title for the appointment (required)' },
+              customerId: { type: 'string', description: 'Customer ID (required)' },
+              date: { type: 'string', description: 'Date in YYYY-MM-DD format (required)' },
+              time: { type: 'string', description: 'Time in HH:MM 24-hour format (required)' },
+              address: { type: 'string', description: 'Service address (optional)' },
+            },
+            required: ['title', 'customerId', 'date', 'time'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'reschedule_job',
+          description: 'Reschedule an existing job/appointment to a new date and time. Use this when a caller wants to change their existing appointment.',
+          parameters: {
+            type: 'object',
+            properties: {
+              jobId: { type: 'string', description: 'Job ID to reschedule (required)' },
+              date: { type: 'string', description: 'New date in YYYY-MM-DD format (required)' },
+              time: { type: 'string', description: 'New time in HH:MM 24-hour format (required)' },
+            },
+            required: ['jobId', 'date', 'time'],
+          },
+        },
+      },
+      // ── External side effect tools ──
+      {
+        type: 'function',
+        function: {
+          name: 'send_sms',
+          description: 'Send an SMS message to a phone number. Use this to send a follow-up message, confirmation, or summary to the caller after the conversation.',
+          parameters: {
+            type: 'object',
+            properties: {
+              to: { type: 'string', description: 'Recipient phone in E.164 format (required)' },
+              message: { type: 'string', description: 'Message content (required, max 1600 chars)' },
+            },
+            required: ['to', 'message'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'transfer_to_human',
+          description: 'Transfer the call to a human agent. Use this when the caller explicitly asks for a human, when the request is too complex for AI, or when the AI cannot help. If no target is specified, the receptionist\'s configured handoff number is used.',
+          parameters: {
+            type: 'object',
+            properties: {
+              target: { type: 'string', description: 'Phone number to transfer to (E.164). If omitted, uses the configured handoff number.' },
+            },
+          },
+        },
+      },
+    ];
+  }
+
+  /**
    * Create a Vapi assistant (called when deploying a new AiAgentVersion).
    */
   async createAssistant(config: VapiAssistantConfig): Promise<CreateAssistantResult> {
@@ -96,6 +301,10 @@ class VapiVoiceProviderImpl implements VoiceProvider {
         provider: 'deepgram',
         model: 'nova-2',
       },
+      // Phase 9.8: Declare the function-call tools so the LLM can emit
+      // tool calls (create_lead, schedule_job, transfer_to_human, etc.)
+      // Without these, the AI cannot perform any CRM actions.
+      tools: this.getToolSchemas(),
       // Vapi hard limits (enforced by Fieseros policy)
       maxDurationSeconds: config.maxDurationSeconds,
       silenceTimeoutSeconds: config.silenceTimeoutSeconds,
@@ -156,6 +365,9 @@ class VapiVoiceProviderImpl implements VoiceProvider {
         provider: 'deepgram',
         model: 'nova-2',
       },
+      // Phase 9.8: tools array must be present on update too — otherwise
+      // PATCH would remove the tools that were set on create.
+      tools: this.getToolSchemas(),
       maxDurationSeconds: config.maxDurationSeconds,
       silenceTimeoutSeconds: config.silenceTimeoutSeconds,
       ...(config.serverUrl ? { serverUrl: config.serverUrl } : {}),

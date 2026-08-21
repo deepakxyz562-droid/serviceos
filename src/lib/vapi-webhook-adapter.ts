@@ -67,31 +67,64 @@ export async function handleVapiWebhook(
   if (contentType.includes('application/x-www-form-urlencoded') || rawBody.includes('CallSid=')) {
     const params = new URLSearchParams(rawBody);
     const callSid = params.get('CallSid') || `twilio_call_${Date.now()}`;
-    const rawNumber = params.get('Called') || params.get('To') || '+19843517779';
+    const callStatus = params.get('CallStatus') || '';
+    const rawNumber = params.get('Called') || params.get('To') || '';
     const cleanNumber = rawNumber.startsWith('+') ? rawNumber : `+${rawNumber.replace(/\D/g, '')}`;
     const fromNumber = params.get('From') || '';
+    const callDuration = parseInt(params.get('CallDuration') || '0', 10); // seconds
 
-    console.log(`[vapi-webhook] Twilio PSTN call received: CallSid=${callSid}, Called=${cleanNumber}, From=${fromNumber}`);
+    // ── 0a. Twilio status callback: call ended/completed → finalize ──
+    // When Twilio sends CallStatus=completed (or busy/failed/no-answer),
+    // we finalize the AiCall + release/finalize the usage reservation.
+    //
+    // IDEMPOTENCY (Phase 9.8): Twilio may send status callbacks more than once.
+    // This is safe because:
+    //   1. onCallEnd() checks `call.status === 'ended'` and returns early (no-op)
+    //   2. finalizeUsage() uses `idempotencyKey = ${callSid}:VOICE_MINUTE` (@unique)
+    //   3. releaseReservationByCallId() only updates reservations with status='ACTIVE'
+    //
+    // So a duplicate callback → one canonical AiCall → one finalized call → one usage record.
+    if (['completed', 'busy', 'failed', 'no-answer', 'canceled'].includes(callStatus)) {
+      console.log(`[vapi-webhook] Twilio call ${callSid} status=${callStatus}, duration=${callDuration}s — finalizing`);
+
+      try {
+        // Find the AiCall by vapiCallId (we stored callSid as vapiCallId on start)
+        const aiCall = await db.aiCall.findFirst({
+          where: { vapiCallId: callSid },
+          select: { id: true, tenantId: true, status: true },
+        });
+
+        if (aiCall && aiCall.status !== 'ended' && aiCall.status !== 'failed') {
+          await onCallEnd({
+            vapiCallId: callSid,
+            durationSec: callDuration,
+            billableSeconds: callDuration,
+            endedReason: callStatus === 'completed' ? 'customer_ended' : callStatus,
+          });
+          console.log(`[vapi-webhook] Twilio call ${callSid} finalized via status callback`);
+        } else if (!aiCall) {
+          // No AiCall found — just release the reservation if one exists
+          const { releaseReservationByCallId } = await import('@/lib/usage-service');
+          await releaseReservationByCallId(callSid);
+        }
+      } catch (err) {
+        console.error(`[vapi-webhook] Twilio status callback finalization failed for ${callSid}:`, err);
+      }
+
+      // Acknowledge the status callback (Twilio expects a 200)
+      return new Response('<Response/>', { status: 200, headers: { 'Content-Type': 'text/xml' } });
+    }
+
+    // ── 0b. Initial inbound call (CallStatus=ringing/in-progress) ──
+    console.log(`[vapi-webhook] Twilio PSTN call received: CallSid=${callSid}, Called=${cleanNumber}, From=${fromNumber}, Status=${callStatus}`);
 
     let routing = await getRoutingDecision(cleanNumber);
-    if (!routing) {
+    if (!routing && rawNumber) {
       routing = await getRoutingDecision(rawNumber);
     }
-    if (!routing || !routing.tenantId) {
-      const phoneRow = await db.phoneNumber.findFirst({ where: { number: { contains: '9843517779' } } });
-      if (phoneRow) {
-        const connRow = await db.phoneConnection.findFirst({ where: { phoneNumberId: phoneRow.id } });
-        routing = {
-          routingMode: 'AI_RECEPTIONIST',
-          routingTarget: null,
-          fallbackRoutingMode: null,
-          fallbackRoutingTarget: null,
-          tenantId: phoneRow.tenantId,
-          phoneNumberId: phoneRow.id,
-          connectionId: connRow?.id || null,
-        };
-      }
-    }
+    // Phase 9.8: Removed the hardcoded `contains: '9843517779'` fallback —
+    // routing should use exact number lookup, not a hardcoded substring.
+    // If routing returns null, the call is from a number not managed by Fieseros.
 
     if (routing?.tenantId) {
       const admission = await admitCall({
@@ -110,11 +143,21 @@ export async function handleVapiWebhook(
         phoneNumberId: routing.phoneNumberId || undefined,
       }).catch(() => {});
 
+      // Phase 9.8: Look up the tenant's actual name (no more hardcoded "Singh Fabrication")
+      let businessName = 'our team';
+      try {
+        const tenant = await db.tenant.findUnique({
+          where: { id: routing.tenantId },
+          select: { name: true },
+        });
+        if (tenant?.name) businessName = tenant.name;
+      } catch { /* non-fatal */ }
+
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say voice="Polly.Joanna">Thank you for calling Singh Fabrication. Your call is connected to our AI receptionist.</Say>
+    <Say voice="Polly.Joanna">Thank you for calling ${businessName}. Your call is connected to our AI receptionist.</Say>
     <Pause length="1"/>
-    <Say voice="Polly.Joanna">How can I help you with your fabrication order today?</Say>
+    <Say voice="Polly.Joanna">How can I help you today?</Say>
 </Response>`;
 
       return new Response(twiml, {

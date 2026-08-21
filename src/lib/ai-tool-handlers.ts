@@ -254,6 +254,13 @@ registerToolHandler('create_lead', async (ctx, params) => {
     });
 
     if (existing) {
+      // Phase 9.8: even on dedup, link the AiCall to the existing lead + set outcome
+      if (ctx.externalCallId) {
+        await db.aiCall.updateMany({
+          where: { vapiCallId: ctx.externalCallId, tenantId: ctx.tenantId },
+          data: { leadId: existing.id, outcomeType: 'lead_created' },
+        }).catch(() => {});
+      }
       return { created: false, existing: true, leadId: existing.id, message: 'Lead already exists from recent call' };
     }
   }
@@ -269,6 +276,17 @@ registerToolHandler('create_lead', async (ctx, params) => {
       status: 'new',
     },
   });
+
+  // Phase 9.8: Back-link the AiCall to the newly created Lead + set outcome.
+  // This is what makes the Calls UI show "✓ Lead created" for this call.
+  // Uses updateMany (not update) because vapiCallId might not be unique if
+  // the call hasn't been linked yet, and it's a no-op if no matching AiCall.
+  if (ctx.externalCallId) {
+    await db.aiCall.updateMany({
+      where: { vapiCallId: ctx.externalCallId, tenantId: ctx.tenantId },
+      data: { leadId: lead.id, outcomeType: 'lead_created' },
+    }).catch(() => {});
+  }
 
   return { created: true, leadId: lead.id, message: `Lead created for ${lead.name}` };
 });
@@ -305,6 +323,14 @@ registerToolHandler('create_customer', async (ctx, params) => {
       address: address || null,
     },
   });
+
+  // Phase 9.8: Back-link the AiCall to the newly created Customer.
+  if (ctx.externalCallId) {
+    await db.aiCall.updateMany({
+      where: { vapiCallId: ctx.externalCallId, tenantId: ctx.tenantId },
+      data: { customerId: customer.id, callerIdentifiedAs: 'customer' },
+    }).catch(() => {});
+  }
 
   return { created: true, customerId: customer.id, message: `Customer created: ${customer.name}` };
 });
@@ -390,6 +416,14 @@ registerToolHandler('schedule_job', async (ctx, params) => {
       source: 'ai_receptionist',
     },
   });
+
+  // Phase 9.8: Mark the AiCall outcome as 'booked' — the caller scheduled an appointment.
+  if (ctx.externalCallId) {
+    await db.aiCall.updateMany({
+      where: { vapiCallId: ctx.externalCallId, tenantId: ctx.tenantId },
+      data: { outcomeType: 'booked', customerId: customer.id },
+    }).catch(() => {});
+  }
 
   return { created: true, jobId: job.id, scheduledAt: scheduledAt.toISOString(), message: `Job scheduled: ${title} on ${dateStr} at ${timeStr}` };
 });
@@ -502,6 +536,13 @@ registerToolHandler('transfer_to_human', async (ctx, params) => {
     });
 
     if (receptionist?.handoffTransferTarget) {
+      // Phase 9.8: Mark the AiCall outcome as 'transferred'
+      if (ctx.externalCallId) {
+        await db.aiCall.updateMany({
+          where: { vapiCallId: ctx.externalCallId, tenantId: ctx.tenantId },
+          data: { outcomeType: 'transferred' },
+        }).catch(() => {});
+      }
       return {
         transferred: true,
         target: receptionist.handoffTransferTarget,
@@ -514,6 +555,14 @@ registerToolHandler('transfer_to_human', async (ctx, params) => {
 
   if (!target) {
     return { error: 'No transfer target specified and no handoff target configured' };
+  }
+
+  // Phase 9.8: Mark the AiCall outcome as 'transferred'
+  if (ctx.externalCallId) {
+    await db.aiCall.updateMany({
+      where: { vapiCallId: ctx.externalCallId, tenantId: ctx.tenantId },
+      data: { outcomeType: 'transferred' },
+    }).catch(() => {});
   }
 
   // The actual Vapi transfer is handled by the VapiVoiceProvider

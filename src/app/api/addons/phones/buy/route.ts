@@ -101,17 +101,13 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 2. Entitlement check (skip if resuming an existing saga) ──
+    // Phase 9.8: A phone number can ONLY be purchased if the tenant has an
+    // active AI Receptionist subscription. This is enforced at the backend,
+    // not just the UI — even a direct API call cannot bypass this gate.
     const isResuming = existingAttempt?.status === 'TWILIO_PURCHASED' || existingAttempt?.status === 'VAPI_IMPORTED';
     let attempt = existingAttempt || null;
-    // Check how many phone numbers the tenant already owns
-    const existingNumbers = await db.phoneNumber.count({
-      where: {
-        tenantId: user.tenantId,
-        status: { in: ['active', 'suspended', 'release_pending'] },
-      },
-    });
 
-    // Get the tenant's includedNumbers from their entitlement
+    // Get the tenant's AI Receptionist entitlement
     const entitlement = await db.addonEntitlement.findFirst({
       where: {
         tenantId: user.tenantId,
@@ -120,15 +116,36 @@ export async function POST(request: NextRequest) {
           addonProduct: { code: 'AI_RECEPTIONIST' },
         },
       },
-      select: { includedNumbers: true },
+      select: { id: true, includedNumbers: true },
     });
 
-    const includedNumbers = entitlement?.includedNumbers ?? 0;
+    // Gate 1: No active AI Receptionist subscription → 403 ADDON_REQUIRED
+    if (!entitlement) {
+      return NextResponse.json(
+        {
+          error: 'AI Receptionist subscription required. Purchase the AI Receptionist add-on before buying a phone number.',
+          code: 'ADDON_REQUIRED',
+        },
+        { status: 403 },
+      );
+    }
 
+    // Check how many phone numbers the tenant already owns
+    const existingNumbers = await db.phoneNumber.count({
+      where: {
+        tenantId: user.tenantId,
+        status: { in: ['active', 'suspended', 'release_pending'] },
+      },
+    });
+
+    const includedNumbers = entitlement.includedNumbers;
+
+    // Gate 2: At the included number limit → 403 LIMIT_REACHED
     if (existingNumbers >= includedNumbers) {
       return NextResponse.json(
         {
-          error: `You have reached your phone number limit (${includedNumbers} included). Purchase an additional AI Phone Number add-on or release an existing number.`,
+          error: `You have reached your phone number limit (${includedNumbers} included with your plan). Release an existing number or purchase an additional AI Phone Number add-on.`,
+          code: 'LIMIT_REACHED',
           currentCount: existingNumbers,
           included: includedNumbers,
         },

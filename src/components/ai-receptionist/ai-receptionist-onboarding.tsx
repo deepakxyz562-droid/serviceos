@@ -534,64 +534,291 @@ function Step3GetPhoneNumber({ onComplete, onBack }: { onComplete: (phoneId: str
   );
 }
 
-// ─── Step 4: Activate ──────────────────────────────────────────────────────
+// ─── Step 4: Test & Activate ──────────────────────────────────────────────
+
+type DeployState = 'idle' | 'deploying' | 'deployed' | 'error';
+type TestState = 'idle' | 'calling' | 'success' | 'error';
 
 function Step4Activate({ phoneNumberId, onBack }: { phoneNumberId: string | null; onBack: () => void }) {
-  const [loading, setLoading] = useState(false);
+  const [deployState, setDeployState] = useState<DeployState>('idle');
+  const [deployResult, setDeployResult] = useState<{ action: string; phoneBound: boolean; message: string } | null>(null);
+  const [testState, setTestState] = useState<TestState>('idle');
+  const [testNumber, setTestNumber] = useState('');
+
+  // Auto-deploy on mount — the user has completed Steps 1-3, so deploy immediately
+  useEffect(() => {
+    let cancelled = false;
+    const deploy = async () => {
+      setDeployState('deploying');
+      try {
+        const res = await fetch('/api/addons/receptionist/deploy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (res.ok && data.ok) {
+          setDeployState('deployed');
+          setDeployResult({
+            action: data.action,
+            phoneBound: data.phoneBound,
+            message: data.message,
+          });
+          toast.success('AI Receptionist deployed to Vapi!');
+        } else {
+          setDeployState('error');
+          setDeployResult({ action: 'error', phoneBound: false, message: data.error || data.detail || 'Deployment failed' });
+          toast.error(data.error || 'Deployment failed');
+        }
+      } catch {
+        if (cancelled) return;
+        setDeployState('error');
+        toast.error('Network error during deployment');
+      }
+    };
+    deploy();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Used by the "Retry Deployment" button
+  const handleDeploy = async () => {
+    setDeployState('deploying');
+    setDeployResult(null);
+    try {
+      const res = await fetch('/api/addons/receptionist/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setDeployState('deployed');
+        setDeployResult({ action: data.action, phoneBound: data.phoneBound, message: data.message });
+        toast.success('AI Receptionist deployed to Vapi!');
+      } else {
+        setDeployState('error');
+        setDeployResult({ action: 'error', phoneBound: false, message: data.error || data.detail || 'Deployment failed' });
+        toast.error(data.error || 'Deployment failed');
+      }
+    } catch {
+      setDeployState('error');
+      toast.error('Network error during deployment');
+    }
+  };
+
+  const handleTestCall = async () => {
+    setTestState('calling');
+    try {
+      const res = await fetch('/api/addons/receptionist/test-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerNumber: testNumber }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setTestState('success');
+        toast.success(`Calling ${data.customerNumber}...`);
+      } else {
+        setTestState('error');
+        toast.error(data.error || 'Test call failed');
+      }
+    } catch {
+      setTestState('error');
+      toast.error('Network error');
+    }
+  };
+
+  const isDeployed = deployState === 'deployed';
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Rocket className="size-5 text-emerald-600" />
-          Your AI Receptionist is Ready!
+          Test & Activate
         </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          We&apos;ll deploy your receptionist to Vapi and verify it works with a test call.
+        </p>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="flex flex-col items-center justify-center gap-4 py-4">
-          <div className="flex items-center justify-center size-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-            <CheckCircle2 className="size-8 text-emerald-600" />
-          </div>
-          <div className="text-center space-y-1">
-            <p className="text-lg font-semibold">All set!</p>
-            <p className="text-sm text-muted-foreground">
-              Your AI Receptionist is active and ready to receive calls.
+      <CardContent className="space-y-5">
+        {/* Deployment status */}
+        <div className="space-y-3">
+          <p className="text-sm font-medium flex items-center gap-2">
+            <span className={isDeployed ? 'text-emerald-600' : 'text-muted-foreground'}>
+              {deployState === 'deploying' ? '1. Deploying to Vapi...' :
+               deployState === 'deployed' ? '1. ✓ Deployed to Vapi' :
+               deployState === 'error' ? '1. ✕ Deployment failed' :
+               '1. Deploy to Vapi'}
+            </span>
+          </p>
+
+          {deployState === 'deploying' && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900">
+              <Loader2 className="size-5 text-blue-600 animate-spin" />
+              <div className="text-sm">
+                <p className="font-medium text-blue-900 dark:text-blue-300">Deploying your AI Receptionist...</p>
+                <p className="text-xs text-blue-700 dark:text-blue-400">
+                  Creating the Vapi assistant with 13 CRM tools (create_lead, schedule_job, etc.)
+                </p>
+              </div>
+            </div>
+          )}
+
+          {deployState === 'deployed' && deployResult && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900">
+                <CheckCircle2 className="size-5 text-emerald-600" />
+                <div className="text-sm">
+                  <p className="font-medium text-emerald-900 dark:text-emerald-300">{deployResult.message}</p>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
+                    Assistant ID set · Version published · {deployResult.phoneBound ? 'Phone number bound ✓' : 'Phone not bound yet'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Checklist */}
+              <div className="rounded-lg border p-4 space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="size-4 text-emerald-500" />
+                  <span>AI Receptionist configured</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="size-4 text-emerald-500" />
+                  <span>Phone number purchased & connected</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="size-4 text-emerald-500" />
+                  <span>Vapi assistant deployed (with CRM tools)</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="size-4 text-emerald-500" />
+                  <span>Call routing active (AI + voicemail fallback)</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {deployState === 'error' && deployResult && (
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900">
+                <AlertCircle className="size-5 text-red-600 shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-red-900 dark:text-red-300">Deployment failed</p>
+                  <p className="text-xs text-red-700 dark:text-red-400 mt-1 break-words">{deployResult.message}</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleDeploy} className="gap-2">
+                <Loader2 className="size-3.5" />
+                Retry Deployment
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Test call section — only after deployment succeeds */}
+        {isDeployed && (
+          <div className="space-y-3 pt-4 border-t">
+            <p className="text-sm font-medium flex items-center gap-2">
+              {testState === 'success' ? '2. ✓ Test call successful' :
+               testState === 'calling' ? '2. Calling...' :
+               testState === 'error' ? '2. ✕ Test call failed' :
+               '2. Test your receptionist'}
             </p>
-          </div>
-        </div>
+            <p className="text-xs text-muted-foreground">
+              Enter your phone number — we&apos;ll call you and connect you to your AI Receptionist.
+              This proves the full pipeline works: number → Twilio → Vapi → AI → CRM tools.
+            </p>
 
-        <div className="rounded-lg border p-4 space-y-2">
-          <div className="flex items-center gap-2 text-sm">
-            <CheckCircle2 className="size-4 text-emerald-500" />
-            <span>AI Receptionist configured</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <CheckCircle2 className="size-4 text-emerald-500" />
-            <span>Phone number purchased & connected</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <CheckCircle2 className="size-4 text-emerald-500" />
-            <span>Call routing active (AI + voicemail fallback)</span>
-          </div>
-        </div>
+            {testState === 'idle' && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="test-number">Your phone number</Label>
+                  <Input
+                    id="test-number"
+                    value={testNumber}
+                    onChange={(e) => setTestNumber(e.target.value)}
+                    placeholder="+1 415 555 0123"
+                    autoComplete="tel"
+                  />
+                </div>
+                <Button
+                  onClick={handleTestCall}
+                  disabled={!testNumber.trim()}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2"
+                >
+                  <Phone className="size-4" />
+                  Start Test Call
+                </Button>
+              </div>
+            )}
 
-        <div className="space-y-2">
-          <p className="text-sm font-medium">What happens next?</p>
-          <ul className="text-xs text-muted-foreground space-y-1 ml-4 list-disc">
-            <li>Incoming calls are answered by your AI Receptionist</li>
-            <li>The AI captures leads, books appointments, and answers FAQs</li>
-            <li>Calls that need human help transfer to your number</li>
-            <li>You can view call history and usage in Settings → AI</li>
-          </ul>
-        </div>
+            {testState === 'calling' && (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20">
+                <Loader2 className="size-5 text-blue-600 animate-spin" />
+                <p className="text-sm font-medium text-blue-900 dark:text-blue-300">
+                  Calling {testNumber}... Answer your phone.
+                </p>
+              </div>
+            )}
 
-        <div className="flex justify-between pt-4">
-          <Button variant="outline" onClick={onBack}>
+            {testState === 'success' && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900">
+                  <CheckCircle2 className="size-5 text-emerald-600" />
+                  <div className="text-sm">
+                    <p className="font-medium text-emerald-900 dark:text-emerald-300">Test call started!</p>
+                    <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
+                      Answer your phone — your AI Receptionist will be on the line.
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  After the call, view it in the Calls tab with full transcript and outcome.
+                </p>
+              </div>
+            )}
+
+            {testState === 'error' && (
+              <div className="space-y-2">
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900">
+                  <AlertCircle className="size-5 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-sm text-amber-900 dark:text-amber-300">
+                    Test call failed — you can skip this and test later from the workspace.
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleTestCall} className="gap-2">
+                  Retry Test Call
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* What happens next */}
+        {isDeployed && (
+          <div className="pt-4 border-t space-y-2">
+            <p className="text-sm font-medium">What happens next?</p>
+            <ul className="text-xs text-muted-foreground space-y-1 ml-4 list-disc">
+              <li>Incoming calls are answered by your AI Receptionist</li>
+              <li>The AI captures leads, books appointments, and answers FAQs</li>
+              <li>Calls that need human help transfer to your number</li>
+              <li>You can view call history and usage in the AI Receptionist workspace</li>
+            </ul>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex justify-between pt-2">
+          <Button variant="outline" onClick={onBack} disabled={deployState === 'deploying'}>
             <ChevronLeft className="size-4 mr-1" /> Back
           </Button>
-          <Button onClick={() => window.location.reload()}>
-            Go to Dashboard
-          </Button>
+          {isDeployed && (
+            <Button onClick={() => window.location.reload()} className="gap-2">
+              Go to Workspace <ChevronRight className="size-4 ml-1" />
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

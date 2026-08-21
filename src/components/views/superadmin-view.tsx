@@ -32,6 +32,8 @@ import {
   LayoutGrid, Palette, Mail, MessageCircle, Bell, Lock,
   ListTodo, Terminal, LifeBuoy, ClipboardList, Languages,
   ChevronLeft, X, LayoutList, MapPin, Download,
+  // AI Platform section
+  Cloud,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -74,6 +76,7 @@ import { lazy, Suspense } from 'react';
 // 4GB container) and lets each section code-split naturally.
 const CommandCenterSection = lazy(() => import('@/components/views/superadmin/sections/command-center').then(m => ({ default: m.CommandCenterSection })));
 const AICenterSection = lazy(() => import('@/components/views/superadmin/sections/ai-center').then(m => ({ default: m.AICenterSection })));
+const AiPlatformSection = lazy(() => import('@/components/views/superadmin/sections/ai-platform').then(m => ({ default: m.AiPlatformSection })));
 const MarketplaceSection = lazy(() => import('@/components/views/superadmin/sections/marketplace').then(m => ({ default: m.MarketplaceSection })));
 const IndustryTemplatesSection = lazy(() => import('@/components/views/superadmin/sections/industry-templates').then(m => ({ default: m.IndustryTemplatesSection })));
 const PlatformSettingsSection = lazy(() => import('@/components/views/superadmin/sections/platform-settings').then(m => ({ default: m.PlatformSettingsSection })));
@@ -363,7 +366,7 @@ type TabKey =
   // BUSINESS
   | 'tenants' | 'subscriptions' | 'users' | 'credits' | 'industry-templates'
   // PLATFORM
-  | 'platform-settings' | 'theme-branding' | 'marketplace' | 'integrations' | 'ai-center' | 'menu-management'
+  | 'platform-settings' | 'theme-branding' | 'marketplace' | 'integrations' | 'ai-center' | 'ai-platform' | 'menu-management'
   // COMMUNICATION
   | 'email-services' | 'sms-services' | 'whatsapp-providers' | 'push-notifications'
   // SECURITY
@@ -409,6 +412,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'directory-listings', label: 'Directory Listings', icon: MapPin },
       { key: 'integrations', label: 'Integrations', icon: Plug },
       { key: 'ai-center', label: 'AI Center', icon: Sparkles },
+      { key: 'ai-platform', label: 'AI Platform', icon: Cloud },
       { key: 'menu-management', label: 'Menu Management', icon: LayoutList },
       { key: 'social-publishing-config', label: 'Social Publishing', icon: Megaphone },
     ],
@@ -1318,6 +1322,7 @@ export function SuperAdminView() {
         {activeTab === 'marketplace' && <MarketplaceSection />}
         {activeTab === 'directory-listings' && <DirectoryListingsSection />}
         {activeTab === 'ai-center' && <AICenterSection />}
+        {activeTab === 'ai-platform' && <AiPlatformSection />}
         {activeTab === 'menu-management' && <MenuManagementSection />}
         {activeTab === 'email-services' && <EmailServicesSection />}
         {activeTab === 'sms-services' && <SMSServicesSection />}
