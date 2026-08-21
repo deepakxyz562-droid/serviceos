@@ -4,7 +4,6 @@ import { db } from '@/lib/db';
 import {
   getReceptionistForTenant,
   getCurrentVersion,
-  createAgentVersion,
   publishVersion,
 } from '@/lib/ai-receptionist-service';
 import { getVapiVoiceProvider } from '@/lib/vapi-voice-provider';
@@ -12,23 +11,28 @@ import { getVapiVoiceProvider } from '@/lib/vapi-voice-provider';
 /**
  * POST /api/addons/receptionist/deploy
  * ─────────────────────────────────────────────────────────────────────────
- * Phase 9.8: Deploy the current agent version to Vapi.
+ * Phase 9.8: Deploy the current agent version to Vapi + bind to phone number.
  *
- * This is the CRITICAL step that was missing. The onboarding wizard creates
- * a DRAFT agent version (Step 2), but nothing actually deploys it to Vapi.
- * Without deployment, the Vapi assistant doesn't exist — so the tools array
- * (Phase 9.8 fix) never reaches Vapi, and the AI can't answer calls.
+ * This endpoint enforces the full lifecycle at the backend (not just the UI):
  *
- * Flow:
- *   1. Get the receptionist + current version
- *   2. If no version exists, error (Step 2 must be done first)
- *   3. Check if an ACTIVE deployment already exists:
- *      a. YES → updateAssistant on Vapi (PATCH — refreshes tools, prompt, etc.)
- *      b. NO  → createAssistant on Vapi (POST — creates the assistant)
- *   4. Create/update the AiProviderDeployment record
- *   5. publishVersion (marks version PUBLISHED + sets currentVersionId)
- *   6. If a phone number exists, assign the assistant to the Vapi phone number
- *   7. Return the deployment result
+ *   1. subscription ACTIVE (AI_RECEPTIONIST)
+ *   2. entitlement ACTIVE (AddonEntitlement)
+ *   3. receptionist configuration exists (AiReceptionist)
+ *   4. agent version exists (AiAgentVersion — DRAFT or PUBLISHED)
+ *   5. phone number exists (PhoneNumber status=active + PhoneConnection ACTIVE)
+ *
+ * If ANY check fails → 403/400 with a clear error code.
+ *
+ * ORDERING (the "AI-active" invariant):
+ *   The AiProviderDeployment is only marked ACTIVE **after** every external
+ *   operation required for a callable number succeeds:
+ *     a. Vapi createAssistant / updateAssistant → must succeed
+ *     b. Vapi assignAssistantToPhoneNumber → must succeed (if phone exists)
+ *     c. Only then → AiProviderDeployment.status = ACTIVE + publishVersion
+ *
+ *   If (a) succeeds but (b) fails → deployment status = FAILED with lastError
+ *   explaining the phone binding failed. The tenant sees a clear error, not a
+ *   false "ACTIVE" state.
  *
  * Auth: owner only.
  */
@@ -49,23 +53,67 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const { versionId: explicitVersionId } = body as { versionId?: string };
 
-    // ── 1. Get the receptionist + version ──
+    // ── 1. Enforce: subscription ACTIVE ──
+    const subscription = await db.tenantAddonSubscription.findFirst({
+      where: {
+        tenantId,
+        status: { in: ['ACTIVE', 'PAST_DUE'] },
+        addonPlan: { addonProduct: { code: 'AI_RECEPTIONIST' } },
+      },
+      select: { id: true, status: true, currentPeriodEnd: true },
+    });
+
+    if (!subscription) {
+      return NextResponse.json(
+        {
+          error: 'No active AI Receptionist subscription. Purchase the add-on first.',
+          code: 'SUBSCRIPTION_REQUIRED',
+        },
+        { status: 403 },
+      );
+    }
+
+    // ── 2. Enforce: entitlement ACTIVE ──
+    const entitlement = await db.addonEntitlement.findFirst({
+      where: {
+        tenantId,
+        status: 'ACTIVE',
+        subscription: {
+          addonProduct: { code: 'AI_RECEPTIONIST' },
+        },
+      },
+      select: { id: true, includedNumbers: true, maxConcurrentCalls: true },
+    });
+
+    if (!entitlement) {
+      return NextResponse.json(
+        {
+          error: 'No active AI Receptionist entitlement. Contact support.',
+          code: 'ENTITLEMENT_REQUIRED',
+        },
+        { status: 403 },
+      );
+    }
+
+    // ── 3. Enforce: receptionist configuration exists ──
     const receptionist = await getReceptionistForTenant(tenantId);
     if (!receptionist) {
       return NextResponse.json(
-        { error: 'No AI Receptionist configured. Complete Step 2 first.' },
+        {
+          error: 'No AI Receptionist configured. Complete the configuration step first.',
+          code: 'RECEPTIONIST_REQUIRED',
+        },
         { status: 400 },
       );
     }
 
-    // Resolve the version to deploy
+    // ── 4. Enforce: agent version exists ──
     let version = explicitVersionId
       ? await db.aiAgentVersion.findFirst({
           where: { id: explicitVersionId, aiReceptionistId: receptionist.id },
         })
       : await getCurrentVersion(tenantId, receptionist.id);
 
-    // If no current version, try to get the latest DRAFT
     if (!version) {
       version = await db.aiAgentVersion.findFirst({
         where: { aiReceptionistId: receptionist.id, status: 'DRAFT' },
@@ -75,12 +123,59 @@ export async function POST(request: NextRequest) {
 
     if (!version) {
       return NextResponse.json(
-        { error: 'No agent version found. Configure your receptionist first (Step 2).' },
+        {
+          error: 'No agent version found. Configure your receptionist first.',
+          code: 'VERSION_REQUIRED',
+        },
         { status: 400 },
       );
     }
 
-    // ── 2. Build the Vapi assistant config from the version + receptionist ──
+    // ── 5. Enforce: phone number exists + is active ──
+    const phoneConnection = await db.phoneConnection.findFirst({
+      where: { tenantId, status: 'ACTIVE' },
+      include: {
+        phoneNumber: {
+          select: { id: true, number: true, vapiNumberId: true, status: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!phoneConnection) {
+      return NextResponse.json(
+        {
+          error: 'No active phone number. Purchase a phone number first.',
+          code: 'PHONE_REQUIRED',
+        },
+        { status: 400 },
+      );
+    }
+
+    const phone = phoneConnection.phoneNumber;
+    if (phone.status !== 'active') {
+      return NextResponse.json(
+        {
+          error: `Phone number is ${phone.status}. Cannot deploy to an inactive number.`,
+          code: 'PHONE_INACTIVE',
+        },
+        { status: 400 },
+      );
+    }
+    if (!phone.vapiNumberId) {
+      return NextResponse.json(
+        {
+          error: 'Phone number is not bound to Vapi. Contact support to reconcile.',
+          code: 'VAPI_BINDING_MISSING',
+        },
+        { status: 400 },
+      );
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // All pre-conditions passed. Now perform the actual deployment.
+    // ════════════════════════════════════════════════════════════════════════
+
     const appUrl = getAppUrl();
     const serverUrl = appUrl ? `${appUrl}/api/vapi/function-call` : undefined;
     const webhookUrl = appUrl ? `${appUrl}/api/vapi/webhook` : undefined;
@@ -99,7 +194,7 @@ export async function POST(request: NextRequest) {
       webhookUrl,
     };
 
-    // ── 3. Check for existing ACTIVE deployment ──
+    // ── Step A: Create/update the Vapi assistant (with 13 tools) ──
     const existingDeployment = await db.aiProviderDeployment.findFirst({
       where: {
         aiAgentVersionId: version.id,
@@ -109,29 +204,26 @@ export async function POST(request: NextRequest) {
     });
 
     let externalAssistantId: string;
-    let deploymentStatus: 'created' | 'updated' = 'created';
+    let action: 'created' | 'updated' = 'created';
 
     try {
       const vapi = getVapiVoiceProvider();
 
       if (existingDeployment?.externalAssistantId) {
-        // ── 3a. Update existing assistant (refresh tools + prompt) ──
         console.log(`[deploy] updating existing Vapi assistant ${existingDeployment.externalAssistantId}`);
         await vapi.updateAssistant(existingDeployment.externalAssistantId, vapiConfig);
         externalAssistantId = existingDeployment.externalAssistantId;
-        deploymentStatus = 'updated';
+        action = 'updated';
       } else {
-        // ── 3b. Create new assistant ──
         console.log('[deploy] creating new Vapi assistant');
         const result = await vapi.createAssistant(vapiConfig);
         externalAssistantId = result.assistantId;
       }
     } catch (vapiErr) {
-      // Vapi deployment failed — mark deployment FAILED + return error
-      console.error('[deploy] Vapi assistant deployment failed:', vapiErr);
-      const errorMessage = vapiErr instanceof Error ? vapiErr.message : 'Vapi deployment failed';
+      // Step A failed — no Vapi assistant exists. Record FAILED + return.
+      console.error('[deploy] Step A (Vapi assistant) failed:', vapiErr);
+      const errorMessage = vapiErr instanceof Error ? vapiErr.message : 'Vapi assistant creation failed';
 
-      // Record the failed attempt (if no existing deployment)
       if (!existingDeployment) {
         await db.aiProviderDeployment.create({
           data: {
@@ -150,12 +242,63 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json(
-        { error: 'Failed to deploy to Vapi', detail: errorMessage },
+        { error: 'Failed to create/update Vapi assistant', detail: errorMessage, code: 'VAPI_ASSISTANT_FAILED' },
         { status: 502 },
       );
     }
 
-    // ── 4. Upsert the AiProviderDeployment record ──
+    // ── Step B: Bind the assistant to the Vapi phone number ──
+    // CRITICAL: This MUST succeed before we mark the deployment ACTIVE.
+    // If binding fails, the tenant would see "ACTIVE" but calls wouldn't work.
+    try {
+      const vapi = getVapiVoiceProvider();
+      await vapi.assignAssistantToPhoneNumber({
+        vapiPhoneNumberId: phone.vapiNumberId!,
+        assistantId: externalAssistantId,
+      });
+      console.log(`[deploy] Step B: bound assistant ${externalAssistantId} to Vapi number ${phone.vapiNumberId}`);
+    } catch (bindErr) {
+      // Step B failed — Vapi assistant exists but isn't bound to the number.
+      // Mark the deployment FAILED (NOT ACTIVE) so the tenant sees the real state.
+      console.error('[deploy] Step B (phone binding) failed:', bindErr);
+      const bindError = bindErr instanceof Error ? bindErr.message : 'Vapi phone binding failed';
+
+      if (existingDeployment) {
+        await db.aiProviderDeployment.update({
+          where: { id: existingDeployment.id },
+          data: {
+            status: 'FAILED',
+            externalAssistantId,
+            lastError: `Vapi assistant created (${externalAssistantId}) but phone binding failed: ${bindError}`,
+          },
+        });
+      } else {
+        await db.aiProviderDeployment.create({
+          data: {
+            aiAgentVersionId: version.id,
+            provider: 'VAPI',
+            externalAssistantId,
+            status: 'FAILED',
+            lastError: `Vapi assistant created (${externalAssistantId}) but phone binding failed: ${bindError}`,
+          },
+        });
+      }
+
+      return NextResponse.json(
+        {
+          error: 'Vapi assistant created but failed to bind to phone number.',
+          detail: bindError,
+          code: 'VAPI_BINDING_FAILED',
+        },
+        { status: 502 },
+      );
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Both Step A (assistant) + Step B (binding) succeeded.
+    // NOW we can mark the deployment ACTIVE + publish the version.
+    // ════════════════════════════════════════════════════════════════════════
+
     let deployment;
     if (existingDeployment) {
       deployment = await db.aiProviderDeployment.update({
@@ -170,7 +313,8 @@ export async function POST(request: NextRequest) {
             voice: vapiConfig.voice,
             serverUrl: vapiConfig.serverUrl,
             webhookUrl: vapiConfig.webhookUrl,
-            toolsCount: 13, // Phase 9.8: 13 non-restricted tools
+            toolsCount: 13,
+            phoneNumberBound: true,
           }),
         },
       });
@@ -187,68 +331,40 @@ export async function POST(request: NextRequest) {
             serverUrl: vapiConfig.serverUrl,
             webhookUrl: vapiConfig.webhookUrl,
             toolsCount: 13,
+            phoneNumberBound: true,
           }),
           lastSyncedAt: new Date(),
         },
       });
     }
 
-    console.log(`[deploy] Vapi assistant ${deploymentStatus} (id=${externalAssistantId}), deployment ${deployment.id} ACTIVE`);
+    console.log(`[deploy] deployment ${deployment.id} → ACTIVE (assistant=${externalAssistantId}, phone=${phone.number})`);
 
-    // ── 5. Publish the version (marks PUBLISHED + sets currentVersionId) ──
+    // ── Step C: Publish the version (marks PUBLISHED + sets currentVersionId) ──
     try {
       await publishVersion({
         tenantId,
         receptionistId: receptionist.id,
         versionId: version.id,
-        requireActiveDeployment: false, // we just created the deployment above
+        requireActiveDeployment: false, // we just created the ACTIVE deployment
       });
       console.log(`[deploy] version ${version.id} published → receptionist.currentVersionId updated`);
     } catch (pubErr) {
-      // publishVersion failed — the deployment exists but the version isn't marked published.
-      // This is recoverable — the assistant is live on Vapi, just not flagged as current.
-      console.error('[deploy] publishVersion failed (non-fatal — assistant is deployed):', pubErr);
+      // Non-fatal — the assistant is deployed + bound. publishVersion can be retried.
+      console.error('[deploy] Step C (publishVersion) failed (non-fatal):', pubErr);
     }
 
-    // ── 6. Assign the assistant to the Vapi phone number (if a number exists) ──
-    let phoneBound = false;
-    const phoneConnection = await db.phoneConnection.findFirst({
-      where: { tenantId, status: 'ACTIVE' },
-      include: {
-        phoneNumber: {
-          select: { id: true, number: true, vapiNumberId: true, status: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (phoneConnection?.phoneNumber?.vapiNumberId && phoneConnection.phoneNumber.status === 'active') {
-      try {
-        const vapi = getVapiVoiceProvider();
-        await vapi.assignAssistantToPhoneNumber({
-          vapiPhoneNumberId: phoneConnection.phoneNumber.vapiNumberId,
-          assistantId: externalAssistantId,
-        });
-        phoneBound = true;
-        console.log(`[deploy] assigned assistant ${externalAssistantId} to Vapi number ${phoneConnection.phoneNumber.vapiNumberId}`);
-      } catch (bindErr) {
-        // Non-fatal — the assistant is deployed, just not bound to the number yet.
-        console.error('[deploy] phone binding failed (non-fatal):', bindErr);
-      }
-    }
-
-    // ── 7. Return the result ──
     return NextResponse.json({
       ok: true,
       deployed: true,
       deploymentId: deployment.id,
       externalAssistantId,
-      action: deploymentStatus, // 'created' or 'updated'
+      action, // 'created' or 'updated'
       versionId: version.id,
       versionNumber: version.versionNumber,
-      phoneBound,
-      phoneNumber: phoneConnection?.phoneNumber?.number || null,
-      message: deploymentStatus === 'created'
+      phoneBound: true,
+      phoneNumber: phone.number,
+      message: action === 'created'
         ? 'AI Receptionist deployed to Vapi successfully.'
         : 'AI Receptionist updated on Vapi (tools + prompt refreshed).',
     });

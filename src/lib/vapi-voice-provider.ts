@@ -282,6 +282,9 @@ class VapiVoiceProviderImpl implements VoiceProvider {
         temperature: config.temperature,
         maxTokens: config.maxTokens,
         systemPrompt: config.systemPrompt,
+        // Phase 9.8: tools go INSIDE model (Vapi API puts function-call
+        // tools on the model, not at the assistant top level)
+        tools: this.getToolSchemas(),
         messages: [
           {
             role: 'system',
@@ -294,24 +297,16 @@ class VapiVoiceProviderImpl implements VoiceProvider {
         ],
       },
       voice: {
-        provider: '11labs',
-        voiceId: config.voice,
+        provider: 'openai',
+        voiceId: 'alloy',
       },
       transcriber: {
         provider: 'deepgram',
         model: 'nova-2',
       },
-      // Phase 9.8: Declare the function-call tools so the LLM can emit
-      // tool calls (create_lead, schedule_job, transfer_to_human, etc.)
-      // Without these, the AI cannot perform any CRM actions.
-      tools: this.getToolSchemas(),
-      // Vapi hard limits (enforced by Fieseros policy)
       maxDurationSeconds: config.maxDurationSeconds,
       silenceTimeoutSeconds: config.silenceTimeoutSeconds,
-      // Function-call server URL (Vapi sends tool calls here)
       ...(config.serverUrl ? { serverUrl: config.serverUrl } : {}),
-      // Webhook URL (Vapi sends call lifecycle events here)
-      ...(config.webhookUrl ? { webhookUrl: config.webhookUrl } : {}),
     };
 
     const response = await fetch(`${this.baseUrl}/assistant`, {
@@ -346,6 +341,8 @@ class VapiVoiceProviderImpl implements VoiceProvider {
         temperature: config.temperature,
         maxTokens: config.maxTokens,
         systemPrompt: config.systemPrompt,
+        // Phase 9.8: tools must be inside model for update too
+        tools: this.getToolSchemas(),
         messages: [
           {
             role: 'system',
@@ -358,20 +355,16 @@ class VapiVoiceProviderImpl implements VoiceProvider {
         ],
       },
       voice: {
-        provider: '11labs',
-        voiceId: config.voice,
+        provider: 'openai',
+        voiceId: 'alloy',
       },
       transcriber: {
         provider: 'deepgram',
         model: 'nova-2',
       },
-      // Phase 9.8: tools array must be present on update too — otherwise
-      // PATCH would remove the tools that were set on create.
-      tools: this.getToolSchemas(),
       maxDurationSeconds: config.maxDurationSeconds,
       silenceTimeoutSeconds: config.silenceTimeoutSeconds,
       ...(config.serverUrl ? { serverUrl: config.serverUrl } : {}),
-      ...(config.webhookUrl ? { webhookUrl: config.webhookUrl } : {}),
     };
 
     const response = await fetch(`${this.baseUrl}/assistant/${assistantId}`, {
@@ -582,7 +575,7 @@ class VapiVoiceProviderImpl implements VoiceProvider {
       provider: 'twilio',
       twilioAccountSid: params.twilioAccountSid,
       twilioAuthToken: params.twilioAuthToken,
-      twilioPhoneNumber: params.twilioPhoneNumber,
+      number: params.twilioPhoneNumber, // Vapi API field is "number", not "twilioPhoneNumber"
     };
 
     if (params.assistantId) body.assistantId = params.assistantId;
@@ -717,6 +710,21 @@ class VapiVoiceProviderImpl implements VoiceProvider {
       const errorText = await response.text();
       throw new Error(`Vapi deleteVapiPhoneNumber failed: ${response.status} ${errorText}`);
     }
+  }
+
+  /**
+   * List all Vapi phone numbers (for reconciliation + finding existing numbers).
+   */
+  async listPhoneNumbers(): Promise<Array<{ id: string; number: string; assistantId: string | null; status: string }>> {
+    const auth = await this.getAuthHeader();
+    const response = await fetch(`${this.baseUrl}/phone-number`, {
+      headers: { Authorization: auth },
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Vapi listPhoneNumbers failed: ${response.status} ${errorText}`);
+    }
+    return await response.json();
   }
 
   /**
