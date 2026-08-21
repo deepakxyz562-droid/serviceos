@@ -103,6 +103,7 @@ const MenuManagementSection = lazy(() => import('@/components/views/superadmin/s
 const DirectoryListingsSection = lazy(() => import('@/components/views/superadmin/sections/directory-listings').then(m => ({ default: m.DirectoryListingsSection })));
 const BackupSection = lazy(() => import('@/components/views/superadmin/sections/backup').then(m => ({ default: m.BackupSection })));
 const SocialPublishingConfigSection = lazy(() => import('@/components/views/superadmin/sections/social-publishing-config').then(m => ({ default: m.SocialPublishingConfigSection })));
+const CreemBillingSection = lazy(() => import('@/components/views/superadmin/sections/creem-billing').then(m => ({ default: m.CreemBillingSection })));
 
 // Lightweight Suspense fallback for lazy-loaded sections.
 function SectionLoader() {
@@ -367,6 +368,8 @@ type TabKey =
   | 'tenants' | 'subscriptions' | 'users' | 'credits' | 'industry-templates'
   // PLATFORM
   | 'platform-settings' | 'theme-branding' | 'marketplace' | 'integrations' | 'ai-center' | 'ai-platform' | 'menu-management'
+  // BILLING
+  | 'creem-billing'
   // COMMUNICATION
   | 'email-services' | 'sms-services' | 'whatsapp-providers' | 'push-notifications'
   // SECURITY
@@ -398,6 +401,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: 'tenants', label: 'Workspaces', icon: Building2 },
       { key: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
+      { key: 'creem-billing', label: 'Creem Billing', icon: CreditCard },
       { key: 'users', label: 'Users', icon: Users },
       { key: 'credits', label: 'Credits', icon: Wallet },
       { key: 'industry-templates', label: 'Industry Templates', icon: LayoutGrid },
@@ -1323,6 +1327,7 @@ export function SuperAdminView() {
         {activeTab === 'directory-listings' && <DirectoryListingsSection />}
         {activeTab === 'ai-center' && <AICenterSection />}
         {activeTab === 'ai-platform' && <AiPlatformSection />}
+        {activeTab === 'creem-billing' && <CreemBillingSection />}
         {activeTab === 'menu-management' && <MenuManagementSection />}
         {activeTab === 'email-services' && <EmailServicesSection />}
         {activeTab === 'sms-services' && <SMSServicesSection />}
