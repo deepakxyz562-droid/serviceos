@@ -20,8 +20,19 @@ export async function GET() {
     const subscriptions = await db.tenantAddonSubscription.findMany({
       where: { tenantId: user.tenantId },
       include: {
+        // Phase 9.8: Add addonProduct at the TOP LEVEL so it's resolved directly
+        // from TenantAddonSubscription.addonProductId → AddonProduct.
+        // This is more reliable than the nested addonPlan.addonProduct path
+        // (which depends on the AddonPlan row's addonProductId being non-null
+        // and matching). The TenantAddonSubscription schema guarantees
+        // addonProductId is non-nullable, so this always resolves.
+        addonProduct: {
+          select: { id: true, code: true, name: true },
+        },
         addonPlan: {
           include: {
+            // Kept as a fallback — if the direct resolution fails for any reason,
+            // the nested path provides a second chance.
             addonProduct: {
               select: { id: true, code: true, name: true },
             },
