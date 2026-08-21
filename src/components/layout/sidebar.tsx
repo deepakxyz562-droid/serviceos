@@ -188,7 +188,7 @@ const ownerNavSections: NavSection[] = [
   {
     title: 'AI Receptionist',
     items: [
-      { view: 'aiReceptionist', label: 'AI Receptionist', icon: PhoneCall, badge: 'Free' },
+      { view: 'aiReceptionist', label: 'AI Receptionist', icon: PhoneCall },
     ],
   },
   {
@@ -346,7 +346,7 @@ const superadminNavSections: NavSection[] = [
   {
     title: 'AI Receptionist',
     items: [
-      { view: 'aiReceptionist', label: 'AI Receptionist', icon: PhoneCall, badge: 'Free' },
+      { view: 'aiReceptionist', label: 'AI Receptionist', icon: PhoneCall },
     ],
   },
   {

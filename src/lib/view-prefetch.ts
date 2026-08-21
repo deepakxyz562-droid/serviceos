@@ -79,7 +79,7 @@ export function prefetchView(viewId: string): void {
     // AI & Extras
     case 'aiAssistant': void import('@/components/views/ai-assistant-view'); break;
     case 'chatbotBuilder': void import('@/components/views/chatbot-builder-view'); break;
-    case 'aiReceptionist': void import('@/components/views/ai-receptionist-view'); break;
+    case 'aiReceptionist': void import('@/components/ai-receptionist/ai-receptionist-settings'); break;
     case 'aiAgents': void import('@/components/views/ai-agents-view'); break;
     case 'aiPhoneNumbers': void import('@/components/views/sms-numbers-view'); break;
     case 'aiCallHistory': void import('@/components/views/ai-call-history-view'); break;

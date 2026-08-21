@@ -109,7 +109,12 @@ export const MENU_CATALOG: MenuCatalogItem[] = [
   { key: 'socialAnalytics', label: 'Social Analytics', icon: 'BarChart3', section: 'Inbox & Automation', sortOrder: 53, minPlan: 'growth', upgradeDescription: 'Unified engagement metrics across all your social platforms.' },
 
   // ─── AI Receptionist ─────────────────────────────────────────────────
-  { key: 'aiReceptionist', label: 'AI Receptionist Dashboard', icon: 'PhoneCall', section: 'AI Receptionist', sortOrder: 50, minPlan: 'business', upgradeDescription: 'AI-powered receptionist dashboard for call management, analytics, and performance insights.' },
+  // Phase 9.8: AI Receptionist is a separate commercial addon (purchased via Creem),
+  // NOT gated by the base Fieseros plan. A Starter-plan tenant who purchases the
+  // AI Receptionist addon should see it in their sidebar. The wrapper component
+  // (AiReceptionistSettings) handles all 4 states: no addon → upsell, addon no
+  // phone → onboarding, phone no deploy → onboarding step 4, active → workspace.
+  { key: 'aiReceptionist', label: 'AI Receptionist', icon: 'PhoneCall', section: 'AI Receptionist', sortOrder: 50, upgradeDescription: 'Your 24/7 AI voice receptionist — answers calls, captures leads, books jobs, and transfers callers to your team.' },
   { key: 'aiAgents', label: 'AI Agents', icon: 'Bot', section: 'AI Receptionist', sortOrder: 51, minPlan: 'business', upgradeDescription: 'Create and manage AI voice agents for automated call handling, scheduling, and customer support.' },
   { key: 'aiPhoneNumbers', label: 'Phone Numbers', icon: 'PhoneIncoming', section: 'AI Receptionist', sortOrder: 52, minPlan: 'business', upgradeDescription: 'Purchase and manage dedicated phone numbers for your AI receptionist and business communications.' },
   { key: 'aiCallHistory', label: 'Call History', icon: 'PhoneCall', section: 'AI Receptionist', sortOrder: 53, minPlan: 'business', upgradeDescription: 'View call logs, recordings, transcripts, and analytics for all AI receptionist calls.' },

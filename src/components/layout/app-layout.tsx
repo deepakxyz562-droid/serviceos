@@ -86,7 +86,7 @@ const AiAssistantView = lazy(() => import('@/components/views/ai-assistant-view'
 const ChatbotBuilderView = lazy(() => import('@/components/views/chatbot-builder-view').then(m => ({ default: m.ChatbotBuilderView })));
 
 // AI Receptionist (Vapi.ai BYOK)
-const AiReceptionistView = lazy(() => import('@/components/views/ai-receptionist-view').then(m => ({ default: m.AiReceptionistView })));
+const AiReceptionistView = lazy(() => import('@/components/ai-receptionist/ai-receptionist-settings').then(m => ({ default: m.AiReceptionistSettings })));
 const AiAgentsView = lazy(() => import('@/components/views/ai-agents-view').then(m => ({ default: m.AiAgentsView })));
 // (aiPhoneNumbers view removed — phone numbers now managed in Settings → Communication → Dedicated Phone Number.
 //  The view type is kept in the type union for backward-compat; deep links to 'aiPhoneNumbers' will render SmsNumbersView.)
@@ -224,7 +224,10 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   // AI & Extras
   aiAssistant: AiAssistantView,
   chatbotBuilder: ChatbotBuilderView,
-  // AI Receptionist (Vapi.ai BYOK)
+  // AI Receptionist — Phase 9.8: platform-managed (Creem addon → Fieseros Vapi/Twilio → phone → deploy → activate)
+  // The main sidebar "AI Receptionist" now opens the new AiReceptionistSettings wrapper, which
+  // shows the onboarding wizard (if not configured) or the permanent workspace (if active).
+  // No BYOK, no Vapi API key, no "Configure AI Voice" — the tenant never sees provider credentials.
   aiReceptionist: AiReceptionistView,
   aiAgents: AiAgentsView,
   aiPhoneNumbers: SmsNumbersView, // redirect legacy deep links to the real phone numbers UI

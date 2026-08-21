@@ -52,58 +52,78 @@ export function AiReceptionistOnboarding() {
     subscriptionActive: false,
     receptionistCreated: false,
     phoneNumberId: null,
-    loading: false,
+    loading: true, // start loading immediately on mount (avoids flash + lint-safe)
   });
 
   // Check existing state on mount
-  const checkState = useCallback(async () => {
-    setState(s => ({ ...s, loading: true }));
+  // Phase 9.8 fix: compute the step deterministically from the ACTUAL API results,
+  // not from stale React state. If the APIs fail (e.g., Supabase table missing),
+  // the step correctly resets to 1 instead of keeping a stale step 4 from a
+  // previous session.
+  const checkState = useCallback(async (): Promise<OnboardingState> => {
+    // Returns the computed state — the caller (useEffect) sets it via .then()
+    // to avoid calling setState synchronously in the effect body (React lint rule).
     try {
-      // Check subscription
-      const subRes = await fetch('/api/addons/subscriptions');
-      if (subRes.ok) {
-        const subData = await subRes.json();
+      const [subRes, recvRes, phoneRes] = await Promise.allSettled([
+        fetch('/api/addons/subscriptions'),
+        fetch('/api/addons/receptionist'),
+        fetch('/api/addons/phones/connections'),
+      ]);
+
+      let subscriptionActive = false;
+      let receptionistCreated = false;
+      let phoneNumberId: string | null = null;
+
+      if (subRes.status === 'fulfilled' && subRes.value.ok) {
+        const subData = await subRes.value.json();
         const aiSub = subData.subscriptions?.find(
-          (s: { addonProduct: { code: string } }) => s.addonProduct?.code === 'AI_RECEPTIONIST'
+          (s: { addonProduct: { code: string }; status: string }) =>
+            s.addonProduct?.code === 'AI_RECEPTIONIST' &&
+            ['ACTIVE', 'PAST_DUE', 'SUSPENDED'].includes(s.status),
         );
-        // Phase 9.8: accept ACTIVE, PAST_DUE, SUSPENDED consistently with the
-        // workspace wrapper. SUSPENDED shows the workspace (with billing warning)
-        // but the backend AdmissionController rejects new calls when SUSPENDED.
-        if (aiSub && ['ACTIVE', 'PAST_DUE', 'SUSPENDED'].includes(aiSub.status)) {
-          setState(s => ({ ...s, subscriptionActive: true, step: s.step < 2 ? 2 : s.step }));
-        }
+        subscriptionActive = !!aiSub;
       }
 
-      // Check receptionist
-      const recvRes = await fetch('/api/addons/receptionist');
-      if (recvRes.ok) {
-        const recvData = await recvRes.json();
-        if (recvData.receptionist) {
-          setState(s => ({ ...s, receptionistCreated: true, step: s.step < 3 ? 3 : s.step }));
-        }
+      if (recvRes.status === 'fulfilled' && recvRes.value.ok) {
+        const recvData = await recvRes.value.json();
+        receptionistCreated = !!recvData.receptionist;
       }
 
-      // Check phone numbers
-      const phoneRes = await fetch('/api/addons/phones/connections');
-      if (phoneRes.ok) {
-        const phoneData = await phoneRes.json();
+      if (phoneRes.status === 'fulfilled' && phoneRes.value.ok) {
+        const phoneData = await phoneRes.value.json();
         if (phoneData.connections?.length > 0) {
-          setState(s => ({
-            ...s,
-            phoneNumberId: phoneData.connections[0].phoneNumberId,
-            step: s.step < 4 ? 4 : s.step,
-          }));
+          phoneNumberId = phoneData.connections[0].phoneNumberId;
         }
       }
+
+      // Compute the step deterministically (not from stale state)
+      let computedStep: Step = 1;
+      if (subscriptionActive) computedStep = 2;
+      if (subscriptionActive && receptionistCreated) computedStep = 3;
+      if (subscriptionActive && receptionistCreated && phoneNumberId) computedStep = 4;
+
+      if (typeof console !== 'undefined' && console.debug) {
+        console.debug('[AiReceptionistOnboarding] checkState', {
+          subscription: subRes.status === 'fulfilled' ? subRes.value.status : 'rejected',
+          receptionist: recvRes.status === 'fulfilled' ? recvRes.value.status : 'rejected',
+          phoneConnections: phoneRes.status === 'fulfilled' ? phoneRes.value.status : 'rejected',
+          subscriptionActive, receptionistCreated, hasPhone: !!phoneNumberId, computedStep,
+        });
+      }
+
+      return { step: computedStep, subscriptionActive, receptionistCreated, phoneNumberId, loading: false };
     } catch {
-      // silent
-    } finally {
-      setState(s => ({ ...s, loading: false }));
+      // Network error — reset to step 1
+      return { step: 1 as Step, subscriptionActive: false, receptionistCreated: false, phoneNumberId: null, loading: false };
     }
   }, []);
 
   useEffect(() => {
-    checkState();
+    let active = true;
+    checkState().then((newState) => {
+      if (active) setState(newState);
+    });
+    return () => { active = false; };
   }, [checkState]);
 
   if (state.loading) {
