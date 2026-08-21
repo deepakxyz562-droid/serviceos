@@ -3,6 +3,17 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { getCall as vapiGetCall } from '@/lib/vapi-client';
 
+/**
+ * Helper: safely serialize dates from BOTH Prisma (Date objects) and the
+ * Supabase REST adapter (which returns ISO strings from PostgREST).
+ */
+const safeDate = (d: unknown): string | null => {
+  if (!d) return null;
+  if (typeof d === 'string') return d;
+  if (d instanceof Date) return d.toISOString();
+  try { return new Date(d as string).toISOString(); } catch { return null; }
+};
+
 async function isFeatureVisible(tenantId: string): Promise<boolean> {
   const flag = await db.featureFlag.findUnique({
     where: { tenantId_featureKey: { tenantId, featureKey: 'ai_receptionist' } },
@@ -28,24 +39,27 @@ export async function GET(request: NextRequest) {
 
     // Single call with full transcript
     if (callId) {
+      // Phase 9.8: Removed `include: { agent, number }` — these use legacy
+      // AiAgent/AiPhoneNumber tables that PostgREST can't resolve (wrong table
+      // name fallback). The call's own fields (fromNumber, toNumber, customerPhone)
+      // provide the same information without needing the relation.
       const call = await db.aiCall.findFirst({
         where: { id: callId, tenantId: auth.tenantId },
-        include: {
-          agent: { select: { id: true, name: true } },
-          number: { select: { id: true, phoneNumber: true, friendlyName: true } },
-        },
       });
       if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 });
 
       // Try to enrich with live Vapi data (transcript, recording)
-      let vapiCall: any = null;
+      let vapiCall: Record<string, unknown> | null = null;
       if (call.vapiCallId) {
-        try { vapiCall = await vapiGetCall(call.vapiCallId); } catch (e) { /* ignore */ }
+        try { vapiCall = await vapiGetCall(call.vapiCallId); } catch { /* ignore */ }
       }
 
       return NextResponse.json({
         call: {
           ...call,
+          startedAt: safeDate(call.startedAt),
+          endedAt: safeDate(call.endedAt),
+          createdAt: safeDate(call.createdAt),
           transcript: JSON.parse(call.transcriptJson || '[]'),
           analysis: JSON.parse(call.analysisJson || '{}'),
           functionCalls: JSON.parse(call.functionCallsJson || '[]'),
@@ -54,26 +68,25 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // List calls
+    // List calls — no nested includes (use flat fields from AiCall)
     const where: Record<string, unknown> = { tenantId: auth.tenantId };
     if (status) where.status = status;
     if (assistantId) where.assistantId = assistantId;
 
     const calls = await db.aiCall.findMany({
       where,
-      include: {
-        agent: { select: { id: true, name: true } },
-        number: { select: { id: true, phoneNumber: true, friendlyName: true } },
-      },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
 
     // Summary stats
+    // Phase 9.8: Use _count: { id: true } instead of _count: { _all: true }
+    // because the Supabase adapter's aggregate doesn't support _all (it
+    // looks for a column called "_all" which doesn't exist).
     const stats = await db.aiCall.aggregate({
       where: { tenantId: auth.tenantId },
       _sum: { durationSec: true, costUsd: true },
-      _count: { _all: true },
+      _count: { id: true },
     });
 
     const today = new Date();
@@ -83,11 +96,16 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({
-      calls,
+      calls: calls.map((c: Record<string, unknown>) => ({
+        ...c,
+        startedAt: safeDate(c.startedAt),
+        endedAt: safeDate(c.endedAt),
+        createdAt: safeDate(c.createdAt),
+      })),
       stats: {
-        total: stats._count._all,
-        totalDurationSec: stats._sum.durationSec || 0,
-        totalCost: stats._sum.costUsd || 0,
+        total: (stats._count as Record<string, number> | null)?.id || 0,
+        totalDurationSec: stats._sum?.durationSec || 0,
+        totalCost: stats._sum?.costUsd || 0,
         todayCount: todayCalls,
       },
     });

@@ -46,19 +46,31 @@ export async function GET() {
     }> = [];
 
     // ── 1. Subscription ──
-    const subscription = await db.tenantAddonSubscription.findFirst({
-      where: {
-        tenantId,
-        addonPlan: { addonProduct: { code: 'AI_RECEPTIONIST' } },
-      },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        status: true,
-        currentPeriodEnd: true,
-        cancelAtPeriodEnd: true,
-        addonPlan: { select: { name: true } },
-      },
+    // Phase 9.8: Use a two-step lookup instead of a nested relation filter.
+    // PostgREST (Supabase REST adapter) can't translate Prisma's nested
+    // `where: { addonPlan: { addonProduct: { code: 'AI_RECEPTIONIST' } } }`
+    // — it drops the nested filter and returns 0 rows.
+    // Instead: find the AddonProduct by code, then query subscriptions by addonProductId.
+    const addonProduct = await db.addonProduct.findUnique({
+      where: { code: 'AI_RECEPTIONIST' },
+      select: { id: true },
     });
+
+    const subscription = addonProduct
+      ? await db.tenantAddonSubscription.findFirst({
+          where: {
+            tenantId,
+            addonProductId: addonProduct.id,
+            status: { in: ['ACTIVE', 'PAST_DUE', 'SUSPENDED'] },
+          },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            status: true,
+            currentPeriodEnd: true,
+            cancelAtPeriodEnd: true,
+          },
+        })
+      : null;
 
     if (!subscription) {
       checks.push({

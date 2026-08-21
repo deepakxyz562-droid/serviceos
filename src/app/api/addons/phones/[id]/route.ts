@@ -3,6 +3,17 @@ import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 
 /**
+ * Helper: safely serialize dates from BOTH Prisma (Date objects) and the
+ * Supabase REST adapter (which returns ISO strings from PostgREST).
+ */
+const safeDate = (d: unknown): string | null => {
+  if (!d) return null;
+  if (typeof d === 'string') return d;
+  if (d instanceof Date) return d.toISOString();
+  try { return new Date(d as string).toISOString(); } catch { return null; }
+};
+
+/**
  * GET /api/addons/phones/[id]
  * ─────────────────────────────────────────────────────────────────────────
  * Get phone number details + connection configuration.
@@ -46,9 +57,9 @@ export async function GET(
         capabilities: phone.capabilities,
         status: phone.status,
         monthlyCost: phone.monthlyCost,
-        releaseScheduledAt: phone.releaseScheduledAt?.toISOString() || null,
-        releaseAfter: phone.releaseAfter?.toISOString() || null,
-        createdAt: phone.createdAt.toISOString(),
+        releaseScheduledAt: safeDate(phone.releaseScheduledAt),
+        releaseAfter: safeDate(phone.releaseAfter),
+        createdAt: safeDate(phone.createdAt) || new Date().toISOString(),
       },
       connection: connection ? {
         id: connection.id,
@@ -58,7 +69,7 @@ export async function GET(
         fallbackRoutingMode: connection.fallbackRoutingMode,
         fallbackRoutingTarget: connection.fallbackRoutingTarget,
         status: connection.status,
-        verifiedAt: connection.verifiedAt?.toISOString() || null,
+        verifiedAt: safeDate(connection.verifiedAt),
       } : null,
     });
   } catch (error) {

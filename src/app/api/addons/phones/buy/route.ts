@@ -51,6 +51,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Phase 9.8: Duplicate-number pre-check ──
+    // Check if this number is already owned by ANY tenant BEFORE purchasing
+    // on Twilio. This prevents orphaned Twilio numbers when the DB unique
+    // constraint fails after the purchase succeeds.
+    const existingNumber = await db.phoneNumber.findUnique({
+      where: { number: requestedE164 },
+      select: { id: true, tenantId: true, status: true },
+    });
+
+    if (existingNumber) {
+      // If the number belongs to THIS tenant, return it (idempotent purchase)
+      if (existingNumber.tenantId === user.tenantId) {
+        return NextResponse.json({
+          idempotent: true,
+          phoneNumber: {
+            id: existingNumber.id,
+            number: requestedE164,
+            status: existingNumber.status,
+          },
+        });
+      }
+      // Number belongs to ANOTHER tenant — reject with a clear message
+      return NextResponse.json(
+        {
+          error: 'This phone number is already assigned to another account. Please choose a different number.',
+          code: 'NUMBER_ALREADY_TAKEN',
+        },
+        { status: 409 },
+      );
+    }
+
     // ── 1. Idempotency check ──
     const idempotencyKey = request.headers.get('idempotency-key') ||
       createHash('sha256').update(`${user.tenantId}:${requestedE164}:buy`).digest('hex').slice(0, 32);

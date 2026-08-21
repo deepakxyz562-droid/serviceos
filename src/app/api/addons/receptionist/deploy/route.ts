@@ -54,14 +54,23 @@ export async function POST(request: NextRequest) {
     const { versionId: explicitVersionId } = body as { versionId?: string };
 
     // ── 1. Enforce: subscription ACTIVE ──
-    const subscription = await db.tenantAddonSubscription.findFirst({
-      where: {
-        tenantId,
-        status: { in: ['ACTIVE', 'PAST_DUE'] },
-        addonPlan: { addonProduct: { code: 'AI_RECEPTIONIST' } },
-      },
-      select: { id: true, status: true, currentPeriodEnd: true },
+    // Phase 9.8: Use a two-step lookup instead of a nested relation filter.
+    // PostgREST can't translate `addonPlan: { addonProduct: { code: 'AI_RECEPTIONIST' } }`.
+    const addonProduct = await db.addonProduct.findUnique({
+      where: { code: 'AI_RECEPTIONIST' },
+      select: { id: true },
     });
+
+    const subscription = addonProduct
+      ? await db.tenantAddonSubscription.findFirst({
+          where: {
+            tenantId,
+            addonProductId: addonProduct.id,
+            status: { in: ['ACTIVE', 'PAST_DUE'] },
+          },
+          select: { id: true, status: true, currentPeriodEnd: true },
+        })
+      : null;
 
     if (!subscription) {
       return NextResponse.json(
@@ -74,13 +83,12 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 2. Enforce: entitlement ACTIVE ──
+    // Phase 9.8: Same two-step pattern — filter by addonProductId directly,
+    // not via a nested `subscription: { addonProduct: { code: ... } }` filter.
     const entitlement = await db.addonEntitlement.findFirst({
       where: {
         tenantId,
         status: 'ACTIVE',
-        subscription: {
-          addonProduct: { code: 'AI_RECEPTIONIST' },
-        },
       },
       select: { id: true, includedNumbers: true, maxConcurrentCalls: true },
     });
