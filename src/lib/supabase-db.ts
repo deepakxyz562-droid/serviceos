@@ -224,9 +224,9 @@ const TABLE_MAP: Record<string, string> = {
   aiCallTag: 'AiCallTag',
   aiBillingCounter: 'AiBillingCounter',
   aiCall: 'AiCall',
-  aiReceptionist: 'AiReceptionist',
-  aiAgentVersion: 'AiAgentVersion',
-  aiProviderDeployment: 'AiProviderDeployment',
+  aiReceptionist: 'AiAgent',
+  aiAgentVersion: 'AiAgent',
+  aiProviderDeployment: 'AiProviderKey',
   usageReservation: 'UsageReservation',
   usageLedger: 'UsageLedger',
   tenantAddonSubscription: 'TenantAddonSubscription',
@@ -356,6 +356,10 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   },
   PhoneNumber: {
     phoneConnections: { targetTable: 'PhoneConnection', targetFkColumn: 'phoneNumberId', isMany: true },
+  },
+  PhoneConnection: {
+    phoneNumber: { targetTable: 'PhoneNumber', fkColumn: 'phoneNumberId' },
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
   },
   Property: {
     customer: { targetTable: 'Customer', fkColumn: 'customerId' },
