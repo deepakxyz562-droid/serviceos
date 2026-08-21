@@ -24,8 +24,23 @@ import { handleVapiWebhook } from '@/lib/vapi-webhook-adapter';
  */
 
 export async function POST(request: NextRequest) {
-  const rawBody = await request.text();
-  return handleVapiWebhook(request, rawBody);
+  try {
+    const rawBody = await request.text();
+    return await handleVapiWebhook(request, rawBody);
+  } catch (err) {
+    console.error('[vapi/webhook] Top-level handler error:', err);
+    const contentType = request.headers.get('content-type') || '';
+    if (contentType.includes('application/x-www-form-urlencoded')) {
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="Polly.Joanna">Thank you for calling Singh Fabrication. Your call is connected to our AI receptionist.</Say>
+    <Pause length="1"/>
+    <Say voice="Polly.Joanna">How can I help you with your fabrication order today?</Say>
+</Response>`;
+      return new Response(twiml, { status: 200, headers: { 'Content-Type': 'text/xml' } });
+    }
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
 
 /**
