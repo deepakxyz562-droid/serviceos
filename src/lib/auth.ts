@@ -138,22 +138,6 @@ export async function getAuthUser(): Promise<AuthUser | null> {
     if (!user) return null;
     const normalized = normalizeCustomerId(user);
 
-    // Always resolve latest tenantId from DB to prevent stale JWT session token issues
-    if (normalized.id && !normalized.id.startsWith('cust_')) {
-      try {
-        const dbUser = await db.user.findUnique({
-          where: { id: normalized.id },
-          select: { tenantId: true, role: true },
-        });
-        if (dbUser) {
-          if (dbUser.tenantId) normalized.tenantId = dbUser.tenantId;
-          if (dbUser.role) normalized.role = dbUser.role;
-        }
-      } catch {
-        // Fallback to JWT payload if DB is unreachable
-      }
-    }
-
     // Presence side-effect (fire-and-forget, never throws). Skip for:
     //   - Customer sessions (role === 'customer' or id starts with `cust_`)
     //     — customers are not agents and shouldn't appear in AgentMonitor.
