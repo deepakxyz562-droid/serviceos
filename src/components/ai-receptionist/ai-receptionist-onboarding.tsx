@@ -66,7 +66,10 @@ export function AiReceptionistOnboarding() {
         const aiSub = subData.subscriptions?.find(
           (s: { addonProduct: { code: string } }) => s.addonProduct?.code === 'AI_RECEPTIONIST'
         );
-        if (aiSub && ['ACTIVE', 'PAST_DUE'].includes(aiSub.status)) {
+        // Phase 9.8: accept ACTIVE, PAST_DUE, SUSPENDED consistently with the
+        // workspace wrapper. SUSPENDED shows the workspace (with billing warning)
+        // but the backend AdmissionController rejects new calls when SUSPENDED.
+        if (aiSub && ['ACTIVE', 'PAST_DUE', 'SUSPENDED'].includes(aiSub.status)) {
           setState(s => ({ ...s, subscriptionActive: true, step: s.step < 2 ? 2 : s.step }));
         }
       }

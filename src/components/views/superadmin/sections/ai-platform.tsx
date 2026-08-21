@@ -235,13 +235,13 @@ function OverviewSubTab() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard icon={PhoneCall} label="Calls Today" value={String(data.callsToday)} accent="emerald" />
-        <StatCard icon={Clock} label="Billable Minutes" value={`${Math.floor(data.totalBillableSeconds / 60)}m`} accent="blue" />
-        <StatCard icon={DollarSign} label="Provider Cost" value={`$${data.totalProviderCost.toFixed(2)}`} accent="amber" />
-        <StatCard icon={TrendingUp} label="Revenue" value={`$${data.totalRevenue.toFixed(2)}`} accent="violet" />
+        <StatCard icon={Clock} label="Billable Minutes" value={`${Math.floor((data.totalBillableSeconds ?? 0) / 60)}m`} accent="blue" />
+        <StatCard icon={DollarSign} label="Provider Cost" value={`$${(data.totalProviderCost ?? 0).toFixed(2)}`} accent="amber" />
+        <StatCard icon={TrendingUp} label="Revenue" value={`$${(data.totalRevenue ?? 0).toFixed(2)}`} accent="violet" />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <StatCard icon={TrendingUp} label="Gross Margin" value={`${data.grossMargin.toFixed(1)}%`} accent="emerald" />
+        <StatCard icon={TrendingUp} label="Gross Margin" value={`${(data.grossMargin ?? 0).toFixed(1)}%`} accent="emerald" />
         <StatCard icon={Users} label="Active AI Tenants" value={String(data.activeAiTenants)} accent="blue" />
         <StatCard icon={Activity} label="Active Calls Now" value={String(data.activeCalls)} accent="amber" />
       </div>
@@ -714,7 +714,7 @@ function PlatformCallRow({ call }: { call: CallRecord }) {
         {call.durationSec > 0 && (
           <span className="text-xs text-muted-foreground">{Math.floor(call.durationSec / 60)}m {call.durationSec % 60}s</span>
         )}
-        <span className="text-xs text-muted-foreground">${call.costUsd.toFixed(3)}</span>
+        <span className="text-xs text-muted-foreground">${(call.costUsd ?? 0).toFixed(3)}</span>
         {call.outcomeType && (
           <Badge variant="secondary" className={outcomeColors[call.outcomeType] || ''}>
             {call.outcomeType}

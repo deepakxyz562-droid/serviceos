@@ -426,9 +426,24 @@ export function SettingsView() {
   // returns to the default 'company' section.
   const pendingSettingsSection = useAppStore((s) => s.pendingSettingsSection);
   const setPendingSettingsSection = useAppStore((s) => s.setPendingSettingsSection);
-  const [activeSection, setActiveSection] = useState(
-    () => pendingSettingsSection || 'company',
-  );
+  const [activeSection, setActiveSection] = useState<string>(() => {
+    // Priority 1: explicit in-app navigation (Zustand pendingSettingsSection)
+    // This is set by other views (e.g., the AI Receptionist sidebar "Configure AI Voice"
+    // button) to deep-link into a specific settings section.
+    if (pendingSettingsSection) return pendingSettingsSection;
+    // Priority 2: ?section= query param (used by Creem checkout success URL)
+    // e.g. /?view=settings&section=ai&addon_purchased=... lands on the AI section.
+    // Only applied on initial mount — doesn't override explicit in-app selection.
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const sectionParam = params.get('section');
+      if (sectionParam && SETTINGS_SECTIONS.some((s) => s.id === sectionParam)) {
+        return sectionParam;
+      }
+    }
+    // Priority 3: default
+    return 'company';
+  });
 
   // Clear the pending signal once consumed so a subsequent refresh or
   // settings open doesn't re-target the same section unexpectedly.
