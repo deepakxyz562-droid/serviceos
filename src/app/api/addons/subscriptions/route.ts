@@ -45,7 +45,7 @@ export async function GET() {
         maxConcurrentCalls: sub.addonPlan.maxConcurrentCalls,
         includedNumbers: sub.addonPlan.includedNumbers,
       },
-      addonProduct: sub.addonPlan.addonProduct,
+      addonProduct: sub.addonProduct || sub.addonPlan?.addonProduct,
       currentPeriodStart: sub.currentPeriodStart?.toISOString() || null,
       currentPeriodEnd: sub.currentPeriodEnd?.toISOString() || null,
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd,

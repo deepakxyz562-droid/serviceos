@@ -365,6 +365,69 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   PhoneNumber: {
     phoneConnections: { targetTable: 'PhoneConnection', targetFkColumn: 'phoneNumberId', isMany: true },
   },
+  // ── Phase 9.8: AI Receptionist addon models ──────────────────────────────
+  // These entries let the Supabase adapter resolve nested includes for the
+  // AI Receptionist APIs. Without them, PostgREST silently drops the joins
+  // and the API returns null for nested relations (e.g., addonProduct on
+  // AddonPlan → the onboarding wrapper sees addonProduct?.code === null →
+  // shows the pricing cards instead of the workspace).
+  AddonProduct: {
+    plans: { targetTable: 'AddonPlan', targetFkColumn: 'addonProductId', isMany: true },
+    subscriptions: { targetTable: 'TenantAddonSubscription', targetFkColumn: 'addonProductId', isMany: true },
+  },
+  AddonPlan: {
+    addonProduct: { targetTable: 'AddonProduct', fkColumn: 'addonProductId' },
+    subscriptions: { targetTable: 'TenantAddonSubscription', targetFkColumn: 'addonPlanId', isMany: true },
+  },
+  AddonEntitlement: {
+    subscription: { targetTable: 'TenantAddonSubscription', fkColumn: 'tenantAddonSubscriptionId' },
+    reservations: { targetTable: 'UsageReservation', targetFkColumn: 'entitlementId', isMany: true },
+    ledgerEntries: { targetTable: 'UsageLedger', targetFkColumn: 'entitlementId', isMany: true },
+  },
+  UsageReservation: {
+    entitlement: { targetTable: 'AddonEntitlement', fkColumn: 'entitlementId' },
+  },
+  UsageLedger: {
+    entitlement: { targetTable: 'AddonEntitlement', fkColumn: 'entitlementId' },
+  },
+  AiReceptionist: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    currentVersion: { targetTable: 'AiAgentVersion', fkColumn: 'currentVersionId' },
+    versions: { targetTable: 'AiAgentVersion', targetFkColumn: 'aiReceptionistId', isMany: true },
+    aiCalls: { targetTable: 'AiCall', targetFkColumn: 'receptionistId', isMany: true },
+  },
+  AiAgentVersion: {
+    reception: { targetTable: 'AiReceptionist', fkColumn: 'aiReceptionistId' },
+    deployments: { targetTable: 'AiProviderDeployment', targetFkColumn: 'aiAgentVersionId', isMany: true },
+    aiCalls: { targetTable: 'AiCall', targetFkColumn: 'agentVersionId', isMany: true },
+  },
+  AiProviderDeployment: {
+    agentVersion: { targetTable: 'AiAgentVersion', fkColumn: 'aiAgentVersionId' },
+    aiCalls: { targetTable: 'AiCall', targetFkColumn: 'deploymentId', isMany: true },
+  },
+  PhoneConnection: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    phoneNumber: { targetTable: 'PhoneNumber', fkColumn: 'phoneNumberId' },
+    externalPhoneNumber: { targetTable: 'ExternalPhoneNumber', fkColumn: 'externalPhoneNumberId' },
+  },
+  ExternalPhoneNumber: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    connections: { targetTable: 'PhoneConnection', targetFkColumn: 'externalPhoneNumberId', isMany: true },
+  },
+  TenantTelephonyAccount: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+  },
+  AiCall: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    receptionist: { targetTable: 'AiReceptionist', fkColumn: 'receptionistId' },
+    agentVersion: { targetTable: 'AiAgentVersion', fkColumn: 'agentVersionId' },
+    deployment: { targetTable: 'AiProviderDeployment', fkColumn: 'deploymentId' },
+    connection: { targetTable: 'PhoneConnection', fkColumn: 'connectionId' },
+  },
+  AiPhoneNumber: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    calls: { targetTable: 'AiCall', targetFkColumn: 'phoneNumberId', isMany: true },
+  },
   Property: {
     customer: { targetTable: 'Customer', fkColumn: 'customerId' },
     contacts: { targetTable: 'PropertyContact', targetFkColumn: 'propertyId', isMany: true },
