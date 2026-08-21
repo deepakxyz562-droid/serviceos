@@ -75,6 +75,29 @@ export async function POST(request: NextRequest) {
       description =
         'Dedicated phone number for SMS + voice. Billed monthly per number.';
       price = 5;
+    } else if (addonKey) {
+      // Phase 9.8: AI Receptionist addon plans (and any other AddonPlan).
+      // Look up the AddonPlan by code to get the price + name + currency.
+      const addonPlan = await db.addonPlan.findUnique({
+        where: { code: addonKey },
+        select: { name: true, description: true, price: true, currency: true, billingCycle: true },
+      });
+      if (!addonPlan) {
+        return NextResponse.json(
+          { error: `Addon plan "${addonKey}" not found in catalog.` },
+          { status: 404 }
+        );
+      }
+      name = `Fieseros ${addonPlan.name} — Monthly`;
+      description = addonPlan.description || `Fieseros ${addonPlan.name}, monthly subscription`;
+      price = addonPlan.price;
+      currency = addonPlan.currency || 'USD';
+      if (!price || price <= 0) {
+        return NextResponse.json(
+          { error: `Addon plan "${addonKey}" has no price. Nothing to create in Creem.` },
+          { status: 400 }
+        );
+      }
     } else if (planCode) {
       const plan = await db.plan.findUnique({ where: { code: planCode } });
       if (!plan) {

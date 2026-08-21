@@ -131,6 +131,27 @@ const ADDON_INPUT_DEFS: Array<{
     // and createAllCreemProducts() in src/lib/creem.ts which both use 'USD'.
     cycleLabel: 'Monthly $5',
   },
+  // Phase 9.8: AI Receptionist addon plans (monthly only — AddonPlan.billingCycle is 'monthly').
+  // These are created by createAllCreemProducts() and stored under cfg.products[addonCode].monthly.
+  // The addon checkout route (/api/addons/checkout) resolves the Creem product_id from this same catalog.
+  {
+    addonKey: 'AI_RECEPTIONIST_STARTER',
+    addonName: 'AI Receptionist Starter',
+    cycle: 'monthly',
+    cycleLabel: 'Monthly $29',
+  },
+  {
+    addonKey: 'AI_RECEPTIONIST_PRO',
+    addonName: 'AI Receptionist Pro',
+    cycle: 'monthly',
+    cycleLabel: 'Monthly $59',
+  },
+  {
+    addonKey: 'AI_RECEPTIONIST_BUSINESS',
+    addonName: 'AI Receptionist Business',
+    cycle: 'monthly',
+    cycleLabel: 'Monthly $129',
+  },
 ];
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -291,10 +312,11 @@ export function CreemBillingSection() {
   }
 
   // ─── Create ALL products in Creem ──────────────────────────────────────────
-  // Calls /api/superadmin/creem/create-all-products which creates up to 7
-  // products (starter×2 + growth×2 + business×2 + sms_number×1; enterprise is
-  // skipped because it's contact-sales $0). On success, refetch the config so
-  // the new product IDs auto-fill the inputs below.
+  // Calls /api/superadmin/creem/create-all-products which creates up to 10
+  // products (starter×2 + growth×2 + business×2 + sms_number×1 +
+  // AI_RECEPTIONIST_STARTER/PRO/BUSINESS×1 each; enterprise is skipped because
+  // it's contact-sales $0). On success, refetch the config so the new product
+  // IDs auto-fill the inputs below.
   async function handleCreateAllProducts() {
     setCreatingAll(true);
     try {
@@ -706,13 +728,12 @@ export function CreemBillingSection() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Create all products in Creem?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will create up to 7 products in your Creem account
+                    This will create up to 10 products in your Creem account
                     (starter, Professional, business × monthly/yearly + the SMS
-                    Number add-on; Enterprise is &quot;Custom&quot; pricing so
-                    it is skipped automatically — Creem&apos;s checkout
-                    can&apos;t process $0 plans). Add-on plans (AI Pro,
-                    Marketplace Featured/Premium) are billed via a separate
-                    manual flow and are not created here. Continue?
+                    Number add-on + AI Receptionist Starter/Pro/Business monthly;
+                    Enterprise is &quot;Custom&quot; pricing so it is skipped
+                    automatically — Creem&apos;s checkout can&apos;t process $0
+                    plans). Continue?
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
