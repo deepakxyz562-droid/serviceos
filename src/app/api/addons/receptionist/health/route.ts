@@ -68,9 +68,10 @@ export async function GET() {
         detail: 'No AI Receptionist subscription found',
       });
     } else if (['ACTIVE', 'PAST_DUE'].includes(subscription.status)) {
-      const periodEnd = subscription.currentPeriodEnd;
-      const daysLeft = periodEnd
-        ? Math.ceil((periodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      const rawEnd = subscription.currentPeriodEnd;
+      const periodEndMs = rawEnd instanceof Date ? rawEnd.getTime() : typeof rawEnd === 'string' ? new Date(rawEnd).getTime() : null;
+      const daysLeft = periodEndMs && !isNaN(periodEndMs)
+        ? Math.ceil((periodEndMs - Date.now()) / (1000 * 60 * 60 * 24))
         : null;
       checks.push({
         key: 'subscription',

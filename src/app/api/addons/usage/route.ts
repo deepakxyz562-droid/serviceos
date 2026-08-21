@@ -3,6 +3,13 @@ import { getAuthUser } from '@/lib/auth';
 import { getActiveEntitlement, computeRemainingSeconds } from '@/lib/entitlement-service';
 import { db } from '@/lib/db';
 
+const safeDate = (d: unknown): string | null => {
+  if (!d) return null;
+  if (typeof d === 'string') return d;
+  if (d instanceof Date) return d.toISOString();
+  try { return new Date(d as string).toISOString(); } catch { return null; }
+};
+
 /**
  * GET /api/addons/usage
  * ─────────────────────────────────────────────────────────────────────────
@@ -116,8 +123,8 @@ export async function GET() {
       maxCallDurationSeconds: entitlement.maxCallDurationSeconds,
       includedNumbers: entitlement.includedNumbers,
       // Billing period
-      periodStart: entitlement.periodStart.toISOString(),
-      periodEnd: entitlement.periodEnd.toISOString(),
+      periodStart: safeDate(entitlement.periodStart),
+      periodEnd: safeDate(entitlement.periodEnd),
       // Subscription
       subscriptionStatus: subscription?.status || null,
       cancelAtPeriodEnd: subscription?.cancelAtPeriodEnd || false,
