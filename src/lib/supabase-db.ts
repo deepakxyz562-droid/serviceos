@@ -223,6 +223,16 @@ const TABLE_MAP: Record<string, string> = {
   aiEscalationPolicy: 'AiEscalationPolicy',
   aiCallTag: 'AiCallTag',
   aiBillingCounter: 'AiBillingCounter',
+  aiCall: 'AiCall',
+  aiReceptionist: 'AiReceptionist',
+  aiAgentVersion: 'AiAgentVersion',
+  aiProviderDeployment: 'AiProviderDeployment',
+  usageReservation: 'UsageReservation',
+  usageLedger: 'UsageLedger',
+  tenantAddonSubscription: 'TenantAddonSubscription',
+  addonEntitlement: 'AddonEntitlement',
+  addonProduct: 'AddonProduct',
+  addonPlan: 'AddonPlan',
 };
 
 // Known missing tables in Supabase (return empty results gracefully)

@@ -237,7 +237,23 @@ export async function onCallEnd(params: CallEndParams): Promise<{
   });
 
   if (!call) {
-    console.warn(`[CallLifecycle] onCallEnd: no AiCall found for ${params.vapiCallId}`);
+    console.warn(`[CallLifecycle] onCallEnd: no AiCall found for ${params.vapiCallId} — finalizing via UsageReservation fallback`);
+    const reservation = await db.usageReservation.findFirst({
+      where: { externalCallId: params.vapiCallId },
+      select: { tenantId: true, entitlementId: true, id: true },
+    });
+    if (reservation) {
+      const finalRes = await finalizeUsage({
+        tenantId: reservation.tenantId,
+        entitlementId: reservation.entitlementId,
+        reservationId: reservation.id,
+        externalCallId: params.vapiCallId,
+        billableSeconds: params.billableSeconds ?? Math.ceil(params.durationSec),
+        providerCostUsd: params.costUsd,
+        revenueUsd: params.revenueUsd,
+      });
+      return { callId: null, usageFinalized: finalRes.ok, usageIdempotent: finalRes.idempotent };
+    }
     return { callId: null, usageFinalized: false, usageIdempotent: false };
   }
 
