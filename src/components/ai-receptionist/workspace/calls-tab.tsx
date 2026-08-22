@@ -547,9 +547,11 @@ function formatDuration(sec: number): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-function safeParse<T>(json: string, fallback: T): T {
+function safeParse<T>(json: string | null | undefined, fallback: T): T {
+  if (!json) return fallback;
   try {
-    return JSON.parse(json) as T;
+    const val = JSON.parse(json);
+    return val === null ? fallback : (val as T);
   } catch {
     return fallback;
   }
