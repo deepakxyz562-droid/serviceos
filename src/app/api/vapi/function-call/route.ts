@@ -46,9 +46,12 @@ export async function POST(request: NextRequest) {
 
   // ── 2. Parse the request ──
   const body = await request.json();
-  const { toolCalls, call } = body;
+  const message = body.message || body;
+  const toolCalls = message.toolCalls || body.toolCalls || message.toolWithToolCallList;
+  const call = message.call || body.call;
 
   if (!toolCalls || !Array.isArray(toolCalls)) {
+    console.warn('[vapi/function-call] missing toolCalls array in payload:', JSON.stringify(body));
     return NextResponse.json({ error: 'No toolCalls in request' }, { status: 400 });
   }
 
