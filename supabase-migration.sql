@@ -303,10 +303,15 @@ CREATE TABLE IF NOT EXISTS "RecurringJobSchedule" (
   "dayOfWeek" INTEGER,
   "dayOfMonth" INTEGER,
   "weekOfMonth" INTEGER,
+  "weekdaysJson" TEXT NOT NULL DEFAULT '[]',
+  "interval" INTEGER NOT NULL DEFAULT 1,
+  "nthWeekdayJson" TEXT,
+  "endDate" TIMESTAMP(3),
+  "endAfterOccurrences" INTEGER,
+  "asNeeded" BOOLEAN NOT NULL DEFAULT false,
   "timeOfDay" TEXT,
   "durationMins" INTEGER NOT NULL DEFAULT 60,
   "startDate" TIMESTAMP(3) NOT NULL DEFAULT now(),
-  "endDate" TIMESTAMP(3),
   "nextRunAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
   "lastRunAt" TIMESTAMP(3),
   "lastJobId" TEXT,
@@ -317,8 +322,12 @@ CREATE TABLE IF NOT EXISTS "RecurringJobSchedule" (
   "visitInstructions" TEXT,
   "checklistIdsJson" TEXT NOT NULL DEFAULT '[]',
   "lineItemsJson" TEXT NOT NULL DEFAULT '[]',
+  "generateInvoice" BOOLEAN NOT NULL DEFAULT false,
+  "invoiceTiming" TEXT NOT NULL DEFAULT 'on_completion',
+  "timezone" TEXT,
   "active" BOOLEAN NOT NULL DEFAULT true,
   "pausedAt" TIMESTAMP(3),
+  "pausedUntil" TIMESTAMP(3),
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
   "updatedAt" TIMESTAMP(3) NOT NULL
 );
@@ -466,6 +475,8 @@ CREATE TABLE IF NOT EXISTS "Invoice" (
   "milestoneIndex" INTEGER,
   "parentInvoiceId" TEXT,
   "recurrenceId" TEXT,
+  "occurrenceDate" TIMESTAMP(3),
+  "recurringScheduleId" TEXT,
   "dueDate" TIMESTAMP(3),
   "sentAt" TIMESTAMP(3),
   "paidAt" TIMESTAMP(3),
@@ -499,6 +510,9 @@ CREATE TABLE IF NOT EXISTS "RecurringInvoice" (
   "createdById" TEXT,
   "autoChargeEnabled" BOOLEAN NOT NULL DEFAULT false,
   "paymentMethodId" TEXT,
+  "pausedAt" TIMESTAMP(3),
+  "pausedUntil" TIMESTAMP(3),
+  "timezone" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
   "updatedAt" TIMESTAMP(3) NOT NULL
 );
@@ -3149,11 +3163,14 @@ CREATE TABLE IF NOT EXISTS "PhoneNumber" (
   "providerCost" DOUBLE PRECISION NOT NULL DEFAULT 0,
   "paymentProvider" TEXT,
   "subscriptionId" TEXT,
-  "providerSid" TEXT,
+  "providerSid" TEXT UNIQUE,
   "smsWebhookUrl" TEXT,
   "voiceWebhookUrl" TEXT,
   "status" TEXT NOT NULL DEFAULT 'pending',
   "releasedAt" TIMESTAMP(3),
+  "releaseScheduledAt" TIMESTAMP(3),
+  "releaseAfter" TIMESTAMP(3),
+  "vapiReleasedAt" TIMESTAMP(3),
   "lastUsedAt" TIMESTAMP(3),
   "voiceMode" TEXT,
   "forwardToPhone" TEXT,
@@ -3185,7 +3202,7 @@ CREATE TABLE IF NOT EXISTS "AiPhoneNumber" (
 CREATE TABLE IF NOT EXISTS "AiCall" (
   "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
   "tenantId" TEXT NOT NULL,
-  "vapiCallId" TEXT,
+  "vapiCallId" TEXT UNIQUE,
   "callType" TEXT NOT NULL DEFAULT 'inbound',
   "status" TEXT NOT NULL DEFAULT 'queued',
   "phoneNumberId" TEXT,
@@ -3196,7 +3213,10 @@ CREATE TABLE IF NOT EXISTS "AiCall" (
   "startedAt" TIMESTAMP(3),
   "endedAt" TIMESTAMP(3),
   "durationSec" INTEGER NOT NULL DEFAULT 0,
+  "billableSeconds" INTEGER NOT NULL DEFAULT 0,
   "costUsd" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "revenueUsd" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "costBreakdownJson" TEXT NOT NULL DEFAULT '{}',
   "transcriptJson" TEXT NOT NULL DEFAULT '[]',
   "summary" TEXT,
   "analysisJson" TEXT NOT NULL DEFAULT '{}',
@@ -3211,6 +3231,10 @@ CREATE TABLE IF NOT EXISTS "AiCall" (
   "timeSavedSec" INTEGER NOT NULL DEFAULT 0,
   "aiDisabled" BOOLEAN NOT NULL DEFAULT false,
   "callerIdentifiedAs" TEXT,
+  "receptionistId" TEXT,
+  "agentVersionId" TEXT,
+  "deploymentId" TEXT,
+  "connectionId" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
   "updatedAt" TIMESTAMP(3) NOT NULL
 );
@@ -4344,6 +4368,295 @@ CREATE TABLE IF NOT EXISTS "CustomerContact" (
 );
 
 
+CREATE TABLE IF NOT EXISTS "AddonProduct" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "code" TEXT NOT NULL UNIQUE,
+  "name" TEXT NOT NULL,
+  "description" TEXT,
+  "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "sortOrder" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "AddonPlan" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "addonProductId" TEXT NOT NULL,
+  "code" TEXT NOT NULL UNIQUE,
+  "name" TEXT NOT NULL,
+  "description" TEXT,
+  "price" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "currency" TEXT NOT NULL DEFAULT 'USD',
+  "billingCycle" TEXT NOT NULL DEFAULT 'monthly',
+  "includedSeconds" INTEGER NOT NULL DEFAULT 0,
+  "maxCallDurationSeconds" INTEGER NOT NULL DEFAULT 600,
+  "maxConcurrentCalls" INTEGER NOT NULL DEFAULT 1,
+  "includedNumbers" INTEGER NOT NULL DEFAULT 1,
+  "creemProductId" TEXT,
+  "creemPriceId" TEXT,
+  "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "sortOrder" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "TenantAddonSubscription" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "addonPlanId" TEXT NOT NULL,
+  "addonProductId" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'PENDING',
+  "creemSubscriptionId" TEXT UNIQUE,
+  "creemCustomerId" TEXT,
+  "currentPeriodStart" TIMESTAMP(3),
+  "currentPeriodEnd" TIMESTAMP(3),
+  "cancelAtPeriodEnd" BOOLEAN NOT NULL DEFAULT false,
+  "cancelledAt" TIMESTAMP(3),
+  "endedAt" TIMESTAMP(3),
+  "trialEndsAt" TIMESTAMP(3),
+  "gracePeriodEndsAt" TIMESTAMP(3),
+  "metadataJson" TEXT NOT NULL DEFAULT '{}',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "AddonEntitlement" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "tenantAddonSubscriptionId" TEXT NOT NULL,
+  "includedSeconds" INTEGER NOT NULL,
+  "maxCallDurationSeconds" INTEGER NOT NULL,
+  "maxConcurrentCalls" INTEGER NOT NULL,
+  "includedNumbers" INTEGER NOT NULL,
+  "periodStart" TIMESTAMP(3) NOT NULL,
+  "periodEnd" TIMESTAMP(3) NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+  "cachedRemainingSeconds" INTEGER NOT NULL DEFAULT 0,
+  "lastCalculatedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "UsageReservation" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "entitlementId" TEXT NOT NULL,
+  "aiCallId" TEXT,
+  "externalCallId" TEXT,
+  "reservedSeconds" INTEGER NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+  "reservedAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "releasedAt" TIMESTAMP(3),
+  "consumedSeconds" INTEGER,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "UsageLedger" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "entitlementId" TEXT NOT NULL,
+  "aiCallId" TEXT,
+  "idempotencyKey" TEXT NOT NULL UNIQUE,
+  "usageType" TEXT NOT NULL,
+  "quantitySeconds" INTEGER NOT NULL,
+  "providerCostUsd" DOUBLE PRECISION,
+  "revenueUsd" DOUBLE PRECISION,
+  "costBreakdownJson" TEXT,
+  "periodStart" TIMESTAMP(3) NOT NULL,
+  "periodEnd" TIMESTAMP(3) NOT NULL,
+  "occurredAt" TIMESTAMP(3) NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now()
+);
+
+
+CREATE TABLE IF NOT EXISTS "ExternalPhoneNumber" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "e164" TEXT NOT NULL,
+  "label" TEXT,
+  "country" TEXT,
+  "verificationStatus" TEXT NOT NULL DEFAULT 'PENDING',
+  "verificationCode" TEXT,
+  "verificationExpiresAt" TIMESTAMP(3),
+  "verifiedAt" TIMESTAMP(3),
+  "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "PhoneConnection" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "phoneNumberId" TEXT NOT NULL,
+  "externalPhoneNumberId" TEXT,
+  "connectionType" TEXT NOT NULL DEFAULT 'DIRECT',
+  "routingMode" TEXT NOT NULL DEFAULT 'AI_RECEPTIONIST',
+  "routingTarget" TEXT,
+  "fallbackRoutingMode" TEXT,
+  "fallbackRoutingTarget" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'PENDING',
+  "verifiedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "AiProviderConfig" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "provider" TEXT NOT NULL UNIQUE,
+  "displayName" TEXT NOT NULL,
+  "encryptedApiKey" TEXT,
+  "capabilities" TEXT NOT NULL DEFAULT '',
+  "configJson" TEXT NOT NULL DEFAULT '{}',
+  "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+  "lastValidatedAt" TIMESTAMP(3),
+  "lastError" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "AiReceptionist" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "name" TEXT NOT NULL DEFAULT 'Sarah',
+  "status" TEXT NOT NULL DEFAULT 'DRAFT',
+  "currentVersionId" TEXT UNIQUE,
+  "greeting" TEXT,
+  "afterHoursGreeting" TEXT,
+  "businessHoursMode" TEXT NOT NULL DEFAULT 'use_tenant_hours',
+  "customHoursJson" TEXT,
+  "handoffEnabled" BOOLEAN NOT NULL DEFAULT true,
+  "handoffTransferTarget" TEXT,
+  "handoffFallbackMode" TEXT NOT NULL DEFAULT 'VOICEMAIL',
+  "smsSendBackEnabled" BOOLEAN NOT NULL DEFAULT false,
+  "smsSendBackTemplate" TEXT,
+  "trustedPhonesJson" TEXT NOT NULL DEFAULT '[]',
+  "knownCallerGreetingTemplate" TEXT,
+  "backgroundNoiseEnabled" BOOLEAN NOT NULL DEFAULT false,
+  "responseDelaySeconds" INTEGER NOT NULL DEFAULT 0,
+  "knowledgeConfigJson" TEXT NOT NULL DEFAULT '{}',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "AiAgentVersion" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "aiReceptionistId" TEXT NOT NULL,
+  "versionNumber" INTEGER NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'DRAFT',
+  "systemPrompt" TEXT NOT NULL,
+  "voice" TEXT NOT NULL DEFAULT 'rachel',
+  "voiceProvider" TEXT NOT NULL DEFAULT 'elevenlabs',
+  "model" TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+  "temperature" DOUBLE PRECISION NOT NULL DEFAULT 0.7,
+  "maxTokens" INTEGER NOT NULL DEFAULT 500,
+  "greeting" TEXT,
+  "personality" TEXT NOT NULL DEFAULT 'professional',
+  "responseStyle" TEXT NOT NULL DEFAULT 'concise',
+  "maxDurationSeconds" INTEGER NOT NULL DEFAULT 600,
+  "silenceTimeoutSeconds" INTEGER NOT NULL DEFAULT 120,
+  "knowledgeConfigSnapshot" TEXT NOT NULL DEFAULT '{}',
+  "publishedAt" TIMESTAMP(3),
+  "createdBy" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "AiProviderDeployment" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "aiAgentVersionId" TEXT NOT NULL,
+  "provider" TEXT NOT NULL DEFAULT 'VAPI',
+  "externalAssistantId" TEXT,
+  "externalPhoneNumberId" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'PENDING',
+  "deploymentConfigJson" TEXT NOT NULL DEFAULT '{}',
+  "lastSyncedAt" TIMESTAMP(3),
+  "lastError" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "AiToolExecution" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "externalCallId" TEXT NOT NULL,
+  "toolCallId" TEXT,
+  "idempotencyKey" TEXT NOT NULL UNIQUE,
+  "toolName" TEXT NOT NULL,
+  "capability" TEXT NOT NULL,
+  "parametersJson" TEXT NOT NULL DEFAULT '{}',
+  "requestHash" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'PENDING',
+  "resultJson" TEXT,
+  "errorJson" TEXT,
+  "startedAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "completedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "TenantTelephonyAccount" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "provider" TEXT NOT NULL DEFAULT 'TWILIO',
+  "providerAccountSid" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "PhoneProvisioningAttempt" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "tenantId" TEXT NOT NULL,
+  "idempotencyKey" TEXT NOT NULL UNIQUE,
+  "provider" TEXT NOT NULL DEFAULT 'TWILIO',
+  "requestedE164" TEXT,
+  "twilioProviderSid" TEXT,
+  "vapiNumberId" TEXT,
+  "resultingPhoneNumberId" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'PENDING',
+  "error" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  "completedAt" TIMESTAMP(3)
+);
+
+
+CREATE TABLE IF NOT EXISTS "TwilioProviderConfig" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "accountSid" TEXT NOT NULL UNIQUE,
+  "messagingServiceSid" TEXT,
+  "defaultVoiceWebhook" TEXT,
+  "defaultSmsWebhook" TEXT,
+  "region" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS "VapiProviderConfig" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "webhookSecret" TEXT,
+  "defaultServerUrl" TEXT,
+  "defaultWebhookUrl" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+
+
 -- ##########################################
 -- PHASE 2: BACKPORT COLUMNS
 -- (ensures pre-existing tables get any missing columns)
@@ -4578,10 +4891,15 @@ ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "frequency" TEXT DEF
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "dayOfWeek" INTEGER;
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "dayOfMonth" INTEGER;
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "weekOfMonth" INTEGER;
+ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "weekdaysJson" TEXT DEFAULT '[]';
+ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "interval" INTEGER DEFAULT 1;
+ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "nthWeekdayJson" TEXT;
+ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "endDate" TIMESTAMP(3);
+ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "endAfterOccurrences" INTEGER;
+ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "asNeeded" BOOLEAN DEFAULT false;
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "timeOfDay" TEXT;
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "durationMins" INTEGER DEFAULT 60;
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "startDate" TIMESTAMP(3) DEFAULT now();
-ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "endDate" TIMESTAMP(3);
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "nextRunAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "lastRunAt" TIMESTAMP(3);
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "lastJobId" TEXT;
@@ -4592,8 +4910,12 @@ ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "branchId" TEXT;
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "visitInstructions" TEXT;
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "checklistIdsJson" TEXT DEFAULT '[]';
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "lineItemsJson" TEXT DEFAULT '[]';
+ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "generateInvoice" BOOLEAN DEFAULT false;
+ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "invoiceTiming" TEXT DEFAULT 'on_completion';
+ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "timezone" TEXT;
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "active" BOOLEAN DEFAULT true;
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "pausedAt" TIMESTAMP(3);
+ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "pausedUntil" TIMESTAMP(3);
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "RecurringJobSchedule" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 
@@ -4723,6 +5045,8 @@ ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "invoiceType" TEXT DEFAULT 'stand
 ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "milestoneIndex" INTEGER;
 ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "parentInvoiceId" TEXT;
 ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "recurrenceId" TEXT;
+ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "occurrenceDate" TIMESTAMP(3);
+ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "recurringScheduleId" TEXT;
 ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "dueDate" TIMESTAMP(3);
 ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "sentAt" TIMESTAMP(3);
 ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "paidAt" TIMESTAMP(3);
@@ -4753,6 +5077,9 @@ ALTER TABLE "RecurringInvoice" ADD COLUMN IF NOT EXISTS "executionCount" INTEGER
 ALTER TABLE "RecurringInvoice" ADD COLUMN IF NOT EXISTS "createdById" TEXT;
 ALTER TABLE "RecurringInvoice" ADD COLUMN IF NOT EXISTS "autoChargeEnabled" BOOLEAN DEFAULT false;
 ALTER TABLE "RecurringInvoice" ADD COLUMN IF NOT EXISTS "paymentMethodId" TEXT;
+ALTER TABLE "RecurringInvoice" ADD COLUMN IF NOT EXISTS "pausedAt" TIMESTAMP(3);
+ALTER TABLE "RecurringInvoice" ADD COLUMN IF NOT EXISTS "pausedUntil" TIMESTAMP(3);
+ALTER TABLE "RecurringInvoice" ADD COLUMN IF NOT EXISTS "timezone" TEXT;
 ALTER TABLE "RecurringInvoice" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "RecurringInvoice" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 
@@ -6991,6 +7318,9 @@ ALTER TABLE "PhoneNumber" ADD COLUMN IF NOT EXISTS "smsWebhookUrl" TEXT;
 ALTER TABLE "PhoneNumber" ADD COLUMN IF NOT EXISTS "voiceWebhookUrl" TEXT;
 ALTER TABLE "PhoneNumber" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'pending';
 ALTER TABLE "PhoneNumber" ADD COLUMN IF NOT EXISTS "releasedAt" TIMESTAMP(3);
+ALTER TABLE "PhoneNumber" ADD COLUMN IF NOT EXISTS "releaseScheduledAt" TIMESTAMP(3);
+ALTER TABLE "PhoneNumber" ADD COLUMN IF NOT EXISTS "releaseAfter" TIMESTAMP(3);
+ALTER TABLE "PhoneNumber" ADD COLUMN IF NOT EXISTS "vapiReleasedAt" TIMESTAMP(3);
 ALTER TABLE "PhoneNumber" ADD COLUMN IF NOT EXISTS "lastUsedAt" TIMESTAMP(3);
 ALTER TABLE "PhoneNumber" ADD COLUMN IF NOT EXISTS "voiceMode" TEXT;
 ALTER TABLE "PhoneNumber" ADD COLUMN IF NOT EXISTS "forwardToPhone" TEXT;
@@ -7027,7 +7357,10 @@ ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "customerPhone" TEXT;
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "startedAt" TIMESTAMP(3);
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "endedAt" TIMESTAMP(3);
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "durationSec" INTEGER DEFAULT 0;
+ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "billableSeconds" INTEGER DEFAULT 0;
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "costUsd" DOUBLE PRECISION DEFAULT 0;
+ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "revenueUsd" DOUBLE PRECISION DEFAULT 0;
+ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "costBreakdownJson" TEXT DEFAULT '{}';
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "transcriptJson" TEXT DEFAULT '[]';
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "summary" TEXT;
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "analysisJson" TEXT DEFAULT '{}';
@@ -7042,6 +7375,10 @@ ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "outcomeType" TEXT;
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "timeSavedSec" INTEGER DEFAULT 0;
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "aiDisabled" BOOLEAN DEFAULT false;
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "callerIdentifiedAs" TEXT;
+ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "receptionistId" TEXT;
+ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "agentVersionId" TEXT;
+ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "deploymentId" TEXT;
+ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "connectionId" TEXT;
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "AiCall" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 
@@ -7999,6 +8336,244 @@ ALTER TABLE "CustomerContact" ADD COLUMN IF NOT EXISTS "role" TEXT;
 ALTER TABLE "CustomerContact" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "CustomerContact" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 
+ALTER TABLE "AddonProduct" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "AddonProduct" ADD COLUMN IF NOT EXISTS "code" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AddonProduct" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AddonProduct" ADD COLUMN IF NOT EXISTS "description" TEXT;
+ALTER TABLE "AddonProduct" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT true;
+ALTER TABLE "AddonProduct" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER DEFAULT 0;
+ALTER TABLE "AddonProduct" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "AddonProduct" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "addonProductId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "code" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "description" TEXT;
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "price" DOUBLE PRECISION DEFAULT 0;
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "currency" TEXT DEFAULT 'USD';
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "billingCycle" TEXT DEFAULT 'monthly';
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "includedSeconds" INTEGER DEFAULT 0;
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "maxCallDurationSeconds" INTEGER DEFAULT 600;
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "maxConcurrentCalls" INTEGER DEFAULT 1;
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "includedNumbers" INTEGER DEFAULT 1;
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "creemProductId" TEXT;
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "creemPriceId" TEXT;
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT true;
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER DEFAULT 0;
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "AddonPlan" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "addonPlanId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "addonProductId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'PENDING';
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "creemSubscriptionId" TEXT;
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "creemCustomerId" TEXT;
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "currentPeriodStart" TIMESTAMP(3);
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "currentPeriodEnd" TIMESTAMP(3);
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "cancelAtPeriodEnd" BOOLEAN DEFAULT false;
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "cancelledAt" TIMESTAMP(3);
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "endedAt" TIMESTAMP(3);
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "trialEndsAt" TIMESTAMP(3);
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "gracePeriodEndsAt" TIMESTAMP(3);
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "metadataJson" TEXT DEFAULT '{}';
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "TenantAddonSubscription" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "AddonEntitlement" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "AddonEntitlement" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AddonEntitlement" ADD COLUMN IF NOT EXISTS "tenantAddonSubscriptionId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AddonEntitlement" ADD COLUMN IF NOT EXISTS "includedSeconds" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "AddonEntitlement" ADD COLUMN IF NOT EXISTS "maxCallDurationSeconds" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "AddonEntitlement" ADD COLUMN IF NOT EXISTS "maxConcurrentCalls" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "AddonEntitlement" ADD COLUMN IF NOT EXISTS "includedNumbers" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "AddonEntitlement" ADD COLUMN IF NOT EXISTS "periodStart" TIMESTAMP(3) NOT NULL DEFAULT now();
+ALTER TABLE "AddonEntitlement" ADD COLUMN IF NOT EXISTS "periodEnd" TIMESTAMP(3) NOT NULL DEFAULT now();
+ALTER TABLE "AddonEntitlement" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'ACTIVE';
+ALTER TABLE "AddonEntitlement" ADD COLUMN IF NOT EXISTS "cachedRemainingSeconds" INTEGER DEFAULT 0;
+ALTER TABLE "AddonEntitlement" ADD COLUMN IF NOT EXISTS "lastCalculatedAt" TIMESTAMP(3);
+ALTER TABLE "AddonEntitlement" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "AddonEntitlement" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "UsageReservation" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "UsageReservation" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "UsageReservation" ADD COLUMN IF NOT EXISTS "entitlementId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "UsageReservation" ADD COLUMN IF NOT EXISTS "aiCallId" TEXT;
+ALTER TABLE "UsageReservation" ADD COLUMN IF NOT EXISTS "externalCallId" TEXT;
+ALTER TABLE "UsageReservation" ADD COLUMN IF NOT EXISTS "reservedSeconds" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "UsageReservation" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'ACTIVE';
+ALTER TABLE "UsageReservation" ADD COLUMN IF NOT EXISTS "reservedAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "UsageReservation" ADD COLUMN IF NOT EXISTS "releasedAt" TIMESTAMP(3);
+ALTER TABLE "UsageReservation" ADD COLUMN IF NOT EXISTS "consumedSeconds" INTEGER;
+ALTER TABLE "UsageReservation" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "UsageReservation" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "UsageLedger" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "UsageLedger" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "UsageLedger" ADD COLUMN IF NOT EXISTS "entitlementId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "UsageLedger" ADD COLUMN IF NOT EXISTS "aiCallId" TEXT;
+ALTER TABLE "UsageLedger" ADD COLUMN IF NOT EXISTS "idempotencyKey" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "UsageLedger" ADD COLUMN IF NOT EXISTS "usageType" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "UsageLedger" ADD COLUMN IF NOT EXISTS "quantitySeconds" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "UsageLedger" ADD COLUMN IF NOT EXISTS "providerCostUsd" DOUBLE PRECISION;
+ALTER TABLE "UsageLedger" ADD COLUMN IF NOT EXISTS "revenueUsd" DOUBLE PRECISION;
+ALTER TABLE "UsageLedger" ADD COLUMN IF NOT EXISTS "costBreakdownJson" TEXT;
+ALTER TABLE "UsageLedger" ADD COLUMN IF NOT EXISTS "periodStart" TIMESTAMP(3) NOT NULL DEFAULT now();
+ALTER TABLE "UsageLedger" ADD COLUMN IF NOT EXISTS "periodEnd" TIMESTAMP(3) NOT NULL DEFAULT now();
+ALTER TABLE "UsageLedger" ADD COLUMN IF NOT EXISTS "occurredAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+ALTER TABLE "UsageLedger" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+
+ALTER TABLE "ExternalPhoneNumber" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "ExternalPhoneNumber" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "ExternalPhoneNumber" ADD COLUMN IF NOT EXISTS "e164" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "ExternalPhoneNumber" ADD COLUMN IF NOT EXISTS "label" TEXT;
+ALTER TABLE "ExternalPhoneNumber" ADD COLUMN IF NOT EXISTS "country" TEXT;
+ALTER TABLE "ExternalPhoneNumber" ADD COLUMN IF NOT EXISTS "verificationStatus" TEXT DEFAULT 'PENDING';
+ALTER TABLE "ExternalPhoneNumber" ADD COLUMN IF NOT EXISTS "verificationCode" TEXT;
+ALTER TABLE "ExternalPhoneNumber" ADD COLUMN IF NOT EXISTS "verificationExpiresAt" TIMESTAMP(3);
+ALTER TABLE "ExternalPhoneNumber" ADD COLUMN IF NOT EXISTS "verifiedAt" TIMESTAMP(3);
+ALTER TABLE "ExternalPhoneNumber" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'ACTIVE';
+ALTER TABLE "ExternalPhoneNumber" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "ExternalPhoneNumber" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "PhoneConnection" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "PhoneConnection" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "PhoneConnection" ADD COLUMN IF NOT EXISTS "phoneNumberId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "PhoneConnection" ADD COLUMN IF NOT EXISTS "externalPhoneNumberId" TEXT;
+ALTER TABLE "PhoneConnection" ADD COLUMN IF NOT EXISTS "connectionType" TEXT DEFAULT 'DIRECT';
+ALTER TABLE "PhoneConnection" ADD COLUMN IF NOT EXISTS "routingMode" TEXT DEFAULT 'AI_RECEPTIONIST';
+ALTER TABLE "PhoneConnection" ADD COLUMN IF NOT EXISTS "routingTarget" TEXT;
+ALTER TABLE "PhoneConnection" ADD COLUMN IF NOT EXISTS "fallbackRoutingMode" TEXT;
+ALTER TABLE "PhoneConnection" ADD COLUMN IF NOT EXISTS "fallbackRoutingTarget" TEXT;
+ALTER TABLE "PhoneConnection" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'PENDING';
+ALTER TABLE "PhoneConnection" ADD COLUMN IF NOT EXISTS "verifiedAt" TIMESTAMP(3);
+ALTER TABLE "PhoneConnection" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "PhoneConnection" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "AiProviderConfig" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "AiProviderConfig" ADD COLUMN IF NOT EXISTS "provider" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiProviderConfig" ADD COLUMN IF NOT EXISTS "displayName" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiProviderConfig" ADD COLUMN IF NOT EXISTS "encryptedApiKey" TEXT;
+ALTER TABLE "AiProviderConfig" ADD COLUMN IF NOT EXISTS "capabilities" TEXT DEFAULT '';
+ALTER TABLE "AiProviderConfig" ADD COLUMN IF NOT EXISTS "configJson" TEXT DEFAULT '{}';
+ALTER TABLE "AiProviderConfig" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'ACTIVE';
+ALTER TABLE "AiProviderConfig" ADD COLUMN IF NOT EXISTS "lastValidatedAt" TIMESTAMP(3);
+ALTER TABLE "AiProviderConfig" ADD COLUMN IF NOT EXISTS "lastError" TEXT;
+ALTER TABLE "AiProviderConfig" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "AiProviderConfig" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "name" TEXT DEFAULT 'Sarah';
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'DRAFT';
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "currentVersionId" TEXT;
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "greeting" TEXT;
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "afterHoursGreeting" TEXT;
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "businessHoursMode" TEXT DEFAULT 'use_tenant_hours';
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "customHoursJson" TEXT;
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "handoffEnabled" BOOLEAN DEFAULT true;
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "handoffTransferTarget" TEXT;
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "handoffFallbackMode" TEXT DEFAULT 'VOICEMAIL';
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "smsSendBackEnabled" BOOLEAN DEFAULT false;
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "smsSendBackTemplate" TEXT;
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "trustedPhonesJson" TEXT DEFAULT '[]';
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "knownCallerGreetingTemplate" TEXT;
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "backgroundNoiseEnabled" BOOLEAN DEFAULT false;
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "responseDelaySeconds" INTEGER DEFAULT 0;
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "knowledgeConfigJson" TEXT DEFAULT '{}';
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "AiReceptionist" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "aiReceptionistId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "versionNumber" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'DRAFT';
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "systemPrompt" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "voice" TEXT DEFAULT 'rachel';
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "voiceProvider" TEXT DEFAULT 'elevenlabs';
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "model" TEXT DEFAULT 'gpt-4o-mini';
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "temperature" DOUBLE PRECISION DEFAULT 0.7;
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "maxTokens" INTEGER DEFAULT 500;
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "greeting" TEXT;
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "personality" TEXT DEFAULT 'professional';
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "responseStyle" TEXT DEFAULT 'concise';
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "maxDurationSeconds" INTEGER DEFAULT 600;
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "silenceTimeoutSeconds" INTEGER DEFAULT 120;
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "knowledgeConfigSnapshot" TEXT DEFAULT '{}';
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "publishedAt" TIMESTAMP(3);
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "createdBy" TEXT;
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "AiAgentVersion" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "AiProviderDeployment" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "AiProviderDeployment" ADD COLUMN IF NOT EXISTS "aiAgentVersionId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiProviderDeployment" ADD COLUMN IF NOT EXISTS "provider" TEXT DEFAULT 'VAPI';
+ALTER TABLE "AiProviderDeployment" ADD COLUMN IF NOT EXISTS "externalAssistantId" TEXT;
+ALTER TABLE "AiProviderDeployment" ADD COLUMN IF NOT EXISTS "externalPhoneNumberId" TEXT;
+ALTER TABLE "AiProviderDeployment" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'PENDING';
+ALTER TABLE "AiProviderDeployment" ADD COLUMN IF NOT EXISTS "deploymentConfigJson" TEXT DEFAULT '{}';
+ALTER TABLE "AiProviderDeployment" ADD COLUMN IF NOT EXISTS "lastSyncedAt" TIMESTAMP(3);
+ALTER TABLE "AiProviderDeployment" ADD COLUMN IF NOT EXISTS "lastError" TEXT;
+ALTER TABLE "AiProviderDeployment" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "AiProviderDeployment" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "externalCallId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "toolCallId" TEXT;
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "idempotencyKey" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "toolName" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "capability" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "parametersJson" TEXT DEFAULT '{}';
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "requestHash" TEXT;
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'PENDING';
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "resultJson" TEXT;
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "errorJson" TEXT;
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "startedAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "completedAt" TIMESTAMP(3);
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "AiToolExecution" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "TenantTelephonyAccount" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "TenantTelephonyAccount" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "TenantTelephonyAccount" ADD COLUMN IF NOT EXISTS "provider" TEXT DEFAULT 'TWILIO';
+ALTER TABLE "TenantTelephonyAccount" ADD COLUMN IF NOT EXISTS "providerAccountSid" TEXT;
+ALTER TABLE "TenantTelephonyAccount" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'ACTIVE';
+ALTER TABLE "TenantTelephonyAccount" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "TenantTelephonyAccount" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "PhoneProvisioningAttempt" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "PhoneProvisioningAttempt" ADD COLUMN IF NOT EXISTS "tenantId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "PhoneProvisioningAttempt" ADD COLUMN IF NOT EXISTS "idempotencyKey" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "PhoneProvisioningAttempt" ADD COLUMN IF NOT EXISTS "provider" TEXT DEFAULT 'TWILIO';
+ALTER TABLE "PhoneProvisioningAttempt" ADD COLUMN IF NOT EXISTS "requestedE164" TEXT;
+ALTER TABLE "PhoneProvisioningAttempt" ADD COLUMN IF NOT EXISTS "twilioProviderSid" TEXT;
+ALTER TABLE "PhoneProvisioningAttempt" ADD COLUMN IF NOT EXISTS "vapiNumberId" TEXT;
+ALTER TABLE "PhoneProvisioningAttempt" ADD COLUMN IF NOT EXISTS "resultingPhoneNumberId" TEXT;
+ALTER TABLE "PhoneProvisioningAttempt" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'PENDING';
+ALTER TABLE "PhoneProvisioningAttempt" ADD COLUMN IF NOT EXISTS "error" TEXT;
+ALTER TABLE "PhoneProvisioningAttempt" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "PhoneProvisioningAttempt" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+ALTER TABLE "PhoneProvisioningAttempt" ADD COLUMN IF NOT EXISTS "completedAt" TIMESTAMP(3);
+
+ALTER TABLE "TwilioProviderConfig" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "TwilioProviderConfig" ADD COLUMN IF NOT EXISTS "accountSid" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "TwilioProviderConfig" ADD COLUMN IF NOT EXISTS "messagingServiceSid" TEXT;
+ALTER TABLE "TwilioProviderConfig" ADD COLUMN IF NOT EXISTS "defaultVoiceWebhook" TEXT;
+ALTER TABLE "TwilioProviderConfig" ADD COLUMN IF NOT EXISTS "defaultSmsWebhook" TEXT;
+ALTER TABLE "TwilioProviderConfig" ADD COLUMN IF NOT EXISTS "region" TEXT;
+ALTER TABLE "TwilioProviderConfig" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "TwilioProviderConfig" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
+ALTER TABLE "VapiProviderConfig" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "VapiProviderConfig" ADD COLUMN IF NOT EXISTS "webhookSecret" TEXT;
+ALTER TABLE "VapiProviderConfig" ADD COLUMN IF NOT EXISTS "defaultServerUrl" TEXT;
+ALTER TABLE "VapiProviderConfig" ADD COLUMN IF NOT EXISTS "defaultWebhookUrl" TEXT;
+ALTER TABLE "VapiProviderConfig" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
+ALTER TABLE "VapiProviderConfig" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
+
 -- ##########################################
 -- PHASE 3: UNIQUE CONSTRAINTS
 -- (drops orphaned indexes first to avoid name collisions)
@@ -8572,12 +9147,30 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- PhoneNumber.providerSid unique
+ALTER TABLE "PhoneNumber" DROP CONSTRAINT IF EXISTS "PhoneNumber_providerSid_key";
+DROP INDEX IF EXISTS "PhoneNumber_providerSid_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('PhoneNumber_providerSid_key', 'u') THEN
+    ALTER TABLE "PhoneNumber" ADD CONSTRAINT "PhoneNumber_providerSid_key" UNIQUE ("providerSid");
+  END IF;
+END $$;
+
 -- AiPhoneNumber @@unique [tenantId, phoneNumber]
 ALTER TABLE "AiPhoneNumber" DROP CONSTRAINT IF EXISTS "AiPhoneNumber_tenantId_phoneNumber_key";
 DROP INDEX IF EXISTS "AiPhoneNumber_tenantId_phoneNumber_key";
 DO $$ BEGIN
   IF NOT _constraint_exists('AiPhoneNumber_tenantId_phoneNumber_key', 'u') THEN
     ALTER TABLE "AiPhoneNumber" ADD CONSTRAINT "AiPhoneNumber_tenantId_phoneNumber_key" UNIQUE ("tenantId", "phoneNumber");
+  END IF;
+END $$;
+
+-- AiCall.vapiCallId unique
+ALTER TABLE "AiCall" DROP CONSTRAINT IF EXISTS "AiCall_vapiCallId_key";
+DROP INDEX IF EXISTS "AiCall_vapiCallId_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('AiCall_vapiCallId_key', 'u') THEN
+    ALTER TABLE "AiCall" ADD CONSTRAINT "AiCall_vapiCallId_key" UNIQUE ("vapiCallId");
   END IF;
 END $$;
 
@@ -8722,6 +9315,96 @@ DROP INDEX IF EXISTS "SocialPostMetric_socialPostId_platform_fetchedAt_key";
 DO $$ BEGIN
   IF NOT _constraint_exists('SocialPostMetric_socialPostId_platform_fetchedAt_key', 'u') THEN
     ALTER TABLE "SocialPostMetric" ADD CONSTRAINT "SocialPostMetric_socialPostId_platform_fetchedAt_key" UNIQUE ("socialPostId", "platform", "fetchedAt");
+  END IF;
+END $$;
+
+-- AddonProduct.code unique
+ALTER TABLE "AddonProduct" DROP CONSTRAINT IF EXISTS "AddonProduct_code_key";
+DROP INDEX IF EXISTS "AddonProduct_code_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('AddonProduct_code_key', 'u') THEN
+    ALTER TABLE "AddonProduct" ADD CONSTRAINT "AddonProduct_code_key" UNIQUE ("code");
+  END IF;
+END $$;
+
+-- AddonPlan.code unique
+ALTER TABLE "AddonPlan" DROP CONSTRAINT IF EXISTS "AddonPlan_code_key";
+DROP INDEX IF EXISTS "AddonPlan_code_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('AddonPlan_code_key', 'u') THEN
+    ALTER TABLE "AddonPlan" ADD CONSTRAINT "AddonPlan_code_key" UNIQUE ("code");
+  END IF;
+END $$;
+
+-- TenantAddonSubscription.creemSubscriptionId unique
+ALTER TABLE "TenantAddonSubscription" DROP CONSTRAINT IF EXISTS "TenantAddonSubscription_creemSubscriptionId_key";
+DROP INDEX IF EXISTS "TenantAddonSubscription_creemSubscriptionId_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('TenantAddonSubscription_creemSubscriptionId_key', 'u') THEN
+    ALTER TABLE "TenantAddonSubscription" ADD CONSTRAINT "TenantAddonSubscription_creemSubscriptionId_key" UNIQUE ("creemSubscriptionId");
+  END IF;
+END $$;
+
+-- UsageLedger.idempotencyKey unique
+ALTER TABLE "UsageLedger" DROP CONSTRAINT IF EXISTS "UsageLedger_idempotencyKey_key";
+DROP INDEX IF EXISTS "UsageLedger_idempotencyKey_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('UsageLedger_idempotencyKey_key', 'u') THEN
+    ALTER TABLE "UsageLedger" ADD CONSTRAINT "UsageLedger_idempotencyKey_key" UNIQUE ("idempotencyKey");
+  END IF;
+END $$;
+
+-- AiProviderConfig.provider unique
+ALTER TABLE "AiProviderConfig" DROP CONSTRAINT IF EXISTS "AiProviderConfig_provider_key";
+DROP INDEX IF EXISTS "AiProviderConfig_provider_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('AiProviderConfig_provider_key', 'u') THEN
+    ALTER TABLE "AiProviderConfig" ADD CONSTRAINT "AiProviderConfig_provider_key" UNIQUE ("provider");
+  END IF;
+END $$;
+
+-- AiReceptionist.currentVersionId unique
+ALTER TABLE "AiReceptionist" DROP CONSTRAINT IF EXISTS "AiReceptionist_currentVersionId_key";
+DROP INDEX IF EXISTS "AiReceptionist_currentVersionId_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('AiReceptionist_currentVersionId_key', 'u') THEN
+    ALTER TABLE "AiReceptionist" ADD CONSTRAINT "AiReceptionist_currentVersionId_key" UNIQUE ("currentVersionId");
+  END IF;
+END $$;
+
+-- AiToolExecution.idempotencyKey unique
+ALTER TABLE "AiToolExecution" DROP CONSTRAINT IF EXISTS "AiToolExecution_idempotencyKey_key";
+DROP INDEX IF EXISTS "AiToolExecution_idempotencyKey_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('AiToolExecution_idempotencyKey_key', 'u') THEN
+    ALTER TABLE "AiToolExecution" ADD CONSTRAINT "AiToolExecution_idempotencyKey_key" UNIQUE ("idempotencyKey");
+  END IF;
+END $$;
+
+-- TenantTelephonyAccount @@unique [tenantId, provider]
+ALTER TABLE "TenantTelephonyAccount" DROP CONSTRAINT IF EXISTS "TenantTelephonyAccount_tenantId_provider_key";
+DROP INDEX IF EXISTS "TenantTelephonyAccount_tenantId_provider_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('TenantTelephonyAccount_tenantId_provider_key', 'u') THEN
+    ALTER TABLE "TenantTelephonyAccount" ADD CONSTRAINT "TenantTelephonyAccount_tenantId_provider_key" UNIQUE ("tenantId", "provider");
+  END IF;
+END $$;
+
+-- PhoneProvisioningAttempt.idempotencyKey unique
+ALTER TABLE "PhoneProvisioningAttempt" DROP CONSTRAINT IF EXISTS "PhoneProvisioningAttempt_idempotencyKey_key";
+DROP INDEX IF EXISTS "PhoneProvisioningAttempt_idempotencyKey_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('PhoneProvisioningAttempt_idempotencyKey_key', 'u') THEN
+    ALTER TABLE "PhoneProvisioningAttempt" ADD CONSTRAINT "PhoneProvisioningAttempt_idempotencyKey_key" UNIQUE ("idempotencyKey");
+  END IF;
+END $$;
+
+-- TwilioProviderConfig.accountSid unique
+ALTER TABLE "TwilioProviderConfig" DROP CONSTRAINT IF EXISTS "TwilioProviderConfig_accountSid_key";
+DROP INDEX IF EXISTS "TwilioProviderConfig_accountSid_key";
+DO $$ BEGIN
+  IF NOT _constraint_exists('TwilioProviderConfig_accountSid_key', 'u') THEN
+    ALTER TABLE "TwilioProviderConfig" ADD CONSTRAINT "TwilioProviderConfig_accountSid_key" UNIQUE ("accountSid");
   END IF;
 END $$;
 
@@ -8877,6 +9560,12 @@ END $$;
 DO $$ BEGIN
   IF NOT _fk_exists('Invoice_recurrenceId_fkey') THEN
     ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_recurrenceId_fkey" FOREIGN KEY ("recurrenceId") REFERENCES "RecurringInvoice"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('Invoice_recurringScheduleId_fkey') THEN
+    ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_recurringScheduleId_fkey" FOREIGN KEY ("recurringScheduleId") REFERENCES "RecurringJobSchedule"("id");
   END IF;
 END $$;
 
@@ -9493,6 +10182,24 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
+  IF NOT _fk_exists('AiCall_receptionistId_fkey') THEN
+    ALTER TABLE "AiCall" ADD CONSTRAINT "AiCall_receptionistId_fkey" FOREIGN KEY ("receptionistId") REFERENCES "AiReceptionist"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('AiCall_agentVersionId_fkey') THEN
+    ALTER TABLE "AiCall" ADD CONSTRAINT "AiCall_agentVersionId_fkey" FOREIGN KEY ("agentVersionId") REFERENCES "AiAgentVersion"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('AiCall_deploymentId_fkey') THEN
+    ALTER TABLE "AiCall" ADD CONSTRAINT "AiCall_deploymentId_fkey" FOREIGN KEY ("deploymentId") REFERENCES "AiProviderDeployment"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
   IF NOT _fk_exists('MarketplaceTransaction_tenantId_fkey') THEN
     ALTER TABLE "MarketplaceTransaction" ADD CONSTRAINT "MarketplaceTransaction_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE;
   END IF;
@@ -9828,6 +10535,102 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+DO $$ BEGIN
+  IF NOT _fk_exists('AddonPlan_addonProductId_fkey') THEN
+    ALTER TABLE "AddonPlan" ADD CONSTRAINT "AddonPlan_addonProductId_fkey" FOREIGN KEY ("addonProductId") REFERENCES "AddonProduct"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('TenantAddonSubscription_tenantId_fkey') THEN
+    ALTER TABLE "TenantAddonSubscription" ADD CONSTRAINT "TenantAddonSubscription_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('TenantAddonSubscription_addonPlanId_fkey') THEN
+    ALTER TABLE "TenantAddonSubscription" ADD CONSTRAINT "TenantAddonSubscription_addonPlanId_fkey" FOREIGN KEY ("addonPlanId") REFERENCES "AddonPlan"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('TenantAddonSubscription_addonProductId_fkey') THEN
+    ALTER TABLE "TenantAddonSubscription" ADD CONSTRAINT "TenantAddonSubscription_addonProductId_fkey" FOREIGN KEY ("addonProductId") REFERENCES "AddonProduct"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('AddonEntitlement_tenantAddonSubscriptionId_fkey') THEN
+    ALTER TABLE "AddonEntitlement" ADD CONSTRAINT "AddonEntitlement_tenantAddonSubscriptionId_fkey" FOREIGN KEY ("tenantAddonSubscriptionId") REFERENCES "TenantAddonSubscription"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('UsageReservation_entitlementId_fkey') THEN
+    ALTER TABLE "UsageReservation" ADD CONSTRAINT "UsageReservation_entitlementId_fkey" FOREIGN KEY ("entitlementId") REFERENCES "AddonEntitlement"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('UsageLedger_entitlementId_fkey') THEN
+    ALTER TABLE "UsageLedger" ADD CONSTRAINT "UsageLedger_entitlementId_fkey" FOREIGN KEY ("entitlementId") REFERENCES "AddonEntitlement"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('ExternalPhoneNumber_tenantId_fkey') THEN
+    ALTER TABLE "ExternalPhoneNumber" ADD CONSTRAINT "ExternalPhoneNumber_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('PhoneConnection_tenantId_fkey') THEN
+    ALTER TABLE "PhoneConnection" ADD CONSTRAINT "PhoneConnection_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('PhoneConnection_phoneNumberId_fkey') THEN
+    ALTER TABLE "PhoneConnection" ADD CONSTRAINT "PhoneConnection_phoneNumberId_fkey" FOREIGN KEY ("phoneNumberId") REFERENCES "PhoneNumber"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('PhoneConnection_externalPhoneNumberId_fkey') THEN
+    ALTER TABLE "PhoneConnection" ADD CONSTRAINT "PhoneConnection_externalPhoneNumberId_fkey" FOREIGN KEY ("externalPhoneNumberId") REFERENCES "ExternalPhoneNumber"("id") ON DELETE SET NULL;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('AiReceptionist_tenantId_fkey') THEN
+    ALTER TABLE "AiReceptionist" ADD CONSTRAINT "AiReceptionist_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('AiReceptionist_currentVersionId_fkey') THEN
+    ALTER TABLE "AiReceptionist" ADD CONSTRAINT "AiReceptionist_currentVersionId_fkey" FOREIGN KEY ("currentVersionId") REFERENCES "AiAgentVersion"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('AiAgentVersion_aiReceptionistId_fkey') THEN
+    ALTER TABLE "AiAgentVersion" ADD CONSTRAINT "AiAgentVersion_aiReceptionistId_fkey" FOREIGN KEY ("aiReceptionistId") REFERENCES "AiReceptionist"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('AiProviderDeployment_aiAgentVersionId_fkey') THEN
+    ALTER TABLE "AiProviderDeployment" ADD CONSTRAINT "AiProviderDeployment_aiAgentVersionId_fkey" FOREIGN KEY ("aiAgentVersionId") REFERENCES "AiAgentVersion"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT _fk_exists('TenantTelephonyAccount_tenantId_fkey') THEN
+    ALTER TABLE "TenantTelephonyAccount" ADD CONSTRAINT "TenantTelephonyAccount_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
 -- ##########################################
 -- PHASE 5: INDEXES
 -- ##########################################
@@ -9909,6 +10712,7 @@ CREATE INDEX IF NOT EXISTS "Invoice_customerId_idx" ON "Invoice"("customerId");
 CREATE INDEX IF NOT EXISTS "Invoice_invoiceType_idx" ON "Invoice"("invoiceType");
 CREATE INDEX IF NOT EXISTS "Invoice_bookingId_idx" ON "Invoice"("bookingId");
 CREATE INDEX IF NOT EXISTS "Invoice_recurrenceId_idx" ON "Invoice"("recurrenceId");
+CREATE INDEX IF NOT EXISTS "Invoice_recurringScheduleId_idx" ON "Invoice"("recurringScheduleId");
 CREATE INDEX IF NOT EXISTS "Invoice_parentInvoiceId_idx" ON "Invoice"("parentInvoiceId");
 
 CREATE INDEX IF NOT EXISTS "RecurringInvoice_tenantId_idx" ON "RecurringInvoice"("tenantId");
@@ -10496,6 +11300,7 @@ CREATE INDEX IF NOT EXISTS "AiCall_assistantId_idx" ON "AiCall"("assistantId");
 CREATE INDEX IF NOT EXISTS "AiCall_status_idx" ON "AiCall"("status");
 CREATE INDEX IF NOT EXISTS "AiCall_customerPhone_idx" ON "AiCall"("customerPhone");
 CREATE INDEX IF NOT EXISTS "AiCall_outcomeType_idx" ON "AiCall"("outcomeType");
+CREATE INDEX IF NOT EXISTS "AiCall_receptionistId_idx" ON "AiCall"("receptionistId");
 
 CREATE INDEX IF NOT EXISTS "MarketplaceTransaction_tenantId_idx" ON "MarketplaceTransaction"("tenantId");
 CREATE INDEX IF NOT EXISTS "MarketplaceTransaction_status_idx" ON "MarketplaceTransaction"("status");
@@ -10704,6 +11509,72 @@ CREATE INDEX IF NOT EXISTS "Property_customerId_idx" ON "Property"("customerId")
 CREATE INDEX IF NOT EXISTS "PropertyContact_propertyId_idx" ON "PropertyContact"("propertyId");
 
 CREATE INDEX IF NOT EXISTS "CustomerContact_customerId_idx" ON "CustomerContact"("customerId");
+
+CREATE INDEX IF NOT EXISTS "AddonProduct_isActive_idx" ON "AddonProduct"("isActive");
+
+CREATE INDEX IF NOT EXISTS "AddonPlan_addonProductId_idx" ON "AddonPlan"("addonProductId");
+CREATE INDEX IF NOT EXISTS "AddonPlan_isActive_idx" ON "AddonPlan"("isActive");
+
+CREATE INDEX IF NOT EXISTS "TenantAddonSubscription_tenantId_idx" ON "TenantAddonSubscription"("tenantId");
+CREATE INDEX IF NOT EXISTS "TenantAddonSubscription_addonPlanId_idx" ON "TenantAddonSubscription"("addonPlanId");
+CREATE INDEX IF NOT EXISTS "TenantAddonSubscription_addonProductId_idx" ON "TenantAddonSubscription"("addonProductId");
+CREATE INDEX IF NOT EXISTS "TenantAddonSubscription_status_idx" ON "TenantAddonSubscription"("status");
+CREATE INDEX IF NOT EXISTS "TenantAddonSubscription_creemSubscriptionId_idx" ON "TenantAddonSubscription"("creemSubscriptionId");
+
+CREATE INDEX IF NOT EXISTS "AddonEntitlement_tenantId_idx" ON "AddonEntitlement"("tenantId");
+CREATE INDEX IF NOT EXISTS "AddonEntitlement_tenantAddonSubscriptionId_idx" ON "AddonEntitlement"("tenantAddonSubscriptionId");
+CREATE INDEX IF NOT EXISTS "AddonEntitlement_status_idx" ON "AddonEntitlement"("status");
+CREATE INDEX IF NOT EXISTS "AddonEntitlement_periodStart_periodEnd_idx" ON "AddonEntitlement"("periodStart", "periodEnd");
+
+CREATE INDEX IF NOT EXISTS "UsageReservation_tenantId_idx" ON "UsageReservation"("tenantId");
+CREATE INDEX IF NOT EXISTS "UsageReservation_entitlementId_idx" ON "UsageReservation"("entitlementId");
+CREATE INDEX IF NOT EXISTS "UsageReservation_externalCallId_idx" ON "UsageReservation"("externalCallId");
+CREATE INDEX IF NOT EXISTS "UsageReservation_status_idx" ON "UsageReservation"("status");
+
+CREATE INDEX IF NOT EXISTS "UsageLedger_tenantId_idx" ON "UsageLedger"("tenantId");
+CREATE INDEX IF NOT EXISTS "UsageLedger_entitlementId_idx" ON "UsageLedger"("entitlementId");
+CREATE INDEX IF NOT EXISTS "UsageLedger_usageType_idx" ON "UsageLedger"("usageType");
+CREATE INDEX IF NOT EXISTS "UsageLedger_occurredAt_idx" ON "UsageLedger"("occurredAt");
+CREATE INDEX IF NOT EXISTS "UsageLedger_periodStart_periodEnd_idx" ON "UsageLedger"("periodStart", "periodEnd");
+
+CREATE INDEX IF NOT EXISTS "ExternalPhoneNumber_tenantId_idx" ON "ExternalPhoneNumber"("tenantId");
+CREATE INDEX IF NOT EXISTS "ExternalPhoneNumber_e164_idx" ON "ExternalPhoneNumber"("e164");
+CREATE INDEX IF NOT EXISTS "ExternalPhoneNumber_verificationStatus_idx" ON "ExternalPhoneNumber"("verificationStatus");
+
+CREATE INDEX IF NOT EXISTS "PhoneConnection_tenantId_idx" ON "PhoneConnection"("tenantId");
+CREATE INDEX IF NOT EXISTS "PhoneConnection_phoneNumberId_idx" ON "PhoneConnection"("phoneNumberId");
+CREATE INDEX IF NOT EXISTS "PhoneConnection_externalPhoneNumberId_idx" ON "PhoneConnection"("externalPhoneNumberId");
+CREATE INDEX IF NOT EXISTS "PhoneConnection_routingMode_idx" ON "PhoneConnection"("routingMode");
+CREATE INDEX IF NOT EXISTS "PhoneConnection_status_idx" ON "PhoneConnection"("status");
+
+CREATE INDEX IF NOT EXISTS "AiProviderConfig_provider_status_idx" ON "AiProviderConfig"("provider", "status");
+
+CREATE INDEX IF NOT EXISTS "AiReceptionist_tenantId_idx" ON "AiReceptionist"("tenantId");
+CREATE INDEX IF NOT EXISTS "AiReceptionist_status_idx" ON "AiReceptionist"("status");
+
+CREATE INDEX IF NOT EXISTS "AiAgentVersion_aiReceptionistId_idx" ON "AiAgentVersion"("aiReceptionistId");
+CREATE INDEX IF NOT EXISTS "AiAgentVersion_status_idx" ON "AiAgentVersion"("status");
+
+CREATE INDEX IF NOT EXISTS "AiProviderDeployment_aiAgentVersionId_idx" ON "AiProviderDeployment"("aiAgentVersionId");
+CREATE INDEX IF NOT EXISTS "AiProviderDeployment_provider_status_idx" ON "AiProviderDeployment"("provider", "status");
+CREATE INDEX IF NOT EXISTS "AiProviderDeployment_externalAssistantId_idx" ON "AiProviderDeployment"("externalAssistantId");
+
+CREATE INDEX IF NOT EXISTS "AiToolExecution_tenantId_idx" ON "AiToolExecution"("tenantId");
+CREATE INDEX IF NOT EXISTS "AiToolExecution_externalCallId_idx" ON "AiToolExecution"("externalCallId");
+CREATE INDEX IF NOT EXISTS "AiToolExecution_toolName_idx" ON "AiToolExecution"("toolName");
+CREATE INDEX IF NOT EXISTS "AiToolExecution_status_idx" ON "AiToolExecution"("status");
+CREATE INDEX IF NOT EXISTS "AiToolExecution_idempotencyKey_idx" ON "AiToolExecution"("idempotencyKey");
+
+CREATE INDEX IF NOT EXISTS "TenantTelephonyAccount_tenantId_idx" ON "TenantTelephonyAccount"("tenantId");
+CREATE INDEX IF NOT EXISTS "TenantTelephonyAccount_provider_status_idx" ON "TenantTelephonyAccount"("provider", "status");
+
+CREATE INDEX IF NOT EXISTS "PhoneProvisioningAttempt_tenantId_idx" ON "PhoneProvisioningAttempt"("tenantId");
+CREATE INDEX IF NOT EXISTS "PhoneProvisioningAttempt_idempotencyKey_idx" ON "PhoneProvisioningAttempt"("idempotencyKey");
+CREATE INDEX IF NOT EXISTS "PhoneProvisioningAttempt_status_idx" ON "PhoneProvisioningAttempt"("status");
+CREATE INDEX IF NOT EXISTS "PhoneProvisioningAttempt_twilioProviderSid_idx" ON "PhoneProvisioningAttempt"("twilioProviderSid");
+CREATE INDEX IF NOT EXISTS "PhoneProvisioningAttempt_vapiNumberId_idx" ON "PhoneProvisioningAttempt"("vapiNumberId");
+
+CREATE INDEX IF NOT EXISTS "TwilioProviderConfig_accountSid_idx" ON "TwilioProviderConfig"("accountSid");
 
 
 -- ##########################################

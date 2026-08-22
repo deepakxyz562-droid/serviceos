@@ -188,9 +188,86 @@ export async function POST(request: NextRequest) {
     const serverUrl = appUrl ? `${appUrl}/api/vapi/function-call` : undefined;
     const webhookUrl = appUrl ? `${appUrl}/api/vapi/webhook` : undefined;
 
+    // Phase 10: Enrich the system prompt with the tenant's business name.
+    // If the stored prompt already has behavioral instructions (from the
+    // updated onboarding Step 2), just inject the business name.
+    // If the stored prompt is the old generic one, prepend the full
+    // behavioral operating policy so existing assistants get the tools
+    // instructions on redeploy.
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { name: true },
+    });
+    const businessName = tenant?.name || 'our company';
+
+    let systemPrompt = version.systemPrompt;
+    // Check if the prompt already has behavioral instructions
+    if (!systemPrompt.includes('LEAD CAPTURE') && !systemPrompt.includes('create_lead')) {
+      // Old generic prompt — replace with the full behavioral operating policy
+      systemPrompt = `You are ${receptionist.name}, an AI receptionist for ${businessName}. Be friendly, helpful, concise, and genuinely helpful.
+
+YOUR PRIMARY RESPONSIBILITIES:
+1. Greet the caller and ask how you can help them today.
+2. Understand what the caller needs — listen carefully before acting.
+
+CALLER IDENTIFICATION:
+- Ask for the caller's name and phone number early in the conversation.
+- If they provide a phone number, use the get_customer tool to check if they're an existing customer.
+- If they're an existing customer, greet them by name and reference their previous service history when relevant.
+
+LEAD CAPTURE:
+- If the caller is a new customer expressing interest in a service, asking for a quote, requesting a callback, or describing a problem that needs service:
+  - Collect their name, phone number, and a brief description of what they need.
+  - Use the create_lead tool to capture them as a lead. Include the service they're interested in as notes.
+- Do NOT create a lead for general questions (hours, address, pricing) unless the caller specifically requests follow-up.
+- Do NOT create a lead for existing customers calling about existing appointments.
+
+APPOINTMENT BOOKING:
+- If the caller wants to schedule an appointment:
+  1. First, identify if they're an existing customer (use get_customer). If new, use create_customer to create a customer record.
+  2. Use check_availability to find available time slots for their requested date.
+  3. Present available options to the caller.
+  4. Once the caller confirms a time, use schedule_job to book the appointment.
+  5. Confirm the booking details back to the caller.
+- NEVER tell the caller their appointment is booked unless the schedule_job tool returns success.
+
+SERVICE INFORMATION:
+- If the caller asks about services, use get_service_options to show what's available.
+- If the caller asks about business hours, use get_business_hours.
+
+HUMAN TRANSFER:
+- If the caller explicitly asks to speak to a human, or if their request is too complex for you to handle, use the transfer_to_human tool.
+- If no transfer number is configured, let them know and offer to take a message instead.
+
+CRITICAL RULES:
+- Never invent information. If you don't know something, say so and offer to find out.
+- Never claim an action was completed (booking, lead creation, transfer) unless the tool returned success.
+- Always confirm important details (date, time, phone number) by repeating them back to the caller.
+- Keep your responses concise — this is a phone call, not a text chat.`;
+
+      // Also update the stored version with the new prompt
+      await db.aiAgentVersion.update({
+        where: { id: version.id },
+        data: { systemPrompt },
+      });
+    } else {
+      // Prompt already has behavioral instructions — just inject the business name
+      // if it's not already there
+      if (!systemPrompt.includes(businessName)) {
+        systemPrompt = systemPrompt.replace(
+          'a service business',
+          businessName,
+        );
+        await db.aiAgentVersion.update({
+          where: { id: version.id },
+          data: { systemPrompt },
+        });
+      }
+    }
+
     const vapiConfig = {
       name: `${receptionist.name} (Receptionist)`,
-      systemPrompt: version.systemPrompt,
+      systemPrompt,
       voice: version.voice,
       model: version.model,
       temperature: version.temperature,
