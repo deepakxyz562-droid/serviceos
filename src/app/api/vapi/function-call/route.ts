@@ -139,6 +139,7 @@ export async function POST(request: NextRequest) {
       where: {
         externalAssistantId: call.assistantId,
         status: 'ACTIVE',
+        externalSource: 'ai_receptionist',
       },
       select: { id: true, aiAgentVersionId: true },
     });

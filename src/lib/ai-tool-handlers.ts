@@ -21,6 +21,15 @@ import { db } from '@/lib/db';
 import { registerToolHandler, type AiExecutionContext } from '@/lib/ai-tool-dispatcher';
 import { getVapiVoiceProvider } from '@/lib/vapi-voice-provider';
 
+// Helper to resolve workspaceId from tenantId (Job table uses workspaceId instead of tenantId)
+async function getTenantWorkspaceId(tenantId: string): Promise<string | null> {
+  const ws = await db.workspace.findFirst({
+    where: { tenantId },
+    select: { id: true },
+  });
+  return ws?.id || null;
+}
+
 // ─── Read tools ──────────────────────────────────────────────────────────────
 
 registerToolHandler('get_customer', async (ctx, params) => {
@@ -92,8 +101,9 @@ registerToolHandler('get_customer_jobs', async (ctx, params) => {
     return { error: 'Customer not found' };
   }
 
+  const workspaceId = await getTenantWorkspaceId(ctx.tenantId);
   const jobs = await db.job.findMany({
-    where: { customerId: customer.id, tenantId: ctx.tenantId },
+    where: { customerId: customer.id, workspaceId },
     select: {
       id: true,
       title: true,
@@ -117,8 +127,9 @@ registerToolHandler('get_job', async (ctx, params) => {
   }
 
   // Verify tenant ownership
+  const workspaceId = await getTenantWorkspaceId(ctx.tenantId);
   const job = await db.job.findFirst({
-    where: { id: jobId, tenantId: ctx.tenantId },
+    where: { id: jobId, workspaceId },
     select: {
       id: true,
       title: true,
@@ -165,18 +176,26 @@ registerToolHandler('get_business_hours', async (ctx) => {
 
 registerToolHandler('get_service_options', async (ctx) => {
   const services = await db.service.findMany({
-    where: { tenantId: ctx.tenantId },
+    where: { tenantId: ctx.tenantId, isActive: true },
     select: {
       id: true,
       name: true,
       description: true,
-      price: true,
-      durationMinutes: true,
+      basePrice: true,
+      duration: true,
     },
     take: 20,
   });
 
-  return { services };
+  return {
+    services: services.map((s) => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      price: s.basePrice,
+      durationMinutes: s.duration,
+    })),
+  };
 });
 
 registerToolHandler('check_availability', async (ctx, params) => {
@@ -208,9 +227,10 @@ registerToolHandler('check_availability', async (ctx, params) => {
   const endOfDay = new Date(date);
   endOfDay.setHours(23, 59, 59, 999);
 
+  const workspaceId = await getTenantWorkspaceId(ctx.tenantId);
   const existingJobs = await db.job.findMany({
     where: {
-      tenantId: ctx.tenantId,
+      workspaceId,
       scheduledAt: { gte: startOfDay, lte: endOfDay },
       status: { notIn: ['cancelled', 'completed'] },
     },
@@ -364,9 +384,10 @@ registerToolHandler('create_job_request', async (ctx, params) => {
       return { error: 'Customer not found or does not belong to this tenant' };
     }
 
+    const workspaceId = await getTenantWorkspaceId(ctx.tenantId);
     const job = await db.job.create({
       data: {
-        tenantId: ctx.tenantId,
+        workspaceId,
         customerId: customer.id,
         customerName: customer.name,
         customerPhone: customer.phone || null,
@@ -374,7 +395,7 @@ registerToolHandler('create_job_request', async (ctx, params) => {
         description: description || 'Created by AI Receptionist',
         status: 'pending',
         type: 'service',
-        source: 'ai_receptionist',
+        externalSource: 'ai_receptionist',
       },
     });
 
@@ -410,9 +431,10 @@ registerToolHandler('schedule_job', async (ctx, params) => {
     return { error: 'Invalid date/time format' };
   }
 
+  const workspaceId = await getTenantWorkspaceId(ctx.tenantId);
   const job = await db.job.create({
     data: {
-      tenantId: ctx.tenantId,
+      workspaceId,
       customerId: customer.id,
       customerName: customer.name,
       customerPhone: customer.phone || null,
@@ -422,7 +444,7 @@ registerToolHandler('schedule_job', async (ctx, params) => {
       address: address || null,
       status: 'scheduled',
       type: 'service',
-      source: 'ai_receptionist',
+      externalSource: 'ai_receptionist',
     },
   });
 
@@ -447,8 +469,9 @@ registerToolHandler('reschedule_job', async (ctx, params) => {
   }
 
   // Verify job belongs to this tenant
+  const workspaceId = await getTenantWorkspaceId(ctx.tenantId);
   const job = await db.job.findFirst({
-    where: { id: jobId, tenantId: ctx.tenantId },
+    where: { id: jobId, workspaceId },
     select: { id: true, title: true, customerName: true },
   });
 
@@ -482,8 +505,9 @@ registerToolHandler('cancel_job', async (ctx, params) => {
   }
 
   // Verify job belongs to this tenant
+  const workspaceId = await getTenantWorkspaceId(ctx.tenantId);
   const job = await db.job.findFirst({
-    where: { id: jobId, tenantId: ctx.tenantId },
+    where: { id: jobId, workspaceId },
     select: { id: true, title: true, status: true },
   });
 
@@ -535,38 +559,37 @@ registerToolHandler('send_sms', async (ctx, params) => {
 });
 
 registerToolHandler('transfer_to_human', async (ctx, params) => {
-  const target = (params.target as string) || '';
+  const requestedTarget = (params.target as string) || '';
 
-  // If no target specified, use the receptionist's handoff transfer target
-  if (!target && ctx.receptionistId) {
+  // 1. Fetch receptionist settings to resolve handoff target
+  let handoffTarget = '';
+  if (ctx.receptionistId) {
     const receptionist = await db.aiReceptionist.findFirst({
       where: { id: ctx.receptionistId, tenantId: ctx.tenantId },
       select: { handoffTransferTarget: true },
     });
-
-    if (receptionist?.handoffTransferTarget) {
-      // Phase 9.8: Mark the AiCall outcome as 'transferred'
-      if (ctx.externalCallId) {
-        await db.aiCall.updateMany({
-          where: { vapiCallId: ctx.externalCallId, tenantId: ctx.tenantId },
-          data: { outcomeType: 'transferred' },
-        }).catch(() => {});
-      }
-      return {
-        transferred: true,
-        target: receptionist.handoffTransferTarget,
-        message: 'Transferring to human agent',
-        action: 'transfer',
-        destination: receptionist.handoffTransferTarget,
-      };
-    }
+    handoffTarget = receptionist?.handoffTransferTarget || '';
   }
 
-  if (!target) {
-    return { error: 'No transfer target specified and no handoff target configured' };
+  // 2. Validate/Normalize phone inputs for target comparison
+  const cleanDigits = (num: string) => num.replace(/\D/g, '');
+  const cleanRequested = cleanDigits(requestedTarget);
+  const cleanHandoff = cleanDigits(handoffTarget);
+
+  let resolvedTarget = handoffTarget;
+  let resolution: 'authoritative' | 'tenant_fallback' = 'tenant_fallback';
+
+  if (cleanRequested && cleanHandoff && cleanRequested === cleanHandoff) {
+    resolvedTarget = requestedTarget; // Keep original requested format
+    resolution = 'authoritative';
+  } else if (!cleanHandoff) {
+    console.error(`[transfer_to_human] failed: no fallback handoff target configured for receptionistId=${ctx.receptionistId}`);
+    return { error: 'No transfer target configured' };
   }
 
-  // Phase 9.8: Mark the AiCall outcome as 'transferred'
+  console.log(`[transfer_to_human] requestedTarget = "${requestedTarget || 'none'}", resolvedTarget = "${resolvedTarget}", resolution = "${resolution}"`);
+
+  // 3. Mark the AiCall outcome as 'transferred'
   if (ctx.externalCallId) {
     await db.aiCall.updateMany({
       where: { vapiCallId: ctx.externalCallId, tenantId: ctx.tenantId },
@@ -574,14 +597,14 @@ registerToolHandler('transfer_to_human', async (ctx, params) => {
     }).catch(() => {});
   }
 
-  // The actual Vapi transfer is handled by the VapiVoiceProvider
-  // The function-call response tells Vapi to execute the transfer
   return {
     transferred: true,
-    target,
+    target: resolvedTarget,
     message: 'Transferring to human agent',
     action: 'transfer',
-    destination: target,
+    destination: resolvedTarget,
+    resolution,
+    requestedTarget: requestedTarget || 'none',
   };
 });
 
