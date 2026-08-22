@@ -426,17 +426,51 @@ CRITICAL RULES:
     console.log(`[deploy] deployment ${deployment.id} → ACTIVE (assistant=${externalAssistantId}, phone=${phone.number})`);
 
     // ── Step C: Publish the version (marks PUBLISHED + sets currentVersionId) ──
+    // Phase 10: publishVersion() uses db.$transaction + $queryRaw FOR UPDATE,
+    // which the Supabase REST adapter does NOT support. The transaction fails
+    // silently, leaving currentVersionId = null on the AiReceptionist row.
+    // This causes "No agent version found" on the next deploy attempt.
+    //
+    // Fix: do the updates directly (no transaction) — the 3 operations are:
+    //   1. Mark old version as SUPERSEDED (if any)
+    //   2. Mark new version as PUBLISHED
+    //   3. Set currentVersionId on the AiReceptionist
     try {
-      await publishVersion({
-        tenantId,
-        receptionistId: receptionist.id,
-        versionId: version.id,
-        requireActiveDeployment: false, // we just created the ACTIVE deployment
+      // 1. Check if there's an old current version to supersede
+      const currentReceptionist = await db.aiReceptionist.findFirst({
+        where: { id: receptionist.id, tenantId },
+        select: { currentVersionId: true },
       });
+      const oldVersionId = currentReceptionist?.currentVersionId;
+      if (oldVersionId && oldVersionId !== version.id) {
+        await db.aiAgentVersion.update({
+          where: { id: oldVersionId },
+          data: { status: 'SUPERSEDED' },
+        }).catch(() => {}); // non-fatal
+      }
+
+      // 2. Mark the new version as PUBLISHED
+      await db.aiAgentVersion.update({
+        where: { id: version.id },
+        data: {
+          status: 'PUBLISHED',
+          publishedAt: new Date(),
+        },
+      });
+
+      // 3. Set currentVersionId on the AiReceptionist + status=ACTIVE
+      await db.aiReceptionist.update({
+        where: { id: receptionist.id },
+        data: {
+          currentVersionId: version.id,
+          status: 'ACTIVE',
+        },
+      });
+
       console.log(`[deploy] version ${version.id} published → receptionist.currentVersionId updated`);
     } catch (pubErr) {
-      // Non-fatal — the assistant is deployed + bound. publishVersion can be retried.
-      console.error('[deploy] Step C (publishVersion) failed (non-fatal):', pubErr);
+      // Non-fatal — the assistant is deployed + bound. The version publish can be retried.
+      console.error('[deploy] Step C (version publish) failed (non-fatal):', pubErr);
     }
 
     return NextResponse.json({
