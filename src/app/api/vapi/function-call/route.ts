@@ -42,7 +42,12 @@ export async function POST(request: NextRequest) {
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
   if (token !== platformKey) {
     console.warn(`[vapi/function-call] authentication failed — token mismatch (received: ${token.substring(0, 8)}..., expected: ${platformKey.substring(0, 8)}...)`);
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ 
+      error: 'Unauthorized', 
+      message: 'Token mismatch',
+      received: token ? `${token.substring(0, 5)}...${token.substring(token.length - 5)}` : 'empty',
+      expected: `${platformKey.substring(0, 5)}...${platformKey.substring(platformKey.length - 5)}`
+    }, { status: 401 });
   }
 
   console.log('[vapi/function-call] authentication passed');
@@ -51,6 +56,16 @@ export async function POST(request: NextRequest) {
   // Vapi V2 wraps everything in body.message — handle both wrapped and flat formats.
   const body = await request.json();
   const msg = body.message || body;
+  const eventType = msg.type || body.type || 'unknown';
+
+  // Route call lifecycle webhook events (status-update, end-of-call-report, transcript)
+  // directly to the webhook handler. Vapi sends call lifecycle events to the assistant's
+  // serverUrl (which is /api/vapi/function-call) by default when configured.
+  if (eventType !== 'tool-calls') {
+    console.log(`[vapi/function-call] Routing webhook event "${eventType}" to handleVapiWebhook`);
+    const { handleVapiWebhook } = await import('@/lib/vapi-webhook-adapter');
+    return await handleVapiWebhook(request, JSON.stringify(body));
+  }
 
   // Extract toolCalls: Vapi V2 → msg.toolCalls
   const toolCalls = msg.toolCalls || body.toolCalls || msg.toolWithToolCallList;
