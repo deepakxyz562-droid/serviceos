@@ -209,18 +209,43 @@ export async function refreshEntitlementForRenewal(params: {
  *
  * Returns the ACTIVE entitlement for the current billing period, or null
  * if none exists. Used by the AdmissionController.
+ *
+ * Phase 9.8 Supabase fix: PostgREST CANNOT translate Prisma's nested
+ * `where: { subscription: { addonProduct: { code: addonProductCode } } }`
+ * filter. We use a two-step lookup instead:
+ *   1. Resolve the AddonProduct by code → get its id
+ *   2. Find all ACTIVE subscriptions for this tenant + that addonProductId
+ *   3. Find the ACTIVE entitlement linked to any of those subscription ids
  */
 export async function getActiveEntitlement(
   tenantId: string,
   addonProductCode: string,
 ): Promise<EntitlementSnapshot | null> {
+  // Step 1: Resolve the AddonProduct id from the code
+  const addonProduct = await db.addonProduct.findUnique({
+    where: { code: addonProductCode },
+    select: { id: true },
+  });
+  if (!addonProduct) return null;
+
+  // Step 2: Find ACTIVE subscriptions for this tenant + product
+  const subscriptions = await db.tenantAddonSubscription.findMany({
+    where: {
+      tenantId,
+      addonProductId: addonProduct.id,
+      status: { in: ['ACTIVE', 'PAST_DUE'] },
+    },
+    select: { id: true },
+  });
+  if (subscriptions.length === 0) return null;
+
+  // Step 3: Find the ACTIVE entitlement for any of those subscriptions
+  const subscriptionIds = subscriptions.map((s) => s.id);
   const entitlement = await db.addonEntitlement.findFirst({
     where: {
       tenantId,
       status: 'ACTIVE',
-      subscription: {
-        addonProduct: { code: addonProductCode },
-      },
+      tenantAddonSubscriptionId: { in: subscriptionIds },
     },
     orderBy: { periodStart: 'desc' },
   });

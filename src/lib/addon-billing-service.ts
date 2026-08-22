@@ -151,13 +151,28 @@ export async function getActiveSubscription(
     includedNumbers: number;
   };
 } | null> {
+  // Phase 9.8 Supabase fix: PostgREST can't translate the nested
+  // `addonPlan: { addonProduct: { code: addonProductCode } }` filter.
+  // Two-step lookup: resolve addonProductId first, then filter on it directly.
+  const addonProduct = await db.addonProduct.findUnique({
+    where: { code: addonProductCode },
+    select: { id: true },
+  });
+  if (!addonProduct) return null;
+
+  // Find all addon plans for this product, then filter subscriptions by plan id
+  const addonPlans = await db.addonPlan.findMany({
+    where: { addonProductId: addonProduct.id },
+    select: { id: true },
+  });
+  if (addonPlans.length === 0) return null;
+  const addonPlanIds = addonPlans.map((p) => p.id);
+
   const subscription = await db.tenantAddonSubscription.findFirst({
     where: {
       tenantId,
       status: { in: ['ACTIVE', 'PAST_DUE'] },
-      addonPlan: {
-        addonProduct: { code: addonProductCode },
-      },
+      addonPlanId: { in: addonPlanIds },
     },
     include: {
       addonPlan: {

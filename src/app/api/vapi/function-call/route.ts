@@ -84,6 +84,15 @@ export async function POST(request: NextRequest) {
   }
 
   // Path B: resolve from assistantId → AiProviderDeployment → AiAgentVersion → AiReceptionist → tenant
+  // Phase 9.8 Supabase fix: PostgREST (via our adapter) can only resolve ONE
+  // level of nested relations at a time. The old code used:
+  //   select: { agentVersion: { select: { receptionist: { select: { tenantId } } } } }
+  // which the adapter couldn't resolve (nested includes aren't supported, and
+  // the relation name was also wrong — "receptionist" vs the schema's "reception").
+  // We do a flat 3-step lookup instead:
+  //   1. AiProviderDeployment by externalAssistantId (ACTIVE)
+  //   2. AiAgentVersion by id (= deployment.aiAgentVersionId)
+  //   3. AiReceptionist by id (= version.aiReceptionistId) → tenantId
   if (call?.assistantId) {
     const deployment = await db.aiProviderDeployment.findFirst({
       where: {
@@ -91,17 +100,24 @@ export async function POST(request: NextRequest) {
         status: 'ACTIVE',
       },
       select: {
-        agentVersion: {
-          select: {
-            receptionist: {
-              select: { tenantId: true },
-            },
-          },
-        },
+        id: true,
+        aiAgentVersionId: true,
       },
     });
-    if (deployment) {
-      tenantFromAssistant = deployment.agentVersion.receptionist.tenantId;
+    if (deployment?.aiAgentVersionId) {
+      const agentVersion = await db.aiAgentVersion.findUnique({
+        where: { id: deployment.aiAgentVersionId },
+        select: { aiReceptionistId: true },
+      });
+      if (agentVersion?.aiReceptionistId) {
+        const receptionist = await db.aiReceptionist.findUnique({
+          where: { id: agentVersion.aiReceptionistId },
+          select: { tenantId: true },
+        });
+        if (receptionist?.tenantId) {
+          tenantFromAssistant = receptionist.tenantId;
+        }
+      }
     }
   }
 
@@ -138,6 +154,8 @@ export async function POST(request: NextRequest) {
   };
 
   // Resolve receptionist/agent version/deployment from the assistantId (if available)
+  // Phase 9.8 Supabase fix: same flat 3-step lookup as above — PostgREST can't
+  // resolve the nested `agentVersion: { receptionist: {...} }` include.
   if (call?.assistantId) {
     const deployment = await db.aiProviderDeployment.findFirst({
       where: {
@@ -146,21 +164,28 @@ export async function POST(request: NextRequest) {
       },
       select: {
         id: true,
-        agentVersion: {
-          select: {
-            id: true,
-            receptionist: {
-              select: { id: true, tenantId: true },
-            },
-          },
-        },
+        aiAgentVersionId: true,
       },
     });
 
-    if (deployment) {
-      executionContext.deploymentId = deployment.id;
-      executionContext.agentVersionId = deployment.agentVersion.id;
-      executionContext.receptionistId = deployment.agentVersion.receptionist.id;
+    if (deployment?.aiAgentVersionId) {
+      const agentVersion = await db.aiAgentVersion.findUnique({
+        where: { id: deployment.aiAgentVersionId },
+        select: { aiReceptionistId: true },
+      });
+
+      if (agentVersion?.aiReceptionistId) {
+        const receptionist = await db.aiReceptionist.findUnique({
+          where: { id: agentVersion.aiReceptionistId },
+          select: { id: true, tenantId: true },
+        });
+
+        if (receptionist) {
+          executionContext.deploymentId = deployment.id;
+          executionContext.agentVersionId = deployment.aiAgentVersionId;
+          executionContext.receptionistId = receptionist.id;
+        }
+      }
     }
   }
 

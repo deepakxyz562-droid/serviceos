@@ -53,8 +53,13 @@ registerToolHandler('get_customer', async (ctx, params) => {
       phone: true,
       email: true,
       address: true,
-      city: true,
-      state: true,
+      // Phase 9.8 Supabase fix: `city`/`state` don't exist on the Customer
+      // table — they live on the Address model (Customer.address is a free-
+      // text string). Selecting non-existent columns throws a 42703 error
+      // on PostgREST. Use the fields that actually exist on the table.
+      companyName: true,
+      firstName: true,
+      lastName: true,
     },
   });
 
@@ -269,9 +274,12 @@ registerToolHandler('create_lead', async (ctx, params) => {
     data: {
       tenantId: ctx.tenantId,
       name: name || 'Unknown Caller',
-      phone: phone || null,
+      // Phase 9.8 Supabase fix: Lead.phone is NOT nullable — use a placeholder
+      // when no phone is provided (rare — the AI usually collects one).
+      phone: phone || 'unknown',
       email: email || null,
-      notes: notes || 'Created by AI Receptionist',
+      // Phase 9.8 Supabase fix: Lead has `description`, not `notes`.
+      description: notes || 'Created by AI Receptionist',
       source: 'ai_receptionist',
       status: 'new',
     },
@@ -318,7 +326,8 @@ registerToolHandler('create_customer', async (ctx, params) => {
     data: {
       tenantId: ctx.tenantId,
       name,
-      phone: phone || null,
+      // Phase 9.8 Supabase fix: Customer.phone is NOT nullable.
+      phone: phone || 'unknown',
       email: email || null,
       address: address || null,
     },
