@@ -24,16 +24,18 @@ import { handleVapiWebhook } from '@/lib/vapi-webhook-adapter';
  */
 
 export async function POST(request: NextRequest) {
-  try {
-    const authHeader = request.headers.get('authorization') || '';
-    const contentType = request.headers.get('content-type') || '';
-    console.log(`[vapi/webhook] HTTP ${request.method} request received (contentType=${contentType}, hasAuth=${!!authHeader})`);
+  // Phase 10 diagnostic: log that we received a webhook event
+  const contentType = request.headers.get('content-type') || '';
+  const hasAuth = !!request.headers.get('authorization');
+  console.log(`[vapi/webhook] received: content-type=${contentType}, hasAuth=${hasAuth}, url=${request.url}`);
 
+  try {
     const rawBody = await request.text();
+    // Log the first 200 chars of the body for diagnosis (no secrets in body)
+    console.log(`[vapi/webhook] body preview: ${rawBody.substring(0, 200)}`);
     return await handleVapiWebhook(request, rawBody);
   } catch (err) {
     console.error('[vapi/webhook] Top-level handler error:', err);
-    const contentType = request.headers.get('content-type') || '';
     if (contentType.includes('application/x-www-form-urlencoded')) {
       // Phase 9.8: Generic fallback TwiML (no hardcoded business name)
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>

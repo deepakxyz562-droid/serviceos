@@ -139,16 +139,34 @@ export async function POST(request: NextRequest) {
     let attempt = existingAttempt || null;
 
     // Get the tenant's AI Receptionist entitlement
-    const entitlement = await db.addonEntitlement.findFirst({
-      where: {
-        tenantId: user.tenantId,
-        status: 'ACTIVE',
-        subscription: {
-          addonProduct: { code: 'AI_RECEPTIONIST' },
-        },
-      },
-      select: { id: true, includedNumbers: true },
+    // Phase 9.8 Supabase fix: two-step lookup (PostgREST can't translate the
+    // nested `subscription: { addonProduct: { code: ... } }` filter).
+    const addonProduct = await db.addonProduct.findUnique({
+      where: { code: 'AI_RECEPTIONIST' },
+      select: { id: true },
     });
+    const aiSubscriptions = addonProduct
+      ? await db.tenantAddonSubscription.findMany({
+          where: {
+            tenantId: user.tenantId,
+            addonProductId: addonProduct.id,
+            status: { in: ['ACTIVE', 'PAST_DUE'] },
+          },
+          select: { id: true },
+        })
+      : [];
+    const aiSubscriptionIds = aiSubscriptions.map((s) => s.id);
+
+    const entitlement = aiSubscriptionIds.length > 0
+      ? await db.addonEntitlement.findFirst({
+          where: {
+            tenantId: user.tenantId,
+            status: 'ACTIVE',
+            tenantAddonSubscriptionId: { in: aiSubscriptionIds },
+          },
+          select: { id: true, includedNumbers: true },
+        })
+      : null;
 
     // Gate 1: No active AI Receptionist subscription → 403 ADDON_REQUIRED
     if (!entitlement) {

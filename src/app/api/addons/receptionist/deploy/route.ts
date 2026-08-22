@@ -265,8 +265,14 @@ CRITICAL RULES:
       }
     }
 
+    // Vapi enforces a 40-character max on assistant names. Truncate safely.
+    const rawName = `${receptionist.name} (Receptionist)`;
+    const vapiAssistantName = rawName.length > 40
+      ? `${receptionist.name}`.slice(0, 40)
+      : rawName;
+
     const vapiConfig = {
-      name: `${receptionist.name} (Receptionist)`.substring(0, 40),
+      name: vapiAssistantName,
       systemPrompt,
       voice: version.voice,
       model: version.model,
@@ -354,17 +360,41 @@ CRITICAL RULES:
       }
     }
 
-    // ── Step B: Bind the assistant to the Vapi phone number ──
+    // ── Step B: Bind the assistant to the Vapi phone number + set webhook URL ──
     // CRITICAL: This MUST succeed before we mark the deployment ACTIVE.
     // If binding fails, the tenant would see "ACTIVE" but calls wouldn't work.
+    //
+    // Phase 10: We do THREE operations here, not just one:
+    //   B1. assignAssistantToPhoneNumber — ensures the correct assistant answers
+    //   B2. configurePhoneNumberServerUrl — ensures Vapi sends webhook events to Fieseros
+    //
+    // Without B2, Vapi sends call lifecycle events (recording, transcript, usage)
+    // to whatever serverUrl was set during the original import — which may be
+    // stale, wrong, or missing. This is the root cause of "no call log, no
+    // recording, no usage" — Vapi can't reach Fieseros' webhook endpoint.
     try {
       const vapi = getVapiVoiceProvider();
+
+      // B1: Assign the correct assistant to the phone number
       await vapi.assignAssistantToPhoneNumber({
         vapiPhoneNumberId: phone.vapiNumberId!,
         assistantId: externalAssistantId,
-        serverUrl: webhookUrl,
       });
-      console.log(`[deploy] Step B: bound assistant ${externalAssistantId} to Vapi number ${phone.vapiNumberId} with webhook ${webhookUrl}`);
+      console.log(`[deploy] Step B1: bound assistant ${externalAssistantId} to Vapi number ${phone.vapiNumberId}`);
+
+      // B2: Set the phone number's serverUrl to the Fieseros webhook endpoint
+      // This is where Vapi sends: status-update, end-of-call-report, transcript events
+      // Without this, Vapi doesn't know where to send call lifecycle events.
+      const webhookUrl = appUrl ? `${appUrl}/api/vapi/webhook` : undefined;
+      if (webhookUrl) {
+        await vapi.configurePhoneNumberServerUrl({
+          vapiPhoneNumberId: phone.vapiNumberId!,
+          serverUrl: webhookUrl,
+        });
+        console.log(`[deploy] Step B2: set phone number serverUrl to ${webhookUrl}`);
+      } else {
+        console.warn('[deploy] Step B2: skipped — no appUrl configured (webhook URL unknown)');
+      }
     } catch (bindErr) {
       // Step B failed — Vapi assistant exists but isn't bound to the number.
       // Mark the deployment FAILED (NOT ACTIVE) so the tenant sees the real state.

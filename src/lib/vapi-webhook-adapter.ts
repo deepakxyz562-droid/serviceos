@@ -256,13 +256,7 @@ async function handleStatusUpdate(event: VapiWebhookEvent): Promise<NextResponse
   }
 
   const status = call.status;
-  // Robust destination number extraction across all Vapi webhook payload variants
-  const rawCallObj = call as Record<string, any>;
-  const destinationNumber =
-    call.to ||
-    rawCallObj.phoneNumber?.number ||
-    rawCallObj.destination?.number ||
-    rawCallObj.phone_number?.number;
+  const destinationNumber = call.to;
 
   if (!destinationNumber) {
     console.warn('[vapi-webhook] status-update: no destination number');

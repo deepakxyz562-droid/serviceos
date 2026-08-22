@@ -1143,6 +1143,30 @@ function splitSelectAndRelations(
     // Any other shape (e.g. false) — skip.
   }
 
+  // ── Auto-inject FK columns for belongsTo relations ──
+  // When using `select` with relation includes (e.g. select: { status: true,
+  // addonPlan: { select: { code: true } } }), PostgREST only returns the
+  // columns explicitly listed in the select string. The FK column
+  // (e.g. `addonPlanId`) is NOT included, so `resolveIncludes` can't resolve
+  // the relation (it reads main[fkColumn] which is undefined → null).
+  //
+  // Fix: for every relation in `relationInclude` that uses `fkColumn` (the
+  // FK lives on THIS table, pointing to the target's `id`), inject that FK
+  // column into `columnSelect` so PostgREST returns it. We strip these
+  // auto-injected columns from the final response later if they weren't
+  // explicitly requested (via shouldStripJoinKey in resolveIncludes).
+  if (Object.keys(relationInclude).length > 0 && modelRelations) {
+    for (const [relName] of Object.entries(relationInclude)) {
+      const rel = modelRelations[relName];
+      if (rel && rel.fkColumn && !rel.isMany && !rel.targetFkColumn) {
+        // belongsTo: FK is on this table (source), pointing to target.id
+        if (!columnSelect[rel.fkColumn]) {
+          columnSelect[rel.fkColumn] = true;
+        }
+      }
+    }
+  }
+
   return {
     columnSelect: Object.keys(columnSelect).length > 0 ? columnSelect : undefined,
     relationInclude: Object.keys(relationInclude).length > 0 ? relationInclude : undefined,
@@ -2139,7 +2163,18 @@ class SupabaseModel {
     const { data, error } = await query;
     if (error) {
       // Fallback: aggregates disabled (PGRST123) or other aggregate error
-      if (error.code === 'PGRST123' || /aggregate functions/i.test(error.message || '')) {
+      // PostgREST returns a few different errors when aggregates are disabled:
+      //   1. PGRST123 — "Use of aggregate functions is not allowed"
+      //   2. "Could not find a relationship between 'X' and 'sum' in the schema cache"
+      //      — PostgREST treats `sum(col)` as a nested resource lookup when
+      //      aggregates aren't enabled in the schema cache.
+      //   3. Any message mentioning "aggregate functions"
+      const errMsg = error.message || '';
+      if (
+        error.code === 'PGRST123' ||
+        /aggregate functions/i.test(errMsg) ||
+        /could not find a relationship between.*and '(sum|avg|min|max|count)'/i.test(errMsg)
+      ) {
         return await this._aggregateFallback(where, { _sum, _count, _avg, _min, _max });
       }
       console.error(`[SupabaseDB] aggregate error on ${this.tableName}:`, error.message);

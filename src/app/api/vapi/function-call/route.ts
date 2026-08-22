@@ -27,31 +27,42 @@ import { getDecryptedApiKey } from '@/lib/ai-provider-config-service';
  */
 
 export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get('authorization') || '';
-  console.log(`[vapi/function-call] HTTP ${request.method} request received (hasAuth=${!!authHeader})`);
+  // Phase 10 diagnostic: log that we received a function-call request
+  const hasAuth = !!request.headers.get('authorization');
+  console.log(`[vapi/function-call] received: hasAuth=${hasAuth}`);
 
+  // ── 1. Authenticate ──
+  // Verify the bearer token matches the platform Vapi key
+  const authHeader = request.headers.get('authorization') || '';
   const platformKey = await getDecryptedApiKey('VAPI');
 
   if (!platformKey) {
-    console.error('[vapi/function-call] Vapi API key not configured');
+    console.error('[vapi/function-call] Vapi API key not configured — getDecryptedApiKey returned null');
     return NextResponse.json({ error: 'Provider not configured' }, { status: 503 });
   }
 
   // Accept either "Bearer <key>" or just "<key>"
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
   if (token !== platformKey) {
-    console.warn(`[vapi/function-call] authentication failed — token mismatch (tokenLen=${token.length}, platformKeyLen=${platformKey.length})`);
+    console.warn(`[vapi/function-call] authentication failed — token mismatch (received: ${token.substring(0, 8)}..., expected: ${platformKey.substring(0, 8)}...)`);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  console.log('[vapi/function-call] authentication passed');
+
   // ── 2. Parse the request ──
   const body = await request.json();
-  const message = body.message || body;
-  const toolCalls = message.toolCalls || body.toolCalls || message.toolWithToolCallList;
-  const call = message.call || body.call;
+  const { toolCalls, call } = body;
+
+  // Phase 10 diagnostic: log which tools are being called
+  if (toolCalls && Array.isArray(toolCalls)) {
+    const toolNames = toolCalls.map((tc: { name?: string; function?: { name?: string } }) => tc.name || tc.function?.name || 'unknown');
+    console.log(`[vapi/function-call] tools requested: ${toolNames.join(', ')}`);
+    console.log(`[vapi/function-call] call ID: ${call?.id || 'none'}`);
+  }
 
   if (!toolCalls || !Array.isArray(toolCalls)) {
-    console.warn('[vapi/function-call] missing toolCalls array in payload:', JSON.stringify(body));
+    console.warn('[vapi/function-call] no toolCalls in request');
     return NextResponse.json({ error: 'No toolCalls in request' }, { status: 400 });
   }
 
