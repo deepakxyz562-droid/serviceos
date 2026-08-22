@@ -305,11 +305,38 @@ CRITICAL RULES:
         externalAssistantId = result.assistantId;
       }
     } catch (vapiErr) {
-      // Step A failed — no Vapi assistant exists. Record FAILED + return.
+      // Step A failed — log the FULL error for diagnosis
       console.error('[deploy] Step A (Vapi assistant) failed:', vapiErr);
-      const errorMessage = vapiErr instanceof Error ? vapiErr.message : 'Vapi assistant creation failed';
+      const errorMessage = vapiErr instanceof Error ? vapiErr.message : String(vapiErr);
 
-      if (!existingDeployment) {
+      // Phase 10: If updating an existing assistant failed (e.g., the assistant
+      // was deleted from the Vapi dashboard, or the ID is stale), try creating
+      // a NEW assistant as a fallback. This is more resilient than failing outright.
+      if (existingDeployment?.externalAssistantId) {
+        console.log('[deploy] updateAssistant failed — trying createAssistant as fallback...');
+        try {
+          const vapi = getVapiVoiceProvider();
+          const result = await vapi.createAssistant(vapiConfig);
+          externalAssistantId = result.assistantId;
+          action = 'created';
+          console.log('[deploy] fallback createAssistant succeeded:', externalAssistantId);
+          // Skip to Step B — don't fall through to the error handling below
+        } catch (fallbackErr) {
+          console.error('[deploy] fallback createAssistant also failed:', fallbackErr);
+          const fallbackError = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+
+          await db.aiProviderDeployment.update({
+            where: { id: existingDeployment.id },
+            data: { status: 'FAILED', lastError: `Update: ${errorMessage} | Create fallback: ${fallbackError}` },
+          });
+
+          return NextResponse.json(
+            { error: 'Failed to create/update Vapi assistant', detail: `${errorMessage} | Fallback: ${fallbackError}`, code: 'VAPI_ASSISTANT_FAILED' },
+            { status: 502 },
+          );
+        }
+      } else {
+        // No existing deployment — this is a fresh create that failed
         await db.aiProviderDeployment.create({
           data: {
             aiAgentVersionId: version.id,
@@ -319,17 +346,12 @@ CRITICAL RULES:
             lastError: errorMessage,
           },
         });
-      } else {
-        await db.aiProviderDeployment.update({
-          where: { id: existingDeployment.id },
-          data: { status: 'FAILED', lastError: errorMessage },
-        });
-      }
 
-      return NextResponse.json(
-        { error: 'Failed to create/update Vapi assistant', detail: errorMessage, code: 'VAPI_ASSISTANT_FAILED' },
-        { status: 502 },
-      );
+        return NextResponse.json(
+          { error: 'Failed to create Vapi assistant', detail: errorMessage, code: 'VAPI_ASSISTANT_FAILED' },
+          { status: 502 },
+        );
+      }
     }
 
     // ── Step B: Bind the assistant to the Vapi phone number ──
