@@ -372,9 +372,21 @@ function CallDetailDialog({
     fetchDetail();
   }, [callId]);
 
-  const transcript = call ? safeParse(call.transcriptJson, []) : [];
-  const functionCalls = call ? safeParse(call.functionCallsJson, []) : [];
-  const analysis = call ? safeParse(call.analysisJson, {}) : {};
+  const transcript = Array.isArray(call?.transcriptJson)
+    ? call.transcriptJson
+    : call
+      ? safeParse(call.transcriptJson, [])
+      : [];
+  const functionCalls = Array.isArray(call?.functionCallsJson)
+    ? call.functionCallsJson
+    : call
+      ? safeParse(call.functionCallsJson, [])
+      : [];
+  const analysis = typeof call?.analysisJson === 'object' && call.analysisJson
+    ? call.analysisJson
+    : call
+      ? safeParse(call.analysisJson, {})
+      : {};
 
   return (
     <Dialog open={!!callId} onOpenChange={(o) => !o && onClose()}>

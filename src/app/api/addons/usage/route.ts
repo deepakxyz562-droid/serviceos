@@ -94,13 +94,18 @@ export async function GET() {
     const remainingPercent = Math.max(0, 100 - usedPercent);
 
     // Count active (in-progress) calls for concurrency display
-    const activeCallsCount = await db.usageReservation.aggregate({
-      where: {
-        tenantId: user.tenantId,
-        status: 'ACTIVE',
-      },
-      _count: { id: true },
-    });
+    let activeCalls = 0;
+    try {
+      const activeCallsCount = await db.usageReservation.count({
+        where: {
+          tenantId: user.tenantId,
+          status: 'ACTIVE',
+        },
+      });
+      activeCalls = typeof activeCallsCount === 'number' ? activeCallsCount : 0;
+    } catch {
+      activeCalls = 0;
+    }
 
     return NextResponse.json({
       hasEntitlement: true,
@@ -118,7 +123,7 @@ export async function GET() {
       usedPercent,
       remainingPercent,
       // Concurrency
-      activeCalls: activeCallsCount._count.id,
+      activeCalls,
       maxConcurrentCalls: entitlement.maxConcurrentCalls,
       maxCallDurationSeconds: entitlement.maxCallDurationSeconds,
       includedNumbers: entitlement.includedNumbers,

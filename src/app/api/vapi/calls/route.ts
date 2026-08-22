@@ -54,13 +54,24 @@ export async function GET(request: NextRequest) {
         try { vapiCall = await vapiGetCall(call.vapiCallId); } catch { /* ignore */ }
       }
 
+      const dbTranscript = JSON.parse(call.transcriptJson || '[]');
+      const vapiTranscript = Array.isArray(vapiCall?.messages)
+        ? (vapiCall.messages as Array<{ role?: string; message?: string; content?: string }>)
+            .filter((m) => m.role === 'bot' || m.role === 'assistant' || m.role === 'user')
+            .map((m) => ({
+              role: m.role === 'user' ? 'user' : 'assistant',
+              content: m.message || m.content || '',
+            }))
+        : [];
+
       return NextResponse.json({
         call: {
           ...call,
+          recordingUrl: call.recordingUrl || vapiCall?.recordingUrl || vapiCall?.stereoRecordingUrl || null,
           startedAt: safeDate(call.startedAt),
           endedAt: safeDate(call.endedAt),
           createdAt: safeDate(call.createdAt),
-          transcript: JSON.parse(call.transcriptJson || '[]'),
+          transcript: dbTranscript.length > 0 ? dbTranscript : vapiTranscript,
           analysis: JSON.parse(call.analysisJson || '{}'),
           functionCalls: JSON.parse(call.functionCallsJson || '[]'),
         },

@@ -103,14 +103,18 @@ export async function getTenantVapiKeyByTenantId(tenantId: string): Promise<stri
       where: { id: tenantId },
       select: { settingsJson: true },
     });
-    if (!tenant) return null;
-    const settings = JSON.parse(tenant.settingsJson || '{}');
-    const raw = settings.vapiApiKey;
-    if (!raw || typeof raw !== 'string') return null;
-    return decryptVapiKey(raw);
+    if (tenant) {
+      const settings = JSON.parse(tenant.settingsJson || '{}');
+      const raw = settings.vapiApiKey;
+      if (raw && typeof raw === 'string') {
+        const decrypted = decryptVapiKey(raw);
+        if (decrypted) return decrypted;
+      }
+    }
   } catch {
-    return null;
+    // Fall back to environment variable
   }
+  return process.env.VAPI_PRIVATE_API_KEY || null;
 }
 
 export async function getTenantVapiKey(tenantId?: string): Promise<string | null> {

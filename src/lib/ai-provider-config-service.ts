@@ -106,6 +106,10 @@ export async function getDecryptedApiKey(provider: string): Promise<string | nul
   });
 
   if (!config || !config.encryptedApiKey || config.status !== 'ACTIVE') {
+    // SaaS fallback: check environment variable if DB config is missing/inactive
+    if (provider.toUpperCase() === 'VAPI' && process.env.VAPI_PRIVATE_API_KEY) {
+      return process.env.VAPI_PRIVATE_API_KEY;
+    }
     return null;
   }
 
@@ -115,6 +119,11 @@ export async function getDecryptedApiKey(provider: string): Promise<string | nul
     decryptedKey = decryptKey(config.encryptedApiKey);
   } catch (err) {
     console.error(`[AiProviderConfigService] failed to decrypt key for ${provider}:`, err);
+    // SaaS fallback: if decryption fails (e.g. key rotation or secret mismatch), fall back to env var
+    if (provider.toUpperCase() === 'VAPI' && process.env.VAPI_PRIVATE_API_KEY) {
+      console.log(`[AiProviderConfigService] falling back to process.env.VAPI_PRIVATE_API_KEY for ${provider}`);
+      return process.env.VAPI_PRIVATE_API_KEY;
+    }
     return null;
   }
 
