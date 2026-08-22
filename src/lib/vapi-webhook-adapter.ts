@@ -36,22 +36,35 @@ interface VapiWebhookEvent {
     id?: string;
     status?: string;
     assistantId?: string;
-    phoneNumberId?: string;
+    phoneNumberId?: string; // Vapi V2: use this instead of call.to
     from?: string;
     to?: string;
     startedAt?: string;
     endedAt?: string;
     durationSeconds?: number;
     costUsd?: number;
+    cost?: number; // Vapi V2 field
     recordingUrl?: string;
     stereoRecordingUrl?: string;
-    transcript?: Array<{ role: string; content: string; timestamp: string }>;
+    transcript?: string | Array<{ role: string; content: string; timestamp?: string }>; // Vapi V2: transcript is a string
     analysis?: Record<string, unknown>;
     endedReason?: string;
+    customer?: { number?: string }; // Vapi V2: customer phone number
+    summary?: string;
   };
+  // Vapi V2: wraps payload under "message"
   message?: {
+    type?: string;
     toolCallId?: string;
     toolCalls?: Array<{ id: string; name: string; parameters: Record<string, unknown> }>;
+    call?: VapiWebhookEvent['call'];
+    endedReason?: string;
+    transcript?: string;
+    recordingUrl?: string;
+    summary?: string;
+    cost?: number;
+    costs?: Record<string, unknown>[];
+    artifact?: Record<string, unknown>;
   };
 }
 
@@ -175,12 +188,18 @@ export async function handleVapiWebhook(
   }
 
   // ── 1. Authenticate Vapi Webhooks ──
+  // Vapi sends the platform API key as the Bearer token on webhook requests.
+  // We accept either the Vapi private API key OR the webhook secret (if configured).
+  // If neither is set in env, skip auth (fail-open for backward compat).
   const authHeader = request.headers.get('authorization') || '';
-  const vapiWebhookSecret = process.env.VAPI_WEBHOOK_SECRET;
+  const vapiWebhookSecret = process.env.VAPI_WEBHOOK_SECRET || '';
+  const vapiPrivateKey = process.env.VAPI_PRIVATE_API_KEY || '';
 
-  if (authHeader && vapiWebhookSecret) {
+  if (authHeader && (vapiWebhookSecret || vapiPrivateKey)) {
     const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (token !== vapiWebhookSecret) {
+    const isValid = (vapiPrivateKey && token === vapiPrivateKey) ||
+                    (vapiWebhookSecret && token === vapiWebhookSecret);
+    if (!isValid) {
       console.warn('[vapi-webhook] authentication failed — invalid bearer token');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -195,10 +214,34 @@ export async function handleVapiWebhook(
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
+  // Vapi V2 wraps the payload under "message" — normalize it so all handlers
+  // can use event.type and event.call consistently regardless of Vapi version.
+  if (event.message) {
+    if (!event.type && event.message.type) {
+      event.type = event.message.type;
+    }
+    if (!event.call && event.message.call) {
+      event.call = event.message.call;
+    }
+    // Hoist end-of-call-report fields from message level
+    if (event.message.recordingUrl && event.call) {
+      event.call.recordingUrl = event.call.recordingUrl || event.message.recordingUrl;
+    }
+    if (event.message.transcript && event.call) {
+      event.call.transcript = event.call.transcript || event.message.transcript as string;
+    }
+    if (event.message.endedReason && event.call) {
+      event.call.endedReason = event.call.endedReason || event.message.endedReason;
+    }
+    if (event.message.summary && event.call) {
+      event.call.summary = event.call.summary || event.message.summary;
+    }
+  }
+
   // Normalize the event type (Vapi uses both "type" and "message.type")
   const eventType = event.type || event.message?.type || 'unknown';
 
-  console.log(`[vapi-webhook] received event: ${eventType} (callId=${event.call?.id || 'none'})`);
+  console.log(`[vapi-webhook] received event: ${eventType} (callId=${event.call?.id || 'none'}, phoneNumberId=${event.call?.phoneNumberId || 'none'})`);
 
   // ── 3. Dispatch ──
   try {
@@ -256,19 +299,43 @@ async function handleStatusUpdate(event: VapiWebhookEvent): Promise<NextResponse
   }
 
   const status = call.status;
-  const destinationNumber = call.to;
 
-  if (!destinationNumber) {
-    console.warn('[vapi-webhook] status-update: no destination number');
-    return NextResponse.json({ received: true, error: 'no destination number' });
+  // ── Resolve routing ──
+  // Vapi V2 does NOT send call.to or call.from — it sends phoneNumberId and customer.number.
+  // Use phoneNumberId → PhoneNumber.vapiNumberId lookup first, then fall back to call.to.
+  let routing = null;
+  const customerPhone = call.customer?.number || call.from || '';
+
+  if (call.phoneNumberId) {
+    // Primary: look up by Vapi phoneNumberId → PhoneNumber record → routing
+    try {
+      const phoneRecord = await db.phoneNumber.findFirst({
+        where: { vapiNumberId: call.phoneNumberId },
+        select: { number: true, tenantId: true },
+      });
+      if (phoneRecord?.number) {
+        routing = await getRoutingDecision(phoneRecord.number);
+      }
+    } catch (e) {
+      console.warn('[vapi-webhook] phoneNumberId lookup failed:', e);
+    }
+  }
+
+  // Fallback: use call.to if phoneNumberId lookup failed
+  if (!routing && call.to) {
+    routing = await getRoutingDecision(call.to);
+  }
+
+  if (!routing) {
+    console.warn(`[vapi-webhook] status-update: no routing found (phoneNumberId=${call.phoneNumberId}, to=${call.to})`);
+    return NextResponse.json({ received: true, error: 'no routing' });
   }
 
   // ── On call start (ringing or in_progress/in-progress): run admission ──
   if (status === 'ringing' || status === 'in_progress' || status === 'in-progress') {
     // 1. Get the routing decision (which tenant + what routing mode?)
-    const routing = await getRoutingDecision(destinationNumber);
     if (!routing || !routing.tenantId) {
-      console.warn(`[vapi-webhook] no routing found for ${destinationNumber}`);
+      console.warn(`[vapi-webhook] no routing found for call ${call.id}`);
       return NextResponse.json({ received: true, error: 'no routing' });
     }
 
@@ -295,9 +362,9 @@ async function handleStatusUpdate(event: VapiWebhookEvent): Promise<NextResponse
         await onCallStart({
           tenantId: routing.tenantId,
           vapiCallId: call.id,
-          fromNumber: call.from,
-          toNumber: call.to,
-          customerPhone: call.from,
+          fromNumber: customerPhone,
+          toNumber: call.to || '',
+          customerPhone,
           connectionId: routing.connectionId,
           phoneNumberId: routing.phoneNumberId,
         }).catch(() => {}); // non-fatal — call record is for audit, not billing
@@ -323,10 +390,9 @@ async function handleStatusUpdate(event: VapiWebhookEvent): Promise<NextResponse
       await onCallStart({
         tenantId: routing.tenantId,
         vapiCallId: call.id,
-        fromNumber: call.from,
-        toNumber: call.to,
-        customerPhone: call.from,
-        receptionistId: admission.entitlementId ? undefined : undefined, // resolved from deployment
+        fromNumber: customerPhone,
+        toNumber: call.to || '',
+        customerPhone,
         connectionId: routing.connectionId,
         phoneNumberId: routing.phoneNumberId,
       }).catch(() => {}); // non-fatal
@@ -411,14 +477,17 @@ async function handleEndOfCall(event: VapiWebhookEvent): Promise<NextResponse> {
     durationSec: callDetails.durationSeconds || 0,
     billableSeconds: Math.ceil(callDetails.durationSeconds || 0),
     costUsd: callDetails.costUsd || 0,
-    costBreakdown: callDetails.costUsd ? { vapi: callDetails.costUsd } : undefined,
+    // Vapi V2 uses cost (number), not costUsd
+    costUsd: callDetails.cost || callDetails.costUsd || 0,
+    costBreakdown: (callDetails.cost || callDetails.costUsd) ? { vapi: callDetails.cost || callDetails.costUsd } : undefined,
     endedReason: callDetails.endedReason,
     recordingUrl: callDetails.recordingUrl,
     stereoRecordingUrl: callDetails.stereoRecordingUrl,
     transcript: callDetails.transcript,
-    summary: typeof callDetails.analysis === 'object' && callDetails.analysis
+    // Vapi V2: summary is a top-level field on the call, not inside analysis
+    summary: callDetails.summary || (typeof callDetails.analysis === 'object' && callDetails.analysis
       ? (callDetails.analysis as Record<string, unknown>).summary as string | undefined
-      : undefined,
+      : undefined),
     analysis: callDetails.analysis,
     outcomeType: typeof callDetails.analysis === 'object' && callDetails.analysis
       ? (callDetails.analysis as Record<string, unknown>).outcome as string | undefined
