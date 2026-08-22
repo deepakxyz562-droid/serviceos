@@ -266,7 +266,7 @@ CRITICAL RULES:
     }
 
     const vapiConfig = {
-      name: `${receptionist.name} (Receptionist)`,
+      name: `${receptionist.name} (Receptionist)`.substring(0, 40),
       systemPrompt,
       voice: version.voice,
       model: version.model,
