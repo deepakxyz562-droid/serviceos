@@ -600,9 +600,24 @@ registerToolHandler('transfer_to_human', async (ctx, params) => {
   return {
     transferred: true,
     target: resolvedTarget,
-    message: 'Transferring to human agent',
+    message: 'Transferring to human agent. Please hold.',
     action: 'transfer',
-    destination: resolvedTarget,
+    
+    // Format A (vapi-functions standard command format):
+    type: 'transfer',
+    destination: resolvedTarget, // E.164 string format
+    
+    // Format B (Vapi Custom Tool dynamic destination object format):
+    destinationObject: {
+      type: 'number',
+      number: resolvedTarget,
+    },
+    // Keep raw object under destination for custom tool direct routing:
+    destinationInfo: {
+      type: 'number',
+      number: resolvedTarget,
+    },
+    
     resolution,
     requestedTarget: requestedTarget || 'none',
   };

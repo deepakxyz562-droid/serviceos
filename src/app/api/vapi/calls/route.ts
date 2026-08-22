@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         call: {
           ...call,
-          recordingUrl: call.recordingUrl || vapiCall?.recordingUrl || vapiCall?.stereoRecordingUrl || null,
+          recordingUrl: call.vapiCallId ? `/api/vapi/calls/${call.id}/recording` : null,
           startedAt: safeDate(call.startedAt),
           endedAt: safeDate(call.endedAt),
           createdAt: safeDate(call.createdAt),
@@ -109,6 +109,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       calls: calls.map((c: Record<string, unknown>) => ({
         ...c,
+        recordingUrl: c.vapiCallId ? `/api/vapi/calls/${c.id}/recording` : null,
         startedAt: safeDate(c.startedAt),
         endedAt: safeDate(c.endedAt),
         createdAt: safeDate(c.createdAt),
