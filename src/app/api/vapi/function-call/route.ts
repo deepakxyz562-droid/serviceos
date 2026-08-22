@@ -27,9 +27,9 @@ import { getDecryptedApiKey } from '@/lib/ai-provider-config-service';
  */
 
 export async function POST(request: NextRequest) {
-  // ── 1. Authenticate ──
-  // Verify the bearer token matches the platform Vapi key
   const authHeader = request.headers.get('authorization') || '';
+  console.log(`[vapi/function-call] HTTP ${request.method} request received (hasAuth=${!!authHeader})`);
+
   const platformKey = await getDecryptedApiKey('VAPI');
 
   if (!platformKey) {
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   // Accept either "Bearer <key>" or just "<key>"
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
   if (token !== platformKey) {
-    console.warn('[vapi/function-call] authentication failed — invalid bearer token');
+    console.warn(`[vapi/function-call] authentication failed — token mismatch (tokenLen=${token.length}, platformKeyLen=${platformKey.length})`);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

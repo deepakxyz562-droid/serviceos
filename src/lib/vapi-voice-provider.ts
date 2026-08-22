@@ -643,8 +643,14 @@ class VapiVoiceProviderImpl implements VoiceProvider {
   async assignAssistantToPhoneNumber(params: {
     vapiPhoneNumberId: string;
     assistantId: string;
+    serverUrl?: string;
   }): Promise<void> {
     const auth = await this.getAuthHeader();
+
+    const patchBody: Record<string, unknown> = { assistantId: params.assistantId };
+    if (params.serverUrl) {
+      patchBody.serverUrl = params.serverUrl;
+    }
 
     const response = await fetch(`${this.baseUrl}/phone-number/${params.vapiPhoneNumberId}`, {
       method: 'PATCH',
@@ -652,7 +658,7 @@ class VapiVoiceProviderImpl implements VoiceProvider {
         Authorization: auth,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ assistantId: params.assistantId }),
+      body: JSON.stringify(patchBody),
     });
 
     if (!response.ok) {

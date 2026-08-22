@@ -362,8 +362,9 @@ CRITICAL RULES:
       await vapi.assignAssistantToPhoneNumber({
         vapiPhoneNumberId: phone.vapiNumberId!,
         assistantId: externalAssistantId,
+        serverUrl: webhookUrl,
       });
-      console.log(`[deploy] Step B: bound assistant ${externalAssistantId} to Vapi number ${phone.vapiNumberId}`);
+      console.log(`[deploy] Step B: bound assistant ${externalAssistantId} to Vapi number ${phone.vapiNumberId} with webhook ${webhookUrl}`);
     } catch (bindErr) {
       // Step B failed — Vapi assistant exists but isn't bound to the number.
       // Mark the deployment FAILED (NOT ACTIVE) so the tenant sees the real state.

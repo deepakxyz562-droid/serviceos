@@ -25,6 +25,10 @@ import { handleVapiWebhook } from '@/lib/vapi-webhook-adapter';
 
 export async function POST(request: NextRequest) {
   try {
+    const authHeader = request.headers.get('authorization') || '';
+    const contentType = request.headers.get('content-type') || '';
+    console.log(`[vapi/webhook] HTTP ${request.method} request received (contentType=${contentType}, hasAuth=${!!authHeader})`);
+
     const rawBody = await request.text();
     return await handleVapiWebhook(request, rawBody);
   } catch (err) {
