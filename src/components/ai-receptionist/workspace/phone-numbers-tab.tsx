@@ -60,6 +60,7 @@ import {
 import { toast } from 'sonner';
 import type { PhoneConnectionData } from './use-ai-receptionist-data';
 import { TestCallDialog } from './test-call-dialog';
+import { BuyNumberDialog } from './buy-number-dialog';
 import { cn } from '@/lib/utils';
 
 interface PhoneNumbersTabProps {
@@ -72,6 +73,7 @@ export function PhoneNumbersTab({ connections, onChanged }: PhoneNumbersTabProps
   const [routingId, setRoutingId] = useState<string | null>(null);
   const [releaseId, setReleaseId] = useState<string | null>(null);
   const [testCallOpen, setTestCallOpen] = useState(false);
+  const [buyDialogOpen, setBuyDialogOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const handleRelease = async () => {
@@ -104,15 +106,25 @@ export function PhoneNumbersTab({ connections, onChanged }: PhoneNumbersTabProps
             Manage numbers, routing, and fallback behavior
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={async () => { await onChanged(); toast.success('Refreshed'); }}
-          className="gap-1.5"
-        >
-          <RefreshCw className="size-3.5" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => setBuyDialogOpen(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
+          >
+            <Plus className="size-3.5" />
+            Buy Number
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => { await onChanged(); toast.success('Refreshed'); }}
+            className="gap-1.5"
+          >
+            <RefreshCw className="size-3.5" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {connections.length === 0 ? (
@@ -125,9 +137,16 @@ export function PhoneNumbersTab({ connections, onChanged }: PhoneNumbersTabProps
               <p className="text-sm font-medium">No phone numbers yet</p>
               <p className="text-xs text-muted-foreground mt-1 max-w-sm">
                 You need a phone number for your AI Receptionist to receive calls.
-                Use the onboarding wizard to search and purchase one.
+                Search and purchase one below.
               </p>
             </div>
+            <Button
+              onClick={() => setBuyDialogOpen(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+            >
+              <Plus className="size-4" />
+              Buy a Phone Number
+            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -193,6 +212,13 @@ export function PhoneNumbersTab({ connections, onChanged }: PhoneNumbersTabProps
 
       {/* Test call dialog */}
       <TestCallDialog open={testCallOpen} onOpenChange={setTestCallOpen} />
+
+      {/* Buy number dialog */}
+      <BuyNumberDialog
+        open={buyDialogOpen}
+        onOpenChange={setBuyDialogOpen}
+        onSuccess={async () => { await onChanged(); }}
+      />
     </div>
   );
 }
