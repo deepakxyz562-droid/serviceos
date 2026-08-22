@@ -114,7 +114,9 @@ export async function GET(request: NextRequest) {
         createdAt: safeDate(c.createdAt),
       })),
       stats: {
-        total: (stats._count as Record<string, number> | null)?.id || 0,
+        total: typeof stats._count === 'number'
+          ? stats._count
+          : (stats._count as Record<string, number> | null)?.id || 0,
         totalDurationSec: stats._sum?.durationSec || 0,
         totalCost: stats._sum?.costUsd || 0,
         todayCount: todayCalls,

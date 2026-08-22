@@ -84,9 +84,9 @@ export async function GET() {
       },
     });
 
-    const includedMinutes = Math.floor(calc.includedSeconds / 60);
-    const usedMinutes = Math.floor(calc.usedSeconds / 60);
-    const remainingMinutes = Math.floor(calc.remainingSeconds / 60);
+    const includedMinutes = Math.round(calc.includedSeconds / 60);
+    const usedMinutes = Math.round(calc.usedSeconds / 60);
+    const remainingMinutes = Math.max(0, includedMinutes - usedMinutes);
     const usedPercent =
       calc.includedSeconds > 0
         ? Math.round((calc.usedSeconds / calc.includedSeconds) * 100)
