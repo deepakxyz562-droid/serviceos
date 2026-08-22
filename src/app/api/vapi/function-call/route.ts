@@ -41,7 +41,12 @@ export async function POST(request: NextRequest) {
 
   // Accept either "Bearer <key>" or just "<key>" or x-vapi-secret header
   const token = authHeader.replace(/^Bearer\s+/i, '').trim() || xVapiSecret.trim();
-  if (token !== platformKey) {
+
+  // Accept either the Vapi private API key OR the webhook secret (if configured)
+  const webhookSecret = process.env.VAPI_WEBHOOK_SECRET || '';
+  const isValid = token === platformKey || (webhookSecret && token === webhookSecret);
+
+  if (!isValid) {
     console.warn(`[vapi/function-call] authentication failed — token mismatch (received: ${token.substring(0, 8)}..., expected: ${platformKey.substring(0, 8)}...)`);
     try {
       await db.aiCall.create({
