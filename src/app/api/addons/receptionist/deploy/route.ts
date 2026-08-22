@@ -271,6 +271,9 @@ CRITICAL RULES:
       ? `${receptionist.name}`.slice(0, 40)
       : rawName;
 
+    const { getDecryptedApiKey } = await import('@/lib/ai-provider-config-service');
+    const vapiSecret = await getDecryptedApiKey('VAPI');
+
     const vapiConfig = {
       name: vapiAssistantName,
       systemPrompt,
@@ -283,6 +286,7 @@ CRITICAL RULES:
       silenceTimeoutSeconds: version.silenceTimeoutSeconds,
       serverUrl,
       webhookUrl,
+      serverUrlSecret: vapiSecret || undefined,
     };
 
     // ── Step A: Create/update the Vapi assistant (with 13 tools) ──
@@ -369,6 +373,7 @@ CRITICAL RULES:
         vapiPhoneNumberId: phone.vapiNumberId!,
         assistantId: externalAssistantId,
         serverUrl: webhookUrl,
+        serverUrlSecret: vapiSecret || undefined,
       });
       console.log(`[deploy] Step B: bound assistant ${externalAssistantId} to Vapi number ${phone.vapiNumberId} (serverUrl=${webhookUrl})`);
     } catch (bindErr) {

@@ -192,15 +192,16 @@ export async function handleVapiWebhook(
   // We accept either the Vapi private API key OR the webhook secret (if configured).
   // If neither is set in env, skip auth (fail-open for backward compat).
   const authHeader = request.headers.get('authorization') || '';
+  const xVapiSecret = request.headers.get('x-vapi-secret') || '';
   const vapiWebhookSecret = process.env.VAPI_WEBHOOK_SECRET || '';
   const vapiPrivateKey = process.env.VAPI_PRIVATE_API_KEY || '';
 
-  if (authHeader && (vapiWebhookSecret || vapiPrivateKey)) {
-    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim() || xVapiSecret.trim();
+  if (token && (vapiWebhookSecret || vapiPrivateKey)) {
     const isValid = (vapiPrivateKey && token === vapiPrivateKey) ||
                     (vapiWebhookSecret && token === vapiWebhookSecret);
     if (!isValid) {
-      console.warn('[vapi-webhook] authentication failed — invalid bearer token');
+      console.warn('[vapi-webhook] authentication failed — invalid token');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
   }

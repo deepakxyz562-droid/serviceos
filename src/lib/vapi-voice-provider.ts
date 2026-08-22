@@ -35,6 +35,8 @@ export interface VapiAssistantConfig {
   serverUrl?: string;
   // The webhook URL (Vapi sends call lifecycle events here)
   webhookUrl?: string;
+  // Secret token sent in the Authorization/X-Vapi-Secret header
+  serverUrlSecret?: string;
 }
 
 export interface CreateAssistantResult {
@@ -307,6 +309,7 @@ class VapiVoiceProviderImpl implements VoiceProvider {
       maxDurationSeconds: config.maxDurationSeconds,
       silenceTimeoutSeconds: config.silenceTimeoutSeconds,
       ...(config.serverUrl ? { serverUrl: config.serverUrl } : {}),
+      ...(config.serverUrlSecret ? { serverUrlSecret: config.serverUrlSecret } : {}),
     };
 
     const response = await fetch(`${this.baseUrl}/assistant`, {
@@ -365,6 +368,7 @@ class VapiVoiceProviderImpl implements VoiceProvider {
       maxDurationSeconds: config.maxDurationSeconds,
       silenceTimeoutSeconds: config.silenceTimeoutSeconds,
       ...(config.serverUrl ? { serverUrl: config.serverUrl } : {}),
+      ...(config.serverUrlSecret ? { serverUrlSecret: config.serverUrlSecret } : {}),
     };
 
     const response = await fetch(`${this.baseUrl}/assistant/${assistantId}`, {
@@ -644,6 +648,7 @@ class VapiVoiceProviderImpl implements VoiceProvider {
     vapiPhoneNumberId: string;
     assistantId: string;
     serverUrl?: string;
+    serverUrlSecret?: string;
   }): Promise<void> {
     const auth = await this.getAuthHeader();
 
@@ -652,6 +657,9 @@ class VapiVoiceProviderImpl implements VoiceProvider {
     };
     if (params.serverUrl) {
       patchBody.serverUrl = params.serverUrl;
+    }
+    if (params.serverUrlSecret) {
+      patchBody.serverUrlSecret = params.serverUrlSecret;
     }
 
     const response = await fetch(`${this.baseUrl}/phone-number/${params.vapiPhoneNumberId}`, {

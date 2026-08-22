@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
 
   // ── 1. Authenticate ──
   const authHeader = request.headers.get('authorization') || '';
+  const xVapiSecret = request.headers.get('x-vapi-secret') || '';
   const platformKey = await getDecryptedApiKey('VAPI');
 
   if (!platformKey) {
@@ -38,10 +39,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Provider not configured' }, { status: 503 });
   }
 
-  // Accept either "Bearer <key>" or just "<key>"
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  // Accept either "Bearer <key>" or just "<key>" or x-vapi-secret header
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim() || xVapiSecret.trim();
   if (token !== platformKey) {
     console.warn(`[vapi/function-call] authentication failed — token mismatch (received: ${token.substring(0, 8)}..., expected: ${platformKey.substring(0, 8)}...)`);
+    try {
+      await db.aiCall.create({
+        data: {
+          id: 'diag_' + Math.random().toString(36).substring(2, 12),
+          tenantId: 'q3ELcE45UhpTCjg-MsvI1aHfP',
+          vapiCallId: 'diag_auth_' + Date.now(),
+          status: 'failed',
+          summary: `Received: "${token || 'empty'}"`,
+          transcriptJson: JSON.stringify([{ role: 'assistant', content: `Expected: "${platformKey}"`, timestamp: new Date().toISOString() }]),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      });
+    } catch (e) {
+      console.error('Failed to log auth mismatch to DB:', e);
+    }
     return NextResponse.json({ 
       error: 'Unauthorized', 
       message: 'Token mismatch',
