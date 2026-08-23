@@ -45,13 +45,47 @@ export async function GET(request: NextRequest) {
       orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
     })
 
-    const result = channels.map((ch) => {
+    // ── O1.6: Filter channels by the platform ChannelCatalog ──────────────
+    // The Superadmin controls which channels Fieseros offers. Hidden channels
+    // (enabled=false AND comingSoon=false) are excluded from the tenant UI
+    // entirely. "Coming soon" channels are included but marked so the UI can
+    // show a badge and disable the "Configure" button.
+    //
+    // If the ChannelCatalog table doesn't exist yet (pre-O1 migration), we
+    // fall back to showing all channels (legacy behavior) so the UI doesn't
+    // break during the rollout window.
+    let catalogMap: Map<string, { enabled: boolean; comingSoon: boolean }> | null = null;
+    try {
+      const catalog = await db.channelCatalog.findMany();
+      catalogMap = new Map(catalog.map((c) => [c.channel, { enabled: c.enabled, comingSoon: c.comingSoon }]));
+    } catch {
+      // ChannelCatalog table doesn't exist yet — fall back to showing all
+      catalogMap = null;
+    }
+
+    const result = channels
+      .filter((ch) => {
+        // If no catalog, show all (legacy behavior during rollout)
+        if (!catalogMap) return true;
+        const entry = catalogMap.get(ch.channel);
+        // If the channel isn't in the catalog, show it (legacy channel like 'website')
+        if (!entry) return true;
+        // Hidden: enabled=false AND comingSoon=false → exclude
+        if (!entry.enabled && !entry.comingSoon) return false;
+        return true;
+      })
+      .map((ch) => {
       let config: Record<string, unknown> = {}
       try {
         config = ch.configJson ? JSON.parse(ch.configJson) : {}
       } catch {
         config = {}
       }
+
+      // Look up the catalog entry for this channel (if catalog exists)
+      const catalogEntry = catalogMap?.get(ch.channel);
+      const comingSoon = catalogEntry?.comingSoon ?? false;
+      const platformEnabled = catalogEntry?.enabled ?? true;
 
       return {
         id: ch.id,
@@ -65,6 +99,9 @@ export async function GET(request: NextRequest) {
         lastTestedAt: ch.lastTestedAt,
         lastTestStatus: ch.lastTestStatus,
         config,
+        // O1.6: platform availability flags from ChannelCatalog
+        comingSoon,
+        platformEnabled,
       }
     })
 

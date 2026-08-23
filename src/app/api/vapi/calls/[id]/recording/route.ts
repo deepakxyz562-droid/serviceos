@@ -34,41 +34,31 @@ export async function GET(
       return new Response('Vapi API Key not configured', { status: 503 });
     }
 
-    // 4. Fetch the signed R2 URL from Vapi (follows redirect automatically)
+    // 4. Request the mono recording signed URL from Vapi API
+    // Vapi returns a 302 redirect. We fetch it with redirect: 'manual' to get the Location header.
     const vapiRes = await fetch(`https://api.vapi.ai/call/${call.vapiCallId}/mono-recording`, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${apiKey}`,
       },
-      // Let fetch follow the redirect to get the actual audio bytes from R2
-      redirect: 'follow',
+      redirect: 'manual', // Do not automatically follow the redirect
     });
 
-    if (!vapiRes.ok || !vapiRes.body) {
-      console.error(`[Vapi Recording Proxy] failed. Status: ${vapiRes.status}`);
-      return new Response('Recording unavailable', { status: 502 });
+    const location = vapiRes.headers.get('location');
+    if (!location) {
+      // If Vapi returned a normal 200 response with a URL or didn't redirect:
+      if (vapiRes.status === 200) {
+        const finalUrl = vapiRes.url;
+        if (finalUrl && finalUrl !== `https://api.vapi.ai/call/${call.vapiCallId}/mono-recording`) {
+          return NextResponse.redirect(finalUrl, 307);
+        }
+      }
+      console.error(`[Vapi Recording Proxy] failed to resolve redirect. Status: ${vapiRes.status}`);
+      return new Response('Recording unavailable', { status: 500 });
     }
 
-    // 5. Stream the audio bytes directly to the browser.
-    //    This avoids cross-origin redirect issues with <audio> elements — the
-    //    browser sees a same-origin response and can range-request, seek, and
-    //    play without CORS problems.
-    const contentType = vapiRes.headers.get('content-type') || 'audio/wav';
-    const contentLength = vapiRes.headers.get('content-length');
-
-    const headers: Record<string, string> = {
-      'Content-Type': contentType,
-      'Cache-Control': 'private, max-age=3600',
-      'Accept-Ranges': 'bytes',
-    };
-    if (contentLength) {
-      headers['Content-Length'] = contentLength;
-    }
-
-    return new Response(vapiRes.body, {
-      status: 200,
-      headers,
-    });
+    // 5. Redirect the browser to the short-lived signed R2 URL
+    return NextResponse.redirect(location, 307);
   } catch (error) {
     console.error('[Vapi Recording Proxy Error]', error);
     return new Response('Internal Server Error', { status: 500 });

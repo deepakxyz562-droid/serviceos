@@ -27,6 +27,7 @@ import { db } from '@/lib/db'
 import { createNotification } from '@/lib/notifications'
 import { sendWebPushToUser } from '@/lib/web-push-send'
 import { maybeAutoReply } from '@/lib/auto-reply'
+import { mirrorLiveChatMessageToInbox } from '@/lib/live-chat-bridge'
 
 export const runtime = 'nodejs'
 
@@ -196,6 +197,26 @@ export async function POST(
         ...(visitorName && !session.visitorName ? { visitorName } : {}),
       },
     })
+
+    // ── O1: mirror to the canonical InboxMessage (unified inbox) ──────────
+    // Non-fatal — if the mirror fails, the live chat widget still works
+    // (it reads from PublicChatMessage, not InboxMessage). The mirror lets the
+    // omnichannel inbox show live chat alongside WhatsApp/SMS/Email.
+    if (session.tenantId) {
+      try {
+        await mirrorLiveChatMessageToInbox(
+          message.id,
+          session.id,
+          session.tenantId,
+          'visitor',
+          text,
+          undefined, // visitor has no senderId
+          session.visitorName || visitorName || undefined,
+        );
+      } catch (err) {
+        console.warn('[public-chat] mirror to InboxMessage failed (non-fatal):', err);
+      }
+    }
 
     // --- Notify tenant admins (owners + admins) -----------------------------
     // Only fire when the admin had previously caught up (unreadCount was 0).

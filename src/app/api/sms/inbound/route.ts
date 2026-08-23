@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { maybeAutoReply } from '@/lib/auto-reply'
 import { optOutSmsMarketing, optInSmsMarketing } from '@/lib/sms-consent'
+import { createInboundMessage } from '@/lib/inbox-message-service'
 
 /**
  * POST /api/sms/inbound
@@ -11,12 +12,12 @@ import { optOutSmsMarketing, optInSmsMarketing } from '@/lib/sms-consent'
  *
  *   From=+14155551212  To=+14155553456  Body=Hi  MessageSid=SMxxx  SmsSid=SMxxx
  *
- * Flow:
+ * Flow (O1 Omnichannel canonical path):
  *   1. Find the PhoneNumber by `number = To` to get the tenantId.
  *   2. Find or create a Conversation with `customerPhone = From`,
  *      `channel = 'sms'`, tenantId.
- *   3. Append the inbound message to `Conversation.messagesJson`
- *      (array of { id, direction: 'inbound', body, timestamp, providerSid }).
+ *   3. Create the canonical InboxMessage row via `createInboundMessage()`
+ *      — idempotent via (tenantId, channel, externalId=MessageSid).
  *   4. Update `Conversation.lastMessageAt`, `lastMessageBody`,
  *      `lastDirection = 'inbound'`.
  *   5. Create a `UnifiedMessage` row (channel='sms', direction='inbound',
@@ -105,16 +106,42 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 3. Idempotency check on MessageSid ───────────────────────────────
-    if (messageSid) {
-      const existing = await db.unifiedMessage.findFirst({
-        where: { externalId: messageSid, channel: 'sms' },
-        select: { id: true },
-      })
-      if (existing) {
-        return new NextResponse('<Response></Response>', {
-          status: 200,
-          headers: { 'Content-Type': 'text/xml' },
+    // O1: the canonical idempotency check is now inside createInboundMessage()
+    // via the (tenantId, channel, externalId) unique constraint. We keep an
+    // early return here to avoid the work of creating a Conversation when a
+    // duplicate webhook arrives AND the conversation already has the message.
+    //
+    // RESILIENCE: if the O1 DDL migration hasn't been applied yet (the
+    // `channel` column doesn't exist on InboxMessage), the findFirst query
+    // throws a 42703 error. We catch it and fall back to the legacy
+    // UnifiedMessage check so the SMS webhook keeps working during the
+    // rollout window. This prevents a regression where the inbound SMS
+    // webhook would 500 and Twilio would keep retrying indefinitely.
+    if (messageSid && tenantId) {
+      try {
+        const existing = await db.inboxMessage.findFirst({
+          where: { tenantId, channel: 'sms', externalId: messageSid },
+          select: { id: true },
         })
+        if (existing) {
+          return new NextResponse('<Response></Response>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/xml' },
+          })
+        }
+      } catch {
+        // Fallback: channel column missing (pre-O1 migration) — use the
+        // legacy UnifiedMessage check so the webhook still dedupes correctly.
+        const existing = await db.unifiedMessage.findFirst({
+          where: { externalId: messageSid, channel: 'sms' },
+          select: { id: true },
+        }).catch(() => null)
+        if (existing) {
+          return new NextResponse('<Response></Response>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/xml' },
+          })
+        }
       }
     }
 
@@ -195,23 +222,55 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // ── 5. Create UnifiedMessage row ────────────────────────────────────
-    await db.unifiedMessage.create({
-      data: {
-        channel: 'sms',
-        direction: 'inbound',
-        senderId: from,
-        senderName: customerName || undefined,
-        recipientId: to,
-        recipientName: phoneRow.displayName || phoneRow.number,
-        content: body,
-        contentType: 'text',
-        externalId: messageSid || null,
-        status: 'delivered',
-        customerId: customerId || null,
-        tenantId,
-      },
-    })
+    // ── 5. Create the canonical InboxMessage row (O1) ─────────────────
+    // This replaces the UnifiedMessage write. Idempotent via the
+    // (tenantId, channel, externalId) unique constraint. If this is a
+    // duplicate webhook, createInboundMessage returns the existing row.
+    //
+    // RESILIENCE: if the O1 DDL migration hasn't been applied yet (the
+    // `channel` column doesn't exist on InboxMessage), the create throws a
+    // 42703 error. We catch it and fall back to the legacy UnifiedMessage
+    // write so the SMS webhook keeps working during the rollout window.
+    // Without this fallback, the webhook would 500 and Twilio would retry.
+    if (tenantId) {
+      let inboxWritten = false
+      try {
+        await createInboundMessage({
+          tenantId,
+          conversationId,
+          channel: 'sms',
+          senderId: from,
+          senderName: customerName || undefined,
+          content: body,
+          messageType: 'text',
+          externalId: messageSid || undefined,
+          metadataJson: { to, from, messageSid, phoneNumberId: phoneRow.id },
+        })
+        inboxWritten = true
+      } catch (err) {
+        console.warn('[/api/sms/inbound] InboxMessage write failed (pre-O1 migration?), falling back to UnifiedMessage:', err instanceof Error ? err.message : err)
+      }
+      if (!inboxWritten) {
+        // Fallback: write to the legacy UnifiedMessage table so the message
+        // is at least recorded (pre-O1 migration state).
+        await db.unifiedMessage.create({
+          data: {
+            channel: 'sms',
+            direction: 'inbound',
+            senderId: from,
+            senderName: customerName || undefined,
+            recipientId: to,
+            recipientName: phoneRow.displayName || phoneRow.number,
+            content: body,
+            contentType: 'text',
+            externalId: messageSid || null,
+            status: 'delivered',
+            customerId: customerId || null,
+            tenantId,
+          },
+        }).catch(() => {})
+      }
+    }
 
     // ── 6. Update PhoneNumber.lastUsedAt ────────────────────────────────
     await db.phoneNumber.update({

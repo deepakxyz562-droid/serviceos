@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { resolveWhatsAppConfig } from '@/lib/whatsapp-config';
 import { executeWorkflow, type NodeOutput } from '@/lib/workflow-executor';
 import { maybeAutoReply } from '@/lib/auto-reply';
+import { createInboundMessage } from '@/lib/inbox-message-service';
 
 /**
  * GET - Webhook verification endpoint
@@ -308,11 +309,11 @@ async function handlePlainTextInbound(
       return;
     }
 
-    // ── 2. Idempotency check on wamid ─────────────────────────────────────
-    if (messageId) {
+    // ── 2. Idempotency check on wamid (O1: via InboxMessage) ──────────────
+    if (messageId && tenantId) {
       try {
-        const existing = await db.unifiedMessage.findFirst({
-          where: { externalId: messageId, channel: 'whatsapp' },
+        const existing = await db.inboxMessage.findFirst({
+          where: { tenantId, channel: 'whatsapp', externalId: messageId },
           select: { id: true },
         });
         if (existing) {
@@ -377,51 +378,64 @@ async function handlePlainTextInbound(
       return;
     }
 
-    // ── 4. Create InboxMessage (senderType='customer', direction='inbound') ──
-    try {
-      await db.inboxMessage.create({
-        data: {
+    // ── 4. Create the canonical InboxMessage (O1) ──────────────────────
+    // Replaces the direct db.inboxMessage.create + db.unifiedMessage.create.
+    // Idempotent via the (tenantId, channel, externalId) unique constraint.
+    //
+    // RESILIENCE: if the O1 DDL migration hasn't been applied yet (the
+    // `channel` column doesn't exist on InboxMessage), the create throws a
+    // 42703 error. We catch it and fall back to the legacy UnifiedMessage
+    // write so the WhatsApp webhook keeps recording messages during the
+    // rollout window.
+    if (tenantId) {
+      let inboxWritten = false;
+      try {
+        await createInboundMessage({
+          tenantId,
           conversationId,
-          senderType: 'customer',
+          channel: 'whatsapp',
+          senderId: from,
           senderName: from,
           content: textBody,
           messageType: 'text',
-          direction: 'inbound',
-          status: 'sent',
-          externalId: messageId || null,
-          metadataJson: JSON.stringify({
-            channel: 'whatsapp',
+          externalId: messageId || undefined,
+          metadataJson: {
             whatsappMessageId: messageId,
             phoneNumberId,
-          }),
-          tenantId,
-        },
-      });
-    } catch (err) {
-      console.error('[WhatsApp Callback] InboxMessage create failed:', err);
-      // Continue anyway — maybeAutoReply may still fire and the conversation
-      // record exists. The InboxMessage is the canonical record but missing
-      // it doesn't break the auto-reply pipeline.
+          },
+        });
+        inboxWritten = true;
+      } catch (err) {
+        console.error('[WhatsApp Callback] InboxMessage create failed (pre-O1 migration?), falling back to UnifiedMessage:', err);
+      }
+      if (!inboxWritten) {
+        // Fallback: write to the legacy UnifiedMessage table so the message
+        // is at least recorded (pre-O1 migration state).
+        try {
+          await db.unifiedMessage.create({
+            data: {
+              channel: 'whatsapp',
+              direction: 'inbound',
+              senderId: from,
+              recipientId: phoneNumberId,
+              content: textBody,
+              contentType: 'text',
+              externalId: messageId || null,
+              status: 'delivered',
+              tenantId,
+            },
+          });
+        } catch (fallbackErr) {
+          console.warn('[WhatsApp Callback] UnifiedMessage fallback also failed (non-fatal):', fallbackErr);
+        }
+      }
     }
 
-    // ── 5. Create a UnifiedMessage row (for the unified inbox view) ───────
-    try {
-      await db.unifiedMessage.create({
-        data: {
-          channel: 'whatsapp',
-          direction: 'inbound',
-          senderId: from,
-          recipientId: phoneNumberId,
-          content: textBody,
-          contentType: 'text',
-          externalId: messageId || null,
-          status: 'delivered',
-          tenantId,
-        },
-      });
-    } catch (err) {
-      console.warn('[WhatsApp Callback] UnifiedMessage create failed (non-fatal):', err);
-    }
+    // ── 5. UnifiedMessage write REMOVED (O1) ───────────────────────────
+    // New code no longer writes to UnifiedMessage. The table is kept for
+    // backward compat with any existing reads, but canonical reads come
+    // from InboxMessage via the omnichannel conversations API.
+    // (The fallback above is only used during the pre-migration rollout window.)
 
     // ── 6. Auto-reply when tenant is offline ──────────────────────────────
     // maybeAutoReply checks subscription + config + presence + cooldown

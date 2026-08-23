@@ -34,6 +34,8 @@ import {
   ChevronLeft, X, LayoutList, MapPin, Download,
   // AI Platform section
   Cloud,
+  // O1.5 Channel Catalog
+  RadioTower,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -103,6 +105,7 @@ const MenuManagementSection = lazy(() => import('@/components/views/superadmin/s
 const DirectoryListingsSection = lazy(() => import('@/components/views/superadmin/sections/directory-listings').then(m => ({ default: m.DirectoryListingsSection })));
 const BackupSection = lazy(() => import('@/components/views/superadmin/sections/backup').then(m => ({ default: m.BackupSection })));
 const SocialPublishingConfigSection = lazy(() => import('@/components/views/superadmin/sections/social-publishing-config').then(m => ({ default: m.SocialPublishingConfigSection })));
+const ChannelCatalogSection = lazy(() => import('@/components/views/superadmin/sections/channel-catalog').then(m => ({ default: m.ChannelCatalogSection })));
 const CreemBillingSection = lazy(() => import('@/components/views/superadmin/sections/creem-billing').then(m => ({ default: m.CreemBillingSection })));
 
 // Lightweight Suspense fallback for lazy-loaded sections.
@@ -427,6 +430,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'email-services', label: 'Email Services', icon: Mail },
       { key: 'sms-services', label: 'SMS Services', icon: MessageSquare },
       { key: 'whatsapp-providers', label: 'WhatsApp Providers', icon: MessageCircle },
+      { key: 'channel-catalog', label: 'Channel Catalog', icon: RadioTower },
       { key: 'push-notifications', label: 'Push Notifications', icon: Bell },
     ],
   },
@@ -1349,6 +1353,7 @@ export function SuperAdminView() {
         {activeTab === 'system-health' && <SystemHealthSection />}
         {activeTab === 'backup' && <BackupSection />}
         {activeTab === 'social-publishing-config' && <SocialPublishingConfigSection />}
+        {activeTab === 'channel-catalog' && <ChannelCatalogSection />}
       </Suspense>
     );
   };

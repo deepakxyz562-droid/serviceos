@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { requirePlanFeature } from '@/lib/plan-gate'
 import { sendSmsMessage, normaliseSmsPhone } from '@/lib/sms-send'
+import { createOutboundMessage } from '@/lib/inbox-message-service'
 
 /**
  * POST /api/sms/send
@@ -142,21 +143,27 @@ export async function POST(request: NextRequest) {
     // Find the conversation either by explicit ID, or by channel='sms' +
     // customerPhone=normalisedTo (most recent active), or create a new one.
     let conversation = null as
-      | { id: string; messagesJson: string; customerId: string | null }
+      | { id: string; conversationId: string; messagesJson: string; customerId: string | null }
       | null
+
+    // Track the conversationId across both branches so the InboxMessage write
+    // (step 5) works whether we found an existing conversation or created a new one.
+    let resolvedConversationId: string | null = null
 
     if (conversationId) {
       conversation = await db.conversation.findFirst({
         where: { id: conversationId, tenantId },
-        select: { id: true, messagesJson: true, customerId: true },
+        select: { id: true, conversationId: true, messagesJson: true, customerId: true },
       })
+      if (conversation) resolvedConversationId = conversation.conversationId
     }
     if (!conversation) {
       conversation = await db.conversation.findFirst({
         where: { customerPhone: normalisedTo, channel: 'sms', status: 'active', tenantId },
         orderBy: { lastMessageAt: 'desc' },
-        select: { id: true, messagesJson: true, customerId: true },
+        select: { id: true, conversationId: true, messagesJson: true, customerId: true },
       })
+      if (conversation) resolvedConversationId = conversation.conversationId
     }
 
     const msgId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -203,32 +210,38 @@ export async function POST(request: NextRequest) {
           tenantId: tenantId || null,
         },
       })
+      resolvedConversationId = newConversationId
     }
 
-    // ── 5. Create UnifiedMessage (outbound) ──────────────────────────────
-    await db.unifiedMessage.create({
-      data: {
-        channel: 'sms',
-        direction: 'outbound',
-        senderId: ownedPhoneNumberId ? normaliseSmsPhone(fromNumber as string) : null,
-        senderName: ownedDisplayName || undefined,
-        recipientId: normalisedTo,
-        recipientName: customerName || undefined,
-        content: text,
-        contentType: 'text',
-        externalId: result.messageId || null,
-        status: result.simulated ? 'sent' : 'sent',
-        customerId: customerId || null,
-        tenantId: tenantId || null,
-        metadataJson: JSON.stringify({
-          userId: user.id,
-          userName: user.name,
-          phoneNumberId: ownedPhoneNumberId,
-          simulated: !!result.simulated,
-          provider: result.provider,
-        }),
-      },
-    })
+    // ── 5. Create canonical InboxMessage (O1) — replaces UnifiedMessage ──
+    // The outbound message is recorded in InboxMessage so the omnichannel
+    // inbox shows the agent's reply alongside the customer's inbound SMS.
+    // Idempotent via (tenantId, channel, externalId=result.messageId).
+    // Uses resolvedConversationId which is set in BOTH the existing-conversation
+    // branch AND the new-conversation branch above.
+    if (tenantId && resolvedConversationId) {
+      try {
+        await createOutboundMessage({
+          tenantId,
+          conversationId: resolvedConversationId,
+          channel: 'sms',
+          senderId: user.id,
+          senderName: user.name || user.email,
+          content: text,
+          externalId: result.messageId || undefined,
+          status: 'sent',
+          metadataJson: {
+            userId: user.id,
+            userName: user.name,
+            phoneNumberId: ownedPhoneNumberId,
+            simulated: !!result.simulated,
+            provider: result.provider,
+          },
+        })
+      } catch (err) {
+        console.warn('[/api/sms/send] InboxMessage create failed (non-fatal):', err)
+      }
+    }
 
     // ── 6. UsageCharge for billing (best-effort) ─────────────────────────
     // Charge £0.05 per outbound SMS segment (~160 chars). This is the margin

@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { mirrorLiveChatMessageToInbox } from '@/lib/live-chat-bridge'
 
 export const runtime = 'nodejs'
 
@@ -131,6 +132,21 @@ export async function POST(
         claimedById: user.employeeId || null,
       },
     })
+
+    // ── O1: mirror admin reply to the canonical InboxMessage (unified inbox) ──
+    try {
+      await mirrorLiveChatMessageToInbox(
+        message.id,
+        sessionId,
+        user.tenantId,
+        'admin',
+        text,
+        user.employeeId || user.id,
+        user.name || user.email,
+      );
+    } catch (err) {
+      console.warn('[chat/messages POST] mirror to InboxMessage failed (non-fatal):', err);
+    }
 
     // Note: real-time delivery to the visitor is handled by the socket.io
     // service. The visitor's widget polls as a fallback if socket.io is down.

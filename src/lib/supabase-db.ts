@@ -101,6 +101,9 @@ const TABLE_MAP: Record<string, string> = {
   eventWebhookLog: 'EventWebhookLog',
   conversation: 'Conversation',
   channelConfig: 'ChannelConfig',
+  // O1 Omnichannel foundation
+  channelConnection: 'ChannelConnection',
+  channelCatalog: 'ChannelCatalog',
   customerJourney: 'CustomerJourney',
   customerPortalSession: 'CustomerPortalSession',
   integrationConfig: 'IntegrationConfig',
@@ -303,6 +306,17 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
     lead: { targetTable: 'Lead', fkColumn: 'leadId' },
     job: { targetTable: 'Job', fkColumn: 'jobId' },
     tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    // O1: back-relation to InboxMessage (one-to-many). InboxMessage.conversationId
+    // points to Conversation.conversationId (the @unique string, NOT the PK `id`).
+    inboxMessages: { targetTable: 'InboxMessage', targetFkColumn: 'conversationId', isMany: true },
+  },
+  // O1: InboxMessage → Conversation relation (via conversationId string, not PK)
+  InboxMessage: {
+    conversation: { targetTable: 'Conversation', fkColumn: 'conversationId' },
+  },
+  // O1 Omnichannel foundation: ChannelConnection + ChannelCatalog
+  ChannelConnection: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
   },
   Lead: {
     customer: { targetTable: 'Customer', fkColumn: 'customerId' },
@@ -488,6 +502,8 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
     workflows: { targetTable: 'Workflow', targetFkColumn: 'tenantId', isMany: true },
     menuItemConfigs: { targetTable: 'MenuItemConfig', targetFkColumn: 'tenantId', isMany: true },
     featureFlags: { targetTable: 'FeatureFlag', targetFkColumn: 'tenantId', isMany: true },
+    // O1 Omnichannel: tenant-level channel connections
+    channelConnections: { targetTable: 'ChannelConnection', targetFkColumn: 'tenantId', isMany: true },
     invitations: { targetTable: 'Invitation', targetFkColumn: 'tenantId', isMany: true },
     subscriptionPayments: { targetTable: 'SubscriptionPayment', targetFkColumn: 'tenantId', isMany: true },
     billingEvents: { targetTable: 'BillingEvent', targetFkColumn: 'tenantId', isMany: true },

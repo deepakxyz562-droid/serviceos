@@ -172,6 +172,8 @@ model Tenant {
   workflows           Workflow[]
   menuItemConfigs   MenuItemConfig[]
   featureFlags      FeatureFlag[]
+  // O1 Omnichannel: tenant-level channel connections (credentials + status)
+  channelConnections ChannelConnection[]
   invitations       Invitation[]
   subscriptionPayments SubscriptionPayment[]
   billingEvents     BillingEvent[]
@@ -2065,6 +2067,8 @@ model Conversation {
   lead     Lead?     @relation(fields: [leadId], references: [id])
   job      Job?      @relation(fields: [jobId], references: [id])
   tenant   Tenant?   @relation(fields: [tenantId], references: [id])
+  // O1: back-relation to InboxMessage (canonical message rows).
+  inboxMessages  InboxMessage[]
 
   @@index([conversationId])
   @@index([customerPhone])
@@ -2109,6 +2113,66 @@ model ChannelConfig {
   @@index([channel])
   @@index([status])
   @@index([tenantId])
+}
+
+// ==========================================
+// O1 OMNICHANNEL FOUNDATION — ChannelConnection + ChannelCatalog
+// ==========================================
+
+/// Tenant-level connection to a channel (what they connected + credentials).
+/// Separated from ChannelConfig (behavior) and ChannelCatalog (platform availability).
+///   ChannelCatalog  = what Fieseros supports (Superadmin)
+///   ChannelConnection = what this tenant connected (Tenant)
+///   ChannelConfig     = how this tenant wants the channel to behave (Tenant)
+model ChannelConnection {
+  id              String   @id @default(cuid())
+  tenantId        String
+  channel         String   // whatsapp, sms, email, live_chat, messenger, instagram, googlebusiness, teams, slack
+  status          String   @default("NOT_CONNECTED")  // NOT_CONNECTED, CONNECTING, CONNECTED, ERROR, DISCONNECTED
+  provider        String?  // e.g., "twilio" for SMS, "meta_cloud" for WhatsApp, "smtp" for email, "internal" for live_chat
+  // Encrypted credentials JSON (provider-specific): { apiKey, apiSecret, accountId, phoneNumberId, token, ... }
+  // Encrypted with AES-256-GCM via the same ENCRYPTION_KEY used for AiProviderConfig.
+  credentialsJson String   @default("{}")
+  externalAccountId String?  // e.g., WhatsApp Business Account ID, Twilio Account SID
+  displayName     String?  // e.g., "Main WhatsApp Line", "Sales SMS Number"
+  connectedAt     DateTime?
+  disconnectedAt  DateTime?
+  lastError       String?
+  metadataJson    String   @default("{}")  // non-secret metadata (webhookUrl, verifyToken, etc.)
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, channel])  // one connection per channel per tenant
+  @@index([tenantId])
+  @@index([channel])
+  @@index([status])
+}
+
+/// Platform-level channel availability — Superadmin controls what Fieseros offers.
+/// Tenant UI reads this to decide which channels to show as configurable.
+///   enabled=true,  comingSoon=false → tenant can connect
+///   enabled=false, comingSoon=true  → tenant sees "Coming soon"
+///   enabled=false, comingSoon=false → hidden from tenant entirely (Teams, Slack)
+model ChannelCatalog {
+  id              String   @id @default(cuid())
+  channel         String   @unique  // whatsapp, sms, email, live_chat, messenger, instagram, googlebusiness, teams, slack, webwidget
+  enabled         Boolean  @default(true)   // platform-wide availability
+  comingSoon      Boolean  @default(false)  // show "Coming soon" badge (takes precedence over enabled when false)
+  displayName     String   // "WhatsApp", "SMS", "Email", "Live Chat"
+  description     String   @default("")    // short description shown in tenant UI
+  icon            String?  // lucide icon name (kept as string for portability)
+  color           String?  // brand color hex (e.g., "#25D366")
+  connectionMethod String  @default("manual")  // one_click | oauth | manual
+  sortOrder       Int      @default(100)  // lower = appears first in tenant channel list
+  provider        String?  // default provider hint (e.g., "twilio", "meta_cloud")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([enabled])
+  @@index([sortOrder])
 }
 
 /// Superadmin-managed OAuth app credentials for channel providers (Meta, Google, Slack, etc.).
@@ -2397,16 +2461,29 @@ model InboxMessage {
   mediaCaption    String?
   direction       String   @default("inbound")  // inbound, outbound
   status          String   @default("sent")  // sent, delivered, read, failed
-  externalId      String?  // WhatsApp message ID
+  externalId      String?  // WhatsApp message ID, SMS MessageSid, etc.
   replyToId       String?  // ID of message being replied to
   isInternalNote  Boolean  @default(false)
   mentionsJson    String   @default("[]")  // @mentioned user IDs
   reactionsJson   String   @default("[]")
   metadataJson    String   @default("{}")
+  // ── O1 Omnichannel foundation ──────────────────────────────────────────
+  // Denormalized channel so multi-channel conversations + queries by channel
+  // work without an extra join. Mirrors Conversation.channel for the first
+  // message that created the conversation, but can differ if a message is
+  // sent via a different channel within the same conversation thread.
+  channel         String?  // whatsapp, sms, email, live_chat, messenger, instagram, ...
+  attachmentsJson String   @default("[]")  // [{url, type, name, size}]
   tenantId        String?
   workspaceId     String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  // ── Relation to Conversation (via the stable conversationId string, NOT the PK) ──
+  // O1 decision B: keep the existing conversationId string relationship.
+  // Prisma requires a unique field for the relation target — Conversation.conversationId
+  // is @unique, so this works. We do NOT migrate to Conversation.id in O1.
+  conversation    Conversation @relation(fields: [conversationId], references: [conversationId])
 
   @@index([conversationId])
   @@index([senderType])
@@ -2414,6 +2491,12 @@ model InboxMessage {
   @@index([status])
   @@index([tenantId])
   @@index([createdAt])
+  @@index([channel])
+  // ── Idempotency: a webhook can fire more than once. The composite unique
+  // constraint (tenantId + channel + externalId) prevents duplicate rows at
+  // the database level. Postgres treats NULL externalId as distinct, so
+  // internal/system messages (no external ID) are exempt.
+  @@unique([tenantId, channel, externalId])
 }
 
 model ChatLabel {
