@@ -67,7 +67,7 @@ export async function findOrCreateLiveChatConversation(
       conversationId,
       customerPhone,
       customerName: visitorName || null,
-      channel: 'live_chat',
+      channel: 'livechat',  // Must match channel-meta registry ID (no underscore)
       status: 'active',
       currentStage: 'greeting',
       lastMessageAt: new Date(),
@@ -129,7 +129,7 @@ export async function mirrorLiveChatMessageToInbox(
     await createInboundMessage({
       tenantId,
       conversationId,
-      channel: 'live_chat',
+      channel: 'livechat',  // Must match channel-meta registry ID (no underscore)
       senderId: `visitor_${sessionId.slice(0, 12)}`,
       senderName: senderName || session.visitorName || undefined,
       content: body,
@@ -144,7 +144,7 @@ export async function mirrorLiveChatMessageToInbox(
     await createOutboundMessage({
       tenantId,
       conversationId,
-      channel: 'live_chat',
+      channel: 'livechat',  // Must match channel-meta registry ID (no underscore)
       senderId: senderId || undefined,
       senderName: senderName || undefined,
       content: body,
