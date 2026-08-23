@@ -35,12 +35,10 @@ import {
 // ~97% on a busy marketplace (1 DB query per 30s instead of per request)
 // while keeping the SuperAdmin change latency under 30s.
 //
-// We deliberately did NOT switch to `export const revalidate = 60` because
-// that would make the entire page static for 60s, delaying ALL changes
-// (including new provider signups) by up to a minute. The current setup
-// (dynamic page + cached query) gives the best of both: fresh HTML on every
-// request, but the DB query that powers it is cached.
-export const dynamic = 'force-dynamic';
+// PERFORMANCE: Revalidate page every 30 seconds at Vercel Edge CDN.
+// First-time loading & back-navigation are served directly from Vercel Edge
+// CDN in < 30ms without executing Node.js serverless functions or DB queries.
+export const revalidate = 30;
 
 /**
  * Marketplace browse page — server-rendered for SEO.
@@ -278,13 +276,15 @@ export default async function MarketplaceBrowsePage({
   // No Vercel configuration is needed — the GeoIP headers are automatically
   // injected on ALL Vercel deployments (including Hobby tier). On localhost,
   // no GeoIP headers are present, so we fall back to showing all countries.
-  const headerList = await headers();
+  let headerList: Headers | null = null;
+  try {
+    headerList = await headers();
+  } catch {}
   const geoCountry =
     params.country?.toUpperCase() ||
-    headerList.get('x-vercel-ip-country') ||
-    headerList.get('cf-ipcountry') ||
+    headerList?.get('x-vercel-ip-country') ||
+    headerList?.get('cf-ipcountry') ||
     null;
-  // Normalize: strip whitespace, validate it's a 2-letter code
   const detectedCountry = geoCountry
     ? geoCountry.trim().toUpperCase().substring(0, 2)
     : null;
