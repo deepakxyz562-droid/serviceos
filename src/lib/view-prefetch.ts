@@ -119,11 +119,13 @@ export function prefetchView(viewId: string): void {
     // Help & Support
     case 'helpCenter': void import('@/components/views/help-center-view'); break;
     case 'helpAdminTickets': void import('@/components/views/help-admin-view'); break;
-    // Social Publishing (Engine 1)
-    case 'socialAccounts': void import('@/components/views/tenant/social-accounts-view'); break;
-    case 'postComposer': void import('@/components/views/tenant/post-composer-view'); break;
-    case 'postsList': void import('@/components/views/tenant/posts-list-view'); break;
-    case 'socialAnalytics': void import('@/components/views/tenant/social-analytics-view'); break;
+    // Social Media — unified tabbed page (consolidates the 4 separate views)
+    case 'socialMedia': void import('@/components/views/tenant/social-media-view'); break;
+    // Legacy social views kept for backward compat (redirect to the tabbed page)
+    case 'socialAccounts': void import('@/components/views/tenant/social-media-view'); break;
+    case 'postComposer': void import('@/components/views/tenant/social-media-view'); break;
+    case 'postsList': void import('@/components/views/tenant/social-media-view'); break;
+    case 'socialAnalytics': void import('@/components/views/tenant/social-media-view'); break;
     default: break;
   }
 }

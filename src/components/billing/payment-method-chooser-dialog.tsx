@@ -86,7 +86,7 @@ export function PaymentMethodChooserDialog({
   onClose,
   onChoosePayPal,
 }: PaymentMethodChooserDialogProps) {
-  const [selected, setSelected] = useState<Method>('paypal');
+  const [selected, setSelected] = useState<Method>('creem');
   const [paypalConfigured, setPaypalConfigured] = useState<boolean | null>(null);
   const [creemConfigured, setCreemConfigured] = useState<boolean | null>(null);
   const [redirecting, setRedirecting] = useState(false);
@@ -111,12 +111,12 @@ export function PaymentMethodChooserDialog({
       setPaypalConfigured(paypalOk);
       setCreemConfigured(creemOk);
 
-      // If PayPal is unavailable, pre-select Creem (if it's available) so
-      // the user doesn't have to manually switch.
-      if (!paypalOk && creemOk) {
-        setSelected('creem');
-      } else if (paypalOk) {
+      // Default to Creem (the platform's primary gateway). If Creem is
+      // unavailable, fall back to PayPal (if configured).
+      if (!creemOk && paypalOk) {
         setSelected('paypal');
+      } else if (creemOk) {
+        setSelected('creem');
       }
     }
     load();
@@ -228,52 +228,7 @@ export function PaymentMethodChooserDialog({
           onValueChange={(v) => setSelected(v as Method)}
           className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1"
         >
-          {/* PayPal option (primary / recommended) */}
-          <label
-            htmlFor="method-paypal"
-            className={`relative flex flex-col gap-2 rounded-lg border-2 p-4 cursor-pointer transition-colors ${
-              selected === 'paypal'
-                ? 'border-primary bg-primary/5'
-                : 'border-border hover:border-primary/40 hover:bg-muted/40'
-            } ${paypalConfigured === false ? 'opacity-60 cursor-not-allowed' : ''}`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <RadioGroupItem
-                  id="method-paypal"
-                  value="paypal"
-                  disabled={paypalConfigured === false}
-                />
-                <Wallet className="size-5 text-[#003087] dark:text-blue-400" />
-              </div>
-              <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[10px]">
-                <Sparkles className="size-2.5 mr-1" />
-                Recommended
-              </Badge>
-            </div>
-            <div className="space-y-0.5">
-              <Label htmlFor="method-paypal" className="text-sm font-semibold cursor-pointer">
-                Pay with PayPal
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                PayPal balance, bank, or card. Subscription renews automatically.
-              </p>
-            </div>
-            {paypalConfigured === false && (
-              <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                <AlertCircle className="size-3" />
-                PayPal not configured — contact admin
-              </p>
-            )}
-            {paypalConfigured === true && (
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                <ShieldCheck className="size-3 text-emerald-500" />
-                Secured by PayPal
-              </p>
-            )}
-          </label>
-
-          {/* Creem option (card / fallback) */}
+          {/* Creem option (primary / recommended — platform default) */}
           <label
             htmlFor="method-creem"
             className={`relative flex flex-col gap-2 rounded-lg border-2 p-4 cursor-pointer transition-colors ${
@@ -291,16 +246,17 @@ export function PaymentMethodChooserDialog({
                 />
                 <CreditCard className="size-5 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <Badge variant="outline" className="text-[10px]">
-                Card
+              <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-[10px]">
+                <Sparkles className="size-2.5 mr-1" />
+                Recommended
               </Badge>
             </div>
             <div className="space-y-0.5">
               <Label htmlFor="method-creem" className="text-sm font-semibold cursor-pointer">
-                Pay with Card
+                Pay with Card (Creem)
               </Label>
               <p className="text-xs text-muted-foreground">
-                Visa, Mastercard, AMEX via Creem. Hosted, secure checkout.
+                Visa, Mastercard, AMEX via Creem. Hosted, secure checkout. Subscription renews automatically.
               </p>
             </div>
             {creemConfigured === false && (
@@ -313,6 +269,50 @@ export function PaymentMethodChooserDialog({
               <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                 <ShieldCheck className="size-3 text-emerald-500" />
                 Powered by Creem
+              </p>
+            )}
+          </label>
+
+          {/* PayPal option (secondary) */}
+          <label
+            htmlFor="method-paypal"
+            className={`relative flex flex-col gap-2 rounded-lg border-2 p-4 cursor-pointer transition-colors ${
+              selected === 'paypal'
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-primary/40 hover:bg-muted/40'
+            } ${paypalConfigured === false ? 'opacity-60 cursor-not-allowed' : ''}`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <RadioGroupItem
+                  id="method-paypal"
+                  value="paypal"
+                  disabled={paypalConfigured === false}
+                />
+                <Wallet className="size-5 text-[#003087] dark:text-blue-400" />
+              </div>
+              <Badge variant="outline" className="text-[10px]">
+                PayPal
+              </Badge>
+            </div>
+            <div className="space-y-0.5">
+              <Label htmlFor="method-paypal" className="text-sm font-semibold cursor-pointer">
+                Pay with PayPal
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                PayPal balance, bank, or card.
+              </p>
+            </div>
+            {paypalConfigured === false && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                <AlertCircle className="size-3" />
+                PayPal not configured — contact admin
+              </p>
+            )}
+            {paypalConfigured === true && (
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <ShieldCheck className="size-3 text-emerald-500" />
+                Secured by PayPal
               </p>
             )}
           </label>

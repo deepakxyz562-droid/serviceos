@@ -1875,7 +1875,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
       </div>
 
       <p className="text-center text-xs text-muted-foreground">
-        14-day free trial on all plans · No credit card required for trial · Cancel anytime · Yearly plans save ~17% (2 months free) · Subscribe &amp; Pay Now lets you choose PayPal or Card (via Creem)
+        14-day free trial on all plans · No credit card required for trial · Cancel anytime · Yearly plans save ~17% (2 months free) · Subscribe &amp; Pay Now lets you choose Card (via Creem) or PayPal
       </p>
     </div>
   );

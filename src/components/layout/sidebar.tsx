@@ -70,6 +70,7 @@ import {
   Wrench as WrenchIcon,
   PenSquare,
   Package,
+  Share2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -177,12 +178,8 @@ const ownerNavSections: NavSection[] = [
       { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
       { view: 'triggers', label: 'Triggers', icon: Zap },
       { view: 'variables', label: 'Variables', icon: Variable },
-      // Social Publishing moved here from the old 'Content' section so all
-      // customer-facing communication lives in one place.
-      { view: 'socialAccounts', label: 'Social Accounts', icon: Plug },
-      { view: 'postComposer', label: 'Create Post', icon: PenSquare },
-      { view: 'postsList', label: 'Posts', icon: FileText },
-      { view: 'socialAnalytics', label: 'Social Analytics', icon: BarChart3 },
+      // Social Media — consolidated into one tabbed page (Accounts, Create Post, Posts, Analytics)
+      { view: 'socialMedia', label: 'Social Media', icon: Share2 },
     ],
   },
   {
@@ -202,8 +199,8 @@ const ownerNavSections: NavSection[] = [
   {
     title: 'Marketplace',
     items: [
-      { view: 'marketplaceDashboard', label: 'My Listing', icon: Store },
-      { view: 'claimBusiness', label: 'Claim Business', icon: ShieldCheck },
+      // Consolidated into one tabbed page: My Listing + Claim Business
+      { view: 'marketplaceDashboard', label: 'Marketplace', icon: Store },
     ],
   },
   // The 'Content' section was removed — Social Accounts, Create Post,
@@ -260,8 +257,8 @@ const listingOnlyNavSections: NavSection[] = [
   {
     title: 'Marketplace',
     items: [
-      { view: 'marketplaceDashboard', label: 'My Listing', icon: Store },
-      { view: 'claimBusiness', label: 'Claim Business', icon: ShieldCheck },
+      // Consolidated into one tabbed page: My Listing + Claim Business
+      { view: 'marketplaceDashboard', label: 'Marketplace', icon: Store },
       { view: 'serviceCatalog', label: 'Services', icon: WrenchIcon },
     ],
   },

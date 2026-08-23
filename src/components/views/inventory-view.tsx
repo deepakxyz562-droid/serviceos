@@ -142,6 +142,24 @@ interface StockTransfer {
   createdAt: string;
 }
 
+// Serialized equipment asset (distinct from quantity-level InventoryItem).
+// Each row = one physical tracked item that can be assigned to an employee.
+interface InventoryAssetRow {
+  id: string;
+  name: string;
+  serialNumber: string | null;
+  assetTag: string | null;
+  status: string; // available, assigned, in_repair, retired
+  assignmentStatus: string; // available, assigned
+  assignedEmployeeId: string | null;
+  assignedEmployeeName: string | null;
+  assignedAt: string | null;
+  condition: string | null;
+  location: string | null;
+  notes: string | null;
+  inventoryItem?: { id: string; name: string; sku: string | null } | null;
+}
+
 interface StockTransaction {
   id: string;
   inventoryItemId: string;
@@ -271,7 +289,7 @@ function safeParseItems(json: string | null): Array<{ inventoryItemId: string | 
 export function InventoryView() {
   const { format, currency } = useCompanyCurrency();
 
-  const [activeTab, setActiveTab] = useState<'items' | 'transfers' | 'suppliers' | 'transactions' | 'alerts'>('items');
+  const [activeTab, setActiveTab] = useState<'items' | 'assets' | 'transfers' | 'suppliers' | 'transactions' | 'alerts'>('items');
 
   // ── Items state ────────────────────────────────────────────────────────
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -284,6 +302,18 @@ export function InventoryView() {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [adjustTarget, setAdjustTarget] = useState<InventoryItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null);
+
+  // ── Assets state (serialized equipment tracking + employee assignment) ──
+  const [assets, setAssets] = useState<InventoryAssetRow[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(false);
+  const [assetsError, setAssetsError] = useState<string | null>(null);
+  const [assetsSubTab, setAssetsSubTab] = useState<'available' | 'assigned'>('available');
+  const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
+  const [assignDialogAsset, setAssignDialogAsset] = useState<InventoryAssetRow | null>(null);
+  const [assignEmployeeId, setAssignEmployeeId] = useState('');
+  const [assignNotes, setAssignNotes] = useState('');
+  const [assignSubmitting, setAssignSubmitting] = useState(false);
 
   // ── Suppliers state ────────────────────────────────────────────────────
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -393,6 +423,91 @@ export function InventoryView() {
       setAlertsLoading(false);
     }
   }, [alertStatusFilter]);
+
+  // ── Assets: fetch serialized equipment + employees for assignment ───────
+  const fetchAssets = useCallback(async () => {
+    setAssetsLoading(true);
+    setAssetsError(null);
+    try {
+      const res = await authFetch('/api/inventory/assets?limit=200');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      // Normalize: the API returns { assets: [...] } or [...] — handle both
+      const rows = Array.isArray(data) ? data : (data.assets || []);
+      setAssets(rows);
+    } catch (err) {
+      setAssetsError(err instanceof Error ? err.message : 'Failed to load assets');
+    } finally {
+      setAssetsLoading(false);
+    }
+  }, []);
+
+  const fetchEmployees = useCallback(async () => {
+    setEmployeesLoading(true);
+    try {
+      const res = await authFetch('/api/employees?status=active&limit=100');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const rows = Array.isArray(data) ? data : (data.employees || []);
+      setEmployees(rows.map((e: { id: string; name: string }) => ({ id: e.id, name: e.name })));
+    } catch {
+      // silent — dropdown will just be empty
+    } finally {
+      setEmployeesLoading(false);
+    }
+  }, []);
+
+  // Load assets + employees when the Assets tab is opened
+  useEffect(() => {
+    if (activeTab === 'assets') {
+      fetchAssets();
+      fetchEmployees();
+    }
+  }, [activeTab, fetchAssets, fetchEmployees]);
+
+  // ── Assign / Return handlers ───────────────────────────────────────────
+  const handleAssignAsset = async () => {
+    if (!assignDialogAsset || !assignEmployeeId) return;
+    setAssignSubmitting(true);
+    try {
+      const res = await authFetch(`/api/inventory/assets/${assignDialogAsset.id}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId: assignEmployeeId, notes: assignNotes || undefined }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      toast.success(`Asset assigned to ${employees.find((e) => e.id === assignEmployeeId)?.name || 'employee'}`);
+      setAssignDialogAsset(null);
+      setAssignEmployeeId('');
+      setAssignNotes('');
+      fetchAssets();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to assign asset');
+    } finally {
+      setAssignSubmitting(false);
+    }
+  };
+
+  const handleReturnAsset = async (asset: InventoryAssetRow) => {
+    try {
+      const res = await authFetch(`/api/inventory/assets/${asset.id}/return`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: 'Returned via inventory UI' }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      toast.success(`Asset "${asset.name}" returned`);
+      fetchAssets();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to return asset');
+    }
+  };
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
   useEffect(() => { fetchSuppliers(); }, [fetchSuppliers]);
@@ -524,6 +639,7 @@ export function InventoryView() {
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList className="w-full sm:w-auto overflow-x-auto">
           <TabsTrigger value="items">Items</TabsTrigger>
+          <TabsTrigger value="assets">Assets</TabsTrigger>
           <TabsTrigger value="transfers">Transfers</TabsTrigger>
           <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
           <TabsTrigger value="transactions">Transactions</TabsTrigger>
@@ -705,6 +821,170 @@ export function InventoryView() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── Assets tab (serialized equipment + employee assignment) ─────── */}
+        <TabsContent value="assets" className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold">Equipment Assets</h3>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Track serialized equipment and assign to employees.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={fetchAssets} disabled={assetsLoading}>
+              <RotateCcw className="size-4 mr-1.5" /> Refresh
+            </Button>
+          </div>
+
+          {/* Available / Assigned sub-tabs */}
+          <Tabs value={assetsSubTab} onValueChange={(v) => setAssetsSubTab(v as 'available' | 'assigned')}>
+            <TabsList>
+              <TabsTrigger value="available">
+                Available ({assets.filter((a) => !a.assignedEmployeeId).length})
+              </TabsTrigger>
+              <TabsTrigger value="assigned">
+                Assigned ({assets.filter((a) => a.assignedEmployeeId).length})
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="available" className="mt-4">
+              <Card>
+                <CardContent className="p-0">
+                  {assetsLoading ? (
+                    <div className="p-6 space-y-3">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <Skeleton key={i} className="h-12 w-full" />
+                      ))}
+                    </div>
+                  ) : assetsError ? (
+                    <div className="p-10 text-center">
+                      <p className="text-sm text-red-600 mb-3">{assetsError}</p>
+                      <Button variant="outline" size="sm" onClick={fetchAssets}>
+                        <RotateCcw className="size-4 mr-1.5" /> Retry
+                      </Button>
+                    </div>
+                  ) : assets.filter((a) => !a.assignedEmployeeId).length === 0 ? (
+                    <div className="p-10 text-center">
+                      <div className="mx-auto mb-4 flex items-center justify-center size-14 rounded-full bg-muted">
+                        <Package className="size-7 text-muted-foreground" />
+                      </div>
+                      <h3 className="text-base font-semibold">No available assets</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        All assets are currently assigned, or no assets have been added.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="max-h-[calc(100vh-28rem)] overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Serial #</TableHead>
+                            <TableHead>Asset Tag</TableHead>
+                            <TableHead>Condition</TableHead>
+                            <TableHead>Location</TableHead>
+                            <TableHead className="text-right">Action</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {assets.filter((a) => !a.assignedEmployeeId).map((asset) => (
+                            <TableRow key={asset.id}>
+                              <TableCell className="font-medium">{asset.name}</TableCell>
+                              <TableCell className="text-muted-foreground">{asset.serialNumber || '—'}</TableCell>
+                              <TableCell className="text-muted-foreground">{asset.assetTag || '—'}</TableCell>
+                              <TableCell>
+                                <Badge variant={asset.condition === 'good' ? 'default' : 'secondary'}>
+                                  {asset.condition || 'unknown'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">{asset.location || '—'}</TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  size="sm"
+                                  className="bg-emerald-600 hover:bg-emerald-700"
+                                  onClick={() => {
+                                    setAssignDialogAsset(asset);
+                                    setAssignEmployeeId('');
+                                    setAssignNotes('');
+                                  }}
+                                >
+                                  Assign to Employee
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="assigned" className="mt-4">
+              <Card>
+                <CardContent className="p-0">
+                  {assetsLoading ? (
+                    <div className="p-6 space-y-3">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <Skeleton key={i} className="h-12 w-full" />
+                      ))}
+                    </div>
+                  ) : assets.filter((a) => a.assignedEmployeeId).length === 0 ? (
+                    <div className="p-10 text-center">
+                      <div className="mx-auto mb-4 flex items-center justify-center size-14 rounded-full bg-muted">
+                        <ClipboardCheck className="size-7 text-muted-foreground" />
+                      </div>
+                      <h3 className="text-base font-semibold">No assigned assets</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Assign an asset from the Available tab to see it here.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="max-h-[calc(100vh-28rem)] overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Serial #</TableHead>
+                            <TableHead>Assigned To</TableHead>
+                            <TableHead>Assigned At</TableHead>
+                            <TableHead className="text-right">Action</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {assets.filter((a) => a.assignedEmployeeId).map((asset) => (
+                            <TableRow key={asset.id}>
+                              <TableCell className="font-medium">{asset.name}</TableCell>
+                              <TableCell className="text-muted-foreground">{asset.serialNumber || '—'}</TableCell>
+                              <TableCell>
+                                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                                  {asset.assignedEmployeeName || 'Employee'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {asset.assignedAt ? new Date(asset.assignedAt).toLocaleDateString() : '—'}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleReturnAsset(asset)}
+                                >
+                                  Return
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         {/* ── Transfers tab ─────────────────────────────────────────────── */}
@@ -1197,6 +1477,68 @@ export function InventoryView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Assign Asset to Employee Dialog ──────────────────────────────── */}
+      <Dialog
+        open={!!assignDialogAsset}
+        onOpenChange={(open) => { if (!open) setAssignDialogAsset(null); }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Asset to Employee</DialogTitle>
+            <DialogDescription>
+              Assign "{assignDialogAsset?.name}" to an employee. The asset will be marked as assigned until returned.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {employeesLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="text-sm text-muted-foreground">Loading employees...</div>
+              </div>
+            ) : employees.length === 0 ? (
+              <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                No active employees found. Add employees first to assign assets.
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="assign-employee">Employee</Label>
+                  <Select value={assignEmployeeId} onValueChange={setAssignEmployeeId}>
+                    <SelectTrigger id="assign-employee">
+                      <SelectValue placeholder="Select an employee..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {employees.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="assign-notes">Notes (optional)</Label>
+                  <Textarea
+                    id="assign-notes"
+                    value={assignNotes}
+                    onChange={(e) => setAssignNotes(e.target.value)}
+                    placeholder="Assignment notes..."
+                    rows={3}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignDialogAsset(null)}>Cancel</Button>
+            <Button
+              onClick={handleAssignAsset}
+              disabled={assignSubmitting || !assignEmployeeId || employees.length === 0}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {assignSubmitting ? 'Assigning...' : 'Assign Asset'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

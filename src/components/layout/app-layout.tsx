@@ -136,17 +136,19 @@ const SuperAdminView = lazy(() => import('@/components/views/superadmin-view').t
 const HelpCenterView = lazy(() => import('@/components/views/help-center-view').then(m => ({ default: m.HelpCenterView })));
 const HelpAdminView = lazy(() => import('@/components/views/help-admin-view').then(m => ({ default: m.HelpAdminView })));
 
-// Social Publishing (Engine 1) — unified multi-platform publishing infrastructure
-const SocialAccountsView = lazy(() => import('@/components/views/tenant/social-accounts-view').then(m => ({ default: m.SocialAccountsView })));
-const PostComposerView = lazy(() => import('@/components/views/tenant/post-composer-view').then(m => ({ default: m.PostComposerView })));
-const PostsListView = lazy(() => import('@/components/views/tenant/posts-list-view').then(m => ({ default: m.PostsListView })));
-const SocialAnalyticsView = lazy(() => import('@/components/views/tenant/social-analytics-view').then(m => ({ default: m.SocialAnalyticsView })));
+// Social Media — unified tabbed page (consolidates Accounts / Create Post / Posts / Analytics)
+const SocialMediaView = lazy(() => import('@/components/views/tenant/social-media-view').then(m => ({ default: m.SocialMediaView })));
+
+// Marketplace Hub — unified tabbed page (consolidates My Listing + Claim Business)
+const MarketplaceHubView = lazy(() => import('@/components/views/marketplace-hub-view').then(m => ({ default: m.MarketplaceHubView })));
 
 // ─── Smart marketplace dashboard wrapper ────────────────────────────────────
 // Picks the right dashboard based on the tenant's signupMode:
 //   - listing_only / claimed_free → ListingProviderDashboard (2-tab minimal)
 //   - everything else             → ProviderMarketplaceDashboard (6-tab CRM)
-function MarketplaceDashboardRouter() {
+//
+// Exported so the MarketplaceHubView can use it for the "My Listing" tab.
+export function MarketplaceDashboardRouter() {
   const auth = useAppStore((s) => s.auth);
   const isListingOnly =
     (auth?.tenant as any)?.signupMode === 'listing_only' ||
@@ -241,9 +243,10 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   reviews: ReviewsView,
   leadDiscovery: LeadDiscoveryView,
   journeyAutomation: JourneyAutomationView,
-  marketplace: MarketplaceView,
-  marketplaceDashboard: ProviderMarketplaceDashboard,
-  claimBusiness: ClaimBusinessView,
+  // Marketplace — consolidated into the hub view with tabs (My Listing + Claim Business)
+  marketplaceDashboard: MarketplaceHubView,
+  marketplace: MarketplaceHubView,
+  claimBusiness: MarketplaceHubView,
   enterprise: EnterpriseView,
   aiCampaignGenerator: AiCampaignGeneratorView,
   webviewEngine: WebviewEngineView,
@@ -275,10 +278,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   helpAdminCategories: HelpAdminView,
   helpAdminAnnouncements: HelpAdminView,
   // Social Publishing (Engine 1)
-  socialAccounts: SocialAccountsView,
-  postComposer: PostComposerView,
-  postsList: PostsListView,
-  socialAnalytics: SocialAnalyticsView,
+  socialMedia: SocialMediaView,
 };
 
 // ─── Loading fallback ────────────────────────────────────────────────────────
