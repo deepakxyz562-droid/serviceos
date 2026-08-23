@@ -199,6 +199,32 @@ export async function proxy(request: NextRequest) {
     });
   }
 
+  // ── GeoIP injection for /marketplace ───────────────────────────────────
+  //
+  // The marketplace page needs the visitor's country to filter providers by
+  // region. Previously, the page called `headers()` to read `x-vercel-ip-country`
+  // — but `headers()` forces dynamic rendering, defeating `revalidate = 30`
+  // and Vercel Edge CDN caching.
+  //
+  // Here in the proxy (edge), we read the GeoIP headers (free, no config) and
+  // inject `?_geo=XX` via NextResponse.rewrite(). The page then reads
+  // `searchParams._geo` (a static value) instead of `headers()`, allowing the
+  // full HTML to be CDN-cached. Each country gets its own cache variant.
+  if (pathname === '/marketplace' && !request.nextUrl.searchParams.has('_geo')) {
+    const country =
+      request.headers.get('x-vercel-ip-country') ||
+      request.headers.get('cf-ipcountry') ||
+      request.headers.get('x-country-code') ||
+      '';
+    if (country) {
+      const url = request.nextUrl.clone();
+      url.searchParams.set('_geo', country.trim().toUpperCase().substring(0, 2));
+      const response = NextResponse.rewrite(url);
+      response.headers.set('X-Request-Id', requestId);
+      return response;
+    }
+  }
+
   // Non-API, non-static route (e.g. a page) or an exempt API route (health,
   // cron, webhook) — pass through with the request ID only.
   // (PUBLIC_PATHS is preserved as a marker for future auth-gating logic; the

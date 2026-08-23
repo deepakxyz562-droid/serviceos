@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import { INDUSTRY_CATALOG, VERTICALS, getIndustry } from '@/lib/industry-catalog';
 import { MarketplaceBrowser } from '@/components/marketplace/marketplace-browser';
 import { MarketplaceHeader } from '@/components/marketplace/marketplace-header';
@@ -79,14 +78,14 @@ interface SsrProviderPage {
 }
 
 /**
- * Marketplace page-1 fetch with shared cache + stale-while-revalidate.
+ * Marketplace page-1 fetch with in-memory shared cache + stale-while-revalidate.
  *
- * Replaces the previous `unstable_cache` wrapper (process-local — each
- * Vercel instance paid the cold-cache cost independently). Now uses the
- * shared cache (Redis when configured) so all instances share one entry
- * per filter combination.
+ * Uses the in-memory sharedCacheWrap (process-local, no Redis dependency).
+ * Combined with `export const revalidate = 30` + the GeoIP middleware, the
+ * Vercel Edge CDN caches the full HTML response for 30s — the in-memory cache
+ * only fires on a CDN miss (cold instance).
  *
- *   - freshTtl: 30s (matches the old unstable_cache revalidate)
+ *   - freshTtl: 30s (matches the Vercel CDN revalidate)
  *   - staleTtl: 5min (serve stale + background-refresh, then grace-serve
  *                during Supabase outages)
  *
@@ -264,26 +263,23 @@ export default async function MarketplaceBrowsePage({
   const industryFilter = params.industry ?? null;
 
   // ── Country detection ──────────────────────────────────────────────────
-  // Priority: ?country= URL param (manual override) > x-vercel-ip-country
-  // header (Vercel GeoIP, auto-set by edge network) > cf-ipcountry (Cloudflare
-  // proxy) > null (show all countries — localhost/dev fallback).
+  // Priority: ?country= URL param (manual override) > ?_geo=XX (injected by
+  // middleware.ts from x-vercel-ip-country / cf-ipcountry) > null (show all
+  // countries — localhost/dev fallback).
   //
-  // When the user changes country "through a proxy", the proxy routes their
-  // traffic through a server in the target country. Vercel's edge network
-  // sees the proxy's IP and sets x-vercel-ip-country to that country's ISO
-  // code (e.g. "AU"). We use that to filter the marketplace.
+  // The middleware reads GeoIP headers at the edge and injects ?_geo=XX into
+  // the URL. This lets us avoid calling `headers()` in the page component
+  // (which would force dynamic rendering and defeat `revalidate = 30` +
+  // Vercel Edge CDN caching). The page reads `searchParams._geo` — a static
+  // value — so the full HTML response is cacheable.
   //
   // No Vercel configuration is needed — the GeoIP headers are automatically
   // injected on ALL Vercel deployments (including Hobby tier). On localhost,
-  // no GeoIP headers are present, so we fall back to showing all countries.
-  let headerList: Headers | null = null;
-  try {
-    headerList = await headers();
-  } catch {}
+  // no middleware GeoIP headers are present, so we fall back to showing all
+  // countries.
   const geoCountry =
     params.country?.toUpperCase() ||
-    headerList?.get('x-vercel-ip-country') ||
-    headerList?.get('cf-ipcountry') ||
+    params._geo?.toUpperCase() ||
     null;
   const detectedCountry = geoCountry
     ? geoCountry.trim().toUpperCase().substring(0, 2)
