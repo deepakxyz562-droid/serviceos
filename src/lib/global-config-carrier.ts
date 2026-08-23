@@ -30,7 +30,7 @@
 import { db } from '@/lib/db';
 
 export const SENTINEL_TENANT_NAME = '[System] Global Menu Config';
-export const SENTINEL_TENANT_SLUG = 'system-global-menu-config';
+export const SENTINEL_TENANT_SLUG = '__global_menu_config__';
 
 // Unique-ish placeholder values so the sentinel never conflicts with real
 // tenants. These fields are required by the schema but never used.
@@ -58,14 +58,34 @@ export async function getGlobalConfigCarrierTenant(
   client: DbClient = db
 ): Promise<CarrierTenant | null> {
   try {
-    // 1. Deterministic lookup by name — same row on every instance/request.
+    // 1. Deterministic lookup by SLUG (not name) — the slug column has a
+    // unique index (@@index([slug]) in the Prisma schema), so this is an
+    // O(log n) index scan. Lookup by NAME requires a full table scan on
+    // the 91K-row Tenant table, which times out on Supabase Free's shared
+    // CPU (statement timeout = 57014). This was the root cause of the
+    // "menu items not hiding" bug: the timeout → catch → disabledKeys empty
+    // → API returns {disabledMenus: []} → all menus visible.
     const existing = await client.tenant.findFirst({
-      where: { name: SENTINEL_TENANT_NAME },
+      where: { slug: SENTINEL_TENANT_SLUG },
     });
     if (existing) {
       return {
         id: existing.id,
         settingsJson: existing.settingsJson ?? '{}',
+      };
+    }
+
+    // 1b. Fallback: try by name (the carrier might have been created before
+    // the slug was added). This is a full table scan, but it only fires
+    // when the slug lookup misses (first deploy after the fix). Once the
+    // slug is set, subsequent lookups are instant.
+    const existingByName = await client.tenant.findFirst({
+      where: { name: SENTINEL_TENANT_NAME },
+    });
+    if (existingByName) {
+      return {
+        id: existingByName.id,
+        settingsJson: existingByName.settingsJson ?? '{}',
       };
     }
 
@@ -91,9 +111,9 @@ export async function getGlobalConfigCarrierTenant(
         settingsJson: '{}',
       };
     } catch (createError) {
-      // Concurrent create (another instance won the race) — re-read.
+      // Concurrent create (another instance won the race) — re-read by slug.
       const fallback = await client.tenant.findFirst({
-        where: { name: SENTINEL_TENANT_NAME },
+        where: { slug: SENTINEL_TENANT_SLUG },
       });
       if (fallback) {
         return {

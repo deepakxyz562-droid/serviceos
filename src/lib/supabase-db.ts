@@ -257,6 +257,7 @@ const MISSING_TABLES = new Set<string>([
 // these tables don't have that column, so PostgREST will reject it. Listing
 // them here lets us skip the auto-add and avoid an unnecessary retry round-trip.
 const TABLES_WITHOUT_UPDATED_AT = new Set<string>([
+  // ── Originally listed (manually discovered) ──
   'ImageLibrary',
   'BrandKit',
   'TemplatePack',
@@ -269,23 +270,69 @@ const TABLES_WITHOUT_UPDATED_AT = new Set<string>([
   'MetaLead',
   'GoogleAdsLead',
   'TicketAttachment',
-  // FeaturedLocation has no updatedAt column in the Prisma schema.
-  // Without this entry, every upsert() auto-adds updatedAt → PostgREST 400 →
-  // triggers a retry round-trip to strip it. Listing it here skips the
-  // wasted round-trip on every hourly cron tick.
   'FeaturedLocation',
-  // ── Live Dispatch (Wave 3) ──
-  // GPSLocation is an append-only log: schema declares createdAt + capturedAt
-  // but NO updatedAt. Without this entry, every GPS ping insert auto-adds
-  // updatedAt → PostgREST 400 ("column updatedAt of relation GPSLocation
-  // does not exist") → the resilient retry loop strips it and retries, but
-  // that doubles the latency of every single 15-second ping and floods the
-  // logs. Listing it here makes inserts single-round-trip.
-  // ── AI Receptionist Ledger ──
-  // UsageLedger is an append-only financial ledger: schema declares createdAt
-  // but NO updatedAt column. Listing it here prevents auto-adding updatedAt.
   'UsageLedger',
   'GPSLocation',
+  // ── Auto-generated: all Prisma models WITHOUT @updatedAt ──────────────
+  // These tables have createdAt but NO updatedAt column in the Prisma schema.
+  // Without listing them here, every insert auto-adds updatedAt → PostgREST
+  // returns "Could not find the 'updatedAt' column of 'X' in the schema cache"
+  // → the retry loop's first branch matches "schema cache" and waits 1s per
+  // retry → 15 retries × 1s = 15 seconds wasted PER INSERT. This was the root
+  // cause of the "every create/edit is too slow" bug — ActivityLog, AuditLog,
+  // and NotificationLog inserts blocked every job/lead/inventory create.
+  'ActivityLog',
+  'AdConversion',
+  'AiCallTag',
+  'AnalyticsSnapshot',
+  'ApiKey',
+  'AppNotification',
+  'AssetServiceHistory',
+  'AuditLog',
+  'AuditLogEntry',
+  'BillingEvent',
+  'CampaignMessage',
+  'ChatLabel',
+  'ChatbotSession',
+  'ConversationExport',
+  'ConversationLabel',
+  'Coupon',
+  'CustomerPortalSession',
+  'DealStageHistory',
+  'EcommerceSyncLog',
+  'EmailEvent',
+  'EmailUnsubscribeToken',
+  'EmployeeStatusLog',
+  'EventWebhookLog',
+  'ExecutionNodeData',
+  'FormResponse',
+  'HolidayCalendar',
+  'JobPhoto',
+  'JobSignature',
+  'JobStateTransition',
+  'JourneyExecution',
+  'LowStockAlert',
+  'MarketingConsentEvent',
+  'Notification',
+  'NotificationLog',
+  'OtpVerification',
+  'PlatformMetric',
+  'PublicChatMessage',
+  'RetargetingLog',
+  'SecurityEvent',
+  'SegmentMember',
+  'SocialPostMetric',
+  'StockTransaction',
+  'SubscriptionPayment',
+  'TimelineEvent',
+  'TriggerExecution',
+  'UsageCharge',
+  'WAFormResponse',
+  'WebhookEndpointLog',
+  'WebhookRegistration',
+  'WebhookTestRequest',
+  'WhatsAppMessageAction',
+  'WorkflowVersion',
 ]);
 
 // ── Relation Mapping ───────────────────────────────────────────────────────
@@ -1701,13 +1748,46 @@ class SupabaseModel {
     let retryCount = 0;
     while (error && retryCount < 15) {
       const msg = error.message || '';
+
+      // ── FIRST: check for missing-column errors ──────────────────────────
+      // PostgREST error formats for missing columns:
+      //   "Could not find the 'updatedAt' column of 'ActivityLog' in the schema cache"
+      //   'column "updatedAt" of relation "ActivityLog" does not exist'
+      //
+      // CRITICAL: This MUST be checked BEFORE the schema-cache/timeout retry
+      // below. The "schema cache" retry waits 1s per attempt and does NOT
+      // strip the bad column — so it retries with the same bad payload 15
+      // times (15 seconds wasted) before giving up. By checking missing-column
+      // FIRST, we strip the bad column and retry immediately (0s delay).
+      const missingColMatch = msg.match(
+        /(?:Could not find the ['`"]?(\w+)['`"]? column of|column "(\w+)" of relation)/
+      );
+      if (missingColMatch) {
+        const badCol = missingColMatch[1] || missingColMatch[2];
+        if (badCol && badCol in serialized) {
+          console.log(`[SupabaseDB] create retry on ${this.tableName}: stripping missing column "${badCol}" and retrying`);
+          delete serialized[badCol];
+          retryCount++;
+          const retry = await this.client
+            .from(this.tableName)
+            .insert(serialized)
+            .select('*')
+            .single();
+          result = retry.data;
+          error = retry.error;
+          continue;
+        }
+      }
+
+      // ── SECOND: transient errors (network, timeout, schema cache delay) ──
+      // Only retry with delay if the error is NOT about a missing column.
+      // These are genuine transient issues where a blind retry makes sense.
       if (
         error.code === 'PGRST002' ||
-        msg.includes('schema cache') ||
         msg.includes('timeout') ||
         msg.includes('fetch failed')
       ) {
-        console.log(`[SupabaseDB] PostgREST temporary network/schema delay ("${msg}"), retrying in 1s (attempt ${retryCount + 1})...`);
+        console.log(`[SupabaseDB] PostgREST temporary network/timeout ("${msg}"), retrying in 1s (attempt ${retryCount + 1})...`);
         await new Promise((r) => setTimeout(r, 1000));
         retryCount++;
         const retry = await this.client
@@ -1719,25 +1799,9 @@ class SupabaseModel {
         error = retry.error;
         continue;
       }
-      const missingColMatch = msg.match(
-        /(?:Could not find the ['`"]?(\w+)['`"]? column of|column "(\w+)" of relation)/
-      );
-      if (!missingColMatch) {
-        console.warn(`[SupabaseDB] create retry on ${this.tableName}: error did not match missing-column pattern: "${msg}"`);
-        break;
-      }
-      const badCol = missingColMatch[1] || missingColMatch[2];
-      if (!badCol || !(badCol in serialized)) break;
-      console.log(`[SupabaseDB] create retry on ${this.tableName}: stripping missing column "${badCol}" and retrying`);
-      delete serialized[badCol];
-      retryCount++;
-      const retry = await this.client
-        .from(this.tableName)
-        .insert(serialized)
-        .select('*')
-        .single();
-      result = retry.data;
-      error = retry.error;
+      // Unknown error pattern — log and break (don't retry blindly)
+      console.warn(`[SupabaseDB] create retry on ${this.tableName}: unrecognized error, not retrying: "${msg}"`);
+      break;
     }
 
     if (error) {
