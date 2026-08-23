@@ -130,27 +130,21 @@ async function fetchProvidersCached(filters: ProviderFilterOptions): Promise<Ssr
 }
 
 async function fetchProvidersUncached(filters: ProviderFilterOptions): Promise<SsrProviderPage> {
-
-  // Fetch the set of featured tenant IDs (for featured-first sorting on page 1).
   const featuredIds = await fetchFeaturedTenantIds();
-
-  // Fetch the featured map (metadata for cardType computation). Only needed
-  // on page 1 — subsequent pages fetch non-featured items only.
   const featuredMap = await fetchFeaturedListingsMap(Array.from(featuredIds));
-  try {
-    const ssrPage = await fetchProviderPage({
-      filters,
-      cursor: null,
-      pageSize: MARKETPLACE_PAGE_SIZE,
-      featuredTenantIds: new Set(),
-      mapItem: (t) => mapTenantToProviderListItem(t, new Map()),
-    });
-    providers = Array.isArray(ssrPage?.items) ? ssrPage.items : [];
-    totalProviders = typeof ssrPage?.total === 'number' ? ssrPage.total : 0;
-    nextCursor = ssrPage?.nextCursor || null;
-  } catch (err) {
-    console.error('[marketplace/page] failed to fetch providers:', err);
-    providers = [];
+
+  const page = await fetchProviderPage({
+    filters,
+    cursor: null, // page 1
+    pageSize: MARKETPLACE_PAGE_SIZE,
+    featuredTenantIds: featuredIds,
+    mapItem: (t) => mapTenantToProviderListItem(t, featuredMap),
+  });
+
+  return {
+    items: (page?.items || []) as ProviderListItem[],
+    nextCursor: page?.nextCursor || null,
+    total: page?.total ?? 0,
   };
 }
 
