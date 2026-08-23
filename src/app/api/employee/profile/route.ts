@@ -94,6 +94,8 @@ export async function PUT(request: NextRequest) {
     if (typeof phone === 'string') updateData.phone = phone;
     if (typeof email === 'string') updateData.email = email.trim() || null;
     if (typeof location === 'string') updateData.location = location.trim() || null;
+    // Fix: include avatar in the Employee update so it actually persists
+    if (typeof avatar === 'string' && avatar.trim()) updateData.avatar = avatar.trim();
 
     // Emergency contact — stored on the Employee.skills JSON? No — we don't have
     // dedicated columns. Store them as JSON inside the `skills` field's metadata

@@ -18,12 +18,12 @@
  * to look up which companies they belong to. This powers the "company picker"
  * pre-login step.
  *
- * EMPLOYEE PORTAL — company-scoped login:
- *   - Staff MUST select a company first (via CompanyFinder or deep-link).
- *   - POST /api/auth/company-login { slug, email, password, role: 'employee' }.
- *   - The `slug` is REQUIRED by the backend; without it the API returns 400.
- *   - Last-used company is persisted in SecureStore so the user doesn't
- *     re-search on every app launch.
+ * EMPLOYEE PORTAL — direct login (no company selection):
+ *   - Staff log in with email + password ONLY. No CompanyFinder step.
+ *   - POST /api/auth/login { email, password } — the backend resolves
+ *     the tenant automatically from User.tenantId.
+ *   - The tenant/company is determined server-side from the authenticated
+ *     session, NOT supplied by the mobile client (security requirement).
  */
 
 import { create } from 'zustand';
@@ -74,7 +74,7 @@ interface AuthState {
   clearMultiCompanyConflict: () => void;
 
   // ── Employee ────────────────────────────────────────────────────────
-  loginStaff: (slug: string, email: string, password: string) => Promise<void>;
+  loginStaff: (email: string, password: string) => Promise<void>;
 
   // ── Customer — OTP (phone, WhatsApp) ────────────────────────────────
   requestCustomerOtp: (phone: string) => Promise<void>;
@@ -227,22 +227,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // Employee — company-scoped login
   // ─────────────────────────────────────────────────────────────────────
 
-  loginStaff: async (slug, email, password) => {
+  loginStaff: async (email, password) => {
     set({ isLoading: true, error: null, multiCompanyConflict: null });
     try {
-      const normalizedSlug = slug.trim().toLowerCase();
-      if (!normalizedSlug) {
-        throw new Error('Please select a company first.');
-      }
-
+      // Direct login — no company/slug required. The backend resolves the
+      // tenant from User.tenantId automatically. This removes the CompanyFinder
+      // step from the employee login flow per the PWA parity directive.
       const response = await api.post<{
         token?: string;
         accessToken?: string;
         user?: User;
         tenant?: unknown;
       }>(
-        API_PATHS.companyLogin,
-        { slug: normalizedSlug, email: email.trim(), password, role: 'employee' },
+        API_PATHS.directLogin,
+        { email: email.trim(), password },
         { skipAuth: true }
       );
 

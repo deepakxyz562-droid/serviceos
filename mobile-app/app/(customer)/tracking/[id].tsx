@@ -9,7 +9,7 @@
  *   - ETA if available
  *   - Scheduled time
  *   - Auto-refresh every 15 seconds (useQuery `refetchInterval`) while job is active
- *   - Map placeholder (status card with "Open in Maps" link when coordinates exist)
+ *   - Map view with live technician position (visual map card with coordinates)
  *   - Completed state: show completed time + "Leave a Review" CTA
  */
 import React, { useMemo } from 'react';
@@ -332,32 +332,64 @@ export default function LiveTrackingScreen() {
           </Card>
         ) : null}
 
-        {/* Live location card (or placeholder) */}
+        {/* Live location card — visual map with technician position */}
         <Card className="mt-3">
           <View className="flex-row items-center">
             <MapPin size={18} color={COLORS.primary} />
             <Text className="ml-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Live Location
             </Text>
+            {hasCoordinates && !isCompleted && (
+              <View className="ml-auto flex-row items-center">
+                <View className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                <Text className="ml-1.5 text-xs font-semibold text-green-600">Live</Text>
+              </View>
+            )}
           </View>
           {hasCoordinates && mapsUrl ? (
             <View className="mt-3">
-              <View className="items-center rounded-lg bg-primary-50 py-8">
-                <MapPin size={32} color={COLORS.primary} />
-                <Text className="mt-2 text-sm font-semibold text-primary-700">
-                  {info.currentLatitude?.toFixed(4)}, {info.currentLongitude?.toFixed(4)}
-                </Text>
-                <Text className="mt-1 text-xs text-muted-foreground">
-                  Technician's live position
-                </Text>
+              {/* Visual map representation — gradient background with position marker */}
+              <View className="relative overflow-hidden rounded-xl" style={{ height: 180, backgroundColor: '#e8f5e9' }}>
+                {/* Grid lines to simulate a map */}
+                <View style={{ position: 'absolute', top: 40, left: 0, right: 0, height: 1, backgroundColor: 'rgba(0,0,0,0.06)' }} />
+                <View style={{ position: 'absolute', top: 90, left: 0, right: 0, height: 1, backgroundColor: 'rgba(0,0,0,0.06)' }} />
+                <View style={{ position: 'absolute', top: 130, left: 0, right: 0, height: 1, backgroundColor: 'rgba(0,0,0,0.06)' }} />
+                <View style={{ position: 'absolute', top: 0, bottom: 0, left: '25%', width: 1, backgroundColor: 'rgba(0,0,0,0.06)' }} />
+                <View style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, backgroundColor: 'rgba(0,0,0,0.06)' }} />
+                <View style={{ position: 'absolute', top: 0, bottom: 0, left: '75%', width: 1, backgroundColor: 'rgba(0,0,0,0.06)' }} />
+
+                {/* Pulsing position marker in center */}
+                <View style={{ position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -20 }, { translateY: -20 }] }}>
+                  <View className="items-center justify-center" style={{ width: 40, height: 40 }}>
+                    <View className="absolute h-12 w-12 rounded-full bg-primary-200 opacity-30" />
+                    <View className="absolute h-8 w-8 rounded-full bg-primary-300 opacity-50" />
+                    <MapPin size={28} color={COLORS.primary} fill={COLORS.primary} />
+                  </View>
+                </View>
+
+                {/* Coordinates overlay */}
+                <View className="absolute bottom-2 left-2 rounded-md bg-black/50 px-2 py-1">
+                  <Text className="text-xs font-mono text-white">
+                    {info.currentLatitude?.toFixed(4)}, {info.currentLongitude?.toFixed(4)}
+                  </Text>
+                </View>
+
+                {/* Technician label */}
+                <View className="absolute top-2 right-2 rounded-md bg-primary-600 px-2 py-1">
+                  <Text className="text-xs font-semibold text-white">
+                    {info.employeeName || 'Technician'}
+                  </Text>
+                </View>
               </View>
+
               <Pressable
                 onPress={() =>
                   Linking.openURL(mapsUrl).catch(() => Alert.alert('Unable to open maps.'))
                 }
-                className="mt-2 items-center"
+                className="mt-2 flex-row items-center justify-center rounded-lg bg-primary-50 py-2.5"
               >
-                <Text className="text-xs font-semibold text-primary-600">Open in Maps →</Text>
+                <Navigation size={16} color={COLORS.primary} />
+                <Text className="ml-1.5 text-sm font-semibold text-primary-600">Open in Maps</Text>
               </Pressable>
             </View>
           ) : (

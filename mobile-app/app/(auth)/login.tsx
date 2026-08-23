@@ -19,17 +19,12 @@
  * │                                                                      │
  * │  EMPLOYEE PORTAL                                                     │
  * │  ─────────────                                                       │
- * │  Step 1: Find your company                                           │
- * │    • CompanyFinder → /api/companies/search?q=                        │
- * │    • OR deep-link: fieseros://company/[slug]/employee                │
- * │    • OR last-used company (from SecureStore)                         │
- * │                                                                      │
- * │  Step 2: Company resolves → show branded card (logo, name, industry) │
- * │                                                                      │
- * │  Step 3: Enter work email + password                                 │
- * │    • POST /api/auth/company-login { slug, email, password,           │
- * │      role: 'employee' }                                              │
- * │    • The `slug` field is REQUIRED by the backend.                    │
+ * │  Direct login — no company selection required.                       │
+ * │    • Enter work email + password                                      │
+ * │    • POST /api/auth/login { email, password }                        │
+ * │    • Backend resolves tenant from User.tenantId automatically.        │
+ * │    • Deep-link: fieseros://company/[slug]/employee (auto-fills       │
+ * │      company context, but NOT required for login)                     │
  * └──────────────────────────────────────────────────────────────────────┘
  *
  * On success, an in-screen useEffect watcher on { isAuthenticated, role }
@@ -371,18 +366,14 @@ export default function LoginScreen() {
     }
   };
 
-  // ── Staff: Login with selected company ────────────────────────────
+  // ── Staff: Direct login (no company selection required) ──────────
   const handleStaffLogin = async () => {
-    if (!selectedCompany) {
-      show('Please find and select your company first', 'warning');
-      return;
-    }
     if (!staffEmail.trim() || !staffPassword) {
       show('Please enter your email and password', 'warning');
       return;
     }
     try {
-      await loginStaff(selectedCompany.slug, staffEmail.trim(), staffPassword);
+      await loginStaff(staffEmail.trim(), staffPassword);
       show('Signed in', 'success');
     } catch {
       // error surfaced via store
@@ -793,85 +784,62 @@ export default function LoginScreen() {
           )}
 
           {/* ════════════════════════════════════════════════════════════ */}
-          {/*  EMPLOYEE PORTAL                                            */}
+          {/*  EMPLOYEE PORTAL — Direct login (no company selection)      */}
           {/* ════════════════════════════════════════════════════════════ */}
           {mode === 'staff' && (
             <>
-              {/* Step 1: Company finder OR selected company card */}
-              {!selectedCompany ? (
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      fontWeight: '600',
-                      color: COLORS.foreground,
-                      marginBottom: 6,
-                    }}
-                  >
-                    Find your company
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      color: COLORS.mutedForeground,
-                      marginBottom: 12,
-                      lineHeight: 18,
-                    }}
-                  >
-                    Search by company name or slug. Your company link looks like
-                    fieseros.com/your-company/employee.
-                  </Text>
-                  <CompanyFinder
-                    onSelect={(company) => {
-                      setSelectedCompany(company);
-                      setLastCompany(company);
-                    }}
-                    autoFocus
-                    accent={COLORS.primary}
-                  />
-                </View>
-              ) : (
-                <>
-                  {/* Step 2: Company card + (Step 3) credentials */}
-                  <CompanyCard
-                    company={selectedCompany}
-                    accent={COLORS.primary}
-                    onSwitch={() => setSelectedCompany(null)}
-                  />
-                  <Input
-                    label="Work email"
-                    value={staffEmail}
-                    onChangeText={setStaffEmail}
-                    placeholder="you@business.com"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                  />
-                  <Input
-                    label="Password"
-                    value={staffPassword}
-                    onChangeText={setStaffPassword}
-                    placeholder="Enter your password"
-                    secureTextEntry
-                  />
-                  <Button onPress={handleStaffLogin} loading={isLoading} fullWidth size="lg">
-                    Sign In to {selectedCompany.name}
-                  </Button>
-                  <Pressable
-                    onPress={handleForgotPassword}
-                    style={{ marginTop: 14, alignItems: 'center' }}
-                  >
-                    <Text
-                      style={{
-                        color: COLORS.primary,
-                        fontSize: 14,
-                        fontWeight: '600',
-                      }}
-                    >
-                      Forgot password?
-                    </Text>
-                  </Pressable>
-                </>
-              )}
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: '600',
+                  color: COLORS.foreground,
+                  marginBottom: 6,
+                }}
+              >
+                Staff Login
+              </Text>
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: COLORS.mutedForeground,
+                  marginBottom: 12,
+                  lineHeight: 18,
+                }}
+              >
+                Enter your work email and password to sign in.
+              </Text>
+              <Input
+                label="Work email"
+                value={staffEmail}
+                onChangeText={setStaffEmail}
+                placeholder="you@business.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <Input
+                label="Password"
+                value={staffPassword}
+                onChangeText={setStaffPassword}
+                placeholder="Enter your password"
+                secureTextEntry
+              />
+              <Button onPress={handleStaffLogin} loading={isLoading} fullWidth size="lg">
+                Sign In
+              </Button>
+              <Pressable
+                onPress={handleForgotPassword}
+                style={{ marginTop: 14, alignItems: 'center' }}
+              >
+                <Text
+                  style={{
+                    color: COLORS.primary,
+                    fontSize: 14,
+                    fontWeight: '600',
+                  }}
+                >
+                  Forgot password?
+                </Text>
+              </Pressable>
             </>
           )}
 

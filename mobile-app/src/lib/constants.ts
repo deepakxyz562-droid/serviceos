@@ -54,6 +54,8 @@ export const API_PATHS = {
 
   // Employee / admin auth
   companyLogin: '/api/auth/company-login',
+  // Direct login (no company selection required — tenant resolved from User.tenantId)
+  directLogin: '/api/auth/login',
 
   // Shared
   authMe: '/api/auth/me',
