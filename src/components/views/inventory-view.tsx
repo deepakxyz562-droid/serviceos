@@ -491,6 +491,30 @@ export function InventoryView() {
     }
   };
 
+  const handleCreateAssetFromItem = async (item: InventoryItem) => {
+    try {
+      const res = await authFetch('/api/inventory/assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: item.name,
+          inventoryItemId: item.id,
+          serialNumber: item.sku ? `${item.sku}-001` : null,
+          status: 'available',
+          condition: 'good',
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to create trackable asset');
+      }
+      toast.success(`Trackable equipment asset created for "${item.name}". You can now assign it to an employee under Assets or Employees.`);
+      fetchAssets();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create asset');
+    }
+  };
+
   const handleReturnAsset = async (asset: InventoryAssetRow) => {
     try {
       const res = await authFetch(`/api/inventory/assets/${asset.id}/return`, {
@@ -798,6 +822,9 @@ export function InventoryView() {
                                   <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                   <DropdownMenuItem onClick={() => { setEditingItem(item); setItemDialogOpen(true); }}>
                                     <Pencil className="size-3.5 mr-2" /> Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleCreateAssetFromItem(item)}>
+                                    <PackagePlus className="size-3.5 mr-2 text-emerald-600" /> Create Trackable Asset (for Employee)
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => setAdjustTarget(item)}>
                                     <SlidersHorizontal className="size-3.5 mr-2" /> Adjust Stock
@@ -1602,6 +1629,7 @@ interface ItemFormState {
   barcode: string;
   description: string;
   isActive: boolean;
+  createTrackableAsset: boolean;
 }
 
 const EMPTY_ITEM_FORM: ItemFormState = {
@@ -1618,6 +1646,7 @@ const EMPTY_ITEM_FORM: ItemFormState = {
   barcode: '',
   description: '',
   isActive: true,
+  createTrackableAsset: true,
 };
 
 function ItemFormDialog({
@@ -1653,6 +1682,7 @@ function ItemFormDialog({
           barcode: editing.barcode || '',
           description: editing.description || '',
           isActive: editing.isActive,
+          createTrackableAsset: false,
         });
       } else {
         setForm(EMPTY_ITEM_FORM);
@@ -1703,6 +1733,23 @@ function ItemFormDialog({
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || `Failed to ${isEdit ? 'update' : 'create'} item`);
       }
+      const responseData = await res.json().catch(() => ({}));
+      const createdItemId = responseData.item?.id || responseData.id;
+
+      if (!isEdit && createdItemId && form.createTrackableAsset) {
+        await authFetch('/api/inventory/assets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: payload.name,
+            inventoryItemId: createdItemId,
+            serialNumber: payload.sku ? `${payload.sku}-001` : null,
+            status: 'available',
+            condition: 'good',
+          }),
+        }).catch(() => null);
+      }
+
       toast.success(`Item "${payload.name}" ${isEdit ? 'updated' : 'created'}`);
       onSaved();
     } catch (e) {
@@ -1871,6 +1918,21 @@ function ItemFormDialog({
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </div>
+
+          {!editing && (
+            <div className="flex items-center justify-between rounded-lg border bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900 p-3">
+              <div className="space-y-0.5">
+                <Label className="text-emerald-900 dark:text-emerald-200 font-semibold">Trackable Equipment Asset</Label>
+                <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                  Automatically register 1 available equipment asset to assign to employees
+                </p>
+              </div>
+              <Switch
+                checked={form.createTrackableAsset}
+                onCheckedChange={(c) => setForm({ ...form, createTrackableAsset: c })}
+              />
+            </div>
+          )}
 
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div className="space-y-0.5">

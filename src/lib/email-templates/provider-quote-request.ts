@@ -226,24 +226,7 @@ export function renderProviderQuoteEmail(d: ProviderQuoteEmailData): string {
             </td>
           </tr>
 
-          <!-- Footer -->
-          <tr>
-            <td style="padding:24px 36px;border-top:1px solid #f1f5f9;background:#f8fafc;font-size:12px;color:#94a3b8;line-height:1.5;">
-              <p style="margin:0 0 4px 0;">
-                Sent by <strong style="color:#64748b;">${esc(BRAND.name)} Marketplace</strong> to ${esc(d.providerName)}.
-              </p>
-              <p style="margin:0;">
-                Need help? <a href="mailto:${esc(supportEmail)}" style="color:#0f766e;text-decoration:none;font-weight:500;">Contact Support</a>
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+                    <p style="margin:0 0 6px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#99f6e4;">
                       Grow Your Business
                     </p>
                     <h3 style="margin:0 0 10px 0;font-size:18px;font-weight:700;color:#ffffff;line-height:1.4;">

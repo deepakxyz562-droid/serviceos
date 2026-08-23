@@ -4075,6 +4075,60 @@ function AssignEquipmentDialog({
     }
   };
 
+  const [showQuickCreate, setShowQuickCreate] = useState(false);
+  const [quickAssetName, setQuickAssetName] = useState('');
+  const [quickSerial, setQuickSerial] = useState('');
+  const [quickSubmitting, setQuickSubmitting] = useState(false);
+
+  const handleQuickCreateAndAssign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickAssetName.trim()) {
+      toast.error('Asset name is required');
+      return;
+    }
+    setQuickSubmitting(true);
+    try {
+      // 1. Create asset
+      const createRes = await authFetch(apiUrl('/api/inventory/assets'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: quickAssetName.trim(),
+          serialNumber: quickSerial.trim() || undefined,
+          status: 'available',
+          condition: 'good',
+        }),
+      });
+      if (!createRes.ok) {
+        const body = await createRes.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to create asset');
+      }
+      const { asset } = await createRes.json();
+
+      // 2. Assign asset to employee
+      const assignRes = await authFetch(apiUrl(`/api/inventory/assets/${asset.id}/assign`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId, notes: notes.trim() || undefined }),
+      });
+      if (!assignRes.ok) {
+        const body = await assignRes.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to assign asset');
+      }
+
+      toast.success(`Asset "${quickAssetName}" created and assigned to ${employeeName}`);
+      onSuccess();
+      setShowQuickCreate(false);
+      setQuickAssetName('');
+      setQuickSerial('');
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Quick assign failed');
+    } finally {
+      setQuickSubmitting(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -4083,14 +4137,88 @@ function AssignEquipmentDialog({
             <PackagePlus className="size-4 text-emerald-600" /> Assign Equipment to {employeeName}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Search for available assets (status: available, not currently assigned) and assign one to this employee.
+            Select an available asset or create a new trackable asset to assign to this employee.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleAssign} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="asset-search" className="text-xs font-medium">
-              Search available assets
-            </Label>
+
+        {showQuickCreate ? (
+          <form onSubmit={handleQuickCreateAndAssign} className="space-y-4 py-2">
+            <div className="rounded-lg border bg-emerald-50/50 dark:bg-emerald-950/20 p-3 space-y-1">
+              <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-200">
+                Quick Create & Assign Equipment
+              </p>
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                This will instantly register a new equipment asset and assign custody to {employeeName}.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="quick-asset-name" className="text-xs font-medium">
+                Equipment / Asset Name *
+              </Label>
+              <Input
+                id="quick-asset-name"
+                value={quickAssetName}
+                onChange={(e) => setQuickAssetName(e.target.value)}
+                placeholder="e.g. HVAC Vacuum Pump #3, Fluke Multimeter"
+                className="h-9"
+                required
+                autoFocus
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="quick-asset-serial" className="text-xs font-medium">
+                Serial Number or Tag (Optional)
+              </Label>
+              <Input
+                id="quick-asset-serial"
+                value={quickSerial}
+                onChange={(e) => setQuickSerial(e.target.value)}
+                placeholder="e.g. SN-883921"
+                className="h-9"
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowQuickCreate(false)}
+                disabled={quickSubmitting}
+              >
+                Back to Available Assets
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={quickSubmitting || !quickAssetName.trim()}
+              >
+                {quickSubmitting ? 'Assigning…' : 'Create & Assign'}
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleAssign} className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="asset-search" className="text-xs font-medium">
+                Search available assets
+              </Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 text-[11px] text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 px-2"
+                onClick={() => {
+                  setQuickAssetName(search);
+                  setShowQuickCreate(true);
+                }}
+              >
+                <Plus className="size-3 mr-1" /> Quick Create Asset
+              </Button>
+            </div>
             <div className="relative">
               <Search className="size-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" />
               <Input
@@ -4103,25 +4231,36 @@ function AssignEquipmentDialog({
                 autoFocus
               />
             </div>
-          </div>
 
-          <div className="border rounded-md max-h-72 overflow-y-auto">
-            {loadingAssets ? (
-              <div className="p-3 space-y-2">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <Skeleton key={i} className="h-10 w-full" />
-                ))}
-              </div>
-            ) : assets.length === 0 ? (
-              <div className="p-6 text-center">
-                <p className="text-xs text-muted-foreground">
-                  No available assets{debouncedSearch ? ` matching “${debouncedSearch}”.` : '.'}
-                </p>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Add new assets in the Inventory view.
-                </p>
-              </div>
-            ) : (
+            <div className="border rounded-md max-h-72 overflow-y-auto">
+              {loadingAssets ? (
+                <div className="p-3 space-y-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))}
+                </div>
+              ) : assets.length === 0 ? (
+                <div className="p-6 text-center space-y-2.5">
+                  <p className="text-xs text-muted-foreground">
+                    No available assets{debouncedSearch ? ` matching “${debouncedSearch}”.` : '.'}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Create a trackable equipment asset to assign to {employeeName}.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs gap-1.5 border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                    onClick={() => {
+                      setQuickAssetName(search);
+                      setShowQuickCreate(true);
+                    }}
+                  >
+                    <PackagePlus className="size-3.5" /> Quick Create & Assign Asset
+                  </Button>
+                </div>
+              ) : (
               assets.map((asset) => {
                 const selected = selectedAssetId === asset.id;
                 return (
@@ -4215,6 +4354,7 @@ function AssignEquipmentDialog({
             </Button>
           </DialogFooter>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   );
