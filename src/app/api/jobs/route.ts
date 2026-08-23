@@ -50,8 +50,15 @@ async function resolveWorkspaceId(
   if (provided) return provided
   if (authUser?.workspaceId) return authUser.workspaceId
   try {
-    const existing = await db.workspace.findFirst()
-    if (existing) return existing.id
+    if (authUser?.tenantId) {
+      const existing = await db.workspace.findFirst({
+        where: { tenantId: authUser.tenantId },
+        select: { id: true },
+      })
+      if (existing) return existing.id
+    }
+    const existingAny = await db.workspace.findFirst({ select: { id: true } })
+    if (existingAny) return existingAny.id
     const created = await db.workspace.create({
       data: {
         name: 'Default Workspace',

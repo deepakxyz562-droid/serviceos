@@ -14,9 +14,9 @@ const GLOBAL_CONFIG_KEY = 'globalMenuConfig';
 // kept serving stale `disabledMenus` for up to 5 minutes (the TTL). That
 // was the production-only "menu toggle doesn't work" bug.
 //
-// On Vercel serverless every request may land on a different warm instance,
-// so a process-local cache is useless for cache-busting. Redis fixes this.
-const MENU_VISIBILITY_CACHE_TTL_MS = 5 * 60 * 1000;
+// 10-second TTL so superadmin menu toggles apply across all Vercel instances
+// within seconds without waiting for 5-minute stale cache windows.
+const MENU_VISIBILITY_CACHE_TTL_MS = 10 * 1000;
 
 // Helper: safely parse settingsJson from a tenant record
 function parseSettings(raw: unknown): Record<string, unknown> {
