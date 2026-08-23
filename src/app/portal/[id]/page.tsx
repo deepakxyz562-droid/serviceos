@@ -27,6 +27,9 @@ interface PublicJobData {
   scheduledAt?: string;
   customerName?: string;
   assigneeName?: string;
+  assigneePhone?: string;
+  currentLatitude?: number | null;
+  currentLongitude?: number | null;
   lineItemsJson?: string;
   quotedAmount?: number;
   branding?: {
@@ -158,10 +161,19 @@ export default function CustomerPortalJobPage() {
             {job.assigneeName && (
               <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50">
                 <User className="size-5 text-emerald-600" />
-                <div>
+                <div className="flex-1">
                   <p className="text-[10px] uppercase font-semibold text-muted-foreground">Assigned Technician</p>
                   <p className="text-sm font-semibold text-foreground">{job.assigneeName}</p>
                 </div>
+                {job.assigneePhone && (
+                  <a
+                    href={`tel:${job.assigneePhone}`}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-colors"
+                  >
+                    <Phone className="size-4" />
+                    <span className="text-xs font-semibold">Call</span>
+                  </a>
+                )}
               </div>
             )}
 
@@ -178,6 +190,61 @@ export default function CustomerPortalJobPage() {
             )}
           </div>
         </div>
+
+        {/* Live Location Tracking Card */}
+        {job.currentLatitude != null && job.currentLongitude != null && !isCompleted && (
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                <MapPin className="size-4 text-emerald-600" />
+                Live Location
+              </h3>
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs font-semibold text-emerald-600">Live</span>
+              </div>
+            </div>
+            <div
+              className="relative overflow-hidden rounded-xl"
+              style={{ height: 180, backgroundColor: '#e8f5e9' }}
+            >
+              {/* Grid lines */}
+              <div className="absolute top-10 left-0 right-0 h-px bg-black/5" />
+              <div className="absolute top-20 left-0 right-0 h-px bg-black/5" />
+              <div className="absolute top-32 left-0 right-0 h-px bg-black/5" />
+              <div className="absolute top-0 bottom-0 left-1/4 w-px bg-black/5" />
+              <div className="absolute top-0 bottom-0 left-1/2 w-px bg-black/5" />
+              <div className="absolute top-0 bottom-0 left-3/4 w-px bg-black/5" />
+              {/* Pulsing marker */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-5 -translate-y-5 flex items-center justify-center" style={{ width: 40, height: 40 }}>
+                <div className="absolute h-12 w-12 rounded-full bg-emerald-200/30" />
+                <div className="absolute h-8 w-8 rounded-full bg-emerald-300/50" />
+                <MapPin className="size-7 text-emerald-600 fill-emerald-600" />
+              </div>
+              {/* Coordinates */}
+              <div className="absolute bottom-2 left-2 rounded bg-black/50 px-2 py-1">
+                <span className="text-xs font-mono text-white">
+                  {job.currentLatitude.toFixed(4)}, {job.currentLongitude.toFixed(4)}
+                </span>
+              </div>
+              {/* Technician label */}
+              <div className="absolute top-2 right-2 rounded bg-emerald-600 px-2 py-1">
+                <span className="text-xs font-semibold text-white">
+                  {job.assigneeName || 'Technician'}
+                </span>
+              </div>
+            </div>
+            <a
+              href={`https://www.openstreetmap.org/?mlat=${job.currentLatitude}&mlon=${job.currentLongitude}#map=15/${job.currentLatitude}/${job.currentLongitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 py-2.5 hover:bg-emerald-100 transition-colors"
+            >
+              <MapPin className="size-4 text-emerald-600" />
+              <span className="text-sm font-semibold text-emerald-600">Open in Maps</span>
+            </a>
+          </div>
+        )}
 
         {/* Itemized Services & Invoice Summary */}
         {lineItems.length > 0 && (

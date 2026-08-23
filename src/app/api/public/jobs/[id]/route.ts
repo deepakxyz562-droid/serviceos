@@ -13,6 +13,8 @@ import { resolveTenantId } from '@/lib/owner-notifications';
  *   - Job title, description, status, address, scheduledAt
  *   - Customer name (first name only — see note below)
  *   - Assignee name (technician's display name)
+ *   - Assignee phone (for "Call Technician" button on tracking page)
+ *   - Live location (latitude, longitude) for real-time tracking map
  *   - Service line items + quoted amount
  *   - Tenant branding (businessName, logoUrl, primary/accent color,
  *     hideFieserosBranding) — used by the portal page to render with the
@@ -22,7 +24,6 @@ import { resolveTenantId } from '@/lib/owner-notifications';
  *   - verificationPin (the PIN is sent to the customer via SMS/WhatsApp/email)
  *   - internal notes
  *   - customer phone/email/address (beyond what's needed for display)
- *   - assignee phone or contact details
  *   - any pricing beyond the quoted amount
  *   - lifecycle timestamps (internal operational data)
  */
@@ -45,6 +46,9 @@ export async function GET(
         scheduledAt: true,
         quotedAmount: true,
         lineItemsJson: true,
+        // Live tracking fields
+        latitude: true,
+        longitude: true,
         // workspaceId is required to resolve tenant branding below.
         // Not returned in the public DTO itself (kept internal-only).
         workspaceId: true,
@@ -57,6 +61,7 @@ export async function GET(
         assignee: {
           select: {
             name: true,
+            phone: true,
           },
         },
       },
@@ -113,6 +118,16 @@ export async function GET(
       lineItemsJson: job.lineItemsJson,
       customerName: job.customer?.name ?? null,
       assigneeName: job.assignee?.name ?? null,
+      assigneePhone: job.assignee?.phone ?? null,
+      // Live tracking — only returned when the job is in an active state
+      // (assigned, en_route, in_progress). Null otherwise so the tracking
+      // page knows to show "no live location" instead of stale coords.
+      currentLatitude: ['assigned', 'en_route', 'in_progress', 'started', 'on_the_way'].includes(job.status)
+        ? job.latitude
+        : null,
+      currentLongitude: ['assigned', 'en_route', 'in_progress', 'started', 'on_the_way'].includes(job.status)
+        ? job.longitude
+        : null,
       // NOTE: verificationPin is intentionally NOT included.
       branding,
     });
