@@ -606,9 +606,12 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
     take: pageSize + 1, // +1 to detect if there's a next page
   });
 
-  const tenantList = Array.isArray(tenants) ? tenants : [];
-  const hasMore = tenantList.length > pageSize;
-  const page = hasMore ? tenantList.slice(0, pageSize) : tenantList;
+  if (!tenants) {
+    throw new Error('Database tenant query returned null or timed out');
+  }
+
+  const hasMore = tenants.length > pageSize;
+  const page = hasMore ? tenants.slice(0, pageSize) : tenants;
 
   let nextCursor: string | null = null;
   if (page.length > 0 && hasMore) {
