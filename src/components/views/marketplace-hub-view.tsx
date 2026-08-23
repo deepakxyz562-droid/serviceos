@@ -64,10 +64,7 @@ function MarketplaceDashboardRouterInner() {
 }
 
 export function MarketplaceHubView() {
-  const currentView = useAppStore((s) => s.currentView);
-  const [activeTab, setActiveTab] = useState<MarketplaceTab>(
-    currentView === 'claimBusiness' ? 'claim' : 'listing'
-  );
+  const [activeTab, setActiveTab] = useState<MarketplaceTab>('listing');
 
   return (
     <div className="space-y-6">

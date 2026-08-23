@@ -130,7 +130,12 @@ async function fetchProvidersCached(filters: ProviderFilterOptions): Promise<Ssr
 }
 
 async function fetchProvidersUncached(filters: ProviderFilterOptions): Promise<SsrProviderPage> {
+
+  // Fetch the set of featured tenant IDs (for featured-first sorting on page 1).
   const featuredIds = await fetchFeaturedTenantIds();
+
+  // Fetch the featured map (metadata for cardType computation). Only needed
+  // on page 1 — subsequent pages fetch non-featured items only.
   const featuredMap = await fetchFeaturedListingsMap(Array.from(featuredIds));
 
   const page = await fetchProviderPage({
@@ -142,9 +147,9 @@ async function fetchProvidersUncached(filters: ProviderFilterOptions): Promise<S
   });
 
   return {
-    items: (page?.items || []) as ProviderListItem[],
-    nextCursor: page?.nextCursor || null,
-    total: page?.total ?? 0,
+    items: page.items as ProviderListItem[],
+    nextCursor: page.nextCursor,
+    total: page.total ?? 0,
   };
 }
 
@@ -352,7 +357,7 @@ export default async function MarketplaceBrowsePage({
     '@type': 'ItemList',
     name: 'Fieseros Marketplace Providers',
     numberOfItems: totalProviders,
-    itemListElement: (providers || []).slice(0, 30).map((p, i) => {
+    itemListElement: providers.slice(0, 30).map((p, i) => {
       const slug = p.slug || p.publicSlug;
       const profilePath = slug
         ? `/${mapIndustryToUrlSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
