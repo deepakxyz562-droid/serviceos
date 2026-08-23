@@ -62,6 +62,9 @@ interface ChannelConfigRow {
   lastTestedAt: string | null
   lastTestStatus: string | null
   config: Record<string, unknown>
+  // O1: platform availability flags from ChannelCatalog (Superadmin-controlled)
+  comingSoon?: boolean
+  platformEnabled?: boolean
 }
 
 interface OAuthStatus {
@@ -104,7 +107,7 @@ export function ChannelsView() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Channels</h2>
           <p className="text-muted-foreground mt-1">
-            Connect 10 messaging channels. Each channel has step-by-step guidance.
+            Connect {configs.length} messaging {configs.length === 1 ? 'channel' : 'channels'}. Each channel has step-by-step guidance.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -113,12 +116,12 @@ export function ChannelsView() {
         </Button>
       </div>
 
-      {/* Stats summary */}
+      {/* Stats summary — derived from the API response (already filtered by ChannelCatalog) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatTile label="Connected" value={configs.filter((c) => c.connected).length} icon={CheckCircle2} color="text-green-600" />
         <StatTile label="Not configured" value={configs.filter((c) => !c.connected).length} icon={XCircle} color="text-muted-foreground" />
-        <StatTile label="One-click" value={CHANNELS_BY_TIER.one_click.length} icon={Zap} color="text-blue-600" />
-        <StatTile label="OAuth" value={CHANNELS_BY_TIER.oauth.length} icon={Link2} color="text-purple-600" />
+        <StatTile label="One-click" value={configs.filter((c) => c.tier === 'one_click').length} icon={Zap} color="text-blue-600" />
+        <StatTile label="OAuth" value={configs.filter((c) => c.tier === 'oauth').length} icon={Link2} color="text-purple-600" />
       </div>
 
       {/* Channel grid */}
@@ -132,14 +135,25 @@ export function ChannelsView() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {CHANNELS.map((channel) => (
-            <ChannelCard
-              key={channel.id}
-              channel={channel}
-              config={getConfig(channel.id)}
-              onConfigure={() => setWizardChannel(channel.id)}
-            />
-          ))}
+          {/* Render from the API response (configs) which is already filtered
+              by ChannelCatalog — hidden channels (Teams, Slack, Web Widget)
+              are excluded, coming-soon channels are included with a badge.
+              We look up the channel metadata (icon, color, label) from the
+              static CHANNELS array by the channel's type ID. */}
+          {configs.map((config) => {
+            const channelMeta = getChannel(config.type)
+            // Skip if the channel type doesn't have a matching ChannelMeta
+            // entry (defensive — shouldn't happen for catalog channels)
+            if (!channelMeta) return null
+            return (
+              <ChannelCard
+                key={config.id || config.type}
+                channel={channelMeta}
+                config={config}
+                onConfigure={() => setWizardChannel(config.type)}
+              />
+            )
+          })}
         </div>
       )}
 
@@ -175,28 +189,37 @@ function ChannelCard({
   const Icon = channel.icon
   const connected = config?.connected ?? false
   const setupCompleted = config?.setupCompleted ?? false
+  const comingSoon = config?.comingSoon ?? false
 
   return (
-    <Card className={cn('relative overflow-hidden transition-shadow hover:shadow-md', connected && 'border-green-200')}>
+    <Card className={cn('relative overflow-hidden transition-shadow hover:shadow-md', connected && 'border-green-200', comingSoon && 'opacity-75')}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className={cn('flex size-10 items-center justify-center rounded-lg border', channel.badgeClass)}>
             <Icon className="size-5" />
           </div>
           <div className="flex flex-col items-end gap-1">
-            <TierBadge tier={channel.tier} />
-            {connected ? (
-              <Badge className="bg-green-100 text-green-700 border-green-300">
-                <CheckCircle2 className="size-3 mr-1" /> Connected
-              </Badge>
-            ) : setupCompleted ? (
-              <Badge variant="outline" className="text-amber-600 border-amber-300">
-                <AlertCircle className="size-3 mr-1" /> Inactive
+            {comingSoon ? (
+              <Badge className="bg-amber-100 text-amber-700 border-amber-300">
+                <Clock className="size-3 mr-1" /> Coming Soon
               </Badge>
             ) : (
-              <Badge variant="outline" className="text-muted-foreground">
-                <Clock className="size-3 mr-1" /> Not set up
-              </Badge>
+              <>
+                <TierBadge tier={channel.tier} />
+                {connected ? (
+                  <Badge className="bg-green-100 text-green-700 border-green-300">
+                    <CheckCircle2 className="size-3 mr-1" /> Connected
+                  </Badge>
+                ) : setupCompleted ? (
+                  <Badge variant="outline" className="text-amber-600 border-amber-300">
+                    <AlertCircle className="size-3 mr-1" /> Inactive
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-muted-foreground">
+                    <Clock className="size-3 mr-1" /> Not set up
+                  </Badge>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -204,15 +227,21 @@ function ChannelCard({
         <CardDescription className="text-xs line-clamp-2">{channel.description}</CardDescription>
       </CardHeader>
       <CardContent className="pt-0">
-        <Button
-          size="sm"
-          variant={connected ? 'outline' : 'default'}
-          className="w-full"
-          onClick={onConfigure}
-        >
-          <Settings2 className="size-3.5 mr-2" />
-          {connected ? 'Manage' : 'Configure'}
-        </Button>
+        {comingSoon ? (
+          <Button size="sm" variant="outline" className="w-full" disabled>
+            <Clock className="size-3.5 mr-2" /> Coming Soon
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant={connected ? 'outline' : 'default'}
+            className="w-full"
+            onClick={onConfigure}
+          >
+            <Settings2 className="size-3.5 mr-2" />
+            {connected ? 'Manage' : 'Configure'}
+          </Button>
+        )}
       </CardContent>
     </Card>
   )
