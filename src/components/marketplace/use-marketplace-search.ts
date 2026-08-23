@@ -282,8 +282,8 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>()(
       // Default false — the user hasn't cleared anything on first visit.
       userExplicitlyClearedCity: false,
       setSearchInput: (v) => set({ searchInput: v }),
-      setCityInput: (v) => set({ cityInput: v }),
-      setCityFilter: (v) => set({ cityFilter: v }),
+      setCityInput: (v) => set((s) => ({ cityInput: v, userExplicitlyClearedCity: v === '' ? true : s.userExplicitlyClearedCity })),
+      setCityFilter: (v) => set((s) => ({ cityFilter: v, userExplicitlyClearedCity: v === '' ? true : s.userExplicitlyClearedCity })),
       setSort: (v) => set({ sort: v }),
       setVerticalFilter: (v) => set({ verticalFilter: v }),
       setIndustryFilter: (v) => set({ industryFilter: v }),

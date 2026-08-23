@@ -441,6 +441,26 @@ function filterByRadius(
  * NON-FEATURED item's tuple (featured items are always fully loaded on page 1
  * and never paginated).
  */
+
+const COUNT_CACHE_TTL_MS = 5 * 60_000; // 5 minutes
+const _countCache = new Map<string, { total: number; expiresAt: number }>();
+
+async function getCachedCount(where: any): Promise<number> {
+  const cacheKey = JSON.stringify(where);
+  const cached = _countCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.total;
+  }
+  try {
+    const total = await db.tenant.count({ where });
+    _countCache.set(cacheKey, { total, expiresAt: Date.now() + COUNT_CACHE_TTL_MS });
+    return total;
+  } catch (err) {
+    if (cached) return cached.total;
+    return 0;
+  }
+}
+
 export async function fetchProviderPage<T = ProviderListItem>(opts: {
   filters: ProviderFilterOptions;
   cursor: ProviderCursor | null;
@@ -475,8 +495,8 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
         })
       : Promise.resolve([]);
 
-    // Total count — runs in parallel with the featured query.
-    const countPromise = db.tenant.count({ where });
+    // Total count — cached for 5 minutes to prevent 90,000+ row COUNT(*) full-table scans.
+    const countPromise = getCachedCount(where);
 
     const [featuredTenants, total] = await Promise.all([featuredPromise, countPromise]);
 
@@ -489,15 +509,18 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
     // suspect there might be more. This only happens when featured >= pageSize,
     // which is rare (featured is capped at 8, pageSize defaults to 24).
     const nonFeaturedTake = Math.max(pageSize - featuredTenants.length, 0);
-    const nonFeaturedWhere = { ...where, id: { notIn: Array.from(featuredIds) } };
-    const nonFeaturedTenants = nonFeaturedTake > 0
+    const featuredSet = new Set(featuredTenants.map((t) => t.id));
+    const rawNonFeatured = nonFeaturedTake > 0
       ? await db.tenant.findMany({
-          where: nonFeaturedWhere,
+          where, // Clean indexable WHERE clause — enables O(log n) index scan!
           select: PROVIDER_SELECT,
           orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }, { id: 'desc' }],
-          take: nonFeaturedTake + 1, // +1 to detect if there's a next page
+          take: nonFeaturedTake + FEATURED_CAP + 1,
         })
       : [];
+    const nonFeaturedTenants = (Array.isArray(rawNonFeatured) ? rawNonFeatured : []).filter(
+      (t) => !featuredSet.has(t.id)
+    );
 
     let hasMore = nonFeaturedTenants.length > nonFeaturedTake;
     const pageNonFeatured = hasMore ? nonFeaturedTenants.slice(0, nonFeaturedTake) : nonFeaturedTenants;

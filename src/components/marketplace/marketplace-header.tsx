@@ -111,9 +111,9 @@ export function MarketplaceHeader({
   const didSeedRef = React.useRef(false);
   React.useEffect(() => {
     if (didSeedRef.current) return;
-    didSeedRef.current = true;
+    const cleared = useMarketplaceSearch.getState().userExplicitlyClearedCity;
     if (initialSearch && !searchInput) setSearchInput(initialSearch);
-    if (initialCity && !cityInput) setCityInput(initialCity);
+    if (initialCity && !cityInput && !cleared) setCityInput(initialCity);
   }, []);
 
   // On the provider detail page, navigate to /marketplace when the user types.

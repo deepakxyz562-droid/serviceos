@@ -352,11 +352,11 @@ export function MarketplaceBrowser({
       setSearchInput(initialFilters.search ?? '');
     }
     if (initialFilters.city !== prev.city) {
-      setCityInput(initialFilters.city ?? '');
-      // Also set the debounced cityFilter directly so the sidebar's counts
-      // hook gets the right value on the FIRST render after a server-driven
-      // navigation (instead of waiting 250ms for the debounce effect).
-      setCityFilter(initialFilters.city ?? '');
+      const cleared = useMarketplaceSearch.getState().userExplicitlyClearedCity;
+      if (!cleared) {
+        setCityInput(initialFilters.city ?? '');
+        setCityFilter(initialFilters.city ?? '');
+      }
     }
     if (initialFilters.vertical !== prev.vertical || initialFilters.industry !== prev.industry) {
       if (initialFilters.industry) {
