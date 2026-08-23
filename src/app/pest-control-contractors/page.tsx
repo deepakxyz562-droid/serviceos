@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 // Force dynamic so newly-onboarded providers appear without a rebuild.
-export const revalidate = 300; // CDN cache for 5 minutes (replaces force-dynamic for SEO pages)
+export const dynamic = "force-dynamic";
 
 export default async function Page() {
   // Cached via sharedCacheWrap (Redis + in-memory fallback, 30s fresh / 5min stale).
