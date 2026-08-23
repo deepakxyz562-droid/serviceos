@@ -305,6 +305,15 @@ class VapiVoiceProviderImpl implements VoiceProvider {
       transcriber: {
         provider: 'deepgram',
         model: 'nova-2',
+        endpointing: 500,
+      },
+      startSpeakingPlan: {
+        waitSeconds: 0.4,
+        smartEndpointingEnabled: true,
+      },
+      stopSpeakingPlan: {
+        numWords: 2,
+        voiceSeconds: 0.2,
       },
       maxDurationSeconds: config.maxDurationSeconds,
       silenceTimeoutSeconds: config.silenceTimeoutSeconds,
@@ -364,6 +373,15 @@ class VapiVoiceProviderImpl implements VoiceProvider {
       transcriber: {
         provider: 'deepgram',
         model: 'nova-2',
+        endpointing: 500,
+      },
+      startSpeakingPlan: {
+        waitSeconds: 0.4,
+        smartEndpointingEnabled: true,
+      },
+      stopSpeakingPlan: {
+        numWords: 2,
+        voiceSeconds: 0.2,
       },
       maxDurationSeconds: config.maxDurationSeconds,
       silenceTimeoutSeconds: config.silenceTimeoutSeconds,
