@@ -1854,11 +1854,11 @@ export function InvoicesView() {
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="size-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-semibold shrink-0">
-                          {(inv.employeeName || 'Jobber').slice(0, 1).toUpperCase()}
+                          {(inv.employeeName || 'Fieseros').slice(0, 1).toUpperCase()}
                         </span>
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-foreground truncate">
-                            {inv.employeeName || 'Jobber'}
+                            {inv.employeeName || 'Fieseros'}
                           </p>
                           <p className="text-[10px] text-muted-foreground">
                             {formatShortDate(inv.createdAt)}

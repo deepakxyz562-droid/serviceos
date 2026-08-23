@@ -166,7 +166,7 @@ export function AutomationsSettings() {
             <h2 className="text-xl font-semibold tracking-tight">Automations</h2>
           </div>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Configure the triggers and conditions and Jobber will complete routine tasks and
+            Configure the triggers and conditions and Fieseros will complete routine tasks and
             perform actions automatically. Additional automations related to jobs, visits, and
             requests are located under our Emails &amp; Text Messages settings.
           </p>
@@ -255,7 +255,7 @@ export function AutomationsSettings() {
               <DialogTitle>New Automation</DialogTitle>
             </div>
             <DialogDescription>
-              Define a trigger, set conditions, and pick the action Jobber should perform.
+              Define a trigger, set conditions, and pick the action Fieseros should perform.
             </DialogDescription>
           </DialogHeader>
 
@@ -326,7 +326,7 @@ export function AutomationsSettings() {
           <DialogHeader>
             <DialogTitle>Tell us what you&apos;d like to automate</DialogTitle>
             <DialogDescription>
-              Share the routine tasks you wish Jobber could handle for you. Your input shapes our
+              Share the routine tasks you wish Fieseros could handle for you. Your input shapes our
               roadmap.
             </DialogDescription>
           </DialogHeader>

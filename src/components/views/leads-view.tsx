@@ -3923,7 +3923,7 @@ export function LeadsView() {
                     {leadNotes.map((note, idx) => (
                       <div key={idx} className="rounded-lg bg-muted/40 px-3 py-2.5 space-y-1">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs font-semibold text-foreground">Jobber</p>
+                          <p className="text-xs font-semibold text-foreground">Fieseros</p>
                           <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
                             <Link2 className="size-3" /> Linked note
                           </span>
