@@ -179,6 +179,7 @@ export async function getAuthUser(): Promise<AuthUser | null> {
       // (called every 60s by the PWA + every 60s by the mobile app) is
       // Employee presence update is handled by the dedicated /api/employees/heartbeat endpoint
       // and GPS tracking to prevent DB write lock contention on regular API requests.
+    }
 
     return normalized;
   } catch {
