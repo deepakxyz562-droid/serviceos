@@ -478,7 +478,8 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
     // Total count — runs in parallel with the featured query.
     const countPromise = db.tenant.count({ where });
 
-    const [featuredTenants, total] = await Promise.all([featuredPromise, countPromise]);
+    const [rawFeatured, total] = await Promise.all([featuredPromise, countPromise]);
+    const featuredTenants = Array.isArray(rawFeatured) ? rawFeatured : [];
 
     // Non-featured: fill the remaining page size. Exclude featured IDs so
     // we don't duplicate them.
@@ -490,7 +491,7 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
     // which is rare (featured is capped at 8, pageSize defaults to 24).
     const nonFeaturedTake = Math.max(pageSize - featuredTenants.length, 0);
     const nonFeaturedWhere = { ...where, id: { notIn: Array.from(featuredIds) } };
-    const nonFeaturedTenants = nonFeaturedTake > 0
+    const rawNonFeatured = nonFeaturedTake > 0
       ? await db.tenant.findMany({
           where: nonFeaturedWhere,
           select: PROVIDER_SELECT,
@@ -498,6 +499,7 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
           take: nonFeaturedTake + 1, // +1 to detect if there's a next page
         })
       : [];
+    const nonFeaturedTenants = Array.isArray(rawNonFeatured) ? rawNonFeatured : [];
 
     let hasMore = nonFeaturedTenants.length > nonFeaturedTake;
     const pageNonFeatured = hasMore ? nonFeaturedTenants.slice(0, nonFeaturedTake) : nonFeaturedTenants;
@@ -604,8 +606,9 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
     take: pageSize + 1, // +1 to detect if there's a next page
   });
 
-  const hasMore = tenants.length > pageSize;
-  const page = hasMore ? tenants.slice(0, pageSize) : tenants;
+  const tenantList = Array.isArray(tenants) ? tenants : [];
+  const hasMore = tenantList.length > pageSize;
+  const page = hasMore ? tenantList.slice(0, pageSize) : tenantList;
 
   let nextCursor: string | null = null;
   if (page.length > 0 && hasMore) {
