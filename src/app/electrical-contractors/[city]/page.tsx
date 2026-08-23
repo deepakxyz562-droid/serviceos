@@ -25,7 +25,7 @@ const cfg = getIndustryByContractorsPath(CONTRACTORS_PATH)!;
 
 // Force dynamic so newly-onboarded providers appear without a rebuild (matches
 // the existing marketplace browse page policy).
-export const dynamic = "force-dynamic";
+export const revalidate = 300; // CDN cache for 5 minutes (replaces force-dynamic for SEO pages)
 
 // Generate static params for known cities so the pages can be ISR-friendly.
 // Wrapped in try/catch so a DB failure during build doesn't crash the build —

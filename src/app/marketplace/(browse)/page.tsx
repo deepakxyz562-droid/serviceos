@@ -108,8 +108,8 @@ async function fetchProvidersCached(filters: ProviderFilterOptions): Promise<Ssr
 
   const result = await sharedCacheWrap<SsrProviderPage>(
     cacheKey,
-    30_000, // fresh: 30s
-    5 * 60_000, // stale: 5min
+    5 * 60_000, // fresh: 5min (was 30s — reduces Supabase load on 100K+ marketplace)
+    15 * 60_000, // stale: 15min (was 5min — longer grace period for SEO traffic)
     async () => {
       try {
         return await fetchProvidersUncached(filters);

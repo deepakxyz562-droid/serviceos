@@ -164,8 +164,8 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
     try {
       const result = await sharedCacheWrap(
         cacheKey,
-        30_000, // 30s fresh
-        4 * 60_000 + 30_000, // 5min total (stale-while-revalidate)
+        5 * 60_000, // 5min fresh (was 30s — reduces Supabase load on 100K+ marketplace)
+        15 * 60_000, // 15min stale (was 5min — longer grace period for SEO traffic)
         async () => {
           // Fetch the set of featured tenant IDs (needed for featured-first
           // sorting on page 1 + to exclude them from non-featured pagination).
