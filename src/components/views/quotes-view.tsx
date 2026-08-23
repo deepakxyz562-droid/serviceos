@@ -265,35 +265,68 @@ function normalizeQuote(raw: any, customers: Customer[]): Quote {
 }
 
 // ============================================================
-// WhatsApp Preview Component
+// Email Preview Component
 // ============================================================
 
-function WhatsAppPreview({ quote }: { quote: Quote | null }) {
+function EmailPreview({ quote }: { quote: Quote | null }) {
   const { format: fmt } = useCompanyCurrency();
   if (!quote) return null;
   return (
-    <div className="bg-[#e5ddd5] dark:bg-[#1f2c34] rounded-lg p-4 max-w-sm mx-auto">
-      <div className="bg-[#dcf8c6] dark:bg-[#005c4b] rounded-lg p-3 shadow-sm">
-        <p className="font-bold text-sm">*Quote: {quote.title}*</p>
-        <p className="text-sm mt-1">Customer: {quote.customerName}</p>
-        <p className="text-sm mt-2">Services:</p>
-        {quote.services.map((s) => (
-          <p key={s.id} className="text-sm">✓ {s.name} ({fmt(s.price * s.quantity)})</p>
-        ))}
-        {quote.addOns.length > 0 && (
-          <>
-            <p className="text-sm mt-2">Add-ons:</p>
-            {quote.addOns.map((a) => (
-              <p key={a.id} className="text-sm">✓ {a.name} ({fmt(a.price)})</p>
-            ))}
-          </>
-        )}
-        <Separator className="my-2 bg-black/10 dark:bg-white/10" />
-        <p className="text-sm">Subtotal: {fmt(quote.subtotal)}</p>
-        {quote.discount > 0 && <p className="text-sm">Discount: -{fmt(quote.discount)}</p>}
-        <p className="text-sm">Tax ({quote.taxRate}%): {fmt(quote.tax)}</p>
-        <p className="font-bold text-sm">*Total: {fmt(quote.total)}*</p>
-        <p className="text-xs mt-2 opacity-70">Valid until: {formatShortDate(quote.validUntil)}</p>
+    <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 max-w-md mx-auto">
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm text-slate-800 dark:text-slate-200">
+        <div className="bg-teal-700 h-1.5 w-full" />
+        <div className="p-5 space-y-4">
+          <div>
+            <p className="text-[11px] font-bold text-teal-700 dark:text-teal-400 uppercase tracking-wider">Fieseros Quote</p>
+            <h3 className="font-bold text-lg text-slate-900 dark:text-white mt-0.5">Quote: {quote.title}</h3>
+            <p className="text-xs text-slate-500">Prepared for <span className="font-medium text-slate-700 dark:text-slate-300">{quote.customerName}</span></p>
+          </div>
+
+          <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs space-y-1.5">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Subtotal:</span>
+              <span className="font-medium">{fmt(quote.subtotal)}</span>
+            </div>
+            {quote.discount > 0 && (
+              <div className="flex justify-between text-red-600">
+                <span>Discount:</span>
+                <span>-{fmt(quote.discount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-slate-500">Tax ({quote.taxRate}%):</span>
+              <span>{fmt(quote.tax)}</span>
+            </div>
+            <div className="flex justify-between font-bold text-sm text-slate-900 dark:text-white pt-1.5 border-t border-slate-200 dark:border-slate-700">
+              <span>Total Quote Value:</span>
+              <span className="text-teal-700 dark:text-teal-400">{fmt(quote.total)}</span>
+            </div>
+          </div>
+
+          <div className="text-center pt-1">
+            <span className="inline-block bg-teal-700 text-white font-semibold text-xs px-5 py-2.5 rounded-lg shadow-sm">
+              Review & Approve Quote →
+            </span>
+          </div>
+
+          {quote.services.length > 0 && (
+            <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+              <p className="font-semibold text-slate-700 dark:text-slate-300">Line Items:</p>
+              {quote.services.map((s) => (
+                <div key={s.id} className="flex justify-between text-slate-600 dark:text-slate-400">
+                  <span>{s.name} (x{s.quantity})</span>
+                  <span className="font-mono">{fmt(s.price * s.quantity)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {quote.description && (
+            <div className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 p-2.5 rounded-lg border-l-2 border-teal-700">
+              <span className="font-semibold text-slate-700 dark:text-slate-300">Notes:</span> {quote.description}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -893,8 +926,8 @@ export function QuotesView() {
       },
       { label: 'Valid until', value: <span>{formatShortDate(quote.validUntil)}</span> },
       {
-        label: 'WhatsApp sent',
-        value: quote.whatsappSent
+        label: 'Email sent',
+        value: quote.emailSent || quote.whatsappSent
           ? <span className="text-emerald-700 font-medium">Yes</span>
           : <span className="text-muted-foreground">No</span>,
       },
@@ -948,12 +981,12 @@ export function QuotesView() {
               </button>
               <button
                 type="button"
-                onClick={() => handleSendWhatsApp(quote)}
-                title="Send via WhatsApp"
-                className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium text-emerald-700 border border-emerald-600/40 bg-emerald-500/5 hover:bg-emerald-500/15 transition-colors"
+                onClick={() => handleSendEmail(quote)}
+                title="Send via Email"
+                className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm"
               >
-                <MessageCircle className="size-4" />
-                <span className="hidden lg:inline ml-1.5">WhatsApp</span>
+                <Mail className="size-4 mr-1.5" />
+                <span>Send Email</span>
               </button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -963,7 +996,7 @@ export function QuotesView() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => openPreviewDialog(quote)}>
-                    <Eye className="size-3.5 mr-2" /> WhatsApp Preview
+                    <Eye className="size-3.5 mr-2" /> Email Preview
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleDuplicateQuote(quote)}>
                     <Copy className="size-3.5 mr-2" /> Duplicate
@@ -1003,8 +1036,8 @@ export function QuotesView() {
                       <DropdownMenuItem onClick={() => openEditDialog(quote)}>
                         <Edit3 className="size-3.5 mr-2" /> Edit Quote
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleSendWhatsApp(quote)}>
-                        <MessageCircle className="size-3.5 mr-2" /> Send WhatsApp
+                      <DropdownMenuItem onClick={() => handleSendEmail(quote)}>
+                        <Mail className="size-3.5 mr-2" /> Send Email
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -1142,16 +1175,16 @@ export function QuotesView() {
             <FormSectionCard icon={Briefcase} title="Actions">
               <div className="grid grid-cols-1 gap-2">
                 <button
-                  onClick={() => handleSendWhatsApp(quote)}
-                  className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-emerald-700 border border-emerald-600/40 bg-emerald-500/5 hover:bg-emerald-500/15 transition-colors"
+                  onClick={() => handleSendEmail(quote)}
+                  className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm"
                 >
-                  <MessageCircle className="size-4" /> Send WhatsApp
+                  <Mail className="size-4" /> Send Email
                 </button>
                 <button
-                  onClick={() => { setFormMode('list'); openPreviewDialog(quote); }}
+                  onClick={() => { openPreviewDialog(quote); }}
                   className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors"
                 >
-                  <Eye className="size-4" /> WhatsApp Preview
+                  <Eye className="size-4" /> Email Preview
                 </button>
                 <button
                   onClick={() => openEditDialog(quote)}
@@ -1185,7 +1218,7 @@ export function QuotesView() {
               <div className="space-y-2">
                 <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2.5">
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <p className="text-xs font-medium text-foreground">Jobber</p>
+                    <p className="text-xs font-medium text-foreground">Fieseros</p>
                     <p className="text-[11px] text-muted-foreground">{formatShortDate(quote.createdAt)}</p>
                   </div>
                   <p className="text-sm text-foreground whitespace-pre-wrap">
@@ -1197,21 +1230,21 @@ export function QuotesView() {
                     </Badge>
                   </div>
                 </div>
-                {quote.whatsappSent && (
+                {(quote.emailSent || quote.whatsappSent) && (
                   <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5">
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <p className="text-xs font-medium text-emerald-800">System</p>
                       <p className="text-[11px] text-emerald-700">{formatShortDate(quote.createdAt)}</p>
                     </div>
-                    <p className="text-sm text-emerald-900">Quote sent via WhatsApp</p>
+                    <p className="text-sm text-emerald-900">Quote sent via Email</p>
                     <div className="mt-2">
                       <Badge variant="outline" className="text-[10px] h-5 bg-emerald-100 text-emerald-700 border-emerald-200">
-                        <MessageCircle className="size-3 mr-1" /> Sent
+                        <Mail className="size-3 mr-1" /> Sent
                       </Badge>
                     </div>
                   </div>
                 )}
-                {!quote.whatsappSent && !quote.description && (
+                {!quote.emailSent && !quote.whatsappSent && !quote.description && (
                   <p className="text-sm text-muted-foreground italic">No notes yet.</p>
                 )}
               </div>
@@ -1772,7 +1805,7 @@ export function QuotesView() {
                     <TableHead className="cursor-pointer select-none" onClick={() => handleSort('status')}>
                       <span className="flex items-center">Status {renderSortIcon('status')}</span>
                     </TableHead>
-                    <TableHead className="hidden md:table-cell">WhatsApp</TableHead>
+                    <TableHead className="hidden md:table-cell">Email</TableHead>
                     <TableHead className="cursor-pointer select-none hidden sm:table-cell" onClick={() => handleSort('validUntil')}>
                       <span className="flex items-center">Valid Until {renderSortIcon('validUntil')}</span>
                     </TableHead>
@@ -1796,9 +1829,9 @@ export function QuotesView() {
                       <TableCell className="text-right text-sm font-semibold">{format(quote.total)}</TableCell>
                       <TableCell>{renderStatusBadge(quote.status)}</TableCell>
                       <TableCell className="hidden md:table-cell">
-                        {quote.whatsappSent ? (
+                        {quote.emailSent || quote.whatsappSent ? (
                           <Badge variant="outline" className="text-[10px] h-5 bg-green-50 text-green-700 border-green-200">
-                            <MessageCircle className="size-3 mr-1" /> Sent
+                            <Mail className="size-3 mr-1" /> Sent
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="text-[10px] h-5 bg-gray-50 text-gray-500 border-gray-200">
@@ -1823,14 +1856,11 @@ export function QuotesView() {
                             <DropdownMenuItem onClick={() => openEditDialog(quote)}>
                               <Edit3 className="size-3.5 mr-2" /> Edit Quote
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openPreviewDialog(quote)}>
-                              <MessageCircle className="size-3.5 mr-2" /> WhatsApp Preview
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleSendWhatsApp(quote)}>
-                              <Send className="size-3.5 mr-2" /> Send via WhatsApp
-                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleSendEmail(quote)}>
                               <Mail className="size-3.5 mr-2" /> Send via Email
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openPreviewDialog(quote)}>
+                              <Eye className="size-3.5 mr-2" /> Email Preview
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleDuplicateQuote(quote)}>
                               <Copy className="size-3.5 mr-2" /> Duplicate
@@ -1893,10 +1923,10 @@ export function QuotesView() {
                     </div>
                   </div>
 
-                  {selectedQuote.whatsappSent && (
+                  {(selectedQuote.emailSent || selectedQuote.whatsappSent) && (
                     <div className="rounded-lg border bg-green-50 p-3 text-sm flex items-center gap-2">
-                      <MessageCircle className="size-4 text-green-600" />
-                      <span className="text-green-700">Quote sent via WhatsApp</span>
+                      <Mail className="size-4 text-green-600" />
+                      <span className="text-green-700">Quote sent via Email</span>
                     </div>
                   )}
 
@@ -1984,15 +2014,8 @@ export function QuotesView() {
               <DialogFooter className="flex-col sm:flex-row gap-2">
                 <div className="flex gap-2 flex-1">
                   <Button
-                    variant="outline"
-                    className="border-green-600 text-green-600 hover:bg-green-50"
-                    onClick={() => handleSendWhatsApp(selectedQuote)}
-                  >
-                    <MessageCircle className="size-4 mr-1.5" /> Send WhatsApp
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleSendEmail(selectedQuote)}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => { setShowDetailDialog(false); handleSendEmail(selectedQuote); }}
                   >
                     <Mail className="size-4 mr-1.5" /> Send Email
                   </Button>
@@ -2000,11 +2023,11 @@ export function QuotesView() {
                     variant="outline"
                     onClick={() => { setShowDetailDialog(false); openPreviewDialog(selectedQuote); }}
                   >
-                    <Eye className="size-4 mr-1.5" /> WhatsApp Preview
+                    <Eye className="size-4 mr-1.5" /> Email Preview
                   </Button>
                 </div>
                 <Button
-                  className="bg-emerald-600 hover:bg-emerald-700"
+                  variant="outline"
                   onClick={() => { setShowDetailDialog(false); openEditDialog(selectedQuote); }}
                 >
                   <Edit3 className="size-4 mr-1.5" /> Edit
@@ -2015,27 +2038,27 @@ export function QuotesView() {
         </DialogContent>
       </Dialog>
 
-      {/* ── WhatsApp Preview Dialog ──────────────────────────────── */}
+      {/* ── Email Preview Dialog ──────────────────────────────── */}
       <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <MessageCircle className="size-5 text-emerald-600" />
-              WhatsApp Preview
+              <Mail className="size-5 text-emerald-600" />
+              Email Preview
             </DialogTitle>
             <DialogDescription>
-              How this quote will appear when sent via WhatsApp
+              How this quote will appear when sent via Email to the customer
             </DialogDescription>
           </DialogHeader>
-          <WhatsAppPreview quote={selectedQuote} />
+          <EmailPreview quote={selectedQuote} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowPreviewDialog(false)}>Close</Button>
             {selectedQuote && (
               <Button
-                className="bg-green-600 hover:bg-green-700"
-                onClick={() => { handleSendWhatsApp(selectedQuote); setShowPreviewDialog(false); }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={() => { handleSendEmail(selectedQuote); setShowPreviewDialog(false); }}
               >
-                <Send className="size-4 mr-1.5" /> Send via WhatsApp
+                <Send className="size-4 mr-1.5" /> Send via Email
               </Button>
             )}
           </DialogFooter>
