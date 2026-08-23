@@ -32,61 +32,105 @@ export function BrandedLayout({ branding, children, preheader }: BrandedLayoutPr
     email,
     website,
     address,
-    primaryColor,
-    accentColor,
-    fontFamily,
+    primaryColor = '#0f766e',
+    accentColor = '#0d9488',
+    fontFamily = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
     footerHtml,
     hideFieserosBranding,
   } = branding;
 
+  const initials = businessName
+    ? businessName
+        .split(' ')
+        .map((w) => w[0])
+        .filter(Boolean)
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+    : 'SO';
+
   return (
-    <div style={{ fontFamily, backgroundColor: '#f4f5f7', margin: 0, padding: 0 }}>
+    <div style={{ fontFamily, backgroundColor: '#f1f5f9', margin: 0, padding: 0, width: '100%' }}>
       {/* Preheader (hidden preview text) */}
       {preheader && (
-        <div style={{ display: 'none', maxHeight: 0, overflow: 'hidden', opacity: 0 }}>
+        <div style={{ display: 'none', maxHeight: 0, overflow: 'hidden', opacity: 0, msoHide: 'all' }}>
           {preheader}
         </div>
       )}
 
-      <table width="100%" cellPadding="0" cellSpacing="0" style={{ backgroundColor: '#f4f5f7', padding: '24px 0' }}>
+      <table width="100%" cellPadding="0" cellSpacing="0" style={{ backgroundColor: '#f1f5f9', padding: '32px 16px' }}>
         <tbody>
           <tr>
             <td align="center">
-              <table width="600" cellPadding="0" cellSpacing="0" style={{
-                backgroundColor: '#ffffff',
-                borderRadius: '12px',
-                overflow: 'hidden',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-                maxWidth: '600px',
-                width: '100%',
-              }}>
+              <table
+                width="600"
+                cellPadding="0"
+                cellSpacing="0"
+                style={{
+                  backgroundColor: '#ffffff',
+                  borderRadius: '16px',
+                  overflow: 'hidden',
+                  boxShadow: '0 4px 20px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04)',
+                  border: '1px solid #e2e8f0',
+                  maxWidth: '600px',
+                  width: '100%',
+                }}
+              >
                 {/* ── Accent color bar ── */}
                 <tr>
                   <td style={{ backgroundColor: primaryColor, height: '6px', lineHeight: '6px' }}></td>
                 </tr>
 
-                {/* ── Header (logo + business name) ── */}
+                {/* ── Header (logo / business badge) ── */}
                 <tr>
-                  <td style={{ padding: '32px 40px 24px' }}>
+                  <td style={{ padding: '32px 40px 20px' }}>
                     <table width="100%" cellPadding="0" cellSpacing="0">
                       <tbody>
                         <tr>
-                          <td>
+                          <td align="left" style={{ verticalAlign: 'middle' }}>
                             {logoUrl ? (
                               <img
                                 src={logoUrl}
                                 alt={businessName}
-                                style={{ maxHeight: '48px', maxWidth: '200px', height: 'auto', display: 'inline-block' }}
+                                style={{ maxHeight: '52px', maxWidth: '220px', height: 'auto', display: 'block', border: 0 }}
                               />
                             ) : (
-                              <span style={{
-                                fontSize: '22px',
-                                fontWeight: 700,
-                                color: primaryColor,
-                                fontFamily,
-                              }}>
-                                {businessName}
-                              </span>
+                              <table cellPadding="0" cellSpacing="0">
+                                <tbody>
+                                  <tr>
+                                    <td
+                                      style={{
+                                        backgroundColor: primaryColor,
+                                        borderRadius: '12px',
+                                        width: '44px',
+                                        height: '44px',
+                                        textAlign: 'center',
+                                        verticalAlign: 'middle',
+                                        color: '#ffffff',
+                                        fontWeight: 700,
+                                        fontSize: '18px',
+                                        fontFamily,
+                                      }}
+                                    >
+                                      {initials}
+                                    </td>
+                                    <td style={{ paddingLeft: '14px', verticalAlign: 'middle' }}>
+                                      <span
+                                        style={{
+                                          fontSize: '20px',
+                                          fontWeight: 700,
+                                          color: '#0f172a',
+                                          letterSpacing: '-0.02em',
+                                          fontFamily,
+                                          display: 'block',
+                                        }}
+                                      >
+                                        {businessName}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
                             )}
                           </td>
                         </tr>
@@ -97,31 +141,67 @@ export function BrandedLayout({ branding, children, preheader }: BrandedLayoutPr
 
                 {/* ── Body content ── */}
                 <tr>
-                  <td style={{ padding: '0 40px 32px', fontFamily, color: '#1f2937', fontSize: '15px', lineHeight: '1.6' }}>
+                  <td
+                    style={{
+                      padding: '8px 40px 36px',
+                      fontFamily,
+                      color: '#334155',
+                      fontSize: '15px',
+                      lineHeight: '1.65',
+                    }}
+                  >
                     {children}
                   </td>
                 </tr>
 
                 {/* ── Footer ── */}
                 <tr>
-                  <td style={{ padding: '24px 40px 32px', backgroundColor: '#f9fafb', borderTop: '1px solid #e5e7eb' }}>
+                  <td
+                    style={{
+                      padding: '28px 40px 32px',
+                      backgroundColor: '#f8fafc',
+                      borderTop: '1px solid #f1f5f9',
+                    }}
+                  >
                     {/* Contact details */}
-                    <table width="100%" cellPadding="0" cellSpacing="0" style={{ fontSize: '13px', color: '#6b7280' }}>
+                    <table width="100%" cellPadding="0" cellSpacing="0" style={{ fontSize: '13px', color: '#64748b', fontFamily }}>
                       <tbody>
                         <tr>
-                          <td style={{ paddingBottom: '12px' }}>
-                            <strong style={{ color: '#374151' }}>{businessName}</strong>
-                            {address && <><br />{address}</>}
+                          <td style={{ paddingBottom: '10px' }}>
+                            <strong style={{ color: '#0f172a', fontSize: '14px', fontWeight: 600 }}>{businessName}</strong>
+                            {address && (
+                              <div style={{ color: '#64748b', marginTop: '4px', lineHeight: '1.4' }}>
+                                {address}
+                              </div>
+                            )}
                           </td>
                         </tr>
                         <tr>
-                          <td>
+                          <td style={{ paddingTop: '4px' }}>
                             {(phone || email || website) && (
-                              <span>
-                                {phone && <>📞 {phone} &nbsp;&nbsp;</>}
-                                {email && <>✉️ {email} &nbsp;&nbsp;</>}
-                                {website && <>🌐 {website}</>}
-                              </span>
+                              <div style={{ color: '#64748b', fontSize: '13px', lineHeight: '1.6' }}>
+                                {phone && (
+                                  <span style={{ marginRight: '16px', display: 'inline-block' }}>
+                                    <strong style={{ color: '#475569' }}>Phone:</strong> {phone}
+                                  </span>
+                                )}
+                                {email && (
+                                  <span style={{ marginRight: '16px', display: 'inline-block' }}>
+                                    <strong style={{ color: '#475569' }}>Email:</strong> {email}
+                                  </span>
+                                )}
+                                {website && (
+                                  <span style={{ display: 'inline-block' }}>
+                                    <strong style={{ color: '#475569' }}>Web:</strong>{' '}
+                                    <a
+                                      href={website.startsWith('http') ? website : `https://${website}`}
+                                      style={{ color: primaryColor, textDecoration: 'none', fontWeight: 500 }}
+                                    >
+                                      {website.replace(/^https?:\/\//, '')}
+                                    </a>
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </td>
                         </tr>
@@ -131,25 +211,28 @@ export function BrandedLayout({ branding, children, preheader }: BrandedLayoutPr
                     {/* Custom footer HTML (from BrandKit) */}
                     {footerHtml && (
                       <div
-                        style={{ marginTop: '16px', fontSize: '13px', color: '#6b7280' }}
+                        style={{ marginTop: '16px', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}
                         dangerouslySetInnerHTML={{ __html: footerHtml }}
                       />
                     )}
 
                     {/* "Powered by Fieseros" (hidden for white-label tenants) */}
                     {!hideFieserosBranding && (
-                      <div style={{
-                        marginTop: '20px',
-                        paddingTop: '16px',
-                        borderTop: '1px solid #e5e7eb',
-                        fontSize: '12px',
-                        color: '#9ca3af',
-                        textAlign: 'center',
-                      }}>
+                      <div
+                        style={{
+                          marginTop: '24px',
+                          paddingTop: '16px',
+                          borderTop: '1px solid #e2e8f0',
+                          fontSize: '12px',
+                          color: '#94a3b8',
+                          textAlign: 'center',
+                          fontFamily,
+                        }}
+                      >
                         Powered by{' '}
                         <a
                           href="https://fieseros.com"
-                          style={{ color: accentColor, textDecoration: 'none', fontWeight: 600 }}
+                          style={{ color: primaryColor, textDecoration: 'none', fontWeight: 600 }}
                         >
                           Fieseros
                         </a>
@@ -178,14 +261,17 @@ interface BrandedButtonProps {
 
 export function BrandedButton({ href, children, color = '#0f766e' }: BrandedButtonProps) {
   return (
-    <table cellPadding="0" cellSpacing="0" style={{ margin: '16px 0' }}>
+    <table cellPadding="0" cellSpacing="0" style={{ margin: '24px 0 16px' }}>
       <tbody>
         <tr>
-          <td style={{
-            backgroundColor: color,
-            borderRadius: '8px',
-            padding: '12px 24px',
-          }}>
+          <td
+            style={{
+              backgroundColor: color,
+              borderRadius: '10px',
+              padding: '13px 28px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            }}
+          >
             <a
               href={href}
               style={{
@@ -193,8 +279,9 @@ export function BrandedButton({ href, children, color = '#0f766e' }: BrandedButt
                 textDecoration: 'none',
                 fontSize: '15px',
                 fontWeight: 600,
-                fontFamily: 'Inter, sans-serif',
+                fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
                 display: 'inline-block',
+                letterSpacing: '-0.01em',
               }}
             >
               {children}

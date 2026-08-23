@@ -113,34 +113,73 @@ export async function POST(
     }
 
     const viewQuoteButton = magicUrl
-      ? `<div style="margin: 24px 0;"><a href="${magicUrl}" style="display:inline-block;padding:12px 28px;background:#059669;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">View Quote</a></div>`
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+          <tr>
+            <td style="background:#0f766e;border-radius:10px;padding:13px 28px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+              <a href="${magicUrl}" style="color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;display:inline-block;letter-spacing:-0.01em;">
+                Review & Approve Quote →
+              </a>
+            </td>
+          </tr>
+        </table>`
       : '';
 
     const summaryRows = [
-      quote.subtotal ? `<tr><td style="padding:8px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb;">Subtotal</td><td style="padding:8px;border:1px solid #e5e7eb;text-align:right;">$${Number(quote.subtotal).toFixed(2)}</td></tr>` : '',
-      quote.discount ? `<tr><td style="padding:8px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb;">Discount</td><td style="padding:8px;border:1px solid #e5e7eb;text-align:right;">-$${Number(quote.discount).toFixed(2)}</td></tr>` : '',
-      quote.tax ? `<tr><td style="padding:8px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb;">Tax</td><td style="padding:8px;border:1px solid #e5e7eb;text-align:right;">$${Number(quote.tax).toFixed(2)}</td></tr>` : '',
-      `<tr><td style="padding:8px;background:#f9fafb;font-weight:700;border:1px solid #e5e7eb;">Total</td><td style="padding:8px;border:1px solid #e5e7eb;text-align:right;font-weight:700;color:#059669;">$${Number(quote.total).toFixed(2)}</td></tr>`,
-      quote.validUntil ? `<tr><td style="padding:8px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb;">Valid Until</td><td style="padding:8px;border:1px solid #e5e7eb;">${new Date(quote.validUntil).toLocaleDateString()}</td></tr>` : '',
+      quote.subtotal ? `<tr><td style="padding:10px 14px;color:#64748b;font-weight:500;">Subtotal</td><td style="padding:10px 14px;text-align:right;font-weight:600;color:#0f172a;">$${Number(quote.subtotal).toFixed(2)}</td></tr>` : '',
+      quote.discount ? `<tr><td style="padding:10px 14px;color:#64748b;font-weight:500;">Discount</td><td style="padding:10px 14px;text-align:right;font-weight:600;color:#dc2626;">-$${Number(quote.discount).toFixed(2)}</td></tr>` : '',
+      quote.tax ? `<tr><td style="padding:10px 14px;color:#64748b;font-weight:500;">Tax</td><td style="padding:10px 14px;text-align:right;font-weight:600;color:#0f172a;">$${Number(quote.tax).toFixed(2)}</td></tr>` : '',
+      `<tr><td style="padding:12px 14px;font-weight:700;color:#0f172a;border-top:1px solid #e2e8f0;font-size:15px;">Total Quote Value</td><td style="padding:12px 14px;text-align:right;font-weight:700;color:#0f766e;border-top:1px solid #e2e8f0;font-size:18px;">$${Number(quote.total).toFixed(2)}</td></tr>`,
+      quote.validUntil ? `<tr><td style="padding:8px 14px;color:#64748b;font-size:13px;">Valid Until</td><td style="padding:8px 14px;text-align:right;color:#64748b;font-size:13px;">${new Date(quote.validUntil).toLocaleDateString()}</td></tr>` : '',
     ].filter(Boolean).join('');
 
     const summaryTable = summaryRows
-      ? `<table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;">${summaryRows}</table>`
+      ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;font-size:14px;">${summaryRows}</table>`
       : '';
 
-    const emailHtml = [
-      `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:24px">`,
-      `<h2 style="color:#0f172a;">Your Quote: ${quote.title}</h2>`,
-      `<p>Hi ${customerName},</p>`,
-      `<p>Please review your quote from <strong>${quote.tenant?.name || 'Fieseros'}</strong>.</p>`,
-      viewQuoteButton,
-      lineItemsHtml,
-      summaryTable,
-      quote.description ? `<p style="margin-top:16px;"><strong>Notes:</strong> ${quote.description}</p>` : '',
-      `<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />`,
-      `<p style="font-size:12px;color:#9ca3af;">- Sent from ${quote.tenant?.name || 'Fieseros'}</p>`,
-      `</div>`,
-    ].filter(Boolean).join('\n');
+    const businessNameStr = quote.tenant?.name || 'Fieseros';
+
+    const emailHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quote from ${businessNameStr}</title>
+</head>
+<body style="font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f1f5f9;margin:0;padding:0;width:100%">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(15,23,42,0.06),0 1px 3px rgba(15,23,42,0.04);border:1px solid #e2e8f0;max-width:600px;width:100%">
+          <tr><td style="background-color:#0f766e;height:6px;line-height:6px"></td></tr>
+          <tr>
+            <td style="padding:32px 40px 20px;">
+              <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:0.08em;">${businessNameStr}</p>
+              <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#0f172a;letter-spacing:-0.02em;">Quote: ${quote.title}</h1>
+              <p style="margin:0;font-size:14px;color:#64748b;">Prepared for <strong>${customerName}</strong></p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 40px 36px;color:#334155;font-size:15px;line-height:1.65;">
+              <p style="margin:0 0 16px;">Hi ${customerName},</p>
+              <p style="margin:0 0 20px;">Your quote from <strong>${businessNameStr}</strong> is ready for your review.</p>
+              
+              ${summaryTable}
+              ${viewQuoteButton}
+              ${lineItemsHtml}
+              ${quote.description ? `<div style="background:#f8fafc;border-left:4px solid #0f766e;padding:14px 18px;margin-top:20px;border-radius:4px;font-size:14px;color:#475569;"><strong>Notes / Scope:</strong><br />${quote.description}</div>` : ''}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 40px;background-color:#f8fafc;border-top:1px solid #f1f5f9;font-size:12px;color:#94a3b8;text-align:center;">
+              Sent by <strong style="color:#64748b;">${businessNameStr}</strong> • Powered by <a href="https://fieseros.com" style="color:#0f766e;text-decoration:none;font-weight:600">Fieseros</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 
     const textBody = [
       `Your quote "${quote.title}" from ${quote.tenant?.name || 'Fieseros'} is ready.`,

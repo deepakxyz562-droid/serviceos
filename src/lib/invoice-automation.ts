@@ -812,28 +812,78 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
     }
 
     const viewInvoiceButton = magicUrl
-      ? `<div style="margin: 24px 0;"><a href="${magicUrl}" style="display:inline-block;padding:12px 28px;background:#059669;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">View Invoice</a></div>`
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+          <tr>
+            <td style="background:#0f766e;border-radius:10px;padding:13px 28px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+              <a href="${magicUrl}" style="color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;display:inline-block;letter-spacing:-0.01em;">
+                View Invoice Details →
+              </a>
+            </td>
+          </tr>
+        </table>`
       : ''
 
     const subject = `Invoice ${invoice.number} from ${invoice.tenant?.name || 'Fieseros'}`
-    const html = [
-      `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">`,
-      `<h2 style="color: #0f172a;">Invoice ${invoice.number}</h2>`,
-      `<p>Hi ${customerName},</p>`,
-      `<p>Please find your invoice below. Thank you for your business!</p>`,
-      viewInvoiceButton,
-      `<table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">`,
-      `<tr><td style="padding: 8px; background: #f9fafb; font-weight: 600; border: 1px solid #e5e7eb;">Invoice #</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${invoice.number}</td></tr>`,
-      `<tr><td style="padding: 8px; background: #f9fafb; font-weight: 600; border: 1px solid #e5e7eb;">Total Due</td><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: 700; color: #059669;">${invoiceTotal}</td></tr>`,
-      invoice.dueDate ? `<tr><td style="padding: 8px; background: #f9fafb; font-weight: 600; border: 1px solid #e5e7eb;">Due Date</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${new Date(invoice.dueDate).toLocaleDateString()}</td></tr>` : '',
-      `</table>`,
-      `<h3 style="margin-top: 24px;">Line Items</h3>`,
-      `<pre style="background: #f9fafb; padding: 12px; border-radius: 8px; white-space: pre-wrap;">${itemsText || 'No items'}</pre>`,
-      invoice.notes ? `<p style="margin-top: 16px;"><strong>Notes:</strong> ${invoice.notes}</p>` : '',
-      `<hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />`,
-      `<p style="font-size: 12px; color: #9ca3af;">— Sent from ${invoice.tenant?.name || 'Fieseros'}</p>`,
-      `</div>`,
-    ].filter(Boolean).join('\n')
+    const businessNameStr = invoice.tenant?.name || 'Fieseros'
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice ${invoice.number}</title>
+</head>
+<body style="font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f1f5f9;margin:0;padding:0;width:100%">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(15,23,42,0.06),0 1px 3px rgba(15,23,42,0.04);border:1px solid #e2e8f0;max-width:600px;width:100%">
+          <tr><td style="background-color:#0f766e;height:6px;line-height:6px"></td></tr>
+          <tr>
+            <td style="padding:32px 40px 20px;">
+              <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:0.08em;">${businessNameStr}</p>
+              <h1 style="margin:0 0 6px;font-size:24px;font-weight:700;color:#0f172a;letter-spacing:-0.02em;">Invoice #${invoice.number}</h1>
+              <p style="margin:0;font-size:14px;color:#64748b;">Issued to <strong>${customerName}</strong></p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 40px 36px;color:#334155;font-size:15px;line-height:1.65;">
+              <p style="margin:0 0 16px;">Hi ${customerName},</p>
+              <p style="margin:0 0 20px;">Please find your invoice details from <strong>${businessNameStr}</strong> below. Thank you for your business!</p>
+
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;margin-bottom:20px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
+                  <tr>
+                    <td style="padding:4px 0;color:#64748b;font-weight:500;">Invoice Number:</td>
+                    <td style="padding:4px 0;text-align:right;font-weight:700;color:#0f172a;">#${invoice.number}</td>
+                  </tr>
+                  ${invoice.dueDate ? `<tr><td style="padding:4px 0;color:#64748b;font-weight:500;">Due Date:</td><td style="padding:4px 0;text-align:right;font-weight:600;color:#0f172a;">${new Date(invoice.dueDate).toLocaleDateString()}</td></tr>` : ''}
+                  <tr>
+                    <td style="padding:8px 0 0;font-weight:700;color:#0f172a;border-top:1px solid #e2e8f0;font-size:15px;">Balance Due</td>
+                    <td style="padding:8px 0 0;text-align:right;font-weight:700;color:#0f766e;border-top:1px solid #e2e8f0;font-size:18px;">${invoiceTotal}</td>
+                  </tr>
+                </table>
+              </div>
+
+              ${viewInvoiceButton}
+
+              <h3 style="margin:24px 0 10px;font-size:15px;font-weight:700;color:#0f172a;">Line Items / Summary</h3>
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;font-size:13px;color:#475569;font-family:Monaco,Consolas,monospace;white-space:pre-wrap;">${itemsText || 'No items listed'}</div>
+
+              ${invoice.notes ? `<div style="background:#f8fafc;border-left:4px solid #0f766e;padding:14px 18px;margin-top:20px;border-radius:4px;font-size:14px;color:#475569;"><strong>Invoice Notes:</strong><br />${invoice.notes}</div>` : ''}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 40px;background-color:#f8fafc;border-top:1px solid #f1f5f9;font-size:12px;color:#94a3b8;text-align:center;">
+              Sent by <strong style="color:#64748b;">${businessNameStr}</strong> • Powered by <a href="https://fieseros.com" style="color:#0f766e;text-decoration:none;font-weight:600">Fieseros</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
     const text = `Invoice ${invoice.number}\nTotal: ${invoiceTotal}\nDue: ${invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A'}\n${magicUrl ? `\nView your invoice: ${magicUrl}\n` : ''}\nItems:\n${itemsText}\n\n— ${invoice.tenant?.name || 'Fieseros'}`
     try {
       const r = await sendEmail({ to: recipientEmail, subject, html, text, usageType: 'transactional', tenantId: invoice.tenantId || undefined })

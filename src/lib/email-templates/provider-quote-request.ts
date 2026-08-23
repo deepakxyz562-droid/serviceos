@@ -89,28 +89,31 @@ export function renderProviderQuoteEmail(d: ProviderQuoteEmailData): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>New Quote Request from ${esc(d.customerName)}</title>
 </head>
-<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937;">
-  <!-- Outer wrapper: centers the email on desktop -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px;">
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#334155;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
     <tr>
       <td align="center">
-        <!-- Email container: max 560px -->
-        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(15,23,42,0.06),0 1px 3px rgba(15,23,42,0.04);border:1px solid #e2e8f0;">
 
-          <!-- ── Header (emerald gradient) ── -->
+          <!-- Accent Bar -->
           <tr>
-            <td style="background:linear-gradient(135deg,#ecfdf5 0%,#d1fae5 100%);background-color:#ecfdf5;padding:28px 28px 24px 28px;border-bottom:1px solid #bbf7d0;">
+            <td style="background:#0f766e;height:6px;line-height:6px;"></td>
+          </tr>
+
+          <!-- Header -->
+          <tr>
+            <td style="background:#f0fdf4;padding:28px 36px 24px;border-bottom:1px solid #dcfce7;">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td>
-                    <p style="margin:0 0 4px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#059669;">
+                    <p style="margin:0 0 4px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#0f766e;">
                       ${esc(BRAND.name)} Marketplace
                     </p>
-                    <h1 style="margin:0 0 6px 0;font-size:24px;font-weight:700;color:#065f46;line-height:1.3;">
-                      New Quote Request
+                    <h1 style="margin:0 0 6px 0;font-size:24px;font-weight:700;color:#0f172a;line-height:1.3;letter-spacing:-0.02em;">
+                      ⚡ New Customer Quote Request
                     </h1>
                     <p style="margin:0;font-size:14px;color:#047857;line-height:1.5;">
-                      A customer found you on ${esc(BRAND.name)} and wants a quote.
+                      A customer requested a quote directly for <strong>${esc(d.providerName)}</strong>.
                     </p>
                   </td>
                 </tr>
@@ -118,54 +121,57 @@ export function renderProviderQuoteEmail(d: ProviderQuoteEmailData): string {
             </td>
           </tr>
 
-          <!-- ── Project details ── -->
+          <!-- Project details -->
           <tr>
-            <td style="padding:24px 28px 8px 28px;">
-              <h2 style="margin:0 0 12px 0;font-size:18px;font-weight:600;color:#111827;line-height:1.4;">
+            <td style="padding:28px 36px 12px 36px;">
+              <h2 style="margin:0 0 12px 0;font-size:18px;font-weight:700;color:#0f172a;line-height:1.4;">
                 ${esc(d.title)}
               </h2>
-              ${d.description ? `<p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#4b5563;white-space:pre-wrap;">${esc(d.description)}</p>` : ''}
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
-                <tr>
-                  <td style="padding:5px 0;color:#6b7280;width:110px;vertical-align:top;">Urgency:</td>
-                  <td style="padding:5px 0;font-weight:600;color:#111827;">${esc(urgencyLabel)}</td>
-                </tr>
-                <tr>
-                  <td style="padding:5px 0;color:#6b7280;vertical-align:top;">Location:</td>
-                  <td style="padding:5px 0;font-weight:600;color:#111827;">${esc(d.city || 'Not specified')}</td>
-                </tr>
-                <tr>
-                  <td style="padding:5px 0;color:#6b7280;vertical-align:top;">Budget:</td>
-                  <td style="padding:5px 0;font-weight:600;color:#111827;">${esc(budgetStr)}</td>
-                </tr>
-              </table>
+              ${d.description ? `<p style="margin:0 0 20px 0;font-size:14px;line-height:1.6;color:#475569;white-space:pre-wrap;">${esc(d.description)}</p>` : ''}
+              
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;margin-bottom:20px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
+                  <tr>
+                    <td style="padding:4px 0;color:#64748b;width:110px;vertical-align:top;font-weight:500;">Urgency:</td>
+                    <td style="padding:4px 0;font-weight:700;color:#0f172a;">${esc(urgencyLabel)}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:4px 0;color:#64748b;vertical-align:top;font-weight:500;">Location:</td>
+                    <td style="padding:4px 0;font-weight:600;color:#0f172a;">${esc(d.city || 'Not specified')}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:4px 0;color:#64748b;vertical-align:top;font-weight:500;">Budget:</td>
+                    <td style="padding:4px 0;font-weight:600;color:#0f172a;">${esc(budgetStr)}</td>
+                  </tr>
+                </table>
+              </div>
             </td>
           </tr>
 
-          <!-- ── Customer contact card ── -->
+          <!-- Customer contact card -->
           <tr>
-            <td style="padding:8px 28px 0 28px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ecfdf5;border-radius:8px;border-left:4px solid #10b981;">
+            <td style="padding:0 36px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdfa;border-radius:12px;border:1px solid #99f6e4;">
                 <tr>
-                  <td style="padding:18px 20px;">
-                    <h3 style="margin:0 0 10px 0;font-size:15px;font-weight:600;color:#065f46;">
-                      Customer Contact Details
+                  <td style="padding:20px;">
+                    <h3 style="margin:0 0 12px 0;font-size:15px;font-weight:700;color:#0f766e;">
+                      👤 Customer Contact Details
                     </h3>
                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
                       <tr>
-                        <td style="padding:3px 0;color:#6b7280;width:90px;vertical-align:top;">Name:</td>
-                        <td style="padding:3px 0;font-weight:600;color:#111827;">${esc(d.customerName)}</td>
+                        <td style="padding:4px 0;color:#64748b;width:90px;vertical-align:top;font-weight:500;">Name:</td>
+                        <td style="padding:4px 0;font-weight:700;color:#0f172a;">${esc(d.customerName)}</td>
                       </tr>
                       <tr>
-                        <td style="padding:3px 0;color:#6b7280;vertical-align:top;">Phone:</td>
-                        <td style="padding:3px 0;">
-                          <a href="tel:${esc(d.customerPhone.replace(/[^+\\d]/g, ''))}" style="color:#059669;font-weight:600;text-decoration:none;">${esc(d.customerPhone)}</a>
+                        <td style="padding:4px 0;color:#64748b;vertical-align:top;font-weight:500;">Phone:</td>
+                        <td style="padding:4px 0;">
+                          <a href="tel:${esc(d.customerPhone.replace(/[^+\\d]/g, ''))}" style="color:#0f766e;font-weight:700;text-decoration:none;">${esc(d.customerPhone)}</a>
                         </td>
                       </tr>
                       ${d.customerEmail ? `<tr>
-                        <td style="padding:3px 0;color:#6b7280;vertical-align:top;">Email:</td>
-                        <td style="padding:3px 0;">
-                          <a href="mailto:${esc(d.customerEmail)}" style="color:#059669;font-weight:600;text-decoration:none;">${esc(d.customerEmail)}</a>
+                        <td style="padding:4px 0;color:#64748b;vertical-align:top;font-weight:500;">Email:</td>
+                        <td style="padding:4px 0;">
+                          <a href="mailto:${esc(d.customerEmail)}" style="color:#0f766e;font-weight:600;text-decoration:none;">${esc(d.customerEmail)}</a>
                         </td>
                       </tr>` : ''}
                     </table>
@@ -175,15 +181,14 @@ export function renderProviderQuoteEmail(d: ProviderQuoteEmailData): string {
             </td>
           </tr>
 
-          <!-- ── Next step callout (amber) ── -->
+          <!-- Next step callout (amber) -->
           <tr>
-            <td style="padding:16px 28px 0 28px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fef3c7;border-radius:8px;border-left:4px solid #f59e0b;">
+            <td style="padding:16px 36px 0 36px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fffbeb;border-radius:10px;border:1px solid #fde68a;">
                 <tr>
                   <td style="padding:14px 18px;">
                     <p style="margin:0;font-size:13px;color:#92400e;line-height:1.5;">
-                      <strong>Next step:</strong> Contact the customer directly using the details above.
-                      Responding quickly increases your chances of winning the job.
+                      <strong>Pro tip:</strong> Responding within 15 minutes increases your booking rate by 300%. Contact the customer directly using the phone or email above.
                     </p>
                   </td>
                 </tr>
@@ -191,13 +196,54 @@ export function renderProviderQuoteEmail(d: ProviderQuoteEmailData): string {
             </td>
           </tr>
 
-          <!-- ── Fieseros CRM promotional CTA card ── -->
+          <!-- Fieseros CRM promotional CTA card -->
           <tr>
-            <td style="padding:24px 28px 0 28px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#065f46 0%,#047857 100%);background-color:#065f46;border-radius:10px;">
+            <td style="padding:28px 36px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0f766e;border-radius:14px;box-shadow:0 4px 12px rgba(15,118,110,0.2);">
                 <tr>
-                  <td style="padding:24px 22px;">
-                    <p style="margin:0 0 6px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#a7f3d0;">
+                  <td style="padding:28px 24px;">
+                    <p style="margin:0 0 6px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#99f6e4;">
+                      Grow Your Business
+                    </p>
+                    <h3 style="margin:0 0 8px 0;font-size:18px;font-weight:700;color:#ffffff;line-height:1.3;">
+                      Manage leads, quotes & jobs in one place
+                    </h3>
+                    <p style="margin:0 0 20px 0;font-size:14px;color:#ccfbf1;line-height:1.5;">
+                      Claim your free ${esc(BRAND.name)} business profile to update your services, get direct customer requests, and unlock our full service management suite.
+                    </p>
+                    <table role="presentation" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td>
+                          <a href="${esc(claimUrl)}" style="display:inline-block;padding:12px 24px;background:#ffffff;color:#0f766e;text-decoration:none;font-size:14px;font-weight:700;border-radius:8px;line-height:1.2;">
+                            Claim Free Business Profile →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:24px 36px;border-top:1px solid #f1f5f9;background:#f8fafc;font-size:12px;color:#94a3b8;line-height:1.5;">
+              <p style="margin:0 0 4px 0;">
+                Sent by <strong style="color:#64748b;">${esc(BRAND.name)} Marketplace</strong> to ${esc(d.providerName)}.
+              </p>
+              <p style="margin:0;">
+                Need help? <a href="mailto:${esc(supportEmail)}" style="color:#0f766e;text-decoration:none;font-weight:500;">Contact Support</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
                       Grow Your Business
                     </p>
                     <h3 style="margin:0 0 10px 0;font-size:18px;font-weight:700;color:#ffffff;line-height:1.4;">

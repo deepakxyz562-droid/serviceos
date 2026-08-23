@@ -289,93 +289,90 @@ export function renderJobAssignmentEmail(data: JobAssignmentEmailData): string {
   <meta name="x-apple-disable-message-reformatting">
   <title>${esc(JOB_ASSIGNMENT_EMAIL_SUBJECT)}</title>
 </head>
-<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-  <!-- Outer wrapper: centers the email client viewport -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;min-height:100%;">
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;min-height:100%;padding:32px 16px;">
     <tr>
-      <td align="center" style="padding:24px 12px;">
-        <!-- Email container -->
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(15,23,42,0.06),0 1px 3px rgba(15,23,42,0.04);border:1px solid #e2e8f0;">
+
+          <!-- Top Accent Bar -->
+          <tr>
+            <td style="background:#0f766e;height:6px;line-height:6px;"></td>
+          </tr>
 
           <!-- Header bar -->
           <tr>
-            <td style="background:#059669;padding:18px 28px;">
-              <div style="font-size:18px;font-weight:700;color:#ffffff;letter-spacing:0.3px;">${esc(BRAND.name)}</div>
-              <div style="font-size:12px;color:#d1fae5;margin-top:2px;">${esc(tenantLabel)}</div>
+            <td style="padding:28px 36px 20px;border-bottom:1px solid #f1f5f9;">
+              <div style="font-size:20px;font-weight:700;color:#0f172a;letter-spacing:-0.02em;">${esc(BRAND.name)}</div>
+              <div style="font-size:12px;color:#64748b;margin-top:2px;font-weight:500;">${esc(tenantLabel)}</div>
             </td>
           </tr>
 
           <!-- Body -->
           <tr>
-            <td style="padding:32px 28px 8px 28px;">
-              <!-- Subject heading -->
-              <h1 style="margin:0 0 12px 0;font-size:22px;font-weight:700;color:#111827;line-height:1.3;">
-                New task assignment
+            <td style="padding:32px 36px 12px 36px;">
+              <h1 style="margin:0 0 12px 0;font-size:22px;font-weight:700;color:#0f172a;line-height:1.3;letter-spacing:-0.02em;">
+                New Task Assignment
               </h1>
-              <!-- Greeting -->
-              <p style="margin:0 0 24px 0;font-size:15px;color:#374151;line-height:1.6;">
+              <p style="margin:0 0 20px 0;font-size:15px;color:#334155;line-height:1.6;">
                 Hi ${esc(greetingName)},
               </p>
-              <p style="margin:0 0 24px 0;font-size:15px;color:#374151;line-height:1.6;">
-                You've been assigned a new task.${jobTitle ? ` <strong style="color:#111827;">${esc(jobTitle)}</strong>` : ''}
+              <p style="margin:0 0 24px 0;font-size:15px;color:#334155;line-height:1.6;">
+                You have been assigned a new task.${jobTitle ? ` <strong style="color:#0f172a;">${esc(jobTitle)}</strong>` : ''}
               </p>
 
-              <!-- Schedule block (highlighted) -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;">
+              <!-- Schedule block (highlighted card) -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;">
                 <tr>
-                  <td style="padding:14px 16px;">
-                    <div style="font-size:11px;font-weight:600;color:#047857;letter-spacing:0.6px;text-transform:uppercase;margin-bottom:4px;">Schedule</div>
-                    <div style="font-size:16px;font-weight:600;color:#064e3b;line-height:1.4;">${esc(scheduleBlock)}</div>
+                  <td style="padding:18px 20px;">
+                    <div style="font-size:11px;font-weight:700;color:#166534;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px;">Scheduled Window</div>
+                    <div style="font-size:16px;font-weight:700;color:#14532d;line-height:1.4;">${esc(scheduleBlock)}</div>
                   </td>
                 </tr>
               </table>
 
-              <!-- Details table: Assigned to / Job # / Address / Contact -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-                <!-- Assigned to -->
+              <!-- Details Table -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;border-collapse:collapse;">
                 <tr>
-                  <td width="120" valign="top" style="padding:10px 0;border-bottom:1px solid #f3f4f6;">
-                    <div style="font-size:11px;font-weight:600;color:#6b7280;letter-spacing:0.6px;text-transform:uppercase;">Assigned to</div>
+                  <td width="130" valign="top" style="padding:12px 0;border-bottom:1px solid #f1f5f9;">
+                    <div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:0.05em;text-transform:uppercase;">Assigned To</div>
                   </td>
-                  <td valign="top" style="padding:10px 0 10px 12px;border-bottom:1px solid #f3f4f6;">
-                    <div style="font-size:14px;color:#111827;line-height:1.5;font-weight:600;">${esc(assigneeName || '—')}</div>
+                  <td valign="top" style="padding:12px 0 12px 12px;border-bottom:1px solid #f1f5f9;">
+                    <div style="font-size:14px;color:#0f172a;line-height:1.5;font-weight:600;">${esc(assigneeName || '—')}</div>
                   </td>
                 </tr>
-                <!-- Job # -->
                 <tr>
-                  <td width="120" valign="top" style="padding:10px 0;border-bottom:1px solid #f3f4f6;">
-                    <div style="font-size:11px;font-weight:600;color:#6b7280;letter-spacing:0.6px;text-transform:uppercase;">Job #</div>
+                  <td width="130" valign="top" style="padding:12px 0;border-bottom:1px solid #f1f5f9;">
+                    <div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:0.05em;text-transform:uppercase;">Job #</div>
                   </td>
-                  <td valign="top" style="padding:10px 0 10px 12px;border-bottom:1px solid #f3f4f6;">
-                    <div style="font-size:14px;color:#111827;line-height:1.5;font-weight:600;">${esc(jobNumber || '—')}</div>
+                  <td valign="top" style="padding:12px 0 12px 12px;border-bottom:1px solid #f1f5f9;">
+                    <div style="font-size:14px;color:#0f172a;line-height:1.5;font-weight:600;">#${esc(jobNumber || '—')}</div>
                   </td>
                 </tr>
-                <!-- Address -->
                 <tr>
-                  <td width="120" valign="top" style="padding:10px 0;border-bottom:1px solid #f3f4f6;">
-                    <div style="font-size:11px;font-weight:600;color:#6b7280;letter-spacing:0.6px;text-transform:uppercase;">Address</div>
+                  <td width="130" valign="top" style="padding:12px 0;border-bottom:1px solid #f1f5f9;">
+                    <div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:0.05em;text-transform:uppercase;">Location</div>
                   </td>
-                  <td valign="top" style="padding:10px 0 10px 12px;border-bottom:1px solid #f3f4f6;">
-                    ${addressHtml || '<div style="font-size:14px;color:#6b7280;">—</div>'}
+                  <td valign="top" style="padding:12px 0 12px 12px;border-bottom:1px solid #f1f5f9;">
+                    ${addressHtml || '<div style="font-size:14px;color:#64748b;">—</div>'}
                   </td>
                 </tr>
-                <!-- Contact details -->
                 <tr>
-                  <td width="120" valign="top" style="padding:10px 0;">
-                    <div style="font-size:11px;font-weight:600;color:#6b7280;letter-spacing:0.6px;text-transform:uppercase;">Contact details</div>
+                  <td width="130" valign="top" style="padding:12px 0;">
+                    <div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:0.05em;text-transform:uppercase;">Customer Info</div>
                   </td>
-                  <td valign="top" style="padding:10px 0 10px 12px;">
+                  <td valign="top" style="padding:12px 0 12px 12px;">
                     ${contactHtml}
                   </td>
                 </tr>
               </table>
 
               <!-- CTA button -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 24px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 16px 0;">
                 <tr>
                   <td align="left">
-                    <a href="${esc(viewJobUrl)}" style="display:inline-block;padding:12px 24px;background:#059669;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;border-radius:6px;line-height:1.2;">
-                      View Job
+                    <a href="${esc(viewJobUrl)}" style="display:inline-block;padding:14px 28px;background:#0f766e;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;border-radius:10px;line-height:1.2;box-shadow:0 2px 4px rgba(0,0,0,0.08);">
+                      View Job Details →
                     </a>
                   </td>
                 </tr>
@@ -385,21 +382,17 @@ export function renderJobAssignmentEmail(data: JobAssignmentEmailData): string {
 
           <!-- Footer -->
           <tr>
-            <td style="padding:20px 28px 28px 28px;border-top:1px solid #f3f4f6;background:#fafafa;">
-              <p style="margin:0 0 6px 0;font-size:13px;color:#6b7280;line-height:1.5;">
-                Questions? Visit our <a href="mailto:${esc(supportEmail)}" style="color:#059669;text-decoration:none;font-weight:500;">Help Center</a>
+            <td style="padding:24px 36px;border-top:1px solid #f1f5f9;background:#f8fafc;">
+              <p style="margin:0 0 6px 0;font-size:13px;color:#64748b;line-height:1.5;">
+                Questions or issues? Contact support at <a href="mailto:${esc(supportEmail)}" style="color:#0f766e;text-decoration:none;font-weight:600;">${esc(supportEmail)}</a>
               </p>
-              <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.5;">
+              <p style="margin:8px 0 0 0;font-size:12px;color:#94a3b8;line-height:1.5;">
                 © ${year} ${esc(BRAND.legalEntity)}. All rights reserved.
-              </p>
-              <p style="margin:4px 0 0 0;font-size:11px;color:#9ca3af;line-height:1.4;">
-                <a href="${esc(appUrl)}" style="color:#9ca3af;text-decoration:none;">${esc(BRAND.url)}</a>
               </p>
             </td>
           </tr>
 
         </table>
-        <!-- /Email container -->
       </td>
     </tr>
   </table>

@@ -15,8 +15,6 @@
  */
 import { db } from '@/lib/db';
 
-// ─── Email templates ────────────────────────────────────────────────────────
-
 interface TrialTemplateDef {
   slug: string;
   name: string;
@@ -34,17 +32,55 @@ const TRIAL_TEMPLATES: TrialTemplateDef[] = [
     variablesJson:
       '[{"key":"tenantName","label":"Tenant Name","required":true,"example":"AquaFlow"},{"key":"trialEndsAt","label":"Trial End Date","required":true,"example":"July 4, 2026"},{"key":"appName","label":"App Name","required":true,"example":"Fieseros"},{"key":"loginUrl","label":"Login URL","required":true,"example":"https://fieseros.com"}]',
     htmlBody: `<!DOCTYPE html>
-<html>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937;">
-    <h1 style="color: #059669;">Welcome to {{appName}}, {{tenantName}}! 🎉</h1>
-    <p>Your 14-day free trial is now active. You have full access to every feature — leads, jobs, invoices, WhatsApp, automation, and more.</p>
-    <div style="background: #ecfdf5; border-left: 4px solid #059669; padding: 16px; margin: 24px 0; border-radius: 4px;">
-      <p style="margin: 0;"><strong>Trial ends:</strong> {{trialEndsAt}}</p>
-      <p style="margin: 8px 0 0;"><strong>What happens then:</strong> Add a payment method before {{trialEndsAt}} to keep your account active. No card needed during the trial.</p>
-    </div>
-    <a href="{{loginUrl}}" style="display: inline-block; background: #059669; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Open {{appName}}</a>
-    <p style="margin-top: 32px; font-size: 13px; color: #6b7280;">Questions? Just reply to this email.</p>
-  </body>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to {{appName}}</title>
+</head>
+<body style="font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f1f5f9;margin:0;padding:0;width:100%">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(15,23,42,0.06),0 1px 3px rgba(15,23,42,0.04);border:1px solid #e2e8f0;max-width:600px;width:100%">
+          <tr><td style="background-color:#0f766e;height:6px;line-height:6px"></td></tr>
+          <tr>
+            <td style="padding:32px 40px 20px;">
+              <h1 style="color:#0f172a;font-size:24px;font-weight:700;margin:0 0 6px;letter-spacing:-0.02em;">Welcome to {{appName}}, {{tenantName}}! 🎉</h1>
+              <p style="color:#64748b;font-size:14px;margin:0;">Your 14-day free trial is now active.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 40px 36px;color:#334155;font-size:15px;line-height:1.65;">
+              <p style="margin:0 0 16px;">You have full access to every feature — AI receptionist, leads, job scheduling, invoices, WhatsApp messaging, and workflows.</p>
+
+              <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:18px 20px;margin-bottom:24px;">
+                <p style="margin:0 0 6px;color:#0f766e;font-weight:700;font-size:14px;">📅 Trial Expiration: {{trialEndsAt}}</p>
+                <p style="margin:0;color:#115e59;font-size:13px;line-height:1.5;">Add a payment method before {{trialEndsAt}} to keep your account active. No card required during trial.</p>
+              </div>
+
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 16px;">
+                <tr>
+                  <td style="background-color:#0f766e;border-radius:10px;padding:13px 28px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                    <a href="{{loginUrl}}" style="color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;display:inline-block;letter-spacing:-0.01em;">
+                      Launch Dashboard →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:20px 0 0;font-size:13px;color:#94a3b8;">Questions? Simply reply to this email to reach support.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 40px;background-color:#f8fafc;border-top:1px solid #f1f5f9;font-size:12px;color:#94a3b8;text-align:center;">
+              Powered by <a href="https://fieseros.com" style="color:#0f766e;text-decoration:none;font-weight:600">Fieseros</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
 </html>`,
     textBody: `Welcome to {{appName}}, {{tenantName}}!
 
@@ -64,17 +100,53 @@ Questions? Just reply to this email.`,
     variablesJson:
       '[{"key":"tenantName","label":"Tenant Name","required":true,"example":"AquaFlow"},{"key":"trialEndsAt","label":"Trial End Date","required":true,"example":"July 4, 2026"},{"key":"appName","label":"App Name","required":true,"example":"Fieseros"},{"key":"billingUrl","label":"Billing URL","required":true,"example":"https://fieseros.com/billing"}]',
     htmlBody: `<!DOCTYPE html>
-<html>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937;">
-    <h1 style="color: #d97706;">Your trial ends in 3 days, {{tenantName}}</h1>
-    <p>You're almost at the end of your 14-day {{appName}} trial. We hope you've been enjoying it!</p>
-    <div style="background: #fffbeb; border-left: 4px solid #d97706; padding: 16px; margin: 24px 0; border-radius: 4px;">
-      <p style="margin: 0;"><strong>Trial ends:</strong> {{trialEndsAt}}</p>
-      <p style="margin: 8px 0 0;">To keep your account active and retain all your data, leads, and workflows, add a payment method before then.</p>
-    </div>
-    <a href="{{billingUrl}}" style="display: inline-block; background: #d97706; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Choose a plan</a>
-    <p style="margin-top: 24px; font-size: 14px;">No card needed during the trial — only if you decide to continue.</p>
-  </body>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trial Ending Soon</title>
+</head>
+<body style="font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f1f5f9;margin:0;padding:0;width:100%">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(15,23,42,0.06),0 1px 3px rgba(15,23,42,0.04);border:1px solid #e2e8f0;max-width:600px;width:100%">
+          <tr><td style="background-color:#d97706;height:6px;line-height:6px"></td></tr>
+          <tr>
+            <td style="padding:32px 40px 20px;">
+              <h1 style="color:#0f172a;font-size:24px;font-weight:700;margin:0 0 6px;letter-spacing:-0.02em;">Trial Ends in 3 Days</h1>
+              <p style="color:#64748b;font-size:14px;margin:0;">Hi {{tenantName}}, your 14-day trial is almost complete.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 40px 36px;color:#334155;font-size:15px;line-height:1.65;">
+              <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:18px 20px;margin-bottom:24px;">
+                <p style="margin:0 0 6px;color:#b45309;font-weight:700;font-size:14px;">⏳ Trial End Date: {{trialEndsAt}}</p>
+                <p style="margin:0;color:#92400e;font-size:13px;line-height:1.5;">To keep your account active and retain your leads, jobs, and automation settings, add a payment method before then.</p>
+              </div>
+
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 16px;">
+                <tr>
+                  <td style="background-color:#d97706;border-radius:10px;padding:13px 28px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                    <a href="{{billingUrl}}" style="color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;display:inline-block;letter-spacing:-0.01em;">
+                      Select a Plan →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:16px 0 0;font-size:13px;color:#64748b;">No charge will occur until your trial officially ends.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 40px;background-color:#f8fafc;border-top:1px solid #f1f5f9;font-size:12px;color:#94a3b8;text-align:center;">
+              Powered by <a href="https://fieseros.com" style="color:#0f766e;text-decoration:none;font-weight:600">Fieseros</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
 </html>`,
     textBody: `Your trial ends in 3 days, {{tenantName}}
 
@@ -94,19 +166,53 @@ No card needed during the trial — only if you decide to continue.`,
     variablesJson:
       '[{"key":"tenantName","label":"Tenant Name","required":true,"example":"AquaFlow"},{"key":"trialEndsAt","label":"Trial End Date","required":true,"example":"July 4, 2026"},{"key":"appName","label":"App Name","required":true,"example":"Fieseros"},{"key":"billingUrl","label":"Billing URL","required":true,"example":"https://fieseros.com/billing"},{"key":"planName","label":"Plan Name","required":true,"example":"Growth"},{"key":"planPrice","label":"Plan Price","required":true,"example":"$25/month"}]',
     htmlBody: `<!DOCTYPE html>
-<html>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937;">
-    <h1 style="color: #dc2626;">Final reminder: your trial ends tomorrow</h1>
-    <p>Hi {{tenantName}},</p>
-    <p>This is your last reminder before your {{appName}} trial expires <strong>tomorrow ({{trialEndsAt}})</strong>.</p>
-    <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; margin: 24px 0; border-radius: 4px;">
-      <p style="margin: 0;"><strong>Tomorrow:</strong> Your trial will expire.</p>
-      <p style="margin: 8px 0 0;"><strong>To continue:</strong> Add a payment method and choose a plan before {{trialEndsAt}}.</p>
-      <p style="margin: 8px 0 0;"><strong>Recommended plan:</strong> {{planName}} — {{planPrice}}</p>
-    </div>
-    <a href="{{billingUrl}}" style="display: inline-block; background: #dc2626; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Add payment method now</a>
-    <p style="margin-top: 24px; font-size: 13px; color: #6b7280;">If you don't add a payment method, your account will be paused but your data will be preserved for 30 days.</p>
-  </body>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trial Ends Tomorrow</title>
+</head>
+<body style="font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f1f5f9;margin:0;padding:0;width:100%">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(15,23,42,0.06),0 1px 3px rgba(15,23,42,0.04);border:1px solid #e2e8f0;max-width:600px;width:100%">
+          <tr><td style="background-color:#dc2626;height:6px;line-height:6px"></td></tr>
+          <tr>
+            <td style="padding:32px 40px 20px;">
+              <h1 style="color:#dc2626;font-size:24px;font-weight:700;margin:0 0 6px;letter-spacing:-0.02em;">Trial Ends Tomorrow</h1>
+              <p style="color:#64748b;font-size:14px;margin:0;">Hi {{tenantName}}, final reminder before trial expiry.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 40px 36px;color:#334155;font-size:15px;line-height:1.65;">
+              <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:18px 20px;margin-bottom:24px;">
+                <p style="margin:0 0 6px;color:#991b1b;font-weight:700;font-size:14px;">⚠️ Expiration Date: {{trialEndsAt}}</p>
+                <p style="margin:0;color:#991b1b;font-size:13px;line-height:1.5;">Recommended Plan: <strong>{{planName}}</strong> ({{planPrice}})</p>
+              </div>
+
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 16px;">
+                <tr>
+                  <td style="background-color:#dc2626;border-radius:10px;padding:13px 28px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                    <a href="{{billingUrl}}" style="color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;display:inline-block;letter-spacing:-0.01em;">
+                      Add Payment Method Now →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:16px 0 0;font-size:13px;color:#64748b;">If no payment method is added, your account will be paused but your data remains preserved for 30 days.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 40px;background-color:#f8fafc;border-top:1px solid #f1f5f9;font-size:12px;color:#94a3b8;text-align:center;">
+              Powered by <a href="https://fieseros.com" style="color:#0f766e;text-decoration:none;font-weight:600">Fieseros</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
 </html>`,
     textBody: `Final reminder: your trial ends tomorrow
 
@@ -129,16 +235,54 @@ If you don't add a payment method, your account will be paused but your data wil
     variablesJson:
       '[{"key":"tenantName","label":"Tenant Name","required":true,"example":"AquaFlow"},{"key":"appName","label":"App Name","required":true,"example":"Fieseros"},{"key":"billingUrl","label":"Billing URL","required":true,"example":"https://fieseros.com/billing"},{"key":"dataPreservedUntil","label":"Data Preserved Until","required":true,"example":"August 4, 2026"}]',
     htmlBody: `<!DOCTYPE html>
-<html>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937;">
-    <h1 style="color: #6b7280;">Your trial has expired, {{tenantName}}</h1>
-    <p>Your 14-day {{appName}} trial ended. Access to your dashboard, leads, jobs, and workflows is now paused.</p>
-    <div style="background: #f3f4f6; border-left: 4px solid #6b7280; padding: 16px; margin: 24px 0; border-radius: 4px;">
-      <p style="margin: 0;"><strong>Good news:</strong> Your data is preserved until <strong>{{dataPreservedUntil}}</strong>.</p>
-      <p style="margin: 8px 0 0;">Add a payment method and choose a plan to instantly restore full access.</p>
-    </div>
-    <a href="{{billingUrl}}" style="display: inline-block; background: #059669; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Restore access now</a>
-    <p style="margin-top: 32px; font-size: 13px; color: #6b7280;">After {{dataPreservedUntil}}, your data will be permanently deleted unless you upgrade.</p>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trial Expired</title>
+</head>
+<body style="font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f1f5f9;margin:0;padding:0;width:100%">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(15,23,42,0.06),0 1px 3px rgba(15,23,42,0.04);border:1px solid #e2e8f0;max-width:600px;width:100%">
+          <tr><td style="background-color:#64748b;height:6px;line-height:6px"></td></tr>
+          <tr>
+            <td style="padding:32px 40px 20px;">
+              <h1 style="color:#0f172a;font-size:24px;font-weight:700;margin:0 0 6px;letter-spacing:-0.02em;">Trial Expired</h1>
+              <p style="color:#64748b;font-size:14px;margin:0;">Hi {{tenantName}}, your 14-day trial has ended.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 40px 36px;color:#334155;font-size:15px;line-height:1.65;">
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:18px 20px;margin-bottom:24px;">
+                <p style="margin:0 0 6px;color:#334155;font-weight:700;font-size:14px;">🔒 Data Preserved Until: {{dataPreservedUntil}}</p>
+                <p style="margin:0;color:#64748b;font-size:13px;line-height:1.5;">Choose a plan to instantly restore full access to your leads, jobs, and receptionist.</p>
+              </div>
+
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 16px;">
+                <tr>
+                  <td style="background-color:#0f766e;border-radius:10px;padding:13px 28px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                    <a href="{{billingUrl}}" style="color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;display:inline-block;letter-spacing:-0.01em;">
+                      Reactivate Account →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 40px;background-color:#f8fafc;border-top:1px solid #f1f5f9;font-size:12px;color:#94a3b8;text-align:center;">
+              Powered by <a href="https://fieseros.com" style="color:#0f766e;text-decoration:none;font-weight:600">Fieseros</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+    textBody: `Your trial has expired, {{tenantName}}`,servedUntil}}, your data will be permanently deleted unless you upgrade.</p>
   </body>
 </html>`,
     textBody: `Your trial has expired, {{tenantName}}
