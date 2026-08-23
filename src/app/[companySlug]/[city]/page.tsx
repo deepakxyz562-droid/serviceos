@@ -64,7 +64,7 @@ import type { ProviderListItem } from '@/components/marketplace/types';
 // overhead without meaningful hit-rate on a low-traffic route. We rely on
 // Prisma's connection pool + the existing @@index([city]) +
 // @@index([latitude, longitude]) on Tenant for query speed.
-export const revalidate = 300; // CDN cache for 5 minutes (replaces force-dynamic for SEO pages)
+export const dynamic = 'force-dynamic';
 
 // ── Plural display-name map ─────────────────────────────────────────────────
 // The Industry catalog stores the SINGULAR display name (e.g. 'Plumbing',
