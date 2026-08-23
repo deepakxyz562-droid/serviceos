@@ -250,12 +250,16 @@ export function MarketplaceBrowser({
   // The SSR page fetches WITHOUT minRating / claimedFilter / radius filters, so if any of
   // those are active we must NOT use the SSR seed (it would be stale).
   const matchesInitial = React.useMemo(() => {
+    const countryMatches =
+      !initialFilters.country ||
+      !countryFilter ||
+      (countryFilter ?? detectedCountry ?? null) === initialFilters.country;
     return (
       searchQuery === (initialFilters.search ?? '') &&
       cityFilter === (initialFilters.city ?? '') &&
       verticalFilter === initialFilters.vertical &&
       industryFilter === initialFilters.industry &&
-      (countryFilter ?? detectedCountry ?? null) === initialFilters.country &&
+      countryMatches &&
       !trustFullyVerified &&
       !trustRatingHigh &&
       !trustEmergency &&
