@@ -282,9 +282,6 @@ If you don't add a payment method, your account will be paused but your data wil
   </table>
 </body>
 </html>`,
-    textBody: `Your trial has expired, {{tenantName}}`,servedUntil}}, your data will be permanently deleted unless you upgrade.</p>
-  </body>
-</html>`,
     textBody: `Your trial has expired, {{tenantName}}
 
 Your 14-day {{appName}} trial ended. Access to your dashboard, leads, jobs, and workflows is now paused.
