@@ -50,12 +50,14 @@ import {
   Plug,
   Key,
   PawPrint,
+  Loader2,
   type LucideIcon,
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -75,7 +77,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { CompanyFinder } from '@/components/auth/company-finder';
 import {
   mpUrl,
   type ProviderListItem,
@@ -399,11 +400,13 @@ const faqs = [
 
 function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: () => void; onSignIn?: () => void; audience: Audience; onPick: (a: Audience) => void }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
-  // Issue 1: PWA-accessible employee login. The dialog lets an employee
-  // find their company by name/slug and routes to /{slug}/employee. Triggered
-  // by the navbar "Employee Login" link OR by the ?login=employee URL param
-  // (which is what the PWA manifest shortcut uses).
+  // Employee login — direct email + password (no company selection required).
+  // The backend resolves the tenant from User.tenantId automatically.
   const [empLoginOpen, setEmpLoginOpen] = React.useState(false);
+  const [empEmail, setEmpEmail] = React.useState('');
+  const [empPassword, setEmpPassword] = React.useState('');
+  const [empLoading, setEmpLoading] = React.useState(false);
+  const [empError, setEmpError] = React.useState<string | null>(null);
 
   // Auto-open the employee login dialog when ?login=employee is in the URL
   // (PWA manifest shortcut / shared link).
@@ -413,7 +416,6 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
       const params = new URLSearchParams(window.location.search);
       if (params.get('login') === 'employee') {
         setEmpLoginOpen(true);
-        // Strip the param so a refresh doesn't re-open it.
         params.delete('login');
         const remaining = params.toString();
         const newUrl = remaining
@@ -426,9 +428,32 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
     }
   }, []);
 
-  const handleEmployeeSelect = (slug: string) => {
-    if (typeof window !== 'undefined') {
-      window.location.href = `/${slug}/employee`;
+  // Direct employee login — POST /api/auth/login { email, password }
+  // No company/slug required. The backend resolves the tenant automatically.
+  const handleEmployeeLogin = async () => {
+    if (!empEmail.trim() || !empPassword) return;
+    setEmpLoading(true);
+    setEmpError(null);
+    try {
+      const res = await fetch('/api/auth/login?XTransformPort=3000', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: empEmail.trim(), password: empPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Invalid email or password');
+      }
+      // Success — redirect to the app (the cookie is set by the server).
+      // The home-page-client will detect the auth state and route to the
+      // employee portal automatically based on the user's role.
+      if (typeof window !== 'undefined') {
+        window.location.href = '/';
+      }
+    } catch (err) {
+      setEmpError(err instanceof Error ? err.message : 'Login failed');
+    } finally {
+      setEmpLoading(false);
     }
   };
 
@@ -559,7 +584,7 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
         </div>
       ) : null}
 
-      {/* Issue 1: Employee login dialog — company finder → /{slug}/employee */}
+      {/* Employee login dialog — direct email + password (no company selection) */}
       <Dialog open={empLoginOpen} onOpenChange={setEmpLoginOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -570,17 +595,40 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
               <div className="min-w-0">
                 <DialogTitle>Employee Login</DialogTitle>
                 <DialogDescription className="mt-1">
-                  Find your company to sign in to the employee portal.
+                  Enter your work email and password to sign in.
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <CompanyFinder onSelect={handleEmployeeSelect} autoFocus />
-            <p className="text-xs text-muted-foreground text-center pt-2">
-              Don&apos;t know your company link? Search by business name above,
-              or ask your employer for the link.
-            </p>
+            <Input
+              type="email"
+              placeholder="you@business.com"
+              value={empEmail}
+              onChange={(e) => setEmpEmail(e.target.value)}
+              className="min-h-12"
+              autoCapitalize="none"
+              autoComplete="email"
+            />
+            <Input
+              type="password"
+              placeholder="Password"
+              value={empPassword}
+              onChange={(e) => setEmpPassword(e.target.value)}
+              className="min-h-12"
+              autoComplete="current-password"
+              onKeyDown={(e) => { if (e.key === 'Enter') handleEmployeeLogin(); }}
+            />
+            {empError && (
+              <p className="text-sm text-red-600">{empError}</p>
+            )}
+            <Button
+              onClick={handleEmployeeLogin}
+              disabled={empLoading || !empEmail.trim() || !empPassword}
+              className="w-full min-h-12 bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {empLoading ? <Loader2 className="size-4 animate-spin" /> : 'Sign In'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
