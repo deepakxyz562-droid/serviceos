@@ -177,25 +177,8 @@ export async function getAuthUser(): Promise<AuthUser | null> {
       // skip the PATCH if we wrote within the last 60 seconds. This is
       // safe because the dedicated /api/employees/heartbeat endpoint
       // (called every 60s by the PWA + every 60s by the mobile app) is
-      // the source of truth for presence — this auth.ts write is only a
-      // safety net for employees who never trigger start_travel.
-      if (normalized.role === 'employee' || normalized.employeeId) {
-        const empId = normalized.employeeId || normalized.id;
-        const now = Date.now();
-        const lastWrite = LAST_SEEN_WRITE_TS.get(empId) ?? 0;
-        if (now - lastWrite >= 60_000) {
-          LAST_SEEN_WRITE_TS.set(empId, now);
-          try {
-            void db.employee.updateMany({
-              where: { id: empId },
-              data: { lastSeenAt: new Date() },
-            });
-          } catch {
-            // Swallow — never let presence break auth.
-          }
-        }
-      }
-    }
+      // Employee presence update is handled by the dedicated /api/employees/heartbeat endpoint
+      // and GPS tracking to prevent DB write lock contention on regular API requests.
 
     return normalized;
   } catch {

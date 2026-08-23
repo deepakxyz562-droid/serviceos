@@ -53,10 +53,6 @@ export async function GET(request: NextRequest) {
     }
 
     const tenantId = auth.tenantId;
-    if (!tenantId) {
-      // Superadmin or user without tenant — return all enabled
-      return NextResponse.json({ disabledMenus: [] });
-    }
 
     // Cache lookup — keyed by tenantId only (same for all users in a tenant).
     // Uses the SHARED Redis cache so invalidation affects all instances.
@@ -100,19 +96,18 @@ export async function GET(request: NextRequest) {
     //    contain enabled=true for globally-hidden items) from silently
     //    re-enabling those items on tenant refresh.
     try {
-      const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
-      if (tenant) {
-        const settings = parseSettings(tenant.settingsJson);
-        const tenantMenuConfig = settings.menuConfig as Array<{ key: string; enabled: boolean }> | undefined;
-        if (tenantMenuConfig) {
-          for (const item of tenantMenuConfig) {
-            if (!item.enabled) {
-              // Tenant hides this item further (restricts beyond global).
-              disabledKeys.add(item.key);
+      if (tenantId) {
+        const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
+        if (tenant) {
+          const settings = parseSettings(tenant.settingsJson);
+          const tenantMenuConfig = settings.menuConfig as Array<{ key: string; enabled: boolean }> | undefined;
+          if (tenantMenuConfig) {
+            for (const item of tenantMenuConfig) {
+              if (!item.enabled) {
+                // Tenant hides this item further (restricts beyond global).
+                disabledKeys.add(item.key);
+              }
             }
-            // else: tenant says enabled=true. Under Option A this is a
-            // NO-OP — we deliberately do NOT call disabledKeys.delete().
-            // A tenant cannot un-hide a globally-hidden item.
           }
         }
       }

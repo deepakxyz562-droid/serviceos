@@ -801,6 +801,9 @@ model Lead {
   @@index([status])
   @@index([source])
   @@index([createdAt])
+  @@index([customerId])
+  @@index([assignedToId])
+  @@index([serviceId])
 }
 
 // ==========================================
@@ -1826,6 +1829,9 @@ model Job {
   // The partial index is preferred because it's smaller and the predicate is
   // baked in (the planner uses it directly for deletedAt IS NULL queries).
   @@index([workspaceId, createdAt(sort: Desc)], map: "idx_job_workspace_createdat_active")
+  @@index([resourceId])
+  @@index([serviceId])
+  @@index([collectedById])
 }
 
 model ContactList {
@@ -5662,6 +5668,7 @@ model InventoryItem {
   @@index([branchId])
   @@index([category])
   @@index([isActive])
+  @@index([supplierId])
 }
 
 // ==========================================

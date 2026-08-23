@@ -483,9 +483,6 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
   // PERFORMANCE: ?XTransformPort=3000 is required so Caddy routes this to the
   // Next.js dev server (otherwise it 401s and pollutes the dev log).
   useEffect(() => {
-    if (isSuperAdmin) return;
-    // Listing-only users have a fixed minimal nav — no need to fetch
-    // menu-visibility (they don't have CRM menus to toggle).
     if (isListingOnly) return;
     async function fetchMenuVisibility() {
       try {
@@ -554,8 +551,8 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       sections = ownerNavSections;
     }
 
-    // Filter out disabled menus for non-superadmin users
-    if (!isSuperAdmin && disabledMenus.length > 0) {
+    // Filter out disabled menus
+    if (disabledMenus.length > 0) {
       const disabledSet = new Set(disabledMenus);
       sections = sections
         .map((section) => ({
