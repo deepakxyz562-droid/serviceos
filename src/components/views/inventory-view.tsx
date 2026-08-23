@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Package,
+  PackagePlus,
   Plus,
   Search,
   MoreHorizontal,
