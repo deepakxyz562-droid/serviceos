@@ -113,6 +113,7 @@ export async function proxy(request: NextRequest) {
   const isPreviewDomain =
     host.endsWith('.vercel.app') ||
     host.endsWith('.netlify.app') ||
+    host.endsWith('.sslip.io') ||
     host.endsWith('.preview.fieseros.com');
 
   const isLocal =
