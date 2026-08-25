@@ -388,12 +388,19 @@ async function buildPublicBusinessData(
   publicServiceCount: number,
 ): Promise<PublicBusinessData> {
   // Parse gallery to check for ≥1 image.
-  let gallery: Array<{ url?: string }> = []
-  try {
-    gallery = JSON.parse(tenant.galleryJson || '[]')
-  } catch {
-    gallery = []
-  }
+  const parseJsonArray = (val: string | null | undefined): any[] => {
+    if (!val) return [];
+    try {
+      let parsed = typeof val === 'string' ? JSON.parse(val) : val;
+      if (typeof parsed === 'string') {
+        try { parsed = JSON.parse(parsed); } catch {}
+      }
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+  const gallery = parseJsonArray(tenant.galleryJson)
   // ── Cover-image fallback (SEO fix for production tenants) ─────────────
   // Many production tenants onboarded before the auto-populate Hub defaults
   // existed, so their `coverImage` is NULL. Without a fallback, these tenants
@@ -584,19 +591,21 @@ async function _getMarketplaceCertifications(
   }
 }
 
-export const getMarketplaceCertifications = unstable_cache(
-  _getMarketplaceCertifications,
-  ['public-certs'],
-  { revalidate: 120, tags: ['public-business'] },
-)
+export async function getMarketplaceCertifications(tenantId: string) {
+  const res = await sharedCacheWrap(
+    `fieseros:public-certs:${tenantId}`,
+    2 * 60 * 1000,
+    60 * 60 * 1000,
+    () => _getMarketplaceCertifications(tenantId)
+  );
+  return res.value ?? [];
+}
 
 /**
  * Fetch the public services for a tenant (active + public only).
  *
- * Wrapped in `unstable_cache` (120s TTL, tagged 'public-business') so the
- * services list is shared across requests. Also called internally by
- * `_getPublicBusinessByUrl` to derive the `isIndexable` count — sharing
- * the same cache entry means a single DB fetch serves both calls.
+ * Wrapped in `sharedCacheWrap` (120s TTL) so the services list is shared
+ * across requests without depending on Vercel's proprietary unstable_cache.
  */
 async function _getPublicServices(tenantId: string): Promise<PublicServiceData[]> {
   try {
@@ -628,19 +637,19 @@ async function _getPublicServices(tenantId: string): Promise<PublicServiceData[]
   }
 }
 
-export const getPublicServices = unstable_cache(
-  _getPublicServices,
-  ['public-services'],
-  { revalidate: 120, tags: ['public-business'] },
-)
+export async function getPublicServices(tenantId: string) {
+  const res = await sharedCacheWrap(
+    `fieseros:public-services:${tenantId}`,
+    2 * 60 * 1000,
+    60 * 60 * 1000,
+    () => _getPublicServices(tenantId)
+  );
+  return res.value ?? [];
+}
 
 /**
  * Fetch the most recent published reviews for a tenant.
  * Limits to 10 most recent with rating ≥ 1.
- *
- * Wrapped in `unstable_cache` (120s TTL, tagged 'public-business') so the
- * reviews section is shared across requests. NOTE: the cache key includes
- * `limit` via the function args — different limits cache separately.
  */
 async function _getPublicReviews(tenantId: string, limit = 10): Promise<PublicReviewData[]> {
   try {
@@ -670,39 +679,32 @@ async function _getPublicReviews(tenantId: string, limit = 10): Promise<PublicRe
   }
 }
 
-export const getPublicReviews = unstable_cache(
-  _getPublicReviews,
-  ['public-reviews'],
-  { revalidate: 120, tags: ['public-business'] },
-)
+export async function getPublicReviews(tenantId: string, limit = 10) {
+  const res = await sharedCacheWrap(
+    `fieseros:public-reviews:${tenantId}:${limit}`,
+    2 * 60 * 1000,
+    60 * 60 * 1000,
+    () => _getPublicReviews(tenantId, limit)
+  );
+  return res.value ?? [];
+}
 
 /**
  * Bust the public-business cache. Call this after a tenant profile save
- * (Public Hub tab, Settings, etc.) so the next visitor sees fresh data
- * instead of waiting up to 120s for the unstable_cache TTL to expire.
- *
- * Implemented via `revalidateTag('public-business', { expire: 0 })` —
- * purges ALL cached entries tagged 'public-business' (the per-provider
- * business row, services, reviews, and certifications). The blast radius
- * is acceptable because tenant profile saves are infrequent (per-tenant,
- * manual admin action).
- *
- * Safe to call from a Server Action or Route Handler. Importable from
- * client components (it's just a re-export of `revalidateTag`); calling
- * it from the client has no effect (revalidateTag is server-only), so
- * callers MUST invoke it inside a 'use server' action or Route Handler.
- *
- * NOTE: Next.js 16 changed `revalidateTag` to require a second `profile`
- * argument (a named CacheLife profile string OR a `{ expire?: number }`
- * config). We pass `{ expire: 0 }` for immediate invalidation.
+ * (Public Hub tab, Settings, etc.) so the next visitor sees fresh data.
  */
-export function revalidatePublicBusiness(_slugOrTenantId?: string): void {
-  // _slugOrTenantId is accepted for API symmetry with future per-entry
-  // cache busting. Currently we revalidate the whole 'public-business'
-  // tag (all providers) — granular per-tenant busting would require a
-  // unique tag per tenant (e.g. `public-business:${tenantId}`) which we
-  // can add later if the global bust becomes too coarse.
-  revalidateTag('public-business', { expire: 0 })
+export function revalidatePublicBusiness(slugOrTenantId?: string): void {
+  if (slugOrTenantId) {
+    sharedCacheDeleteByPrefix(`fieseros:public-business:${slugOrTenantId}`);
+    sharedCacheDeleteByPrefix(`fieseros:public-services:${slugOrTenantId}`);
+    sharedCacheDeleteByPrefix(`fieseros:public-reviews:${slugOrTenantId}`);
+    sharedCacheDeleteByPrefix(`fieseros:public-certs:${slugOrTenantId}`);
+  } else {
+    sharedCacheDeleteByPrefix('fieseros:public-business:');
+  }
+  try {
+    revalidateTag('public-business', { expire: 0 })
+  } catch {}
 }
 
 // ─── Similar Businesses ─────────────────────────────────────────────────────
@@ -740,7 +742,6 @@ export interface SimilarBusiness {
  * Sort: rating DESC, then reviewCount DESC (most reputable first).
  *
  * Returns at most `limit` (default 6) similar businesses.
- * Cached for 5 minutes via unstable_cache.
  */
 async function _getSimilarProviders(
   tenantId: string,
@@ -808,11 +809,21 @@ async function _getSimilarProviders(
   })
 }
 
-export const getSimilarProviders = unstable_cache(
-  _getSimilarProviders,
-  ['public-business-similar'],
-  { revalidate: 300 }, // 5 minutes
-)
+export async function getSimilarProviders(
+  tenantId: string,
+  industry: string | null,
+  city: string | null,
+  country: string,
+  limit: number = 6,
+) {
+  const res = await sharedCacheWrap(
+    `fieseros:similar-providers:${tenantId}:${industry}:${city}:${limit}`,
+    5 * 60 * 1000,
+    60 * 60 * 1000,
+    () => _getSimilarProviders(tenantId, industry, city, country, limit)
+  );
+  return res.value ?? [];
+}
 
 /**
  * A sitemap entry for an indexable business — the canonical URL plus the

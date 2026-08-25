@@ -252,13 +252,17 @@ export default async function PublicBusinessHubPage({
     business.country,
     6,
   ).catch(() => [])
-  const [services, reviews, certifications, featuredMap, similarProviders] = await Promise.all([
+  const [servicesRaw, reviewsRaw, certificationsRaw, featuredMap, similarProvidersRaw] = await Promise.all([
     getPublicServices(business.id),
     getPublicReviews(business.id, 10),
     certificationsPromise,
     featuredPromise,
     similarPromise,
   ])
+  const services = Array.isArray(servicesRaw) ? servicesRaw : []
+  const reviews = Array.isArray(reviewsRaw) ? reviewsRaw : []
+  const certifications = Array.isArray(certificationsRaw) ? certificationsRaw : []
+  const similarProviders = Array.isArray(similarProvidersRaw) ? similarProvidersRaw : []
 
   // ── Compute the marketplace card type for this business ──────────────────
   // Determines whether the detail page renders the full booking panel
@@ -1541,9 +1545,17 @@ function SocialIcon({
 
 function safeJson<T>(json: string, fallback: T): T {
   try {
-    return JSON.parse(json) as T
+    let parsed = typeof json === 'string' ? JSON.parse(json) : json;
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch {
+        // Not double-encoded, keep first parse result
+      }
+    }
+    return (parsed ?? fallback) as T;
   } catch {
-    return fallback
+    return fallback;
   }
 }
 
