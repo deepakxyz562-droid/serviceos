@@ -132,6 +132,7 @@ export async function proxy(request: NextRequest) {
     host.endsWith(`.${BRAND.domain}`);
 
   if (
+    process.env.ENABLE_CANONICAL_REDIRECT === 'true' &&
     host &&
     !isCanonicalRootDomain &&
     !isLocal &&
@@ -143,7 +144,8 @@ export async function proxy(request: NextRequest) {
     !pathname.startsWith('/api/cron')
   ) {
     const canonicalUrl = new URL(request.url);
-    canonicalUrl.host = canonicalHost;
+    canonicalUrl.hostname = canonicalHost;
+    canonicalUrl.port = '';
     canonicalUrl.protocol = 'https';
     const response = NextResponse.redirect(canonicalUrl, 308);
     response.headers.set('X-Request-Id', request.headers.get('x-request-id') || generateRequestId());
