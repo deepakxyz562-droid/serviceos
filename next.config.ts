@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 // Fieseros demo - trigger dev server restart
 const nextConfig: NextConfig = {
+  output: "standalone",
   compress: false,
   typescript: {
     ignoreBuildErrors: true,

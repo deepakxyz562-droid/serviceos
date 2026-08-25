@@ -1,8 +1,9 @@
 # -----------------------------------------------------------------------------
-# 1. Base image with Bun & Node.js
+# 1. Base image with Bun & OpenSSL
 # -----------------------------------------------------------------------------
 FROM oven/bun:1.2-slim AS base
 WORKDIR /app
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
 # 2. Dependencies stage
@@ -33,7 +34,7 @@ ENV NODE_ENV production
 ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
 
-# Copy built application & public static assets
+# Copy built standalone application & public static assets
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
