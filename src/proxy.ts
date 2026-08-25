@@ -104,7 +104,7 @@ export async function proxy(request: NextRequest) {
   const canonicalHost = (() => {
     try {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${BRAND.domain}`;
-      return new URL(appUrl).host;
+      return new URL(appUrl).hostname;
     } catch {
       return BRAND.domain;
     }
