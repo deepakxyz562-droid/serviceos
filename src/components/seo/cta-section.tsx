@@ -32,9 +32,9 @@ export function CtaSection({
           {subtitle}
         </p>
 
-        {bullets.length > 0 && (
+        {(bullets || []).length > 0 && (
           <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-8">
-            {bullets.map((b) => (
+            {(bullets || []).map((b) => (
               <li
                 key={b}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground"

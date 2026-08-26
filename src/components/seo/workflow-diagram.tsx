@@ -71,7 +71,7 @@ export function WorkflowDiagram({
             className="absolute left-4 top-2 bottom-2 w-px bg-border"
             aria-hidden="true"
           />
-          {steps.map((step, i) => (
+          {(steps || []).map((step, i) => (
             <li key={i} className="relative flex items-start gap-4 pb-6 last:pb-0">
               <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-emerald-600 bg-card text-xs font-bold text-emerald-700 dark:text-emerald-400">
                 {i + 1}

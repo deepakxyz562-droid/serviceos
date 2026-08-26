@@ -30,7 +30,7 @@ export function AudienceGrid({
           </p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {audiences.map((audience) => (
+          {(audiences || []).map((audience) => (
             <div
               key={audience}
               className="flex items-center gap-2 rounded-lg border bg-card px-4 py-3 text-sm text-foreground shadow-sm"

@@ -27,7 +27,7 @@ export function FaqSection({
           )}
         </div>
         <div className="space-y-3">
-          {faqs.map((faq, i) => (
+          {(faqs || []).map((faq, i) => (
             <details
               key={i}
               className="group rounded-lg border bg-card px-4 sm:px-5 py-1 shadow-sm [&_summary::-webkit-details-marker]:hidden"

@@ -38,7 +38,7 @@ export function FeatureGrid({
           )}
         </div>
         <div className={`grid grid-cols-1 ${colClass} gap-5`}>
-          {features.map((f) => (
+          {(features || []).map((f) => (
             <div
               key={f.title}
               className="rounded-xl border bg-card p-5 shadow-sm hover:shadow-md transition-shadow"
