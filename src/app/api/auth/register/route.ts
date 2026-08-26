@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { hashPassword, generateToken, generateSlug, COOKIE_OPTIONS } from '@/lib/auth';
+import { hashPassword, generateSlug, getAppUrl } from '@/lib/auth';
 import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
+import { issueVerificationToken, sendVerificationEmail } from '@/lib/emails/verification-email';
 
 export async function POST(request: NextRequest) {
   const rateLimited = applyRateLimit(authLimiter, request);
@@ -53,6 +54,13 @@ export async function POST(request: NextRequest) {
     // subscription render as "normal-full" cards (with Book Now / Get Quote /
     // services). Unclaimed or expired-trial providers render as "normal-minimal"
     // cards (name / phone / rating / "Call Now" only).
+    //
+    // signupMode='crm_trial' distinguishes this from a marketplace-only claim
+    // (signupMode='listing_only', listingTier='claimed_free'). CRM tenants get
+    // the full sidebar; listing-only tenants get a minimal sidebar. Previously
+    // this field was left NULL, which made CRM tenants look like "legacy /
+    // undecided" tenants and broke downstream filters that check
+    // signupMode === 'crm_trial'.
     const tenant = await db.tenant.create({
       data: {
         name: businessName,
@@ -67,6 +75,7 @@ export async function POST(request: NextRequest) {
         marketplaceTermsAcceptedAt: new Date(),
         claimed: true,
         listingTier: 'claimed',
+        signupMode: 'crm_trial',
       },
     });
 
@@ -82,6 +91,9 @@ export async function POST(request: NextRequest) {
     });
 
     // Create user
+    // emailVerified=false — the user must click the verification link in the
+    // email before they can log in (see /api/auth/login gate). Google OAuth
+    // and employee-invitation flows bypass this (they auto-verify elsewhere).
     const user = await db.user.create({
       data: {
         name,
@@ -92,6 +104,7 @@ export async function POST(request: NextRequest) {
         authProvider: 'email',
         tenantId: tenant.id,
         workspaceId: workspace.id,
+        emailVerified: false,
       },
     });
 
@@ -178,19 +191,101 @@ export async function POST(request: NextRequest) {
       // Non-blocking — tenant can seed manually from Settings → Public Hub
     }
 
-    // Generate JWT token
-    const authUser = {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      tenantId: user.tenantId,
-      workspaceId: user.workspaceId,
-      avatar: user.avatar,
-    };
-    const token = generateToken(authUser);
+    // ── Email verification ────────────────────────────────────────────────
+    // Issue a verification token (hash stored on the User row) and send the
+    // email. The user must click the link before they can log in.
+    //
+    // We do NOT auto-login the user here (no JWT cookie set). The frontend
+    // will show a "Check your email" screen and redirect to /login.
+    const appUrl = getAppUrl(request);
+    try {
+      const rawToken = await issueVerificationToken(user.id);
+      await sendVerificationEmail({
+        to: email,
+        name: user.name,
+        rawToken,
+        appUrl,
+      });
+    } catch (verifyErr) {
+      // Non-blocking — the user can request a resend from the login page.
+      // We still return success because the account was created successfully;
+      // the user just needs to trigger a resend if the initial email failed.
+      console.warn('[Register] Failed to send verification email:', verifyErr);
+    }
 
-    // Build response
+    // ── Welcome email + superadmin notification + EventBus events ─────────
+    // All three are non-blocking — wrapped in try/catch so a failure here
+    // doesn't fail the registration (the account is already created).
+    try {
+      // 1. Send welcome email to the new owner (onboarding checklist).
+      const { sendWelcomeEmailTo } = await import('@/lib/emails/welcome-email');
+      await sendWelcomeEmailTo(email, {
+        ownerName: user.name,
+        businessName: tenant.name,
+        appUrl,
+        tenantSlug: tenant.slug,
+      });
+    } catch (welcomeErr) {
+      console.warn('[Register] Failed to send welcome email:', welcomeErr);
+    }
+
+    try {
+      // 2. Create in-app Notification rows for every superadmin so they see
+      //    "New business registered" in their dashboard. We do NOT email
+      //    superadmins here (too noisy at scale) — in-app only per the
+      //    agreed scope.
+      const superadmins = await db.user.findMany({
+        where: { isSuperAdmin: true, isActive: true },
+        select: { id: true },
+      });
+      if (superadmins.length > 0) {
+        await db.notification.createMany({
+          data: superadmins.map((admin) => ({
+            userId: admin.id,
+            tenantId: tenant.id, // link to the new tenant for one-click navigation
+            title: 'New business registered',
+            message: `${tenant.name} (${email}) just signed up for a 14-day trial.`,
+            type: 'info',
+          })),
+        });
+      }
+    } catch (notifErr) {
+      console.warn('[Register] Failed to create superadmin notifications:', notifErr);
+    }
+
+    try {
+      // 3. Emit EventBus events so the trigger system (and any future
+      //    subscribers) can react. 'user.registered' and 'tenant.created'
+      //    are now in the ServiceEvent type union (see event-bus.ts).
+      const { EventBus } = await import('@/lib/event-bus');
+      await EventBus.emit(
+        'tenant.created',
+        {
+          tenantId: tenant.id,
+          businessName: tenant.name,
+          ownerEmail: email,
+          ownerName: user.name,
+          signupMode: tenant.signupMode,
+          plan: tenant.plan,
+        },
+        { tenantId: tenant.id },
+      );
+      await EventBus.emit(
+        'user.registered',
+        {
+          userId: user.id,
+          email,
+          name: user.name,
+          role: user.role,
+          tenantId: tenant.id,
+        },
+        { tenantId: tenant.id },
+      );
+    } catch (emitErr) {
+      console.warn('[Register] Failed to emit registration events:', emitErr);
+    }
+
+    // Build response — NO token, NO cookie. The user must verify + log in.
     const response = NextResponse.json(
       {
         user: {
@@ -202,8 +297,10 @@ export async function POST(request: NextRequest) {
           tenantId: user.tenantId,
           workspaceId: user.workspaceId,
           avatar: user.avatar,
+          emailVerified: false,
         },
-        token,
+        emailVerificationRequired: true,
+        message: 'Account created. Check your email for a verification link to activate your account.',
         tenant: {
           id: tenant.id,
           name: tenant.name,
@@ -223,12 +320,9 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
 
-    // Set auth cookie
-    response.cookies.set({
-      ...COOKIE_OPTIONS,
-      value: token,
-    });
-
+    // Intentionally do NOT set the auth cookie — the user must verify their
+    // email and then log in. This prevents unverified users from accessing
+    // the dashboard.
     return response;
   } catch (error) {
     console.error('Registration error:', error);

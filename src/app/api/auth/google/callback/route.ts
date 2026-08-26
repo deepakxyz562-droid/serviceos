@@ -36,6 +36,11 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
   // Set claimed=true + listingTier='claimed' so the new business renders as a
   // full card on the marketplace (not an "Unclaimed" minimal card). This
   // matches the email/password registration flow in /api/auth/register.
+  //
+  // signupMode='crm_trial' distinguishes this from a marketplace-only claim
+  // (signupMode='listing_only', listingTier='claimed_free'). Previously this
+  // field was left NULL, making Google-registered tenants look like "legacy"
+  // tenants and breaking downstream signupMode filters.
   const tenant = await db.tenant.create({
     data: {
       name: businessName,
@@ -49,6 +54,7 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
       claimed: true,
       claimedAt: new Date(),
       listingTier: 'claimed',
+      signupMode: 'crm_trial',
       marketplaceOptIn: true,
       marketplaceTermsAcceptedAt: new Date(),
       publicProfileEnabled: true,
@@ -398,6 +404,10 @@ export async function GET(request: NextRequest) {
     // (Previously this created a temp user and redirected to GoogleOnboarding.
     //  Now we create the full user+tenant+workspace+subscription here so the
     //  SaaS onboarding wizard can take over — same flow as email/password.)
+    //
+    // emailVerified=true: Google already verified this email as part of the
+    // OAuth flow (Google's `email_verified` claim is checked earlier in this
+    // route). We trust Google's verification and skip our own email-link flow.
     const tempUser = await db.user.create({
       data: {
         email: userInfo.email,
@@ -408,6 +418,8 @@ export async function GET(request: NextRequest) {
         authProviderId: userInfo.sub,
         isActive: true,
         lastLoginAt: new Date(),
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
         // No tenantId yet — set by createTenantForGoogleUser below.
       },
     });

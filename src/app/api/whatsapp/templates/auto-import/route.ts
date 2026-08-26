@@ -20,9 +20,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}))
     const scope = body.scope || 'tenant'
 
-    // SuperAdmin can import for all tenants
+    // SuperAdmin can import for all tenants.
+    // Canonical superadmin check: isSuperAdmin boolean takes precedence over
+    // role-based check (superadmins have role='owner' + isSuperAdmin=true).
     if (scope === 'all') {
-      if (user.role !== 'superadmin') {
+      const isSuperAdmin =
+        user.isSuperAdmin === true ||
+        user.role === 'superadmin' ||
+        user.role === 'super_admin';
+      if (!isSuperAdmin) {
         return NextResponse.json({ error: 'Only SuperAdmin can import for all tenants' }, { status: 403 })
       }
       const result = await autoImportForAllTenants()

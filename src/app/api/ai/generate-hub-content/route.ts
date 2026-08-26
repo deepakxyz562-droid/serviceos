@@ -31,11 +31,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Tenant must belong to the authenticated user (or be a superadmin).
+    // Canonical superadmin check: isSuperAdmin boolean takes precedence over
+    // role-based check (superadmins have role='owner' + isSuperAdmin=true).
     const tenant = await db.tenant.findUnique({ where: { id: tenantId } })
     if (!tenant) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 })
     }
-    if (tenant.id !== user.tenantId && user.role !== 'superadmin') {
+    const isSuperAdmin =
+      user.isSuperAdmin === true ||
+      user.role === 'superadmin' ||
+      user.role === 'super_admin';
+    if (tenant.id !== user.tenantId && !isSuperAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

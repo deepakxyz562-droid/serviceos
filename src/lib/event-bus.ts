@@ -57,6 +57,12 @@ export type ServiceEvent =
   | 'ai_call.lead_created' | 'ai_call.appointment_booked'
   // ── AI Receptionist Billing (Phase R7) ─────────────────────────
   | 'ai_billing.threshold_reached'
+  // ── Registration / lifecycle (email-verification phase) ─────────────────
+  // Emitted by /api/auth/register when a new tenant + user are created.
+  // Used by the trigger system (trigger-catalog.ts already lists
+  // 'user.registered' as a System Event) and by the superadmin notification
+  // flow. 'tenant.created' is the parallel event for the business itself.
+  | 'user.registered' | 'tenant.created'
 
 export interface EventPayload {
   event: ServiceEvent
@@ -123,6 +129,9 @@ export const SERVICE_EVENT_LABELS: Record<ServiceEvent, { label: string; descrip
   'ai_call.lead_created':       { label: 'AI Call Lead Created',     description: 'AI receptionist captured a new lead',       category: 'ai_call' },
   'ai_call.appointment_booked': { label: 'AI Call Appointment Booked', description: 'AI receptionist booked an appointment',   category: 'ai_call' },
   'ai_billing.threshold_reached': { label: 'AI Billing Threshold Reached', description: 'AI receptionist usage hit a billing threshold (75% / 100%)', category: 'ai_billing' },
+  // ── Registration / lifecycle ────────────────────────────────────────────
+  'user.registered':  { label: 'User Registered',  description: 'A new user signed up (email/password or Google OAuth)',       category: 'system' },
+  'tenant.created':   { label: 'Tenant Created',   description: 'A new business tenant was created (CRM trial or listing)',   category: 'system' },
 }
 
 // ─── Job Events Set ───────────────────────────────────────────────────────────

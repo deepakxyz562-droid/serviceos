@@ -112,8 +112,14 @@ export async function GET(request: NextRequest) {
         )
       }
       const where: Record<string, unknown> = {}
-      // Scope to the authenticated user's tenant (super_admin can pass tenantId explicitly)
-      if (authUser.role === 'super_admin' && tenantId) {
+      // Scope to the authenticated user's tenant. Superadmins (identified by
+      // isSuperAdmin === true, with role-based fallback for legacy accounts)
+      // can pass tenantId explicitly to inspect any tenant's portal sessions.
+      const isSuperAdmin =
+        authUser.isSuperAdmin === true ||
+        authUser.role === 'superadmin' ||
+        authUser.role === 'super_admin';
+      if (isSuperAdmin && tenantId) {
         where.tenantId = tenantId
       } else if (authUser.tenantId) {
         where.tenantId = authUser.tenantId

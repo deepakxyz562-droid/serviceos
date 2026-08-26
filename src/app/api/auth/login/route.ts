@@ -49,6 +49,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Email verification gate ───────────────────────────────────────────
+    // New email/password registrations must verify their email before they
+    // can log in. Google OAuth users and employee-invitation acceptances are
+    // auto-verified at their respective flows. Existing users at migration
+    // time were grandfathered as verified (see backfill SQL).
+    //
+    // We return 403 (not 401) so the frontend can distinguish "needs
+    // verification" from "wrong password" and show the resend-verification
+    // link. We include the email so the frontend can auto-fill the resend
+    // form.
+    if (user.emailVerified === false) {
+      return NextResponse.json(
+        {
+          error: 'Please verify your email before logging in.',
+          code: 'EMAIL_NOT_VERIFIED',
+          email: user.email,
+          resendUrl: '/api/auth/resend-verification',
+        },
+        { status: 403 }
+      );
+    }
+
     // Update lastLoginAt
     await db.user.update({
       where: { id: user.id },

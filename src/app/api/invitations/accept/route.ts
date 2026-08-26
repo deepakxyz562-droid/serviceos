@@ -183,7 +183,11 @@ export async function POST(request: NextRequest) {
         },
       });
     } else {
-      // Create a new user
+      // Create a new user.
+      // emailVerified=true: the invitation was sent to this email address,
+      // and the user is accepting via the unique token URL from that email.
+      // That proves ownership of the email — equivalent to our verification
+      // flow, so we skip the separate email-verification step.
       user = await db.user.create({
         data: {
           email: invitation.email,
@@ -196,6 +200,8 @@ export async function POST(request: NextRequest) {
           workspaceId: invitation.workspaceId,
           isActive: true,
           lastLoginAt: new Date(),
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
         },
       });
     }

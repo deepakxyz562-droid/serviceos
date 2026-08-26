@@ -17,7 +17,12 @@
  *   - Tenant stays unclaimed.
  *   - Send CLAIM_REJECTED email to claimantEmail (no registration link).
  *
- * Auth: requires authenticated user with role 'superadmin'.
+ * Auth: requires authenticated superadmin (isSuperAdmin === true). The legacy
+ * check `user.role !== 'superadmin'` was broken because superadmins in this
+ * codebase are identified by the `isSuperAdmin` boolean on the User model,
+ * NOT by `role === 'superadmin'`. The role field defaults to 'owner' for
+ * superadmin accounts. This blocked legitimate superadmins from accessing
+ * the claim review UI.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -39,7 +44,13 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-    if (user.role !== 'superadmin') {
+    // Canonical superadmin check: isSuperAdmin boolean takes precedence.
+    // Also accept role-based fallbacks for legacy/edge cases.
+    const isSuperAdmin =
+      user.isSuperAdmin === true ||
+      user.role === 'superadmin' ||
+      user.role === 'super_admin';
+    if (!isSuperAdmin) {
       return NextResponse.json(
         { error: 'SuperAdmin access required' },
         { status: 403 },
@@ -188,7 +199,12 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-    if (user.role !== 'superadmin') {
+    // Canonical superadmin check (see POST handler above for rationale).
+    const isSuperAdmin =
+      user.isSuperAdmin === true ||
+      user.role === 'superadmin' ||
+      user.role === 'super_admin';
+    if (!isSuperAdmin) {
       return NextResponse.json(
         { error: 'SuperAdmin access required' },
         { status: 403 },

@@ -703,6 +703,29 @@ model User {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  // ── Email verification (Phase: email-verification) ──────────────────────
+  // emailVerified: false until the user clicks the verification link.
+  //   - New email/password registrations start as false.
+  //   - Google OAuth users start as true (Google already verified the email).
+  //   - Employee invitation acceptances start as true (the invite email proves ownership).
+  //   - Existing users at migration time are grandfathered as true (see backfill SQL).
+  //   - Login is blocked while false (see /api/auth/login).
+  //
+  // emailVerifyTokenHash: SHA-256 hash of the raw token sent in the email.
+  //   - Raw token is NEVER stored (only its hash) — same pattern as password storage.
+  //   - Single-use: cleared (set to NULL) immediately after successful verification.
+  //   - When NULL, no pending verification is in flight.
+  //
+  // emailVerifyTokenExpiresAt: when the token expires (24 hours from issue).
+  //   - Checked at verification time; expired tokens are rejected.
+  //   - Cleared along with the hash on successful verification or expiry.
+  //
+  // emailVerifiedAt: when the user verified their email (for audit).
+  emailVerified           Boolean   @default(false)
+  emailVerifyTokenHash    String?
+  emailVerifyTokenExpiresAt DateTime?
+  emailVerifiedAt         DateTime?
+
   tenant       Tenant?     @relation(fields: [tenantId], references: [id])
   workspace    Workspace?  @relation(fields: [workspaceId], references: [id])
   apiKeys      ApiKey[]
@@ -716,6 +739,7 @@ model User {
 
   @@index([email])
   @@index([tenantId])
+  @@index([emailVerifyTokenHash])
 }
 
 // ==========================================
