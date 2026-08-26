@@ -40,31 +40,35 @@ class TwilioTelephonyProviderImpl implements TelephonyProvider {
    * The Account SID is stored in configJson (non-secret).
    */
   private async getConfig(): Promise<TwilioConfig> {
-    const authToken = await getDecryptedApiKey('TWILIO');
-    if (!authToken) {
-      throw new Error('Twilio credentials not configured. Superadmin must add TWILIO provider config.');
-    }
-
-    // Get the Account SID from configJson
-    const config = await import('@/lib/db').then(db =>
-      db.aiProviderConfig.findUnique({
-        where: { provider: 'TWILIO' },
-        select: { configJson: true },
-      }),
-    );
-
+    let authToken = '';
     let accountSid = '';
-    if (config?.configJson) {
-      try {
+
+    try {
+      const { getDecryptedApiKey } = await import('@/lib/ai-provider-config-service');
+      authToken = (await getDecryptedApiKey('TWILIO')) || '';
+
+      const config = await import('@/lib/db').then(db =>
+        db.aiProviderConfig.findUnique({
+          where: { provider: 'TWILIO' },
+          select: { configJson: true },
+        }),
+      );
+
+      if (config?.configJson) {
         const parsed = JSON.parse(config.configJson);
         accountSid = parsed.accountSid || '';
-      } catch {
-        // ignore — will throw below
       }
+    } catch {
+      // Ignore DB errors — fall through to env vars
     }
 
-    if (!accountSid) {
-      throw new Error('Twilio Account SID not found in provider config. Superadmin must configure it.');
+    if (!authToken || !accountSid) {
+      authToken = authToken || process.env.TWILIO_AUTH_TOKEN || '';
+      accountSid = accountSid || process.env.TWILIO_ACCOUNT_SID || '';
+    }
+
+    if (!authToken || !accountSid) {
+      throw new Error('Twilio credentials not configured. Superadmin must add TWILIO provider config.');
     }
 
     return { accountSid, authToken };
@@ -358,10 +362,10 @@ class TwilioTelephonyProviderImpl implements TelephonyProvider {
     const auth = await this.getAuthHeader();
     const { accountSid } = await this.getConfig();
 
+    const countryCode = params.countryCode || 'US';
     const searchUrl = new URL(
-      `${this.baseUrl}/2010-04-01/Accounts/${accountSid}/AvailablePhoneNumbers/Local.json`,
+      `${this.baseUrl}/2010-04-01/Accounts/${accountSid}/AvailablePhoneNumbers/${countryCode}/Local.json`,
     );
-    searchUrl.searchParams.set('IsoCountry', params.countryCode || 'US');
     if (params.areaCode) searchUrl.searchParams.set('AreaCode', params.areaCode);
     if (params.capabilities.includes('voice')) searchUrl.searchParams.set('VoiceEnabled', 'true');
     if (params.capabilities.includes('sms')) searchUrl.searchParams.set('SmsEnabled', 'true');

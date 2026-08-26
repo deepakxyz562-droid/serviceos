@@ -147,15 +147,5 @@ export interface AvailableNumber {
  */
 export async function getTelephonyProvider(): Promise<TelephonyProvider | null> {
   const { getTwilioTelephonyProvider } = await import('@/lib/twilio-telephony-provider');
-  if (process.env.TWILIO_ACCOUNT_SID) {
-    return getTwilioTelephonyProvider();
-  }
-  try {
-    const { getDecryptedApiKey } = await import('@/lib/ai-provider-config-service');
-    const apiKey = await getDecryptedApiKey('TWILIO');
-    if (!apiKey) return null;
-    return getTwilioTelephonyProvider();
-  } catch {
-    return null;
-  }
+  return getTwilioTelephonyProvider();
 }
