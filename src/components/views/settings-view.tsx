@@ -76,6 +76,7 @@ import { WorkSettings } from '@/components/settings/sections/work-settings';
 import { TimesheetSettings } from '@/components/settings/sections/timesheet-settings';
 import { AiAutoReplySettings } from '@/components/settings/sections/ai-auto-reply-settings';
 import { PaymentIntegrationsSettings } from '@/components/settings/sections/payment-integrations-settings';
+import { VerificationComplianceSection } from '@/components/settings/sections/verification-compliance-section';
 import { GenericPlaceholder } from '@/components/settings/sections/generic-placeholder';
 
 // Embed full developed views inside Settings (single source of truth pattern).
@@ -522,6 +523,12 @@ export function SettingsView() {
         return <CompanySettingsTabs initialTab="brand-brain" onSaved={refreshTenant} />;
       case 'marketplace':
         return <CompanySettingsTabs initialTab="marketplace" onSaved={refreshTenant} />;
+      case 'verification':
+        return tenant?.id ? (
+          <VerificationComplianceSection tenantId={tenant.id} />
+        ) : (
+          <p className="text-sm text-muted-foreground">Tenant context required.</p>
+        );
       case 'crm':
         return <CrmSettings />;
       case 'jobs-scheduling':

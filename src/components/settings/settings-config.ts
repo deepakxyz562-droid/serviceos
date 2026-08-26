@@ -97,6 +97,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     keywords: ['profile', 'name', 'industry', 'currency', 'address', 'phone', 'email', 'whatsapp', 'branding', 'logo', 'tagline', 'public', 'colors', 'font', 'brand brain', 'voice', 'tone', 'audience', 'competitors', 'marketplace', 'visibility', 'white label', 'company settings'],
   },
   {
+    id: 'verification',
+    label: 'Verification & Compliance',
+    icon: 'ShieldCheck',
+    description: 'Business licence, insurance, KYC identity verification, Stripe Connect',
+    group: 'business',
+    keywords: ['verification', 'compliance', 'kyc', 'identity', 'insurance', 'licence', 'vat', 'tax', 'stripe', 'connect', 'marketplace eligibility', 'call-out fee', 'pricing type'],
+  },
+  {
     id: 'products-services',
     label: 'Products & Services',
     icon: 'Package',

@@ -562,8 +562,26 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         .filter((section) => section.items.length > 0);
     }
 
+    // Hide the Marketplace menu for CRM users who have NOT opted into the
+    // marketplace. The user can toggle this from Settings → Public Business
+    // Hub → "List on Fieseros Marketplace". When OFF, the Marketplace sidebar
+    // item is hidden — the user doesn't need it if they're not listed.
+    // Listing-only users ALWAYS see it (their entire dashboard IS the marketplace).
+    // Superadmins ALWAYS see it (they manage the marketplace platform-wide).
+    if (!isListingOnly && !isSuperAdmin) {
+      const marketplaceOptIn = (auth.tenant as any)?.marketplaceOptIn;
+      if (marketplaceOptIn === false) {
+        sections = sections
+          .map((section) => ({
+            ...section,
+            items: section.items.filter((item) => item.view !== 'marketplaceDashboard'),
+          }))
+          .filter((section) => section.items.length > 0);
+      }
+    }
+
     return sections;
-  }, [isSuperAdmin, isEmployee, isListingOnly, disabledMenus]);
+  }, [isSuperAdmin, isEmployee, isListingOnly, disabledMenus, auth.tenant]);
 
   const handleNavClick = (view: ViewType) => {
     setCurrentView(view);

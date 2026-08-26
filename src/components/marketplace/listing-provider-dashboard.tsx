@@ -36,6 +36,7 @@ import {
   Mail,
   Wrench,
   Info,
+  ShieldCheck,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -53,6 +54,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAppStore } from '@/store/app-store';
 import { PublicHubTab } from '@/components/settings/public-hub-tab';
 import { ServiceCatalogView } from '@/components/views/service-catalog-view';
+import { VerificationComplianceSection } from '@/components/settings/sections/verification-compliance-section';
 import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 import {
@@ -164,6 +166,9 @@ export function ListingProviderDashboard() {
           <TabsTrigger value="services" className="gap-1.5">
             <Wrench className="size-3.5" /> Services
           </TabsTrigger>
+          <TabsTrigger value="verification" className="gap-1.5">
+            <ShieldCheck className="size-3.5" /> Verification
+          </TabsTrigger>
         </TabsList>
 
         {/* Tab 1: Marketplace Page
@@ -211,6 +216,16 @@ export function ListingProviderDashboard() {
             </CardContent>
           </Card>
           <ServiceCatalogView />
+        </TabsContent>
+
+        {/* Tab 3: Verification — lets listing-only users complete marketplace
+            eligibility requirements (insurance, licence, KYC, Stripe Connect). */}
+        <TabsContent value="verification" className="mt-4">
+          {tenantSnap ? (
+            <VerificationComplianceSection tenantId={tenantSnap.id} />
+          ) : (
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          )}
         </TabsContent>
       </Tabs>
     </div>
