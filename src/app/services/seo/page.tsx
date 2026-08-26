@@ -95,7 +95,7 @@ export default function SeoPage() {
   const faqSchema = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
-    mainEntity: faqs.map((f) => ({
+    mainEntity: (faqs || []).map((f) => ({
       '@type': 'Question',
       name: f.q,
       acceptedAnswer: { '@type': 'Answer', text: f.a },
@@ -213,7 +213,7 @@ export default function SeoPage() {
             Frequently Asked Questions
           </h2>
           <div className="space-y-6">
-            {faqs.map((faq) => (
+            {(faqs || []).map((faq) => (
               <div key={faq.q}>
                 <h3 className="font-semibold text-foreground mb-2">{faq.q}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{faq.a}</p>
