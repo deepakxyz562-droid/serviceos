@@ -1,8 +1,8 @@
 {
   "id": "/?source=pwa",
-  "name": "Fieseros - Field Service Platform",
+  "name": "Fieseros - Build it. Grow it. Run it.",
   "short_name": "Fieseros",
-  "description": "WhatsApp-first Field Service Operating System. Replace WhatsApp chaos, Excel trackers, and paper forms with one powerful platform.",
+  "description": "Build it. Grow it. Run it. — The operating system for service businesses. Websites, SEO, Google Ads, CRM, scheduling, invoicing, and AI Receptionist in one platform.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",

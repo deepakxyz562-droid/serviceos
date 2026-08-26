@@ -16,6 +16,13 @@ export function CornerstoneFooter() {
     { href: "/#ai-receptionist", label: "AI Receptionist" },
   ];
 
+  const servicesLinks = [
+    { href: "/services/website-development", label: "Website Development" },
+    { href: "/services/seo", label: "SEO & Local Search" },
+    { href: "/services/google-ads", label: "Google Ads" },
+    { href: "/services", label: "All Services" },
+  ];
+
   const industryLinks = [
     { href: "/plumbing-software", label: "Plumbing Software" },
     { href: "/hvac-software", label: "HVAC Software" },
@@ -58,12 +65,29 @@ export function CornerstoneFooter() {
   return (
     <footer className="mt-auto border-t bg-muted/30">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-8">
           {/* Product */}
           <div>
             <h3 className="text-sm font-semibold text-foreground mb-3">Product</h3>
             <ul className="space-y-2">
               {productLinks.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Services (Build / Grow / Run) */}
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-3">Services</h3>
+            <ul className="space-y-2">
+              {servicesLinks.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}

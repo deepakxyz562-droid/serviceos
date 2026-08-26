@@ -1064,8 +1064,13 @@ export default async function PublicBusinessHubPage({
                     (paid feature + tenant.whiteLabelJson.hideFieserosBranding=true).
                     Per review direction: "The tenant's business must remain
                     the hero. Fieseros should feel like the technology powering
-                    a better business experience." */}
-                {!hideFieserosBranding && <FieserosPromoCard />}
+                    a better business experience."
+
+                    For CLAIMED businesses, showServicesCta adds a subtle
+                    "Want a website like this? →" link (Phase 4 cross-sell). */}
+                {!hideFieserosBranding && (
+                  <FieserosPromoCard showServicesCta={business.claimed} />
+                )}
               </div>
             </div>
           </div>

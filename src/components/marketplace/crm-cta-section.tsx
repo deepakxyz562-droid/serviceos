@@ -140,6 +140,20 @@ export function CrmCtaSection({
         </button>
       </div>
 
+      {/* ── Services cross-sell (Phase 4) ──────────────────────────────────
+          Subtle tertiary link for business owners who already have a listing
+          but might want a website + SEO. Per review direction: "Subtle — don't
+          compete with the business's own CTAs." This is a small text link,
+          not a third button. */}
+      <div className="mt-4 border-t border-emerald-200/50 pt-3 text-center">
+        <Link
+          href="/services/website-development"
+          className="text-xs text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors"
+        >
+          Need a website for your business? <span className="font-medium">Build it with Fieseros →</span>
+        </Link>
+      </div>
+
       {/* Claim modal — only rendered for authenticated users */}
       {isAuthenticated && (
         <ClaimBusinessModal

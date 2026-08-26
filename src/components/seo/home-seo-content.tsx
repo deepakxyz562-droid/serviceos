@@ -189,24 +189,24 @@ export function HomeSeoContent() {
         {/* ── Hero / H1 ─────────────────────────────────────────────────── */}
         <div className="mb-16">
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl mb-6">
-            Fieseros — The Operating System for Service Businesses
+            Build it. Grow it. Run it. — The Operating System for Service Businesses
           </h1>
           <p className="text-lg leading-relaxed text-muted-foreground mb-4">
-            Replace scattered texts, emails, and spreadsheets with one powerful
-            platform. Fieseros helps field service businesses manage{' '}
+            Fieseros is the only platform that does all three.{' '}
+            <strong className="text-foreground">Build</strong> a website that
+            generates leads. <strong className="text-foreground">Grow</strong> with
+            SEO, Google Ads, and local marketing.{' '}
+            <strong className="text-foreground">Run</strong> your entire business —{' '}
             <Link href="/scheduling-and-dispatch" className="font-medium text-emerald-700 underline-offset-4 hover:underline">
               scheduling and dispatch
             </Link>
-            , send{' '}
+            ,{' '}
             <Link href="/invoicing-and-payments" className="font-medium text-emerald-700 underline-offset-4 hover:underline">
-              invoices by Email and SMS
+              invoicing
             </Link>
-            , automate customer communications, and grow through the{' '}
-            <Link href="/marketplace" className="font-medium text-emerald-700 underline-offset-4 hover:underline">
-              verified provider marketplace
-            </Link>
-            . Built for plumbers, HVAC, electricians, cleaners, landscapers, and
-            20+ other service industries.
+            , CRM, and AI automation — from one dashboard. Built for plumbers,
+            HVAC, electricians, cleaners, landscapers, and 20+ other service
+            industries.
           </p>
           <p className="text-base leading-relaxed text-muted-foreground">
             Whether you run a one-person operation or manage a team of 50+
@@ -214,6 +214,64 @@ export function HomeSeoContent() {
             call to the final payment, every step is tracked, automated, and
             optimized — so you can focus on the work, not the paperwork.
           </p>
+        </div>
+
+        {/* ── Build / Grow / Run positioning section ────────────────────── */}
+        <div className="mb-16">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl mb-8">
+            One Partner. Three Ways to Grow.
+          </h2>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            {/* Build */}
+            <div className="rounded-xl border border-border bg-card p-6">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                <svg className="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">Build</h3>
+              <p className="text-sm text-muted-foreground mb-3">
+                Get a website that actually generates leads — mobile-first, SEO-ready,
+                with booking and quote forms built in.
+              </p>
+              <Link href="/services/website-development" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+                Website Development →
+              </Link>
+            </div>
+            {/* Grow */}
+            <div className="rounded-xl border border-border bg-card p-6">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 dark:bg-sky-900/30">
+                <svg className="h-5 w-5 text-sky-600 dark:text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">Grow</h3>
+              <p className="text-sm text-muted-foreground mb-3">
+                Turn traffic into customers with local SEO, Google Ads, Google
+                Business Profile optimization, and lead generation.
+              </p>
+              <Link href="/services/seo" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+                SEO &amp; Marketing →
+              </Link>
+            </div>
+            {/* Run */}
+            <div className="rounded-xl border border-border bg-card p-6">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/30">
+                <svg className="h-5 w-5 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">Run</h3>
+              <p className="text-sm text-muted-foreground mb-3">
+                Manage everything from Fieseros CRM — leads, jobs, scheduling,
+                dispatch, invoices, payments, WhatsApp, and AI Receptionist.
+              </p>
+              <Link href="/features" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+                Explore the CRM →
+              </Link>
+            </div>
+          </div>
         </div>
 
         {/* ── Platform Features ─────────────────────────────────────────── */}

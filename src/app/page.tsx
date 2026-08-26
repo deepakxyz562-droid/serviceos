@@ -42,7 +42,7 @@ const AUTH_COOKIE = 'fieseros_session';
  * crawled anyway.
  */
 export const metadata: Metadata = {
-  title: 'Fieseros — The Operating System for Service Businesses',
+  title: 'Fieseros — Build it. Grow it. Run it. | The Operating System for Service Businesses',
   description:
     'Fieseros is the all-in-one operating system for service businesses. Replace scattered texts, emails, and spreadsheets with one platform for leads, dispatch, invoicing, and automated Email, SMS & Push notifications. Start free today.',
   keywords: [
@@ -61,7 +61,7 @@ export const metadata: Metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'Fieseros — The Operating System for Service Businesses',
+    title: 'Fieseros — Build it. Grow it. Run it. | The Operating System for Service Businesses',
     description:
       'Replace scattered texts, emails, and spreadsheets with one powerful platform for leads, dispatch, invoicing, and automated notifications.',
     url: '/',
@@ -71,7 +71,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Fieseros — The Operating System for Service Businesses',
+    title: 'Fieseros — Build it. Grow it. Run it. | The Operating System for Service Businesses',
     description:
       'Replace scattered texts, emails, and spreadsheets with one powerful platform for service businesses.',
     // Twitter image auto-injected from opengraph-image.tsx.

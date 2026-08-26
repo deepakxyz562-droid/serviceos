@@ -52,6 +52,10 @@ interface FieserosPromoCardProps {
   variantIndex?: number;
   /** Optional: additional className for the outer wrapper. */
   className?: string;
+  /** When true (claimed businesses), shows a secondary "Want a website like
+   * this? →" link below the main CTA. This is the marketplace → services
+   * cross-sell (Phase 4). Subtle — doesn't compete with the business's CTAs. */
+  showServicesCta?: boolean;
 }
 
 interface PromoVariant {
@@ -87,6 +91,7 @@ export function FieserosPromoCard({
   variant = 'bottom',
   variantIndex,
   className = '',
+  showServicesCta = false,
 }: FieserosPromoCardProps) {
   // Pick a variant — rotate by day-of-year so it changes daily.
   const dayOfYear = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
@@ -121,6 +126,19 @@ export function FieserosPromoCard({
             Run your business with Fieseros
             <span aria-hidden="true">→</span>
           </Link>
+          {/* Marketplace → Services cross-sell (Phase 4).
+              Subtle secondary link — only shown for claimed businesses
+              (showServicesCta=true). Per review direction: "Subtle for Phase 4
+              — a small 'Want a website like this? →' link. Don't compete with
+              the business's own CTAs." */}
+          {showServicesCta && (
+            <Link
+              href="/services/website-development"
+              className="mt-1.5 block text-[11px] text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors"
+            >
+              Want a website like this? <span aria-hidden="true">→</span>
+            </Link>
+          )}
         </div>
       </div>
     </div>
