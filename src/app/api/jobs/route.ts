@@ -57,17 +57,11 @@ async function resolveWorkspaceId(
       })
       if (existing) return existing.id
     }
-    const existingAny = await db.workspace.findFirst({ select: { id: true } })
-    if (existingAny) return existingAny.id
-    const created = await db.workspace.create({
-      data: {
-        name: 'Default Workspace',
-        slug: 'default',
-        ownerId: authUser?.id || 'system',
-        tenantId: authUser?.tenantId || null,
-      },
-    })
-    return created.id
+    if (authUser?.isSuperAdmin) {
+      const existingAny = await db.workspace.findFirst({ select: { id: true } })
+      if (existingAny) return existingAny.id
+    }
+    return null
   } catch (e) {
     console.error('[Jobs POST] Failed to resolve workspaceId:', e)
     return null
@@ -133,7 +127,7 @@ async function _GET(request: NextRequest) {
     const where: Record<string, unknown> = {}
 
     // Scope to user's workspace/tenant (unless super admin)
-    if (user.tenantId && !user.isSuperAdmin) {
+    if (user.tenantId) {
       // Job uses workspaceId, so find all workspaces in this tenant
       const tenantWorkspaces = await db.workspace.findMany({
         where: { tenantId: user.tenantId },
@@ -148,6 +142,8 @@ async function _GET(request: NextRequest) {
         // No workspaces found — return empty
         return NextResponse.json([]);
       }
+    } else if (!user.isSuperAdmin) {
+      return NextResponse.json({ error: 'Tenant context required' }, { status: 401 });
     } else if (user.isSuperAdmin) {
       const queryTenantId = searchParams.get('tenantId');
       if (queryTenantId) {

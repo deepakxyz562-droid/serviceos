@@ -58,9 +58,9 @@ async function _GET(request: NextRequest) {
     const where: Record<string, unknown> = {}
     if (user.workspaceId) {
       where.workspaceId = user.workspaceId
-    } else {
+    } else if (user.tenantId) {
       const fallbackWorkspace = await db.workspace.findFirst({
-        where: user.tenantId ? { tenantId: user.tenantId } : undefined,
+        where: { tenantId: user.tenantId },
         orderBy: { createdAt: 'asc' },
         select: { id: true },
       })
@@ -69,6 +69,15 @@ async function _GET(request: NextRequest) {
       } else {
         return NextResponse.json({ customers: [], pagination: { page, pageSize, total: 0, totalPages: 0, hasNextPage: false } })
       }
+    } else if (user.isSuperAdmin) {
+      // Super-admin without explicit tenant context
+      const anyWorkspace = await db.workspace.findFirst({
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      })
+      if (anyWorkspace) where.workspaceId = anyWorkspace.id
+    } else {
+      return NextResponse.json({ error: 'Tenant context required' }, { status: 401 })
     }
 
     if (search) {

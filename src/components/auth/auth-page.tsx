@@ -173,6 +173,32 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
     }
   };
 
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [isResending, setIsResending] = useState(false);
+
+  const handleResendEmail = async () => {
+    if (!pendingEmail) return;
+    setIsResending(true);
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to resend verification email');
+      } else {
+        toast.success('Verification email resent! Please check your inbox.');
+      }
+    } catch {
+      toast.error('Could not resend email. Please try again.');
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   // ─── Business Register Handler ───
   const handleBusinessRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -203,6 +229,17 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
         toast.error(data.error || 'Registration failed');
         return;
       }
+      
+      // If email verification is required (standard email/password signup),
+      // DO NOT log the user in or write dummy auth to localStorage.
+      // Show the dedicated "Check your email" screen.
+      if (data.emailVerificationRequired) {
+        setPendingEmail(regEmail);
+        setVerificationSent(true);
+        toast.success('Account created! Please check your email to activate your account.');
+        return;
+      }
+
       localStorage.setItem('fieseros_auth', JSON.stringify({
         isAuthenticated: true,
         user: data.user,
@@ -210,22 +247,6 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
         token: data.token,
       }));
       toast.success('Account created successfully!');
-      // Email verification notification — shown alongside the success toast.
-      // Uses a custom toast with a close (X) button so the user can dismiss it.
-      setTimeout(() => {
-        toast(
-          "We've sent you an email with a link to confirm your address.",
-          {
-            description: 'Check your inbox and click the confirmation link to verify your account.',
-            duration: 10000,
-            icon: '📧',
-            action: {
-              label: '✕',
-              onClick: () => {},
-            },
-          }
-        );
-      }, 500);
       onAuthSuccess(data.user, data.tenant);
     } catch {
       toast.error('Something went wrong. Please try again.');
@@ -237,29 +258,72 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
   // ─── Render: Business Tab Content ───
   const renderBusinessContent = () => (
     <div className="w-full">
-      {/* Business Tabs: Sign In / Create Account */}
-      <div className="flex mb-6 bg-slate-100 rounded-lg p-[3px] h-10">
-        <button
-          onClick={() => setBusinessTab('login')}
-          className={`flex-1 h-[34px] text-sm rounded-md font-medium transition-all cursor-pointer ${
-            businessTab === 'login'
-              ? 'bg-white shadow-sm text-slate-900'
-              : 'text-slate-500 hover:text-slate-700'
-          }`}
+      {verificationSent ? (
+        <motion.div
+          key="biz-verify"
+          variants={formVariants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          className="text-center py-6 space-y-5"
         >
-          Sign In
-        </button>
-        <button
-          onClick={() => setBusinessTab('register')}
-          className={`flex-1 h-[34px] text-sm rounded-md font-medium transition-all cursor-pointer ${
-            businessTab === 'register'
-              ? 'bg-white shadow-sm text-slate-900'
-              : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Create Account
-        </button>
-      </div>
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <Mail className="h-8 w-8" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold text-slate-900">Check Your Email</h3>
+            <p className="text-sm text-slate-600 max-w-sm mx-auto">
+              We&apos;ve sent a verification link to <strong className="text-slate-900">{pendingEmail}</strong>. Please click the link in your email to confirm your account and start your onboarding.
+            </p>
+          </div>
+          <div className="pt-2 space-y-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleResendEmail}
+              disabled={isResending}
+              className="w-full h-10 border-slate-200 text-slate-700"
+            >
+              {isResending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Resend Verification Email
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                setVerificationSent(false);
+                setBusinessTab('login');
+              }}
+              className="text-xs text-slate-500 hover:text-slate-700 font-medium"
+            >
+              Back to Sign In
+            </button>
+          </div>
+        </motion.div>
+      ) : (
+        <>
+          {/* Business Tabs: Sign In / Create Account */}
+          <div className="flex mb-6 bg-slate-100 rounded-lg p-[3px] h-10">
+            <button
+              onClick={() => setBusinessTab('login')}
+              className={`flex-1 h-[34px] text-sm rounded-md font-medium transition-all cursor-pointer ${
+                businessTab === 'login'
+                  ? 'bg-white shadow-sm text-slate-900'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => setBusinessTab('register')}
+              className={`flex-1 h-[34px] text-sm rounded-md font-medium transition-all cursor-pointer ${
+                businessTab === 'register'
+                  ? 'bg-white shadow-sm text-slate-900'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
 
       <AnimatePresence mode="wait">
         {businessTab === 'login' ? (
@@ -463,6 +527,8 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
           </motion.div>
         )}
       </AnimatePresence>
+        </>
+      )}
     </div>
   );
 

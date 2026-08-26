@@ -23,6 +23,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyEmailToken } from '@/lib/emails/verification-email';
+import { db } from '@/lib/db';
+import { generateToken, COOKIE_OPTIONS } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,9 +42,6 @@ export async function GET(request: NextRequest) {
   const result = await verifyEmailToken(token);
 
   if (!result.ok) {
-    // 400 for "already verified" / "missing" (user error)
-    // 410 for "expired" (gone)
-    // 404 for "invalid" (not found)
     const status = /expired/i.test(result.error)
       ? 410
       : /already verified/i.test(result.error)
@@ -51,9 +50,39 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: result.error }, { status });
   }
 
-  return NextResponse.json({
-    ok: true,
-    message: 'Your email has been verified. You can now log in.',
-    email: result.email,
+  // Fetch full user and tenant for auto-login
+  const user = await db.user.findUnique({
+    where: { id: result.userId },
+    include: { tenant: true },
   });
+
+  if (!user) {
+    return NextResponse.json(
+      { ok: true, message: 'Your email has been verified. You can now log in.' },
+      { status: 200 }
+    );
+  }
+
+  const authUser = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    tenantId: user.tenantId,
+    workspaceId: user.workspaceId,
+    avatar: user.avatar,
+    isSuperAdmin: user.isSuperAdmin || false,
+  };
+  const sessionToken = generateToken(authUser);
+
+  const response = NextResponse.json({
+    ok: true,
+    message: 'Your email has been verified.',
+    token: sessionToken,
+    user: authUser,
+    tenant: user.tenant,
+  });
+
+  response.cookies.set('fieseros_session', sessionToken, COOKIE_OPTIONS);
+  return response;
 }

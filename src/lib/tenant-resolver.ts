@@ -62,11 +62,19 @@ const TTL_FAILURE = 5_000 // 5s — don't hammer DB when it's timing out
 const NULL_SENTINEL = '__FALLBACK_TENANT_NULL__'
 
 export async function resolveFallbackTenantId(
-  authUser: { tenantId?: string | null } | null | undefined,
+  authUser: { tenantId?: string | null; isSuperAdmin?: boolean } | null | undefined,
 ): Promise<string | null> {
   // Fast path: the user has a tenantId on their JWT — no DB call needed.
   if (authUser?.tenantId) {
     return authUser.tenantId
+  }
+
+  // Security & Data Isolation Gate:
+  // Only super-admins operating without an explicit tenant context are allowed
+  // to fall back to the primary system tenant. Standard users or unauthenticated
+  // requests MUST NOT inherit another tenant's data.
+  if (!authUser?.isSuperAdmin) {
+    return null
   }
 
   // Check cache before hitting the DB.
@@ -77,7 +85,6 @@ export async function resolveFallbackTenantId(
 
   // Cache miss — query the DB.
   try {
-    // C-2C: select only `id` — the Tenant row has ~80 columns with JSON blobs.
     const firstTenant = await db.tenant.findFirst({
       orderBy: { createdAt: 'asc' },
       select: { id: true },
@@ -86,13 +93,9 @@ export async function resolveFallbackTenantId(
       cache.set(CACHE_KEY, firstTenant.id, TTL_SUCCESS)
       return firstTenant.id
     }
-    // No tenants exist — cache the null for 5s to avoid repeated empty queries.
     cache.set(CACHE_KEY, NULL_SENTINEL, TTL_FAILURE)
     return null
   } catch {
-    // DB error (statement_timeout, lock, connection issue) — cache null for
-    // 5s so subsequent requests don't each wait for their own ~10s timeout.
-    // This is the KEY fix: without this, every super-admin request wastes 10s.
     cache.set(CACHE_KEY, NULL_SENTINEL, TTL_FAILURE)
     return null
   }
