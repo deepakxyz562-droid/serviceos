@@ -113,7 +113,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // or run `eas init` in the mobile-app directory. Set as EAS_PROJECT_ID
     // in your .env file.
     eas: {
-      projectId: process.env.EAS_PROJECT_ID || '',
+      projectId: process.env.EAS_PROJECT_ID || '803b8a8b-6b1c-4d1f-8d3c-ab843119c35c',
     },
     router: {
       origin: false,

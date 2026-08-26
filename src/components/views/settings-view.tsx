@@ -481,6 +481,41 @@ export function SettingsView() {
             industry: normalizeIndustry(t.industry || ''),
             slug: t.slug || '',
           });
+
+          // CRITICAL: Also update the Zustand auth store so the sidebar
+          // (and other components reading auth.tenant) react in real-time.
+          // Without this, the sidebar keeps the OLD marketplaceOptIn value
+          // until a full page reload.
+          const { auth, setAuth } = useAppStore.getState();
+          if (auth.isAuthenticated && data.user) {
+            setAuth({
+              isAuthenticated: true,
+              user: data.user,
+              tenant: data.tenant || null,
+            });
+          }
+
+          // Also update localStorage so the network-failure fallback
+          // in checkSession doesn't use stale data.
+          if (typeof window !== 'undefined') {
+            try {
+              const existingAuth = localStorage.getItem('fieseros_auth');
+              const existingData = existingAuth ? JSON.parse(existingAuth) : {};
+              localStorage.setItem(
+                'fieseros_auth',
+                JSON.stringify({
+                  isAuthenticated: true,
+                  user: data.user,
+                  tenant: data.tenant || null,
+                  token: existingData.token,
+                  portalToken: existingData.portalToken,
+                  isCustomer: existingData.isCustomer || data.user?.role === 'customer',
+                })
+              );
+            } catch {
+              // localStorage unavailable
+            }
+          }
         }
         // Detect platform admin: superadmin flag, superadmin role, or admin
         // role without a tenantId (the legacy platform-admin pattern).
