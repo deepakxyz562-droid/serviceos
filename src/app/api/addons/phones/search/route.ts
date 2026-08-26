@@ -5,16 +5,18 @@ import { getTelephonyProvider } from '@/lib/telephony-provider';
 /**
  * GET /api/addons/phones/search
  * ─────────────────────────────────────────────────────────────────────────
- * Search for available phone numbers from Twilio.
+ * Search for available phone numbers from the active telephony provider.
  *
- * Query: ?countryCode=US&areaCode=312&capabilities=voice,sms
+ * Query: ?countryCode=US&areaCode=312&capabilities=voice,sms&limit=10
  *
  * Returns a list of available numbers — the tenant selects one, then
  * POSTs to /api/addons/phones/buy with the selected number.
  *
  * Phase 8.6: search → select → purchase (not "buy first available").
+ * The selected E.164 is passed through to `provisionNumber({ phoneNumber })`
+ * so the provider buys the EXACT number the user picked.
  *
- * Auth: owner only.
+ * Auth: owner only (superadmin bypasses).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -23,10 +25,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
+    // Owner-only check (superadmin bypasses for support/debugging).
+    if (user.role !== 'owner' && !user.isSuperAdmin) {
+      return NextResponse.json(
+        { error: 'Owner access required to search for phone numbers.' },
+        { status: 403 },
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const countryCode = searchParams.get('countryCode') || 'US';
     const areaCode = searchParams.get('areaCode') || '';
-    const capabilities = (searchParams.get('capabilities') || 'voice,sms').split(',');
+    const capabilities = (searchParams.get('capabilities') || 'voice,sms')
+      .split(',')
+      .filter((c): c is 'sms' | 'voice' => c === 'sms' || c === 'voice');
+    const limitParam = Number(searchParams.get('limit')) || 10;
 
     const provider = await getTelephonyProvider();
     if (!provider) {
@@ -36,96 +49,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Search via Twilio (through the TelephonyProvider interface)
-    // We use the Twilio provider directly for the search API
-    const { getTwilioTelephonyProvider } = await import('@/lib/twilio-telephony-provider');
-    const twilio = getTwilioTelephonyProvider();
-
-    // Call the search method (added to TwilioTelephonyProvider)
-    const auth = await getTwilioAuthHeader(twilio);
-    const { accountSid } = await getTwilioConfig(twilio);
-
-    const searchUrl = new URL(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/AvailablePhoneNumbers/Local.json`);
-    searchUrl.searchParams.set('IsoCountry', countryCode);
-    if (areaCode) searchUrl.searchParams.set('AreaCode', areaCode);
-    if (capabilities.includes('voice')) searchUrl.searchParams.set('VoiceEnabled', 'true');
-    if (capabilities.includes('sms')) searchUrl.searchParams.set('SmsEnabled', 'true');
-    searchUrl.searchParams.set('Limit', '10');
-
-    const response = await fetch(searchUrl, {
-      method: 'GET',
-      headers: { Authorization: auth },
+    // Search through the TelephonyProvider interface — the route does NOT
+    // know whether the underlying provider is Twilio, Telnyx, etc. All
+    // provider-specific URL/auth logic lives inside the provider impl.
+    const numbers = await provider.searchNumbers({
+      countryCode,
+      areaCode: areaCode || undefined,
+      capabilities,
+      limit: limitParam,
     });
-
-    if (!response.ok) {
-      const error = await response.text();
-      return NextResponse.json(
-        { error: `Search failed: ${response.status} ${error}` },
-        { status: 502 },
-      );
-    }
-
-    const data = await response.json();
-    const numbers = (data.available_phone_numbers || []).map((n: Record<string, unknown>) => ({
-      phoneNumber: n.phone_number,
-      friendlyName: n.friendly_name,
-      capabilities: {
-        voice: n.capabilities?.voice ?? false,
-        sms: n.capabilities?.sms ?? false,
-      },
-      locality: n.locality || null,
-      region: n.region || null,
-      isoCountry: n.iso_country || countryCode,
-    }));
 
     return NextResponse.json({ numbers });
   } catch (error) {
     console.error('[GET /api/addons/phones/search] error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to search phone numbers' },
-      { status: 500 },
-    );
+    const message = error instanceof Error ? error.message : 'Failed to search phone numbers';
+    // Distinguish "provider not configured" (503) from upstream failures (502).
+    const status = /not configured|credentials/i.test(message) ? 503 : 502;
+    return NextResponse.json({ error: message }, { status });
   }
-}
-
-// ─── Helpers (access the provider's internal auth) ──────────────────────────
-
-async function getTwilioAuthHeader(_provider: unknown): Promise<string> {
-  const { getDecryptedApiKey } = await import('@/lib/ai-provider-config-service');
-  const authToken = await getDecryptedApiKey('TWILIO');
-  if (!authToken) throw new Error('Twilio credentials not configured');
-
-  const { db } = await import('@/lib/db');
-  const config = await db.aiProviderConfig.findUnique({
-    where: { provider: 'TWILIO' },
-    select: { configJson: true },
-  });
-
-  let accountSid = '';
-  if (config?.configJson) {
-    try {
-      accountSid = JSON.parse(config.configJson).accountSid || '';
-    } catch { /* ignore */ }
-  }
-
-  const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
-  return `Basic ${credentials}`;
-}
-
-async function getTwilioConfig(_provider: unknown): Promise<{ accountSid: string }> {
-  const { db } = await import('@/lib/db');
-  const config = await db.aiProviderConfig.findUnique({
-    where: { provider: 'TWILIO' },
-    select: { configJson: true },
-  });
-
-  let accountSid = '';
-  if (config?.configJson) {
-    try {
-      accountSid = JSON.parse(config.configJson).accountSid || '';
-    } catch { /* ignore */ }
-  }
-
-  if (!accountSid) throw new Error('Twilio Account SID not configured');
-  return { accountSid };
 }

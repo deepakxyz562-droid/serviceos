@@ -17,7 +17,7 @@
  */
 
 import { getDecryptedApiKey } from '@/lib/ai-provider-config-service';
-import type { TelephonyProvider, ProvisionNumberParams, ProvisionNumberResult, ConfigureForwardingParams } from '@/lib/telephony-provider';
+import type { TelephonyProvider, ProvisionNumberParams, ProvisionNumberResult, ConfigureForwardingParams, AvailableNumber } from '@/lib/telephony-provider';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -93,39 +93,54 @@ class TwilioTelephonyProviderImpl implements TelephonyProvider {
     const auth = await this.getAuthHeader();
     const { accountSid } = await this.getConfig();
 
-    // 1. Search for available numbers
-    const searchParams = new URLSearchParams({
-      IsoCountry: params.countryCode || 'US',
-      ...(params.capabilities.includes('voice') ? { VoiceEnabled: 'true' } : {}),
-      ...(params.capabilities.includes('sms') ? { SmsEnabled: 'true' } : {}),
-      Limit: '5',
-    });
+    // ── Phase 8.6: search → select → purchase ─────────────────────────────
+    // If the caller passed a specific `phoneNumber` (the user selected one
+    // from `searchNumbers()` results), buy THAT exact number. No search.
+    // This is the only path the /api/addons/phones/buy route uses now.
+    //
+    // If `phoneNumber` is omitted (legacy callers), fall back to searching
+    // for any available number and buying the first one. This preserves
+    // backward compatibility but is discouraged — the user may not get the
+    // number they expected.
+    let numberToBuy: string;
+    if (params.phoneNumber) {
+      numberToBuy = params.phoneNumber;
+    } else {
+      // Legacy fallback: search + pick first available.
+      const searchParams = new URLSearchParams({
+        IsoCountry: params.countryCode || 'US',
+        ...(params.capabilities.includes('voice') ? { VoiceEnabled: 'true' } : {}),
+        ...(params.capabilities.includes('sms') ? { SmsEnabled: 'true' } : {}),
+        Limit: '5',
+      });
 
-    const searchResponse = await fetch(
-      `${this.baseUrl}/2010-04-01/Accounts/${accountSid}/AvailablePhoneNumbers/Local.json?${searchParams}`,
-      {
-        method: 'GET',
-        headers: { Authorization: auth },
-      },
-    );
+      const searchResponse = await fetch(
+        `${this.baseUrl}/2010-04-01/Accounts/${accountSid}/AvailablePhoneNumbers/Local.json?${searchParams}`,
+        {
+          method: 'GET',
+          headers: { Authorization: auth },
+        },
+      );
 
-    if (!searchResponse.ok) {
-      const error = await searchResponse.text();
-      throw new Error(`Twilio search available numbers failed: ${searchResponse.status} ${error}`);
+      if (!searchResponse.ok) {
+        const error = await searchResponse.text();
+        throw new Error(`Twilio search available numbers failed: ${searchResponse.status} ${error}`);
+      }
+
+      const searchData = await searchResponse.json();
+      const availableNumbers = searchData.available_phone_numbers || [];
+
+      if (availableNumbers.length === 0) {
+        throw new Error(`No available phone numbers found for country ${params.countryCode || 'US'}`);
+      }
+
+      numberToBuy = availableNumbers[0].phone_number;
     }
 
-    const searchData = await searchResponse.json();
-    const availableNumbers = searchData.available_phone_numbers || [];
-
-    if (availableNumbers.length === 0) {
-      throw new Error(`No available phone numbers found for country ${params.countryCode || 'US'}`);
-    }
-
-    const selectedNumber = availableNumbers[0];
-
-    // 2. Buy the number
+    // Buy the number (either the exact one the user picked, or the first
+    // available from the legacy fallback search above).
     const buyParams = new URLSearchParams({
-      PhoneNumber: selectedNumber.phone_number,
+      PhoneNumber: numberToBuy,
       ...(params.friendlyName ? { FriendlyName: params.friendlyName } : {}),
       ...(params.voiceWebhookUrl ? { VoiceUrl: params.voiceWebhookUrl } : {}),
       ...(params.voiceWebhookUrl ? { VoiceMethod: 'POST' } : {}),
@@ -320,6 +335,66 @@ class TwilioTelephonyProviderImpl implements TelephonyProvider {
     } catch (err) {
       return { valid: false, error: err instanceof Error ? err.message : 'Unknown error' };
     }
+  }
+
+  /**
+   * Search for available Twilio phone numbers to purchase.
+   *
+   * Calls Twilio's AvailablePhoneNumbers/Local endpoint with the requested
+   * country code, optional area code, and capability filters. Returns up to
+   * `limit` (default 10) numbers, normalised to the AvailableNumber shape
+   * defined in the TelephonyProvider interface.
+   *
+   * Used by /api/addons/phones/search (the "search → select → purchase"
+   * flow). The user picks one of these numbers, then /api/addons/phones/buy
+   * calls `provisionNumber({ phoneNumber })` to buy the exact one.
+   */
+  async searchNumbers(params: {
+    countryCode: string;
+    areaCode?: string;
+    capabilities: ('sms' | 'voice')[];
+    limit?: number;
+  }): Promise<AvailableNumber[]> {
+    const auth = await this.getAuthHeader();
+    const { accountSid } = await this.getConfig();
+
+    const searchUrl = new URL(
+      `${this.baseUrl}/2010-04-01/Accounts/${accountSid}/AvailablePhoneNumbers/Local.json`,
+    );
+    searchUrl.searchParams.set('IsoCountry', params.countryCode || 'US');
+    if (params.areaCode) searchUrl.searchParams.set('AreaCode', params.areaCode);
+    if (params.capabilities.includes('voice')) searchUrl.searchParams.set('VoiceEnabled', 'true');
+    if (params.capabilities.includes('sms')) searchUrl.searchParams.set('SmsEnabled', 'true');
+    // Twilio caps this at 30 per request; we default to 10.
+    searchUrl.searchParams.set('Limit', String(Math.min(params.limit ?? 10, 30)));
+
+    const response = await fetch(searchUrl, {
+      method: 'GET',
+      headers: { Authorization: auth },
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Twilio search failed: ${response.status} ${error}`);
+    }
+
+    const data = await response.json();
+    const raw = (data.available_phone_numbers || []) as Array<Record<string, unknown>>;
+
+    return raw.map((n) => {
+      const caps = (n.capabilities ?? {}) as { voice?: boolean; sms?: boolean };
+      return {
+        phoneNumber: n.phone_number as string,
+        friendlyName: (n.friendly_name as string | undefined) ?? undefined,
+        capabilities: {
+          voice: caps.voice ?? false,
+          sms: caps.sms ?? false,
+        },
+        locality: (n.locality as string | null) ?? null,
+        region: (n.region as string | null) ?? null,
+        isoCountry: (n.iso_country as string) || params.countryCode || 'US',
+      };
+    });
   }
 }
 

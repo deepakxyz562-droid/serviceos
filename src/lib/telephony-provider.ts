@@ -9,10 +9,9 @@
  * ARCHITECTURE (per Phase 3.5 directive):
  *   PhoneNumberService → TelephonyProvider → Twilio/Telnyx
  *
- * Phase 3.5 defines ONLY the interface. The concrete implementation
- * (TwilioTelephonyProvider) will be built in Phase 5 when Vapi integration
- * lands. For now, this interface exists so the domain layer has a clean
- * boundary to code against.
+ * Phase 8.5+ status: the interface AND the concrete Twilio implementation
+ * (src/lib/twilio-telephony-provider.ts) are both live. Future providers
+ * (Telnyx, etc.) implement this same interface.
  *
  * IMPORTANT: Vapi is NOT a telephony provider — Vapi is the VOICE EXECUTION
  * layer (AI agent runtime). The telephony provider owns the phone network
@@ -37,6 +36,12 @@ export interface ProvisionNumberParams {
   // This URL points to Fieseros' inbound voice handler (Phase 5 Vapi webhook).
   voiceWebhookUrl?: string;
   smsWebhookUrl?: string;
+  // ── Phase 8.6: search → select → purchase ──────────────────────────────
+  // The exact E.164 number the user selected from `searchNumbers()` results.
+  // When provided, the provider MUST buy this exact number (not "first
+  // available"). When omitted, the provider falls back to buying the first
+  // available number from a search (legacy behaviour, kept for back-compat).
+  phoneNumber?: string;
 }
 
 export interface ProvisionNumberResult {
@@ -99,6 +104,34 @@ export interface TelephonyProvider {
    * Called by the Superadmin "Test Connection" button.
    */
   validateCredentials(): Promise<{ valid: boolean; error?: string }>;
+
+  /**
+   * Search for available phone numbers to purchase.
+   * Called by /api/addons/phones/search before the user selects a number.
+   *
+   * Phase 8.6: search → select → purchase. The user picks a specific number
+   * from these results, then `provisionNumber({ phoneNumber })` buys it.
+   *
+   * Returns up to `limit` (default 10) available numbers matching the
+   * requested country / area code / capabilities.
+   */
+  searchNumbers(params: {
+    countryCode: string;
+    areaCode?: string;
+    capabilities: ('sms' | 'voice')[];
+    limit?: number;
+  }): Promise<AvailableNumber[]>;
+}
+
+// ─── Search result type ─────────────────────────────────────────────────────
+
+export interface AvailableNumber {
+  phoneNumber: string; // E.164, e.g. '+14155551234'
+  friendlyName?: string;
+  capabilities: { voice: boolean; sms: boolean };
+  locality?: string | null;
+  region?: string | null;
+  isoCountry: string;
 }
 
 // ─── Factory (Phase 8.5: Twilio implementation wired) ──────────────────────

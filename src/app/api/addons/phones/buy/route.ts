@@ -272,22 +272,25 @@ export async function POST(request: NextRequest) {
 
     let provisionedNumber;
     try {
-      // Call the provider's provisionNumber with the specific E.164
-      // The provider searches for the exact number and buys it
+      // Call the provider's provisionNumber with the EXACT E.164 the user
+      // selected from /api/addons/phones/search results. The provider MUST
+      // buy this specific number — not "first available" (Phase 8.6).
       provisionedNumber = await provider.provisionNumber({
         countryCode,
         capabilities: ['sms', 'voice'],
         friendlyName: friendlyName || `Fieseros Number`,
         voiceWebhookUrl,
         smsWebhookUrl,
+        phoneNumber: requestedE164,
       });
 
-      // Verify the purchased number matches the requested number
+      // Sanity check: the provider should have bought exactly what we asked
+      // for. If it didn't (e.g. a race where another Twilio account grabbed
+      // it between search and buy), we still proceed — the tenant gets a
+      // working number — but we log loudly so support can reconcile.
       if (provisionedNumber.e164 !== requestedE164) {
-        // Twilio bought a different number (shouldn't happen with search → select)
-        // But if it does, we still proceed — the tenant gets a working number
         console.warn(
-          `[phones/buy] purchased number ${provisionedNumber.e164} differs from requested ${requestedE164}`,
+          `[phones/buy] purchased number ${provisionedNumber.e164} differs from requested ${requestedE164} — proceeding with the purchased number`,
         );
       }
     } catch (err) {
