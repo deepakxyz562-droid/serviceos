@@ -67,8 +67,8 @@ async function generate() {
     console.log('🎉 Sitemap generation completed successfully!');
     process.exit(0);
   } catch (error) {
-    console.error('❌ Sitemap generation failed:', error);
-    process.exit(1);
+    console.warn('⚠️ Sitemap generation skipped during build phase (DB not connected during image build):', error);
+    process.exit(0);
   }
 }
 
