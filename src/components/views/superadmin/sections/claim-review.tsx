@@ -69,7 +69,10 @@ interface ClaimRecord {
   reviewedAt: string | null;
   completedAt: string | null;
   createdAt: string;
-  tenant: {
+  // tenant may be undefined if the Supabase adapter failed to populate the
+  // include, OR if the Tenant row was deleted (Cascade) but the ClaimRequest
+  // row remained. The component handles both cases defensively.
+  tenant?: {
     id: string;
     name: string;
     slug: string;
@@ -77,7 +80,7 @@ interface ClaimRecord {
     state: string | null;
     phone: string | null;
     email: string | null;
-  };
+  } | null;
 }
 
 type StatusTab = 'pending' | 'auto_approved' | 'approved' | 'rejected' | 'completed' | 'all';
@@ -240,8 +243,8 @@ export function ClaimReview() {
               {actionDialog.claim && (
                 <>
                   {actionDialog.action === 'approve'
-                    ? `Approve ownership claim for "${actionDialog.claim.tenant.name}". An email with the registration link will be sent to ${actionDialog.claim.claimantEmail}.`
-                    : `Reject ownership claim for "${actionDialog.claim.tenant.name}". A rejection email will be sent to ${actionDialog.claim.claimantEmail}. The listing stays unclaimed.`}
+                    ? `Approve ownership claim for "${actionDialog.claim.tenant?.name || 'Unknown business'}". An email with the registration link will be sent to ${actionDialog.claim.claimantEmail}.`
+                    : `Reject ownership claim for "${actionDialog.claim.tenant?.name || 'Unknown business'}". A rejection email will be sent to ${actionDialog.claim.claimantEmail}. The listing stays unclaimed.`}
                 </>
               )}
             </DialogDescription>
@@ -320,9 +323,13 @@ function ClaimCard({
       {/* Header: tenant + status */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-foreground">{claim.tenant.name}</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {claim.tenant?.name || 'Unknown business (tenant deleted)'}
+          </h3>
           <p className="text-xs text-muted-foreground">
-            {[claim.tenant.city, claim.tenant.state].filter(Boolean).join(', ') || 'No location'}
+            {claim.tenant
+              ? [claim.tenant.city, claim.tenant.state].filter(Boolean).join(', ') || 'No location'
+              : `tenantId: ${claim.tenantId}`}
           </p>
         </div>
         <Badge variant="outline" className={statusColor[claim.status] || ''}>

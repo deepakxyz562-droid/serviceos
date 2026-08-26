@@ -621,6 +621,14 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   FeaturedLocation: {
     location: { targetTable: 'DirectoryLocation', fkColumn: 'locationId' },
   },
+  // ── Marketplace business-claim requests ──
+  // Without this entry, `db.claimRequest.findMany({ include: { tenant: ... } })`
+  // (used by /api/marketplace/claim/admin GET) silently skips the join →
+  // claim.tenant is undefined → superadmin Claims tab crashes with
+  // "Cannot read properties of undefined (reading 'name')".
+  ClaimRequest: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+  },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────

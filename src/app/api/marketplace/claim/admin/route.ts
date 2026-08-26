@@ -80,6 +80,15 @@ export async function POST(request: NextRequest) {
     if (!claim) {
       return NextResponse.json({ error: 'Claim request not found' }, { status: 404 });
     }
+    // Defensive: if the Tenant row was deleted (Cascade) but the ClaimRequest
+    // remained, claim.tenant will be null/undefined. Reject the action with a
+    // clear error rather than crashing on claim.tenant.name below.
+    if (!claim.tenant) {
+      return NextResponse.json(
+        { error: 'The business (Tenant) for this claim no longer exists. Cannot approve/reject a claim for a deleted business.' },
+        { status: 404 },
+      );
+    }
     if (claim.status !== 'pending') {
       return NextResponse.json(
         { error: `Claim is already ${claim.status}` },
@@ -122,8 +131,9 @@ export async function POST(request: NextRequest) {
       ]);
 
       // Send approval email with the registration link
+      // (claim.tenant is guaranteed non-null by the guard above)
       const emailCtx: ClaimEmailContext = {
-        businessName: claim.tenant.name,
+        businessName: claim.tenant!.name,
         claimantEmail: claim.claimantEmail,
         requestId: claim.id,
         completionToken,
@@ -153,8 +163,9 @@ export async function POST(request: NextRequest) {
       });
 
       // Send rejection email (no registration link)
+      // (claim.tenant is guaranteed non-null by the guard above)
       const emailCtx: ClaimEmailContext = {
-        businessName: claim.tenant.name,
+        businessName: claim.tenant!.name,
         claimantEmail: claim.claimantEmail,
         requestId: claim.id,
         appUrl,
