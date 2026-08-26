@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { CornerstoneLayout, CornerstoneHero } from '@/components/seo/cornerstone-layout'
 import { QuoteForm } from './quote-form'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Get a Free Quote — Fieseros Services | Websites, SEO & Google Ads',
   description:

@@ -7,6 +7,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getServiceSchema } from '@/lib/seo/schemas'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Google Ads Management for Service Businesses | Fieseros',
   description:

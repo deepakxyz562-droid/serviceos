@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { getServiceSchema } from '@/lib/seo/schemas'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Website Development for Service Businesses | Fieseros',
   description:
