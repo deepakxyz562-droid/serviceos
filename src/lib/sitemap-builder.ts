@@ -308,6 +308,32 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
     { path: "/technician-app", priority: 0.8, changeFreq: "monthly" },
     { path: "/automations", priority: 0.8, changeFreq: "monthly" },
 
+    // ─── Services (Build / Grow / Run) ───────────────────────────────────
+    { path: "/services", priority: 0.9, changeFreq: "weekly" },
+    { path: "/services/website-development", priority: 0.9, changeFreq: "weekly" },
+    { path: "/services/seo", priority: 0.9, changeFreq: "weekly" },
+    { path: "/services/google-ads", priority: 0.9, changeFreq: "weekly" },
+    { path: "/services/get-a-quote", priority: 0.8, changeFreq: "monthly" },
+    // Industry-specific service pages (18 pages)
+    { path: "/services/website-development/plumbing", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/hvac", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/electrical", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/cleaning-business", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/landscaping", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/lawn-care", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/painting", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/handyman", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/tree-care", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/snow-removal", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/pest-control", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/roofing", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/pool-service", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/window-cleaning", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/concrete", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/garage-door", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/solar", priority: 0.8, changeFreq: "monthly" },
+    { path: "/services/website-development/pet-services", priority: 0.8, changeFreq: "monthly" },
+
     // ─── Free tools (link magnets) ───────────────────────────────────────
     { path: "/invoice-generator", priority: 0.9, changeFreq: "monthly" },
 

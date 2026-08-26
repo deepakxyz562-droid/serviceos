@@ -254,6 +254,13 @@ export function sharedCacheBackend(): 'memory' {
   return 'memory';
 }
 
+/**
+ * Backward compatibility helper for legacy sitemap administration endpoints.
+ */
+export function hasSharedRedis(): boolean {
+  return false;
+}
+
 // Re-export ttlCacheWrap for callers that don't need SWR but want a stable
 // import surface. This preserves backward compatibility with existing code
 // that imports from ttl-cache.ts.
