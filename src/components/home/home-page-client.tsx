@@ -464,6 +464,55 @@ export default function HomePageClient() {
             }
           }
 
+          // ── Email verification deep-link ───────────────────────────────
+          // `/?verify=email&token=xxx` — from the verification email. Call
+          // the verify-email API which marks the user as verified AND
+          // auto-logs them in (returns a JWT + sets a cookie). On success,
+          // store the auth + redirect to the dashboard. On failure, show
+          // an error toast.
+          if (params.get('verify') === 'email') {
+            const verifyToken = params.get('token');
+            if (verifyToken) {
+              try {
+                const res = await fetch(`/api/auth/verify-email?token=${encodeURIComponent(verifyToken)}`);
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                  // Auto-login: store the JWT + user/tenant in localStorage
+                  if (data.token && data.user) {
+                    localStorage.setItem('fieseros_auth', JSON.stringify({
+                      isAuthenticated: true,
+                      user: data.user,
+                      tenant: data.tenant || null,
+                      token: data.token,
+                    }));
+                    // Strip the verify params so a refresh doesn't re-trigger
+                    params.delete('verify');
+                    params.delete('token');
+                    const cleanUrl = params.toString()
+                      ? `${window.location.pathname}?${params.toString()}`
+                      : window.location.pathname;
+                    window.history.replaceState({}, '', cleanUrl);
+                    // Reload to pick up the new auth state
+                    window.location.reload();
+                    return;
+                  }
+                } else {
+                  // Verification failed — show error but don't crash
+                  console.error('[verify-email] Verification failed:', data.error);
+                }
+              } catch (verifyErr) {
+                console.error('[verify-email] Network error:', verifyErr);
+              }
+              // Strip the verify params even on failure (don't loop)
+              params.delete('verify');
+              params.delete('token');
+              const cleanUrl = params.toString()
+                ? `${window.location.pathname}?${params.toString()}`
+                : window.location.pathname;
+              window.history.replaceState({}, '', cleanUrl);
+            }
+          }
+
           // Deep-link from marketplace "List your business" CTA, or from the
           // claim-this-business sign-in gate → auto-open auth. The CTA links to
           // /?auth=register (or /?auth=login); we read it here and switch to the

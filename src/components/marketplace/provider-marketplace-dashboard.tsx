@@ -2250,8 +2250,10 @@ export function ProviderMarketplaceDashboard() {
 
       {/* ── Marketing banner — promotes plan upgrade & feature adoption ──
           Dismissible per-session. Only shows for CRM users (listing-only
-          users get their own upsell banner in ListingProviderDashboard). */}
-      <MarketingBanner onNavigate={navigate} tenant={tenant} />
+          users get their own upsell banner in ListingProviderDashboard).
+          SUPPRESSED when onboarding is not complete — don't upsell to users
+          who haven't finished setting up their business yet. */}
+      {tenant?.onboardingCompleted && <MarketingBanner onNavigate={navigate} tenant={tenant} />}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="w-full sm:w-auto overflow-x-auto h-auto flex-wrap">

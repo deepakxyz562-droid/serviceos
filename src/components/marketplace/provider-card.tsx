@@ -346,9 +346,15 @@ function ProviderCardImpl({
 
   const gates = buildVerificationGates(provider);
   const allGatesPassed = gates.every((g) => g.passed);
+  const anyGatesPassed = gates.some((g) => g.passed);
 
   const showVerifiedBadge = claimed && allGatesPassed;
   const showUnclaimedBadge = !claimed;
+  // For claimed providers that haven't completed verification yet, show a
+  // "New" badge instead of 4 greyed-out "not verified" badges. This avoids
+  // making new CRM users look untrustworthy on the marketplace — they just
+  // registered, they haven't had time to complete KYC/insurance/Stripe yet.
+  const showNewBadge = claimed && !allGatesPassed && !anyGatesPassed;
 
   const description = provider.description ?? listItem.tagline ?? '';
   const profileHref = href ?? '#';
@@ -407,6 +413,11 @@ function ProviderCardImpl({
                 ) : showUnclaimedBadge ? (
                   <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground border border-border/40">
                     Unclaimed
+                  </span>
+                ) : showNewBadge ? (
+                  <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-sky-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200/50">
+                    <Sparkles className="h-3 w-3" />
+                    New
                   </span>
                 ) : null}
               </div>
