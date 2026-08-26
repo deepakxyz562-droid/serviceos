@@ -22,13 +22,20 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Check, ExternalLink, Save, Loader2, ShieldCheck, Star } from 'lucide-react';
+import { Check, ExternalLink, Save, Loader2, ShieldCheck, Star, RotateCcw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import {
+  GoogleConnectedCelebration,
+  hasSeenCelebration,
+  markCelebrationSeen,
+  resetCelebrationSeen,
+} from './google-connected-celebration';
+import { GoogleBookingLink } from './google-booking-link';
 
 const BENEFITS = [
   'Get more clicks from people ready to book',
@@ -41,8 +48,11 @@ export function GoogleBusinessProfileSettings() {
   const [verified, setVerified] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [celebrationOpen, setCelebrationOpen] = useState(false);
 
-  // Load current tenant's GBP URL + verified flag
+  // Load current tenant's GBP URL + verified flag + tenantId (for the
+  // celebration-dialog localStorage key).
   useEffect(() => {
     async function load() {
       try {
@@ -53,6 +63,7 @@ export function GoogleBusinessProfileSettings() {
           const data = await res.json();
           setGbpUrl(data.googleBusinessProfileUrl ?? '');
           setVerified(!!data.googleBusinessVerified);
+          setTenantId(data.id ?? null);
         }
       } catch {
         // ignore — non-critical
@@ -73,6 +84,14 @@ export function GoogleBusinessProfileSettings() {
       });
       if (res.ok) {
         toast.success('Google Business Profile URL saved.');
+        // ── Celebration dialog ──────────────────────────────────────────
+        // Show the celebration the FIRST time the tenant connects a GBP URL.
+        // Tracked per-tenant via localStorage so it shows once per tenant
+        // (not once globally, not on every save).
+        if (gbpUrl && tenantId && !hasSeenCelebration(tenantId)) {
+          markCelebrationSeen(tenantId);
+          setCelebrationOpen(true);
+        }
       } else {
         toast.error('Failed to save URL.');
       }
@@ -81,6 +100,12 @@ export function GoogleBusinessProfileSettings() {
     } finally {
       setSaving(false);
     }
+  }
+
+  /** "Show me again" link — resets the seen flag and re-opens the celebration. */
+  function showCelebrationAgain() {
+    if (tenantId) resetCelebrationSeen(tenantId);
+    setCelebrationOpen(true);
   }
 
   return (
@@ -107,9 +132,23 @@ export function GoogleBusinessProfileSettings() {
               <Loader2 className="size-4 animate-spin" /> Loading...
             </div>
           ) : verified ? (
-            <Badge className="gap-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-              <Check className="size-3" /> Google-verified
-            </Badge>
+            <div className="flex items-center gap-3 flex-wrap">
+              <Badge className="gap-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                <Check className="size-3" /> Google-verified
+              </Badge>
+              {/* "Show me again" link — re-opens the celebration dialog on demand.
+                  Per review direction: "Once + 'Show me again'". */}
+              {gbpUrl && (
+                <button
+                  onClick={showCelebrationAgain}
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  type="button"
+                >
+                  <RotateCcw className="size-3" />
+                  Show the growth checklist again
+                </button>
+              )}
+            </div>
           ) : (
             <Badge variant="outline" className="gap-1 text-amber-700">
               <Star className="size-3" /> Not yet connected
@@ -190,6 +229,33 @@ export function GoogleBusinessProfileSettings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Booking link section (Commit 3a) ──────────────────────────────────
+          Shows ONLY after the tenant has connected their GBP URL. This is the
+          manual approach — no Google API integration required. The tenant
+          copies the UTM-tagged booking URL and pastes it into their Google
+          Business Profile → Info → Booking URL field. Per review direction:
+          'Option A — manual booking link now'. */}
+      {!loading && gbpUrl && <GoogleBookingLink />}
+
+      {/* ── Celebration dialog ───────────────────────────────────────────────
+          Shows ONCE after the tenant saves their GBP URL for the first time.
+          Can be re-opened via the "Show the growth checklist again" link above.
+          Per review direction: "Once + 'Show me again'". */}
+      <GoogleConnectedCelebration
+        open={celebrationOpen}
+        onClose={() => setCelebrationOpen(false)}
+        onSetUpLeadCapture={() => {
+          setCelebrationOpen(false);
+          // Commit 3a will wire this to the booking-link copy UI. For now,
+          // scroll to the booking-link section if it exists, otherwise just
+          // close the dialog.
+          const bookingLinkEl = document.getElementById('google-booking-link');
+          if (bookingLinkEl) {
+            bookingLinkEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }}
+      />
     </div>
   );
 }

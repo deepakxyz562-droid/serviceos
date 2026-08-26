@@ -67,6 +67,9 @@ import {
 } from '@/lib/marketplace-featured'
 import { ClaimBusinessBanner } from '@/components/marketplace/claim-business-banner'
 import { CrmCtaSection } from '@/components/marketplace/crm-cta-section'
+import { FieserosPromoCard } from '@/components/public/fieseros-promo-card'
+import { ImpressionTracker } from '@/components/public/impression-tracker'
+import { loadTenantPublicBranding } from '@/lib/tenant-branding'
 import {
   getIndustrySoftwareUrl,
   getIndustrySoftwareLabel,
@@ -252,17 +255,24 @@ export default async function PublicBusinessHubPage({
     business.country,
     6,
   ).catch(() => [])
-  const [servicesRaw, reviewsRaw, certificationsRaw, featuredMap, similarProvidersRaw] = await Promise.all([
+  const [servicesRaw, reviewsRaw, certificationsRaw, featuredMap, similarProvidersRaw, publicBranding] = await Promise.all([
     getPublicServices(business.id),
     getPublicReviews(business.id, 10),
     certificationsPromise,
     featuredPromise,
     similarPromise,
+    // Resolve white-label flag so we can hide the "Powered by Fieseros" promo
+    // card entirely when the tenant paid for white-label. Fail-open (returns
+    // false on error → promo is shown, which is the safe default).
+    loadTenantPublicBranding(business.id),
   ])
   const services = Array.isArray(servicesRaw) ? servicesRaw : []
   const reviews = Array.isArray(reviewsRaw) ? reviewsRaw : []
   const certifications = Array.isArray(certificationsRaw) ? certificationsRaw : []
   const similarProviders = Array.isArray(similarProvidersRaw) ? similarProvidersRaw : []
+  // When true, the tenant's plan allows white-label AND they've enabled it.
+  // The public business hub MUST NOT show any Fieseros branding in this case.
+  const hideFieserosBranding = publicBranding.hideFieserosBranding
 
   // ── Compute the marketplace card type for this business ──────────────────
   // Determines whether the detail page renders the full booking panel
@@ -470,6 +480,11 @@ export default async function PublicBusinessHubPage({
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <StructuredData data={allSchema} />
+      {/* Anonymous impression tracking — populates the superadmin marketplace
+          funnel widget. Fire-and-forget, no PII, no cookies. Only mounted
+          when the tenant is NOT white-labeled (white-label tenants don't
+          contribute to the Fieseros acquisition funnel). */}
+      {!hideFieserosBranding && <ImpressionTracker slug={business.slug} />}
       <MarketplaceHeader />
 
       {/* NOTE: This page does NOT use id="main-content" — the browse page
@@ -1042,12 +1057,15 @@ export default async function PublicBusinessHubPage({
                   )}
                 </div>
 
-                <div className="text-center text-xs text-muted-foreground">
-                  Powered by{' '}
-                  <Link href="/" className="font-semibold text-emerald-700 hover:underline">
-                    Fieseros
-                  </Link>
-                </div>
+                {/* ── Powered by Fieseros promo card ───────────────────────────
+                    A small premium card (not a footer advertisement) that
+                    positions Fieseros as the technology powering the business.
+                    Hidden entirely when the tenant has white-label enabled
+                    (paid feature + tenant.whiteLabelJson.hideFieserosBranding=true).
+                    Per review direction: "The tenant's business must remain
+                    the hero. Fieseros should feel like the technology powering
+                    a better business experience." */}
+                {!hideFieserosBranding && <FieserosPromoCard />}
               </div>
             </div>
           </div>

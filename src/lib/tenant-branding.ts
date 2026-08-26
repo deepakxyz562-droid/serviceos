@@ -184,3 +184,60 @@ export async function loadTenantEmailBranding(tenantId: string): Promise<TenantE
 export function buildTrackingUrl(jobId: string, origin: string): string {
   return `${origin.replace(/\/$/, '')}/portal/${jobId}`;
 }
+
+/**
+ * Lightweight branding resolver for PUBLIC-FACING pages (the marketplace
+ * business hub at /[companySlug]/[city]/[slug] and the hosted form at /f/[slug]).
+ *
+ * Sister to `loadTenantEmailBranding` — but only returns the fields needed by
+ * public web pages (no email-specific stuff like fontFamily/footerHtml).
+ *
+ * The key field is `hideFieserosBranding`: when true (and the tenant's plan
+ * allows white-label), the public business hub MUST NOT show any "Powered by
+ * Fieseros" branding. This enforces the white-label promise on the customer-
+ * facing surface, not just in emails.
+ *
+ * Used by:
+ *   - src/app/[companySlug]/[city]/[slug]/page.tsx
+ *   - src/app/f/[slug]/page.tsx
+ *
+ * @param tenantId The tenant ID to resolve branding for.
+ * @returns { hideFieserosBranding } — never throws, defaults to false on error
+ *          (fail-open: show branding rather than hiding it incorrectly).
+ */
+export async function loadTenantPublicBranding(
+  tenantId: string,
+): Promise<{ hideFieserosBranding: boolean }> {
+  try {
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        whiteLabelJson: true,
+        plan: true,
+        planStatus: true,
+      },
+    });
+
+    if (!tenant) {
+      return { hideFieserosBranding: false };
+    }
+
+    // ── White-label resolution: plan-gated × tenant override ──
+    let hideFieserosBranding = false;
+    try {
+      const planTier: PlanTier = resolvePlanTier(tenant.plan, tenant.planStatus);
+      const planAllowsWhiteLabel = await isFeatureEnabledForPlan('white_label', planTier);
+      if (planAllowsWhiteLabel) {
+        const wlConfig = parseWhiteLabelConfig(tenant.whiteLabelJson);
+        hideFieserosBranding = wlConfig.hideFieserosBranding === true;
+      }
+    } catch {
+      // If plan feature lookup fails, default to showing branding (fail-open).
+      hideFieserosBranding = false;
+    }
+
+    return { hideFieserosBranding };
+  } catch {
+    return { hideFieserosBranding: false };
+  }
+}

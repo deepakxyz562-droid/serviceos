@@ -29,6 +29,7 @@ import {
 import {
   KpiCard, KPISkeleton, timeAgo, getPlanBadgeClasses,
 } from '@/components/views/superadmin/_shared';
+import { MarketplaceFunnelWidget } from '@/components/views/superadmin/sections/marketplace-funnel-widget';
 import type {
   Tenant, UserRecord, Subscription, PlatformStats, StorageStatus, TabKey,
 } from '@/components/views/superadmin/types';
@@ -276,8 +277,10 @@ export function DashboardTab({
         </Card>
       </div>
 
-      {/* Row 3: Recent Signups (1/2) + Quick Actions (1/2) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Row 3: Recent Signups (1/3) + Marketplace Funnel (1/3) + Quick Actions (1/3)
+          The funnel widget measures the marketplace → CRM acquisition loop:
+          Google → Fieseros business page → booking → CRM lead. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="card-shadow">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
@@ -315,6 +318,9 @@ export function DashboardTab({
             )}
           </CardContent>
         </Card>
+
+        {/* Marketplace → CRM acquisition funnel widget */}
+        <MarketplaceFunnelWidget />
 
         <Card className="card-shadow">
           <CardHeader className="pb-2">
