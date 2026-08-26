@@ -95,7 +95,7 @@ export default async function IndustryServicePage({
                 Without a Fieseros website:
               </h3>
               <ul className="space-y-3">
-                {industry.painPoints.map((pain) => (
+                {industry?.painPoints?.map((pain) => (
                   <li key={pain} className="flex items-start gap-2 text-sm">
                     <XCircle className="mt-0.5 size-4 shrink-0 text-red-500" />
                     <span className="text-muted-foreground">{pain}</span>
@@ -109,10 +109,10 @@ export default async function IndustryServicePage({
           <Card className="border-emerald-500 border-2">
             <CardContent className="pt-6">
               <h3 className="font-semibold text-foreground mb-4">
-                With a Fieseros {industry.name} website:
+                With a Fieseros {industry?.name} website:
               </h3>
               <ul className="space-y-3">
-                {industry.features.map((feature) => (
+                {industry?.features?.map((feature) => (
                   <li key={feature} className="flex items-start gap-2 text-sm">
                     <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
                     <span className="text-muted-foreground">{feature}</span>
@@ -128,17 +128,17 @@ export default async function IndustryServicePage({
       <section className="border-t bg-muted/30">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-8 text-center">
-            Why {industry.name} Businesses Choose Fieseros
+            Why {industry?.name} Businesses Choose Fieseros
           </h2>
           <div className="space-y-6">
             <div className="rounded-lg border border-border bg-card p-6">
               <h3 className="font-semibold text-foreground mb-2">
-                Built for {industry.singularNoun}s, not generic businesses
+                Built for {industry?.singularNoun}s, not generic businesses
               </h3>
               <p className="text-sm text-muted-foreground">
-                We understand the {industry.name.toLowerCase()} industry. Your website
+                We understand the {industry?.name?.toLowerCase()} industry. Your website
                 includes service pages, booking forms, and CRM workflows designed
-                specifically for {industry.singularNoun}s — not a generic template
+                specifically for {industry?.singularNoun}s — not a generic template
                 repurposed for every trade.
               </p>
             </div>
@@ -159,7 +159,7 @@ export default async function IndustryServicePage({
               </h3>
               <p className="text-sm text-muted-foreground">
                 Your website is built with clean code, structured data, and
-                SEO-optimized content for {industry.keywords.slice(0, 3).join(', ')}.
+                SEO-optimized content for {industry?.keywords?.slice(0, 3)?.join(', ')}.
                 Combined with Google Business Profile optimization, you&apos;ll rank
                 for the searches your customers actually type.
               </p>
