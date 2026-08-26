@@ -16,6 +16,7 @@
 
 import { sendEmail } from '@/lib/email-send';
 import { logger } from '@/lib/logger';
+import { renderPromotionalFooter } from '@/lib/emails/promotional-footer';
 
 export interface WelcomeEmailContext {
   /** The business owner's name (User.name). */
@@ -40,19 +41,21 @@ export async function sendWelcomeEmailTo(
   const displayName = ownerName || 'there';
   const dashboardUrl = `${appUrl}/login`;
   const marketplaceUrl = `${appUrl}/provider/${tenantSlug}`;
+  const footer = renderPromotionalFooter({ appUrl, existingUser: true });
 
   const html = renderWelcomeEmailHtml({
     displayName,
     businessName,
     dashboardUrl,
     marketplaceUrl,
+    footerHtml: footer.html,
   });
 
   const result = await sendEmail({
     to,
     subject: `Welcome to Fieseros — let's get ${businessName} online`,
     html,
-    text: welcomeText(displayName, businessName, dashboardUrl, marketplaceUrl),
+    text: welcomeText(displayName, businessName, dashboardUrl, marketplaceUrl, footer.text),
     usageType: 'transactional',
     // No tenantId — bypasses per-tenant email quota gate.
   });
@@ -77,6 +80,7 @@ function welcomeText(
   businessName: string,
   dashboardUrl: string,
   marketplaceUrl: string,
+  footerText: string,
 ): string {
   return `Welcome to Fieseros, ${displayName}!
 
@@ -92,7 +96,7 @@ Log in to your dashboard: ${dashboardUrl}
 
 Need help? Reply to this email or visit our help center.
 
-— The Fieseros team`;
+${footerText}`;
 }
 
 function renderWelcomeEmailHtml(params: {
@@ -100,8 +104,9 @@ function renderWelcomeEmailHtml(params: {
   businessName: string;
   dashboardUrl: string;
   marketplaceUrl: string;
+  footerHtml: string;
 }): string {
-  const { displayName, businessName, dashboardUrl, marketplaceUrl } = params;
+  const { displayName, businessName, dashboardUrl, marketplaceUrl, footerHtml } = params;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -151,8 +156,8 @@ function renderWelcomeEmailHtml(params: {
             </td>
           </tr>
           <tr>
-            <td style="padding:20px 40px 32px;border-top:1px solid #f1f5f9;text-align:center;">
-              <p style="color:#94a3b8;font-size:12px;margin:0;">— The Fieseros team</p>
+            <td style="padding:20px 40px 32px;">
+              ${footerHtml}
             </td>
           </tr>
         </table>

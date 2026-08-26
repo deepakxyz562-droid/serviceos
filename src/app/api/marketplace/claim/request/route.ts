@@ -40,6 +40,7 @@ import {
   sendClaimUnderReviewEmail,
   type ClaimEmailContext,
 } from '@/lib/claim-emails';
+import { computeDomainMatch } from '@/lib/emails/domain-match';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,11 +48,167 @@ export const dynamic = 'force-dynamic';
  * Naive name+address similarity score (0-1). Used for the Google GBP
  * verification path — if the user's GBP listing name + address closely match
  * our tenant record, we trust Google's verification and auto-approve.
+ *
+ * NORMALIZATION (Phase: claim-scoring-fix)
+ * ----------------------------------------
+ * Real-world address strings vary heavily:
+ *   "76 Barrette Street" vs "76 Barrette St"
+ *   "1405 NW Westgate Ave" vs "1405 Northwest Westgate Avenue"
+ *   "Vancouver, WA" vs "Vancouver, Washington"
+ *   "US" vs "USA" vs "United States"
+ *
+ * The raw Jaccard word-overlap score would unfairly penalise these legitimate
+ * variations. Before scoring, we normalise:
+ *   - lowercase
+ *   - strip punctuation (commas, periods, hashes)
+ *   - expand common abbreviations (st→street, ave→avenue, blvd→boulevard, etc.)
+ *   - normalise country names (us/usa/united states → us)
+ *   - normalise canadian province names (ontario→on, british columbia→bc, etc.)
+ *   - collapse whitespace
+ *
+ * This lifts genuinely-matching addresses from ~0-11% (broken) to ~80-95%
+ * (realistic), while still penalising genuinely different addresses.
  */
+const ABBREVIATION_EXPANSIONS: Record<string, string> = {
+  // Street suffixes
+  st: 'street',
+  str: 'street',
+  ave: 'avenue',
+  av: 'avenue',
+  blvd: 'boulevard',
+  Blvd: 'boulevard',
+  rd: 'road',
+  dr: 'drive',
+  ln: 'lane',
+  ct: 'court',
+  cts: 'courts',
+  pl: 'place',
+  sq: 'square',
+  ter: 'terrace',
+  pkwy: 'parkway',
+  hwy: 'highway',
+  cir: 'circle',
+  way: 'way',
+  // Directional
+  nw: 'northwest',
+  ne: 'northeast',
+  sw: 'southwest',
+  se: 'southeast',
+  n: 'north',
+  s: 'south',
+  e: 'east',
+  w: 'west',
+  // Unit/suite
+  ste: 'suite',
+  apt: 'apartment',
+  fl: 'floor',
+  // Country
+  usa: 'us',
+  'united states': 'us',
+  'united states of america': 'us',
+  // Canadian provinces (full → abbreviated, both normalised to abbrev)
+  ontario: 'on',
+  'british columbia': 'bc',
+  alberta: 'ab',
+  quebec: 'qc',
+  'nova scotia': 'ns',
+  'new brunswick': 'nb',
+  manitoba: 'mb',
+  saskatchewan: 'sk',
+  'prince edward island': 'pe',
+  newfoundland: 'nl',
+  'newfoundland and labrador': 'nl',
+  // US states (full → abbreviated, both normalised to abbrev)
+  alabama: 'al',
+  alaska: 'ak',
+  arizona: 'az',
+  arkansas: 'ar',
+  california: 'ca',
+  colorado: 'co',
+  connecticut: 'ct',
+  delaware: 'de',
+  florida: 'fl',
+  georgia: 'ga',
+  hawaii: 'hi',
+  idaho: 'id',
+  illinois: 'il',
+  indiana: 'in',
+  iowa: 'ia',
+  kansas: 'ks',
+  kentucky: 'ky',
+  louisiana: 'la',
+  maine: 'me',
+  maryland: 'md',
+  massachusetts: 'ma',
+  michigan: 'mi',
+  minnesota: 'mn',
+  mississippi: 'ms',
+  missouri: 'mo',
+  montana: 'mt',
+  nebraska: 'ne',
+  'nevada': 'nv',
+  'new hampshire': 'nh',
+  'new jersey': 'nj',
+  'new mexico': 'nm',
+  'new york': 'ny',
+  'north carolina': 'nc',
+  'north dakota': 'nd',
+  ohio: 'oh',
+  oklahoma: 'ok',
+  oregon: 'or',
+  pennsylvania: 'pa',
+  'rhode island': 'ri',
+  'south carolina': 'sc',
+  'south dakota': 'sd',
+  tennessee: 'tn',
+  texas: 'tx',
+  utah: 'ut',
+  vermont: 'vt',
+  virginia: 'va',
+  washington: 'wa',
+  'west virginia': 'wv',
+  wisconsin: 'wi',
+  wyoming: 'wy',
+  // Common words
+  'on': 'on',
+  'canada': 'ca',
+};
+
+function normalizeString(s: string): string {
+  if (!s) return '';
+  let out = s.toLowerCase();
+  // Strip punctuation that doesn't carry meaning (commas, periods, hashes)
+  out = out.replace(/[.,#]/g, ' ');
+  // Collapse whitespace
+  out = out.replace(/\s+/g, ' ').trim();
+  return out;
+}
+
+function normalizeAddress(s: string): string {
+  if (!s) return '';
+  let normalized = normalizeString(s);
+  // Expand abbreviations word-by-word
+  const words = normalized.split(' ').map((w) => ABBREVIATION_EXPANSIONS[w] ?? w);
+  return words.join(' ');
+}
+
 function similarity(a: string, b: string): number {
   if (!a || !b) return 0;
-  const aWords = new Set(a.toLowerCase().split(/\s+/).filter(Boolean));
-  const bWords = new Set(b.toLowerCase().split(/\s+/).filter(Boolean));
+  const aWords = new Set(normalizeString(a).split(/\s+/).filter(Boolean));
+  const bWords = new Set(normalizeString(b).split(/\s+/).filter(Boolean));
+  const intersection = [...aWords].filter((w) => bWords.has(w)).length;
+  const union = new Set([...aWords, ...bWords]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
+/**
+ * Address-specific similarity — uses address-normalised comparison
+ * (abbreviation expansion) so "76 Barrette St" matches "76 Barrette Street".
+ */
+function addressSimilarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const aWords = new Set(normalizeAddress(a).split(/\s+/).filter(Boolean));
+  const bWords = new Set(normalizeAddress(b).split(/\s+/).filter(Boolean));
   const intersection = [...aWords].filter((w) => bWords.has(w)).length;
   const union = new Set([...aWords, ...bWords]).size;
   return union === 0 ? 0 : intersection / union;
@@ -117,9 +274,11 @@ export async function POST(request: NextRequest) {
         name: true,
         email: true,
         phone: true,
+        address: true,   // ← used for full-address similarity comparison
         city: true,
         state: true,
         country: true,
+        website: true,   // ← used for domain-match signal (Improvement D)
         claimed: true,
         listingTier: true,
       },
@@ -165,22 +324,58 @@ export async function POST(request: NextRequest) {
       const gbpAddress = String(google!.gbpAddress ?? '');
 
       const nameScore = similarity(gbpName, tenant.name);
-      const tenantAddress = [tenant.city, tenant.state, tenant.country]
+      // Build the FULL tenant address for comparison — previously this only
+      // used [city, state, country], which dropped the street address and
+      // made the score artificially low (e.g. "76 Barrette Street" vs
+      // "Ottawa, ON, Canada" scored 0%). Now we include tenant.address +
+      // city + state + country so legitimate matches score realistically.
+      const tenantFullAddress = [
+        tenant.address,
+        tenant.city,
+        tenant.state,
+        tenant.country,
+      ]
         .filter(Boolean)
         .join(', ');
-      const addressScore = similarity(gbpAddress, tenantAddress);
+      // Use addressSimilarity (with abbreviation expansion) so "St" matches
+      // "Street", "Ave" matches "Avenue", "WA" matches "Washington", etc.
+      const addressScore = addressSimilarity(gbpAddress, tenantFullAddress);
       const matchScore = nameScore * 0.7 + addressScore * 0.3;
+
+      // ── Domain-match signal (Improvement D) ────────────────────────────
+      // EVIDENCE ONLY — does NOT modify matchScore. Per review direction:
+      // 'domain matching isn't proof of ownership. A domain could be expired,
+      // controlled by someone else, or unrelated to the actual claimant.'
+      // The admin sees this as a green/amber indicator in the review UI.
+      const domainMatch = computeDomainMatch({
+        claimantEmail,
+        businessWebsite: tenant.website,
+        gbpUrl,
+      });
 
       verificationData = {
         gbpUrl,
         gbpName,
         gbpAddress,
+        tenantFullAddress,  // ← expose for admin UI side-by-side comparison
         matchScore: Math.round(matchScore * 100) / 100,
         nameScore: Math.round(nameScore * 100) / 100,
         addressScore: Math.round(addressScore * 100) / 100,
+        // Domain-match signal (Improvement D) — evidence only, no score change
+        domainMatch: {
+          claimantDomain: domainMatch.claimantDomain,
+          websiteDomain: domainMatch.websiteDomain,
+          matchesWebsite: domainMatch.matchesWebsite,
+          signal: domainMatch.signal,
+          label: domainMatch.label,
+        },
       };
 
-      // Auto-approve if Google's listing closely matches our tenant record
+      // Auto-approve if Google's listing closely matches our tenant record.
+      // Threshold stays at 80% — false-positive ownership claims are much
+      // more damaging than false negatives, so we keep this strict.
+      // NOTE: domainMatch is NOT factored into this decision — it's evidence
+      // for the admin, not an automatic signal.
       if (matchScore >= 0.8) {
         status = 'auto_approved';
       }

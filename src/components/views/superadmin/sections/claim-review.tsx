@@ -26,8 +26,14 @@ import {
   Mail,
   ExternalLink,
   ShieldCheck,
+  ShieldAlert,
   Clock,
   RefreshCw,
+  Search,
+  Phone,
+  MapPin,
+  AlertTriangle,
+  User,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,16 +50,34 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
+import {
+  computeDomainMatch,
+  type DomainMatchResult,
+} from '@/lib/emails/domain-match';
 
 interface VerificationData {
   gbpUrl?: string;
   gbpName?: string;
   gbpAddress?: string;
+  // tenantFullAddress is exposed by the claim/request route so the admin UI
+  // can show a side-by-side comparison (Improvement B). On older claims
+  // (filed before the address-scoring fix), this may be absent.
+  tenantFullAddress?: string;
   matchScore?: number;
   nameScore?: number;
   addressScore?: number;
   documentUrls?: string[];
   note?: string;
+  // Domain-match signal computed server-side (Improvement D — claims filed
+  // after this commit). Older claims won't have this; the UI recomputes
+  // client-side as a fallback.
+  domainMatch?: {
+    claimantDomain: string | null;
+    websiteDomain: string | null;
+    matchesWebsite: boolean;
+    signal: 'positive' | 'negative' | 'neutral';
+    label: string;
+  };
 }
 
 interface ClaimRecord {
@@ -69,6 +93,10 @@ interface ClaimRecord {
   reviewedAt: string | null;
   completedAt: string | null;
   createdAt: string;
+  // Total claims filed by this claimant (across all tenants + statuses).
+  // 1 = first-time claimant; 4+ = elevated fraud risk. Computed by the
+  // admin GET route (batched — not N+1).
+  claimantHistoryCount?: number;
   // tenant may be undefined if the Supabase adapter failed to populate the
   // include, OR if the Tenant row was deleted (Cascade) but the ClaimRequest
   // row remained. The component handles both cases defensively.
@@ -76,10 +104,13 @@ interface ClaimRecord {
     id: string;
     name: string;
     slug: string;
+    address?: string | null;
     city: string | null;
     state: string | null;
+    country?: string | null;
     phone: string | null;
     email: string | null;
+    website?: string | null;
   } | null;
 }
 
@@ -310,13 +341,59 @@ function ClaimCard({
   onReject: () => void;
 }) {
   const vd = claim.verificationData;
+  const tenant = claim.tenant;
   const statusColor: Record<string, string> = {
     pending: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
-    auto_approved: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
-    approved: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
+    auto_approved: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-amber-900',
+    approved: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-amber-900',
     rejected: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900',
     completed: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900',
   };
+
+  // ── Derived verification signals ─────────────────────────────────────────
+  const matchScore = typeof vd.matchScore === 'number' ? vd.matchScore : null;
+  const isLowMatch = matchScore !== null && matchScore < 0.8;
+  const historyCount = claim.claimantHistoryCount ?? 1;
+  const isHighRiskClaimant = historyCount >= 4;
+
+  // Build the tenant's full address for display (and to compare with GBP).
+  const tenantFullAddress = vd.tenantFullAddress
+    || [tenant?.address, tenant?.city, tenant?.state, tenant?.country]
+      .filter(Boolean).join(', ')
+    || null;
+
+  // Google search URL for quick verification (Improvement B requirement).
+  const googleSearchUrl = tenant
+    ? `https://www.google.com/search?q=${encodeURIComponent(`${tenant.name} ${tenant.city || ''} ${tenant.state || ''}`.trim())}`
+    : null;
+
+  // Extract domain from tenant.website (if present) for visual comparison
+  // in the tenant reference card. (The full domain-MATCH signal uses the
+  // shared computeDomainMatch helper below.)
+  const tenantWebsiteDomain = tenant?.website
+    ? extractDomain(tenant.website)
+    : null;
+
+  // Use the shared domain-match helper (same logic as the server side).
+  // This is EVIDENCE ONLY — does not affect matchScore. The admin sees it
+  // as a green/amber indicator.
+  const domainMatchSignal: DomainMatchResult = vd.domainMatch
+    ? {
+        // Server-side signal already computed — use it directly.
+        claimantDomain: vd.domainMatch.claimantDomain,
+        websiteDomain: vd.domainMatch.websiteDomain,
+        gbpDomain: null,
+        matchesWebsite: vd.domainMatch.matchesWebsite,
+        matchesGbp: false,
+        signal: vd.domainMatch.signal,
+        label: vd.domainMatch.label,
+      }
+    : computeDomainMatch({
+        // Fallback for older claims — compute client-side.
+        claimantEmail: claim.claimantEmail,
+        businessWebsite: tenant?.website,
+        gbpUrl: vd.gbpUrl,
+      });
 
   return (
     <div className="rounded-lg border border-border bg-card p-4 space-y-3">
@@ -324,30 +401,109 @@ function ClaimCard({
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-foreground">
-            {claim.tenant?.name || 'Unknown business (tenant deleted)'}
+            {tenant?.name || 'Unknown business (tenant deleted)'}
           </h3>
           <p className="text-xs text-muted-foreground">
-            {claim.tenant
-              ? [claim.tenant.city, claim.tenant.state].filter(Boolean).join(', ') || 'No location'
+            {tenant
+              ? [tenant.city, tenant.state].filter(Boolean).join(', ') || 'No location'
               : `tenantId: ${claim.tenantId}`}
           </p>
         </div>
-        <Badge variant="outline" className={statusColor[claim.status] || ''}>
-          {claim.status.replace('_', ' ')}
-        </Badge>
+        <div className="flex items-center gap-2 flex-wrap">
+          {tenant && googleSearchUrl && (
+            <a
+              href={googleSearchUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground hover:bg-muted transition-colors"
+              title="Search Google for this business"
+            >
+              <Search className="h-3 w-3" />
+              Google
+            </a>
+          )}
+          <Badge variant="outline" className={statusColor[claim.status] || ''}>
+            {claim.status.replace('_', ' ')}
+          </Badge>
+        </div>
       </div>
 
-      {/* Claimant info */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+      {/* ⚠️ Low-match warning banner (Improvement B) */}
+      {isLowMatch && claim.verificationMethod === 'google' && (
+        <div className="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-800 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-300">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-semibold">Low match score ({Math.round((matchScore ?? 0) * 100)}%).</span>{' '}
+            Verify carefully — the Google Business Profile name and/or address don&apos;t closely match our tenant record.
+          </div>
+        </div>
+      )}
+
+      {/* High-risk claimant banner */}
+      {isHighRiskClaimant && (
+        <div className="flex items-start gap-2 rounded-md bg-red-50 border border-red-200 p-2.5 text-xs text-red-800 dark:bg-red-950/30 dark:border-red-900 dark:text-red-300">
+          <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-semibold">This claimant has filed {historyCount} claims.</span>{' '}
+            Elevated fraud risk — verify ownership documents carefully before approving.
+          </div>
+        </div>
+      )}
+
+      {/* Claimant info + claim history */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <Mail className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{claim.claimantEmail || 'No email'}</span>
+          <span className="truncate" title={claim.claimantEmail || ''}>
+            {claim.claimantEmail || 'No email'}
+          </span>
         </div>
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <Clock className="h-3.5 w-3.5 shrink-0" />
           <span>{new Date(claim.createdAt).toLocaleString()}</span>
         </div>
+        <div className="flex items-center gap-1.5 text-muted-foreground">
+          <User className="h-3.5 w-3.5 shrink-0" />
+          <span className={
+            historyCount === 1
+              ? 'text-emerald-600 font-medium'
+              : isHighRiskClaimant
+                ? 'text-red-600 font-medium'
+                : 'text-amber-600 font-medium'
+          }>
+            {historyCount} claim{historyCount > 1 ? 's' : ''} filed
+          </span>
+        </div>
       </div>
+
+      {/* ── Tenant reference card (Improvement B) ────────────────────────── */}
+      {tenant && (
+        <div className="rounded-md bg-muted/40 p-3 space-y-1.5 text-xs">
+          <div className="flex items-center gap-1.5 font-medium text-foreground mb-1">
+            <MapPin className="h-3.5 w-3.5" />
+            Fieseros Tenant Record
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
+            <div><span className="text-foreground/70">Address:</span> {tenantFullAddress || 'Not set'}</div>
+            <div className="flex items-center gap-1">
+              <Phone className="h-3 w-3" />
+              <span>{tenant.phone || 'No phone'}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Mail className="h-3 w-3" />
+              <span className="truncate">{tenant.email || 'No email'}</span>
+            </div>
+            {tenant.website && (
+              <div className="flex items-center gap-1">
+                <Globe className="h-3 w-3" />
+                <a href={tenant.website} target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline truncate">
+                  {tenantWebsiteDomain || tenant.website} <ExternalLink className="h-2.5 w-2.5 inline" />
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Verification method + data */}
       <div className="rounded-md bg-muted/40 p-3 space-y-2">
@@ -359,7 +515,7 @@ function ClaimCard({
         </div>
 
         {claim.verificationMethod === 'google' && vd.gbpUrl && (
-          <div className="space-y-1 text-xs">
+          <div className="space-y-2 text-xs">
             <div className="flex items-center gap-1.5">
               <Globe className="h-3 w-3 text-muted-foreground" />
               <a
@@ -371,20 +527,67 @@ function ClaimCard({
                 {vd.gbpName || vd.gbpUrl} <ExternalLink className="h-2.5 w-2.5" />
               </a>
             </div>
-            {vd.gbpAddress && (
-              <p className="text-muted-foreground pl-4.5">Address: {vd.gbpAddress}</p>
-            )}
-            {typeof vd.matchScore === 'number' && (
-              <div className="pl-4.5">
-                <span className="text-muted-foreground">Match score: </span>
-                <span className={`font-medium ${
-                  vd.matchScore >= 0.8 ? 'text-emerald-600' : 'text-amber-600'
-                }`}>
-                  {Math.round(vd.matchScore * 100)}%
-                </span>
-                <span className="text-muted-foreground">
-                  {' '}(name {Math.round((vd.nameScore || 0) * 100)}%, addr {Math.round((vd.addressScore || 0) * 100)}%)
-                </span>
+
+            {/* ── Side-by-side comparison table (Improvement B) ─────────── */}
+            <div className="rounded-md border border-border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/60">
+                  <tr>
+                    <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Field</th>
+                    <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Fieseros Tenant</th>
+                    <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Google Business Profile</th>
+                    <th className="text-right px-2 py-1.5 font-medium text-muted-foreground">Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-border">
+                    <td className="px-2 py-1.5 font-medium text-foreground">Name</td>
+                    <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[150px]">{tenant?.name || '—'}</td>
+                    <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[150px]">{vd.gbpName || '—'}</td>
+                    <td className="px-2 py-1.5 text-right">
+                      <ScorePill score={vd.nameScore} />
+                    </td>
+                  </tr>
+                  <tr className="border-t border-border">
+                    <td className="px-2 py-1.5 font-medium text-foreground">Address</td>
+                    <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[150px]">{tenantFullAddress || '—'}</td>
+                    <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[150px]">{vd.gbpAddress || '—'}</td>
+                    <td className="px-2 py-1.5 text-right">
+                      <ScorePill score={vd.addressScore} />
+                    </td>
+                  </tr>
+                  <tr className="border-t border-border bg-muted/30">
+                    <td className="px-2 py-1.5 font-semibold text-foreground" colSpan={3}>Overall Match</td>
+                    <td className="px-2 py-1.5 text-right">
+                      <ScorePill score={vd.matchScore} bold />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Domain-match signal (Improvement D — evidence only, no score change) */}
+            {domainMatchSignal.claimantDomain && (
+              <div className="flex items-center gap-1.5 text-xs flex-wrap">
+                <span className="text-muted-foreground">Email domain:</span>
+                <code className="px-1 py-0.5 rounded bg-muted text-foreground">
+                  {domainMatchSignal.claimantDomain}
+                </code>
+                {domainMatchSignal.signal === 'positive' && (
+                  <span className="inline-flex items-center gap-0.5 text-emerald-600 font-medium">
+                    <CheckCircle2 className="h-3 w-3" /> {domainMatchSignal.label}
+                  </span>
+                )}
+                {domainMatchSignal.signal === 'negative' && (
+                  <span className="inline-flex items-center gap-0.5 text-amber-600">
+                    <XCircle className="h-3 w-3" /> {domainMatchSignal.label}
+                  </span>
+                )}
+                {domainMatchSignal.signal === 'neutral' && (
+                  <span className="inline-flex items-center gap-0.5 text-muted-foreground">
+                    <AlertTriangle className="h-3 w-3" /> {domainMatchSignal.label}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -451,4 +654,38 @@ function ClaimCard({
       )}
     </div>
   );
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+/** Score pill — green ≥80%, amber 50-79%, red <50%. */
+function ScorePill({ score, bold }: { score?: number; bold?: boolean }) {
+  if (typeof score !== 'number') {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  const pct = Math.round(score * 100);
+  const color = score >= 0.8
+    ? 'text-emerald-600'
+    : score >= 0.5
+      ? 'text-amber-600'
+      : 'text-red-600';
+  return (
+    <span className={`${color} ${bold ? 'font-bold' : 'font-medium'}`}>
+      {pct}%
+    </span>
+  );
+}
+
+/** Extract the registered domain from a URL or bare domain string. */
+function extractDomain(input: string): string | null {
+  try {
+    // Strip protocol + path
+    const withProtocol = input.startsWith('http') ? input : `https://${input}`;
+    const url = new URL(withProtocol);
+    const host = url.hostname.toLowerCase();
+    // Strip leading www.
+    return host.startsWith('www.') ? host.slice(4) : host;
+  } catch {
+    return null;
+  }
 }

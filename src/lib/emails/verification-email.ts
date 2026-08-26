@@ -39,6 +39,7 @@ import { createHash, randomBytes } from 'crypto';
 import { db } from '@/lib/db';
 import { sendEmail } from '@/lib/email-send';
 import { logger } from '@/lib/logger';
+import { renderPromotionalFooter } from '@/lib/emails/promotional-footer';
 
 const TOKEN_BYTES = 32; // 256-bit token → 64 hex chars
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -152,17 +153,19 @@ export async function sendVerificationEmail(params: {
   const { to, name, rawToken, appUrl } = params;
   const verifyLink = `${appUrl}/?verify=email&token=${rawToken}`;
   const displayName = name || 'there';
+  const footer = renderPromotionalFooter({ appUrl, existingUser: false });
 
   const html = renderVerificationEmailHtml({
     displayName,
     verifyLink,
+    footerHtml: footer.html,
   });
 
   const result = await sendEmail({
     to,
     subject: 'Verify your email — Fieseros',
     html,
-    text: `Welcome to Fieseros!\n\nPlease verify your email by visiting this link:\n${verifyLink}\n\nThis link expires in 24 hours. If you didn't sign up for Fieseros, you can safely ignore this email.\n\n— The Fieseros team`,
+    text: `Welcome to Fieseros!\n\nPlease verify your email by visiting this link:\n${verifyLink}\n\nThis link expires in 24 hours. If you didn't sign up for Fieseros, you can safely ignore this email.\n\n${footer.text}`,
     usageType: 'transactional',
     // No tenantId — bypasses the per-tenant email quota gate. The user may
     // not even have a tenant yet at this point (registration flow).
@@ -192,8 +195,9 @@ function hashToken(rawToken: string): string {
 function renderVerificationEmailHtml(params: {
   displayName: string;
   verifyLink: string;
+  footerHtml: string;
 }): string {
-  const { displayName, verifyLink } = params;
+  const { displayName, verifyLink, footerHtml } = params;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -234,8 +238,8 @@ function renderVerificationEmailHtml(params: {
             </td>
           </tr>
           <tr>
-            <td style="padding:20px 40px 32px;border-top:1px solid #f1f5f9;text-align:center;">
-              <p style="color:#94a3b8;font-size:12px;margin:0;">— The Fieseros team</p>
+            <td style="padding:20px 40px 32px;">
+              ${footerHtml}
             </td>
           </tr>
         </table>

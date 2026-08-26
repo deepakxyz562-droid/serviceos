@@ -22,6 +22,7 @@
 import { sendEmail } from '@/lib/email-send';
 import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
+import { renderPromotionalFooter } from '@/lib/emails/promotional-footer';
 
 export interface ClaimEmailContext {
   /** The business name being claimed (tenant.name). */
@@ -58,6 +59,7 @@ export async function sendClaimApprovedEmail(ctx: ClaimEmailContext): Promise<vo
   }
 
   const registrationLink = `${ctx.appUrl}/?claim=complete&token=${ctx.completionToken}`;
+  const footer = renderPromotionalFooter({ appUrl: ctx.appUrl, existingUser: false });
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -74,46 +76,60 @@ export async function sendClaimApprovedEmail(ctx: ClaimEmailContext): Promise<vo
           <tr><td style="background-color:#0f766e;height:6px;line-height:6px"></td></tr>
           <tr>
             <td style="padding:32px 40px 20px;text-align:center;">
-              <div style="display:inline-block;width:52px;height:52px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;line-height:52px;color:#0f766e;font-weight:700;font-size:22px;margin-bottom:12px;">✓</div>
-              <h1 style="color:#0f172a;font-size:24px;font-weight:700;margin:0 0 6px;letter-spacing:-0.02em;">Claim Approved!</h1>
-              <p style="color:#64748b;font-size:14px;margin:0;">You are verified to manage <strong>${escapeHtml(ctx.businessName)}</strong></p>
+              <div style="display:inline-block;width:52px;height:52px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;line-height:52px;color:#0f766e;font-weight:700;font-size:22px;margin-bottom:12px;">&#10003;</div>
+              <h1 style="color:#0f172a;font-size:24px;font-weight:700;margin:0 0 6px;letter-spacing:-0.02em;">Claim Approved</h1>
+              <p style="color:#64748b;font-size:14px;margin:0;">Your claim for <strong>${escapeHtml(ctx.businessName)}</strong> has been approved</p>
             </td>
           </tr>
           <tr>
             <td style="padding:8px 40px 36px;color:#334155;font-size:15px;line-height:1.65;">
-              <div style="background:#f0fdf4;border:1px solid #99f6e4;border-radius:12px;padding:18px 20px;margin-bottom:24px;">
-                <p style="margin:0 0 6px;color:#0f766e;font-size:14px;font-weight:700;">✓ Verification Successful</p>
+              <p style="margin:0 0 14px;">
+                Hi ${escapeHtml(ctx.claimantEmail.split('@')[0] || 'there')},
+              </p>
+              <div style="background:#f0fdf4;border:1px solid #99f6e4;border-radius:12px;padding:18px 20px;margin-bottom:20px;">
+                <p style="margin:0 0 6px;color:#0f766e;font-size:14px;font-weight:700;">&#10003; Claim Approved</p>
                 <p style="margin:0;color:#115e59;font-size:13px;line-height:1.5;">
                   Your claim for <strong>${escapeHtml(ctx.businessName)}</strong> has been approved. You can now create your account and take ownership of this business listing.
                 </p>
               </div>
 
+              <p style="color:#475569;font-size:13px;margin:0 0 16px;">
+                <strong>This approval was sent to:</strong> ${escapeHtml(ctx.claimantEmail)}<br>
+                <strong>Business:</strong> ${escapeHtml(ctx.businessName)}
+              </p>
+
               <p style="color:#0f172a;font-weight:600;margin:0 0 12px;">Once registered, you'll be able to:</p>
               <ul style="color:#475569;font-size:14px;line-height:1.8;padding-left:20px;margin:0 0 24px;">
                 <li>Edit your public business profile (hours, photos, services)</li>
-                <li>Respond to customer reviews & quotes</li>
-                <li>Receive calls & inquiries directly</li>
-                <li>Unlock automated appointment booking & invoicing</li>
+                <li>Respond to customer reviews &amp; quotes</li>
+                <li>Receive calls &amp; inquiries directly</li>
+                <li>Unlock automated appointment booking &amp; invoicing</li>
               </ul>
 
               <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 16px;">
                 <tr>
                   <td style="background-color:#0f766e;border-radius:10px;padding:13px 28px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
                     <a href="${registrationLink}" style="color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;display:inline-block;letter-spacing:-0.01em;">
-                      Create Account & Claim Profile →
+                      Create Account &amp; Claim Profile &rarr;
                     </a>
                   </td>
                 </tr>
               </table>
 
-              <p style="color:#94a3b8;font-size:12px;line-height:1.5;margin-top:20px;">
-                This link is unique to your claim request and expires in 7 days. Reference ID: <span style="font-family:monospace;">${ctx.requestId}</span>
+              <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-top:16px;">
+                <p style="margin:0;color:#78350f;font-size:12px;line-height:1.5;">
+                  <strong>&#9203; Link expires in 7 days.</strong> Create your account before ${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.
+                </p>
+              </div>
+
+              <p style="color:#94a3b8;font-size:11px;line-height:1.5;margin-top:16px;border-top:1px solid #f1f5f9;padding-top:12px;">
+                <strong>Security:</strong> If you didn't request to claim "${escapeHtml(ctx.businessName)}", please reply to this email immediately so we can investigate. Reference ID: <span style="font-family:monospace;">${ctx.requestId}</span>
               </p>
             </td>
           </tr>
           <tr>
-            <td style="padding:24px 40px;background-color:#f8fafc;border-top:1px solid #f1f5f9;font-size:12px;color:#94a3b8;text-align:center;">
-              Powered by <a href="https://fieseros.com" style="color:#0f766e;text-decoration:none;font-weight:600">Fieseros</a>
+            <td style="padding:20px 40px 32px;">
+              ${footer.html}
             </td>
           </tr>
         </table>
@@ -125,13 +141,22 @@ export async function sendClaimApprovedEmail(ctx: ClaimEmailContext): Promise<vo
 
   const text = `Claim Approved — ${ctx.businessName}
 
+Hi ${ctx.claimantEmail.split('@')[0] || 'there'},
+
 Your claim for "${ctx.businessName}" has been approved. You can now create your Fieseros account and take ownership of this business listing.
+
+This approval was sent to: ${ctx.claimantEmail}
+Business: ${ctx.businessName}
 
 Create your account: ${registrationLink}
 
-This link is unique to your claim request and expires after 7 days.
+⚠️ This link expires in 7 days (on ${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}).
+
+Security: If you didn't request to claim "${ctx.businessName}", please reply to this email immediately.
 
 Reference ID: ${ctx.requestId}
+
+${footer.text}
   `.trim();
 
   try {
@@ -153,6 +178,7 @@ Reference ID: ${ctx.requestId}
 
 export async function sendClaimRejectedEmail(ctx: ClaimEmailContext): Promise<void> {
   const reasonText = ctx.reviewNote ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;margin:16px 0;color:#991b1b;font-size:13px;line-height:1.5;"><strong>Reason:</strong> ${escapeHtml(ctx.reviewNote)}</div>` : '';
+  const footer = renderPromotionalFooter({ appUrl: ctx.appUrl, existingUser: false });
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -169,25 +195,35 @@ export async function sendClaimRejectedEmail(ctx: ClaimEmailContext): Promise<vo
           <tr><td style="background-color:#dc2626;height:6px;line-height:6px"></td></tr>
           <tr>
             <td style="padding:32px 40px 20px;text-align:center;">
-              <div style="display:inline-block;width:52px;height:52px;background:#fef2f2;border:1px solid #fecaca;border-radius:14px;line-height:52px;color:#dc2626;font-weight:700;font-size:22px;margin-bottom:12px;">✕</div>
+              <div style="display:inline-block;width:52px;height:52px;background:#fef2f2;border:1px solid #fecaca;border-radius:14px;line-height:52px;color:#dc2626;font-weight:700;font-size:22px;margin-bottom:12px;">&#10005;</div>
               <h1 style="color:#0f172a;font-size:24px;font-weight:700;margin:0 0 6px;letter-spacing:-0.02em;">Claim Update</h1>
-              <p style="color:#64748b;font-size:14px;margin:0;">Verification for <strong>${escapeHtml(ctx.businessName)}</strong></p>
+              <p style="color:#64748b;font-size:14px;margin:0;">Your claim for <strong>${escapeHtml(ctx.businessName)}</strong></p>
             </td>
           </tr>
           <tr>
             <td style="padding:8px 40px 36px;color:#334155;font-size:15px;line-height:1.65;">
+              <p style="margin:0 0 14px;">
+                Hi ${escapeHtml(ctx.claimantEmail.split('@')[0] || 'there')},
+              </p>
               <p style="margin:0 0 16px;">
-                After reviewing your claim for <strong>${escapeHtml(ctx.businessName)}</strong>, we were unable to verify your ownership at this time.
+                After reviewing your claim for <strong>${escapeHtml(ctx.businessName)}</strong>, we were unable to verify your ownership at this time. The listing remains unclaimed.
+              </p>
+              <p style="color:#475569;font-size:13px;margin:0 0 16px;">
+                <strong>This notice was sent to:</strong> ${escapeHtml(ctx.claimantEmail)}<br>
+                <strong>Business:</strong> ${escapeHtml(ctx.businessName)}
               </p>
               ${reasonText}
               <p style="color:#475569;font-size:14px;margin:16px 0 0;">
                 If you believe this is an error or have additional business documentation, please contact support referencing ID: <span style="font-family:monospace;">${ctx.requestId}</span>.
               </p>
+              <p style="color:#94a3b8;font-size:11px;line-height:1.5;margin-top:16px;border-top:1px solid #f1f5f9;padding-top:12px;">
+                <strong>Security:</strong> If you didn't request to claim "${escapeHtml(ctx.businessName)}", please reply to this email immediately so we can investigate.
+              </p>
             </td>
           </tr>
           <tr>
-            <td style="padding:24px 40px;background-color:#f8fafc;border-top:1px solid #f1f5f9;font-size:12px;color:#94a3b8;text-align:center;">
-              Powered by <a href="https://fieseros.com" style="color:#0f766e;text-decoration:none;font-weight:600">Fieseros</a>
+            <td style="padding:20px 40px 32px;">
+              ${footer.html}
             </td>
           </tr>
         </table>
@@ -199,11 +235,20 @@ export async function sendClaimRejectedEmail(ctx: ClaimEmailContext): Promise<vo
 
   const text = `Claim Update — ${ctx.businessName}
 
+Hi ${ctx.claimantEmail.split('@')[0] || 'there'},
+
 After reviewing your claim for "${ctx.businessName}", we were unable to verify your ownership. The listing remains unclaimed.
+
+This notice was sent to: ${ctx.claimantEmail}
+Business: ${ctx.businessName}
 
 ${ctx.reviewNote ? `Reason: ${ctx.reviewNote}\n\n` : ''}If you believe this is an error, please contact support.
 
 Reference ID: ${ctx.requestId}
+
+Security: If you didn't request to claim "${ctx.businessName}", please reply to this email immediately.
+
+${footer.text}
   `.trim();
 
   try {
@@ -224,6 +269,8 @@ Reference ID: ${ctx.requestId}
 }
 
 export async function sendClaimUnderReviewEmail(ctx: ClaimEmailContext): Promise<void> {
+  const footer = renderPromotionalFooter({ appUrl: ctx.appUrl, existingUser: false });
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -239,31 +286,39 @@ export async function sendClaimUnderReviewEmail(ctx: ClaimEmailContext): Promise
           <tr><td style="background-color:#0f766e;height:6px;line-height:6px"></td></tr>
           <tr>
             <td style="padding:32px 40px 20px;text-align:center;">
-              <div style="display:inline-block;width:52px;height:52px;background:#fffbeb;border:1px solid #fde68a;border-radius:14px;line-height:52px;color:#d97706;font-weight:700;font-size:22px;margin-bottom:12px;">⏳</div>
+              <div style="display:inline-block;width:52px;height:52px;background:#fffbeb;border:1px solid #fde68a;border-radius:14px;line-height:52px;color:#d97706;font-weight:700;font-size:22px;margin-bottom:12px;">&#9203;</div>
               <h1 style="color:#0f172a;font-size:24px;font-weight:700;margin:0 0 6px;letter-spacing:-0.02em;">Claim Received</h1>
               <p style="color:#64748b;font-size:14px;margin:0;">We are reviewing your ownership request for <strong>${escapeHtml(ctx.businessName)}</strong></p>
             </td>
           </tr>
           <tr>
             <td style="padding:8px 40px 36px;color:#334155;font-size:15px;line-height:1.65;">
+              <p style="margin:0 0 14px;">
+                Hi ${escapeHtml(ctx.claimantEmail.split('@')[0] || 'there')},
+              </p>
               <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:18px 20px;margin-bottom:20px;">
                 <p style="margin:0;color:#92400e;font-size:13px;line-height:1.5;">
-                  Thank you for submitting your claim. Our verification team will review your details within <strong>1–2 business days</strong>.
+                  Thank you for submitting your claim. Our verification team will review your details within <strong>1&ndash;2 business days</strong>.
                 </p>
               </div>
+
+              <p style="color:#475569;font-size:13px;margin:0 0 16px;">
+                <strong>This confirmation was sent to:</strong> ${escapeHtml(ctx.claimantEmail)}<br>
+                <strong>Business:</strong> ${escapeHtml(ctx.businessName)}
+              </p>
 
               <p style="color:#475569;font-size:14px;margin:0 0 16px;">
                 Once approved, you will receive a second email with a link to create your account and take ownership of your profile.
               </p>
 
-              <p style="color:#94a3b8;font-size:12px;line-height:1.5;margin-top:20px;border-top:1px solid #f1f5f9;padding-top:16px;">
-                Reference ID: <span style="font-family:monospace;">${ctx.requestId}</span>
+              <p style="color:#94a3b8;font-size:11px;line-height:1.5;margin-top:20px;border-top:1px solid #f1f5f9;padding-top:12px;">
+                <strong>Security:</strong> If you didn't request to claim "${escapeHtml(ctx.businessName)}", please reply to this email immediately so we can investigate. Reference ID: <span style="font-family:monospace;">${ctx.requestId}</span>
               </p>
             </td>
           </tr>
           <tr>
-            <td style="padding:24px 40px;background-color:#f8fafc;border-top:1px solid #f1f5f9;font-size:12px;color:#94a3b8;text-align:center;">
-              Powered by <a href="https://fieseros.com" style="color:#0f766e;text-decoration:none;font-weight:600">Fieseros</a>
+            <td style="padding:20px 40px 32px;">
+              ${footer.html}
             </td>
           </tr>
         </table>
@@ -275,11 +330,20 @@ export async function sendClaimUnderReviewEmail(ctx: ClaimEmailContext): Promise
 
   const text = `Claim Received — ${ctx.businessName}
 
+Hi ${ctx.claimantEmail.split('@')[0] || 'there'},
+
 Thank you for submitting your claim for "${ctx.businessName}". Our team will review your submission within 1-2 business days.
+
+This confirmation was sent to: ${ctx.claimantEmail}
+Business: ${ctx.businessName}
 
 Once approved, you'll receive a second email with a link to create your account.
 
+Security: If you didn't request to claim "${ctx.businessName}", please reply to this email immediately.
+
 Reference ID: ${ctx.requestId}
+
+${footer.text}
   `.trim();
 
   try {

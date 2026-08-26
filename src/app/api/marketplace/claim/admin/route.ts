@@ -233,10 +233,16 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             slug: true,
+            // Full address for side-by-side comparison with GBP address.
+            address: true,
             city: true,
             state: true,
+            country: true,
+            // Phone + email for cross-reference with GBP / claimant email.
             phone: true,
             email: true,
+            // Website for domain-match signal (Improvement D).
+            website: true,
           },
         },
       },
@@ -244,11 +250,57 @@ export async function GET(request: NextRequest) {
       take: 100,
     });
 
-    // Parse verificationData JSON for the admin UI
-    const claimsWithParsedData = claims.map((c) => ({
-      ...c,
-      verificationData: JSON.parse(c.verificationData || '{}'),
-    }));
+    // ── Claim history per claimant ─────────────────────────────────────────
+    // For each claim, count how many other claims this claimant has filed
+    // (across all tenants + all statuses). 1 = first-time claimant (green),
+    // 2-3 = normal, 4+ = elevated fraud risk (red flag for the admin).
+    //
+    // We batch this into one grouped query instead of N+1 per-claim queries.
+    const claimantIds = [
+      ...new Set(
+        claims
+          .map((c) => c.claimantUserId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const claimantEmails = [
+      ...new Set(
+        claims
+          .map((c) => c.claimantEmail)
+          .filter((e): e is string => Boolean(e)),
+      ),
+    ];
+
+    // Count claims by claimantUserId OR claimantEmail (a claimant may have
+    // filed some claims while logged in and others anonymously via email).
+    const historyCounts = new Map<string, number>();
+    if (claimantIds.length > 0 || claimantEmails.length > 0) {
+      const allClaims = await db.claimRequest.findMany({
+        where: {
+          OR: [
+            ...(claimantIds.length > 0 ? [{ claimantUserId: { in: claimantIds } }] : []),
+            ...(claimantEmails.length > 0 ? [{ claimantEmail: { in: claimantEmails } }] : []),
+          ],
+        },
+        select: { claimantUserId: true, claimantEmail: true },
+      });
+      for (const c of allClaims) {
+        // Key by whichever identifier is present (userId preferred).
+        const key = c.claimantUserId || c.claimantEmail;
+        if (key) historyCounts.set(key, (historyCounts.get(key) ?? 0) + 1);
+      }
+    }
+
+    // Parse verificationData JSON + attach claim history count for the admin UI.
+    const claimsWithParsedData = claims.map((c) => {
+      const historyKey = c.claimantUserId || c.claimantEmail;
+      return {
+        ...c,
+        verificationData: JSON.parse(c.verificationData || '{}'),
+        // How many total claims this claimant has filed (including this one).
+        claimantHistoryCount: historyKey ? (historyCounts.get(historyKey) ?? 1) : 1,
+      };
+    });
 
     return NextResponse.json({ claims: claimsWithParsedData, total: claims.length });
   } catch (err) {
