@@ -104,6 +104,9 @@ interface Props {
   /** industry + slug are needed to build the URL preview */
   industry: string;
   slug: string;
+  /** Called after a successful save so the parent can refresh auth/tenant
+   * state (e.g. so the sidebar reacts to marketplaceOptIn changes). */
+  onSaved?: () => void;
 }
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
@@ -160,7 +163,7 @@ async function uploadImage(file: File, kind: 'cover' | 'gallery'): Promise<strin
   return data.url as string;
 }
 
-export function PublicHubTab({ tenantId, industry, slug }: Props) {
+export function PublicHubTab({ tenantId, industry, slug, onSaved }: Props) {
   const [form, setForm] = useState<HubForm>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -298,6 +301,9 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
         const data = await res.json();
         setPublicUrl(data.tenant.publicUrl || null);
         toast.success('Public Hub saved — your page is live');
+        // Notify parent so it can refresh auth/tenant state (e.g. so the
+        // sidebar reacts to marketplaceOptIn changes in real-time).
+        onSaved?.();
       } else {
         const err = await res.json().catch(() => ({}));
         toast.error(err.error || 'Failed to save');

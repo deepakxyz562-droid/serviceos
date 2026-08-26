@@ -163,6 +163,7 @@ export function CompanySettingsTabs({ initialTab = 'information', onSaved }: Com
             slug={tenantSnapshot.slug}
             loading={tenantLoading}
             isPlatformAdmin={isPlatformAdmin}
+            onSaved={onSaved}
           />
         </TabsContent>
       </Tabs>

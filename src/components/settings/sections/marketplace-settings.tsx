@@ -27,9 +27,11 @@ interface MarketplaceSettingsProps {
   slug: string;
   loading?: boolean;
   isPlatformAdmin?: boolean;
+  /** Passed through to PublicHubTab so saves refresh the auth/tenant state. */
+  onSaved?: () => void;
 }
 
-export function MarketplaceSettings({ tenantId, industry, slug, loading, isPlatformAdmin }: MarketplaceSettingsProps) {
+export function MarketplaceSettings({ tenantId, industry, slug, loading, isPlatformAdmin, onSaved }: MarketplaceSettingsProps) {
   const setCurrentView = useAppStore((s) => s.setCurrentView);
 
   if (loading) {
@@ -103,7 +105,7 @@ export function MarketplaceSettings({ tenantId, industry, slug, loading, isPlatf
       </div>
 
       {/* Existing public hub profile editor (cover image, tagline, hours, FAQs, SEO) */}
-      <PublicHubTab tenantId={tenantId} industry={industry} slug={slug} />
+      <PublicHubTab tenantId={tenantId} industry={industry} slug={slug} onSaved={onSaved} />
     </div>
   );
 }

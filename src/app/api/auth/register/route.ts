@@ -42,11 +42,11 @@ export async function POST(request: NextRequest) {
     const passwordHash = await hashPassword(password);
 
     // Create tenant first
-    // marketplaceOptIn defaults to true so every new business is listed on
-    // the marketplace browse grid immediately (users can toggle it off from
-    // Settings → Public Hub → Marketplace listing). This fixes the issue
-    // where previously-registered users with a public Business Hub page were
-    // invisible on the marketplace because the flag was never set.
+    // marketplaceOptIn defaults to false — the user must explicitly opt in
+    // during onboarding (Step 2) or from Settings → Public Business Hub.
+    // Previously this was hardcoded to true, which meant every new CRM user
+    // was automatically listed on the marketplace even if they didn't want
+    // to be. The sidebar now hides the Marketplace menu when this is false.
     //
     // claimed=true + listingTier='claimed' mark this as a real registered
     // business (vs. seed/demo data which has claimed=false). These flags drive
@@ -57,10 +57,7 @@ export async function POST(request: NextRequest) {
     //
     // signupMode='crm_trial' distinguishes this from a marketplace-only claim
     // (signupMode='listing_only', listingTier='claimed_free'). CRM tenants get
-    // the full sidebar; listing-only tenants get a minimal sidebar. Previously
-    // this field was left NULL, which made CRM tenants look like "legacy /
-    // undecided" tenants and broke downstream filters that check
-    // signupMode === 'crm_trial'.
+    // the full sidebar; listing-only tenants get a minimal sidebar.
     const tenant = await db.tenant.create({
       data: {
         name: businessName,
@@ -71,8 +68,8 @@ export async function POST(request: NextRequest) {
         plan: 'starter',
         planStatus: 'trial',
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
-        marketplaceOptIn: true,
-        marketplaceTermsAcceptedAt: new Date(),
+        marketplaceOptIn: false,
+        marketplaceTermsAcceptedAt: null,
         claimed: true,
         listingTier: 'claimed',
         signupMode: 'crm_trial',
