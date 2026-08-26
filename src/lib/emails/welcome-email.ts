@@ -27,6 +27,9 @@ export interface WelcomeEmailContext {
   appUrl: string;
   /** The tenant slug — used to build the public marketplace URL. */
   tenantSlug: string;
+  /** Whether the tenant is opted into the marketplace. If false, the
+   * "Your marketplace listing is live" section is hidden from the email. */
+  marketplaceOptIn?: boolean;
 }
 
 /**
@@ -37,7 +40,7 @@ export async function sendWelcomeEmailTo(
   to: string,
   ctx: WelcomeEmailContext,
 ): Promise<void> {
-  const { ownerName, businessName, appUrl, tenantSlug } = ctx;
+  const { ownerName, businessName, appUrl, tenantSlug, marketplaceOptIn = true } = ctx;
   const displayName = ownerName || 'there';
   const dashboardUrl = `${appUrl}/login`;
   const marketplaceUrl = `${appUrl}/provider/${tenantSlug}`;
@@ -48,6 +51,7 @@ export async function sendWelcomeEmailTo(
     businessName,
     dashboardUrl,
     marketplaceUrl,
+    marketplaceOptIn,
     footerHtml: footer.html,
   });
 
@@ -55,7 +59,7 @@ export async function sendWelcomeEmailTo(
     to,
     subject: `Welcome to Fieseros — let's get ${businessName} online`,
     html,
-    text: welcomeText(displayName, businessName, dashboardUrl, marketplaceUrl, footer.text),
+    text: welcomeText(displayName, businessName, dashboardUrl, marketplaceUrl, marketplaceOptIn, footer.text),
     usageType: 'transactional',
     // No tenantId — bypasses per-tenant email quota gate.
   });
@@ -80,8 +84,12 @@ function welcomeText(
   businessName: string,
   dashboardUrl: string,
   marketplaceUrl: string,
+  marketplaceOptIn: boolean,
   footerText: string,
 ): string {
+  const marketplaceLine = marketplaceOptIn
+    ? `5. Your marketplace listing is live: ${marketplaceUrl}`
+    : '5. Opt in to the marketplace from your dashboard to get discovered by customers';
   return `Welcome to Fieseros, ${displayName}!
 
 Your business "${businessName}" is now set up on Fieseros. Here's how to get started:
@@ -90,7 +98,7 @@ Your business "${businessName}" is now set up on Fieseros. Here's how to get sta
 2. Complete your business profile — add your logo, services, and hours
 3. Add your team members so they can start taking jobs
 4. Connect Stripe to start accepting payments
-5. Your marketplace listing is live: ${marketplaceUrl}
+${marketplaceLine}
 
 Log in to your dashboard: ${dashboardUrl}
 
@@ -104,9 +112,19 @@ function renderWelcomeEmailHtml(params: {
   businessName: string;
   dashboardUrl: string;
   marketplaceUrl: string;
+  marketplaceOptIn: boolean;
   footerHtml: string;
 }): string {
-  const { displayName, businessName, dashboardUrl, marketplaceUrl, footerHtml } = params;
+  const { displayName, businessName, dashboardUrl, marketplaceUrl, marketplaceOptIn, footerHtml } = params;
+  const step5Html = marketplaceOptIn
+    ? `<tr><td style="padding:8px 0;color:#0f766e;font-size:14px;"><strong>&#9744; Step 5:</strong></td><td style="padding:8px 0;color:#334155;font-size:14px;">Your marketplace listing is live — share it with customers</td></tr>`
+    : `<tr><td style="padding:8px 0;color:#0f766e;font-size:14px;"><strong>&#9744; Step 5:</strong></td><td style="padding:8px 0;color:#334155;font-size:14px;">Opt in to the marketplace from your dashboard to get discovered by customers</td></tr>`;
+  const marketplaceBoxHtml = marketplaceOptIn
+    ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;margin-top:20px;">
+                <p style="margin:0 0 4px;color:#0f766e;font-size:13px;font-weight:600;">Your marketplace listing</p>
+                <p style="margin:0;color:#115e59;font-size:12px;line-height:1.5;word-break:break-all;font-family:monospace;">${escapeHtml(marketplaceUrl)}</p>
+              </div>`
+    : '';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -136,7 +154,7 @@ function renderWelcomeEmailHtml(params: {
                 <tr><td style="padding:8px 0;color:#0f766e;font-size:14px;"><strong>&#9744; Step 2:</strong></td><td style="padding:8px 0;color:#334155;font-size:14px;">Complete your business profile — logo, services, hours</td></tr>
                 <tr><td style="padding:8px 0;color:#0f766e;font-size:14px;"><strong>&#9744; Step 3:</strong></td><td style="padding:8px 0;color:#334155;font-size:14px;">Add your team members so they can take jobs</td></tr>
                 <tr><td style="padding:8px 0;color:#0f766e;font-size:14px;"><strong>&#9744; Step 4:</strong></td><td style="padding:8px 0;color:#334155;font-size:14px;">Connect Stripe to start accepting payments</td></tr>
-                <tr><td style="padding:8px 0;color:#0f766e;font-size:14px;"><strong>&#9744; Step 5:</strong></td><td style="padding:8px 0;color:#334155;font-size:14px;">Your marketplace listing is live — share it with customers</td></tr>
+                ${step5Html}
               </table>
 
               <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
@@ -147,10 +165,7 @@ function renderWelcomeEmailHtml(params: {
                 </tr>
               </table>
 
-              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;margin-top:20px;">
-                <p style="margin:0 0 4px;color:#0f766e;font-size:13px;font-weight:600;">Your marketplace listing</p>
-                <p style="margin:0;color:#115e59;font-size:12px;line-height:1.5;word-break:break-all;font-family:monospace;">${escapeHtml(marketplaceUrl)}</p>
-              </div>
+              ${marketplaceBoxHtml}
 
               <p style="color:#64748b;font-size:13px;margin:24px 0 0;">Need help? Reply to this email or visit our help center — we're here to help you grow your business.</p>
             </td>

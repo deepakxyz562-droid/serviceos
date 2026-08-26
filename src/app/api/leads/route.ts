@@ -54,7 +54,8 @@ async function _GET(request: NextRequest) {
     // ─── Tenant scoping (mirrors /api/deals pattern) ──────────────────
     // The caller's tenantId is the source of truth — NEVER show all leads.
     // Super-admins may pass ?tenantId= to scope to a specific tenant.
-    // Authenticated users without a tenant get an empty list (not everyone's data).
+    // Authenticated users without a tenant (including superadmins who haven't
+    // selected a tenant) get an empty list — NEVER everyone's data.
     let rpcTenantId: string | null = null;
     const where: Record<string, unknown> = {};
     if (authUser.isSuperAdmin) {
@@ -62,8 +63,13 @@ async function _GET(request: NextRequest) {
       if (queryTenantId) {
         where.tenantId = queryTenantId;
         rpcTenantId = queryTenantId;
+      } else {
+        // Super-admin without ?tenantId= → return empty (was: RPC shows all — DATA LEAK)
+        return NextResponse.json({
+          leads: [],
+          pagination: { page, limit, total: 0, totalPages: 0 },
+        });
       }
-      // Super-admin without ?tenantId= → rpcTenantId stays null → RPC shows all
     } else if (authUser.tenantId) {
       where.tenantId = authUser.tenantId;
       rpcTenantId = authUser.tenantId;

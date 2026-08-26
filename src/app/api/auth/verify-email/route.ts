@@ -83,6 +83,14 @@ export async function GET(request: NextRequest) {
     tenant: user.tenant,
   });
 
-  response.cookies.set('fieseros_session', sessionToken, COOKIE_OPTIONS);
+  // Set auth cookie — MUST use the same pattern as the login route
+  // (spread COOKIE_OPTIONS + value). The previous code passed the cookie
+  // name as a string arg AND in COOKIE_OPTIONS, which could cause the
+  // cookie to not be properly set — leaving a stale admin cookie active
+  // and causing a data leak (superadmin sees all tenants' data).
+  response.cookies.set({
+    ...COOKIE_OPTIONS,
+    value: sessionToken,
+  });
   return response;
 }

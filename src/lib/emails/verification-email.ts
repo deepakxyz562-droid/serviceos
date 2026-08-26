@@ -132,9 +132,33 @@ export async function verifyEmailToken(
     },
   });
 
+  // CRITICAL: Re-fetch the user to verify the update actually persisted.
+  // The Supabase adapter can silently fail to update certain columns
+  // (e.g. if there's a column-level constraint or adapter serialization
+  // issue). Without this check, we'd return { ok: true } even though
+  // emailVerified is still false in the DB → user gets auto-logged in
+  // temporarily but can't log in again (login route checks emailVerified).
+  const updatedUser = await db.user.findUnique({
+    where: { id: user.id },
+    select: { emailVerified: true },
+  });
+
+  if (!updatedUser || !updatedUser.emailVerified) {
+    // The update didn't persist — this is a critical failure.
+    // Return an error so the verify-email route doesn't issue a JWT.
+    logger.error(
+      { component: 'email-verification', userId: user.id, email: user.email },
+      'Email verification update did not persist — emailVerified is still false after update',
+    );
+    return {
+      ok: false,
+      error: 'Failed to verify your email due to a database issue. Please try again or contact support.',
+    };
+  }
+
   logger.info(
     { component: 'email-verification', userId: user.id, email: user.email },
-    'Email verified successfully',
+    'Email verified successfully (confirmed via re-fetch)',
   );
 
   return { ok: true, userId: user.id, email: user.email };

@@ -224,6 +224,7 @@ export async function POST(request: NextRequest) {
         businessName: tenant.name,
         appUrl,
         tenantSlug: tenant.slug,
+        marketplaceOptIn: tenant.marketplaceOptIn,
       });
     } catch (welcomeErr) {
       console.warn('[Register] Failed to send welcome email:', welcomeErr);
