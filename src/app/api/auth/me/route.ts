@@ -131,6 +131,7 @@ export async function GET() {
               onboardingStep: tenant.onboardingStep,
               listingTier: tenant.listingTier,
               signupMode: tenant.signupMode,
+              marketplaceOptIn: tenant.marketplaceOptIn,
               settingsJson: tenant.settingsJson,
               createdAt: tenant.createdAt,
             }
@@ -200,6 +201,7 @@ export async function GET() {
             onboardingStep: user.tenant.onboardingStep,
             listingTier: user.tenant.listingTier,
             signupMode: user.tenant.signupMode,
+            marketplaceOptIn: user.tenant.marketplaceOptIn,
             settingsJson: user.tenant.settingsJson,
             createdAt: user.tenant.createdAt,
           }

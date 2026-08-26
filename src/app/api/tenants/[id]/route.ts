@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { invalidateAuthCache } from '@/app/api/auth/me/route';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import { applyHubDefaultsToTenant, revalidatePublicBusiness } from '@/lib/public-business';
 import { computeProfileCompletion } from '@/lib/marketplace-eligibility';
@@ -673,6 +674,20 @@ export async function PATCH(
       revalidatePublicBusiness(id);
     } catch {
       // revalidateTag can throw in some edge runtime contexts — non-fatal
+    }
+
+    // Invalidate the /api/auth/me cache so the frontend immediately sees
+    // the updated tenant fields (e.g. marketplaceOptIn toggle). Without
+    // this, the 30-second auth-me cache would serve stale data → the
+    // sidebar wouldn't react to marketplaceOptIn changes until the cache
+    // expired naturally.
+    try {
+      const authUser = await getAuthUser();
+      if (authUser?.id) {
+        invalidateAuthCache(authUser.id);
+      }
+    } catch {
+      // non-fatal
     }
 
     return NextResponse.json({
