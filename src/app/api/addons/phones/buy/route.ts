@@ -179,11 +179,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check how many phone numbers the tenant already owns
+    // Check how many valid E.164 phone numbers the tenant already owns
     const existingNumbers = await db.phoneNumber.count({
       where: {
         tenantId: user.tenantId,
         status: { in: ['active', 'suspended', 'release_pending'] },
+        e164: { not: null },
+        NOT: { e164: '' },
       },
     });
 
