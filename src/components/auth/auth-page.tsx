@@ -155,6 +155,12 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
       });
       const data = await res.json();
       if (!res.ok) {
+        if (data.code === 'EMAIL_NOT_VERIFIED') {
+          setPendingEmail(loginEmail);
+          setVerificationSent(true);
+          toast.error('Please verify your email before logging in. A new link can be resent below.');
+          return;
+        }
         toast.error(data.error || 'Login failed');
         return;
       }

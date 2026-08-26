@@ -102,12 +102,12 @@ export async function verifyEmailToken(
   }
 
   if (user.emailVerified) {
-    // Already verified — token should have been cleared. Clear it now (defensive).
+    // Already verified — token should have been cleared. Clear it now (defensive) and return success for auto-login.
     await db.user.update({
       where: { id: user.id },
       data: { emailVerifyTokenHash: null, emailVerifyTokenExpiresAt: null },
     });
-    return { ok: false, error: 'This email is already verified. You can log in.' };
+    return { ok: true, userId: user.id, email: user.email };
   }
 
   const now = Date.now();
