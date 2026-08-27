@@ -25,6 +25,11 @@ import path from 'path';
 import { fetchSitemapFile } from '@/lib/sitemap/storage';
 import { getSitemapFileNumber } from '@/lib/sitemap/hash';
 
+// force-static removes the 'vary: rsc, next-router-state-tree, ...' header
+// that Next.js adds to dynamic routes. That vary header confuses Google's
+// sitemap fetcher and can cause "Sitemap could not be read" errors.
+// force-static also enables CDN caching without the RSC vary complications.
+export const dynamic = 'force-static';
 export const revalidate = 3600; // 1h ISR — caches the response for 1 hour
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'https://fieseros.com';

@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 // Fieseros demo - trigger dev server restart
 const nextConfig: NextConfig = {
   output: "standalone",
-  compress: false,
+  compress: true, // Enable gzip compression — critical for sitemaps (Google prefers compressed responses)
   typescript: {
     ignoreBuildErrors: true,
   },

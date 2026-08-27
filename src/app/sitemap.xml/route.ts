@@ -21,6 +21,10 @@
 
 import { NextResponse } from 'next/server';
 
+// force-static removes the 'vary: rsc, next-router-state-tree, ...' header
+// that Next.js adds to dynamic routes. That vary header confuses Google's
+// sitemap fetcher and can cause "Sitemap could not be read" errors.
+export const dynamic = 'force-static';
 export const revalidate = 3600; // 1h ISR
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'https://fieseros.com';
