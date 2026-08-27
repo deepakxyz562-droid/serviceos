@@ -79,57 +79,84 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ...result, url });
   }
 
-  // ── Option B: submit entire sitemap ──────────────────────────────────────
+  // ── Option B: submit entire sitemap (with recursive index traversal) ────
   if (body.submitAll === true) {
     try {
       const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com';
-      const sitemapRes = await fetch(`${siteUrl}/sitemap.xml`, {
+      const rootSitemapUrl = `${siteUrl}/sitemap.xml`;
+
+      // 1. Fetch root sitemap
+      const rootRes = await fetch(rootSitemapUrl, {
         signal: AbortSignal.timeout(15_000),
       });
-      if (!sitemapRes.ok) {
+      if (!rootRes.ok) {
         return NextResponse.json(
-          { error: `Failed to fetch sitemap: ${sitemapRes.status}` },
+          { error: `Failed to fetch sitemap: ${rootRes.status}` },
           { status: 502 },
         );
       }
-      const xml = await sitemapRes.text();
-      // Extract all <loc>...</loc> URLs from the sitemap XML.
-      const locMatches = xml.match(/<loc>([^<]+)<\/loc>/g) || [];
-      const urls = locMatches
+      const rootXml = await rootRes.text();
+      const locMatches = rootXml.match(/<loc>([^<]+)<\/loc>/g) || [];
+      const extractedLocs = locMatches
         .map((m) => m.replace(/<\/?loc>/g, '').trim())
         .filter((u) => u.startsWith('http'));
 
-      if (urls.length === 0) {
-        return NextResponse.json({ error: 'No URLs found in sitemap' }, { status: 400 });
+      const isSitemapIndex = rootXml.includes('<sitemapindex') || rootXml.includes('<sitemap>');
+
+      let pageUrls: string[] = [];
+
+      if (isSitemapIndex) {
+        // It's a sitemap index containing sub-sitemap URLs (/sitemap/0.xml, /sitemap/1.xml).
+        // Fetch all sub-sitemaps concurrently to extract the actual content page URLs.
+        const subSitemapResults = await Promise.all(
+          extractedLocs.map(async (subUrl) => {
+            try {
+              const res = await fetch(subUrl, { signal: AbortSignal.timeout(15_000) });
+              if (!res.ok) return [];
+              const subXml = await res.text();
+              const subLocs = subXml.match(/<loc>([^<]+)<\/loc>/g) || [];
+              return subLocs
+                .map((m) => m.replace(/<\/?loc>/g, '').trim())
+                .filter((u) => u.startsWith('http'));
+            } catch {
+              return [];
+            }
+          }),
+        );
+        pageUrls = Array.from(new Set(subSitemapResults.flat())).filter((u) => !u.endsWith('.xml'));
+      } else {
+        // Standard urlset — direct content page URLs.
+        pageUrls = Array.from(new Set(extractedLocs)).filter((u) => !u.endsWith('.xml'));
       }
 
-      // IndexNow allows up to 10k URLs per request; we batch at 1000 (matches
-      // the cap in submitToIndexNow) to be safe.
+      if (pageUrls.length === 0) {
+        return NextResponse.json({ error: 'No content page URLs found in sitemaps' }, { status: 400 });
+      }
+
+      // IndexNow allows up to 10k URLs per request; we batch at 1000 to be safe.
       const BATCH = 1000;
       const results = [];
-      for (let i = 0; i < urls.length; i += BATCH) {
-        const batch = urls.slice(i, i + BATCH);
-        // Sequential batches avoid hammering the IndexNow API with concurrent
-        // requests — 1000 URLs per batch is already well within limits.
+      for (let i = 0; i < pageUrls.length; i += BATCH) {
+        const batch = pageUrls.slice(i, i + BATCH);
         const r = await submitToIndexNow(batch);
         results.push(r);
       }
       const totalSubmitted = results.reduce((sum, r) => sum + r.submitted, 0);
       const allOk = results.every((r) => r.ok);
       logger.info(
-        { component: 'api-indexnow', totalUrls: urls.length, totalSubmitted, allOk },
-        'Bulk IndexNow submission (sitemap priming)',
+        { component: 'api-indexnow', totalUrls: pageUrls.length, totalSubmitted, allOk },
+        'Bulk IndexNow submission (recursive sitemap index traversal)',
       );
       return NextResponse.json({
         ok: allOk,
-        totalUrls: urls.length,
+        totalUrls: pageUrls.length,
         submitted: totalSubmitted,
         batches: results,
       });
     } catch (err) {
       logger.error({ component: 'api-indexnow', err }, 'Bulk sitemap submission failed');
       return NextResponse.json(
-        { error: 'Failed to fetch/parse sitemap', detail: err instanceof Error ? err.message : 'Unknown' },
+        { error: 'Failed to fetch/parse sitemaps', detail: err instanceof Error ? err.message : 'Unknown' },
         { status: 500 },
       );
     }
