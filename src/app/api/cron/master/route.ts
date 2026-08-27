@@ -261,6 +261,26 @@ export async function POST(request: NextRequest) {
     results.push(result)
   }
 
+  // ── Sitemap regeneration (direct call — no HTTP fetch) ────────────────
+  // Runs AFTER all sub-crons so it doesn't block time-sensitive crons.
+  // Uses a lock + atomic dirty-file clearing — safe to run every day.
+  // Only regenerates files that have new/changed businesses (incremental).
+  let sitemapResult: { ran: boolean; reason?: string; fullRegen: boolean; dirtyFiles: number[]; durationMs: number } | null = null
+  try {
+    const { regenerateSitemaps } = await import('@/lib/sitemap')
+    const sr = await regenerateSitemaps()
+    sitemapResult = sr
+    console.log(
+      `[master-cron] 🗺️ Sitemap: ${sr.ran ? 'ran' : 'skipped'} — ` +
+      `${sr.dirtyFiles.length} dirty files, ${sr.results.filter((r) => r.ok).length}/${sr.results.length} regenerated` +
+      (sr.fullRegen ? ' (full regen)' : '') +
+      ` in ${sr.durationMs}ms`,
+    )
+  } catch (sitemapErr) {
+    console.error('[master-cron] Sitemap regeneration failed:', sitemapErr)
+    sitemapResult = { ran: false, reason: String(sitemapErr), fullRegen: false, dirtyFiles: [], durationMs: 0 }
+  }
+
   // ── Summary ──────────────────────────────────────────────────────────
   const totalMs = Date.now() - startTime
   const succeeded = results.filter((r) => r.status === 'success').length
@@ -284,6 +304,7 @@ export async function POST(request: NextRequest) {
       errored,
     },
     results,
+    sitemap: sitemapResult,
   })
 }
 
