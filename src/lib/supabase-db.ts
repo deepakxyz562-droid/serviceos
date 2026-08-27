@@ -24,6 +24,24 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 let _adminClient: SupabaseClient | null = null;
 
+const sslipHost = 'supabasekong-iuh7kv0mngqogdigexbcrogu.141.136.44.163.sslip.io';
+
+const resilientSupabaseFetch: typeof fetch = async (input, init) => {
+  const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
+  try {
+    const res = await fetch(input, init);
+    return res;
+  } catch (err) {
+    if (urlStr.includes(sslipHost)) {
+      const rewrittenUrl = urlStr.replace(sslipHost, '141.136.44.163');
+      const headers = new Headers(init?.headers || {});
+      headers.set('Host', sslipHost);
+      return fetch(rewrittenUrl, { ...init, headers });
+    }
+    throw err;
+  }
+};
+
 export function getAdminClient(): SupabaseClient {
   if (!_adminClient) {
     if (!supabaseUrl || !supabaseServiceKey) {
@@ -31,6 +49,7 @@ export function getAdminClient(): SupabaseClient {
     }
     _adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
+      global: { fetch: resilientSupabaseFetch },
     });
   }
   return _adminClient;
