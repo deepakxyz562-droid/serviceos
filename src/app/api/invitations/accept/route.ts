@@ -169,6 +169,12 @@ export async function POST(request: NextRequest) {
     if (existingUser) {
       // Update the existing user's tenant, workspace, and role
       // Also set the passwordHash so the user can log in
+      // emailVerified=true: the invitation was sent to this email address,
+      // and the user is accepting via the unique token URL from that email.
+      // That proves ownership of the email — equivalent to our verification
+      // flow, so we set emailVerified=true here too (not just for new users).
+      // Previously this was missing → employees who accepted invitations
+      // couldn't log in because emailVerified stayed false.
       user = await db.user.update({
         where: { id: existingUser.id },
         data: {
@@ -180,6 +186,8 @@ export async function POST(request: NextRequest) {
           isActive: true,
           lastLoginAt: new Date(),
           passwordHash,
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
         },
       });
     } else {
