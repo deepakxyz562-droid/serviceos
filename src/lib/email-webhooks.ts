@@ -383,10 +383,23 @@ export function verifyEspSignature(
  * EmailEvent ledger. For complaint/unsubscribe, also apply the consent
  * opt-out via applyUnsubscribe().
  *
+ * In parallel, this also matches the event against an EmailCommunication
+ * row (outreach emails — non-campaign) by `providerMessageId` and updates
+ * its delivery status. On bounce/complaint, the recipient is auto-suppressed
+ * via `suppressEmail()` from the outreach lib. The outreach path is wrapped
+ * in its own try/catch so a failure there never affects the campaign path.
+ *
  * Idempotent: if a CampaignMessage row already has the matching
  * (status transition) applied, the second call is a no-op for that row.
+ *
+ * @param ev      Canonical event (already normalized from the ESP payload).
+ * @param provider Optional ESP name (e.g. 'ses') — used to tag suppressions
+ *                 with their source. When omitted, 'unknown' is used.
  */
-export async function applyCanonicalEvent(ev: CanonicalEmailEvent): Promise<void> {
+export async function applyCanonicalEvent(
+  ev: CanonicalEmailEvent,
+  provider?: string,
+): Promise<void> {
   if (!ev.recipientEmail) return
   const email = ev.recipientEmail.toLowerCase()
   const now = new Date()
@@ -522,6 +535,102 @@ export async function applyCanonicalEvent(ev: CanonicalEmailEvent): Promise<void
     } catch (err) {
       console.warn('[email-webhooks] Campaign counter update failed:', err)
     }
+  }
+
+  // ── Parallel outreach path ──────────────────────────────────────────────
+  // Match the event against a non-campaign EmailCommunication row (the one-to-
+  // one outreach emails sent from /api/superadmin/outreach/send). We match by
+  // `providerMessageId` (the SES MessageId stored at send time) and update the
+  // row's delivery status. On bounce/complaint, we also auto-suppress the
+  // recipient via `suppressEmail()`. Wrapped in its own try/catch so a failure
+  // here never breaks the campaign path above.
+  try {
+    // Look up the matching EmailCommunication by providerMessageId (preferred)
+    // — when the ESP doesn't echo the id back, fall back to (recipientEmail +
+    // most recent sent row).
+    let emailComm: Awaited<ReturnType<typeof db.emailCommunication.findFirst>> = null
+    if (ev.messageId) {
+      emailComm = await db.emailCommunication.findFirst({
+        where: {
+          OR: [
+            { providerMessageId: ev.messageId },
+            { providerMessageId: { contains: ev.messageId } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+    }
+    if (!emailComm && email) {
+      emailComm = await db.emailCommunication.findFirst({
+        where: { recipientEmail: email, status: { in: ['sent', 'delivered'] } },
+        orderBy: { sentAt: 'desc' },
+      })
+    }
+
+    if (emailComm) {
+      // Update EmailCommunication status. We only track delivery-level events
+      // for outreach — open/click are intentionally ignored (outreach emails
+      // are one-to-one and don't drive read-tracking analytics the way
+      // campaigns do).
+      try {
+        const patch: Prisma.EmailCommunicationUpdateInput = {}
+        switch (ev.type) {
+          case 'delivered':
+            patch.status = 'delivered'
+            patch.deliveredAt = now
+            break
+          case 'bounce':
+            patch.status = 'bounced'
+            patch.bouncedAt = now
+            patch.bouncedReason = ev.reason || null
+            break
+          case 'complaint':
+            patch.status = 'complained'
+            patch.complainedAt = now
+            break
+          case 'dropped':
+            patch.status = 'failed'
+            break
+          // 'open' and 'click' don't change EmailCommunication status (we only
+          // track delivery-level events for outreach).
+        }
+        if (Object.keys(patch).length > 0) {
+          await db.emailCommunication.update({ where: { id: emailComm.id }, data: patch })
+        }
+      } catch (err) {
+        console.warn('[email-webhooks] EmailCommunication update failed:', err)
+      }
+
+      // Auto-suppress on hard bounce or complaint (protection #3 from the plan).
+      // Dynamic import avoids pulling the outreach lib (which depends on db)
+      // into the module top-level — keeps the webhook handler's import graph
+      // unchanged for the campaign-only path.
+      if (ev.type === 'bounce' || ev.type === 'complaint') {
+        try {
+          const { suppressEmail } = await import('@/lib/outreach')
+          await suppressEmail({
+            email,
+            tenantId: emailComm.tenantId,
+            reason: ev.type === 'bounce' ? 'hard_bounce' : 'complaint',
+            source: `${provider || 'unknown'}_webhook`,
+            provider: provider || 'unknown',
+            metadata: {
+              espMessageId: ev.messageId,
+              reason: ev.reason,
+              communicationId: emailComm.id,
+              rawEvent: ev.metadata,
+            },
+          })
+          console.log(
+            `[email-webhooks] Auto-suppressed ${email} (${ev.type}) for tenant ${emailComm.tenantId}`,
+          )
+        } catch (err) {
+          console.warn('[email-webhooks] Auto-suppress failed:', err)
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[email-webhooks] EmailCommunication handling failed:', err)
   }
 }
 

@@ -32,6 +32,8 @@ import {
   LayoutGrid, Palette, Mail, MessageCircle, Bell, Lock,
   ListTodo, Terminal, LifeBuoy, ClipboardList, Languages,
   ChevronLeft, X, LayoutList, MapPin, Download,
+  // Outreach nav item
+  Send,
   // AI Platform section
   Cloud,
   // O1.5 Channel Catalog
@@ -107,6 +109,7 @@ const BackupSection = lazy(() => import('@/components/views/superadmin/sections/
 const SocialPublishingConfigSection = lazy(() => import('@/components/views/superadmin/sections/social-publishing-config').then(m => ({ default: m.SocialPublishingConfigSection })));
 const ChannelCatalogSection = lazy(() => import('@/components/views/superadmin/sections/channel-catalog').then(m => ({ default: m.ChannelCatalogSection })));
 const CreemBillingSection = lazy(() => import('@/components/views/superadmin/sections/creem-billing').then(m => ({ default: m.CreemBillingSection })));
+const OutreachSection = lazy(() => import('@/components/views/superadmin/sections/outreach').then(m => ({ default: m.OutreachSection })));
 
 // Lightweight Suspense fallback for lazy-loaded sections.
 function SectionLoader() {
@@ -374,7 +377,7 @@ type TabKey =
   // BILLING
   | 'creem-billing'
   // COMMUNICATION
-  | 'email-services' | 'sms-services' | 'whatsapp-providers' | 'push-notifications'
+  | 'email-services' | 'sms-services' | 'whatsapp-providers' | 'push-notifications' | 'outreach'
   // SECURITY
   | 'authentication' | 'security-center' | 'audit-logs' | 'abuse-detection'
   // OPERATIONS
@@ -427,6 +430,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Communication',
     items: [
+      { key: 'outreach', label: 'Outreach', icon: Send },
       { key: 'email-services', label: 'Email Services', icon: Mail },
       { key: 'sms-services', label: 'SMS Services', icon: MessageSquare },
       { key: 'whatsapp-providers', label: 'WhatsApp Providers', icon: MessageCircle },
@@ -1354,6 +1358,7 @@ export function SuperAdminView() {
         {activeTab === 'backup' && <BackupSection />}
         {activeTab === 'social-publishing-config' && <SocialPublishingConfigSection />}
         {activeTab === 'channel-catalog' && <ChannelCatalogSection />}
+        {activeTab === 'outreach' && <OutreachSection />}
       </Suspense>
     );
   };

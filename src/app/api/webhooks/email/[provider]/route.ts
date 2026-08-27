@@ -28,6 +28,9 @@ import {
  *   4. Applies each event (update CampaignMessage + Campaign counters +
  *      EmailEvent ledger; for complaints/unsubscribes, also calls
  *      applyUnsubscribe() to update Contact/Customer consent state).
+ *      In parallel, also matches against outreach EmailCommunication rows
+ *      (by providerMessageId) and updates their status; on bounce/complaint
+ *      the recipient is auto-suppressed via the outreach lib.
  *
  * Always returns 200 OK with a summary — ESPs will retry on non-2xx and we
  * don't want duplicate event application on a transient DB error.
@@ -92,7 +95,7 @@ export async function POST(
   let failed = 0
   for (const ev of events) {
     try {
-      await applyCanonicalEvent(ev)
+      await applyCanonicalEvent(ev, provider)
       applied++
     } catch (err) {
       console.warn(`[email-webhooks] apply failed for ${ev.type} → ${ev.recipientEmail}:`, err)

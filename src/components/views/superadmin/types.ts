@@ -39,6 +39,10 @@ export interface Tenant {
   industry: string;
   country: string;
   currency: string;
+  // Whether the tenant's business ownership has been claimed via the
+  // marketplace claim flow. Surfaced by `/api/superadmin/tenants` and used
+  // by the Outreach send dialog to gate "Claim Your Business" templates.
+  claimed?: boolean;
   onboardingCompleted: boolean;
   suspendedAt: string | null;
   suspensionReason: string | null;
@@ -154,7 +158,7 @@ export type TabKey =
   // PLATFORM
   | 'platform-settings' | 'plan-features' | 'plan-catalog' | 'theme-branding' | 'marketplace' | 'integrations' | 'ai-center' | 'menu-management'
   // COMMUNICATION
-  | 'email-services' | 'sms-services' | 'whatsapp-providers' | 'push-notifications' | 'integration-credentials'
+  | 'outreach' | 'email-services' | 'sms-services' | 'whatsapp-providers' | 'push-notifications' | 'integration-credentials'
   // SECURITY
   | 'authentication' | 'security-center' | 'audit-logs' | 'abuse-detection'
   // OPERATIONS

@@ -32,7 +32,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import {
   Search, Loader2, Eye, Ban, PlayCircle, Pause, Trash2, Edit3, Wallet,
-  Plus, Building2, CheckCircle2,
+  Plus, Building2, CheckCircle2, Mail,
 } from 'lucide-react';
 
 import {
@@ -40,6 +40,7 @@ import {
   getStatusBadgeClasses, getPlanBadgeClasses,
 } from '@/components/views/superadmin/_shared';
 import type { Tenant, CreditInfo } from '@/components/views/superadmin/types';
+import { OutreachSendDialog } from './outreach-send-dialog';
 
 export interface TenantsTabProps {
   tenants: Tenant[];
@@ -76,6 +77,7 @@ export function TenantsTab({
     ownEmailProviderConnected: false,
   });
   const [creditSaving, setCreditSaving] = useState(false);
+  const [sendDialogTenant, setSendDialogTenant] = useState<Tenant | null>(null);
 
   const filteredTenants = useMemo(() => {
     return tenants.filter((t) => {
@@ -383,7 +385,17 @@ export function TenantsTab({
               )}
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="gap-2">
+            {viewTenant && (
+              <Button
+                variant="default"
+                onClick={() => setSendDialogTenant(viewTenant)}
+                disabled={!viewTenant.email}
+                title={viewTenant.email ? 'Send outreach email' : 'No email on file'}
+              >
+                <Mail className="size-4 mr-1" /> Send Email
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setViewTenant(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
@@ -539,6 +551,17 @@ export function TenantsTab({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Outreach Send Email Dialog (opened from the View Tenant footer) */}
+      <OutreachSendDialog
+        open={!!sendDialogTenant}
+        onOpenChange={(open) => { if (!open) setSendDialogTenant(null) }}
+        tenantId={sendDialogTenant?.id || ''}
+        tenantName={sendDialogTenant?.name || ''}
+        tenantEmail={sendDialogTenant?.email || null}
+        tenantClaimed={sendDialogTenant?.claimed || false}
+        onSent={refetchTenants}
+      />
     </div>
   );
 }

@@ -135,6 +135,16 @@ model Tenant {
   // Tenant.reviewCount (optionally synced by an admin or future GBP API job).
   googleBusinessProfileUrl String? @default("")
   googleBusinessVerified   Boolean @default(false)
+
+  // ── Outreach (Superadmin → Tenant one-to-one email) ───────────────────
+  // When true, the entire business is opted out of ALL outreach emails
+  // (regardless of per-email suppression state). Set manually by a superadmin
+  // when a tenant explicitly asks to never be contacted again.
+  outreachDisabled       Boolean  @default(false)
+  outreachDisabledAt     DateTime?
+  outreachDisabledBy     String?  // userId
+  outreachDisabledReason String?
+
   // Google Places API — populated by the seed script (scripts/google-places-seed.ts).
   // googlePlaceId is the canonical Google Place ID (idempotency + future re-sync).
   // website is the business's primary website URL from Google Places.
@@ -2711,6 +2721,106 @@ model EmailEvent {
   @@index([type])
   @@index([recipientEmail])
   @@index([createdAt])
+}
+
+/// Superadmin → Tenant one-to-one outreach email record.
+///
+/// Each row is an immutable snapshot of a single personalized email sent from
+/// the Superadmin Outreach section (or the "Send Email" quick-action on a
+/// tenant). The htmlBody/textBody are SNAPSHOTS at send time — the EmailTemplate
+/// may change later, but this record preserves exactly what was sent (compliance).
+///
+/// Lifecycle:
+///   queued → sent (provider accepted) → delivered | bounced | complained | failed
+///
+/// `status` transitions are driven by ESP webhook events (see
+/// `/api/webhooks/email/[provider]`) matched via `providerMessageId`.
+/// Only `sent` (provider-accepted) sends count toward the daily limit —
+/// `queued` and `failed` sends do NOT consume the daily quota.
+model EmailCommunication {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  recipientEmail     String   // normalized lowercase
+  recipientName      String?
+  templateId         String?  // nullable: ad-hoc emails (no template) are allowed
+  subject            String
+  htmlBody           String   // SNAPSHOT (compliance — template may change later)
+  textBody           String?
+  category           String   @default("outreach")  // outreach | operational | transactional
+  variablesJson      String   @default("{}")        // merge vars used (debugging)
+  status             String   @default("queued")    // queued|sent|delivered|bounced|complained|failed
+  providerMessageId  String?  // SES MessageId — CRITICAL for webhook matching
+  sentByUserId       String
+  sentAt             DateTime?  // set when provider accepts (status → sent)
+  deliveredAt        DateTime?
+  bouncedAt          DateTime?
+  bouncedReason      String?
+  complainedAt       DateTime?
+  createdAt          DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([recipientEmail])
+  @@index([status])
+  @@index([sentByUserId])
+  @@index([providerMessageId])
+}
+
+/// Per-email-address suppression list (NOT per-tenant).
+///
+/// A tenant may have multiple email addresses (owner@, office@, accounts@).
+/// We suppress the ADDRESS, not the business — one bounce on office@ should
+/// not block sending to owner@.
+///
+/// Auto-created by ESP webhooks on hard_bounce or complaint. Can also be
+/// created manually by a superadmin. Resolved (unsuppressed) manually via
+/// the Outreach → Suppressions UI.
+///
+/// `reason`:
+///   hard_bounce  — permanent delivery failure (auto)
+///   complaint    — recipient marked as spam (auto)
+///   manual       — superadmin manually suppressed
+///
+/// `resolvedAt` null = currently suppressed. Set when a superadmin unsuppresses.
+model EmailSuppression {
+  id            String   @id @default(cuid())
+  email         String   // normalized lowercase
+  tenantId      String?  // nullable: null = platform-wide suppression
+  reason        String   // hard_bounce | complaint | manual
+  source        String   // ses_webhook | sendgrid_webhook | manual | imported
+  provider      String?  // ses, sendgrid, mailgun, postmark, brevo, resend
+  metadataJson  String   @default("{}")  // bounce diagnostic, complaint feedback, etc.
+  resolvedAt    DateTime?
+  resolvedBy    String?  // userId
+  resolveReason String?
+  createdAt     DateTime @default(now())
+
+  @@unique([email, tenantId])  // one active suppression per email+tenant
+  @@index([email])
+  @@index([tenantId])
+  @@index([reason])
+  @@index([resolvedAt])
+}
+
+/// Short-lived claim token embedded in outreach emails (e.g. "Claim Your
+/// Business" template). Distinct from the standard claim flow's token because:
+///   - Shorter TTL (7 days vs 24h) — outreach emails may sit unread
+///   - One active token per tenant (regenerated on each send)
+///   - Tracks which email communication carried it (audit trail)
+///
+/// When a recipient clicks the claim link, the claim flow consumes this token
+/// and proceeds with the standard claim ownership transfer.
+model OutreachClaimToken {
+  id                   String   @id @default(cuid())
+  tenantId             String   @unique  // one active token per tenant
+  token                String   @unique
+  expiresAt            DateTime  // 7 days
+  usedAt               DateTime?
+  emailCommunicationId String?  // link to the email that carried it
+  createdAt            DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([expiresAt])
+  @@index([token])
 }
 
 /// GDPR Article 5(2) + Article 7(1) consent audit trail. Every opt-in or
