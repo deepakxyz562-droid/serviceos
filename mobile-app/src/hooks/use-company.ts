@@ -10,7 +10,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/auth-store';
-import type { Company, DiscoverResult } from '@/types';
+import type { Company } from '@/types';
 
 export const COMPANY_KEYS = {
   search: (q: string) => ['company', 'search', q] as const,
@@ -42,18 +42,6 @@ export function useResolveCompany(slug: string | null) {
     queryFn: () => resolveCompany(slug!),
     enabled: !!slug,
     staleTime: 5 * 60 * 1000,
-  });
-}
-
-/**
- * Discover which companies a customer belongs to (by email or phone).
- * This is a mutation because it's an explicit user action with side-effects
- * (the result drives the next step of the login flow).
- */
-export function useDiscoverCustomer() {
-  const discover = useAuthStore((s) => s.discoverCustomerCompanies);
-  return useMutation<DiscoverResult, Error, string>({
-    mutationFn: (identifier) => discover(identifier),
   });
 }
 

@@ -4,18 +4,15 @@
  * ┌──────────────────────────────────────────────────────────────────────┐
  * │  CUSTOMER PORTAL                                                     │
  * │  ─────────────                                                       │
- * │  Step 1: Enter email OR phone → /api/auth/customer/discover          │
- * │    • 0 companies → "No account found"                                │
- * │    • 1 company → proceed to Step 2 (tenantId auto-remembered)        │
- * │    • 2+ companies → show picker → user selects → proceed             │
+ * │  Auth method toggle (2 tabs only):                                   │
+ * │    • OTP       — WhatsApp or Email sub-toggle → send code → verify   │
+ * │      (if 409 multi-company → CompanyPickerModal → re-verify)         │
+ * │    • Password  — email/phone + password → /api/auth/customer/login   │
+ * │      (if 409 multi-company → CompanyPickerModal)                     │
  * │                                                                      │
- * │  Step 2: Choose auth method                                          │
- * │    • OTP       — phone → send-otp → verify-otp (WhatsApp OTP)        │
- * │    • Password  — identifier + password → /api/auth/customer/login    │
- * │      (if 409 multi-company → show CompanyPickerModal)                │
- * │    • Magic link — token → /api/auth/customer/exchange-magic-link     │
- * │      (deep-link: fieseros://?mgl=TOKEN)                              │
- * │    • Activate  — activation token + new password                     │
+ * │  Deep-link auto-login (no visible tab):                              │
+ * │    • Magic link — fieseros://?mgl=TOKEN → auto-exchange              │
+ * │    • Activate   — fieseros://?activate=TOKEN → show activation form  │
  * │                                                                      │
  * │  EMPLOYEE PORTAL                                                     │
  * │  ─────────────                                                       │
@@ -45,20 +42,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ExpoLinking from 'expo-linking';
-import { Sparkles, ShieldCheck, Building2, ArrowLeft } from 'lucide-react-native';
+import { ShieldCheck, Building2, ArrowLeft } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth-store';
 import { BRAND, COLORS } from '@/lib/constants';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { useToast } from '@/components/ui/Toast';
-import { CompanyCard, CompanyRow } from '@/components/auth/CompanyCard';
-import { CompanyFinder } from '@/components/auth/CompanyFinder';
 import { CompanyPickerModal } from '@/components/auth/CompanyPickerModal';
-import type { Company, DiscoveredCompany } from '@/types';
+import type { Company } from '@/types';
 
 type Mode = 'customer' | 'staff';
-type CustomerMethod = 'otp' | 'password' | 'magic' | 'activate';
+type CustomerMethod = 'otp' | 'password' | 'activate';
 type OtpChannel = 'whatsapp' | 'email';
 
 export default function LoginScreen() {
@@ -71,7 +66,6 @@ export default function LoginScreen() {
     loginCustomerPassword,
     exchangeMagicLink,
     activateCustomer,
-    discoverCustomerCompanies,
     resolveCompany,
     setLastCompany,
     loadLastCompany,
@@ -108,7 +102,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
-  const [magicToken, setMagicToken] = useState('');
   const [activationToken, setActivationToken] = useState('');
   const [activationPassword, setActivationPassword] = useState('');
 
@@ -118,11 +111,6 @@ export default function LoginScreen() {
   // don't tangle each other's input.
   const [otpChannel, setOtpChannel] = useState<OtpChannel>('whatsapp');
   const [emailForOtp, setEmailForOtp] = useState('');
-
-  // Customer discovery state
-  const [discovering, setDiscovering] = useState(false);
-  const [discoveredCompanies, setDiscoveredCompanies] = useState<DiscoveredCompany[] | null>(null);
-  const [selectedDiscovered, setSelectedDiscovered] = useState<DiscoveredCompany | null>(null);
 
   // ── Staff state ───────────────────────────────────────────────────
   const [staffEmail, setStaffEmail] = useState('');
@@ -155,8 +143,6 @@ export default function LoginScreen() {
 
         if (mgl) {
           setMode('customer');
-          setMethod('magic');
-          setMagicToken(mgl);
           exchangeMagicLink(mgl)
             .then(() => show('Signed in via magic link', 'success'))
             .catch((err) => {
@@ -206,13 +192,10 @@ export default function LoginScreen() {
     setOtpSent(false);
     setOtp('');
     setPassword('');
-    setMagicToken('');
     setActivationToken('');
     setActivationPassword('');
     setOtpChannel('whatsapp');
     setEmailForOtp('');
-    setDiscoveredCompanies(null);
-    setSelectedDiscovered(null);
     clearError();
     clearMultiCompanyConflict();
   }, [clearError, clearMultiCompanyConflict]);
@@ -250,39 +233,6 @@ export default function LoginScreen() {
     () => identifier.trim().length > 0 && /^[+\d][\d\s-]*$/.test(identifier.trim()),
     [identifier]
   );
-
-  // ── Customer: Discover companies by email or phone ────────────────
-  const handleDiscover = async () => {
-    if (!identifier.trim()) {
-      show('Please enter your email or phone', 'warning');
-      return;
-    }
-    setDiscovering(true);
-    clearError();
-    try {
-      const result = await discoverCustomerCompanies(identifier.trim());
-      setDiscoveredCompanies(result.companies);
-      if (!result.found || result.companies.length === 0) {
-        show('No account found for this email/phone', 'error');
-      } else if (result.companies.length === 1) {
-        // Auto-select the single company
-        setSelectedDiscovered(result.companies[0]);
-        show(`Found: ${result.companies[0].tenantName}`, 'success');
-      } else {
-        show(`${result.companies.length} companies found — pick one`, 'info');
-      }
-    } catch (err) {
-      show(err instanceof Error ? err.message : 'Lookup failed', 'error');
-    } finally {
-      setDiscovering(false);
-    }
-  };
-
-  const handlePickDiscovered = (c: DiscoveredCompany) => {
-    setSelectedDiscovered(c);
-    setIdentifier(c.customerName || identifier);
-    show(`Selected: ${c.tenantName}`, 'info');
-  };
 
   // ── Customer: OTP via WhatsApp ────────────────────────────────────
   const handleSendOtp = async () => {
@@ -368,10 +318,7 @@ export default function LoginScreen() {
       return;
     }
     try {
-      const tenantId =
-        tenantIdOverride !== undefined
-          ? tenantIdOverride
-          : selectedDiscovered?.tenantId || null;
+      const tenantId = tenantIdOverride !== undefined ? tenantIdOverride : null;
       await loginCustomerPassword(identifier.trim(), password, tenantId);
       show('Signed in', 'success');
     } catch {
@@ -388,20 +335,6 @@ export default function LoginScreen() {
       await handleVerifyEmailOtp(tenantId);
     } else {
       await handlePasswordLogin(tenantId);
-    }
-  };
-
-  // ── Customer: Magic link ──────────────────────────────────────────
-  const handleExchangeMagic = async () => {
-    if (!magicToken.trim()) {
-      show('Paste a magic-link token first', 'warning');
-      return;
-    }
-    try {
-      await exchangeMagicLink(magicToken.trim());
-      show('Signed in via magic link', 'success');
-    } catch {
-      // error surfaced via store
     }
   };
 
@@ -502,133 +435,11 @@ export default function LoginScreen() {
           {/* ════════════════════════════════════════════════════════════ */}
           {mode === 'customer' && (
             <>
-              {/* Step 1: Discover companies by email or phone */}
-              {!selectedDiscovered && method !== 'magic' && method !== 'activate' && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      fontWeight: '600',
-                      color: COLORS.foreground,
-                      marginBottom: 6,
-                    }}
-                  >
-                    Find your account
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      color: COLORS.mutedForeground,
-                      marginBottom: 12,
-                      lineHeight: 18,
-                    }}
-                  >
-                    Enter the email or phone number your service provider used to invite you. We'll
-                    find which companies you're linked to.
-                  </Text>
-                  <Input
-                    label="Email or phone"
-                    value={identifier}
-                    onChangeText={setIdentifier}
-                    placeholder="you@example.com or +91 98765 43210"
-                    keyboardType={looksLikePhone ? 'phone-pad' : 'email-address'}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  <Button
-                    onPress={handleDiscover}
-                    loading={discovering}
-                    fullWidth
-                    size="lg"
-                    variant="secondary"
-                  >
-                    Find my companies
-                  </Button>
-
-                  {/* Discovered companies list */}
-                  {discoveredCompanies && discoveredCompanies.length > 1 && (
-                    <View style={{ marginTop: 16 }}>
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          fontWeight: '600',
-                          color: COLORS.foreground,
-                          marginBottom: 8,
-                        }}
-                      >
-                        Select a company ({discoveredCompanies.length} found)
-                      </Text>
-                      {discoveredCompanies.map((c, idx) => (
-                        <View key={`${c.customerId}-${idx}`} style={{ marginBottom: 8 }}>
-                          <CompanyRow
-                            company={{
-                              // Smart fallback: tenantName → workspaceName → generic label.
-                              // The discover API returns tenantName=null when the
-                              // customer's workspace chain is incomplete; workspaceName
-                              // is usually still populated in those cases.
-                              name: c.tenantName || c.workspaceName || 'Your service provider',
-                              logo: c.logo,
-                              industry: c.industry,
-                              slug: c.tenantSlug || '',
-                              tenantName: c.tenantName,
-                              tenantSlug: c.tenantSlug,
-                            }}
-                            accent={COLORS.customerAccent}
-                            onPress={() => handlePickDiscovered(c)}
-                          />
-                        </View>
-                      ))}
-                    </View>
-                  )}
-
-                  {discoveredCompanies && discoveredCompanies.length === 0 && (
-                    <View
-                      style={{
-                        marginTop: 16,
-                        padding: 14,
-                        backgroundColor: '#FEF3C7',
-                        borderRadius: 10,
-                        borderLeftWidth: 4,
-                        borderLeftColor: COLORS.warning,
-                      }}
-                    >
-                      <Text style={{ fontSize: 13, color: COLORS.foreground, lineHeight: 18 }}>
-                        No portal account found for this email/phone. Please ask your service
-                        provider to send you a portal invitation.
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* Selected company badge (after discovery) */}
-              {selectedDiscovered && method !== 'magic' && method !== 'activate' && (
-                <View style={{ marginBottom: 16 }}>
-                  <CompanyCard
-                    company={{
-                      id: selectedDiscovered.tenantId || '',
-                      // Smart fallback: tenantName → workspaceName → generic label.
-                      name: selectedDiscovered.tenantName || selectedDiscovered.workspaceName || 'Your service provider',
-                      slug: selectedDiscovered.tenantSlug || '',
-                      logo: selectedDiscovered.logo,
-                      industry: selectedDiscovered.industry,
-                    }}
-                    accent={COLORS.customerAccent}
-                    onSwitch={() => {
-                      setSelectedDiscovered(null);
-                      setDiscoveredCompanies(null);
-                    }}
-                  />
-                </View>
-              )}
-
-              {/* Step 2: Auth method toggle */}
+              {/* Auth method toggle */}
               <SegmentedControl<CustomerMethod>
                 options={[
                   { value: 'otp', label: 'OTP' },
                   { value: 'password', label: 'Password' },
-                  { value: 'magic', label: 'Magic Link' },
-                  { value: 'activate', label: 'Activate' },
                 ]}
                 value={method}
                 onChange={handleMethodSwitch}
@@ -822,53 +633,7 @@ export default function LoginScreen() {
                 </>
               )}
 
-              {/* Magic link method */}
-              {method === 'magic' && (
-                <>
-                  <View
-                    style={{
-                      backgroundColor: COLORS.primaryLight,
-                      borderRadius: 12,
-                      padding: 12,
-                      marginBottom: 12,
-                      flexDirection: 'row',
-                      alignItems: 'flex-start',
-                    }}
-                  >
-                    <Sparkles size={16} color={COLORS.customerAccent} />
-                    <Text
-                      style={{
-                        marginLeft: 8,
-                        flex: 1,
-                        fontSize: 12,
-                        color: COLORS.foreground,
-                        lineHeight: 18,
-                      }}
-                    >
-                      Sign-in links are sent by Fieseros staff via email or SMS. Open the link on
-                      this device and we'll sign you in automatically, or paste the token below.
-                    </Text>
-                  </View>
-                  <Input
-                    label="Magic link token"
-                    value={magicToken}
-                    onChangeText={setMagicToken}
-                    placeholder="Paste token from your email"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  <Button
-                    onPress={handleExchangeMagic}
-                    loading={isLoading}
-                    fullWidth
-                    size="lg"
-                  >
-                    Sign In with Magic Link
-                  </Button>
-                </>
-              )}
-
-              {/* Activation method */}
+              {/* Activation method (deep-link only) */}
               {method === 'activate' && (
                 <>
                   <View

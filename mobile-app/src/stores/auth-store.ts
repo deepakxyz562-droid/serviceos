@@ -32,7 +32,6 @@ import type {
   UserRole,
   Tenant,
   Company,
-  DiscoverResult,
   MultiCompanyConflict,
 } from '@/types';
 import {
@@ -68,7 +67,6 @@ interface AuthState {
   // ── Company / tenant discovery (pre-login) ──────────────────────────
   searchCompanies: (q: string) => Promise<Company[]>;
   resolveCompany: (slug: string) => Promise<Company | null>;
-  discoverCustomerCompanies: (identifier: string) => Promise<DiscoverResult>;
   setLastCompany: (company: Company) => void;
   loadLastCompany: () => Promise<Company | null>;
   clearMultiCompanyConflict: () => void;
@@ -196,15 +194,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.error('[auth] resolveCompany failed:', error);
       return null;
     }
-  },
-
-  discoverCustomerCompanies: async (identifier) => {
-    const res = await api.post<DiscoverResult>(
-      API_PATHS.customerDiscover,
-      { identifier },
-      { skipAuth: true }
-    );
-    return res;
   },
 
   setLastCompany: (company) => {

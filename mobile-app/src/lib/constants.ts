@@ -45,7 +45,6 @@ export const API_PATHS = {
   companiesResolve: '/api/companies/resolve',
 
   // Customer auth
-  customerDiscover: '/api/auth/customer/discover',
   customerSendOtp: '/api/auth/customer/send-otp',
   customerVerifyOtp: '/api/auth/customer/verify-otp',
   customerLogin: '/api/auth/customer/login',
