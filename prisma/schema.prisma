@@ -2274,8 +2274,11 @@ model CustomerPortalSession {
 model OtpVerification {
   id          String   @id @default(cuid())
   phone       String
+  // Email channel — set when channel='email'. Nullable because the existing
+  // phone/WhatsApp path doesn't set it. Backfilled as null on legacy rows.
+  email       String?
   otpCode     String
-  channel     String   @default("whatsapp")  // whatsapp, sms
+  channel     String   @default("whatsapp")  // whatsapp, sms, email
   verified    Boolean  @default(false)
   expiresAt   DateTime
   verifiedAt  DateTime?
@@ -2284,6 +2287,7 @@ model OtpVerification {
   createdAt   DateTime @default(now())
 
   @@index([phone])
+  @@index([email])
   @@index([otpCode])
   @@index([expiresAt])
 }

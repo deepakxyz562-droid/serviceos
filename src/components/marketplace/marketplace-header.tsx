@@ -346,13 +346,22 @@ function HeaderAction() {
 
   if (!auth?.isAuthenticated) {
     return (
-      <Link
-        href="/?auth=register"
-        className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
-      >
-        <span className="hidden sm:inline">List your business</span>
-        <span className="sm:hidden">List</span>
-      </Link>
+      <div className="flex items-center gap-2">
+        <Link
+          href="/customer-login"
+          className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-3 sm:px-4 text-xs sm:text-sm font-medium text-foreground transition-colors hover:bg-muted"
+        >
+          <span className="hidden sm:inline">Customer Login</span>
+          <span className="sm:hidden">Login</span>
+        </Link>
+        <Link
+          href="/?auth=register"
+          className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+        >
+          <span className="hidden sm:inline">List your business</span>
+          <span className="sm:hidden">List</span>
+        </Link>
+      </div>
     );
   }
 

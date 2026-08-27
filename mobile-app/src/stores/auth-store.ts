@@ -80,6 +80,14 @@ interface AuthState {
   requestCustomerOtp: (phone: string) => Promise<void>;
   loginCustomerOtp: (phone: string, otp: string) => Promise<void>;
 
+  // ── Customer — OTP (email) ───────────────────────────────────────────
+  requestCustomerEmailOtp: (email: string) => Promise<void>;
+  loginCustomerEmailOtp: (
+    email: string,
+    otpCode: string,
+    tenantId?: string | null
+  ) => Promise<void>;
+
   // ── Customer — password ─────────────────────────────────────────────
   loginCustomerPassword: (
     identifier: string,
@@ -321,6 +329,101 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
       });
     } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'OTP verification failed',
+      });
+      throw error;
+    }
+  },
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Customer — OTP (email)
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Send a 6-digit OTP to the given customer email via the shared
+   * `/api/auth/customer/send-otp` endpoint (the backend now accepts { email }
+   * and dispatches through the email provider). Mirrors `requestCustomerOtp`
+   * but sends an email body instead of a phone body.
+   */
+  requestCustomerEmailOtp: async (email) => {
+    set({ isLoading: true, error: null });
+    try {
+      await api.post(
+        API_PATHS.customerSendOtp,
+        { email: email.trim().toLowerCase() },
+        { skipAuth: true }
+      );
+      set({ isLoading: false });
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to send OTP',
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Verify an email OTP and log the customer in. Mirrors `loginCustomerOtp`
+   * but sends { email, otpCode, tenantId? } to `/api/auth/customer/verify-otp`.
+   *
+   * Handles the 409 multi-company case (identical shape to the password
+   * login route): when the customer's email belongs to multiple companies
+   * and no `tenantId` is supplied, the API throws an `ApiRequestError` with
+   * `statusCode === 409` and `body.multiCompany === true`. In that case we
+   * surface the conflict via `multiCompanyConflict` (instead of throwing)
+   * so the login UI can show the `CompanyPickerModal`; the user picks a
+   * company and we re-call this action with the chosen `tenantId`.
+   */
+  loginCustomerEmailOtp: async (email, otpCode, tenantId) => {
+    set({ isLoading: true, error: null, multiCompanyConflict: null });
+    try {
+      const body: Record<string, unknown> = {
+        email: email.trim().toLowerCase(),
+        otpCode,
+      };
+      if (tenantId) body.tenantId = tenantId;
+
+      const response = await api.post<{
+        token?: string;
+        accessToken?: string;
+        refreshToken?: string;
+        user?: User;
+        tenant?: unknown;
+      }>(API_PATHS.customerVerifyOtp, body, { skipAuth: true });
+
+      const token = extractToken(response);
+      if (!token || !response.user) throw new Error('Invalid response from server');
+
+      await setTokens(token, response.refreshToken);
+      await setStoredUserData(response.user);
+      await setActiveRole('customer');
+
+      const tenant = toTenant(response.tenant);
+      set({
+        user: response.user,
+        role: 'customer',
+        tenant,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+    } catch (error) {
+      // The api client throws ApiRequestError with statusCode + body.
+      // For 409 multi-company, body contains { multiCompany: true, companies: [...] }.
+      const anyErr = error as { statusCode?: number; body?: unknown };
+      if (anyErr?.statusCode === 409 && anyErr?.body) {
+        const conflict = anyErr.body as MultiCompanyConflict;
+        if (conflict?.multiCompany && Array.isArray(conflict.companies)) {
+          set({
+            isLoading: false,
+            multiCompanyConflict: conflict,
+            error: conflict.error || 'Multiple companies found.',
+          });
+          return;
+        }
+      }
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'OTP verification failed',
