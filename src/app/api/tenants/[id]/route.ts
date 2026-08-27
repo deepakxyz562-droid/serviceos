@@ -7,6 +7,7 @@ import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import { applyHubDefaultsToTenant, revalidatePublicBusiness } from '@/lib/public-business';
 import { computeProfileCompletion } from '@/lib/marketplace-eligibility';
 import { seedTenantDefaults } from '@/lib/seed-tenant-defaults';
+import { markSitemapDirtyForTenant } from '@/lib/sitemap';
 
 // GET /api/tenants/[id] - Get tenant details
 export async function GET(
@@ -296,6 +297,13 @@ export async function PUT(
       where: { id },
       data: updateData,
     });
+
+    // Mark the tenant's sitemap file as dirty. The PUT handler updates
+    // URL-relevant fields (name, publicSlug, city, industry,
+    // publicProfileEnabled) — the sitemap URL for this tenant may need
+    // refreshing. Fire-and-forget: never blocks, never throws; the 7-day
+    // safety net catches any missed updates.
+    markSitemapDirtyForTenant(id).catch(() => {});
 
     // ── Auto-populate Hub defaults on onboarding completion ──────────────
     // Runs AFTER the main update so it can read the freshly-saved name,
@@ -640,6 +648,13 @@ export async function PATCH(
       where: { id },
       data: updateData,
     });
+
+    // Mark the tenant's sitemap file as dirty. The PATCH handler updates
+    // marketplace-eligibility fields (marketplaceOptIn, businessCategories,
+    // serviceRadiusKm) which can change the tenant's inclusion in the
+    // indexable business list. Fire-and-forget: never blocks, never throws;
+    // the 7-day safety net catches any missed updates.
+    markSitemapDirtyForTenant(id).catch(() => {});
 
     // ── Live-recompute profile completion % and persist back ────────────────
     // The computeProfileCompletion() function reads from DB so it sees the

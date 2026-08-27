@@ -35,6 +35,7 @@ import {
   sendClaimRejectedEmail,
   type ClaimEmailContext,
 } from '@/lib/claim-emails';
+import { markSitemapDirtyForTenant } from '@/lib/sitemap';
 
 export const dynamic = 'force-dynamic';
 
@@ -129,6 +130,13 @@ export async function POST(request: NextRequest) {
           },
         }),
       ]);
+
+      // Mark the tenant's sitemap file as dirty so the next daily cron
+      // regenerates it. Claiming changes the listingTier which affects
+      // marketplace indexability — the sitemap URL for this tenant must
+      // be refreshed. Fire-and-forget: the 7-day safety net catches any
+      // missed updates if this DB write fails.
+      markSitemapDirtyForTenant(claim.tenantId).catch(() => {});
 
       // Send approval email with the registration link
       // (claim.tenant is guaranteed non-null by the guard above)

@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { markSitemapDirtyForTenant } from '@/lib/sitemap'
 
 // GET /api/tenants — List tenants (for super admin)
 export async function GET(request: NextRequest) {
@@ -134,6 +135,12 @@ export async function POST(request: NextRequest) {
         whatsappPhone: whatsappPhone ?? null,
       },
     })
+
+    // Mark the tenant's sitemap file as dirty so the next daily cron
+    // regenerates it. A newly-created tenant won't appear in the sitemap
+    // until its file is regenerated. Fire-and-forget: never blocks, never
+    // throws; the 7-day safety net catches any missed updates.
+    markSitemapDirtyForTenant(tenant.id).catch(() => {})
 
     // Auto-seed dummy public business hub data so the new tenant has a
     // starting point they can edit from Settings → Public Hub. (No workspace

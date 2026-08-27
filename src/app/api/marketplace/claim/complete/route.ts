@@ -40,6 +40,7 @@ import {
   generateSlug,
 } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { markSitemapDirtyForTenant } from '@/lib/sitemap';
 
 export const dynamic = 'force-dynamic';
 
@@ -163,6 +164,9 @@ export async function POST(request: NextRequest) {
         'Claim completed (existing user)',
       );
 
+      // Mark sitemap dirty — the tenant's claim status changed, affecting its URL
+      await markSitemapDirtyForTenant(claim.tenantId).catch(() => {});
+
       return NextResponse.json({
         user: {
           id: existingUser.id,
@@ -270,6 +274,9 @@ export async function POST(request: NextRequest) {
         },
       }),
     ]);
+
+    // Mark sitemap dirty — the tenant's claim status changed, affecting its URL
+    await markSitemapDirtyForTenant(claim.tenantId).catch(() => {});
 
     // Issue JWT
     const authUser = {

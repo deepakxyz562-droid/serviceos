@@ -5320,6 +5320,39 @@ model RevenueFeatureToggle {
   @@index([enabled])
 }
 
+/// Sitemap regeneration state — tracks which sitemap files need regeneration
+/// and when the last full/partial regeneration ran.
+///
+/// There is only EVER ONE row in this table (id = 'singleton'). It stores:
+///   dirtyFilesJson  — JSON array of file numbers (1-10) that need regeneration
+///                      e.g. "[3, 7]" means files 3 and 7 have new/changed data
+///   lastRunAt       — when the cron last ran (regardless of whether it did work)
+///   lastFullRegenAt — when ALL 10 business files were last regenerated
+///                      (used by the 7-day safety net to force a full regen)
+///   lockAt          — when a cron run acquired the lock (null = unlocked)
+///                      prevents concurrent cron runs from double-generating
+///
+/// Flow:
+///   Business claimed/added/updated → markSitemapDirty(tenantId)
+///     → computes bucket = SHA-256(tenantId)[0] % 10 + 1
+///     → adds bucket to dirtyFilesJson (atomic upsert)
+///   Daily cron → regenerateDirtySitemaps()
+///     → acquires lock (sets lockAt)
+///     → reads dirtyFilesJson
+///     → for each dirty file: query that bucket's businesses, generate XML,
+///       upload to Supabase Storage. Only clear the file from dirtyFilesJson
+///       if the upload SUCCEEDED (atomic — failed files stay dirty for retry)
+///     → releases lock (clears lockAt)
+///   7-day safety net → if lastFullRegenAt > 7 days, regenerate all 10 files
+model SitemapState {
+  id              String   @id  // always 'singleton'
+  dirtyFilesJson  String   @default("[]")  // [3, 7] — file numbers needing regen
+  lastRunAt       DateTime?
+  lastFullRegenAt DateTime?
+  lockAt          DateTime?  // non-null = cron currently running
+  updatedAt       DateTime @updatedAt
+}
+
 // ==========================================
 // AI PROVIDER KEYS (Multi-key with fallback chain)
 // ==========================================

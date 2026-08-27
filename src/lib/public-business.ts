@@ -1064,6 +1064,21 @@ export async function listIndexableBusinessUrls(options?: {
  * page requests are then served from the in-memory cache.
  */
 export async function listAllIndexableBusinessUrls(): Promise<IndexableBusinessUrl[]> {
+  // ── In-memory cache (1-hour TTL) ──────────────────────────────────────
+  // The sitemap routes call this function on EVERY request. Without caching,
+  // each sitemap page fetch loads ALL ~94K businesses from the DB (~7s).
+  // With this cache, the first request loads the data, and all subsequent
+  // requests within 1 hour are served from memory (<1ms). This is critical
+  // for Google Search Console — without it, Google's crawler times out
+  // waiting for the sitemap to generate.
+  const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+  if (
+    listAllIndexableBusinessUrlsCache &&
+    Date.now() - listAllIndexableBusinessUrlsCacheTimestamp < CACHE_TTL_MS
+  ) {
+    return listAllIndexableBusinessUrlsCache;
+  }
+
   try {
     const PAGE_SIZE = 1000
     const allTenants: Array<{
@@ -1187,6 +1202,9 @@ export async function listAllIndexableBusinessUrls(): Promise<IndexableBusinessU
         tier,
       })
     }
+    // Cache the successful result for 1 hour
+    listAllIndexableBusinessUrlsCache = entries;
+    listAllIndexableBusinessUrlsCacheTimestamp = Date.now();
     return entries
   } catch (err) {
     // Re-throw CircuitOpenError so the shared-cache layer (sitemap-builder's
@@ -1197,6 +1215,12 @@ export async function listAllIndexableBusinessUrls(): Promise<IndexableBusinessU
     return []
   }
 }
+
+// ── In-memory cache for listAllIndexableBusinessUrls ───────────────────────
+// Module-level variables — survive across requests in the same server process.
+// TTL is 1 hour (matching the sitemap route's `revalidate = 3600`).
+let listAllIndexableBusinessUrlsCache: IndexableBusinessUrl[] | null = null;
+let listAllIndexableBusinessUrlsCacheTimestamp = 0;
 
 /**
  * Count indexable marketplace tenants for sitemap-index sizing.
