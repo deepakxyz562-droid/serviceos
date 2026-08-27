@@ -834,6 +834,14 @@ export interface IndexableBusinessUrl {
   url: string
   lastModified?: string
   /**
+   * The tenant ID that generated this URL. Used by the sitemap's hash-based
+   * 10-file split to deterministically assign each business to a file via
+   * SHA-256(tenantId)[0] % 10. Without this, the sitemap can't correctly
+   * bucket businesses (the old slug-matching approach only caught ~100 per
+   * bucket instead of ~9,400).
+   */
+  tenantId?: string
+  /**
    * Profile tier (A=rich / B=medium). Tier C is never emitted — those
    * listings are excluded from the sitemap entirely (noindex,follow).
    * Used by sitemap.ts to set differentiated `priority` per URL so Google
@@ -1034,6 +1042,7 @@ export async function listIndexableBusinessUrls(options?: {
       entries.push({
         url: `${SITE_URL}/${industrySlug}/${citySlug}/${t.slug}`,
         lastModified,
+        tenantId: t.id,
         tier,
       })
     }
@@ -1199,6 +1208,7 @@ export async function listAllIndexableBusinessUrls(): Promise<IndexableBusinessU
       entries.push({
         url: `${SITE_URL}/${industrySlug}/${citySlug}/${t.slug}`,
         lastModified,
+        tenantId: t.id,
         tier,
       })
     }

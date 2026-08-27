@@ -26,10 +26,25 @@ import { fetchSitemapFile } from '@/lib/sitemap/storage';
 
 export const revalidate = 3600; // 1h ISR (CDN does the heavy lifting via s-maxage)
 
-const CDN_CACHE_HEADERS = {
-  'Content-Type': 'application/xml; charset=UTF-8',
-  'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=3600',
-};
+/**
+ * Build a NextResponse for XML content with explicit Content-Length + Content-Type.
+ *
+ * NextResponse doesn't always set Content-Length correctly for string bodies
+ * (it can report 0), which causes Google Search Console to reject the sitemap
+ * with "Sitemap could not be read" + "Discovered pages: 0". Using a Buffer
+ * + explicit Content-Length header fixes this.
+ */
+function xmlResponse(xml: string): NextResponse {
+  const buf = Buffer.from(xml, 'utf-8');
+  return new NextResponse(buf, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/xml; charset=UTF-8',
+      'Content-Length': String(buf.length),
+      'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=3600',
+    },
+  });
+}
 
 export async function GET(
   _request: Request,
@@ -42,14 +57,13 @@ export async function GET(
     return new NextResponse('Invalid sitemap page ID', { status: 400 });
   }
 
-  // ── Tier 1: Fetch from Supabase Storage (source of truth) ─────────────
-  const storageXml = await fetchSitemapFile(pageId);
-  if (storageXml) {
-    return new NextResponse(storageXml, { headers: CDN_CACHE_HEADERS });
+  // ── Tier 1: Fetch from Storage / filesystem (source of truth) ──────────
+  const xml = await fetchSitemapFile(pageId);
+  if (xml) {
+    return xmlResponse(xml);
   }
 
   // ── Tier 2: Build-time static fallback (public/sitemap/{pageId}.xml) ──
-  // Use pageId (parsed integer) not id (raw string which may include '.xml')
   const possiblePaths = [
     path.join(process.cwd(), 'public', 'sitemap', `${pageId}.xml`),
     path.join(process.cwd(), 'standalone', 'public', 'sitemap', `${pageId}.xml`),
@@ -58,14 +72,12 @@ export async function GET(
   for (const filePath of possiblePaths) {
     try {
       const content = await fs.readFile(filePath, 'utf-8');
-      return new NextResponse(content, { headers: CDN_CACHE_HEADERS });
+      return xmlResponse(content);
     } catch {
       // File not found — try next path
     }
   }
 
   // ── Tier 3: 404 — no DB fallback (prevents the 7-second timeout) ──────
-  // Google will retry on the next crawl. The daily cron will upload the
-  // files to Supabase Storage, making them available for subsequent fetches.
   return new NextResponse(`Sitemap ${pageId}.xml not yet generated`, { status: 404 });
 }

@@ -96,23 +96,36 @@ export async function uploadSitemapFile(
   }
 
   // ── Filesystem fallback (always write — even if Storage succeeded) ────
-  // Writing to the filesystem ensures the sitemap routes can serve the file
-  // immediately (Tier 2 fallback in the route handler). If Storage succeeded,
-  // this is a harmless backup. If Storage failed, this is the primary copy.
+  // Write to /tmp/sitemaps/ (always writable in Docker containers, even when
+  // public/ is read-only). The fetch function + sitemap routes check /tmp
+  // FIRST, then public/, then Supabase Storage.
   try {
     const fs = await import('fs/promises');
     const path = await import('path');
+    const tmpDir = path.join('/tmp', 'sitemaps');
     const publicDir = path.join(process.cwd(), 'public');
-    const sitemapDir = path.join(publicDir, SITEMAP_PREFIX);
+    const publicSitemapDir = path.join(publicDir, SITEMAP_PREFIX);
 
-    // Ensure the directory exists
-    await fs.mkdir(sitemapDir, { recursive: true });
-
+    // Write to /tmp (always writable)
+    await fs.mkdir(tmpDir, { recursive: true });
     if (fileNumber === 'index') {
-      await fs.writeFile(path.join(publicDir, 'sitemap.xml'), xmlContent, 'utf-8');
+      await fs.writeFile(path.join(tmpDir, 'sitemap.xml'), xmlContent, 'utf-8');
     } else {
-      await fs.writeFile(path.join(sitemapDir, `${fileNumber}.xml`), xmlContent, 'utf-8');
+      await fs.writeFile(path.join(tmpDir, `${fileNumber}.xml`), xmlContent, 'utf-8');
     }
+
+    // ALSO try writing to public/ (may fail if read-only — that's OK)
+    try {
+      await fs.mkdir(publicSitemapDir, { recursive: true });
+      if (fileNumber === 'index') {
+        await fs.writeFile(path.join(publicDir, 'sitemap.xml'), xmlContent, 'utf-8');
+      } else {
+        await fs.writeFile(path.join(publicSitemapDir, `${fileNumber}.xml`), xmlContent, 'utf-8');
+      }
+    } catch {
+      // public/ is read-only — /tmp copy is the primary
+    }
+
     // Filesystem write succeeded — return true even if Storage failed
     return true;
   } catch (fsErr) {
@@ -135,7 +148,24 @@ export async function uploadSitemapFile(
 export async function fetchSitemapFile(
   fileNumber: number | 'index',
 ): Promise<string | null> {
-  // ── Tier 1: Filesystem (freshest — written by the daily cron) ─────────
+  // ── Tier 1: /tmp/sitemaps/ (freshest — written by the daily cron) ────
+  // /tmp is always writable in Docker containers, even when public/ is read-only.
+  try {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const filePath =
+      fileNumber === 'index'
+        ? path.join('/tmp', 'sitemaps', 'sitemap.xml')
+        : path.join('/tmp', 'sitemaps', `${fileNumber}.xml`);
+    const content = await fs.readFile(filePath, 'utf-8');
+    if (content && content.length > 0) {
+      return content;
+    }
+  } catch {
+    // File not found in /tmp — fall through to public/
+  }
+
+  // ── Tier 2: public/ (build-time fallback OR cron-written if public/ is writable) ─
   try {
     const fs = await import('fs/promises');
     const path = await import('path');
