@@ -489,6 +489,7 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
             <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold uppercase tracking-wide">New</span>
           </a>
           <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium" onClick={(e) => crmAnchorClick('#pricing', e)}>Pricing</a>
+          <a href="/services" className="text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors font-medium">Services</a>
           <a href="/marketplace" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Marketplace</a>
           <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium" onClick={(e) => crmAnchorClick('#faq', e)}>FAQ</a>
         </nav>
@@ -566,6 +567,7 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
             <a href="#crm-features" className="block text-sm text-muted-foreground hover:text-foreground min-h-12 flex items-center px-3 rounded-lg hover:bg-muted/60 active:bg-muted" onClick={(e) => crmAnchorClick('#crm-features', e)}>Features</a>
             <a href="#ai-receptionist" className="block text-sm text-emerald-600 min-h-12 flex items-center px-3 rounded-lg hover:bg-emerald-50/60 active:bg-emerald-50" onClick={(e) => crmAnchorClick('#ai-receptionist', e)}>AI Receptionist</a>
             <a href="#pricing" className="block text-sm text-muted-foreground hover:text-foreground min-h-12 flex items-center px-3 rounded-lg hover:bg-muted/60 active:bg-muted" onClick={(e) => crmAnchorClick('#pricing', e)}>Pricing</a>
+            <a href="/services" className="block text-sm text-amber-600 hover:text-amber-700 min-h-12 flex items-center px-3 rounded-lg hover:bg-amber-50/60 active:bg-amber-50" onClick={() => setMobileOpen(false)}>Services</a>
             <a href="/marketplace" className="block text-sm text-muted-foreground hover:text-foreground min-h-12 flex items-center px-3 rounded-lg hover:bg-muted/60 active:bg-muted" onClick={() => setMobileOpen(false)}>Marketplace</a>
             <a href="#faq" className="block text-sm text-muted-foreground hover:text-foreground min-h-12 flex items-center px-3 rounded-lg hover:bg-muted/60 active:bg-muted" onClick={(e) => crmAnchorClick('#faq', e)}>FAQ</a>
             <Separator className="my-2" />

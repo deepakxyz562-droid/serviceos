@@ -134,6 +134,10 @@ export async function POST(request: NextRequest) {
           maxUsers: 1,
           maxJobs: 200,
           maxWorkflows: 10,
+          // SMS + email + WhatsApp quotas per plan
+          smsQuota: 50,           // Starter: 50 SMS/month
+          emailQuota: 200,        // Starter: 200 emails/month
+          whatsappQuota: 0,       // Starter: 0 (BYO WhatsApp)
           featuresJson: JSON.stringify({
             // WhatsApp is NOT platform-provided. It is BYO (user connects own
             // Meta API). The whatsappIntegration flag gates the menu's

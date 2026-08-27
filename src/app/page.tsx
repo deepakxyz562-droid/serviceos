@@ -152,8 +152,12 @@ export default async function HomePage() {
           is in the initial HTML (before JS execution) with 1,500+ words and
           25+ internal links to key pages — giving Google clear sitelink
           candidates and strong topical context.
-          Skipped for authenticated users to prevent FOUC on hard refresh. */}
-      {!hasAuthCookie && <HomeSeoContent />}
+          Skipped for authenticated users to prevent FOUC on hard refresh.
+          DISABLED: this content renders AFTER the landing page's footer,
+          making it look like duplicate marketing content below the fold.
+          The SEO content (H1, Build/Grow/Run, internal links) is already
+          in the interactive landing page (DualAudienceLanding). */}
+      {/* {!hasAuthCookie && <HomeSeoContent />} */}
       {/* Hourly-rotating European city spotlight — server-rendered, populated
           by the standalone external cron at /api/cron/featured-location.
           Skipped for authenticated users (they go straight to the dashboard). */}

@@ -503,3 +503,71 @@ export async function seedPlanFeatureMatrix(): Promise<{ seeded: number }> {
 
   return { seeded };
 }
+
+// ─── Plan SMS / Email / WhatsApp Quotas ─────────────────────────────────────
+// Per-plan monthly quotas for platform-provided communication channels.
+// Used by the register route + subscription upgrade flow to set the
+// Subscription model's smsQuota / emailQuota / whatsappQuota fields.
+//
+// WhatsApp is BYO (Bring Your Own Meta API) — the platform does NOT provide
+// WhatsApp credits. The quota here is 0 for all plans; tenants connect their
+// own Meta API and pay Meta directly for WhatsApp messages.
+//
+// SMS + Email are platform-provided (via Twilio + configured SMTP/Resend/etc.).
+// The quotas below are monthly limits enforced by the email-send.ts + SMS
+// gateway middleware.
+
+export interface PlanQuotas {
+  smsQuota: number;
+  emailQuota: number;
+  whatsappQuota: number;
+  maxUsers: number;
+  maxJobs: number;
+}
+
+export const PLAN_QUOTAS: Record<PlanTier, PlanQuotas> = {
+  trial: {
+    smsQuota: 50,        // 50 SMS during trial
+    emailQuota: 200,     // 200 emails during trial
+    whatsappQuota: 0,    // BYO
+    maxUsers: 1,
+    maxJobs: 200,
+  },
+  starter: {
+    smsQuota: 50,        // 50 SMS/month
+    emailQuota: 200,     // 200 emails/month
+    whatsappQuota: 0,    // BYO
+    maxUsers: 1,
+    maxJobs: 200,
+  },
+  growth: {
+    smsQuota: 500,       // 500 SMS/month
+    emailQuota: 2000,    // 2,000 emails/month
+    whatsappQuota: 0,    // BYO
+    maxUsers: 5,
+    maxJobs: 1000,
+  },
+  business: {
+    smsQuota: 2000,      // 2,000 SMS/month
+    emailQuota: 10000,   // 10,000 emails/month
+    whatsappQuota: 0,    // BYO
+    maxUsers: 20,
+    maxJobs: 5000,
+  },
+  enterprise: {
+    smsQuota: 10000,     // 10,000 SMS/month
+    emailQuota: 50000,   // 50,000 emails/month
+    whatsappQuota: 0,    // BYO
+    maxUsers: 100,
+    maxJobs: 50000,
+  },
+};
+
+/**
+ * Get the quotas for a given plan tier.
+ * Falls back to starter quotas if the tier is unknown.
+ */
+export function getPlanQuotas(plan: string, planStatus?: string): PlanQuotas {
+  const tier = resolvePlanTier(plan, planStatus);
+  return PLAN_QUOTAS[tier] || PLAN_QUOTAS.starter;
+}

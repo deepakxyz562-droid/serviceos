@@ -9,7 +9,12 @@ import { Button } from '@/components/ui/button'
 import { getServiceSchema } from '@/lib/seo/schemas'
 import { INDUSTRY_SERVICES, getIndustryBySlug, getAllIndustrySlugs } from '@/lib/services/industry-data'
 
-export const dynamic = 'force-dynamic'
+// Statically generate all 18 industry pages at build time.
+export const dynamicParams = false
+
+export function generateStaticParams() {
+  return getAllIndustrySlugs().map((slug) => ({ industry: slug }))
+}
 
 export async function generateMetadata({
   params,

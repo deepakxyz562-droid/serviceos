@@ -8,6 +8,7 @@ import {
   Zap,
   FileText,
   Siren,
+  ChevronLeft,
   ChevronRight,
   Wrench,
   Sparkles,
@@ -230,29 +231,10 @@ export function MarketplaceCompact({
               </CardContent>
             </Card>
           ) : (
-            <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0">
-              {featured.map((p) => {
-                const slug = p.slug || p.publicSlug;
-                // Canonical /{pluralIndustry}/{city}/{slug} URL — links
-                // directly to the unified public business hub. PLURAL segment
-                // avoids a singular→plural 301 redirect (blank white page).
-                const canonicalHref = slug
-                  ? `/${mapIndustryToPluralSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
-                  : undefined;
-                return (
-                  <div key={p.id} className="w-72 shrink-0">
-                    <ProviderCard
-                      provider={p}
-                      featured={!!p.featured}
-                      onViewProfile={handleProviderClick}
-                      compact
-                      className="h-full"
-                      href={canonicalHref}
-                    />
-                  </div>
-                );
-              })}
-            </div>
+            <FeaturedCarousel
+              featured={featured}
+              handleProviderClick={handleProviderClick}
+            />
           )}
         </div>
 
@@ -357,5 +339,116 @@ export function MarketplaceCompact({
         </div>
       </div>
     </section>
+  );
+}
+
+// ─── Featured Carousel ──────────────────────────────────────────────────────
+// Horizontal-scroll carousel with left/right navigation arrows.
+// Cards are responsive: 1 on mobile, 2 on tablet, 3-4 on desktop.
+// The arrows appear/disappear based on scroll position.
+
+function FeaturedCarousel({
+  featured,
+  handleProviderClick,
+}: {
+  featured: ProviderListItem[];
+  handleProviderClick: (p: ProviderListItem) => void;
+}) {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = React.useState(false);
+  const [canScrollRight, setCanScrollRight] = React.useState(true);
+
+  const checkScrollPosition = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 10);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  }, []);
+
+  React.useEffect(() => {
+    checkScrollPosition();
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', checkScrollPosition, { passive: true });
+    window.addEventListener('resize', checkScrollPosition);
+    return () => {
+      el.removeEventListener('scroll', checkScrollPosition);
+      window.removeEventListener('resize', checkScrollPosition);
+    };
+  }, [checkScrollPosition]);
+
+  const scrollByCards = (direction: 'left' | 'right') => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // Scroll by ~2 card widths (card + gap ≈ 304px)
+    const scrollAmount = direction === 'left' ? -640 : 640;
+    el.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="relative">
+      {/* Navigation arrows — desktop only */}
+      {canScrollLeft && (
+        <button
+          onClick={() => scrollByCards('left')}
+          className="absolute -left-3 top-1/2 z-10 hidden -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background p-2 shadow-lg transition-all hover:bg-muted md:flex"
+          aria-label="Previous providers"
+          type="button"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+      )}
+      {canScrollRight && (
+        <button
+          onClick={() => scrollByCards('right')}
+          className="absolute -right-3 top-1/2 z-10 hidden -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background p-2 shadow-lg transition-all hover:bg-muted md:flex"
+          aria-label="Next providers"
+          type="button"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      )}
+
+      {/* Scrollable container */}
+      <div
+        ref={scrollRef}
+        className="flex gap-4 overflow-x-auto scroll-smooth pb-4"
+        style={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#0f766e40 transparent',
+        }}
+      >
+        {featured.map((p) => {
+          const slug = p.slug || p.publicSlug;
+          const canonicalHref = slug
+            ? `/${mapIndustryToPluralSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
+            : undefined;
+          return (
+            <div
+              key={p.id}
+              className="w-[85%] shrink-0 sm:w-[45%] md:w-[31%] lg:w-[23.5%]"
+            >
+              <ProviderCard
+                provider={p}
+                featured={!!p.featured}
+                onViewProfile={handleProviderClick}
+                compact
+                className="h-full"
+                href={canonicalHref}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Mobile scroll hint — dots indicator */}
+      <div className="mt-2 flex justify-center gap-1.5 md:hidden">
+        {featured.length > 1 && (
+          <span className="text-xs text-muted-foreground">
+            ← Swipe to see more →
+          </span>
+        )}
+      </div>
+    </div>
   );
 }

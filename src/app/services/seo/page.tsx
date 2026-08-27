@@ -7,7 +7,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getServiceSchema } from '@/lib/seo/schemas'
 
-export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'SEO & Local Search for Service Businesses | Fieseros',
