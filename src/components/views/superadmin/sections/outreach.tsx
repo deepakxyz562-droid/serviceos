@@ -1,21 +1,23 @@
 'use client';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OutreachSection — Superadmin Outreach management page (Task 5-a).
+// OutreachSection — Superadmin Outreach management page (Task 5-a redesign).
 //
-// 4 tabs:
-//   1. Overview  — KPI cards + daily-limit Settings card.
-//   2. History   — tenant selector + pre-flight stats + history table +
-//                  "Send Email" button (opens OutreachSendDialog).
-//   3. Suppressions — table of active suppressions + "Show resolved" toggle +
-//                  "Manually suppress" dialog.
-//   4. Settings  — daily limit editor (Input + Save).
+// 5 tabs:
+//   1. Overview     — KPI cards + daily-limit Settings card.
+//   2. Compose      — split-pane: tenant list (left, checkboxes) + email
+//                     preview (right). Multi-tenant bulk send via /send-bulk.
+//   3. Sent         — tenant selector + per-tenant email history table
+//                     (read-only; sending happens in Compose).
+//   4. Suppressions — table of active suppressions + "Show resolved" toggle +
+//                     "Manually suppress" dialog.
+//   5. Settings     — daily limit editor (Input + Save).
 //
 // All API calls go through `authFetch` from `@/lib/client-auth` with the
 // `?XTransformPort=3000` gateway suffix. Toasts via `sonner`.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -27,6 +29,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -38,16 +41,15 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
-  Mail, Send, Loader2, CheckCircle2, XCircle, ShieldAlert, Ban,
-  RefreshCw, History, Settings as SettingsIcon, Plus, Building2,
-  AlertTriangle, Clock,
+  Mail, Send, Loader2, CheckCircle2, ShieldAlert, Ban,
+  RefreshCw, History, Settings as SettingsIcon, Plus,
+  AlertTriangle, Clock, Search, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { authFetch } from '@/lib/client-auth';
 import {
   SectionHeader, KpiCard, EmptyState, TableSkeleton,
   formatDate, formatDateTime, timeAgo, formatNumber,
 } from '@/components/views/superadmin/_shared';
-import { OutreachSendDialog } from './outreach-send-dialog';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -103,12 +105,68 @@ interface TenantOption {
   claimed: boolean;
 }
 
+// ─── ComposeTab types ────────────────────────────────────────────────────────
+
+interface Eligibility {
+  selectable: boolean;
+  reason: 'no_email' | 'cooldown_active' | 'email_suppressed' | 'outreach_disabled' | null;
+  cooldownUntil: string | null;
+  lastSentAt: string | null;
+}
+
+interface EligibleTenant {
+  id: string;
+  name: string;
+  slug: string;
+  email: string | null;
+  industry: string | null;
+  city: string | null;
+  claimed: boolean;
+  outreachDisabled: boolean;
+  lastSentAt: string | null;
+  eligibility: Eligibility;
+}
+
+interface Quota {
+  dailyLimit: number;
+  sentToday: number;
+  remaining: number;
+}
+
+interface EmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  htmlBody: string;
+  textBody: string | null;
+  category: string;
+  tagsJson: string;
+}
+
+interface SendBulkResultItem {
+  tenantId: string;
+  tenantName: string;
+  status: 'sent' | 'skipped' | 'failed';
+  reason?: string | null;
+  communicationId?: string | null;
+  providerMessageId?: string | null;
+}
+
+interface SendBulkResponse {
+  requested: number;
+  sent: number;
+  skipped: number;
+  failed: number;
+  results: SendBulkResultItem[];
+  stats: OutreachStats;
+}
+
 // ─── Status badge styling for EmailCommunication.status ──────────────────────
 
 function getStatusBadge(status: string): { className: string; label: string } {
   const map: Record<string, { className: string; label: string }> = {
     queued: { className: 'bg-muted text-muted-foreground border-border', label: 'Queued' },
-    sent: { className: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20', label: 'Sent' },
+    sent: { className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20', label: 'Sent' },
     delivered: { className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20', label: 'Delivered' },
     bounced: { className: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20', label: 'Bounced' },
     complained: { className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20', label: 'Complained' },
@@ -139,7 +197,8 @@ export function OutreachSection() {
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="w-full sm:w-auto overflow-x-auto">
           <TabsTrigger value="overview" className="gap-1.5"><Mail className="size-3.5" /> Overview</TabsTrigger>
-          <TabsTrigger value="history" className="gap-1.5"><History className="size-3.5" /> History</TabsTrigger>
+          <TabsTrigger value="compose" className="gap-1.5"><Send className="size-3.5" /> Compose</TabsTrigger>
+          <TabsTrigger value="sent" className="gap-1.5"><History className="size-3.5" /> Sent</TabsTrigger>
           <TabsTrigger value="suppressions" className="gap-1.5"><ShieldAlert className="size-3.5" /> Suppressions</TabsTrigger>
           <TabsTrigger value="settings" className="gap-1.5"><SettingsIcon className="size-3.5" /> Settings</TabsTrigger>
         </TabsList>
@@ -147,8 +206,11 @@ export function OutreachSection() {
         <TabsContent value="overview" className="mt-4">
           <OverviewTab />
         </TabsContent>
-        <TabsContent value="history" className="mt-4">
-          <HistoryTab />
+        <TabsContent value="compose" className="mt-4">
+          <ComposeTab />
+        </TabsContent>
+        <TabsContent value="sent" className="mt-4">
+          <SentTab />
         </TabsContent>
         <TabsContent value="suppressions" className="mt-4">
           <SuppressionsTab />
@@ -234,9 +296,794 @@ function OverviewTab() {
   );
 }
 
-// ─── Tab 2: History ──────────────────────────────────────────────────────────
+// ─── Tab 2: Compose (split-pane) ─────────────────────────────────────────────
 
-function HistoryTab() {
+function ComposeTab() {
+  // ── State ──────────────────────────────────────────────────────────────
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [tenants, setTenants] = useState<EligibleTenant[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [quota, setQuota] = useState<Quota>({ dailyLimit: 20, sentToday: 0, remaining: 20 });
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [focusedTenantId, setFocusedTenantId] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [customLine, setCustomLine] = useState('');
+  const [sending, setSending] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [resultsDialog, setResultsDialog] = useState<{
+    open: boolean;
+    results: SendBulkResultItem[];
+    summary: { sent: number; skipped: number; failed: number };
+  }>({ open: false, results: [], summary: { sent: 0, skipped: 0, failed: 0 } });
+
+  const LIMIT = 50;
+
+  // ── Debounce search input ──────────────────────────────────────────────
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // ── Fetch eligible tenants ─────────────────────────────────────────────
+  const fetchTenants = useCallback(() => {
+    setLoading(true);
+    const params = new URLSearchParams({ XTransformPort: '3000' });
+    if (debouncedSearch) params.set('search', debouncedSearch);
+    if (filter) params.set('filter', filter);
+    params.set('page', String(page));
+    params.set('limit', String(LIMIT));
+    authFetch(`/api/superadmin/outreach/eligible-tenants?${params.toString()}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((d: {
+        tenants: EligibleTenant[];
+        total: number;
+        dailyLimit: number;
+        sentToday: number;
+        remaining: number;
+      }) => {
+        setTenants(d.tenants || []);
+        setTotal(d.total || 0);
+        setQuota({
+          dailyLimit: d.dailyLimit,
+          sentToday: d.sentToday,
+          remaining: d.remaining,
+        });
+      })
+      .catch(() => toast.error('Failed to load tenants'))
+      .finally(() => setLoading(false));
+  }, [debouncedSearch, filter, page]);
+
+  useEffect(() => {
+    fetchTenants();
+  }, [fetchTenants]);
+
+  // ── Fetch templates on mount ───────────────────────────────────────────
+  // The `/api/email-templates` route's category allow-list doesn't include
+  // 'outreach', so we fetch all global templates and filter client-side by
+  // `category === 'outreach'`.
+  useEffect(() => {
+    authFetch('/api/email-templates?XTransformPort=3000')
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((rows: EmailTemplate[]) => {
+        const outreach = (rows || []).filter((t) => t.category === 'outreach');
+        setTemplates(outreach);
+        if (outreach.length > 0) setSelectedTemplateId(outreach[0].id);
+      })
+      .catch(() => toast.error('Failed to load email templates'));
+  }, []);
+
+  // ── Derived: focused tenant + filtered templates ───────────────────────
+  const focusedTenant = useMemo<EligibleTenant | null>(() => {
+    if (focusedTenantId) {
+      return tenants.find((t) => t.id === focusedTenantId) ?? null;
+    }
+    // Fallback: first checked tenant, or first tenant in the list.
+    if (checkedIds.size > 0) {
+      const firstChecked = tenants.find((t) => checkedIds.has(t.id));
+      if (firstChecked) return firstChecked;
+    }
+    return tenants[0] ?? null;
+  }, [focusedTenantId, checkedIds, tenants]);
+
+  const visibleTemplates = useMemo(() => {
+    // Hide "claim" sub-category templates when the focused tenant is claimed.
+    if (!focusedTenant || !focusedTenant.claimed) return templates;
+    return templates.filter((t) => extractSubCategory(t.tagsJson) !== 'claim');
+  }, [templates, focusedTenant]);
+
+  // If the currently selected template is filtered out (because focused
+  // tenant is claimed), pick the first available.
+  useEffect(() => {
+    if (visibleTemplates.length === 0) return;
+    const stillVisible = visibleTemplates.some((t) => t.id === selectedTemplateId);
+    if (!stillVisible) setSelectedTemplateId(visibleTemplates[0].id);
+  }, [visibleTemplates, selectedTemplateId]);
+
+  const selectedTemplate = useMemo(
+    () => templates.find((t) => t.id === selectedTemplateId) ?? null,
+    [templates, selectedTemplateId],
+  );
+
+  // Sorted array of checked tenants (in the same order they appear in the list).
+  const checkedTenantList = useMemo(
+    () => tenants.filter((t) => checkedIds.has(t.id) && t.eligibility.selectable),
+    [tenants, checkedIds],
+  );
+
+  // ── Handlers ───────────────────────────────────────────────────────────
+
+  const handleToggleCheck = (tenantId: string) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(tenantId)) {
+        next.delete(tenantId);
+      } else {
+        // Enforce daily-limit cap on selection.
+        if (next.size >= quota.remaining) {
+          toast.error(`You can only select up to ${quota.remaining} tenants (daily limit)`);
+          return prev; // prevent toggle
+        }
+        next.add(tenantId);
+      }
+      return next;
+    });
+  };
+
+  // Clicking a selectable row both sets focus AND toggles its checkbox.
+  // Non-selectable rows do NOT change focus (only selectable rows can be
+  // focused for preview).
+  const handleRowClick = (tenant: EligibleTenant) => {
+    if (!tenant.eligibility.selectable) return;
+    setFocusedTenantId(tenant.id);
+    handleToggleCheck(tenant.id);
+  };
+
+  // The checkbox itself is a separate click target — stop the row click from
+  // also toggling (which would double-toggle and cancel out).
+  const handleCheckboxClick = (e: React.MouseEvent, tenant: EligibleTenant) => {
+    e.stopPropagation();
+    if (!tenant.eligibility.selectable) return;
+    setFocusedTenantId(tenant.id);
+    handleToggleCheck(tenant.id);
+  };
+
+  const handlePrevSelected = () => {
+    if (checkedTenantList.length < 2) return;
+    const currentIdx = focusedTenant
+      ? checkedTenantList.findIndex((t) => t.id === focusedTenant.id)
+      : -1;
+    const newIdx = currentIdx <= 0
+      ? checkedTenantList.length - 1
+      : currentIdx - 1;
+    setFocusedTenantId(checkedTenantList[newIdx].id);
+  };
+
+  const handleNextSelected = () => {
+    if (checkedTenantList.length < 2) return;
+    const currentIdx = focusedTenant
+      ? checkedTenantList.findIndex((t) => t.id === focusedTenant.id)
+      : -1;
+    const newIdx = currentIdx === -1 || currentIdx >= checkedTenantList.length - 1
+      ? 0
+      : currentIdx + 1;
+    setFocusedTenantId(checkedTenantList[newIdx].id);
+  };
+
+  const handleSendClick = () => {
+    if (checkedIds.size === 0 || !selectedTemplateId) return;
+    setConfirmOpen(true);
+  };
+
+  const handleSendConfirm = async () => {
+    setConfirmOpen(false);
+    if (checkedIds.size === 0 || !selectedTemplateId) return;
+    setSending(true);
+    try {
+      const body: Record<string, unknown> = {
+        tenantIds: Array.from(checkedIds),
+        templateId: selectedTemplateId,
+      };
+      if (customLine.trim()) {
+        body.customVariables = { customLine: customLine.trim() };
+      }
+      const res = await authFetch('/api/superadmin/outreach/send-bulk?XTransformPort=3000', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data: SendBulkResponse | null = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        toast.error('Failed to send outreach emails');
+        return;
+      }
+      // Success toast (only if at least one email went out).
+      if (data.sent > 0) {
+        toast.success(`Sent ${data.sent} email(s)`, {
+          description: data.skipped + data.failed > 0
+            ? `${data.skipped} skipped, ${data.failed} failed`
+            : 'All sends accepted by the provider',
+        });
+      } else {
+        toast.error('No emails were sent', {
+          description: `${data.skipped} skipped, ${data.failed} failed`,
+        });
+      }
+      // Details dialog if any skipped or failed.
+      if (data.skipped > 0 || data.failed > 0) {
+        setResultsDialog({
+          open: true,
+          results: data.results || [],
+          summary: { sent: data.sent, skipped: data.skipped, failed: data.failed },
+        });
+      }
+      // Update quota from response.stats (so the bar reflects new state).
+      if (data.stats) {
+        setQuota({
+          dailyLimit: data.stats.dailyLimit,
+          sentToday: data.stats.sentToday,
+          remaining: data.stats.remaining,
+        });
+      }
+      // Clear selection + custom line.
+      setCheckedIds(new Set());
+      setCustomLine('');
+      // Re-fetch the list so sent tenants show greyed-out with cooldown.
+      fetchTenants();
+    } catch {
+      toast.error('Network error — could not reach the server');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // ── Derived: rendered preview ──────────────────────────────────────────
+  const renderedSubject = useMemo(() => {
+    if (!selectedTemplate || !focusedTenant) return '';
+    return previewRenderText(selectedTemplate.subject, focusedTenant, customLine);
+  }, [selectedTemplate, focusedTenant, customLine]);
+
+  const renderedHtml = useMemo(() => {
+    if (!selectedTemplate || !focusedTenant) return '';
+    return previewRenderText(selectedTemplate.htmlBody, focusedTenant, customLine);
+  }, [selectedTemplate, focusedTenant, customLine]);
+
+  const hasMore = tenants.length < total;
+  const quotaPct = quota.dailyLimit > 0
+    ? Math.min(100, (quota.sentToday / quota.dailyLimit) * 100)
+    : 0;
+
+  // Index of focused tenant within the checked list (for the "X / Y selected" counter).
+  const focusedCheckedIdx = focusedTenant
+    ? checkedTenantList.findIndex((t) => t.id === focusedTenant.id)
+    : -1;
+
+  // ── Render ─────────────────────────────────────────────────────────────
+
+  return (
+    <div className="space-y-3">
+      {/* ── Toolbar: search + filter + refresh + quota ────────────────── */}
+      <Card className="card-shadow">
+        <CardContent className="p-3 sm:p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+              <Input
+                type="text"
+                placeholder="Search by name, email, or slug…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            <Select
+              value={filter}
+              onValueChange={(v) => { setFilter(v); setPage(1); }}
+            >
+              <SelectTrigger className="w-full sm:w-44">
+                <SelectValue placeholder="Filter" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All tenants</SelectItem>
+                <SelectItem value="unclaimed">Unclaimed</SelectItem>
+                <SelectItem value="claimed">Claimed</SelectItem>
+                <SelectItem value="no_email">No email</SelectItem>
+                <SelectItem value="opted_out">Opted out</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={fetchTenants}
+              disabled={loading}
+              title="Refresh"
+            >
+              <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
+            </Button>
+          </div>
+          {/* Quota bar */}
+          <div className="flex items-center gap-3 text-xs">
+            <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+              <div
+                className={cn(
+                  'h-full transition-all',
+                  quotaPct >= 100
+                    ? 'bg-red-500'
+                    : quotaPct >= 80
+                      ? 'bg-amber-500'
+                      : 'bg-emerald-500',
+                )}
+                style={{ width: `${quotaPct}%` }}
+              />
+            </div>
+            <span className="text-muted-foreground whitespace-nowrap">
+              <span className="font-semibold text-foreground">{quota.sentToday}</span>
+              {' / '}
+              {quota.dailyLimit} used
+              {' · '}
+              <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                {quota.remaining} remaining
+              </span>
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Split-pane: tenants list (left) + preview (right) ──────────── */}
+      <div className="flex flex-col md:flex-row gap-3">
+        {/* LEFT PANE — tenant list */}
+        <Card className="card-shadow md:w-2/5 md:flex-shrink-0 flex flex-col">
+          <CardHeader className="pb-2 pt-3">
+            <CardTitle className="text-sm flex items-center justify-between">
+              <span>Tenants to email</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                {total} total
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 p-0">
+            {loading && tenants.length === 0 ? (
+              <div className="p-4"><TableSkeleton rows={6} /></div>
+            ) : tenants.length === 0 ? (
+              <EmptyState
+                icon={Mail}
+                title="No tenants match"
+                subtitle="Try a different search or filter."
+              />
+            ) : (
+              <div className="max-h-[40vh] md:max-h-[60vh] overflow-y-auto px-2 pb-2 space-y-0.5">
+                {tenants.map((t) => (
+                  <TenantRow
+                    key={t.id}
+                    tenant={t}
+                    checked={checkedIds.has(t.id)}
+                    focused={focusedTenant?.id === t.id}
+                    onRowClick={() => handleRowClick(t)}
+                    onCheckboxClick={(e) => handleCheckboxClick(e, t)}
+                  />
+                ))}
+              </div>
+            )}
+          </CardContent>
+          {/* Footer: selected count + load more */}
+          <div className="border-t border-border p-3 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">
+                <span className="font-semibold text-foreground">{checkedIds.size}</span> selected
+                {' '}
+                <span className="text-muted-foreground/70">(max {quota.remaining})</span>
+              </span>
+              {hasMore && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={loading}
+                >
+                  Load more ↓
+                </Button>
+              )}
+            </div>
+          </div>
+        </Card>
+
+        {/* RIGHT PANE — email preview */}
+        <Card className="card-shadow md:flex-1 flex flex-col">
+          <CardHeader className="pb-2 pt-3">
+            <CardTitle className="text-sm flex items-center justify-between gap-2 flex-wrap">
+              <span className="flex items-center gap-2">
+                <Mail className="size-4" />
+                Email preview
+              </span>
+              {focusedTenant && (
+                <Badge variant="outline" className="font-normal">
+                  Focused: {focusedTenant.name}
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 space-y-3">
+            {!focusedTenant ? (
+              <EmptyState
+                icon={Mail}
+                title="Select a tenant from the left to preview"
+                subtitle="Click any tenant row to see a personalized preview."
+              />
+            ) : (
+              <>
+                {/* Template selector */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="compose-template" className="text-xs">Template</Label>
+                  <Select
+                    value={selectedTemplateId ?? ''}
+                    onValueChange={setSelectedTemplateId}
+                    disabled={templates.length === 0}
+                  >
+                    <SelectTrigger id="compose-template">
+                      <SelectValue
+                        placeholder={templates.length === 0
+                          ? 'No templates available'
+                          : 'Select a template'}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {visibleTemplates.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {focusedTenant.claimed && (
+                    <p className="text-[11px] text-muted-foreground">
+                      &ldquo;Claim Your Business&rdquo; templates are hidden — this tenant is already claimed.
+                    </p>
+                  )}
+                </div>
+
+                {/* Custom opening line */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="compose-custom-line" className="text-xs">
+                    Custom opening line <span className="text-muted-foreground">(optional)</span>
+                  </Label>
+                  <Textarea
+                    id="compose-custom-line"
+                    value={customLine}
+                    onChange={(e) => setCustomLine(e.target.value)}
+                    placeholder="e.g. Saw your recent 5-star review — congrats!"
+                    rows={2}
+                    disabled={sending}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Injected as <code className="font-mono">{`{{customLine}}`}</code> in the template body.
+                  </p>
+                </div>
+
+                {/* Preview area */}
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Preview ({focusedTenant.name})
+                  </p>
+                  <div className="rounded-md border border-border bg-background overflow-hidden">
+                    <div className="px-3 py-2 border-b border-border bg-muted/30">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Subject</p>
+                      <p className="text-sm font-medium text-foreground break-words">
+                        {renderedSubject || '—'}
+                      </p>
+                    </div>
+                    <div
+                      className="px-3 py-3 text-sm text-foreground max-h-[400px] overflow-y-auto [&_a]:text-primary [&_a]:underline"
+                      dangerouslySetInnerHTML={{
+                        __html: renderedHtml
+                          || '<p class="text-muted-foreground">No template body.</p>',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Prev / Next selected buttons */}
+                <div className="flex items-center justify-between gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePrevSelected}
+                    disabled={checkedTenantList.length < 2}
+                    className="text-xs"
+                  >
+                    <ChevronLeft className="size-3.5 mr-1" /> Prev selected
+                  </Button>
+                  <span className="text-xs text-muted-foreground text-center">
+                    {focusedCheckedIdx >= 0
+                      ? `${focusedCheckedIdx + 1} / ${checkedTenantList.length} selected`
+                      : `${checkedTenantList.length} selected`}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleNextSelected}
+                    disabled={checkedTenantList.length < 2}
+                    className="text-xs"
+                  >
+                    Next selected <ChevronRight className="size-3.5 ml-1" />
+                  </Button>
+                </div>
+
+                {/* Send button */}
+                <Button
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={handleSendClick}
+                  disabled={checkedIds.size === 0 || !selectedTemplateId || sending}
+                >
+                  {sending ? (
+                    <><Loader2 className="size-4 mr-1.5 animate-spin" /> Sending…</>
+                  ) : (
+                    <><Send className="size-4 mr-1.5" /> Send to {checkedIds.size} selected tenant{checkedIds.size === 1 ? '' : 's'}</>
+                  )}
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Confirm dialog ──────────────────────────────────────────────── */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="size-5 text-primary" /> Confirm bulk send
+            </DialogTitle>
+            <DialogDescription>
+              Send <span className="font-medium text-foreground">{selectedTemplate?.name ?? 'this template'}</span> to{' '}
+              <span className="font-medium text-foreground">{checkedIds.size}</span> tenant{checkedIds.size === 1 ? '' : 's'}?
+              Each email will be personalized with the recipient&rsquo;s business name and claim link.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={sending}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendConfirm}
+              disabled={sending}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {sending
+                ? <Loader2 className="size-4 mr-1.5 animate-spin" />
+                : <Send className="size-4 mr-1.5" />}
+              Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Results dialog (skipped/failed details) ─────────────────────── */}
+      <Dialog
+        open={resultsDialog.open}
+        onOpenChange={(open) => setResultsDialog((prev) => ({ ...prev, open }))}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="size-5 text-amber-500" /> Send results
+            </DialogTitle>
+            <DialogDescription>
+              Sent: <span className="font-medium text-emerald-600 dark:text-emerald-400">{resultsDialog.summary.sent}</span>
+              {' · '}
+              Skipped: <span className="font-medium text-amber-600 dark:text-amber-400">{resultsDialog.summary.skipped}</span>
+              {' · '}
+              Failed: <span className="font-medium text-red-600 dark:text-red-400">{resultsDialog.summary.failed}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border border-border max-h-[60vh] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tenant</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Reason</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {resultsDialog.results
+                  .filter((r) => r.status !== 'sent')
+                  .map((r) => (
+                    <TableRow key={r.tenantId}>
+                      <TableCell className="font-medium text-foreground">{r.tenantName}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={r.status === 'skipped'
+                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                            : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20'}
+                        >
+                          {r.status === 'skipped' ? 'Skipped' : 'Failed'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {r.reason || '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setResultsDialog((prev) => ({ ...prev, open: false }))}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── ComposeTab sub-components + helpers ─────────────────────────────────────
+
+function TenantRow({
+  tenant, checked, focused, onRowClick, onCheckboxClick,
+}: {
+  tenant: EligibleTenant;
+  checked: boolean;
+  focused: boolean;
+  onRowClick: () => void;
+  onCheckboxClick: (e: React.MouseEvent) => void;
+}) {
+  const elig = tenant.eligibility;
+  const isGreyed = !elig.selectable;
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onRowClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onRowClick();
+        }
+      }}
+      className={cn(
+        'group flex items-start gap-2 rounded-md p-2 transition-colors text-left',
+        isGreyed
+          ? 'opacity-60 cursor-not-allowed'
+          : 'cursor-pointer hover:bg-muted/60',
+        focused && 'bg-emerald-500/10 ring-1 ring-emerald-500/30',
+      )}
+    >
+      <div onClick={onCheckboxClick} className="pt-0.5">
+        <Checkbox
+          checked={checked}
+          disabled={isGreyed}
+          aria-label={`Select ${tenant.name}`}
+        />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <p className="text-sm font-medium text-foreground truncate">{tenant.name}</p>
+          <Badge variant="outline" className={cn(
+            'text-[10px] px-1.5 py-0 h-4',
+            tenant.claimed
+              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+              : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+          )}>
+            {tenant.claimed ? 'Claimed' : 'Unclaimed'}
+          </Badge>
+        </div>
+        <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+          {[tenant.industry, tenant.city].filter(Boolean).join(' · ') || '—'}
+        </p>
+        {isGreyed ? (
+          <EligibilityReason tenant={tenant} />
+        ) : elig.lastSentAt ? (
+          // Eligible again (cooldown expired) but has been emailed before.
+          <p className="text-[10px] text-muted-foreground/80 mt-0.5">
+            ✓ Sent {formatShortDate(elig.lastSentAt)}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function EligibilityReason({ tenant }: { tenant: EligibleTenant }) {
+  const elig = tenant.eligibility;
+  if (elig.reason === 'cooldown_active') {
+    return (
+      <p className="text-[10px] text-muted-foreground/80 mt-0.5">
+        ✓ Sent {formatShortDate(elig.lastSentAt)} · Next eligible {formatShortDate(elig.cooldownUntil)}
+      </p>
+    );
+  }
+  if (elig.reason === 'email_suppressed') {
+    return (
+      <Badge variant="outline" className="mt-0.5 text-[10px] px-1.5 py-0 h-4 bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20">
+        Suppressed
+      </Badge>
+    );
+  }
+  if (elig.reason === 'no_email') {
+    return (
+      <Badge variant="outline" className="mt-0.5 text-[10px] px-1.5 py-0 h-4 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+        No email
+      </Badge>
+    );
+  }
+  if (elig.reason === 'outreach_disabled') {
+    return (
+      <Badge variant="outline" className="mt-0.5 text-[10px] px-1.5 py-0 h-4 bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20">
+        Opted out
+      </Badge>
+    );
+  }
+  return null;
+}
+
+// Format ISO date as "Aug 27" (compact short date).
+function formatShortDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return '—';
+  }
+}
+
+// Extract 'claim' | 'outreach' sub-category from tagsJson.
+function extractSubCategory(tagsJson: string | null | undefined): 'claim' | 'outreach' {
+  if (!tagsJson) return 'outreach';
+  try {
+    const arr = JSON.parse(tagsJson);
+    if (Array.isArray(arr)) {
+      for (const tag of arr) {
+        if (typeof tag === 'string') {
+          if (tag === 'claim') return 'claim';
+          if (tag === 'outreach') return 'outreach';
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return 'outreach';
+}
+
+// Naive variable substitution for the Preview panel. The backend does the
+// real substitution on send; this is just a UI preview.
+function previewRenderText(
+  text: string,
+  tenant: EligibleTenant,
+  customLine: string,
+): string {
+  const marketplaceUrl = `https://fieseros.com/${tenant.slug}`;
+  const claimLink = 'https://fieseros.com/claim?token=PREVIEW';
+  return text
+    .replace(/\{\{businessName\}\}/g, escapeHtml(tenant.name))
+    .replace(/\{\{marketplaceUrl\}\}/g, marketplaceUrl)
+    .replace(/\{\{claimLink\}\}/g, claimLink)
+    .replace(/\{\{industry\}\}/g, escapeHtml(tenant.industry || ''))
+    .replace(/\{\{city\}\}/g, escapeHtml(tenant.city || ''))
+    .replace(/\{\{customLine\}\}/g, customLine ? escapeHtml(customLine) : '');
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// ─── Tab 3: Sent (tenant selector + history table, no send button) ───────────
+
+function SentTab() {
   const [tenants, setTenants] = useState<TenantOption[]>([]);
   const [tenantsLoading, setTenantsLoading] = useState(true);
   const [selectedTenantId, setSelectedTenantId] = useState<string>('');
@@ -245,7 +1092,6 @@ function HistoryTab() {
   const [statsLoading, setStatsLoading] = useState(false);
   const [communications, setCommunications] = useState<CommunicationRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [sendDialogOpen, setSendDialogOpen] = useState(false);
 
   // Load tenants once on mount.
   useEffect(() => {
@@ -305,7 +1151,6 @@ function HistoryTab() {
 
   const refetchAll = useCallback(() => {
     if (!selectedTenantId) return;
-    // Re-trigger the effect by toggling state — simplest is to re-fetch directly.
     authFetch(`/api/superadmin/outreach/stats?tenantId=${encodeURIComponent(selectedTenantId)}&XTransformPort=3000`)
       .then((r) => r.ok ? r.json() : Promise.reject(r))
       .then((d: { stats: OutreachStats }) => setStats(d.stats))
@@ -324,7 +1169,8 @@ function HistoryTab() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Select a workspace</CardTitle>
           <CardDescription>
-            Pick a tenant to view its outreach history + pre-flight stats. Per-tenant cooldown is 72h.
+            Pick a tenant to view its outreach send history + pre-flight stats.
+            To send new emails, switch to the Compose tab.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -347,12 +1193,13 @@ function HistoryTab() {
             </Select>
             {selectedTenant && (
               <Button
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                onClick={() => setSendDialogOpen(true)}
-                disabled={!selectedTenant.email}
-                title={selectedTenant.email ? 'Send outreach email' : 'No email on file'}
+                variant="outline"
+                onClick={refetchAll}
+                disabled={statsLoading || historyLoading}
+                title="Refresh history + stats"
               >
-                <Mail className="size-4 mr-1.5" /> Send Email
+                <RefreshCw className={cn('size-4', (statsLoading || historyLoading) && 'animate-spin')} />
+                <span className="ml-1.5">Refresh</span>
               </Button>
             )}
           </div>
@@ -363,7 +1210,7 @@ function HistoryTab() {
         <EmptyState
           icon={History}
           title="No workspace selected"
-          subtitle="Select a workspace above to view its outreach history and pre-flight stats."
+          subtitle="Select a workspace above to view its outreach send history and pre-flight stats."
         />
       ) : (
         <>
@@ -458,22 +1305,6 @@ function HistoryTab() {
           </Card>
         </>
       )}
-
-      {/* Send Email dialog */}
-      {selectedTenant && (
-        <OutreachSendDialog
-          open={sendDialogOpen}
-          onOpenChange={(open) => {
-            setSendDialogOpen(open);
-            if (!open) refetchAll();
-          }}
-          tenantId={selectedTenant.id}
-          tenantName={selectedTenant.name}
-          tenantEmail={selectedTenant.email || null}
-          tenantClaimed={selectedTenant.claimed || false}
-          onSent={refetchAll}
-        />
-      )}
     </div>
   );
 }
@@ -489,7 +1320,7 @@ function StatTile({ label, value, ok }: { label: string; value: string; ok: bool
   );
 }
 
-// ─── Tab 3: Suppressions ─────────────────────────────────────────────────────
+// ─── Tab 4: Suppressions ─────────────────────────────────────────────────────
 
 function SuppressionsTab() {
   const [showResolved, setShowResolved] = useState(false);
@@ -773,7 +1604,7 @@ function ManualSuppressDialog({
   );
 }
 
-// ─── Tab 4: Settings ─────────────────────────────────────────────────────────
+// ─── Tab 5: Settings ─────────────────────────────────────────────────────────
 
 function SettingsTab() {
   return (
