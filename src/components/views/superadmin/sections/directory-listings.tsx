@@ -25,11 +25,11 @@ import { toast } from 'sonner';
 import {
   Store, Search, Trash2, Edit3, RefreshCw, CheckCircle2, AlertTriangle,
   Database, MapPin, Star, Globe, Filter, Loader2, Plus, Crown, Clock,
-  Calendar, X, ShieldCheck,
+  Calendar, X, ShieldCheck, Zap, Send, Flame,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -1606,14 +1606,250 @@ function ManageTab() {
   );
 }
 
+// ─── SEO & IndexNow Tab ──────────────────────────────────────────────────────
+
+function SeoIndexNowTab() {
+  const [submitting, setSubmitting] = useState(false);
+  const [customUrls, setCustomUrls] = useState('');
+  const [customSubmitting, setCustomSubmitting] = useState(false);
+  const [sitemapLoading, setSitemapLoading] = useState(false);
+  const [sitemapInfo, setSitemapInfo] = useState<Record<string, unknown> | null>(null);
+
+  const handlePrimeIndexNow = async () => {
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/indexnow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submitAll: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'IndexNow submission failed');
+      } else {
+        toast.success(`IndexNow Accepted! Submitted ${data.submitted || 0} URLs from sitemap.`);
+      }
+    } catch {
+      toast.error('Failed to contact IndexNow endpoint');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCustomUrlsSubmit = async () => {
+    const urls = customUrls
+      .split('\n')
+      .map((u) => u.trim())
+      .filter((u) => u.startsWith('http'));
+
+    if (urls.length === 0) {
+      toast.error('Please enter at least one valid HTTP/HTTPS URL');
+      return;
+    }
+
+    setCustomSubmitting(true);
+    try {
+      const res = await fetch('/api/indexnow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to submit URLs');
+      } else {
+        toast.success(`Submitted ${data.submitted || 0} custom URLs to IndexNow!`);
+        setCustomUrls('');
+      }
+    } catch {
+      toast.error('Network error during IndexNow submission');
+    } finally {
+      setCustomSubmitting(false);
+    }
+  };
+
+  const handleCheckSitemapStatus = async () => {
+    setSitemapLoading(true);
+    try {
+      const res = await fetch('/api/sitemap-status');
+      const data = await res.json();
+      setSitemapInfo(data);
+      toast.success('Sitemap status retrieved');
+    } catch {
+      toast.error('Failed to fetch sitemap status');
+    } finally {
+      setSitemapLoading(false);
+    }
+  };
+
+  const handleWarmSitemapCache = async () => {
+    setSitemapLoading(true);
+    try {
+      const res = await fetch('/api/sitemap-warm');
+      const data = await res.json();
+      toast.success(data.message || 'Sitemap cache warmed successfully!');
+    } catch {
+      toast.error('Failed to warm sitemap cache');
+    } finally {
+      setSitemapLoading(false);
+    }
+  };
+
+  const handleClearSitemapCache = async () => {
+    setSitemapLoading(true);
+    try {
+      const res = await fetch('/api/sitemap-clear', { method: 'POST' });
+      const data = await res.json();
+      toast.success(data.message || 'Sitemap cache purged!');
+    } catch {
+      toast.error('Failed to clear sitemap cache');
+    } finally {
+      setSitemapLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* IndexNow Card */}
+        <Card className="border-border">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Zap className="size-5 text-emerald-600 dark:text-emerald-400" />
+                IndexNow Instant Indexing
+              </CardTitle>
+              <Badge className="bg-emerald-600 text-white">Active</Badge>
+            </div>
+            <CardDescription>
+              Push site updates instantly to Bing, Yandex, Naver, Seznam, and Yep search engines.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg border bg-muted/40 p-3 text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground">Ownership Key:</span>
+                <code className="text-emerald-700 dark:text-emerald-300 font-mono">120d26ffeba34c528feebf382dcbdafd</code>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground">Key Location:</span>
+                <a
+                  href="https://fieseros.com/120d26ffeba34c528feebf382dcbdafd.txt"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-emerald-600 underline"
+                >
+                  fieseros.com/120d26ff...txt
+                </a>
+              </div>
+            </div>
+
+            <Button
+              onClick={handlePrimeIndexNow}
+              disabled={submitting}
+              className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700"
+            >
+              {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+              Submit All Sitemap URLs to IndexNow
+            </Button>
+
+            <div className="space-y-2 pt-2">
+              <Label className="text-xs font-medium">Submit Specific URLs (One per line)</Label>
+              <Textarea
+                value={customUrls}
+                onChange={(e) => setCustomUrls(e.target.value)}
+                placeholder="https://fieseros.com/services/seo&#10;https://fieseros.com/plumbing-software"
+                rows={3}
+                className="font-mono text-xs"
+              />
+              <Button
+                onClick={handleCustomUrlsSubmit}
+                disabled={customSubmitting || !customUrls.trim()}
+                variant="outline"
+                size="sm"
+                className="w-full gap-1.5"
+              >
+                {customSubmitting ? <Loader2 className="size-3.5 animate-spin" /> : <Globe className="size-3.5" />}
+                Submit Custom URLs
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Sitemap Management Card */}
+        <Card className="border-border">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Globe className="size-5 text-emerald-600 dark:text-emerald-400" />
+                Sitemap & Cache Manager
+              </CardTitle>
+              <a
+                href="/sitemap.xml"
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-emerald-600 hover:underline flex items-center gap-1 font-medium"
+              >
+                View sitemap.xml ↗
+              </a>
+            </div>
+            <CardDescription>
+              Manage dynamic sitemaps (/sitemap.xml, /sitemap/0.xml, /sitemap/1.xml) and RAM/Redis caching.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-2">
+              <Button
+                onClick={handleCheckSitemapStatus}
+                disabled={sitemapLoading}
+                variant="outline"
+                className="w-full gap-2 justify-start"
+              >
+                <Database className="size-4 text-emerald-600" />
+                Check Sitemap Status
+              </Button>
+              <Button
+                onClick={handleWarmSitemapCache}
+                disabled={sitemapLoading}
+                variant="outline"
+                className="w-full gap-2 justify-start"
+              >
+                <Flame className="size-4 text-amber-500" />
+                Warm Up Sitemap Cache (RAM / Redis)
+              </Button>
+              <Button
+                onClick={handleClearSitemapCache}
+                disabled={sitemapLoading}
+                variant="outline"
+                className="w-full gap-2 justify-start text-red-600 hover:text-red-700"
+              >
+                <Trash2 className="size-4" />
+                Purge Sitemap Cache
+              </Button>
+            </div>
+
+            {sitemapInfo && (
+              <div className="rounded-lg border bg-muted/40 p-3 text-xs font-mono space-y-1">
+                <pre className="whitespace-pre-wrap overflow-x-auto text-muted-foreground">
+                  {JSON.stringify(sitemapInfo, null, 2)}
+                </pre>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 // ─── Section ────────────────────────────────────────────────────────────────
 
 export function DirectoryListingsSection() {
   return (
     <div className="space-y-5">
       <SectionHeader
-        title="Directory Listings"
-        description="Seed and manage public marketplace business listings across cities."
+        title="Directory & SEO Management"
+        description="Seed and manage public marketplace business listings, IndexNow instant search indexing, and dynamic sitemaps."
         icon={Store}
       />
       <Tabs defaultValue="seed">
@@ -1630,6 +1866,10 @@ export function DirectoryListingsSection() {
             <ShieldCheck className="size-3.5" />
             Claims
           </TabsTrigger>
+          <TabsTrigger value="seo" className="gap-1.5">
+            <Zap className="size-3.5" />
+            SEO & IndexNow
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="seed" className="mt-4">
           <SeedTab />
@@ -1639,6 +1879,9 @@ export function DirectoryListingsSection() {
         </TabsContent>
         <TabsContent value="claims" className="mt-4">
           <ClaimReview />
+        </TabsContent>
+        <TabsContent value="seo" className="mt-4">
+          <SeoIndexNowTab />
         </TabsContent>
       </Tabs>
     </div>
