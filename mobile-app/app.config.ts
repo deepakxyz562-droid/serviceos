@@ -31,6 +31,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       NSPhotoLibraryUsageDescription: 'Fieseros needs photo access to upload job evidence and proof of work.',
       NSPhotoLibraryAddUsageDescription: 'Fieseros saves job photos to your library for record-keeping.',
       NSUserNotificationsUsageDescription: 'Fieseros sends notifications about your jobs, bookings, and shift updates.',
+      ITSAppUsesNonExemptEncryption: false,
       // Allows the OS to keep the location background task running. Without
       // this entry the app will crash on `startLocationUpdatesAsync`.
       UIBackgroundModes: ['location', 'fetch', 'remote-notification'],

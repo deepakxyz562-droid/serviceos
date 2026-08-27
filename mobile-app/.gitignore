@@ -5,6 +5,8 @@ web-build/
 *.log
 .env
 .DS_Store
+!assets/
+!assets/*.png
 ios/
 android/
 
