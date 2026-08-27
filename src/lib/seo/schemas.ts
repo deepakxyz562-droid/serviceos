@@ -92,11 +92,12 @@ function absolutizeUrl(url: string): string {
   return `${SITE_URL}${path}`;
 }
 
-export function getBreadcrumbSchema(items: BreadcrumbItem[]) {
+export function getBreadcrumbSchema(items?: BreadcrumbItem[]) {
+  const safeItems = Array.isArray(items) ? items : [];
   return {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
-    itemListElement: items.map((item, i) => ({
+    itemListElement: safeItems.map((item, i) => ({
       "@type": "ListItem",
       position: i + 1,
       name: item.name,
@@ -384,6 +385,41 @@ export function getServiceSchema(opts: {
   }
 
   return schema;
+}
+
+// ─── Service Catalog Schema (for /services page) ──────────────────────────────
+
+export function getServiceCatalogSchema() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "OfferCatalog",
+    name: "Fieseros Services Catalog",
+    description:
+      "Professional services for field service businesses including Website Development, Local SEO, and Google Ads management.",
+    itemListElement: [
+      {
+        "@type": "OfferCatalog",
+        name: "Website Development",
+        description:
+          "Mobile-first, SEO-ready websites built for service businesses starting at $999.",
+        url: "https://fieseros.com/services/website-development",
+      },
+      {
+        "@type": "OfferCatalog",
+        name: "Local SEO & Google Maps",
+        description:
+          "Local SEO, Google Business Profile optimization, and review management to rank higher on Google.",
+        url: "https://fieseros.com/services/seo",
+      },
+      {
+        "@type": "OfferCatalog",
+        name: "Google Ads Management",
+        description:
+          "Targeted Google Ads campaigns to get qualified leads fast for service businesses.",
+        url: "https://fieseros.com/services/google-ads",
+      },
+    ],
+  };
 }
 
 // ─── Industry → schema.org @type mapping ──────────────────────────────────────

@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getServiceSchema } from '@/lib/seo/schemas'
 
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'SEO & Local Search for Service Businesses | Fieseros',
@@ -104,7 +105,13 @@ export default function SeoPage() {
   }
 
   return (
-    <CornerstoneLayout>
+    <CornerstoneLayout
+      breadcrumbs={[
+        { name: 'Home', url: '/' },
+        { name: 'Services', url: '/services' },
+        { name: 'SEO & Local Search', url: '/services/seo' },
+      ]}
+    >
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
 

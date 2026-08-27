@@ -25,12 +25,12 @@ import { AiReceptionistSection } from "./ai-receptionist-section";
  */
 export function CornerstoneLayout({
   children,
-  breadcrumbs,
+  breadcrumbs = [],
   additionalSchema = [],
   activePath,
 }: {
   children: ReactNode;
-  breadcrumbs: BreadcrumbItem[];
+  breadcrumbs?: BreadcrumbItem[];
   additionalSchema?: object[];
   activePath?: string;
 }) {
@@ -38,21 +38,18 @@ export function CornerstoneLayout({
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <CornerstoneHeader activePath={activePath} />
 
-      {/* Page-specific structured data only.
-          Organization + WebSite are injected globally by the root layout
-          (src/app/layout.tsx) so we do NOT duplicate them here. Previously
-          this rendered [getOrganizationSchema(), getWebsiteSchema(), ...additionalSchema]
-          which caused duplicate Organization + WebSite JSON-LD on every
-          cornerstone page (flagged by Google Search Console). */}
+      {/* Page-specific structured data only */}
       {additionalSchema.length > 0 && <StructuredData data={additionalSchema} />}
 
       <main className="flex-1">
-        {/* Breadcrumb bar */}
-        <div className="border-b bg-muted/20">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
-            <Breadcrumbs items={breadcrumbs} />
+        {/* Breadcrumb bar (only if breadcrumbs exist) */}
+        {breadcrumbs && breadcrumbs.length > 0 && (
+          <div className="border-b bg-muted/20">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
+              <Breadcrumbs items={breadcrumbs} />
+            </div>
           </div>
-        </div>
+        )}
 
         {children}
       </main>

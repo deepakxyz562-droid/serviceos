@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getServiceSchema } from '@/lib/seo/schemas'
 
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Google Ads Management for Service Businesses | Fieseros',
@@ -108,7 +109,13 @@ export default function GoogleAdsPage() {
   }
 
   return (
-    <CornerstoneLayout>
+    <CornerstoneLayout
+      breadcrumbs={[
+        { name: 'Home', url: '/' },
+        { name: 'Services', url: '/services' },
+        { name: 'Google Ads', url: '/services/google-ads' },
+      ]}
+    >
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
 

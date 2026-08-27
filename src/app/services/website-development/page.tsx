@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { getServiceSchema } from '@/lib/seo/schemas'
 
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Website Development for Service Businesses | Fieseros',
@@ -143,7 +144,13 @@ export default function WebsiteDevelopmentPage() {
   }
 
   return (
-    <CornerstoneLayout>
+    <CornerstoneLayout
+      breadcrumbs={[
+        { name: 'Home', url: '/' },
+        { name: 'Services', url: '/services' },
+        { name: 'Website Development', url: '/services/website-development' },
+      ]}
+    >
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
 

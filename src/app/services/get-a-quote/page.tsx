@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { CornerstoneLayout, CornerstoneHero } from '@/components/seo/cornerstone-layout'
 import { QuoteForm } from './quote-form'
 
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Get a Free Quote — Fieseros Services | Websites, SEO & Google Ads',
@@ -19,7 +20,13 @@ export const metadata: Metadata = {
 
 export default function GetAQuotePage() {
   return (
-    <CornerstoneLayout>
+    <CornerstoneLayout
+      breadcrumbs={[
+        { name: 'Home', url: '/' },
+        { name: 'Services', url: '/services' },
+        { name: 'Get a Quote', url: '/services/get-a-quote' },
+      ]}
+    >
       <CornerstoneHero
         eyebrow="Free Quote"
         title="Get a Free Quote for Your Service Business"

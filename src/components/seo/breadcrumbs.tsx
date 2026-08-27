@@ -7,15 +7,18 @@ import { getBreadcrumbSchema, type BreadcrumbItem } from "@/lib/seo/schemas";
  * Breadcrumb navigation with BreadcrumbList structured data.
  * Renders visible breadcrumbs AND injects JSON-LD for Google rich results.
  */
-export function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
+export function Breadcrumbs({ items }: { items?: BreadcrumbItem[] }) {
+  const safeItems = Array.isArray(items) ? items : [];
+  if (safeItems.length === 0) return null;
+
   return (
     <>
       <nav aria-label="Breadcrumb" className="text-sm">
         <ol className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
-          {items.map((item, i) => (
+          {safeItems.map((item, i) => (
             <li key={item.url} className="flex items-center gap-1.5">
               {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />}
-              {i === items.length - 1 ? (
+              {i === safeItems.length - 1 ? (
                 <span className="font-medium text-foreground" aria-current="page">
                   {item.name}
                 </span>
@@ -31,7 +34,7 @@ export function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
           ))}
         </ol>
       </nav>
-      <StructuredData data={getBreadcrumbSchema(items)} />
+      <StructuredData data={getBreadcrumbSchema(safeItems)} />
     </>
   );
 }

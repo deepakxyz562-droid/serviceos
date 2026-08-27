@@ -5,6 +5,7 @@ import { CornerstoneLayout } from '@/components/seo/cornerstone-layout'
 import { CtaSection } from '@/components/seo/cta-section'
 import { Button } from '@/components/ui/button'
 
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Thank You — Fieseros Services',
