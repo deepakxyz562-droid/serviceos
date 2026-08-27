@@ -24,19 +24,26 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 let _adminClient: SupabaseClient | null = null;
 
-const sslipHost = 'supabasekong-iuh7kv0mngqogdigexbcrogu.141.136.44.163.sslip.io';
-
 const resilientSupabaseFetch: typeof fetch = async (input, init) => {
   const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
   try {
     const res = await fetch(input, init);
     return res;
   } catch (err) {
-    if (urlStr.includes(sslipHost)) {
-      const rewrittenUrl = urlStr.replace(sslipHost, '141.136.44.163');
-      const headers = new Headers(init?.headers || {});
-      headers.set('Host', sslipHost);
-      return fetch(rewrittenUrl, { ...init, headers });
+    // Dynamic IP extraction for sslip.io hostnames — zero hardcoded IPs or domains
+    try {
+      const parsedUrl = new URL(urlStr);
+      const ipMatch = parsedUrl.hostname.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\.sslip\.io$/);
+      if (ipMatch && ipMatch[1]) {
+        const targetIp = ipMatch[1];
+        const originalHost = parsedUrl.hostname;
+        parsedUrl.hostname = targetIp;
+        const headers = new Headers(init?.headers || {});
+        headers.set('Host', originalHost);
+        return fetch(parsedUrl.toString(), { ...init, headers });
+      }
+    } catch {
+      // Fall through if URL parsing fails
     }
     throw err;
   }
