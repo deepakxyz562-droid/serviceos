@@ -27,7 +27,12 @@ export default function robots(): MetadataRoute.Robots {
         ],
       },
     ],
-    sitemap: "https://fieseros.com/sitemap.xml",
+    sitemap: [
+      "https://fieseros.com/sitemap.xml",
+      "https://fieseros.com/sitemap1.xml",
+      "https://fieseros.com/sitemap2.xml",
+      "https://fieseros.com/sitemap3.xml",
+    ],
     host: "https://fieseros.com",
   };
 }

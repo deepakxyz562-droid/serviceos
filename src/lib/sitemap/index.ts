@@ -1,10 +1,16 @@
 /**
  * Sitemap lib — barrel export + event-driven dirty marking.
  *
+ * 4 files (simple URLs, no index):
+ *   sitemap.xml    → bucket 0 (static URLs + businesses where hash % 4 === 0)
+ *   sitemap1.xml   → bucket 1
+ *   sitemap2.xml   → bucket 2
+ *   sitemap3.xml   → bucket 3
+ *
  * Usage:
  *   import { markSitemapDirtyForTenant, regenerateSitemaps } from '@/lib/sitemap';
  */
-export { getSitemapFileNumber, getAllBusinessFileNumbers, BUSINESS_FILE_COUNT, TOTAL_SITEMAP_FILES } from './hash';
+export { getSitemapFileNumber, getAllBusinessFileNumbers, getSitemapFileName, getSitemapFileNumberFromName, BUSINESS_FILE_COUNT, TOTAL_SITEMAP_FILES } from './hash';
 export { uploadSitemapFile, fetchSitemapFile, ensureSitemapBucket } from './storage';
 export {
   getSitemapState,
@@ -17,9 +23,7 @@ export {
   needsFullRegen,
 } from './state';
 export {
-  generateStaticSitemapFile,
   generateSitemapForBucket,
-  generateSitemapIndex,
   generateAllSitemaps,
   invalidateBusinessUrlCache,
 } from './generate';
@@ -41,7 +45,7 @@ import { db } from '@/lib/db';
  *   - Deleted
  *   - publicProfileEnabled toggled
  *
- * This computes the tenant's sitemap file number via SHA-256(tenantId) % 10
+ * This computes the tenant's sitemap file number via SHA-256(tenantId) % 4
  * and adds it to the SitemapState.dirtyFilesJson array. The daily cron
  * will regenerate that file on the next run.
  *
@@ -59,7 +63,7 @@ export async function markSitemapDirtyForTenant(tenantId: string): Promise<void>
 }
 
 /**
- * Mark the static sitemap file (0.xml) as dirty.
+ * Mark the static sitemap file (bucket 0 = sitemap.xml) as dirty.
  * Call this when static pages change (rare — e.g. new service page added).
  */
 export async function markStaticSitemapDirty(): Promise<void> {

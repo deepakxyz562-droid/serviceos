@@ -1,25 +1,31 @@
 /**
- * Sitemap Storage — Supabase Storage as the source of truth for sitemap XML files.
+ * Sitemap Storage — Supabase Storage + filesystem for sitemap XML files.
  *
- * Bucket: 'sitemaps'
- * Files:  'sitemap/0.xml', 'sitemap/1.xml', ..., 'sitemap/10.xml', 'sitemap.xml'
+ * Files (simple URLs, no index):
+ *   sitemap.xml    → bucket 0 (static URLs + businesses where hash % 4 === 0)
+ *   sitemap1.xml   → bucket 1
+ *   sitemap2.xml   → bucket 2
+ *   sitemap3.xml   → bucket 3
  *
- * Why Supabase Storage (not the container filesystem):
- *   - Docker containers are ephemeral — files written to public/ at runtime
- *     are lost on every redeploy
- *   - Supabase Storage is persistent, survives container recreation
- *   - Works across multiple containers/regions without volume syncing
+ * Architecture:
+ *   - Supabase Storage = persistent source of truth (survives container restarts)
+ *   - /tmp/sitemaps/ = local cache for fast reads (instant, no network)
+ *   - public/sitemap/ = build-time fallback (baked into Docker image)
  *
- * CDN caching strategy:
- *   The Next.js route handler sets `Cache-Control: public, s-maxage=86400,
- *   stale-while-revalidate=3600` so Google/CDN cache the XML for 24h, with
- *   a 1h stale-while-revalidate window. The origin (this route) only fetches
- *   from Supabase Storage when the CDN cache misses.
+ * Fetch order (fastest first):
+ *   1. /tmp/sitemaps/{filename}  → instant (local filesystem)
+ *   2. public/sitemap/{filename} → instant (local filesystem, build-time)
+ *   3. Supabase Storage           → ~50ms (network)
+ *
+ * Upload order:
+ *   1. Supabase Storage (persistent)
+ *   2. /tmp/sitemaps/ (local cache for fast reads)
+ *   3. public/sitemap/ (may fail if read-only — that's OK)
  */
 import { getAdminClient } from '@/lib/supabase-db';
 
 const BUCKET_NAME = 'sitemaps';
-const SITEMAP_PREFIX = 'sitemap';
+const TMP_DIR = '/tmp/sitemaps';
 
 let _bucketEnsured = false;
 
@@ -31,10 +37,8 @@ export async function ensureSitemapBucket(): Promise<boolean> {
   if (_bucketEnsured) return true;
   try {
     const client = getAdminClient();
-    // Check if bucket exists
     const { data: existing } = await client.storage.getBucket(BUCKET_NAME);
     if (!existing) {
-      // Create the bucket (public read so the CDN/Google can fetch directly if needed)
       const { error } = await client.storage.createBucket(BUCKET_NAME, {
         public: true,
         fileSizeLimit: '50mb',
@@ -54,36 +58,31 @@ export async function ensureSitemapBucket(): Promise<boolean> {
 }
 
 /**
- * Upload a sitemap XML file to Supabase Storage.
- * Overwrites the file if it already exists.
+ * Upload a sitemap XML file.
  *
- * FALLBACK: If Supabase Storage fails (bucket missing, Storage API not enabled,
- * permissions error, etc.), the XML is written to the local filesystem
- * (`public/sitemap/{N}.xml`) so the sitemap routes can still serve it.
- * This survives until the next container redeploy — the daily cron regenerates
- * it every day, so it's always fresh. Storage can be fixed later for full
- * persistence across redeploys.
+ * Writes to:
+ *   1. Supabase Storage (persistent — survives container restarts)
+ *   2. /tmp/sitemaps/ (local cache for fast reads)
+ *   3. public/sitemap/ (may fail if read-only — that's OK)
  *
- * @param fileNumber - 0 for static, 1-10 for business files, or 'index' for the sitemap index
- * @param xmlContent - the XML string to upload
+ * @param fileName - 'sitemap.xml', 'sitemap1.xml', 'sitemap2.xml', 'sitemap3.xml'
+ * @param xmlContent - the XML string
  * @returns true on success (Storage OR filesystem), false only if BOTH fail
  */
 export async function uploadSitemapFile(
-  fileNumber: number | 'index',
+  fileName: string,
   xmlContent: string,
 ): Promise<boolean> {
-  // ── Try Supabase Storage first ────────────────────────────────────────
+  // ── Try Supabase Storage first (persistent) ───────────────────────────
   let storageOk = false;
   try {
     if (await ensureSitemapBucket()) {
       const client = getAdminClient();
-      const fileName =
-        fileNumber === 'index' ? `${SITEMAP_PREFIX}.xml` : `${SITEMAP_PREFIX}/${fileNumber}.xml`;
       const { error } = await client.storage
         .from(BUCKET_NAME)
         .upload(fileName, xmlContent, {
           contentType: 'application/xml; charset=UTF-8',
-          upsert: true, // overwrite if exists
+          upsert: true,
         });
       if (!error) {
         storageOk = true;
@@ -92,44 +91,20 @@ export async function uploadSitemapFile(
       }
     }
   } catch (err) {
-    console.error(`[sitemap-storage] Storage upload error for ${fileNumber}:`, err);
+    console.error(`[sitemap-storage] Storage upload error for ${fileName}:`, err);
   }
 
-  // ── Filesystem fallback (always write — even if Storage succeeded) ────
-  // Write to /tmp/sitemaps/ (always writable in Docker containers, even when
-  // public/ is read-only). The fetch function + sitemap routes check /tmp
-  // FIRST, then public/, then Supabase Storage.
+  // ── Write to /tmp (always writable, local cache for fast reads) ───────
   try {
     const fs = await import('fs/promises');
     const path = await import('path');
-    const tmpDir = path.join('/tmp', 'sitemaps');
-    const publicDir = path.join(process.cwd(), 'public');
-    const publicSitemapDir = path.join(publicDir, SITEMAP_PREFIX);
-
-    // Write to /tmp (always writable)
+    const tmpDir = TMP_DIR;
     await fs.mkdir(tmpDir, { recursive: true });
-    if (fileNumber === 'index') {
-      await fs.writeFile(path.join(tmpDir, 'sitemap.xml'), xmlContent, 'utf-8');
-    } else {
-      await fs.writeFile(path.join(tmpDir, `${fileNumber}.xml`), xmlContent, 'utf-8');
-    }
-
-    // ALSO try writing to public/ (may fail if read-only — that's OK)
-    try {
-      await fs.mkdir(publicSitemapDir, { recursive: true });
-      if (fileNumber === 'index') {
-        await fs.writeFile(path.join(publicDir, 'sitemap.xml'), xmlContent, 'utf-8');
-      } else {
-        await fs.writeFile(path.join(publicSitemapDir, `${fileNumber}.xml`), xmlContent, 'utf-8');
-      }
-    } catch {
-      // public/ is read-only — /tmp copy is the primary
-    }
-
-    // Filesystem write succeeded — return true even if Storage failed
+    await fs.writeFile(path.join(tmpDir, fileName), xmlContent, 'utf-8');
+    // /tmp write succeeded — return true even if Storage failed
     return true;
   } catch (fsErr) {
-    console.error(`[sitemap-storage] Filesystem fallback failed for ${fileNumber}:`, fsErr);
+    console.error(`[sitemap-storage] /tmp write failed for ${fileName}:`, fsErr);
     // Return true only if Storage succeeded
     return storageOk;
   }
@@ -138,55 +113,45 @@ export async function uploadSitemapFile(
 /**
  * Fetch a sitemap XML file.
  *
- * Order: filesystem FIRST (fresh from cron), then Supabase Storage.
- * The cron writes to the filesystem on every regeneration, so the filesystem
- * copy is always the freshest. Storage is a backup for cross-container persistence.
+ * Order (fastest first):
+ *   1. /tmp/sitemaps/ (local cache — instant)
+ *   2. public/sitemap/ (build-time fallback — instant)
+ *   3. Supabase Storage (network — ~50ms)
  *
- * @param fileNumber - 0 for static, 1-10 for business files, or 'index' for the sitemap index
- * @returns the XML string, or null if the file doesn't exist / fetch failed
+ * @param fileName - 'sitemap.xml', 'sitemap1.xml', 'sitemap2.xml', 'sitemap3.xml'
+ * @returns the XML string, or null if not found anywhere
  */
-export async function fetchSitemapFile(
-  fileNumber: number | 'index',
-): Promise<string | null> {
+export async function fetchSitemapFile(fileName: string): Promise<string | null> {
   // ── Tier 1: /tmp/sitemaps/ (freshest — written by the daily cron) ────
-  // /tmp is always writable in Docker containers, even when public/ is read-only.
   try {
     const fs = await import('fs/promises');
     const path = await import('path');
-    const filePath =
-      fileNumber === 'index'
-        ? path.join('/tmp', 'sitemaps', 'sitemap.xml')
-        : path.join('/tmp', 'sitemaps', `${fileNumber}.xml`);
+    const filePath = path.join(TMP_DIR, fileName);
     const content = await fs.readFile(filePath, 'utf-8');
     if (content && content.length > 0) {
       return content;
     }
   } catch {
-    // File not found in /tmp — fall through to public/
+    // File not found in /tmp — fall through
   }
 
-  // ── Tier 2: public/ (build-time fallback OR cron-written if public/ is writable) ─
+  // ── Tier 2: public/sitemap/ (build-time fallback) ────────────────────
   try {
     const fs = await import('fs/promises');
     const path = await import('path');
-    const filePath =
-      fileNumber === 'index'
-        ? path.join(process.cwd(), 'public', 'sitemap.xml')
-        : path.join(process.cwd(), 'public', SITEMAP_PREFIX, `${fileNumber}.xml`);
+    const filePath = path.join(process.cwd(), 'public', 'sitemap', fileName);
     const content = await fs.readFile(filePath, 'utf-8');
     if (content && content.length > 0) {
       return content;
     }
   } catch {
-    // File not found on disk — fall through to Storage
+    // File not found in public/ — fall through
   }
 
-  // ── Tier 2: Supabase Storage (backup) ─────────────────────────────────
+  // ── Tier 3: Supabase Storage (persistent backup) ─────────────────────
   try {
     if (await ensureSitemapBucket()) {
       const client = getAdminClient();
-      const fileName =
-        fileNumber === 'index' ? `${SITEMAP_PREFIX}.xml` : `${SITEMAP_PREFIX}/${fileNumber}.xml`;
       const { data, error } = await client.storage
         .from(BUCKET_NAME)
         .download(fileName);
@@ -200,27 +165,8 @@ export async function fetchSitemapFile(
       return await data.text();
     }
   } catch (err) {
-    console.error(`[sitemap-storage] fetchSitemapFile Storage error for ${fileNumber}:`, err);
+    console.error(`[sitemap-storage] fetchSitemapFile Storage error for ${fileName}:`, err);
   }
 
   return null;
-}
-
-/**
- * Check if a sitemap file exists in Supabase Storage.
- */
-export async function sitemapFileExists(fileNumber: number | 'index'): Promise<boolean> {
-  try {
-    if (!(await ensureSitemapBucket())) return false;
-    const client = getAdminClient();
-    const fileName =
-      fileNumber === 'index' ? `${SITEMAP_PREFIX}.xml` : `${SITEMAP_PREFIX}/${fileNumber}.xml`;
-    const { data, error } = await client.storage
-      .from(BUCKET_NAME)
-      .list(SITEMAP_PREFIX, { search: `${fileNumber}.xml` });
-    if (error) return false;
-    return Array.isArray(data) && data.some((f) => f.name === `${fileNumber}.xml`);
-  } catch {
-    return false;
-  }
 }

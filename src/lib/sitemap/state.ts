@@ -84,7 +84,8 @@ export async function markSitemapFileDirty(fileNumber: number): Promise<void> {
  */
 export async function markAllBusinessFilesDirty(): Promise<void> {
   try {
-    const allFiles = Array.from({ length: 10 }, (_, i) => i + 1);
+    // 4 files: 0, 1, 2, 3 (sitemap.xml, sitemap1.xml, sitemap2.xml, sitemap3.xml)
+    const allFiles = [0, 1, 2, 3];
     await db.sitemapState.update({
       where: { id: SINGLETON_ID },
       data: { dirtyFilesJson: JSON.stringify(allFiles) },

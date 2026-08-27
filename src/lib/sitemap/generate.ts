@@ -1,30 +1,34 @@
 /**
- * Sitemap Generate — per-bucket business query + XML generation + Storage upload.
+ * Sitemap Generate — per-bucket business query + XML generation + upload.
  *
- * Each business file (1-10) contains only the businesses whose
- * SHA-256(tenantId)[0] % 10 === fileNumber - 1.
+ * 4 files (simple URLs, no index):
+ *   sitemap.xml    → bucket 0 (static URLs + businesses where hash % 4 === 0)
+ *   sitemap1.xml   → bucket 1 (businesses where hash % 4 === 1)
+ *   sitemap2.xml   → bucket 2 (businesses where hash % 4 === 2)
+ *   sitemap3.xml   → bucket 3 (businesses where hash % 4 === 3)
  *
  * The cron calls `generateSitemapForBucket(N)` for each dirty file N.
  * This function:
  *   1. Loads all indexable businesses (1h in-memory cache — shared across
  *      buckets within the same cron run, so only 1 DB query per cron)
  *   2. Filters to the bucket's businesses by hash
- *   3. Generates the XML
- *   4. Uploads to Supabase Storage
+ *   3. Generates the XML (bucket 0 also includes static URLs)
+ *   4. Uploads to Supabase Storage + /tmp
  *   5. Returns true on success, false on failure
  *
  * The in-memory cache is ONLY used during cron regeneration (once per day),
- * NOT during runtime (Google fetches). Runtime reads from Supabase Storage.
+ * NOT during runtime (Google fetches). Runtime reads static files.
  */
 import { listAllIndexableBusinessUrls } from '@/lib/public-business';
-import { serializeUrlSet, serializeSitemapIndex, buildStaticSitemap, BASE_URL } from '@/lib/sitemap-builder';
+import { serializeUrlSet, buildStaticSitemap } from '@/lib/sitemap-builder';
 import { uploadSitemapFile } from './storage';
-import { getSitemapFileNumber, getAllBusinessFileNumbers, TOTAL_SITEMAP_FILES } from './hash';
+import { getSitemapFileNumber, getAllBusinessFileNumbers, getSitemapFileName } from './hash';
 
 interface IndexableBusinessUrl {
   url: string;
   lastModified?: string;
-  tier?: number;
+  tenantId?: string;
+  tier?: 'A' | 'B';
 }
 
 // ── In-memory cache (1h TTL) — only used during cron, not runtime ──────
@@ -56,30 +60,20 @@ export function invalidateBusinessUrlCache(): void {
 }
 
 /**
- * Generate the static sitemap file (0.xml) and upload to Storage.
- * Contains: homepage, services, blog, legal, industry pages, etc.
+ * Generate a sitemap file for a specific bucket (0-3).
  *
- * @returns true on success, false on failure
- */
-export async function generateStaticSitemapFile(): Promise<boolean> {
-  try {
-    const staticEntries = await buildStaticSitemap();
-    const xml = serializeUrlSet(staticEntries);
-    return await uploadSitemapFile(0, xml);
-  } catch (err) {
-    console.error('[sitemap-generate] generateStaticSitemapFile error:', err);
-    return false;
-  }
-}
-
-/**
- * Generate a single business sitemap file (1-10) and upload to Storage.
+ * Bucket 0 (sitemap.xml) includes:
+ *   - All static URLs (services, blog, legal, etc.)
+ *   - Businesses where SHA-256(tenantId) % 4 === 0
  *
- * @param fileNumber - 1 to 10
+ * Buckets 1-3 (sitemap1-3.xml) include:
+ *   - Only businesses for that bucket
+ *
+ * @param fileNumber - 0, 1, 2, or 3
  * @returns true on success, false on failure
  */
 export async function generateSitemapForBucket(fileNumber: number): Promise<boolean> {
-  if (fileNumber < 1 || fileNumber > 10) {
+  if (fileNumber < 0 || fileNumber > 3) {
     console.error(`[sitemap-generate] Invalid file number: ${fileNumber}`);
     return false;
   }
@@ -89,35 +83,45 @@ export async function generateSitemapForBucket(fileNumber: number): Promise<bool
     const allUrls = await loadAllBusinessUrlsCached();
 
     // Filter to this bucket's businesses by hash
-    // NOTE: we can't filter by hash in the DB query (PostgREST doesn't support
-    // SHA-256), so we filter in JS. The 1h cache means this only hits the DB
-    // once per cron run, not once per bucket.
-    //
-    // To filter by hash, we need the tenantId — but listAllIndexableBusinessUrls
-    // returns { url, lastModified, tier } without the tenantId. So we need to
-    // load the tenants directly to get their IDs for hash computation.
-    //
-    // ALTERNATIVE: compute the hash from the URL slug (the last path segment).
-    // This works because each business URL ends with /{slug} and the slug is
-    // derived from the tenant. But this is fragile if the URL format changes.
-    //
-    // BEST APPROACH: load tenant IDs + URLs together. Let's use the existing
-    // listAllIndexableBusinessUrls but ALSO load the tenant IDs in the same
-    // order. Actually, the simplest correct approach is to load the tenants
-    // directly here with the same filter logic.
+    const bucketUrls: IndexableBusinessUrl[] = [];
+    for (const entry of allUrls) {
+      if (entry.tenantId) {
+        const fn = getSitemapFileNumber(entry.tenantId);
+        if (fn === fileNumber) {
+          bucketUrls.push(entry);
+        }
+      }
+    }
 
-    const bucketUrls = await loadBusinessUrlsForBucket(fileNumber);
+    // Build entries: bucket 0 includes static URLs first, then businesses
+    const entries: Array<{ url: string; lastModified?: string }> = [];
 
-    const entries = bucketUrls.map((entry) => ({
-      url: entry.url,
-      lastModified: entry.lastModified,
-    }));
+    if (fileNumber === 0) {
+      // Add static URLs first
+      try {
+        const staticEntries = await buildStaticSitemap();
+        for (const entry of staticEntries) {
+          entries.push({ url: entry.url, lastModified: entry.lastModified });
+        }
+      } catch (err) {
+        console.error('[sitemap-generate] Failed to load static URLs:', err);
+      }
+    }
 
+    // Add business URLs
+    for (const entry of bucketUrls) {
+      entries.push({ url: entry.url, lastModified: entry.lastModified });
+    }
+
+    // Serialize to XML
     const xml = serializeUrlSet(entries);
-    const success = await uploadSitemapFile(fileNumber, xml);
+
+    // Upload with the simple filename
+    const fileName = getSitemapFileName(fileNumber);
+    const success = await uploadSitemapFile(fileName, xml);
 
     if (success) {
-      console.log(`[sitemap-generate] Generated sitemap/${fileNumber}.xml (${entries.length} URLs)`);
+      console.log(`[sitemap-generate] ✅ ${fileName} generated (${entries.length} URLs)`);
     }
 
     return success;
@@ -128,69 +132,22 @@ export async function generateSitemapForBucket(fileNumber: number): Promise<bool
 }
 
 /**
- * Load business URLs for a specific bucket (file number 1-10).
- *
- * Uses the tenantId (now returned by listAllIndexableBusinessUrls) to compute
- * SHA-256(tenantId)[0] % 10 and filter to only this bucket's businesses.
- * This correctly distributes ~94K businesses across 10 files (~9,400 each).
- */
-async function loadBusinessUrlsForBucket(fileNumber: number): Promise<IndexableBusinessUrl[]> {
-  const allUrls = await loadAllBusinessUrlsCached();
-
-  // Filter by hash: keep only URLs whose tenantId hashes to this file number
-  const bucketUrls: IndexableBusinessUrl[] = [];
-  for (const entry of allUrls) {
-    if (entry.tenantId) {
-      const fn = getSitemapFileNumber(entry.tenantId);
-      if (fn === fileNumber) {
-        bucketUrls.push(entry);
-      }
-    }
-  }
-
-  return bucketUrls;
-}
-
-/**
- * Generate the sitemap index (sitemap.xml) and upload to Storage.
- * Lists all 11 files: 0.xml (static) + 1.xml through 10.xml (business).
- *
- * @returns true on success, false on failure
- */
-export async function generateSitemapIndex(): Promise<boolean> {
-  try {
-    const ids = Array.from({ length: TOTAL_SITEMAP_FILES }, (_, i) => ({ id: i }));
-    const xml = serializeSitemapIndex(ids);
-    return await uploadSitemapFile('index', xml);
-  } catch (err) {
-    console.error('[sitemap-generate] generateSitemapIndex error:', err);
-    return false;
-  }
-}
-
-/**
- * Generate ALL sitemap files (static + all 10 business files + index).
+ * Generate ALL sitemap files (all 4 buckets).
  * Used by the 7-day safety net + the build-time script.
  *
  * @returns object with per-file success/failure
  */
 export async function generateAllSitemaps(): Promise<{
-  staticOk: boolean;
-  businessResults: Array<{ fileNumber: number; ok: boolean }>;
-  indexOk: boolean;
+  results: Array<{ fileNumber: number; fileName: string; ok: boolean }>;
 }> {
   // Invalidate cache to ensure fresh data for full regen
   invalidateBusinessUrlCache();
 
-  const staticOk = await generateStaticSitemapFile();
-
-  const businessResults: Array<{ fileNumber: number; ok: boolean }> = [];
+  const results: Array<{ fileNumber: number; fileName: string; ok: boolean }> = [];
   for (const fn of getAllBusinessFileNumbers()) {
     const ok = await generateSitemapForBucket(fn);
-    businessResults.push({ fileNumber: fn, ok });
+    results.push({ fileNumber: fn, fileName: getSitemapFileName(fn), ok });
   }
 
-  const indexOk = await generateSitemapIndex();
-
-  return { staticOk, businessResults, indexOk };
+  return { results };
 }
