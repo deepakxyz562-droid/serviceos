@@ -64,6 +64,14 @@ db/*.db-journal
 *.gif
 *.webp
 
+# Mobile app assets MUST NOT be ignored (required for EAS Build)
+# The *.png rule above excludes ALL png files globally. EAS Build
+# reads this .gitignore when creating the build archive, which causes
+# mobile-app/assets/*.png to be excluded → build fails with ENOENT.
+# These un-ignore rules override the *.png rule for mobile-app assets.
+!mobile-app/assets/
+!mobile-app/assets/**
+
 # Agent context files
 /agent-ctx/
 

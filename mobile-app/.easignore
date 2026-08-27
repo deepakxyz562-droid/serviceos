@@ -1,3 +1,5 @@
+# .easignore — used by EAS Build INSTEAD of .gitignore
+# This file ensures mobile-app/assets/*.png are included in the build archive.
 node_modules
 .expo
 dist
