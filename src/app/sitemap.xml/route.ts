@@ -4,62 +4,59 @@
  *
  * Sitemap INDEX — lists all individual sitemap files (0-10).
  *
- * Source of truth: Supabase Storage (bucket: 'sitemaps', file: 'sitemap.xml')
- * Build-time fallback: public/sitemap.xml (baked into the Docker image)
+ * The index is GENERATED ON-THE-FLY (no DB query, no file read — just a list
+ * of 11 file URLs with the current timestamp). This is instant (<1ms) and
+ * always reflects the correct 11-file structure.
+ *
+ * Why not read from a file? The cron writes the index to /tmp/sitemaps/
+ * (ephemeral — cleared on container restart) and public/ is read-only (baked
+ * into the Docker image at build time with a stale 4-file index). Generating
+ * on-the-fly avoids both issues.
  *
  * CDN caching:
- *   Cache-Control: public, s-maxage=86400, stale-while-revalidate=3600
- *
- * NO DB queries — this route ONLY reads from Storage/filesystem.
- * If neither exists → 404 (Google retries on next crawl).
+ *   Cache-Control: public, s-maxage=3600, stale-while-revalidate=600
+ *   → Google/CDN cache for 1h (shorter than individual files because the index
+ *   is cheap to regenerate and we want new files to appear quickly)
  */
 
 import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { fetchSitemapFile } from '@/lib/sitemap/storage';
 
-export const revalidate = 3600; // 1h ISR (CDN does the heavy lifting via s-maxage)
+export const revalidate = 3600; // 1h ISR
 
-/**
- * Build a NextResponse for XML content with explicit Content-Length + Content-Type.
- * Using a Buffer + explicit Content-Length header prevents Google Search Console
- * from rejecting the sitemap with "Sitemap could not be read".
- */
-function xmlResponse(xml: string): NextResponse {
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'https://fieseros.com';
+const TOTAL_FILES = 11; // 0 (static) + 1-10 (business)
+
+function escapeXml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+export async function GET() {
+  const now = new Date().toISOString();
+
+  // Generate the sitemap index on-the-fly — lists all 11 files
+  const sitemapEntries: string[] = [];
+  for (let i = 0; i < TOTAL_FILES; i++) {
+    sitemapEntries.push(
+      `  <sitemap>\n` +
+      `    <loc>${escapeXml(SITE_URL)}/sitemap/${i}.xml</loc>\n` +
+      `    <lastmod>${now}</lastmod>\n` +
+      `  </sitemap>`
+    );
+  }
+
+  const xml =
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    `${sitemapEntries.join('\n')}\n` +
+    `</sitemapindex>`;
+
   const buf = Buffer.from(xml, 'utf-8');
   return new NextResponse(buf, {
     status: 200,
     headers: {
       'Content-Type': 'application/xml; charset=UTF-8',
       'Content-Length': String(buf.length),
-      'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=3600',
+      'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=600',
     },
   });
-}
-
-export async function GET() {
-  // ── Tier 1: Fetch from Storage / filesystem (source of truth) ──────────
-  const xml = await fetchSitemapFile('index');
-  if (xml) {
-    return xmlResponse(xml);
-  }
-
-  // ── Tier 2: Build-time static fallback (public/sitemap.xml) ───────────
-  const possiblePaths = [
-    path.join(process.cwd(), 'public', 'sitemap.xml'),
-    path.join(process.cwd(), 'standalone', 'public', 'sitemap.xml'),
-  ];
-
-  for (const filePath of possiblePaths) {
-    try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      return xmlResponse(content);
-    } catch {
-      // File not found — try next path
-    }
-  }
-
-  // ── Tier 3: 404 — no DB fallback (prevents the 7-second timeout) ──────
-  return new NextResponse('Sitemap index not yet generated', { status: 404 });
 }
