@@ -57,38 +57,77 @@ export async function ensureSitemapBucket(): Promise<boolean> {
  * Upload a sitemap XML file to Supabase Storage.
  * Overwrites the file if it already exists.
  *
+ * FALLBACK: If Supabase Storage fails (bucket missing, Storage API not enabled,
+ * permissions error, etc.), the XML is written to the local filesystem
+ * (`public/sitemap/{N}.xml`) so the sitemap routes can still serve it.
+ * This survives until the next container redeploy — the daily cron regenerates
+ * it every day, so it's always fresh. Storage can be fixed later for full
+ * persistence across redeploys.
+ *
  * @param fileNumber - 0 for static, 1-10 for business files, or 'index' for the sitemap index
  * @param xmlContent - the XML string to upload
- * @returns true on success, false on failure
+ * @returns true on success (Storage OR filesystem), false only if BOTH fail
  */
 export async function uploadSitemapFile(
   fileNumber: number | 'index',
   xmlContent: string,
 ): Promise<boolean> {
+  // ── Try Supabase Storage first ────────────────────────────────────────
+  let storageOk = false;
   try {
-    if (!(await ensureSitemapBucket())) return false;
-    const client = getAdminClient();
-    const fileName =
-      fileNumber === 'index' ? `${SITEMAP_PREFIX}.xml` : `${SITEMAP_PREFIX}/${fileNumber}.xml`;
-    const { error } = await client.storage
-      .from(BUCKET_NAME)
-      .upload(fileName, xmlContent, {
-        contentType: 'application/xml; charset=UTF-8',
-        upsert: true, // overwrite if exists
-      });
-    if (error) {
-      console.error(`[sitemap-storage] Upload failed for ${fileName}:`, error);
-      return false;
+    if (await ensureSitemapBucket()) {
+      const client = getAdminClient();
+      const fileName =
+        fileNumber === 'index' ? `${SITEMAP_PREFIX}.xml` : `${SITEMAP_PREFIX}/${fileNumber}.xml`;
+      const { error } = await client.storage
+        .from(BUCKET_NAME)
+        .upload(fileName, xmlContent, {
+          contentType: 'application/xml; charset=UTF-8',
+          upsert: true, // overwrite if exists
+        });
+      if (!error) {
+        storageOk = true;
+      } else {
+        console.error(`[sitemap-storage] Storage upload failed for ${fileName}:`, error);
+      }
     }
-    return true;
   } catch (err) {
-    console.error(`[sitemap-storage] uploadSitemapFile error for ${fileNumber}:`, err);
-    return false;
+    console.error(`[sitemap-storage] Storage upload error for ${fileNumber}:`, err);
+  }
+
+  // ── Filesystem fallback (always write — even if Storage succeeded) ────
+  // Writing to the filesystem ensures the sitemap routes can serve the file
+  // immediately (Tier 2 fallback in the route handler). If Storage succeeded,
+  // this is a harmless backup. If Storage failed, this is the primary copy.
+  try {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const publicDir = path.join(process.cwd(), 'public');
+    const sitemapDir = path.join(publicDir, SITEMAP_PREFIX);
+
+    // Ensure the directory exists
+    await fs.mkdir(sitemapDir, { recursive: true });
+
+    if (fileNumber === 'index') {
+      await fs.writeFile(path.join(publicDir, 'sitemap.xml'), xmlContent, 'utf-8');
+    } else {
+      await fs.writeFile(path.join(sitemapDir, `${fileNumber}.xml`), xmlContent, 'utf-8');
+    }
+    // Filesystem write succeeded — return true even if Storage failed
+    return true;
+  } catch (fsErr) {
+    console.error(`[sitemap-storage] Filesystem fallback failed for ${fileNumber}:`, fsErr);
+    // Return true only if Storage succeeded
+    return storageOk;
   }
 }
 
 /**
- * Fetch a sitemap XML file from Supabase Storage.
+ * Fetch a sitemap XML file.
+ *
+ * Order: filesystem FIRST (fresh from cron), then Supabase Storage.
+ * The cron writes to the filesystem on every regeneration, so the filesystem
+ * copy is always the freshest. Storage is a backup for cross-container persistence.
  *
  * @param fileNumber - 0 for static, 1-10 for business files, or 'index' for the sitemap index
  * @returns the XML string, or null if the file doesn't exist / fetch failed
@@ -96,28 +135,45 @@ export async function uploadSitemapFile(
 export async function fetchSitemapFile(
   fileNumber: number | 'index',
 ): Promise<string | null> {
+  // ── Tier 1: Filesystem (freshest — written by the daily cron) ─────────
   try {
-    if (!(await ensureSitemapBucket())) return null;
-    const client = getAdminClient();
-    const fileName =
-      fileNumber === 'index' ? `${SITEMAP_PREFIX}.xml` : `${SITEMAP_PREFIX}/${fileNumber}.xml`;
-    const { data, error } = await client.storage
-      .from(BUCKET_NAME)
-      .download(fileName);
-    if (error) {
-      // Don't log "not found" errors — they're expected for new deployments
-      if (!error.message.includes('Not found') && !error.message.includes('404')) {
-        console.error(`[sitemap-storage] Download failed for ${fileName}:`, error);
-      }
-      return null;
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const filePath =
+      fileNumber === 'index'
+        ? path.join(process.cwd(), 'public', 'sitemap.xml')
+        : path.join(process.cwd(), 'public', SITEMAP_PREFIX, `${fileNumber}.xml`);
+    const content = await fs.readFile(filePath, 'utf-8');
+    if (content && content.length > 0) {
+      return content;
     }
-    if (!data) return null;
-    // Convert Blob to string
-    return await data.text();
-  } catch (err) {
-    console.error(`[sitemap-storage] fetchSitemapFile error for ${fileNumber}:`, err);
-    return null;
+  } catch {
+    // File not found on disk — fall through to Storage
   }
+
+  // ── Tier 2: Supabase Storage (backup) ─────────────────────────────────
+  try {
+    if (await ensureSitemapBucket()) {
+      const client = getAdminClient();
+      const fileName =
+        fileNumber === 'index' ? `${SITEMAP_PREFIX}.xml` : `${SITEMAP_PREFIX}/${fileNumber}.xml`;
+      const { data, error } = await client.storage
+        .from(BUCKET_NAME)
+        .download(fileName);
+      if (error) {
+        if (!error.message.includes('Not found') && !error.message.includes('404')) {
+          console.error(`[sitemap-storage] Download failed for ${fileName}:`, error);
+        }
+        return null;
+      }
+      if (!data) return null;
+      return await data.text();
+    }
+  } catch (err) {
+    console.error(`[sitemap-storage] fetchSitemapFile Storage error for ${fileNumber}:`, err);
+  }
+
+  return null;
 }
 
 /**
