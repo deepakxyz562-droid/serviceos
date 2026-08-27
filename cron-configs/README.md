@@ -1,71 +1,124 @@
-# Cron Jobs — 3rd-Party Scheduler Setup
+# Cron Jobs — Coolify/Hostinger Setup (cron-job.org)
 
-This project has **12 cron routes** under `/api/cron/*`. Vercel Hobby plan only allows 2 daily crons, so **all 12 must run via a 3rd-party scheduler**.
+This project has **6 cron jobs** that must be triggered externally via [cron-job.org](https://cron-job.org). On Coolify/Hostinger, `vercel.json` crons are ignored — **all crons must run via an external HTTP cron service.**
 
-## Quick Setup (cron-job.org — recommended)
+## Architecture
 
-1. **Generate a secret:**
-   ```bash
-   openssl rand -hex 32
-   ```
+```
+┌─────────────────────────────────────────────────────────────┐
+│  cron-job.org (external scheduler — FREE)                   │
+│                                                             │
+│  6 jobs:                                                    │
+│    1. daily-master        → /api/cron/master (daily 02:00)  │
+│    2. scheduled-messages  → /api/cron/scheduled-messages    │
+│    3. scheduled-executions → /api/cron/scheduled-executions │
+│    4. campaigns           → /api/cron/campaigns             │
+│    5. appointment-reminders → /api/cron/appointment-reminders│
+│    6. featured-location   → /api/cron/featured-location     │
+└─────────────────────────────────────────────────────────────┘
+                        ↓ HTTP POST with x-cron-secret header
+┌─────────────────────────────────────────────────────────────┐
+│  Coolify Docker Container (Next.js app)                     │
+│                                                             │
+│  /api/cron/master fans out to 9 daily sub-crons +           │
+│  sitemap regeneration (incremental — only dirty files)      │
+└─────────────────────────────────────────────────────────────┘
+```
 
-2. **Set it as env var** on your Next.js deployment:
-   ```
-   CRON_SECRET=<your-generated-secret>
-   ```
+The **daily master cron** (`/api/cron/master`) is the key — it internally runs:
+- marketplace-settlement (escrow release)
+- archive-old-won-deals (Kanban cleanup)
+- recurring-jobs (generate jobs from schedules)
+- overdue-detector (mark overdue invoices)
+- trial-reminders (3-day trial-ending emails)
+- pre-charge-reminder (card charged tomorrow email)
+- recurring-invoices (generate + send recurring invoices)
+- trial-expire (expire trials past trialEndsAt)
+- renewal (downgrades, PayPal sync, expired subs)
+- **sitemap regeneration** (incremental — only dirty files, 7-day safety net)
+- sms-quota-reset (monthly — only on the 1st of each month)
 
-3. **Sign up** at [cron-job.org](https://cron-job.org) (free, supports sub-minute schedules)
+## Quick Setup (cron-job.org)
 
-4. **Create 12 jobs** using the config in `cron-job-org-import.json`. For each job:
-   - **URL:** `https://YOUR-DOMAIN.com/api/cron/{name}`
-   - **Schedule:** the cron expression from the JSON
-   - **Method:** POST (or GET — all routes accept both)
-   - **Request Header:** `x-cron-secret: YOUR_CRON_SECRET`
-   - **Timeout:** 300 seconds (some jobs like campaigns take a while)
+### 1. Verify `CRON_SECRET` is set in Coolify
 
-5. **Test** one job manually from the cron-job.org dashboard → check response is `{"success":true,...}`
+Coolify Dashboard → your project → Environment Variables → confirm `CRON_SECRET` is set.
 
-## Alternative: GitHub Actions
+If not set, generate one:
+```bash
+openssl rand -hex 32
+```
+Add it to Coolify → Environment Variables → `CRON_SECRET=<your-secret>` → Redeploy.
 
-Use `.github/workflows/cron-jobs.yml` — it defines all 12 jobs as scheduled workflows. **Requires repo secrets:**
-- `APP_URL` — your deployed app URL (e.g. `https://yourapp.vercel.app`)
-- `CRON_SECRET` — the secret you generated
+### 2. Create 6 jobs on cron-job.org
 
-⚠️ **GitHub Actions caveat:** Free tier limits scheduled workflows to 5-min minimum interval and throttles aggressively. The 4 high-frequency jobs (every 15 min) may be delayed. For production, prefer cron-job.org.
+Sign up at [cron-job.org](https://cron-job.org) (free). Create each job using the config in `cron-job-org-import.json`:
 
-## All 12 Cron Jobs (Reference)
+For each job:
+- **URL:** `https://YOUR-DOMAIN.com/api/cron/{name}` (replace YOUR-DOMAIN.com with `fieseros.com`)
+- **Schedule:** the cron expression from the JSON
+- **Method:** POST
+- **Request Header:** `x-cron-secret: YOUR_CRON_SECRET`
+- **Timeout:** 300 seconds for `daily-master`; 60 seconds for others
+- **Notify on failure:** ✅ enabled
 
-| # | Endpoint | Schedule (UTC) | Frequency | Purpose |
+### 3. The 6 jobs to create
+
+| # | Name | URL | Schedule | Timeout |
 |---|---|---|---|---|
-| 1 | `/api/cron/marketplace-settlement` | `0 2 * * *` | Daily 02:00 | Release escrow funds to providers |
-| 2 | `/api/cron/trial-expire` | `30 0 * * *` | Daily 00:30 | Expire ended trials |
-| 3 | `/api/cron/trial-reminders` | `0 9 * * *` | Daily 09:00 | Trial-ending reminders |
-| 4 | `/api/cron/renewal` | `0 3 * * *` | Daily 03:00 | Subscription renewals |
-| 5 | `/api/cron/pre-charge-reminder` | `0 8 * * *` | Daily 08:00 | Pre-charge warning |
-| 6 | `/api/cron/recurring-invoices` | `0 1 * * *` | Daily 01:00 | Generate recurring invoices |
-| 7 | `/api/cron/recurring-jobs` | `0 6 * * *` | Daily 06:00 | Generate recurring jobs |
-| 8 | `/api/cron/overdue-detector` | `0 8 * * *` | Daily 08:00 | Detect overdue invoices |
-| 9 | `/api/cron/campaigns` | `*/15 * * * *` | Every 15 min | Dispatch scheduled campaigns |
-| 10 | `/api/cron/scheduled-messages` | `*/15 * * * *` | Every 15 min | Send reminders (appt/payment/overdue) |
-| 11 | `/api/cron/scheduled-executions` | `*/15 * * * *` | Every 15 min | Run delayed workflow automations |
-| 12 | `/api/cron/appointment-reminders` | `0 */6 * * *` | Every 6 hours | Schedule visit reminders |
+| 1 | **daily-master** | `https://fieseros.com/api/cron/master` | `0 2 * * *` (daily 02:00 UTC) | 300s |
+| 2 | scheduled-messages | `https://fieseros.com/api/cron/scheduled-messages` | `*/5 * * * *` (every 5 min) | 60s |
+| 3 | scheduled-executions | `https://fieseros.com/api/cron/scheduled-executions` | `*/5 * * * *` (every 5 min) | 60s |
+| 4 | campaigns | `https://fieseros.com/api/cron/campaigns` | `*/15 * * * *` (every 15 min) | 60s |
+| 5 | appointment-reminders | `https://fieseros.com/api/cron/appointment-reminders` | `0 * * * *` (hourly) | 60s |
+| 6 | featured-location | `https://fieseros.com/api/cron/featured-location` | `0 * * * *` (hourly) | 60s |
 
-## Authentication
+### 4. Test manually
 
-All routes accept the secret via any of:
-- **Header:** `x-cron-secret: <secret>` (preferred)
-- **Header:** `Authorization: Bearer <secret>`
-- **Query:** `?key=<secret>` or `?secret=<secret>`
+Test the daily master cron (it should return a JSON response with `success: true` + a `sitemap` field):
+```bash
+curl -X POST https://fieseros.com/api/cron/master \
+  -H "x-cron-secret: YOUR_CRON_SECRET"
+```
 
-## Staggering (optional, recommended)
+Expected response:
+```json
+{
+  "success": true,
+  "ranAt": "2026-08-27T02:00:00.000Z",
+  "summary": { "total": 9, "succeeded": 9, "failed": 0, "errored": 0 },
+  "sitemap": {
+    "ran": true,
+    "fullRegen": true,
+    "dirtyFiles": [0,1,2,3,4,5,6,7,8,9,10],
+    "durationMs": 45000
+  }
+}
+```
 
-To avoid all daily jobs hitting at once, you can stagger the 8 daily jobs across the early morning:
-- 00:30 → trial-expire
-- 01:00 → recurring-invoices
-- 02:00 → marketplace-settlement
-- 03:00 → renewal
-- 06:00 → recurring-jobs
-- 08:00 → pre-charge-reminder + overdue-detector (can run together)
-- 09:00 → trial-reminders
+## Why cron-job.org (not built-in cron)?
 
-The 4 high-frequency jobs (every 15 min / 6 hours) should stay on their original schedule.
+The Docker container could run `node-cron` internally, but:
+1. **Multiple containers** — if Coolify scales to 2+ containers, each runs its own cron → duplicate execution
+2. **Container restarts** — if the container restarts mid-cron, the cron is lost
+3. **No external monitoring** — cron-job.org emails you on failure; built-in cron silently fails
+
+External cron is the correct approach for Coolify deployments.
+
+## What happens if the daily master cron is NOT set up?
+
+If you deploy to Coolify without setting up the daily master cron on cron-job.org:
+- ❌ Sitemaps won't regenerate (Google won't see new businesses)
+- ❌ Recurring invoices won't generate (billing breaks)
+- ❌ Trial reminders won't send (poor UX)
+- ❌ Overdue invoices won't be detected (revenue leak)
+- ❌ Marketplace escrow won't settle (provider payouts delayed)
+- ❌ Subscriptions won't renew/downgrade automatically
+
+**The daily master cron is critical for the app to function correctly.**
+
+## vercel.json is ignored on Coolify
+
+The `vercel.json` file in this repo is only used when deploying to Vercel. On Coolify, it has no effect — that's why you MUST set up the external cron via cron-job.org.
+
+If you ever migrate back to Vercel, the `vercel.json` cron config will work automatically (and you can remove the `daily-master` job from cron-job.org to avoid double-execution).
