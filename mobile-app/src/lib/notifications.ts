@@ -86,22 +86,43 @@ function getEasProjectId(): string | null {
 /**
  * Register for push notifications and subscribe the token to the backend.
  * Safe to call multiple times — returns the cached token on subsequent calls.
+ *
+ * Returns a structured result so callers can show the ACTUAL error (not just
+ * "Permission denied" for everything that fails).
  */
+export interface PushRegistrationResult {
+  success: boolean;
+  token?: string;
+  error?: string;
+  reason?: 'permission_denied' | 'no_project_id' | 'backend_error' | 'network_error' | 'unknown';
+}
+
 export async function registerForPushNotifications(): Promise<string | null> {
-  if (pushToken) return pushToken;
+  const result = await registerForPushNotificationsDetailed();
+  return result.success ? result.token ?? null : null;
+}
+
+export async function registerForPushNotificationsDetailed(): Promise<PushRegistrationResult> {
+  if (pushToken) return { success: true, token: pushToken };
 
   // Web: use Web Push API (VAPID)
   if (Platform.OS === 'web') {
-    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return null;
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+      return { success: false, reason: 'unknown', error: 'Service Worker not available' };
+    }
     try {
       const perm = await Notification.requestPermission();
-      if (perm !== 'granted') return null;
+      if (perm !== 'granted') {
+        return { success: false, reason: 'permission_denied', error: 'Notification permission denied' };
+      }
 
       const reg = await navigator.serviceWorker.ready;
       const vapidRes = await api.get<{ publicKey?: string }>(
         '/api/notifications/push/vapid-public-key'
       );
-      if (!vapidRes.publicKey) return null;
+      if (!vapidRes.publicKey) {
+        return { success: false, reason: 'backend_error', error: 'VAPID public key not configured on server' };
+      }
 
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -111,15 +132,17 @@ export async function registerForPushNotifications(): Promise<string | null> {
       const subscriptionJson = sub.toJSON();
       await api.post('/api/notifications/push/subscribe', subscriptionJson);
       pushToken = sub.endpoint;
-      return pushToken;
+      return { success: true, token: pushToken };
     } catch (err) {
       console.warn('[notifications] web push registration failed:', err);
-      return null;
+      return { success: false, reason: 'network_error', error: err instanceof Error ? err.message : 'Web push registration failed' };
     }
   }
 
   // Native: use Expo push notifications
-  if (!Notifications) return null;
+  if (!Notifications) {
+    return { success: false, reason: 'unknown', error: 'Notifications module not available' };
+  }
 
   // Set up the foreground notification handler so push notifications are
   // actually visible when the app is open (not silently dropped).
@@ -132,24 +155,18 @@ export async function registerForPushNotifications(): Promise<string | null> {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
-    if (finalStatus !== 'granted') return null;
+    if (finalStatus !== 'granted') {
+      return { success: false, reason: 'permission_denied', error: 'Notification permission denied by user' };
+    }
 
-    // FIX: getExpoPushTokenAsync requires a valid EAS projectId (UUID).
-    // Using the app slug ('fieseros-app') does NOT work — Expo's push
-    // service rejects it with 'Project ID not found'. We read the projectId
-    // from Constants.expoConfig.extra.eas.projectId instead.
-    //
-    // CRITICAL FIX: Previously this returned `null` when no EAS projectId
-    // was configured, and the Profile screen's handleTogglePush() mistook
-    // that null for a permission denial — showing the misleading message
-    // "Permission denied — enable notifications in Settings." even though
-    // the user HAD granted permission. Now we throw a clear, actionable
-    // error so the UI can show the real reason push can't be enabled.
+    // Get the EAS project ID
     const projectId = getEasProjectId();
     if (!projectId) {
-      throw new Error(
-        'Push notifications require an EAS project ID. Set EAS_PROJECT_ID in the app .env file (get it from https://expo.dev → your project → Project ID, or run `eas init` in the mobile-app directory).'
-      );
+      return {
+        success: false,
+        reason: 'no_project_id',
+        error: 'Push notifications require an EAS project ID. Set EAS_PROJECT_ID in the app .env file.',
+      };
     }
 
     const tokenData = await Notifications.getExpoPushTokenAsync({
@@ -158,18 +175,33 @@ export async function registerForPushNotifications(): Promise<string | null> {
     const token = tokenData.data;
     pushToken = token;
 
-    // Subscribe the token to the backend. The backend now accepts Expo
-    // push tokens directly (no VAPID required for native).
-    await api.post('/api/notifications/push/subscribe', {
-      platform: Platform.OS,
-      token,
-      expoPushToken: token,
-    });
+    // Subscribe the token to the backend
+    try {
+      await api.post('/api/notifications/push/subscribe', {
+        platform: Platform.OS,
+        token,
+        expoPushToken: token,
+      });
+    } catch (backendErr) {
+      // Token was obtained but backend subscription failed
+      // Still return the token — the user can retry subscription later
+      console.warn('[notifications] backend subscription failed:', backendErr);
+      return {
+        success: false,
+        reason: 'backend_error',
+        error: backendErr instanceof Error ? backendErr.message : 'Failed to subscribe to push notifications on server',
+        token,
+      };
+    }
 
-    return token;
+    return { success: true, token };
   } catch (err) {
     console.warn('[notifications] native push registration failed:', err);
-    return null;
+    return {
+      success: false,
+      reason: 'unknown',
+      error: err instanceof Error ? err.message : 'Push notification registration failed',
+    };
   }
 }
 

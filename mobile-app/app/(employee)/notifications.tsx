@@ -168,12 +168,23 @@ export default function NotificationsScreen() {
 
   const handleEnablePush = async () => {
     try {
-      const token = await registerForPushNotifications();
-      setPushEnabled(!!token);
-      if (token) {
+      const { registerForPushNotificationsDetailed } = await import('@/lib/notifications');
+      const result = await registerForPushNotificationsDetailed();
+      setPushEnabled(result.success);
+      if (result.success) {
         toast.show('Push notifications enabled', 'success');
       } else {
-        toast.show('Permission denied — enable notifications in Settings.', 'warning');
+        // Show the ACTUAL error, not just "Permission denied"
+        const errorMsg = result.error || 'Unknown error';
+        if (result.reason === 'permission_denied') {
+          toast.show('Permission denied — enable notifications in Settings.', 'warning');
+        } else if (result.reason === 'no_project_id') {
+          toast.show('Push not configured — EAS Project ID missing.', 'warning');
+        } else if (result.reason === 'backend_error') {
+          toast.show(`Server error: ${errorMsg}`, 'error');
+        } else {
+          toast.show(`Couldn't enable push: ${errorMsg}`, 'error');
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Please try again.';

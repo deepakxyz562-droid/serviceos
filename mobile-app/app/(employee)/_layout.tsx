@@ -14,14 +14,67 @@
  *   1. The "6th tab" bug — inventory was auto-discovered as a tab.
  *   2. The broken back button — tabs have no "back"; Stacks do.
  */
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Tabs } from 'expo-router';
+import { AppState, AppStateStatus } from 'react-native';
 import { Home, Briefcase, CalendarDays, Clock, User } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from '@/lib/constants';
+import { useAuthStore } from '@/stores/auth-store';
+import { API_BASE_URL, COLORS } from '@/lib/constants';
+import { getToken } from '@/lib/auth';
 
 export default function EmployeeLayout() {
   const insets = useSafeAreaInsets();
+
+  // ── Employee heartbeat ────────────────────────────────────────────
+  // Keeps `Employee.lastSeenAt` fresh on the backend so the Live Dispatch
+  // map shows the technician as "online" whenever the app is open — not
+  // only while actively tracking a job (useLiveTracking only runs inside
+  // jobs/[id].tsx). Posts to /api/employees/heartbeat every 60s, sends
+  // immediately on mount and when the app returns to the foreground, and
+  // tears down when the employee logs out (employeeId becomes null).
+  const employeeId = useAuthStore((s) => s.user?.employeeId ?? null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!employeeId) return;
+
+    const sendHeartbeat = async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        await fetch(`${API_BASE_URL}/api/employees/heartbeat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      } catch {
+        // Non-critical — heartbeat will retry on next interval
+      }
+    };
+
+    // Send immediately on mount
+    sendHeartbeat();
+
+    // Then every 60 seconds
+    heartbeatRef.current = setInterval(sendHeartbeat, 60_000);
+
+    // Handle app background/foreground
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        // App came to foreground — send heartbeat immediately
+        sendHeartbeat();
+      }
+    });
+
+    return () => {
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      subscription.remove();
+    };
+  }, [employeeId]);
+
   return (
     <Tabs
       screenOptions={{

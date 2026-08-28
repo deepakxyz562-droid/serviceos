@@ -77,6 +77,25 @@ export async function POST(request: NextRequest) {
       data: { lastLoginAt: new Date() },
     });
 
+    // ── Employee lookup (fix: employeeId was missing from the JWT) ────────
+    // The EmployeePortalLayout checks `auth.user?.employeeId` — if null,
+    // it shows "Employee ID Not Found". The company-login route does this
+    // lookup, but the direct login route didn't — causing employees who
+    // log in via the web app to see the error.
+    // This also fixes clock in/out (the shift API uses employeeId from JWT).
+    let employeeId: string | null = null;
+    if (user.role === 'employee') {
+      try {
+        const emp = await db.employee.findFirst({
+          where: { userId: user.id },
+          select: { id: true },
+        });
+        employeeId = emp?.id || null;
+      } catch (empErr) {
+        console.warn('[login] Employee lookup failed:', empErr instanceof Error ? empErr.message : empErr);
+      }
+    }
+
     // Generate JWT token
     const authUser = {
       id: user.id,
@@ -87,6 +106,7 @@ export async function POST(request: NextRequest) {
       workspaceId: user.workspaceId,
       avatar: user.avatar,
       isSuperAdmin: user.isSuperAdmin || false,
+      ...(employeeId ? { employeeId } : {}),
     };
     const token = generateToken(authUser);
 
@@ -103,6 +123,7 @@ export async function POST(request: NextRequest) {
           workspaceId: user.workspaceId,
           avatar: user.avatar,
           isSuperAdmin: user.isSuperAdmin || false,
+          employeeId,
           lastLoginAt: new Date(),
         },
         token,

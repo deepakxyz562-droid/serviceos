@@ -5,7 +5,7 @@
  * │  CUSTOMER PORTAL                                                     │
  * │  ─────────────                                                       │
  * │  Auth method toggle (2 tabs only):                                   │
- * │    • OTP       — WhatsApp or Email sub-toggle → send code → verify   │
+ * │    • OTP       — Email → send code → verify                          │
  * │      (if 409 multi-company → CompanyPickerModal → re-verify)         │
  * │    • Password  — email/phone + password → /api/auth/customer/login   │
  * │      (if 409 multi-company → CompanyPickerModal)                     │
@@ -54,13 +54,10 @@ import type { Company } from '@/types';
 
 type Mode = 'customer' | 'staff';
 type CustomerMethod = 'otp' | 'password' | 'activate';
-type OtpChannel = 'whatsapp' | 'email';
 
 export default function LoginScreen() {
   const {
     loginStaff,
-    requestCustomerOtp,
-    loginCustomerOtp,
     requestCustomerEmailOtp,
     loginCustomerEmailOtp,
     loginCustomerPassword,
@@ -105,11 +102,9 @@ export default function LoginScreen() {
   const [activationToken, setActivationToken] = useState('');
   const [activationPassword, setActivationPassword] = useState('');
 
-  // OTP channel sub-toggle (within method === 'otp'):
-  // 'whatsapp' uses the identifier field as a phone number;
-  // 'email' uses the dedicated emailForOtp field so the two channels
-  // don't tangle each other's input.
-  const [otpChannel, setOtpChannel] = useState<OtpChannel>('whatsapp');
+  // Email address for the OTP login method. Kept separate from the
+  // password method's `identifier` (which can be email or phone) so the
+  // two methods don't tangle each other's input.
   const [emailForOtp, setEmailForOtp] = useState('');
 
   // ── Staff state ───────────────────────────────────────────────────
@@ -194,7 +189,6 @@ export default function LoginScreen() {
     setPassword('');
     setActivationToken('');
     setActivationPassword('');
-    setOtpChannel('whatsapp');
     setEmailForOtp('');
     clearError();
     clearMultiCompanyConflict();
@@ -212,7 +206,6 @@ export default function LoginScreen() {
     setOtpSent(false);
     setOtp('');
     setPassword('');
-    setOtpChannel('whatsapp');
     setEmailForOtp('');
     clearError();
     clearMultiCompanyConflict();
@@ -233,44 +226,6 @@ export default function LoginScreen() {
     () => identifier.trim().length > 0 && /^[+\d][\d\s-]*$/.test(identifier.trim()),
     [identifier]
   );
-
-  // ── Customer: OTP via WhatsApp ────────────────────────────────────
-  const handleSendOtp = async () => {
-    // OTP requires a phone number (WhatsApp OTP, not email).
-    // If the user entered email in the identifier field, we need them to
-    // provide a phone for OTP. We use the identifier if it's a phone.
-    const phone = identifier.trim();
-    if (!phone) {
-      show('Please enter your phone number', 'warning');
-      return;
-    }
-    // Basic phone validation — at least 10 digits
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length < 10) {
-      show('Please enter a valid phone number', 'warning');
-      return;
-    }
-    try {
-      await requestCustomerOtp(phone);
-      setOtpSent(true);
-      show(`Verification code sent to ${phone}`, 'success');
-    } catch {
-      // error surfaced via store
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    if (!otp.trim()) {
-      show('Please enter the verification code', 'warning');
-      return;
-    }
-    try {
-      await loginCustomerOtp(identifier.trim(), otp.trim());
-      show('Signed in', 'success');
-    } catch {
-      // error surfaced via store
-    }
-  };
 
   // ── Customer: OTP via Email ───────────────────────────────────────
   const handleSendEmailOtp = async () => {
@@ -331,7 +286,7 @@ export default function LoginScreen() {
     show(`Selected: ${tenantName}`, 'info');
     clearMultiCompanyConflict();
     // Re-submit with the chosen tenantId, based on which method triggered the 409
-    if (method === 'otp' && otpChannel === 'email') {
+    if (method === 'otp') {
       await handleVerifyEmailOtp(tenantId);
     } else {
       await handlePasswordLogin(tenantId);
@@ -447,145 +402,62 @@ export default function LoginScreen() {
                 className="mb-5"
               />
 
-              {/* OTP method */}
+              {/* OTP method — Email only */}
               {method === 'otp' && (
                 <>
-                  {/* Sub-toggle: WhatsApp vs Email channel within the OTP method */}
-                  <SegmentedControl<OtpChannel>
-                    options={[
-                      { value: 'whatsapp', label: 'WhatsApp' },
-                      { value: 'email', label: 'Email' },
-                    ]}
-                    value={otpChannel}
-                    onChange={(ch) => {
-                      setOtpChannel(ch);
-                      setOtpSent(false);
-                      setOtp('');
-                      clearError();
-                      clearMultiCompanyConflict();
-                    }}
-                    activeColor={COLORS.customerAccent}
-                    className="mb-4"
+                  <Input
+                    label="Email address"
+                    value={emailForOtp}
+                    onChangeText={setEmailForOtp}
+                    placeholder="you@example.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
                   />
-
-                  {/* WhatsApp channel — phone-based OTP (existing behavior) */}
-                  {otpChannel === 'whatsapp' && (
-                    <>
-                      <Input
-                        label="Phone number (WhatsApp)"
-                        value={identifier}
-                        onChangeText={setIdentifier}
-                        placeholder="+91 98765 43210"
-                        keyboardType="phone-pad"
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                      />
-                      {otpSent && (
-                        <Input
-                          label="Verification code"
-                          value={otp}
-                          onChangeText={setOtp}
-                          placeholder="Enter 6-digit code"
-                          keyboardType="numeric"
-                          maxLength={6}
-                        />
-                      )}
-                      {otpSent ? (
-                        <Button
-                          onPress={handleVerifyOtp}
-                          loading={isLoading}
-                          fullWidth
-                          size="lg"
-                        >
-                          Verify &amp; Sign In
-                        </Button>
-                      ) : (
-                        <Button
-                          onPress={handleSendOtp}
-                          loading={isLoading}
-                          fullWidth
-                          size="lg"
-                        >
-                          Send WhatsApp Code
-                        </Button>
-                      )}
-                      {otpSent && (
-                        <Pressable
-                          onPress={handleSendOtp}
-                          style={{ marginTop: 14, alignItems: 'center' }}
-                        >
-                          <Text
-                            style={{
-                              color: COLORS.customerAccent,
-                              fontSize: 14,
-                              fontWeight: '600',
-                            }}
-                          >
-                            Resend code
-                          </Text>
-                        </Pressable>
-                      )}
-                    </>
+                  {otpSent && (
+                    <Input
+                      label="Verification code"
+                      value={otp}
+                      onChangeText={setOtp}
+                      placeholder="Enter 6-digit code"
+                      keyboardType="numeric"
+                      maxLength={6}
+                    />
                   )}
-
-                  {/* Email channel — email-based OTP (new) */}
-                  {otpChannel === 'email' && (
-                    <>
-                      <Input
-                        label="Email address"
-                        value={emailForOtp}
-                        onChangeText={setEmailForOtp}
-                        placeholder="you@example.com"
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                      />
-                      {otpSent && (
-                        <Input
-                          label="Verification code"
-                          value={otp}
-                          onChangeText={setOtp}
-                          placeholder="Enter 6-digit code"
-                          keyboardType="numeric"
-                          maxLength={6}
-                        />
-                      )}
-                      {otpSent ? (
-                        <Button
-                          onPress={() => handleVerifyEmailOtp()}
-                          loading={isLoading}
-                          fullWidth
-                          size="lg"
-                        >
-                          Verify &amp; Sign In
-                        </Button>
-                      ) : (
-                        <Button
-                          onPress={handleSendEmailOtp}
-                          loading={isLoading}
-                          fullWidth
-                          size="lg"
-                        >
-                          Send Email Code
-                        </Button>
-                      )}
-                      {otpSent && (
-                        <Pressable
-                          onPress={handleSendEmailOtp}
-                          style={{ marginTop: 14, alignItems: 'center' }}
-                        >
-                          <Text
-                            style={{
-                              color: COLORS.customerAccent,
-                              fontSize: 14,
-                              fontWeight: '600',
-                            }}
-                          >
-                            Resend code
-                          </Text>
-                        </Pressable>
-                      )}
-                    </>
+                  {otpSent ? (
+                    <Button
+                      onPress={() => handleVerifyEmailOtp()}
+                      loading={isLoading}
+                      fullWidth
+                      size="lg"
+                    >
+                      Verify &amp; Sign In
+                    </Button>
+                  ) : (
+                    <Button
+                      onPress={handleSendEmailOtp}
+                      loading={isLoading}
+                      fullWidth
+                      size="lg"
+                    >
+                      Send Email Code
+                    </Button>
+                  )}
+                  {otpSent && (
+                    <Pressable
+                      onPress={handleSendEmailOtp}
+                      style={{ marginTop: 14, alignItems: 'center' }}
+                    >
+                      <Text
+                        style={{
+                          color: COLORS.customerAccent,
+                          fontSize: 14,
+                          fontWeight: '600',
+                        }}
+                      >
+                        Resend code
+                      </Text>
+                    </Pressable>
                   )}
                 </>
               )}

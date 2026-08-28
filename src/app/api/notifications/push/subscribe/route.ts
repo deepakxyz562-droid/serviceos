@@ -47,7 +47,10 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
-    if (!user.tenantId) {
+    // Customers don't have a tenantId — allow push subscriptions for them
+    // using a null tenantId. Employees/admins must have a tenantId.
+    const isCustomer = user.role === 'customer' || user.role === 'CUSTOMER';
+    if (!user.tenantId && !isCustomer) {
       return NextResponse.json(
         {
           error: 'Your account is not linked to a company. Contact your admin to enable push notifications.',
