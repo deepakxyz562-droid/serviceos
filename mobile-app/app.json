@@ -3,6 +3,10 @@
     "name": "Fieseros",
     "slug": "fieseros",
     "version": "1.0.0",
+    "android": {
+      "package": "com.fieseros.app",
+      "googleServicesFile": "./google-services.json"
+    },
     "extra": {
       "eas": {
         "projectId": "49dae8a6-ccf0-4a29-b5ec-6617ccfa298c"
