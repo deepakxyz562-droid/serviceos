@@ -237,6 +237,16 @@ export interface Job {
   signatures?: JobSignature[];
   lineItems?: JobLineItem[];
   lifecycleTimestamps?: Record<string, string | null> | null;
+  // Backend `/api/jobs/[id]` returns counts (NOT arrays) for photos /
+  // signatures / checklists via Prisma's `_count` relation aggregate. The
+  // mobile app reads these to render the quick-action badges (e.g. "Photos 3")
+  // without fetching the full child collections. Optional because some legacy
+  // endpoints still return the arrays instead.
+  _counts?: {
+    photos?: number;
+    signatures?: number;
+    checklists?: number;
+  };
   // Backwards-compat: some code still reads `customerPin`. Newer code should
   // prefer `verificationPin`. Both are kept optional/nullable.
   customerPin?: string | null;
@@ -246,7 +256,16 @@ export interface Job {
 export interface JobPhoto {
   id: string;
   url: string;
-  type: string;
+  /**
+   * Canonical photo taxonomy: 'before' | 'progress' | 'after' | 'issue' | 'other'.
+   *
+   * Named `photoType` to match the backend's Prisma `JobPhoto.photoType` column
+   * and the JSON returned by `/api/jobs/[id]/photos`. The mobile app previously
+   * declared this as `type`, which mismatched the API and caused every photo's
+   * badge to render as 'undefined' (and the type-based colour mapping to fall
+   * back to 'default').
+   */
+  photoType: string;
   caption?: string | null;
   latitude?: number | null;
   longitude?: number | null;

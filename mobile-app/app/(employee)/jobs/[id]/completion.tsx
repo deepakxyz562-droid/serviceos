@@ -171,7 +171,7 @@ function InlinePhotoCapture({
 
   const photos = useMemo(
     () =>
-      (photosQuery.data ?? []).filter((p) => p.type === photoType),
+      (photosQuery.data ?? []).filter((p) => p.photoType === photoType),
     [photosQuery.data, photoType]
   );
 
@@ -1072,11 +1072,11 @@ export default function JobCompletionScreen() {
 
   // ── Derive chip states ──────────────────────────────────────────
   const beforePhotos = useMemo(
-    () => allPhotos.filter((p) => p.type === 'before'),
+    () => allPhotos.filter((p) => p.photoType === 'before'),
     [allPhotos]
   );
   const afterPhotos = useMemo(
-    () => allPhotos.filter((p) => p.type === 'after'),
+    () => allPhotos.filter((p) => p.photoType === 'after'),
     [allPhotos]
   );
   const customerSigs = useMemo(

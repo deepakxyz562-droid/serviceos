@@ -21,6 +21,7 @@ import {
   ScrollView,
   RefreshControl,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { format, parseISO, isToday as isDateToday } from 'date-fns';
@@ -35,7 +36,6 @@ import {
   History,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonList } from '@/components/ui/Skeleton';
@@ -267,83 +267,113 @@ export default function ShiftScreen() {
       >
         <Text className="mb-3 mt-2 text-2xl font-bold text-foreground">Shift</Text>
 
-        {/* ── Active shift card / clock-in CTA ─────────────────────────── */}
-        <Card className="mb-4 items-center">
-          <View className="mb-1 flex-row items-center">
-            <Clock size={14} color={COLORS.mutedForeground} />
-            <Text className="ml-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Current Time
+        {/* ── Hero shift card (clock-in CTA / live timer) ──────────────────
+            Mirrors the PWA's attendance hero card: solid emerald when clocked
+            in, amber when on break, slate when off duty. All text is white so
+            the status + elapsed timer read at a glance. Action buttons get a
+            white background with state-colored text so they pop on the
+            colored hero. */}
+        <View
+          style={{
+            borderRadius: 20,
+            padding: 24,
+            marginBottom: 16,
+            overflow: 'hidden',
+            backgroundColor: isOnBreak
+              ? '#D97706' // amber-600
+              : isClockedIn
+                ? '#059669' // emerald-600
+                : '#334155', // slate-700
+          }}
+        >
+          {/* Status pill (top-left) */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              alignSelf: 'flex-start',
+              backgroundColor: 'rgba(255,255,255,0.18)',
+              borderRadius: 999,
+              paddingHorizontal: 12,
+              paddingVertical: 5,
+              marginBottom: 14,
+            }}
+          >
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: isOnBreak
+                  ? '#FCD34D' // amber-300
+                  : isClockedIn
+                    ? '#6EE7B7' // emerald-300
+                    : '#CBD5E1', // slate-300
+                marginRight: 8,
+              }}
+            />
+            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
+              {isOnBreak
+                ? 'ON BREAK'
+                : isClockedIn
+                  ? 'CLOCKED IN'
+                  : 'OFF DUTY'}
             </Text>
           </View>
-          <Text className="text-4xl font-bold tabular-nums text-foreground">
-            {formatClock(new Date(now))}
-          </Text>
-          <Text className="mt-1 text-sm text-muted-foreground">
-            {format(new Date(now), 'EEEE, MMMM d')}
-          </Text>
 
-          {/* Status pill */}
-          <View
-            className={cn(
-              'mt-4 rounded-full px-4 py-1.5',
-              isOnBreak ? 'bg-amber-100' : isClockedIn ? 'bg-primary-100' : 'bg-muted'
-            )}
-          >
-            <View className="flex-row items-center">
-              <View
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: isOnBreak
-                    ? COLORS.warning
-                    : isClockedIn
-                      ? COLORS.primary
-                      : COLORS.mutedForeground,
-                  marginRight: 8,
-                }}
-              />
-              <Text
-                className={cn(
-                  'text-sm font-semibold',
-                  isOnBreak
-                    ? 'text-amber-700'
-                    : isClockedIn
-                      ? 'text-primary-700'
-                      : 'text-muted-foreground'
-                )}
-              >
-                {isOnBreak
-                  ? 'On Break'
-                  : isClockedIn
-                    ? 'Clocked In'
-                    : 'Off the Clock'}
-              </Text>
-            </View>
-          </View>
-
-          {/* Elapsed time */}
+          {/* Headline — live elapsed timer when active, prompt when off duty */}
           {isClockedIn && shift ? (
-            <View className="mt-4 items-center">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <View style={{ alignItems: 'flex-start' }}>
+              <Text
+                style={{
+                  color: 'rgba(255,255,255,0.8)',
+                  fontSize: 12,
+                  fontWeight: '600',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                }}
+              >
                 Elapsed
               </Text>
               <Text
-                className={cn(
-                  'mt-1 text-3xl font-bold tabular-nums',
-                  isOnBreak ? 'text-amber-600' : 'text-primary-600'
-                )}
+                style={{
+                  color: '#fff',
+                  fontSize: 48,
+                  fontWeight: '800',
+                  fontVariant: ['tabular-nums'],
+                  marginTop: 2,
+                  marginBottom: 6,
+                }}
               >
                 {elapsed.h}:{elapsed.m}:{elapsed.s}
               </Text>
-              <Text className="mt-1 text-xs text-muted-foreground">
-                Started at {formatTime(shift.startTime)}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Clock size={13} color="rgba(255,255,255,0.85)" />
+                <Text
+                  style={{
+                    color: 'rgba(255,255,255,0.9)',
+                    fontSize: 13,
+                    marginLeft: 5,
+                  }}
+                >
+                  Started at {formatTime(shift.startTime)}
+                </Text>
+              </View>
               {shift.location ? (
-                <View className="mt-1 flex-row items-center">
-                  <MapPin size={11} color={COLORS.mutedForeground} />
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginTop: 3,
+                  }}
+                >
+                  <MapPin size={13} color="rgba(255,255,255,0.85)" />
                   <Text
-                    className="ml-1 text-xs text-muted-foreground"
+                    style={{
+                      color: 'rgba(255,255,255,0.9)',
+                      fontSize: 13,
+                      marginLeft: 5,
+                    }}
                     numberOfLines={1}
                   >
                     {shift.location}
@@ -351,82 +381,217 @@ export default function ShiftScreen() {
                 </View>
               ) : null}
             </View>
-          ) : null}
+          ) : (
+            <View style={{ alignItems: 'flex-start' }}>
+              <Text
+                style={{
+                  color: '#fff',
+                  fontSize: 22,
+                  fontWeight: '700',
+                  marginBottom: 4,
+                }}
+              >
+                Ready to start your day?
+              </Text>
+              <Text
+                style={{
+                  color: 'rgba(255,255,255,0.85)',
+                  fontSize: 14,
+                }}
+              >
+                Check in to mark your attendance for today.
+              </Text>
+            </View>
+          )}
 
-          {/* Action buttons */}
-          <View className="mt-5 w-full gap-2">
+          {/* Live current-time strip */}
+          <View
+            style={{
+              marginTop: 16,
+              paddingTop: 14,
+              borderTopColor: 'rgba(255,255,255,0.18)',
+              borderTopWidth: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <View>
+              <Text
+                style={{
+                  color: 'rgba(255,255,255,0.7)',
+                  fontSize: 10,
+                  fontWeight: '600',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                }}
+              >
+                Current Time
+              </Text>
+              <Text
+                style={{
+                  color: '#fff',
+                  fontSize: 24,
+                  fontWeight: '700',
+                  fontVariant: ['tabular-nums'],
+                }}
+              >
+                {formatClock(new Date(now))}
+              </Text>
+            </View>
+            <Text
+              style={{
+                color: 'rgba(255,255,255,0.85)',
+                fontSize: 13,
+                textAlign: 'right',
+              }}
+            >
+              {format(new Date(now), 'EEEE,\nMMM d')}
+            </Text>
+          </View>
+
+          {/* Action buttons — white bg with state-colored text */}
+          <View style={{ marginTop: 18, gap: 8 }}>
             {isClockedIn ? (
-              <>
-                {/* Break + Clock Out row */}
-                <View className="flex-row gap-2">
-                  <View className="flex-1">
-                    {isOnBreak ? (
-                      <Button
-                        variant="outline"
-                        onPress={handleBreakEnd}
-                        loading={breakEnd.isPending}
-                        disabled={anyActionPending}
-                        fullWidth
-                      >
-                        <View className="flex-row items-center justify-center">
-                          <Play size={16} color={COLORS.primary} />
-                          <Text className="ml-2 font-semibold text-primary-700">
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  {isOnBreak ? (
+                    <Pressable
+                      onPress={handleBreakEnd}
+                      disabled={anyActionPending}
+                      style={{
+                        backgroundColor: '#fff',
+                        borderRadius: 12,
+                        paddingVertical: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: anyActionPending ? 0.6 : 1,
+                      }}
+                    >
+                      {breakEnd.isPending ? (
+                        <ActivityIndicator size="small" color="#D97706" />
+                      ) : (
+                        <>
+                          <Play size={16} color="#D97706" />
+                          <Text
+                            style={{
+                              color: '#D97706',
+                              fontSize: 15,
+                              fontWeight: '700',
+                              marginLeft: 7,
+                            }}
+                          >
                             End Break
                           </Text>
-                        </View>
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        onPress={handleBreakStart}
-                        loading={breakStart.isPending}
-                        disabled={anyActionPending}
-                        fullWidth
-                      >
-                        <View className="flex-row items-center justify-center">
-                          <Coffee size={16} color={COLORS.warning} />
-                          <Text className="ml-2 font-semibold text-amber-700">
+                        </>
+                      )}
+                    </Pressable>
+                  ) : (
+                    <Pressable
+                      onPress={handleBreakStart}
+                      disabled={anyActionPending}
+                      style={{
+                        backgroundColor: 'rgba(255,255,255,0.15)',
+                        borderRadius: 12,
+                        paddingVertical: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.35)',
+                        opacity: anyActionPending ? 0.6 : 1,
+                      }}
+                    >
+                      {breakStart.isPending ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <Coffee size={16} color="#fff" />
+                          <Text
+                            style={{
+                              color: '#fff',
+                              fontSize: 15,
+                              fontWeight: '700',
+                              marginLeft: 7,
+                            }}
+                          >
                             Start Break
                           </Text>
-                        </View>
-                      </Button>
-                    )}
-                  </View>
-                  <View className="flex-1">
-                    <Button
-                      variant="destructive"
-                      onPress={handleClockOut}
-                      loading={clockOut.isPending}
-                      disabled={anyActionPending}
-                      fullWidth
-                    >
-                      <View className="flex-row items-center justify-center">
-                        <LogOut size={16} color="#fff" />
-                        <Text className="ml-2 font-semibold text-white">
+                        </>
+                      )}
+                    </Pressable>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Pressable
+                    onPress={handleClockOut}
+                    disabled={anyActionPending}
+                    style={{
+                      backgroundColor: '#fff',
+                      borderRadius: 12,
+                      paddingVertical: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: anyActionPending ? 0.6 : 1,
+                    }}
+                  >
+                    {clockOut.isPending ? (
+                      <ActivityIndicator size="small" color="#DC2626" />
+                    ) : (
+                      <>
+                        <LogOut size={16} color="#DC2626" />
+                        <Text
+                          style={{
+                            color: '#DC2626',
+                            fontSize: 15,
+                            fontWeight: '700',
+                            marginLeft: 7,
+                          }}
+                        >
                           Clock Out
                         </Text>
-                      </View>
-                    </Button>
-                  </View>
+                      </>
+                    )}
+                  </Pressable>
                 </View>
-              </>
+              </View>
             ) : (
-              <Button
+              <Pressable
                 onPress={handleClockIn}
-                loading={clockIn.isPending}
                 disabled={anyActionPending}
-                fullWidth
+                style={{
+                  backgroundColor: '#fff',
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: anyActionPending ? 0.6 : 1,
+                }}
               >
-                <View className="flex-row items-center justify-center">
-                  <LogIn size={16} color="#fff" />
-                  <Text className="ml-2 font-semibold text-white">
-                    Clock In
-                  </Text>
-                </View>
-              </Button>
+                {clockIn.isPending ? (
+                  <ActivityIndicator size="small" color="#059669" />
+                ) : (
+                  <>
+                    <LogIn size={18} color="#059669" />
+                    <Text
+                      style={{
+                        color: '#059669',
+                        fontSize: 16,
+                        fontWeight: '700',
+                        marginLeft: 8,
+                      }}
+                    >
+                      Clock In
+                    </Text>
+                  </>
+                )}
+              </Pressable>
             )}
           </View>
-        </Card>
+        </View>
 
         {/* ── Today's totals ─────────────────────────────────────────── */}
         <View className="mb-2 flex-row gap-2">

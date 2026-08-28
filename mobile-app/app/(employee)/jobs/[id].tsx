@@ -467,7 +467,14 @@ export default function JobDetailScreen() {
     );
   }
 
-  const photoCount = job.photos?.length ?? 0;
+  // The job detail API (`/api/jobs/[id]`) returns photo counts under
+  // `_counts.photos` (a number), NOT under `photos` (an array). The previous
+  // `job.photos?.length ?? 0` always returned 0 because `job.photos` was
+  // undefined → the Photos quick-action badge rendered "0" even when photos
+  // existed. Fall back to the array length for legacy endpoints that still
+  // embed the photos array.
+  const photoCount =
+    job._counts?.photos ?? job.photos?.length ?? 0;
   const checklistItems = job.checklist ?? [];
   const checklistDone = checklistItems.filter((c) => c.completed).length;
   const signatureCount = job.signatures?.length ?? 0;

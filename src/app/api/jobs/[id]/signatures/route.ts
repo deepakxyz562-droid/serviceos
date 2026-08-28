@@ -61,8 +61,25 @@ export async function GET(
  * POST /api/jobs/[id]/signatures
  * Body: { signatoryType, signatoryName, signatoryRole?, signatureData, latitude?, longitude?, notes? }
  *
- * Uploads the signature PNG via the shared storage helper (S3 → Supabase → local),
- * creates a JobSignature record, and emits a CustomerTimelineEntry.
+ * Accepts two content types:
+ *   1. JSON (PWA customer/employee portal) — `{ signatoryType, signatoryName,
+ *      signatoryRole?, signatureData, latitude?, longitude?, notes? }` where
+ *      `signatureData` is a base64 PNG data URL.
+ *   2. multipart/form-data (mobile app) — fields:
+ *        - `file`         Blob (PNG) — converted to a base64 data URL inline
+ *        - `type`         signatoryType ('customer' | 'employee')
+ *        - `signerName`   signatoryName
+ *        - `latitude?`    string
+ *        - `longitude?`   string
+ *        - `accuracy?`    string
+ *        - `signatoryRole?`, `notes?`, `signatureData?` (alt file field)
+ *
+ * Previously the handler unconditionally did `await request.json()`, which
+ * threw `SyntaxError: Unexpected token ...` on FormData bytes → the mobile
+ * signature save failed with a 500 "json parse error invalid number".
+ *
+ * Uploads the signature PNG via the shared storage helper (S3 → Supabase →
+ * local), creates a JobSignature record, and emits a CustomerTimelineEntry.
  */
 export async function POST(
   request: NextRequest,
@@ -84,18 +101,77 @@ export async function POST(
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
 
-    const body = await request.json();
-    const {
-      signatoryType,
-      signatoryName,
-      signatoryRole,
-      signatureData,
-      latitude,
-      longitude,
-      notes,
-    } = body;
+    // ── Parse body: support both JSON (PWA) and multipart/form-data (mobile) ──
+    let signatoryType: string | undefined;
+    let signatoryName: string | undefined;
+    let signatoryRole: string | undefined;
+    let signatureData: string | undefined;
+    let latitude: number | undefined;
+    let longitude: number | undefined;
+    let notes: string | undefined;
 
-    if (!VALID_SIGNATORY_TYPES.includes(signatoryType)) {
+    const contentType = request.headers.get('content-type') || '';
+
+    if (contentType.includes('multipart/form-data')) {
+      // Mobile app sends FormData. Map the mobile field names to the canonical
+      // schema fields: `type` → `signatoryType`, `signerName` → `signatoryName`,
+      // and the `file` Blob → a base64 data URL string (`signatureData`) so the
+      // shared parseDataUrl + uploadFile path below works for both clients.
+      const formData = await request.formData();
+
+      signatoryType =
+        (formData.get('signatoryType') as string) ||
+        (formData.get('type') as string) ||
+        'customer';
+
+      signatoryName =
+        (formData.get('signatoryName') as string) ||
+        (formData.get('signerName') as string) ||
+        undefined;
+
+      signatoryRole = (formData.get('signatoryRole') as string) || undefined;
+      notes = (formData.get('notes') as string) || undefined;
+
+      latitude = formData.get('latitude')
+        ? Number(formData.get('latitude'))
+        : undefined;
+      longitude = formData.get('longitude')
+        ? Number(formData.get('longitude'))
+        : undefined;
+
+      // `file` may be a Blob (native captureRef / web canvas blob) or, in some
+      // edge cases, a pre-encoded base64 data URL string sent by the web build.
+      const file = formData.get('file');
+      if (file instanceof Blob) {
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const b64 = buffer.toString('base64');
+        const mime = (file as File).type || 'image/png';
+        signatureData = `data:${mime};base64,${b64}`;
+      } else if (typeof file === 'string' && file) {
+        signatureData = file;
+      }
+
+      // Allow `signatureData` field as an alternate source for clients that
+      // pre-encode the PNG themselves (e.g. the web build's dataUrlToBlob path
+      // occasionally falls back to sending the raw data URL).
+      if (!signatureData) {
+        const alt = formData.get('signatureData');
+        if (typeof alt === 'string' && alt) signatureData = alt;
+      }
+    } else {
+      // PWA / JSON path (unchanged).
+      const body = await request.json();
+      signatoryType = body.signatoryType;
+      signatoryName = body.signatoryName;
+      signatoryRole = body.signatoryRole;
+      signatureData = body.signatureData;
+      latitude = body.latitude;
+      longitude = body.longitude;
+      notes = body.notes;
+    }
+
+    if (!VALID_SIGNATORY_TYPES.includes(signatoryType as string)) {
       return NextResponse.json(
         { error: `Invalid signatoryType. Must be one of: ${VALID_SIGNATORY_TYPES.join(', ')}` },
         { status: 400 }

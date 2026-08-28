@@ -472,14 +472,14 @@ export default function JobPhotosScreen() {
                       source={{ uri: url }}
                       className="h-32 w-full"
                       resizeMode="cover"
-                      accessibilityLabel={`Photo: ${p.type}`}
-                      alt={`Photo: ${p.type}`}
+                      accessibilityLabel={`Photo: ${p.photoType}`}
+                      alt={`Photo: ${p.photoType}`}
                     />
                   </Pressable>
                   <View className="p-2">
                     <View className="flex-row items-center justify-between">
-                      <Badge variant={photoTypeVariant(p.type)}>
-                        {p.type}
+                      <Badge variant={photoTypeVariant(p.photoType)}>
+                        {p.photoType}
                       </Badge>
                       <Text className="text-[10px] text-muted-foreground">
                         {formatDate(p.createdAt)}
@@ -652,8 +652,8 @@ export default function JobPhotosScreen() {
             />
             <View className="mt-2 flex-row items-center justify-between px-2 pb-2">
               <View>
-                <Badge variant={photoTypeVariant(viewerPhoto.type)}>
-                  {viewerPhoto.type}
+                <Badge variant={photoTypeVariant(viewerPhoto.photoType)}>
+                  {viewerPhoto.photoType}
                 </Badge>
                 {viewerPhoto.caption ? (
                   <Text className="mt-1 text-sm text-foreground">
