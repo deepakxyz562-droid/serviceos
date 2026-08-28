@@ -63,7 +63,7 @@ async function GET(request: NextRequest) {
     const includeInactive = searchParams.get('includeInactive') === 'true'
 
     const authUser = await getAuthUser()
-    if (!authUser) return NextResponse.json([])
+    if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { workspaceIds, tenantId, isSuperAdmin } = await resolveScope(authUser, workspaceIdParam)
 

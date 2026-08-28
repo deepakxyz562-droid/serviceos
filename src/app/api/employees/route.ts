@@ -22,9 +22,9 @@ async function _GET(request: NextRequest) {
 
     const authUser = await getAuthUser()
 
-    // If not authenticated, return empty list
+    // If not authenticated, return 401
     if (!authUser) {
-      return NextResponse.json([])
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const isSuperAdmin = authUser.isSuperAdmin || (authUser.role === 'admin' && !authUser.tenantId)

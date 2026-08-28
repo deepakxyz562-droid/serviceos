@@ -64,6 +64,9 @@ async function _GET(request: NextRequest) {
     const crmGuard = await requireCrmTenant(request);
     if (crmGuard) return crmGuard;
     const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');

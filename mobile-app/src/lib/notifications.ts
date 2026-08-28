@@ -56,31 +56,42 @@ function ensureNotificationHandler() {
  * Resolve the EAS project ID for getExpoPushTokenAsync.
  *
  * In Expo SDK 50+, getExpoPushTokenAsync requires a `projectId` (a UUID
- * from your EAS project). We try (in order):
- *   1. Constants.expoConfig.extra.eas.projectId (set by `eas build`)
- *   2. Constants.expoConfig.extra.eas.projectId via app.config.ts extra
- * If none is found, return null (caller skips registration with a warning).
+ * from your EAS project). Multi-layered fallback:
+ *   1. process.env.EXPO_PUBLIC_EAS_PROJECT_ID (inlined by bundler at build time)
+ *   2. process.env.EAS_PROJECT_ID (runtime env var)
+ *   3. Constants.expoConfig.extra.eas.projectId (set by `eas build`)
+ *   4. Constants.easConfig?.projectId / manifest2 / manifest fallbacks
+ *   5. Hardcoded fallback (Fieseros project ID)
  */
 function getEasProjectId(): string | null {
+  // 1. Check EXPO_PUBLIC_EAS_PROJECT_ID environment variable (inlined by bundler)
+  if (process.env.EXPO_PUBLIC_EAS_PROJECT_ID) {
+    return process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+  }
+  if (process.env.EAS_PROJECT_ID) {
+    return process.env.EAS_PROJECT_ID;
+  }
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Constants = require('expo-constants');
-    const cfg = Constants.expoConfig as
-      | {
-          extra?: {
-            eas?: { projectId?: string };
-            API_BASE_URL?: string;
-          };
-        }
-      | undefined;
-    const projectId = cfg?.extra?.eas?.projectId;
+    const defaultConstants = Constants.default || Constants;
+
+    const projectId =
+      defaultConstants.expoConfig?.extra?.eas?.projectId ||
+      defaultConstants.easConfig?.projectId ||
+      defaultConstants.manifest2?.extra?.eas?.projectId ||
+      defaultConstants.manifest?.extra?.eas?.projectId;
+
     if (typeof projectId === 'string' && projectId.length > 0) {
       return projectId;
     }
   } catch {
     // Constants not available — fall through
   }
-  return null;
+
+  // 5. Default fallback project ID for Fieseros
+  return '49dae8a6-ccf0-4a29-b5ec-6617ccfa298c';
 }
 
 /**

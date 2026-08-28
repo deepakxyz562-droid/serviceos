@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 
 // ─── GET /api/forms ────────────────────────────────────────────────────────
 // List all forms for a tenant (query param: tenantId). Return forms with response counts.
+// Requires authentication — form definitions contain field names, slugs, and configuration.
 
 export async function GET(request: NextRequest) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const tenantId = searchParams.get('tenantId');
     const type = searchParams.get('type');
