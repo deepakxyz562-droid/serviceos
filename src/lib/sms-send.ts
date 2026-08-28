@@ -212,7 +212,7 @@ async function sendTwilio(
   const apiKeySid = cfg.apiKeySid
   const apiKeySecret = cfg.apiKeySecret
   const fromNumber = cfg.fromNumber
-  const alphanumericSender = cfg.alphanumericSender || 'Fieseros'
+  const alphanumericSender = cfg.alphanumericSender
 
   if (!accountSid) {
     return { success: false, error: 'Twilio requires accountSid' }
@@ -221,12 +221,12 @@ async function sendTwilio(
   // Determine the auth credentials to use.
   let authUser: string
   let authPass: string
-  if (apiKeySid && (apiKeySecret || authToken)) {
-    // API Key auth (recommended)
+  if (apiKeySid && apiKeySecret) {
+    // API Key auth (requires both SID and Secret)
     authUser = apiKeySid
-    authPass = apiKeySecret || authToken
-  } else if (authToken) {
-    // Legacy account token auth
+    authPass = apiKeySecret
+  } else if (accountSid && authToken) {
+    // Account SID + Auth Token
     authUser = accountSid
     authPass = authToken
   } else {
@@ -237,22 +237,15 @@ async function sendTwilio(
   }
 
   // ── Sender ID resolution ───────────────────────────────────────────────
-  // Alphanumeric sender IDs (e.g. "Fieseros") work internationally but NOT
-  // in the US/CA (Twilio requires a dedicated long code or short code there).
-  //
-  // Strategy:
-  //   - If the recipient is a US/CA number (+1...) AND fromNumber is set →
-  //     use the numeric fromNumber, but PREFIX the message body with
-  //     "Fieseros: " so the brand is still visible.
-  //   - For all other destinations → use the alphanumeric sender "Fieseros"
-  //     (overrides fromNumber) for better brand recognition + no per-message
-  //     number cost.
-  //   - If no alphanumericSender is configured → fall back to fromNumber.
+  // US/CA recipients require a numeric From number (fromNumber).
+  // International recipients use fromNumber (purchased phone number) unless
+  // an alphanumericSender is explicitly configured in the provider config.
   const isUsOrCanada = /^\+1\d{10}$/.test(to)
   let fromField: string
   let bodyField: string
+
   if (isUsOrCanada) {
-    // US/CA: must use a numeric sender. Prefix the message with the brand.
+    // US/CA: must use a numeric sender.
     if (!fromNumber) {
       return {
         success: false,
@@ -260,16 +253,15 @@ async function sendTwilio(
       }
     }
     fromField = fromNumber
-    bodyField = `${alphanumericSender}: ${message}`
+    bodyField = alphanumericSender ? `${alphanumericSender}: ${message}` : message
   } else {
-    // International: prefer the alphanumeric sender for brand recognition.
-    // Fall back to fromNumber if no alphanumeric sender is configured.
-    fromField = alphanumericSender || fromNumber
+    // International: prefer explicitly configured alphanumericSender, otherwise fromNumber.
+    fromField = alphanumericSender || fromNumber || ''
     bodyField = message
     if (!fromField) {
       return {
         success: false,
-        error: 'Twilio requires either alphanumericSender or fromNumber',
+        error: 'Twilio requires fromNumber or alphanumericSender in provider config',
       }
     }
   }
