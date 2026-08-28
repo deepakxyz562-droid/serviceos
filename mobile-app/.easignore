@@ -1,5 +1,40 @@
 # .easignore — used by EAS Build INSTEAD of .gitignore
-# This file ensures mobile-app/assets/*.png are included in the build archive.
+# This file is in mobile-app/ — EAS reads THIS file, not the root .easignore.
+# It excludes files from the BUILD ARCHIVE (not from the repo).
+#
+# Since EAS archives from the repo root (monorepo mode), we need to exclude
+# ALL root-level PWA directories that are NOT needed for the mobile build.
+
+# ── Root-level PWA directories (NOT needed for mobile build) ────────────
+# Use relative paths from the repo root (EAS resolves these)
+../node_modules/
+../.next/
+../standalone/
+../public/
+../upload/
+../temp/
+../skills/
+../mini-services/
+../docs/
+../content/
+../netlify/
+../scripts/
+../cron-configs/
+../agent-ctx/
+../src/
+../prisma/
+../db/
+../.easignore
+../Dockerfile*
+../docker-compose*
+../*.sh
+../*.mjs
+../*.js
+../*.sql
+../*.log
+../.env*
+
+# ── Mobile app directories (NOT needed for build) ──────────────────────
 node_modules
 .expo
 dist
