@@ -108,7 +108,7 @@ export interface CustomerFormSheetProps {
 // ─── Static dropdown options ────────────────────────────────────────────────
 
 const TITLE_OPTIONS = [
-  { value: '', label: 'No title' },
+  { value: 'none', label: 'No title' },
   { value: 'Mr', label: 'Mr' },
   { value: 'Mrs', label: 'Mrs' },
   { value: 'Ms', label: 'Ms' },
@@ -292,7 +292,7 @@ export function CustomerFormSheet({
       // Build the POST body — strip empty-string optionals so the API
       // can default them to null server-side.
       const payload: Record<string, unknown> = {
-        title: title.trim() || undefined,
+        title: title && title !== 'none' ? title.trim() : undefined,
         firstName: firstName.trim() || undefined,
         lastName: lastName.trim() || undefined,
         companyName: companyName.trim() || undefined,
@@ -412,13 +412,13 @@ export function CustomerFormSheet({
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="cust-title">Title</Label>
-                    <Select value={title} onValueChange={setTitle}>
+                    <Select value={title || 'none'} onValueChange={(val) => setTitle(val === 'none' ? '' : val)}>
                       <SelectTrigger id="cust-title" className="w-full">
                         <SelectValue placeholder="No title" />
                       </SelectTrigger>
                       <SelectContent>
                         {TITLE_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value || 'none'} value={opt.value}>
+                          <SelectItem key={opt.value} value={opt.value}>
                             {opt.label}
                           </SelectItem>
                         ))}
