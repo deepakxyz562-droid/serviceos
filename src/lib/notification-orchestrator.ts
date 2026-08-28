@@ -501,6 +501,58 @@ async function sendWhatsApp(
  *
  * Falls back to simulated mode if no provider is configured.
  */
+/**
+ * Wrap bare HTML email body in a branded, responsive email template.
+ * All notification emails go through this wrapper so they look consistent
+ * and professional (instead of bare unstyled HTML).
+ */
+function wrapEmailHtml(body: string, subject: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${subject}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:24px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);max-width:600px;width:100%;">
+<!-- Header -->
+<tr>
+<td style="background-color:#10B981;padding:24px 32px;text-align:center;">
+<h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Fieseros</h1>
+<p style="margin:4px 0 0;color:#d1fae5;font-size:12px;font-weight:400;">The Operating System for Service Businesses</p>
+</td>
+</tr>
+<!-- Body -->
+<tr>
+<td style="padding:32px 32px 8px 32px;color:#1f2937;font-size:15px;line-height:1.6;">
+${body}
+</td>
+</tr>
+<!-- Footer -->
+<tr>
+<td style="padding:24px 32px 32px 32px;">
+<table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e5e7eb;padding-top:20px;">
+<tr>
+<td style="color:#9ca3af;font-size:12px;line-height:1.5;">
+<p style="margin:0 0 4px;">This is an automated message from Fieseros.</p>
+<p style="margin:0 0 4px;">Fieseros · <a href="https://fieseros.com" style="color:#10B981;text-decoration:none;">fieseros.com</a></p>
+<p style="margin:0;">© ${new Date().getFullYear()} Fieseros. All rights reserved.</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>`
+}
+
 async function sendEmail(
   to: string,
   subject: string,
@@ -516,7 +568,7 @@ async function sendEmail(
     const result = await sendEmailCentral({
       to,
       subject,
-      html: body,
+      html: wrapEmailHtml(body, subject),
       usageType: 'transactional',
       tenantId,
     })
