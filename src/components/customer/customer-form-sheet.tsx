@@ -139,7 +139,10 @@ export function CustomerFormSheet({
   open,
   onOpenChange,
   onSaved,
+  initialCustomer,
 }: CustomerFormSheetProps) {
+  const isEdit = !!(initialCustomer as any)?.id;
+
   // ── Section 1: Primary contact details ──
   const [title, setTitle] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -190,31 +193,90 @@ export function CustomerFormSheet({
     email: string | null;
   } | null>(null);
 
-  // Reset the form whenever the sheet is opened (so a fresh "New Customer"
-  // never inherits stale state from a previous edit session).
+  // Populate or reset form whenever the sheet is opened
   useEffect(() => {
     if (open) {
-      setTitle('');
-      setFirstName('');
-      setLastName('');
-      setCompanyName('');
-      setPhone('');
-      setEmail('');
-      setNotificationSettings(DEFAULT_NOTIFICATIONS);
-      setLeadSource('');
-      setAdditionalContacts([]);
-      setPropertyLabel('');
-      setStreet1('');
-      setStreet2('');
-      setCity('');
-      setProvince('');
-      setPostalCode('');
-      setCountry('');
-      setPropertyContacts([]);
-      setTaxRulesForCountry(null);
-      setDuplicateCustomer(null);
+      if (initialCustomer && typeof initialCustomer === 'object' && (initialCustomer as any).id) {
+        const cust = initialCustomer as any;
+        setTitle(cust.title || '');
+        const full = (cust.name || '').trim();
+        const parts = full.split(' ');
+        const fn = cust.firstName || parts[0] || '';
+        const ln = cust.lastName || (parts.length > 1 ? parts.slice(1).join(' ') : '');
+        setFirstName(fn);
+        setLastName(ln);
+        setCompanyName(cust.companyName || '');
+        setPhone(cust.phone || '');
+        setEmail(cust.email || '');
+        setLeadSource(cust.leadSource || '');
+
+        if (cust.notificationSettingsJson) {
+          try {
+            setNotificationSettings(JSON.parse(cust.notificationSettingsJson));
+          } catch {
+            setNotificationSettings(DEFAULT_NOTIFICATIONS);
+          }
+        } else {
+          setNotificationSettings(DEFAULT_NOTIFICATIONS);
+        }
+
+        const primaryProp = Array.isArray(cust.properties) ? cust.properties[0] : null;
+        setPropertyLabel(primaryProp?.label || '');
+        setStreet1(primaryProp?.street1 || cust.address || '');
+        setStreet2(primaryProp?.street2 || '');
+        setCity(primaryProp?.city || '');
+        setProvince(primaryProp?.province || '');
+        setPostalCode(primaryProp?.postalCode || '');
+        setCountry(primaryProp?.country || '');
+
+        setAdditionalContacts(
+          Array.isArray(cust.additionalContacts)
+            ? cust.additionalContacts.map((c: any) => ({
+                id: c.id || newLocalId(),
+                name: c.name || '',
+                phone: c.phone || '',
+                email: c.email || '',
+                role: c.role || '',
+              }))
+            : []
+        );
+
+        setPropertyContacts(
+          Array.isArray(primaryProp?.contacts)
+            ? primaryProp.contacts.map((c: any) => ({
+                id: c.id || newLocalId(),
+                name: c.name || '',
+                phone: c.phone || '',
+                email: c.email || '',
+                role: c.role || '',
+              }))
+            : []
+        );
+        setTaxRulesForCountry(null);
+        setDuplicateCustomer(null);
+      } else {
+        setTitle('');
+        setFirstName('');
+        setLastName('');
+        setCompanyName('');
+        setPhone('');
+        setEmail('');
+        setNotificationSettings(DEFAULT_NOTIFICATIONS);
+        setLeadSource('');
+        setAdditionalContacts([]);
+        setPropertyLabel('');
+        setStreet1('');
+        setStreet2('');
+        setCity('');
+        setProvince('');
+        setPostalCode('');
+        setCountry('');
+        setPropertyContacts([]);
+        setTaxRulesForCountry(null);
+        setDuplicateCustomer(null);
+      }
     }
-  }, [open]);
+  }, [open, initialCustomer]);
 
   // Fetch TaxRules for the selected country so we can show the
   // "No tax rate created for {country}" amber alert when the list is empty.
@@ -344,8 +406,13 @@ export function CustomerFormSheet({
         ];
       }
 
-      const res = await fetch('/api/customers', {
-        method: 'POST',
+      const isEdit = !!(initialCustomer as any)?.id;
+      const targetId = (initialCustomer as any)?.id;
+      const endpoint = isEdit ? `/api/customers/${targetId}` : '/api/customers';
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const res = await fetch(endpoint, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -356,6 +423,7 @@ export function CustomerFormSheet({
         // error, surface the existing customer record in a dedicated dialog
         // so the user can choose to open it rather than create a dup.
         if (
+          !isEdit &&
           res.status === 409 &&
           data?.error === 'duplicate_customer' &&
           data?.existingCustomer
@@ -371,12 +439,12 @@ export function CustomerFormSheet({
         throw new Error(data?.error || `Request failed (${res.status})`);
       }
 
-      toast.success('Customer created successfully');
+      toast.success(isEdit ? 'Customer updated successfully' : 'Customer created successfully');
       onOpenChange(false);
       onSaved?.();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Network error';
-      toast.error(`Failed to create customer: ${msg}`);
+      toast.error(`Failed to save customer: ${msg}`);
     } finally {
       setSubmitting(false);
     }
@@ -393,9 +461,13 @@ export function CustomerFormSheet({
         >
           {/* Header (fixed) */}
           <SheetHeader className="border-b px-6 py-4">
-            <SheetTitle className="text-lg">New Customer</SheetTitle>
+            <SheetTitle className="text-lg">
+              {isEdit ? 'Edit Customer' : 'New Customer'}
+            </SheetTitle>
             <SheetDescription>
-              Add a new customer with their contact details, communication preferences, and service address.
+              {isEdit
+                ? 'Update contact details, communication preferences, and service address.'
+                : 'Add a new customer with their contact details, communication preferences, and service address.'}
             </SheetDescription>
           </SheetHeader>
 
@@ -801,6 +873,8 @@ export function CustomerFormSheet({
                 <>
                   <Loader2 className="size-4 animate-spin" /> Saving…
                 </>
+              ) : isEdit ? (
+                'Update Customer'
               ) : (
                 'Save Customer'
               )}

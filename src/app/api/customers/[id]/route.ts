@@ -201,7 +201,26 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { name, phone, email, address, whatsappId } = body
+    const {
+      name: explicitName,
+      phone,
+      email,
+      address,
+      whatsappId,
+      title,
+      firstName,
+      lastName,
+      companyName,
+      leadSource,
+      notificationSettingsJson,
+    } = body
+
+    const derivedName = [
+      typeof firstName === 'string' ? firstName.trim() : '',
+      typeof lastName === 'string' ? lastName.trim() : '',
+    ].filter(Boolean).join(' ').trim()
+      || (typeof explicitName === 'string' ? explicitName.trim() : '')
+      || (typeof companyName === 'string' ? companyName.trim() : '')
 
     // Keep normalizedPhone/normalizedEmail in sync when phone/email changes
     const normalizedPhone = phone ? normalizePhone(phone) : undefined
@@ -210,13 +229,19 @@ export async function PUT(
     const customer = await db.customer.update({
       where: { id },
       data: {
-        ...(name && { name }),
+        ...(derivedName && { name: derivedName }),
         ...(phone && { phone }),
         ...(email !== undefined && { email }),
         ...(normalizedPhone !== undefined && { normalizedPhone }),
         ...(normalizedEmail !== undefined && { normalizedEmail }),
         ...(address !== undefined && { address }),
         ...(whatsappId !== undefined && { whatsappId }),
+        ...(title !== undefined && { title }),
+        ...(firstName !== undefined && { firstName }),
+        ...(lastName !== undefined && { lastName }),
+        ...(companyName !== undefined && { companyName }),
+        ...(leadSource !== undefined && { leadSource }),
+        ...(notificationSettingsJson !== undefined && { notificationSettingsJson }),
       },
     })
 

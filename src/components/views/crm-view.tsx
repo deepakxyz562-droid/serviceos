@@ -1193,8 +1193,17 @@ export function CrmView() {
         {/* Add/Edit Customer Sheet (ISSUE-3 — replaces the inline 4-field Dialog) */}
         <CustomerFormSheet
           open={showAddCustomer}
-          onOpenChange={setShowAddCustomer}
-          onSaved={() => fetchCustomers(debouncedCustomerSearch)}
+          onOpenChange={(open) => {
+            setShowAddCustomer(open);
+            if (!open) setEditingCustomer(null);
+          }}
+          initialCustomer={editingCustomer}
+          onSaved={() => {
+            fetchCustomers(debouncedCustomerSearch);
+            if (selectedCustomer && editingCustomer?.id === selectedCustomer.id) {
+              openCustomerDetail(selectedCustomer);
+            }
+          }}
         />
       </div>
     );
@@ -1632,7 +1641,11 @@ export function CrmView() {
       {/* ─── Add/Edit Customer Sheet (ISSUE-3 — replaces the inline 4-field Dialog) ── */}
       <CustomerFormSheet
         open={showAddCustomer}
-        onOpenChange={setShowAddCustomer}
+        onOpenChange={(open) => {
+          setShowAddCustomer(open);
+          if (!open) setEditingCustomer(null);
+        }}
+        initialCustomer={editingCustomer}
         onSaved={() => fetchCustomers(debouncedCustomerSearch)}
       />
 
