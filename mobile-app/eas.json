@@ -23,6 +23,13 @@
       "android": {
         "buildType": "apk"
       }
+    },
+    "production-apk": {
+      "extends": "production",
+      "android": {
+        "buildType": "apk"
+      },
+      "distribution": "internal"
     }
   },
   "submit": {

@@ -16,6 +16,7 @@ import {
   getInlinedVapidPublicKey,
   urlBase64ToUint8Array,
 } from '@/lib/push-client';
+import { authFetch } from '@/lib/client-auth';
 
 type NotificationPermission = 'default' | 'granted' | 'denied';
 
@@ -188,7 +189,7 @@ function usePushPermission(): UsePushPermissionReturn {
         // lives only in the browser and is lost on uninstall/SW eviction.
         if (json.endpoint) {
           try {
-            const subRes = await fetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+            const subRes = await authFetch('/api/notifications/push/subscribe?XTransformPort=3000', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -287,7 +288,7 @@ function usePushPermission(): UsePushPermissionReturn {
       // Tell the server to deactivate this device's subscription row.
       if (endpoint) {
         try {
-          await fetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+          await authFetch('/api/notifications/push/subscribe?XTransformPort=3000', {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ endpoint }),

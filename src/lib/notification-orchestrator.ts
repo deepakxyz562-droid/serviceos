@@ -27,7 +27,7 @@
  *
  * Usage:
  *   const result = await orchestrateNotification({
- *     channels: ['email', 'sms', 'whatsapp'],
+ *     channels: ['push', 'in_app', 'email', 'sms', 'whatsapp'],
  *     recipient: { phone: '+1234567890', email: 'user@example.com', name: 'John' },
  *     template: 'job_assigned',
  *     templateData: { jobNumber: 'ABC123', customerName: 'Jane', ... },
@@ -870,10 +870,35 @@ export async function orchestrateNotification(
       }
 
       case 'push': {
-        // Push notifications - future implementation
-        console.log('[NotificationOrchestrator] Push notifications not yet implemented')
-        sendResult = { success: false, error: 'Push notifications not yet implemented' }
-        attemptNumber = 1
+        // Send push notification via Expo Push API (mobile) or Web Push (PWA)
+        try {
+          const { sendWebPushToUser } = await import('@/lib/web-push-send')
+          const pushTitle = subject || template.getSubject(request.templateData)
+          const pushBody = message || template.getSmsMessage(request.templateData) // SMS is the shortest — good for push
+          const pushResult = await sendWebPushToUser(
+            request.recipient.userId || '',
+            request.tenantId,
+            {
+              title: pushTitle,
+              body: pushBody,
+              url: request.recipient.actionUrl || '/',
+              data: { template: request.template, ...request.templateData },
+            }
+          )
+          sendResult = {
+            success: pushResult.sent > 0,
+            externalId: pushResult.sent > 0 ? 'push-sent' : undefined,
+            error: pushResult.sent > 0 ? undefined : (pushResult.configError || pushResult.notConfigured ? 'Push not configured' : 'No active push subscriptions'),
+          }
+          attemptNumber = 1
+        } catch (pushErr) {
+          console.warn('[NotificationOrchestrator] Push send failed:', pushErr)
+          sendResult = {
+            success: false,
+            error: pushErr instanceof Error ? pushErr.message : 'Push send failed',
+          }
+          attemptNumber = 1
+        }
         break
       }
 
@@ -1075,7 +1100,7 @@ export async function notifyJobAssigned(
   const empData = buildEmployeeTemplateData(employee)
 
   return orchestrateNotification({
-    channels: options?.channels || ['email', 'sms', 'whatsapp'],
+    channels: options?.channels || ['push', 'in_app', 'email', 'sms', 'whatsapp'],
     recipient: {
       phone: employee.phone || employee.whatsappId,
       email: employee.email,
@@ -1126,7 +1151,7 @@ export async function notifyJobStarted(
       }
 
   return orchestrateNotification({
-    channels: options?.channels || ['email', 'sms', 'whatsapp'],
+    channels: options?.channels || ['push', 'in_app', 'email', 'sms', 'whatsapp'],
     recipient,
     template: 'job_started',
     templateData: { ...jobData, ...empData },
@@ -1183,7 +1208,7 @@ export async function notifyJobCompleted(
       }
 
   return orchestrateNotification({
-    channels: options?.channels || ['email', 'sms', 'whatsapp'],
+    channels: options?.channels || ['push', 'in_app', 'email', 'sms', 'whatsapp'],
     recipient,
     template: 'job_completed',
     templateData: { ...jobData, ...empData, tenantName },
@@ -1251,7 +1276,7 @@ export async function notifyBookingConfirmed(
   const jobData = buildJobTemplateData(job)
 
   return orchestrateNotification({
-    channels: options?.channels || ['email', 'sms', 'whatsapp'],
+    channels: options?.channels || ['push', 'in_app', 'email', 'sms', 'whatsapp'],
     recipient: {
       phone: job.customerPhone,
       email: job.customerEmail,
