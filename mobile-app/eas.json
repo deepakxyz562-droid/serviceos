@@ -22,7 +22,8 @@
     "production": {
       "android": {
         "buildType": "apk"
-      }
+      },
+      "monorepo": false 
     }
   },
   "submit": {
