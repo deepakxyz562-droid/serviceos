@@ -309,7 +309,22 @@ const INTENT_RULES: IntentRule[] = [
 // In-memory store for active conversations. In production, this would be
 // persisted to the database (e.g., a Conversation model) or Redis.
 
+const MAX_CONVERSATION_STORE = 500
 const conversationStore = new Map<string, Conversation>()
+
+function saveToConversationStore(key: string, value: Conversation): void {
+  if (conversationStore.has(key)) {
+    conversationStore.delete(key)
+  }
+  conversationStore.set(key, value)
+  if (conversationStore.size > MAX_CONVERSATION_STORE) {
+    const oldest = conversationStore.keys().next().value
+    if (oldest !== undefined) {
+      conversationStore.delete(oldest)
+    }
+  }
+}
+
 let conversationIdCounter = 0
 
 function generateConversationId(): string {
@@ -487,7 +502,7 @@ export async function findOrCreateConversation(
     updatedAt: new Date(),
   }
 
-  conversationStore.set(normalizedPhone, conversation)
+  saveToConversationStore(normalizedPhone, conversation)
   return conversation
 }
 

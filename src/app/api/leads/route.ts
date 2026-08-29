@@ -187,6 +187,9 @@ export async function POST(request: NextRequest) {
     const crmGuard = await requireCrmTenant(request);
     if (crmGuard) return crmGuard;
     const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
 
     const body = await request.json();
     const {

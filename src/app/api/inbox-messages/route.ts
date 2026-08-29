@@ -1,24 +1,38 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUser } from '@/lib/auth'
+import { requireCrmTenant } from '@/lib/require-crm-tenant'
 
 export async function GET(request: NextRequest) {
   try {
+    const crmGuard = await requireCrmTenant(request)
+    if (crmGuard) return crmGuard
+
+    const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const conversationId = searchParams.get('conversationId')
     const senderType = searchParams.get('senderType')
     const direction = searchParams.get('direction')
     const status = searchParams.get('status')
-    const tenantId = searchParams.get('tenantId')
+    const requestedTenantId = searchParams.get('tenantId')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
 
-    const where: Record<string, unknown> = {}
+    const tenantId = authUser.role === 'superadmin' && requestedTenantId ? requestedTenantId : authUser.tenantId
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Tenant context required' }, { status: 400 })
+    }
+
+    const where: Record<string, unknown> = { tenantId }
 
     if (conversationId) where.conversationId = conversationId
     if (senderType) where.senderType = senderType
     if (direction) where.direction = direction
     if (status) where.status = status
-    if (tenantId) where.tenantId = tenantId
 
     const skip = (page - 1) * limit
 
@@ -49,14 +63,26 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const crmGuard = await requireCrmTenant(request)
+    if (crmGuard) return crmGuard
+
+    const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
     const body = await request.json()
+    const tenantId = authUser.role === 'superadmin' && body.tenantId ? body.tenantId : authUser.tenantId
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Tenant context required' }, { status: 400 })
+    }
 
     const message = await db.inboxMessage.create({
       data: {
         conversationId: body.conversationId,
         senderType: body.senderType || 'customer',
-        senderId: body.senderId,
-        senderName: body.senderName,
+        senderId: body.senderId || authUser.id,
+        senderName: body.senderName || authUser.name,
         content: body.content,
         messageType: body.messageType || 'text',
         mediaUrl: body.mediaUrl,
@@ -69,15 +95,14 @@ export async function POST(request: NextRequest) {
         mentionsJson: body.mentionsJson || '[]',
         reactionsJson: body.reactionsJson || '[]',
         metadataJson: body.metadataJson || '{}',
-        tenantId: body.tenantId,
+        tenantId,
         workspaceId: body.workspaceId,
       },
     })
 
-    // Update conversation's lastMessageAt
     try {
       await db.conversation.updateMany({
-        where: { conversationId: body.conversationId },
+        where: { conversationId: body.conversationId, tenantId },
         data: {
           lastMessageAt: new Date(),
           lastMessageBody: body.content,
@@ -85,7 +110,7 @@ export async function POST(request: NextRequest) {
         },
       })
     } catch {
-      // Conversation might not exist, that's ok
+      // Conversation update fallback
     }
 
     return NextResponse.json({ data: message }, { status: 201 })

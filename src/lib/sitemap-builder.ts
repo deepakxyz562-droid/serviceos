@@ -67,22 +67,14 @@ export const BASE_URL = "https://fieseros.com";
  */
 export const BUSINESS_PER_FILE = 40_000;
 
+import staticPageDatesJson from "@/lib/seo/static-page-dates.json";
+
+const STATIC_PAGE_DATES: Record<string, string> = staticPageDatesJson as Record<string, string>;
+
 /**
- * Stable lastmod timestamp for static / industry-hub / browse URLs.
- *
- * WHY NOT `new Date()` per request:
- *   Google ignores <lastmod> when it always equals the fetch time — it
- *   detects the pattern and treats the field as noise. A module-level
- *   constant (computed once when the serverless instance boots) keeps
- *   lastmod stable for the instance lifetime. Combined with the 1h-fresh
- *   / 24h-stale shared cache, the served lastmod is stable for up to 25h
- *   — giving Google a meaningful "page last verified" hint.
- *
- *   Blog posts use their own publish date (getAllPosts). Business pages
- *   use their own updatedAt (from listAllIndexableBusinessUrls). Only
- *   the truly-static routes — which change only on deploy — use this.
+ * Fallback lastmod timestamp for items where no date is available.
  */
-const SITE_LASTMOD = new Date().toISOString();
+export const DEFAULT_STATIC_LASTMOD = "2026-08-20";
 
 /**
  * Redis key for a pre-serialized sitemap page's XML.
@@ -263,11 +255,7 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
     { path: "/plumbing-software", priority: 0.9, changeFreq: "monthly" },
     { path: "/hvac-software", priority: 0.9, changeFreq: "monthly" },
     { path: "/cleaning-business-software", priority: 0.9, changeFreq: "monthly" },
-    {
-      path: "/electrical-contractor-software",
-      priority: 0.9,
-      changeFreq: "monthly",
-    },
+    { path: "/electrical-contractor-software", priority: 0.9, changeFreq: "monthly" },
     { path: "/landscaping-software", priority: 0.9, changeFreq: "monthly" },
     { path: "/lawn-care-software", priority: 0.9, changeFreq: "monthly" },
     { path: "/painting-software", priority: 0.9, changeFreq: "monthly" },
@@ -285,21 +273,9 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
 
     // ─── Cornerstone: Comparison pages (high conversion intent) ──────────
     { path: "/jobber-alternatives", priority: 0.9, changeFreq: "monthly" },
-    {
-      path: "/housecall-pro-alternatives",
-      priority: 0.8,
-      changeFreq: "monthly",
-    },
-    {
-      path: "/servicetitan-alternatives",
-      priority: 0.8,
-      changeFreq: "monthly",
-    },
-    {
-      path: "/best-field-service-software",
-      priority: 0.9,
-      changeFreq: "monthly",
-    },
+    { path: "/housecall-pro-alternatives", priority: 0.8, changeFreq: "monthly" },
+    { path: "/servicetitan-alternatives", priority: 0.8, changeFreq: "monthly" },
+    { path: "/best-field-service-software", priority: 0.9, changeFreq: "monthly" },
 
     // ─── Cornerstone: Feature pages ──────────────────────────────────────
     { path: "/scheduling-and-dispatch", priority: 0.8, changeFreq: "monthly" },
@@ -354,10 +330,14 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
   // frequency and importance from its own signals (PageRank, freshness,
   // click-through data). Including them only bloats the XML and slows
   // generation. Only <loc> and <lastmod> are emitted per URL.
-  const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((r) => ({
-    url: `${BASE_URL}${r.path}`,
-    lastModified: SITE_LASTMOD,
-  }));
+  const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((r) => {
+    const routeKey = r.path || "/";
+    const lastModified = STATIC_PAGE_DATES[routeKey] || r.lastModified || DEFAULT_STATIC_LASTMOD;
+    return {
+      url: `${BASE_URL}${r.path}`,
+      lastModified,
+    };
+  });
 
   // Dynamic: blog articles (from MDX files in content/blog/).
   const blogEntries: MetadataRoute.Sitemap = getAllPosts().map((post) => ({
@@ -370,7 +350,7 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
     PLURAL_SLUG_TO_INDUSTRY,
   ).map((slug) => ({
     url: `${BASE_URL}/${slug}`,
-    lastModified: SITE_LASTMOD,
+    lastModified: STATIC_PAGE_DATES[`/${slug}`] || STATIC_PAGE_DATES["/industries"] || DEFAULT_STATIC_LASTMOD,
   }));
 
   // ── Dynamic: plural browse pages (/{pluralIndustry}/{city}) ───────────────
@@ -387,6 +367,7 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
     const topIndustries = ["plumbing", "electrical", "cleaning", "hvac"];
 
     const demandKeys = new Set<string>();
+    const demandMaxDates = new Map<string, string>();
     const PAGE_SIZE = 1000;
     // Cursor-based pagination (id > lastId) — O(n) total. The previous
     // offset-based approach (skip += PAGE_SIZE) was O(n²) on PostgREST:
@@ -412,6 +393,7 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
           industry: true,
           city: true,
           businessCategoriesJson: true,
+          updatedAt: true,
         },
         take: PAGE_SIZE,
         orderBy: { id: "asc" },
@@ -431,7 +413,15 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
             t.industry === industry ||
             t.businessCategoriesJson?.includes(`"${industry}"`);
           if (matches) {
-            demandKeys.add(`${citySlug}|${industry}`);
+            const key = `${citySlug}|${industry}`;
+            demandKeys.add(key);
+            if (t.updatedAt) {
+              const dateStr = (t.updatedAt instanceof Date ? t.updatedAt : new Date(t.updatedAt as string)).toISOString().slice(0, 10);
+              const currentMax = demandMaxDates.get(key);
+              if (!currentMax || dateStr > currentMax) {
+                demandMaxDates.set(key, dateStr);
+              }
+            }
           }
         }
       }
@@ -441,11 +431,13 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
 
     for (const city of cities) {
       for (const industry of topIndustries) {
-        if (!demandKeys.has(`${city.citySlug}|${industry}`)) continue;
+        const key = `${city.citySlug}|${industry}`;
+        if (!demandKeys.has(key)) continue;
         const plural = mapIndustryToPluralSlug(industry);
+        const lastmod = demandMaxDates.get(key) || CONTENT_REVISION_DATES.BROWSE_HUBS;
         browseEntries.push({
           url: `${BASE_URL}/${plural}/${city.citySlug}`,
-          lastModified: SITE_LASTMOD,
+          lastModified: lastmod,
         });
       }
     }
@@ -602,7 +594,6 @@ async function getPageLastId(
 export async function buildBusinessSitemap(
   pageZeroIndexed: number,
 ): Promise<MetadataRoute.Sitemap> {
-  const now = new Date().toISOString();
   const offset = pageZeroIndexed * BUSINESS_PER_FILE;
   try {
     const allUrls = await getAllBusinessUrlsCached();
@@ -610,7 +601,7 @@ export async function buildBusinessSitemap(
     return pageUrls.map((entry) => {
       return {
         url: entry.url,
-        lastModified: entry.lastModified || now,
+        lastModified: entry.lastModified || DEFAULT_STATIC_LASTMOD,
       };
     });
   } catch (err) {
@@ -679,13 +670,13 @@ export function serializeUrlSet(entries: MetadataRoute.Sitemap): string {
  * Each entry points to `/sitemap/{id}.xml`.
  */
 export function serializeSitemapIndex(ids: { id: number }[]): string {
-  const now = new Date().toISOString();
+  const today = new Date().toISOString().slice(0, 10);
   const sitemaps = ids
     .map(
       ({ id }) =>
         `  <sitemap>\n` +
         `    <loc>${escapeXml(`${BASE_URL}/sitemap/${id}.xml`)}</loc>\n` +
-        `    <lastmod>${now}</lastmod>\n` +
+        `    <lastmod>${today}</lastmod>\n` +
         `  </sitemap>`,
     )
     .join("\n");

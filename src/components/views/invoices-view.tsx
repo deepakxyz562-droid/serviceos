@@ -431,6 +431,7 @@ export function InvoicesView() {
   // Loading state
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
+  const [invoiceLoadError, setInvoiceLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
 
@@ -483,6 +484,7 @@ export function InvoicesView() {
 
   const fetchInvoices = useCallback(async () => {
     setLoadingInvoices(true);
+    setInvoiceLoadError(null);
     try {
       const res = await authFetch('/api/invoices');
       if (!res.ok) {
@@ -492,7 +494,9 @@ export function InvoicesView() {
       const rawList: Record<string, unknown>[] = Array.isArray(data.invoices) ? data.invoices : [];
       setInvoices(rawList.map(parseApiInvoice));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to load invoices');
+      const msg = e instanceof Error ? e.message : 'Failed to load invoices';
+      toast.error(msg);
+      setInvoiceLoadError(msg);
       setInvoices([]);
     } finally {
       setLoadingInvoices(false);
@@ -502,7 +506,7 @@ export function InvoicesView() {
   const fetchCustomers = useCallback(async () => {
     setLoadingCustomers(true);
     try {
-      const res = await authFetch('/api/customers');
+      const res = await authFetch('/api/customers?limit=200');
       if (!res.ok) {
         throw new Error('Failed to fetch customers');
       }
@@ -2307,6 +2311,16 @@ export function InvoicesView() {
             </div>
           </CardContent>
         </Card>
+      ) : invoiceLoadError ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-red-200 bg-red-50 py-12 text-center">
+          <AlertCircle className="size-8 mb-2 text-red-500" />
+          <p className="font-medium text-sm text-foreground">Failed to load invoices</p>
+          <p className="text-xs text-muted-foreground mt-1 max-w-sm">{invoiceLoadError}</p>
+          <Button variant="outline" size="sm" className="mt-4 gap-2" onClick={fetchInvoices}>
+            <RotateCcw className="size-3.5" />
+            Retry
+          </Button>
+        </div>
       ) : filteredInvoices.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
           <FileText className="size-12 mb-3 opacity-20" />
