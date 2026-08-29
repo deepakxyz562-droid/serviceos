@@ -92,6 +92,9 @@ import {
   LineItemsSection,
 } from '@/components/views/leads-view';
 
+// Reusable primitives
+import { DataTable, type ColumnDef } from '@/components/primitives/data-table/data-table';
+
 // Checklist builder (Jobber-style "Capture on-site details" feature).
 import {
   ChecklistBuilder,
@@ -1344,6 +1347,7 @@ export function JobsView() {
     { id: string; name: string; phone: string; email?: string | null; address?: string | null }[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [jobLoadError, setJobLoadError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   // Debounce search input so we don't fire an HTTP request on every keystroke.
@@ -1651,6 +1655,7 @@ export function JobsView() {
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
+    setJobLoadError(null);
     try {
       const params = new URLSearchParams();
       // Phase 2: 'overdue' is a client-side pseudo-filter (jobs past their
@@ -1705,7 +1710,8 @@ export function JobsView() {
           })
         );
       }
-    } catch {
+    } catch (e) {
+      setJobLoadError(e instanceof Error ? e.message : 'Failed to load jobs');
       setJobs([]);
     } finally {
       setLoading(false);
