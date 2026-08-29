@@ -443,7 +443,22 @@ function filterByRadius(
  */
 
 const COUNT_CACHE_TTL_MS = 5 * 60_000; // 5 minutes
+const COUNT_CACHE_MAX_ENTRIES = 500;
 const _countCache = new Map<string, { total: number; expiresAt: number }>();
+
+function pruneCountCache() {
+  const now = Date.now();
+  for (const [k, v] of _countCache) {
+    if (v.expiresAt < now) _countCache.delete(k);
+  }
+  // If still over the limit, evict the oldest 50 entries
+  if (_countCache.size >= COUNT_CACHE_MAX_ENTRIES) {
+    const entries = Array.from(_countCache.entries())
+      .sort((a, b) => a[1].expiresAt - b[1].expiresAt)
+      .slice(0, 50);
+    for (const [k] of entries) _countCache.delete(k);
+  }
+}
 
 async function getCachedCount(where: any): Promise<number> {
   const cacheKey = JSON.stringify(where);
@@ -451,9 +466,13 @@ async function getCachedCount(where: any): Promise<number> {
   if (cached && Date.now() < cached.expiresAt) {
     return cached.total;
   }
+  // Opportunistic cleanup — prune expired entries every ~50 writes
+  if (_countCache.size % 50 === 0) pruneCountCache();
   try {
     const total = await db.tenant.count({ where });
     _countCache.set(cacheKey, { total, expiresAt: Date.now() + COUNT_CACHE_TTL_MS });
+    // Enforce hard cap
+    if (_countCache.size > COUNT_CACHE_MAX_ENTRIES) pruneCountCache();
     return total;
   } catch (err) {
     if (cached) return cached.total;

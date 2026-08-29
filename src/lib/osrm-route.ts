@@ -22,7 +22,9 @@ const OSRM_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
 const OSRM_TIMEOUT_MS = 5_000;
 const COORD_ROUND = 4; // 4 decimal places ≈ 11m at the equator
 
-/** In-memory cache: "${fromLat},${fromLng},${toLat},${toLng}" → [lat,lng][]. */
+/** In-memory cache: "${fromLat},${fromLng},${toLat},${toLng}" → [lat,lng][].
+ *  Capped at 200 entries — LRU eviction when full. */
+const ROUTE_CACHE_MAX = 200;
 const routeCache = new Map<string, [number, number][]>();
 
 function cacheKey(
@@ -103,6 +105,16 @@ export async function fetchOsmrRoute(
     if (latlngs.length < 2) return fallback;
 
     routeCache.set(key, latlngs);
+    // Enforce hard cap — delete oldest entries (Map preserves insertion order)
+    if (routeCache.size > ROUTE_CACHE_MAX) {
+      const toDelete = routeCache.size - ROUTE_CACHE_MAX;
+      let count = 0;
+      for (const k of routeCache.keys()) {
+        routeCache.delete(k);
+        count++;
+        if (count >= toDelete) break;
+      }
+    }
     return latlngs;
   } catch {
     // AbortError (timeout), network failure, JSON parse error, CORS block, etc.

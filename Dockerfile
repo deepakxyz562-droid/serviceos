@@ -43,6 +43,9 @@ ENV NODE_ENV production
 ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
 ENV USE_SUPABASE_DB true
+# Limit Node.js heap to 1GB — prevents the container from consuming all VPS RAM
+# when in-memory caches grow. The app normally uses ~500MB; this leaves headroom.
+ENV NODE_OPTIONS "--max-old-space-size=1024"
 
 # Copy built standalone application & public static assets
 COPY --from=builder /app/public ./public

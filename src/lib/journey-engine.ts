@@ -218,8 +218,26 @@ const STAGE_ACTIONS: Record<JourneyStage, StageAction> = {
 // ─── In-Memory Scheduled Actions Store ────────────────────────────────────────
 // In production, this would be replaced with a persistent job queue (BullMQ, etc.)
 
+const SCHEDULED_ACTIONS_MAX = 500
 const scheduledActionsStore = new Map<string, ScheduledAction>()
 let actionIdCounter = 0
+
+function pruneScheduledActions() {
+  const now = Date.now()
+  for (const [id, action] of scheduledActionsStore) {
+    // Delete actions that are past their scheduled time by > 1 hour
+    if (action.scheduledAt && now - new Date(action.scheduledAt).getTime() > 3600000) {
+      scheduledActionsStore.delete(id)
+    }
+  }
+  // If still over the limit, delete the oldest 50
+  if (scheduledActionsStore.size >= SCHEDULED_ACTIONS_MAX) {
+    const entries = Array.from(scheduledActionsStore.entries())
+      .sort((a, b) => new Date(a[1].scheduledAt).getTime() - new Date(b[1].scheduledAt).getTime())
+      .slice(0, 50)
+    for (const [id] of entries) scheduledActionsStore.delete(id)
+  }
+}
 
 function generateActionId(): string {
   actionIdCounter++
@@ -229,7 +247,20 @@ function generateActionId(): string {
 // ─── In-Memory Journey Store ──────────────────────────────────────────────────
 // Maps jobId → CustomerJourney. Persisted via Job/Lead DB records.
 
+const JOURNEY_CACHE_MAX = 200
 const journeyCache = new Map<string, CustomerJourney>()
+
+function pruneJourneyCache() {
+  if (journeyCache.size <= JOURNEY_CACHE_MAX) return
+  // Delete oldest entries (first inserted — Map preserves insertion order)
+  const toDelete = journeyCache.size - JOURNEY_CACHE_MAX
+  let count = 0
+  for (const key of journeyCache.keys()) {
+    journeyCache.delete(key)
+    count++
+    if (count >= toDelete) break
+  }
+}
 
 // ─── Notification Templates ───────────────────────────────────────────────────
 
@@ -452,6 +483,7 @@ async function buildJourneyFromJob(jobId: string): Promise<CustomerJourney | nul
   }
 
   journeyCache.set(jobId, journey)
+  pruneJourneyCache()
   return journey
 }
 
@@ -919,6 +951,7 @@ export const JourneyEngine = {
 
     // Update cache
     journeyCache.set(jobId, journey)
+    pruneJourneyCache()
   },
 
   /**
@@ -950,6 +983,7 @@ export const JourneyEngine = {
     }
 
     scheduledActionsStore.set(id, action)
+    if (scheduledActionsStore.size > SCHEDULED_ACTIONS_MAX) pruneScheduledActions()
 
     console.log(
       `[JourneyEngine] Scheduled action ${actionType} for job ${jobId} ` +
