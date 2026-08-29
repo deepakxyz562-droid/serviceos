@@ -18,7 +18,7 @@
     "db:seed-full": "bun run prisma/seed.ts",
     "db:generate-seed-sql": "bun run prisma/generate-seed-sql.ts",
     "supabase:query": "bun run src/scripts/supabase-query.ts",
-    "prod": "NODE_OPTIONS=\"--max-old-space-size=512\" next start -p 3000 2>&1 | tee dev.log",
+    "prod": "NODE_OPTIONS=\"--max-old-space-size=512\" next start -p 3000",
     "indexnow": "bun run scripts/indexnow-submit.ts",
     "indexnow:blog": "bun run scripts/indexnow-submit.ts --blog",
     "test:inventory": "bun run tests/inventory-api.ts"
