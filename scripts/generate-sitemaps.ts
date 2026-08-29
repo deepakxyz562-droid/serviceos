@@ -26,9 +26,17 @@ import path from 'path';
 import { forceFullRegeneration } from '../src/lib/sitemap';
 import { fetchSitemapFile } from '../src/lib/sitemap/storage';
 import { getSitemapFileName, getAllBusinessFileNumbers } from '../src/lib/sitemap/hash';
+import { extractAllStaticDates } from './extract-git-lastmod';
 
 async function generate() {
   console.log('🏁 Starting sitemap generation (4-file hash-based split)...');
+
+  try {
+    console.log('🔍 Extracting Git commit dates for static routes...');
+    extractAllStaticDates();
+  } catch (err) {
+    console.warn('⚠️  Could not extract Git dates, using existing static-page-dates.json fallback:', err);
+  }
 
   const publicDir = path.resolve(__dirname, '../public');
   const sitemapDir = path.join(publicDir, 'sitemap');

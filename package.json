@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 -H 0.0.0.0",
+    "prebuild": "bun scripts/extract-git-lastmod.ts",
     "build": "next build && bun scripts/standalone-cleanup.js && bash scripts/sync-public-to-standalone.sh",
+    "sitemaps:generate": "bun scripts/generate-sitemaps.ts",
     "sync-public": "bash scripts/sync-public-to-standalone.sh",
     "start": "next start",
     "lint": "eslint .",

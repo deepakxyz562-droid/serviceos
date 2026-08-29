@@ -407,11 +407,18 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
     lead: { targetTable: 'Lead', targetFkColumn: 'jobId', isMany: false },
     conversation: { targetTable: 'Conversation', targetFkColumn: 'jobId', isMany: false },
     journey: { targetTable: 'CustomerJourney', targetFkColumn: 'jobId', isMany: false },
+    photos: { targetTable: 'JobPhoto', targetFkColumn: 'jobId', isMany: true },
+    signatures: { targetTable: 'JobSignature', targetFkColumn: 'jobId', isMany: true },
+    checklists: { targetTable: 'JobChecklist', targetFkColumn: 'jobId', isMany: true },
+    notes: { targetTable: 'JobNote', targetFkColumn: 'jobId', isMany: true },
+    invoices: { targetTable: 'Invoice', targetFkColumn: 'jobId', isMany: true },
   },
   RecurringJobSchedule: {
     customer: { targetTable: 'Customer', fkColumn: 'customerId' },
     tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
     lastJob: { targetTable: 'Job', fkColumn: 'lastJobId' },
+    generatedJobs: { targetTable: 'Job', targetFkColumn: 'recurringScheduleId', isMany: true },
+    generatedInvoices: { targetTable: 'Invoice', targetFkColumn: 'recurringScheduleId', isMany: true },
   },
   Employee: {
     workspace: { targetTable: 'Workspace', fkColumn: 'workspaceId' },

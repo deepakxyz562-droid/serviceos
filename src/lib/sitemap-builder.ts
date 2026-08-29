@@ -12,6 +12,10 @@ import {
 import { slugifyCity } from "@/lib/seo/schemas";
 import { sharedCacheWrap, sharedCacheGet, sharedCacheSet } from "@/lib/shared-cache";
 import { CircuitOpenError, rethrowIfCircuitOpen } from "@/lib/circuit-breaker";
+import staticPageDatesJson from "@/lib/seo/static-page-dates.json";
+
+export const STATIC_PAGE_DATES: Record<string, string> = staticPageDatesJson;
+export const DEFAULT_STATIC_LASTMOD = "2026-08-15";
 
 /**
  * Sitemap builder — shared logic for the explicit sitemap route handlers.
@@ -356,7 +360,7 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
   // generation. Only <loc> and <lastmod> are emitted per URL.
   const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((r) => ({
     url: `${BASE_URL}${r.path}`,
-    lastModified: SITE_LASTMOD,
+    lastModified: STATIC_PAGE_DATES[r.path] || DEFAULT_STATIC_LASTMOD,
   }));
 
   // Dynamic: blog articles (from MDX files in content/blog/).
@@ -368,10 +372,15 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
   // ── Industry-only hub pages (/{pluralIndustry}) ──────────────────────────
   const industryHubEntries: MetadataRoute.Sitemap = Object.keys(
     PLURAL_SLUG_TO_INDUSTRY,
-  ).map((slug) => ({
-    url: `${BASE_URL}/${slug}`,
-    lastModified: SITE_LASTMOD,
-  }));
+  ).map((slug) => {
+    const industryId = PLURAL_SLUG_TO_INDUSTRY[slug];
+    const landingRoute = `/${industryId}-software`;
+    const lastMod = STATIC_PAGE_DATES[landingRoute] || STATIC_PAGE_DATES["/industries"] || DEFAULT_STATIC_LASTMOD;
+    return {
+      url: `${BASE_URL}/${slug}`,
+      lastModified: lastMod,
+    };
+  });
 
   // ── Dynamic: plural browse pages (/{pluralIndustry}/{city}) ───────────────
   // Top 50 cities × 4 most popular industries. Demand-gated: only emit
@@ -645,19 +654,29 @@ function escapeXml(value: string): string {
  * removing them reduces XML size by ~40% (faster generation + smaller
  * response for crawlers to download).
  */
+function formatSitemapLastMod(lastModified: Date | string): string {
+  if (lastModified instanceof Date) {
+    return lastModified.toISOString().split("T")[0];
+  }
+  if (typeof lastModified === "string") {
+    const match = lastModified.match(/^\d{4}-\d{2}-\d{2}/);
+    if (match) return match[0];
+    try {
+      return new Date(lastModified).toISOString().split("T")[0];
+    } catch {
+      return lastModified;
+    }
+  }
+  return String(lastModified);
+}
+
 function entryToUrlElement(entry: MetadataRoute.Sitemap[number]): string {
   const parts: string[] = [`    <loc>${escapeXml(entry.url)}</loc>`];
 
   if (entry.lastModified) {
-    const ts =
-      entry.lastModified instanceof Date
-        ? entry.lastModified.toISOString()
-        : entry.lastModified;
+    const ts = formatSitemapLastMod(entry.lastModified);
     parts.push(`    <lastmod>${ts}</lastmod>`);
   }
-  // NOTE: <changefreq> and <priority> are deliberately NOT emitted.
-  // Google's documentation states these are ignored. Removing them keeps
-  // the XML clean and reduces payload size.
   return `  <url>\n${parts.join("\n")}\n  </url>`;
 }
 
