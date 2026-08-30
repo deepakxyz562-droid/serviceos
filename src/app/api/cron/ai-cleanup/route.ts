@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getTelephonyProvider } from '@/lib/telephony-provider';
 import { releaseStaleReservations } from '@/lib/usage-service';
+import { verifyCronAuth } from '@/lib/cron-auth';
 
 /**
  * GET /api/cron/ai-cleanup
@@ -29,19 +30,13 @@ import { releaseStaleReservations } from '@/lib/usage-service';
  *      b. → status = released
  *   4. released: skip (done)
  *
- * Auth: x-cron-secret header (matches CRON_SECRET or INTERNAL_API_SECRET)
+ * Auth: verifyCronAuth (x-cron-secret header / Bearer / ?key=)
+ *       Production refuses to run if CRON_SECRET is unset (no dev fallback).
  */
 
 export async function GET(request: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET || process.env.INTERNAL_API_SECRET;
-  if (cronSecret) {
-    const authHeader = request.headers.get('authorization') || '';
-    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-    const headerSecret = request.headers.get('x-cron-secret') || '';
-    if (token !== cronSecret && headerSecret !== cronSecret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-  }
+  const auth = verifyCronAuth(request);
+  if (!auth.ok) return auth.response;
 
   try {
     const now = new Date();
