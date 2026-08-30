@@ -99,10 +99,9 @@ export async function GET(request: NextRequest) {
     return response;
 
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
     console.error('[verify-email] Unhandled error:', err);
     return NextResponse.json(
-      { ok: false, error: `Email verification failed: ${errorMsg}`, code: 'UNHANDLED_ROUTE_ERROR' },
+      { ok: false, error: 'Unable to complete email verification. Please try again or contact support.', code: 'UNHANDLED_ROUTE_ERROR' },
       { status: 500 },
     );
   }
