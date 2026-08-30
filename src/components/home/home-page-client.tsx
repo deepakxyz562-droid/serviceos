@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 
 // SEO (P0-1): LandingPage is loaded with ssr:false because it's a 2290-line
 // interactive component that is too heavy for Turbopack to server-render
@@ -141,6 +142,21 @@ export default function HomePageClient() {
     showOnboarding,
     setShowOnboarding,
   } = useAppStore();
+
+  const queryClient = useQueryClient();
+
+  // ─── Cache-aware auth clearing ──────────────────────────────────────────────
+  // Every path that clears auth state MUST also clear the React Query cache.
+  // Without this, the cache retains the previous user's CRM data and the next
+  // user (after login) could see stale data from a different tenant/session.
+  //
+  // Ordering: clearAuth() first (resets Zustand auth state), then
+  // queryClient.clear() (drops all cached query/mutation data). This matches
+  // the user's specified ordering: logout → clear auth → clear cache → redirect.
+  const clearAuthAndCache = useCallback(() => {
+    clearAuth();
+    queryClient.clear();
+  }, [clearAuth, queryClient]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [unauthView, setUnauthView] = useState<UnauthView>('landing');
@@ -360,7 +376,7 @@ export default function HomePageClient() {
             // localStorage unavailable — nothing to clear
           }
         }
-        clearAuth();
+        clearAuthAndCache();
         return;
       }
       // Non-200 (e.g. 401) — same treatment: don't trust stale localStorage.
@@ -372,7 +388,7 @@ export default function HomePageClient() {
           // ignore
         }
       }
-      clearAuth();
+      clearAuthAndCache();
       return;
     } catch {
       // API failed or timed out (network error / abort). In this case ONLY,
@@ -431,14 +447,14 @@ export default function HomePageClient() {
             } catch {
               // ignore
             }
-            clearAuth();
+            clearAuthAndCache();
           }
         }
       }
     } catch {
       // localStorage read failed
     }
-  }, [setAuth, setShowOnboarding, clearAuth]);
+  }, [setAuth, setShowOnboarding, clearAuthAndCache]);
 
   useEffect(() => {
     const init = async () => {
@@ -669,11 +685,11 @@ export default function HomePageClient() {
       removeToken();
     }
 
-    clearAuth();
+    clearAuthAndCache();
     useAppStore.getState().setCurrentView('dashboard'); // Reset view
     setUnauthView('landing');
     toast.success('You have been signed out');
-  }, [clearAuth]);
+  }, [clearAuthAndCache]);
 
   // Keep the handleLogoutRef in sync so the ?logout=1 deep-link effect can
   // call the latest handleLogout without a stale closure.

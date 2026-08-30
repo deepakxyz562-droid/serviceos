@@ -67,8 +67,21 @@ export const qk = {
     list: (filters?: Filters) => [...qk.jobs.lists(), filters ?? {}] as const,
     details: () => [...qk.jobs.all, 'detail'] as const,
     detail: (id: string) => [...qk.jobs.details(), id] as const,
-    /** Calendar events are sourced from /api/jobs but rendered in calendar context. */
-    calendar: (filters?: Filters) => [...qk.jobs.all, 'calendar', filters ?? {}] as const,
+    /**
+     * Calendar events — sourced from /api/jobs but rendered in calendar context.
+     *
+     * Hierarchy:
+     *   qk.jobs.calendar.all()  → ['jobs', 'calendar']  (invalidates ALL calendar variants)
+     *   qk.jobs.calendar.list() → ['jobs', 'calendar', {}]  (one specific filtered view)
+     *
+     * Use `all()` for invalidation after job mutations (catches every calendar
+     * filter combination). Use `list(filters)` for the queryKey of a specific
+     * calendar query.
+     */
+    calendar: {
+      all: () => [...qk.jobs.all, 'calendar'] as const,
+      list: (filters?: Filters) => [...qk.jobs.all, 'calendar', filters ?? {}] as const,
+    },
   },
 
   // ── Customers (the Customer model — /api/customers) ───────────────────────
@@ -167,19 +180,14 @@ export const qk = {
      * Invalidation with `qk.employees.detail(id)` catches ALL tabs for that
      * employee — useful after an employee update that affects multiple tabs.
      */
-    tab: (id: string, tab: string) => [...qk.employees.detail(id), 'tab', tab] as const,
+    tab: (id: string, tab: string, filters?: Filters) =>
+      [...qk.employees.detail(id), 'tab', tab, filters ?? {}] as const,
   },
 
   // ── Dispatch (live status, real-time) ─────────────────────────────────────
   dispatch: {
     all: ['dispatch'] as const,
     live: () => [...qk.dispatch.all, 'live'] as const,
-  },
-
-  // ── Calendar ──────────────────────────────────────────────────────────────
-  calendar: {
-    all: ['calendar'] as const,
-    events: (filters?: Filters) => [...qk.calendar.all, 'events', filters ?? {}] as const,
   },
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
@@ -350,8 +358,30 @@ export type QueryKey = readonly (string | number | object | undefined)[];
  * hierarchical `qk.*` structure. This shim prevents breakage during the
  * transition.
  *
+ * ─── Why tenant IDs are intentionally ignored ────────────────────────────────
+ * The old factory accepted an optional `tenantId` parameter on every list
+ * key: `queryKeys.leads(tenantId)` → `['leads', tenantId]`. The new canonical
+ * factory does NOT include tenantId in the key: `qk.leads.lists()` →
+ * `['leads', 'list']`.
+ *
+ * This is safe because the application has a **single-tenant CRM session
+ * boundary**: one `QueryClient` per browser session, one authenticated user
+ * per session, one `tenantId` per user (from `getAuthUser()`). Regular users
+ * never see data from another tenant's CRM — the API enforces this server-side.
+ *
+ * Superadmin queries (tenants, subscriptions, feature flags, menu items) ARE
+ * namespaced under `qk.superadmin.*` because superadmin can switch between
+ * tenants — but those queries return tenant management metadata, not CRM data.
+ *
+ * The `queryClient.clear()` call on logout (added in Phase 1.1 retrofit)
+ * ensures no CRM data leaks between sessions when a different user logs in
+ * on the same browser.
+ *
  * @deprecated Use `qk` instead. This shim will be removed after all callers
- *             are migrated in Phase 1.2.
+ *             are migrated to `qk.*` directly (happens naturally during
+ *             Phase 1.8+ view migrations). The `tenantId` parameters on the
+ *             shim functions are intentionally ignored — see the explanation
+ *             above.
  */
 export const queryKeys = {
   // CRM

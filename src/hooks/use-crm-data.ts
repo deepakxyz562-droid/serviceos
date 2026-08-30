@@ -50,6 +50,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authFetch } from '@/lib/api';
+import { qk, type QueryKey } from '@/lib/query-keys';
 
 // ── Jobs ─────────────────────────────────────────────────────────────────────
 
@@ -62,7 +63,7 @@ export interface JobListParams {
 
 export function useJobs(params: JobListParams = {}) {
   return useQuery({
-    queryKey: ['jobs', params],
+    queryKey: qk.jobs.list(params),
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params.status && params.status !== 'all') searchParams.set('status', params.status);
@@ -79,7 +80,7 @@ export function useJobs(params: JobListParams = {}) {
         pagination: data.pagination ?? null,
       };
     },
-    staleTime: 30_000, // 30s — jobs change frequently
+    staleTime: 10_000, // 10s — Freshness Contract: CRM jobs
   });
 }
 
@@ -113,7 +114,7 @@ export interface CustomerListParams {
 
 export function useCustomers(params: CustomerListParams = {}) {
   return useQuery({
-    queryKey: ['customers', params],
+    queryKey: qk.contacts.list(params),
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params.search) searchParams.set('search', params.search);
@@ -140,7 +141,7 @@ export function useCustomers(params: CustomerListParams = {}) {
         pagination: data.pagination ?? null,
       };
     },
-    staleTime: 60_000, // 60s — customers change less frequently
+    staleTime: 10_000, // 10s — Freshness Contract: CRM customers/contacts
   });
 }
 
@@ -148,14 +149,14 @@ export function useCustomers(params: CustomerListParams = {}) {
 
 export function useInvoices() {
   return useQuery({
-    queryKey: ['invoices'],
+    queryKey: qk.invoices.lists(),
     queryFn: async () => {
       const res = await authFetch('/api/invoices');
       if (!res.ok) throw new Error('Failed to fetch invoices');
       const data = await res.json();
       return data.invoices ?? (Array.isArray(data) ? data : []);
     },
-    staleTime: 60_000,
+    staleTime: 10_000, // 10s — Freshness Contract: CRM invoices
   });
 }
 
@@ -171,7 +172,7 @@ export interface LeadListParams {
 
 export function useLeads(params: LeadListParams = {}) {
   return useQuery({
-    queryKey: ['leads', params],
+    queryKey: qk.leads.list(params),
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params.status && params.status !== 'all') searchParams.set('status', params.status);
@@ -189,7 +190,7 @@ export function useLeads(params: LeadListParams = {}) {
         pagination: data.pagination ?? null,
       };
     },
-    staleTime: 30_000,
+    staleTime: 10_000, // 10s — Freshness Contract: CRM leads
   });
 }
 
@@ -197,41 +198,118 @@ export function useLeads(params: LeadListParams = {}) {
 
 export function useExpenses() {
   return useQuery({
-    queryKey: ['expenses'],
+    queryKey: qk.expenses.lists(),
     queryFn: async () => {
       const res = await authFetch('/api/expenses');
       if (!res.ok) throw new Error('Failed to fetch expenses');
       const data = await res.json();
       return data.expenses ?? (Array.isArray(data) ? data : []);
     },
-    staleTime: 60_000,
+    staleTime: 10_000, // 10s — Freshness Contract: CRM expenses
   });
 }
 
-// ── Mutation helpers ─────────────────────────────────────────────────────────
+// ── Dependency-aware mutation helper ─────────────────────────────────────────
 
 /**
- * Generic mutation hook that invalidates the given query keys on success.
+ * Generic CRM mutation hook with dependency-aware cache invalidation.
  *
- * Usage:
- *   const createJob = useCrmMutation({
- *     url: '/api/jobs',
- *     method: 'POST',
- *     invalidateQueries: ['jobs'],
- *   });
- *   createJob.mutate(jobData);
+ * Unlike a blanket "invalidate everything" approach, this hook lets each
+ * mutation specify EXACTLY which queries should be invalidated based on
+ * the runtime data (response) and variables (request body).
+ *
+ * ─── Why dependency-aware? ───────────────────────────────────────────────────
+ * A job creation might affect:
+ *   - the jobs list (always)
+ *   - the dashboard KPIs (always)
+ *   - the calendar (always)
+ *   - the assigned customer's detail (only if customerId is present)
+ *   - the assigned employee's detail (only if assigneeId is present)
+ *
+ * A static `invalidateQueries: [['jobs'], ['dashboard']]` can't express
+ * "only if customerId is present" — it either always invalidates the
+ * customer (wasteful) or never does (stale data). The function API solves
+ * this:
+ *
+ *   invalidate: ({ data, variables }) => [
+ *     qk.jobs.all,
+ *     qk.dashboard.all,
+ *     qk.jobs.calendar.all(),
+ *     ...(data.customerId ? [qk.customers.detail(data.customerId)] : []),
+ *     ...(data.assigneeId ? [qk.employees.detail(data.assigneeId)] : []),
+ *   ]
+ *
+ * ─── Usage ───────────────────────────────────────────────────────────────────
+ *
+ * 1. Simple JSON POST (most common):
+ *    const createJob = useCrmMutation({
+ *      url: '/api/jobs',
+ *      method: 'POST',
+ *      invalidate: ({ data }) => [qk.jobs.all, qk.dashboard.all],
+ *    });
+ *
+ * 2. Dynamic URL (PUT /api/jobs/${id}):
+ *    const updateJob = useCrmMutation({
+ *      url: ({ id }) => `/api/jobs/${id}`,
+ *      method: 'PUT',
+ *      invalidate: ({ data, variables }) => [
+ *        qk.jobs.all,
+ *        qk.jobs.detail(variables.id),
+ *      ],
+ *    });
+ *
+ * 3. Custom mutationFn (FormData, multi-step, etc.):
+ *    const uploadPhoto = useCrmMutation({
+ *      mutationFn: async (formData) => {
+ *        const res = await authFetch('/api/upload', { method: 'POST', body: formData });
+ *        if (!res.ok) throw new Error('Upload failed');
+ *        return res.json();
+ *      },
+ *      invalidate: ({ data }) => [qk.jobs.detail(data.jobId)],
+ *    });
  */
-export function useCrmMutation<TData, TVariables = unknown>(opts: {
-  url: string;
+export function useCrmMutation<TData = unknown, TVariables = unknown>(opts: {
+  /**
+   * Custom mutation function. Takes precedence over `url`/`method`.
+   * Use this for FormData, dynamic request bodies, multi-step mutations, etc.
+   */
+  mutationFn?: (variables: TVariables) => Promise<TData>;
+
+  /**
+   * URL for the default mutationFn (JSON body). Can be a string or a function
+   * of variables (for dynamic URLs like /api/jobs/${id}).
+   * Ignored if `mutationFn` is provided.
+   */
+  url?: string | ((variables: TVariables) => string);
+
+  /** HTTP method for the default mutationFn. Default: 'POST'. */
   method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  invalidateQueries?: unknown[][];
-  onSuccess?: (data: TData) => void;
+
+  /**
+   * Dependency-aware invalidation function. Receives { data, variables } and
+   * returns an array of query keys to invalidate. This is the KEY feature —
+   * invalidation can depend on runtime IDs (customerId, employeeId, etc.)
+   * rather than blanket-invalidating an entire entity namespace.
+   *
+   * For complex dependency logic, use the helper functions from
+   * `@/lib/invalidation-helpers` (Phase 1.4):
+   *
+   *   invalidate: ({ data, variables }) =>
+   *     getJobInvalidations({ mutation: 'create', data, variables })
+   */
+  invalidate?: (context: { data: TData; variables: TVariables }) => QueryKey[];
+
+  /** Optional callback after successful mutation + invalidation. */
+  onSuccess?: (data: TData, variables: TVariables) => void;
 }) {
   const queryClient = useQueryClient();
 
   return useMutation<TData, Error, TVariables>({
-    mutationFn: async (variables: TVariables) => {
-      const res = await authFetch(opts.url, {
+    mutationFn: opts.mutationFn ?? (async (variables: TVariables) => {
+      const url = typeof opts.url === 'function' ? opts.url(variables) : opts.url;
+      if (!url) throw new Error('useCrmMutation: either mutationFn or url is required');
+
+      const res = await authFetch(url, {
         method: opts.method ?? 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(variables),
@@ -240,15 +318,17 @@ export function useCrmMutation<TData, TVariables = unknown>(opts: {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || `Request failed: ${res.status}`);
       }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      if (opts.invalidateQueries) {
-        for (const queryKey of opts.invalidateQueries) {
+      return res.json() as Promise<TData>;
+    }),
+    onSuccess: (data, variables) => {
+      // Dependency-aware invalidation — the key feature
+      if (opts.invalidate) {
+        const keys = opts.invalidate({ data, variables });
+        for (const queryKey of keys) {
           queryClient.invalidateQueries({ queryKey });
         }
       }
-      opts.onSuccess?.(data);
+      opts.onSuccess?.(data, variables);
     },
   });
 }
@@ -257,7 +337,7 @@ export function useCrmMutation<TData, TVariables = unknown>(opts: {
 
 export function useCalendarEvents(params: { employeeId?: string; startDate?: string; endDate?: string } = {}) {
   return useQuery({
-    queryKey: ['calendar-events', params],
+    queryKey: qk.jobs.calendar.list(params),
     queryFn: async () => {
       const sp = new URLSearchParams();
       if (params.employeeId) sp.set('assigneeId', params.employeeId);
@@ -269,7 +349,7 @@ export function useCalendarEvents(params: { employeeId?: string; startDate?: str
       const data = await res.json();
       return data.jobs ?? (Array.isArray(data) ? data : []);
     },
-    staleTime: 30_000,
+    staleTime: 10_000, // 10s — Freshness Contract: CRM calendar (jobs)
   });
 }
 
@@ -277,7 +357,7 @@ export function useCalendarEvents(params: { employeeId?: string; startDate?: str
 
 export function useBookings(params: { status?: string; search?: string } = {}) {
   return useQuery({
-    queryKey: ['bookings', params],
+    queryKey: qk.bookings.list(params),
     queryFn: async () => {
       const sp = new URLSearchParams();
       if (params.status && params.status !== 'all') sp.set('status', params.status);
@@ -287,7 +367,7 @@ export function useBookings(params: { status?: string; search?: string } = {}) {
       const data = await res.json();
       return data.bookings ?? (Array.isArray(data) ? data : []);
     },
-    staleTime: 30_000,
+    staleTime: 10_000, // 10s — Freshness Contract: CRM bookings
   });
 }
 
@@ -295,7 +375,7 @@ export function useBookings(params: { status?: string; search?: string } = {}) {
 
 export function useExpensesFiltered(params: { status?: string; category?: string; search?: string } = {}) {
   return useQuery({
-    queryKey: ['expenses-filtered', params],
+    queryKey: qk.expenses.list(params),
     queryFn: async () => {
       const sp = new URLSearchParams();
       if (params.status && params.status !== 'all') sp.set('status', params.status);
@@ -306,7 +386,7 @@ export function useExpensesFiltered(params: { status?: string; category?: string
       const data = await res.json();
       return data.expenses ?? (Array.isArray(data) ? data : []);
     },
-    staleTime: 30_000,
+    staleTime: 10_000, // 10s — Freshness Contract: CRM expenses (filtered)
   });
 }
 
@@ -314,7 +394,7 @@ export function useExpensesFiltered(params: { status?: string; category?: string
 
 export function useBroadcasts(params: { status?: string; page?: number; limit?: number } = {}) {
   return useQuery({
-    queryKey: ['broadcasts', params],
+    queryKey: qk.broadcasts.list(params),
     queryFn: async () => {
       const sp = new URLSearchParams();
       if (params.status) sp.set('status', params.status);
@@ -333,7 +413,7 @@ export function useBroadcasts(params: { status?: string; page?: number; limit?: 
 
 export function useCampaigns(params: { status?: string; type?: string; limit?: number } = {}) {
   return useQuery({
-    queryKey: ['campaigns', params],
+    queryKey: qk.campaigns.list(params),
     queryFn: async () => {
       const sp = new URLSearchParams();
       if (params.status) sp.set('status', params.status);
@@ -354,7 +434,7 @@ export function useCampaigns(params: { status?: string; type?: string; limit?: n
 
 export function useInventoryItems(params: { search?: string; category?: string } = {}) {
   return useQuery({
-    queryKey: ['inventory-items', params],
+    queryKey: qk.inventory.items(params),
     queryFn: async () => {
       const sp = new URLSearchParams();
       if (params.search) sp.set('search', params.search);
@@ -373,7 +453,7 @@ export function useInventoryItems(params: { search?: string; category?: string }
 
 export function useInventoryTransactions(params: { type?: string; startDate?: string; endDate?: string } = {}) {
   return useQuery({
-    queryKey: ['inventory-transactions', params],
+    queryKey: qk.inventory.transactions(params),
     queryFn: async () => {
       const sp = new URLSearchParams();
       if (params.type && params.type !== 'all') sp.set('type', params.type);
@@ -392,7 +472,7 @@ export function useInventoryTransactions(params: { type?: string; startDate?: st
 
 export function usePurchaseOrders(params: { status?: string; search?: string } = {}) {
   return useQuery({
-    queryKey: ['purchase-orders', params],
+    queryKey: qk.inventory.purchaseOrders(params),
     queryFn: async () => {
       const sp = new URLSearchParams();
       if (params.status && params.status !== 'all') sp.set('status', params.status);
@@ -410,7 +490,7 @@ export function usePurchaseOrders(params: { status?: string; search?: string } =
 
 export function useCrmCustomers(params: { search?: string } = {}) {
   return useQuery({
-    queryKey: ['crm-customers', params],
+    queryKey: qk.customers.list(params),
     queryFn: async () => {
       const sp = new URLSearchParams();
       if (params.search) sp.set('search', params.search);
@@ -420,6 +500,6 @@ export function useCrmCustomers(params: { search?: string } = {}) {
       const data = await res.json();
       return data.customers ?? (Array.isArray(data) ? data : []);
     },
-    staleTime: 60_000,
+    staleTime: 10_000, // 10s — Freshness Contract: CRM customers
   });
 }

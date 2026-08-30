@@ -1,20 +1,34 @@
 /**
  * Supabase Query Hooks — TanStack Query + Supabase
- * 
+ *
  * All data fetching goes through these hooks.
  * Uses the backend API routes which use the Supabase adapter.
  * No direct Supabase client calls from the frontend.
+ *
+ * ─── Auth strategy (Phase 1.2) ──────────────────────────────────────────────
+ * All client-side CRM queries use `authFetch` from `@/lib/api` (Bearer token
+ * from localStorage + XTransformPort for the Caddy gateway). This ensures
+ * auth works even when HTTP-only cookies aren't forwarded through the proxy.
+ *
+ * ─── Query keys (Phase 1.2) ─────────────────────────────────────────────────
+ * Query keys come from the canonical `qk.*` factory in `@/lib/query-keys`.
+ * The `queryKeys` export is a backward-compat shim that maps the old flat
+ * API (`queryKeys.leads(tenantId)`) to the new hierarchical structure
+ * (`qk.leads.lists()`). New code should use `qk.*` directly.
  */
 
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { authFetch } from '@/lib/api';
+import { qk, queryKeys } from '@/lib/query-keys';
 
 // ─── Generic fetcher ────────────────────────────────────────────────────────
+// Uses authFetch under the hood so all CRM queries are auth-aware. Throws on
+// !res.ok so React Query sees errors correctly (not silent error-JSON-as-data).
 
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    credentials: 'same-origin',
+  const res = await authFetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -29,69 +43,10 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 // ─── Query Key Factory ──────────────────────────────────────────────────────
-
-export const queryKeys = {
-  // CRM
-  leads: (tenantId?: string) => ['leads', tenantId] as const,
-  lead: (id: string) => ['leads', id] as const,
-  contacts: (tenantId?: string) => ['contacts', tenantId] as const,
-  customers: (tenantId?: string) => ['customers', tenantId] as const,
-  customer: (id: string) => ['customers', id] as const,
-  customer360: (id: string) => ['customer360', id] as const,
-  pipeline: (tenantId?: string) => ['pipeline', tenantId] as const,
-
-  // Communication
-  conversations: (tenantId?: string) => ['conversations', tenantId] as const,
-  conversation: (id: string) => ['conversation', id] as const,
-  inboxMessages: (conversationId: string) => ['inboxMessages', conversationId] as const,
-  campaigns: (tenantId?: string) => ['campaigns', tenantId] as const,
-  broadcast: (tenantId?: string) => ['broadcast', tenantId] as const,
-  templates: (tenantId?: string) => ['templates', tenantId] as const,
-  channelConfigs: (tenantId?: string) => ['channelConfigs', tenantId] as const,
-
-  // Automation
-  workflows: (tenantId?: string) => ['workflows', tenantId] as const,
-  workflow: (id: string) => ['workflows', id] as const,
-  triggers: (tenantId?: string) => ['triggers', tenantId] as const,
-  variables: (tenantId?: string) => ['variables', tenantId] as const,
-  executions: (tenantId?: string) => ['executions', tenantId] as const,
-  forms: (tenantId?: string) => ['forms', tenantId] as const,
-  formResponses: (formId: string) => ['formResponses', formId] as const,
-
-  // Operations
-  jobs: (tenantId?: string) => ['jobs', tenantId] as const,
-  job: (id: string) => ['jobs', id] as const,
-  bookings: (tenantId?: string) => ['bookings', tenantId] as const,
-  employees: (tenantId?: string) => ['employees', tenantId] as const,
-  employee: (id: string) => ['employees', id] as const,
-  dispatch: (tenantId?: string) => ['dispatch', tenantId] as const,
-
-  // Finance
-  quotes: (tenantId?: string) => ['quotes', tenantId] as const,
-  quote: (id: string) => ['quotes', id] as const,
-  invoices: (tenantId?: string) => ['invoices', tenantId] as const,
-  invoice: (id: string) => ['invoices', id] as const,
-  billing: (tenantId?: string) => ['billing', tenantId] as const,
-
-  // System
-  credentials: (tenantId?: string) => ['credentials', tenantId] as const,
-  auditLogs: (tenantId?: string) => ['auditLogs', tenantId] as const,
-  reports: (tenantId?: string) => ['reports', tenantId] as const,
-  settings: (tenantId?: string) => ['settings', tenantId] as const,
-
-  // Super Admin
-  saasStats: () => ['saasStats'] as const,
-  tenants: () => ['tenants'] as const,
-  tenant: (id: string) => ['tenants', id] as const,
-  subscriptions: () => ['subscriptions'] as const,
-  subscription: (id: string) => ['subscriptions', id] as const,
-  featureFlags: (tenantId?: string) => ['featureFlags', tenantId] as const,
-  menuItems: (tenantId: string) => ['menuItems', tenantId] as const,
-  users: () => ['users'] as const,
-
-  // Dashboard
-  dashboardStats: (tenantId?: string) => ['dashboardStats', tenantId] as const,
-};
+// Re-exported from the canonical `@/lib/query-keys` module for backward compat.
+// The `queryKeys` shim maps old flat calls to the new hierarchical `qk.*`
+// structure. New hooks should use `qk.*` directly.
+export { queryKeys };
 
 // ─── CRM Hooks ──────────────────────────────────────────────────────────────
 
@@ -114,7 +69,7 @@ export function useCreateLead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: any) => apiFetch('/api/leads', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['leads'] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.leads.all }); },
   });
 }
 
@@ -122,7 +77,7 @@ export function useUpdateLead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: any) => apiFetch(`/api/leads/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    onSuccess: (_: any, vars: any) => { qc.invalidateQueries({ queryKey: ['leads'] }); qc.invalidateQueries({ queryKey: queryKeys.lead(vars.id) }); },
+    onSuccess: (_: any, vars: any) => { qc.invalidateQueries({ queryKey: qk.leads.all }); qc.invalidateQueries({ queryKey: qk.leads.detail(vars.id) }); },
   });
 }
 
@@ -249,7 +204,7 @@ export function useCreateJob() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: any) => apiFetch('/api/jobs', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['jobs'] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.jobs.all }); },
   });
 }
 
@@ -257,13 +212,13 @@ export function useUpdateJob() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: any) => apiFetch(`/api/jobs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    onSuccess: (_: any, vars: any) => { qc.invalidateQueries({ queryKey: ['jobs'] }); qc.invalidateQueries({ queryKey: queryKeys.job(vars.id) }); },
+    onSuccess: (_: any, vars: any) => { qc.invalidateQueries({ queryKey: qk.jobs.all }); qc.invalidateQueries({ queryKey: qk.jobs.detail(vars.id) }); },
   });
 }
 
 export function useBookings(customerId?: string) {
   return useQuery({
-    queryKey: ['bookings', customerId],
+    queryKey: qk.bookings.list({ customerId }),
     queryFn: () => apiFetch<any>(`/api/bookings${customerId ? `?customerId=${customerId}` : ''}`),
   });
 }
@@ -279,7 +234,7 @@ export function useCreateEmployee() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: any) => apiFetch('/api/employees', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['employees'] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.employees.all }); },
   });
 }
 
@@ -287,7 +242,7 @@ export function useUpdateEmployee() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: any) => apiFetch(`/api/employees/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['employees'] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.employees.all }); },
   });
 }
 
@@ -311,7 +266,7 @@ export function useCreateInvoice() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: any) => apiFetch('/api/invoices', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoices'] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.invoices.all }); },
   });
 }
 
@@ -334,7 +289,7 @@ export function useWorkflow(id: string) {
 
 export function useWorkflowAutomations(tenantId?: string) {
   return useQuery({
-    queryKey: ['workflowAutomations', tenantId],
+    queryKey: qk.workflows.automations(),
     queryFn: () => apiFetch<any[]>(`/api/workflow-automations${tenantId ? `?tenantId=${tenantId}` : ''}`),
   });
 }
@@ -391,7 +346,7 @@ export function useUpdateTenant() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: any) => apiFetch(`/api/superadmin/tenants/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    onSuccess: (_: any, vars: any) => { qc.invalidateQueries({ queryKey: ['tenants'] }); qc.invalidateQueries({ queryKey: queryKeys.tenant(vars.id) }); },
+    onSuccess: (_: any, vars: any) => { qc.invalidateQueries({ queryKey: qk.superadmin.tenants.all }); qc.invalidateQueries({ queryKey: qk.superadmin.tenants.detail(vars.id) }); },
   });
 }
 
@@ -399,7 +354,7 @@ export function useCreateTenant() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: any) => apiFetch('/api/superadmin/tenants', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tenants'] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.superadmin.tenants.all }); },
   });
 }
 
@@ -407,7 +362,7 @@ export function useDeleteTenant() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiFetch(`/api/superadmin/tenants/${id}`, { method: 'DELETE' }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tenants'] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.superadmin.tenants.all }); },
   });
 }
 
@@ -432,7 +387,7 @@ export function useUpdateSubscription() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: any) => apiFetch('/api/superadmin/subscriptions', { method: 'PUT', body: JSON.stringify({ subscriptionId: id, ...data }) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['subscriptions'] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.superadmin.subscriptions.all }); },
   });
 }
 
@@ -441,7 +396,7 @@ export function usePauseSubscription() {
   return useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
       apiFetch('/api/superadmin/subscriptions', { method: 'PATCH', body: JSON.stringify({ action: 'pause', subscriptionId: id, reason }) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['subscriptions'] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.superadmin.subscriptions.all }); },
   });
 }
 
@@ -457,13 +412,13 @@ export function useToggleFeatureFlag() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: any) => apiFetch('/api/superadmin/feature-flags', { method: 'PUT', body: JSON.stringify(data) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['featureFlags'] }); qc.invalidateQueries({ queryKey: ['menuItems'] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.superadmin.featureFlags }); qc.invalidateQueries({ queryKey: qk.superadmin.menuItems.all }); },
   });
 }
 
 export function useMenuItems(tenantId?: string, enabled: boolean = true) {
   return useQuery({
-    queryKey: tenantId ? queryKeys.menuItems(tenantId) : ['menuItems', 'all'],
+    queryKey: tenantId ? qk.superadmin.menuItems.forTenant(tenantId) : qk.superadmin.menuItems.global,
     queryFn: () => apiFetch<any>(`/api/superadmin/menu-items${tenantId ? `?tenantId=${tenantId}` : '?scope=global'}`),
     enabled,
   });
@@ -471,7 +426,7 @@ export function useMenuItems(tenantId?: string, enabled: boolean = true) {
 
 export function useGlobalMenuItems(enabled: boolean = true) {
   return useQuery({
-    queryKey: ['globalMenuItems'] as const,
+    queryKey: qk.superadmin.menuItems.global,
     queryFn: () => apiFetch<any>(`/api/superadmin/menu-items?scope=global`),
     enabled,
   });
@@ -482,8 +437,8 @@ export function useToggleMenuItem() {
   return useMutation({
     mutationFn: (data: any) => apiFetch('/api/superadmin/menu-items', { method: 'PUT', body: JSON.stringify(data) }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['menuItems'] });
-      qc.invalidateQueries({ queryKey: ['globalMenuItems'] });
+      qc.invalidateQueries({ queryKey: qk.superadmin.menuItems.all });
+      qc.invalidateQueries({ queryKey: qk.superadmin.menuItems.global });
     },
   });
 }
@@ -497,8 +452,8 @@ export function useBulkUpdateMenuItems() {
     mutationFn: (data: { tenantId?: string; scope: 'global' | 'tenant'; items: { key: string; enabled: boolean }[] }) =>
       apiFetch('/api/superadmin/menu-items', { method: 'POST', body: JSON.stringify(data) }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['menuItems'] });
-      qc.invalidateQueries({ queryKey: ['globalMenuItems'] });
+      qc.invalidateQueries({ queryKey: qk.superadmin.menuItems.all });
+      qc.invalidateQueries({ queryKey: qk.superadmin.menuItems.global });
     },
   });
 }
