@@ -42,6 +42,16 @@ import {
 import { toast } from 'sonner';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { authFetch } from '@/lib/client-auth';
+import {
+  useCreateInvoice,
+  useUpdateInvoice,
+  useDeleteInvoice,
+  useDuplicateInvoice,
+  useChangeInvoiceStatus,
+  useReopenInvoice,
+} from '@/hooks/use-crm-data';
+import { useQueryClient } from '@tanstack/react-query';
+import { getInvoiceInvalidations } from '@/lib/invalidation-helpers';
 import { useAppStore } from '@/store/app-store';
 import { DataTable, type Column } from '@/components/ui/data-table';
 
@@ -147,6 +157,25 @@ export function InvoicesView() {
   // Full-page detail mode (Jobber-style) — when 'detail', the list is replaced
   // by `renderInvoiceDetailPage()` instead of the legacy small Dialog.
   const [formMode, setFormMode] = useState<'list' | 'detail' | 'create'>('list');
+
+  // ── Mutations (dependency-aware, auto-invalidate via getInvoiceInvalidations) ──
+  // create/duplicate → invoices.all ONLY (draft, no dashboard)
+  // update/delete/status/mark_paid/reopen → invoices.all + dashboard.all + detail + customer detail
+  // send/reminder/approve → invoices.all + detail (NO dashboard)
+  //
+  // NOTE: invoices-view uses local state for reads (NOT React Query). So the
+  // qk.invoices.* invalidations are currently no-ops — the caller MUST keep
+  // its existing setInvoices(prev => ...) local state updates. The dashboard
+  // + customer detail invalidations DO work (those ARE in RQ).
+  const createInvoice = useCreateInvoice();
+  const updateInvoice = useUpdateInvoice();
+  const deleteInvoice = useDeleteInvoice();
+  const duplicateInvoice = useDuplicateInvoice();
+  const changeInvoiceStatus = useChangeInvoiceStatus();
+  const reopenInvoice = useReopenInvoice();
+  // useQueryClient for handleInvoiceAction's manual invalidation (complex per-channel
+  // error handling can't use useCrmMutation — needs response body on !res.ok)
+  const queryClient = useQueryClient();
 
   // Form
   const [form, setForm] = useState<InvoiceFormData>(EMPTY_FORM());
@@ -392,7 +421,6 @@ export function InvoicesView() {
     try {
       if (isEditing) {
         // ── Edit mode: PUT to /api/invoices/[id] ──
-        // The PUT route recalculates amount/tax/total from itemsJson + taxPercent + discount.
         const body = {
           customerId: form.customer,
           itemsJson: form.lineItems.map((li) => ({
@@ -405,17 +433,11 @@ export function InvoicesView() {
           dueDate: form.dueDate,
           notes: form.notes || '',
         };
-        const res = await authFetch(`/api/invoices/${editingInvoice!.id}`, {
-          method: 'PUT',
-          body: JSON.stringify(body),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error((data as { error?: string }).error || 'Failed to update invoice');
-        }
+        // useUpdateInvoice auto-invalidates: invoices.all + dashboard.all +
+        // invoices.detail(id) + customers.detail(customerId). NO manual fetchInvoices() needed.
+        const data: any = await updateInvoice.mutateAsync({ id: editingInvoice!.id, ...body });
         const updated = parseApiInvoice(data as Record<string, unknown>);
         setInvoices((prev) => prev.map((inv) => (inv.id === updated.id ? updated : inv)));
-        // If the detail dialog is open for this invoice, refresh it too
         if (selectedInvoice?.id === updated.id) {
           setSelectedInvoice(updated);
         }
@@ -437,20 +459,14 @@ export function InvoicesView() {
           taxPercent: form.taxPercent || 0,
           currency,
         };
-        const res = await authFetch('/api/invoices', {
-          method: 'POST',
-          body: JSON.stringify(body),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error((data as { error?: string }).error || 'Failed to create invoice');
-        }
+        // useCreateInvoice auto-invalidates: invoices.all ONLY (draft, NO dashboard).
+        const data: any = await createInvoice.mutateAsync(body);
         const newInvoice = parseApiInvoice((data as { invoice: Record<string, unknown> }).invoice);
         setInvoices((prev) => [newInvoice, ...prev]);
         setFormMode('list');
         toast.success('Invoice created successfully');
       }
-    } catch (e) {
+    } catch (e: any) {
       toast.error(e instanceof Error ? e.message : (isEditing ? 'Failed to update invoice' : 'Failed to create invoice'));
     } finally {
       setSaving(false);
@@ -458,7 +474,7 @@ export function InvoicesView() {
   };
 
   const handleStatusChange = async (invoiceId: string, newStatus: InvoiceStatus) => {
-    // Optimistic update
+    // Optimistic update — PRESERVED (per Phase 1.9d requirements)
     const prevInvoices = invoices;
     setInvoices((curr) =>
       curr.map((inv) => (inv.id === invoiceId ? { ...inv, status: newStatus } : inv))
@@ -467,22 +483,17 @@ export function InvoicesView() {
       setSelectedInvoice((prev) => (prev ? { ...prev, status: newStatus } : prev));
     }
     try {
-      const res = await authFetch(`/api/invoices/${invoiceId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ status: newStatus }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error((data as { error?: string }).error || 'Failed to update invoice');
-      }
+      // useChangeInvoiceStatus auto-invalidates: invoices.all + dashboard.all +
+      // invoices.detail(id) + customers.detail(customerId).
+      const data: any = await changeInvoiceStatus.mutateAsync({ id: invoiceId, status: newStatus });
       const parsed = parseApiInvoice(data as Record<string, unknown>);
       setInvoices((curr) => curr.map((inv) => (inv.id === invoiceId ? parsed : inv)));
       if (selectedInvoice?.id === invoiceId) {
         setSelectedInvoice(parsed);
       }
       toast.success(`Invoice marked as ${getStatusConfig(newStatus).label}`);
-    } catch (e) {
-      // Rollback
+    } catch (e: any) {
+      // Rollback — PRESERVED
       setInvoices(prevInvoices);
       if (selectedInvoice?.id === invoiceId) {
         const original = prevInvoices.find((i) => i.id === invoiceId) || null;
@@ -494,18 +505,16 @@ export function InvoicesView() {
 
   const handleDeleteInvoice = async (invoiceId: string) => {
     try {
-      const res = await authFetch(`/api/invoices/${invoiceId}`, { method: 'DELETE' });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error((data as { error?: string }).error || 'Failed to delete invoice');
-      }
+      // useDeleteInvoice auto-invalidates: invoices.all + dashboard.all +
+      // invoices.detail(id) + customers.detail(customerId).
+      await deleteInvoice.mutateAsync({ id: invoiceId });
       setInvoices((prev) => prev.filter((inv) => inv.id !== invoiceId));
       if (selectedInvoice?.id === invoiceId) {
         setShowDetailDialog(false);
         setSelectedInvoice(null);
       }
       toast.success('Invoice deleted');
-    } catch (e) {
+    } catch (e: any) {
       toast.error(e instanceof Error ? e.message : 'Failed to delete invoice');
     }
   };
@@ -532,18 +541,12 @@ export function InvoicesView() {
         taxPercent: invoice.taxPercent || 0,
         currency: invoice.currency || currency,
       };
-      const res = await authFetch('/api/invoices', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error((data as { error?: string }).error || 'Failed to duplicate invoice');
-      }
+      // useDuplicateInvoice auto-invalidates: invoices.all ONLY (draft, NO dashboard).
+      const data: any = await duplicateInvoice.mutateAsync(body);
       const newInvoice = parseApiInvoice((data as { invoice: Record<string, unknown> }).invoice);
       setInvoices((prev) => [newInvoice, ...prev]);
       toast.success('Invoice duplicated');
-    } catch (e) {
+    } catch (e: any) {
       toast.error(e instanceof Error ? e.message : 'Failed to duplicate invoice');
     } finally {
       setActionLoading((prev) => {
@@ -662,6 +665,18 @@ export function InvoicesView() {
         } else {
           toast.success(successMsg[action as Exclude<InvoiceAction, 'send' | 'send_email' | 'send_whatsapp' | 'approve'>]);
         }
+      }
+
+      // ── Dependency-aware invalidation (manual, because handleInvoiceAction's
+      // complex per-channel error handling can't use useCrmMutation) ──────────
+      // mark_paid → dashboard + customer detail; send/reminder/approve → no dashboard
+      const invMutationType = action === 'mark_paid' ? 'mark_paid' : (action || 'send');
+      for (const key of getInvoiceInvalidations({
+        mutation: invMutationType,
+        data,
+        variables: { id: invoiceId, action },
+      })) {
+        queryClient.invalidateQueries({ queryKey: key });
       }
 
       // Reflect likely status changes locally
@@ -1049,20 +1064,15 @@ export function InvoicesView() {
   const handleReopenInvoice = async (inv: Invoice) => {
     setActionLoading((prev) => ({ ...prev, [`${inv.id}-reopen`]: true }));
     try {
-      const res = await authFetch(`/api/invoices/${inv.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ status: 'sent', paidAt: null }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error((data as { error?: string }).error || 'Failed to re-open invoice');
-      }
+      // useReopenInvoice auto-invalidates: invoices.all + dashboard.all +
+      // invoices.detail(id) + customers.detail(customerId).
+      const data: any = await reopenInvoice.mutateAsync({ id: inv.id });
       const parsed = parseApiInvoice(data as Record<string, unknown>);
       setInvoices((curr) => curr.map((i) => (i.id === parsed.id ? parsed : i)));
       setSelectedInvoice(parsed);
       toast.success(`Invoice ${parsed.number} re-opened`);
-      void fetchInvoices();
-    } catch (e) {
+      // No void fetchInvoices() needed — useReopenInvoice auto-invalidates.
+    } catch (e: any) {
       toast.error(e instanceof Error ? e.message : 'Failed to re-open invoice');
     } finally {
       setActionLoading((prev) => {

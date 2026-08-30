@@ -36,7 +36,15 @@ import { cn } from '@/lib/utils';
 import { authFetch } from '@/lib/api';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
-import { useLeads } from '@/hooks/use-crm-data';
+import {
+  useLeads,
+  useCreateLead,
+  useUpdateLead,
+  useDeleteLead,
+  useConvertLead,
+  useChangeLeadStatus,
+  useAddLeadNote,
+} from '@/hooks/use-crm-data';
 
 // Phase 4: lead types + helpers + sub-components extracted to src/features/leads/
 import type { Lead, LeadFormData, CustomerOption } from '@/features/leads/types';
@@ -1280,6 +1288,18 @@ export function LeadsView() {
   const totalLeads = leadsData?.pagination?.total ?? 0;
   const totalPages = leadsData?.pagination?.totalPages ?? 1;
 
+  // ── Mutations (dependency-aware, auto-invalidate via getLeadInvalidations) ──
+  // create/update/delete/status → leads.all + dashboard.all (+ detail)
+  // convert → leads.all + dashboard.all + customers.all + jobs.all +
+  //           jobs.calendar.all() + dispatch.all + customer/job details
+  // note → leads.detail(id) ONLY (NO dashboard — notesJson not consumed by dashboard)
+  const createLead = useCreateLead();
+  const updateLead = useUpdateLead();
+  const deleteLead = useDeleteLead();
+  const convertLead = useConvertLead();
+  const changeLeadStatus = useChangeLeadStatus();
+  const addLeadNote = useAddLeadNote();
+
   // Reset page when filters change (uses debounced search so a single
   // "stop typing" event resets page once, not once per keystroke)
   useEffect(() => {
@@ -1422,24 +1442,21 @@ export function LeadsView() {
         body.notesJson = notesJsonToSend;
       }
 
-      const res = await authFetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (res.ok) {
-        toast.success(`Lead ${isEditing ? 'updated' : 'created'} successfully`);
-        setFormMode('list');
-        setEditingLead(null);
-        setLeadForm({ ...EMPTY_FORM });
-        fetchLeads();
+      // useCreateLead/useUpdateLead auto-invalidate qk.leads.all + qk.dashboard.all
+      // (+ qk.leads.detail(id) for update). NO fetchLeads() needed.
+      if (isEditing) {
+        await updateLead.mutateAsync({ id: editingLead.id, ...body } as any);
       } else {
-        const data = await res.json();
-        toast.error(data.error || `Failed to ${isEditing ? 'update' : 'create'} lead`);
+        await createLead.mutateAsync(body as any);
       }
-    } catch {
-      toast.error('Network error');
+
+      toast.success(`Lead ${isEditing ? 'updated' : 'created'} successfully`);
+      setFormMode('list');
+      setEditingLead(null);
+      setLeadForm({ ...EMPTY_FORM });
+    } catch (e: any) {
+      const msg = e instanceof Error ? e.message : `Failed to ${isEditing ? 'update' : 'create'} lead`;
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -1451,29 +1468,23 @@ export function LeadsView() {
     try {
       // Soft-delete: sets deletedAt = now(). Lead is hidden from active list
       // but kept in Lead History for audit/permanent-delete.
-      const res = await authFetch(`/api/leads/${deletingLead.id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ softDelete: true }),
-      });
-      if (res.ok) {
-        toast.success('Lead moved to History');
-        setShowDeleteDialog(false);
-        setDeletingLead(null);
-        if (showDetailDialog && selectedLead?.id === deletingLead.id) {
-          setShowDetailDialog(false);
-          setSelectedLead(null);
-        }
-        if (formMode === 'detail' && selectedLead?.id === deletingLead.id) {
-          setFormMode('list');
-          setSelectedLead(null);
-        }
-        fetchLeads();
-      } else {
-        toast.error('Failed to delete lead');
+      // useDeleteLead auto-includes JSON.stringify + Content-Type.
+      // Auto-invalidates qk.leads.all + qk.dashboard.all + qk.leads.detail(id).
+      await deleteLead.mutateAsync({ id: deletingLead.id, softDelete: true });
+      toast.success('Lead moved to History');
+      setShowDeleteDialog(false);
+      setDeletingLead(null);
+      if (showDetailDialog && selectedLead?.id === deletingLead.id) {
+        setShowDetailDialog(false);
+        setSelectedLead(null);
       }
-    } catch {
-      toast.error('Network error');
+      if (formMode === 'detail' && selectedLead?.id === deletingLead.id) {
+        setFormMode('list');
+        setSelectedLead(null);
+      }
+      // No fetchLeads() needed — useDeleteLead auto-invalidates.
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete lead');
     } finally {
       setDeletingLeadLoading(false);
     }
@@ -1483,30 +1494,23 @@ export function LeadsView() {
     if (!convertingLead) return;
     setConverting(true);
     try {
-      const res = await authFetch('/api/leads/convert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadId: convertingLead.id }),
-      });
-      if (res.ok) {
-        toast.success(`"${convertingLead.name}" converted to job successfully!`);
-        setShowConvertDialog(false);
-        setConvertingLead(null);
-        if (showDetailDialog) {
-          setShowDetailDialog(false);
-          setSelectedLead(null);
-        }
-        if (formMode === 'detail') {
-          setFormMode('list');
-          setSelectedLead(null);
-        }
-        fetchLeads();
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Failed to convert lead');
+      // useConvertLead auto-invalidates: leads.all + dashboard.all +
+      // customers.all + jobs.all + jobs.calendar.all() + dispatch.all +
+      // customer/job details (from response). NO fetchLeads() needed.
+      await convertLead.mutateAsync({ leadId: convertingLead.id });
+      toast.success(`"${convertingLead.name}" converted to job successfully!`);
+      setShowConvertDialog(false);
+      setConvertingLead(null);
+      if (showDetailDialog) {
+        setShowDetailDialog(false);
+        setSelectedLead(null);
       }
-    } catch {
-      toast.error('Network error');
+      if (formMode === 'detail') {
+        setFormMode('list');
+        setSelectedLead(null);
+      }
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Failed to convert lead');
     } finally {
       setConverting(false);
     }
@@ -1515,23 +1519,15 @@ export function LeadsView() {
   const handleStatusChange = async (leadId: string, newStatus: string) => {
     setStatusLoadingId(leadId);
     try {
-      const res = await authFetch(`/api/leads/${leadId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (res.ok) {
-        toast.success(`Status updated to ${STATUS_CONFIG[newStatus]?.label || newStatus}`);
-        fetchLeads();
-        if (selectedLead?.id === leadId) {
-          setSelectedLead({ ...selectedLead, status: newStatus });
-        }
-      } else {
-        toast.error('Failed to update status');
-        throw new Error('update failed');
+      // useChangeLeadStatus auto-invalidates qk.leads.all + qk.dashboard.all +
+      // qk.leads.detail(id). NO fetchLeads() needed.
+      await changeLeadStatus.mutateAsync({ id: leadId, status: newStatus });
+      toast.success(`Status updated to ${STATUS_CONFIG[newStatus]?.label || newStatus}`);
+      if (selectedLead?.id === leadId) {
+        setSelectedLead({ ...selectedLead, status: newStatus });
       }
     } catch (err) {
-      toast.error('Network error');
+      toast.error(err instanceof Error ? err.message : 'Failed to update status');
       throw err;
     } finally {
       setStatusLoadingId(null);
@@ -1665,21 +1661,18 @@ export function LeadsView() {
         try { return JSON.parse(selectedLead.notesJson || '[]'); } catch { return []; }
       })();
       const updatedNotes = [...existingNotes, { text: newNote.trim(), createdAt: new Date().toISOString() }];
-      const res = await authFetch(`/api/leads/${selectedLead.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notesJson: JSON.stringify(updatedNotes) }),
+      // useAddLeadNote uses mutation='note' → invalidates qk.leads.detail(id) ONLY.
+      // NO qk.leads.all, NO qk.dashboard.all (notesJson not consumed by dashboard/list).
+      await addLeadNote.mutateAsync({
+        id: selectedLead.id,
+        notesJson: JSON.stringify(updatedNotes),
       });
-      if (res.ok) {
-        toast.success('Note added');
-        setNewNote('');
-        setSelectedLead({ ...selectedLead, notesJson: JSON.stringify(updatedNotes) });
-        fetchLeads();
-      } else {
-        toast.error('Failed to add note');
-      }
-    } catch {
-      toast.error('Network error');
+      toast.success('Note added');
+      setNewNote('');
+      setSelectedLead({ ...selectedLead, notesJson: JSON.stringify(updatedNotes) });
+      // No fetchLeads() needed — notes don't affect the list (list doesn't show notes)
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Failed to add note');
     }
   };
 

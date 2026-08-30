@@ -219,7 +219,7 @@ export function useExpenses() {
 //
 // Migration: Phase 1.8a — expenses-view.tsx is the first consumer.
 
-import { getExpenseInvalidations, getCustomerInvalidations, getContactInvalidations } from '@/lib/invalidation-helpers';
+import { getExpenseInvalidations, getCustomerInvalidations, getContactInvalidations, getLeadInvalidations, getInvoiceInvalidations } from '@/lib/invalidation-helpers';
 
 export interface ExpenseCreateInput {
   category: string;
@@ -798,5 +798,227 @@ export function useImportContactsFormData() {
         queryClient.invalidateQueries({ queryKey });
       }
     },
+  });
+}
+
+// ── Lead mutations (dependency-aware) ───────────────────────────────────────
+//
+// These hooks use `useCrmMutation` + `getLeadInvalidations` so every
+// mutation invalidates exactly the right cache keys:
+//   - create/update/delete/status → leads.all + dashboard.all (+ detail)
+//   - convert → leads.all + dashboard.all + customers.all + jobs.all +
+//               jobs.calendar.all() + dispatch.all + customer/job details
+//   - note → leads.detail(id) ONLY (NO dashboard, NO list — notesJson not
+//            consumed by dashboard or list, only by detail view)
+//
+// ─── Dashboard consumption (verified Phase 1.9c audit) ──────────────────────
+// The dashboard API consumes: lead.count, lead.groupBy(status), lead.groupBy(source),
+// lead.findMany(recent 5). Note-only updates do NOT affect these → no dashboard
+// invalidation for 'note' mutations.
+//
+// Migration: Phase 1.9c — leads-view.tsx
+
+export interface LeadSaveInput {
+  id?: string; // present for update, absent for create
+  title?: string | null;
+  name: string;
+  phone: string;
+  email?: string | null;
+  source?: string;
+  status?: string;
+  priority?: string;
+  value?: number;
+  description?: string | null;
+  address?: string | null;
+  serviceType?: string | null;
+  serviceId?: string | null;
+  lineItemsJson?: string;
+  imagesJson?: string;
+  assessmentImagesJson?: string;
+  customerId?: string | null;
+  notesJson?: string;
+}
+
+export interface LeadDeleteInput {
+  id: string;
+  softDelete?: boolean;
+}
+
+export interface LeadConvertInput {
+  leadId: string;
+}
+
+export interface LeadStatusChangeInput {
+  id: string;
+  status: string;
+}
+
+export interface LeadNoteInput {
+  id: string;
+  notesJson: string;
+}
+
+export function useCreateLead() {
+  return useCrmMutation<unknown, Omit<LeadSaveInput, 'id'>>({
+    url: '/api/leads',
+    method: 'POST',
+    invalidate: ({ data }) =>
+      getLeadInvalidations({ mutation: 'create', data }),
+  });
+}
+
+export function useUpdateLead() {
+  return useCrmMutation<unknown, LeadSaveInput>({
+    url: ({ id }) => `/api/leads/${id}`,
+    method: 'PUT',
+    invalidate: ({ data, variables }) =>
+      getLeadInvalidations({ mutation: 'update', data, variables }),
+  });
+}
+
+export function useDeleteLead() {
+  return useCrmMutation<unknown, LeadDeleteInput>({
+    url: ({ id }) => `/api/leads/${id}`,
+    method: 'DELETE',
+    invalidate: ({ variables }) =>
+      getLeadInvalidations({ mutation: 'delete', variables }),
+  });
+}
+
+export function useConvertLead() {
+  return useCrmMutation<unknown, LeadConvertInput>({
+    url: '/api/leads/convert',
+    method: 'POST',
+    invalidate: ({ data, variables }) =>
+      getLeadInvalidations({ mutation: 'convert', data, variables }),
+  });
+}
+
+export function useChangeLeadStatus() {
+  return useCrmMutation<unknown, LeadStatusChangeInput>({
+    url: ({ id }) => `/api/leads/${id}`,
+    method: 'PUT',
+    invalidate: ({ data, variables }) =>
+      getLeadInvalidations({ mutation: 'status', data, variables }),
+  });
+}
+
+export function useAddLeadNote() {
+  return useCrmMutation<unknown, LeadNoteInput>({
+    url: ({ id }) => `/api/leads/${id}`,
+    method: 'PUT',
+    invalidate: ({ variables }) =>
+      getLeadInvalidations({ mutation: 'note', variables }),
+  });
+}
+
+// ── Invoice mutations (dependency-aware) ────────────────────────────────────
+//
+// These hooks use `useCrmMutation` + `getInvoiceInvalidations` so every
+// mutation invalidates exactly the right cache keys:
+//   - create/duplicate → invoices.all ONLY (draft, no dashboard)
+//   - update/delete/status/mark_paid/reopen → invoices.all + dashboard.all +
+//     invoices.detail(id) + customers.detail(customerId)
+//   - send/reminder/approve → invoices.all + invoices.detail(id) (NO dashboard)
+//
+// ─── IMPORTANT: Invoice RQ cache is NOT YET ACTIVE ──────────────────────────
+// invoices-view uses local state (useState + authFetch), NOT React Query.
+// So qk.invoices.* invalidations are currently no-ops. The caller (invoices-view)
+// MUST keep its existing setInvoices(prev => ...) local state updates.
+// The dashboard + customer detail invalidations DO work (those ARE in RQ).
+//
+// Migration: Phase 1.9d — invoices-view.tsx (mutations only; reads stay manual)
+
+export interface InvoiceSaveInput {
+  id?: string; // present for update, absent for create
+  customerId: string;
+  jobId?: string;
+  employeeId?: string;
+  items: Array<{ description: string; quantity: number; rate: number }>;
+  dueDate?: string;
+  notes?: string;
+  discount?: number;
+  taxPercent?: number;
+  currency?: string;
+}
+
+export interface InvoiceUpdateInput extends Partial<InvoiceSaveInput> {
+  id: string;
+  status?: string;
+  paidAt?: string | null;
+}
+
+export interface InvoiceActionInput {
+  id: string;
+  action: string; // 'send' | 'send_email' | 'send_whatsapp' | 'mark_paid' | 'reminder' | 'approve'
+}
+
+export function useCreateInvoice() {
+  return useCrmMutation<unknown, Omit<InvoiceSaveInput, 'id'>>({
+    url: '/api/invoices',
+    method: 'POST',
+    invalidate: ({ data }) =>
+      getInvoiceInvalidations({ mutation: 'create', data }),
+  });
+}
+
+export function useUpdateInvoice() {
+  return useCrmMutation<unknown, InvoiceUpdateInput>({
+    url: ({ id }) => `/api/invoices/${id}`,
+    method: 'PUT',
+    invalidate: ({ data, variables }) =>
+      getInvoiceInvalidations({ mutation: 'update', data, variables }),
+  });
+}
+
+export function useDeleteInvoice() {
+  return useCrmMutation<unknown, { id: string }>({
+    url: ({ id }) => `/api/invoices/${id}`,
+    method: 'DELETE',
+    invalidate: ({ variables }) =>
+      getInvoiceInvalidations({ mutation: 'delete', variables }),
+  });
+}
+
+export function useDuplicateInvoice() {
+  return useCrmMutation<unknown, Omit<InvoiceSaveInput, 'id'>>({
+    url: '/api/invoices',
+    method: 'POST',
+    invalidate: ({ data }) =>
+      getInvoiceInvalidations({ mutation: 'duplicate', data }),
+  });
+}
+
+export function useInvoiceAction() {
+  return useCrmMutation<unknown, InvoiceActionInput>({
+    url: ({ id }) => `/api/invoices/${id}/actions`,
+    method: 'POST',
+    invalidate: ({ data, variables }) => {
+      // Map the action to the correct mutation type for invalidation
+      const action = variables.action;
+      if (action === 'mark_paid') {
+        return getInvoiceInvalidations({ mutation: 'mark_paid', data, variables });
+      }
+      // send, send_email, send_whatsapp, reminder, approve → no dashboard
+      return getInvoiceInvalidations({ mutation: action || 'send', data, variables });
+    },
+  });
+}
+
+export function useChangeInvoiceStatus() {
+  return useCrmMutation<unknown, InvoiceUpdateInput>({
+    url: ({ id }) => `/api/invoices/${id}`,
+    method: 'PUT',
+    invalidate: ({ data, variables }) =>
+      getInvoiceInvalidations({ mutation: 'status', data, variables }),
+  });
+}
+
+export function useReopenInvoice() {
+  return useCrmMutation<unknown, { id: string }>({
+    url: ({ id }) => `/api/invoices/${id}`,
+    method: 'PUT',
+    invalidate: ({ data, variables }) =>
+      getInvoiceInvalidations({ mutation: 'reopen', data, variables }),
   });
 }

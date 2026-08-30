@@ -122,35 +122,55 @@ export function getJobInvalidations(opts: InvalidationContext): QueryKey[] {
 /**
  * Dependency-aware invalidation for Invoice mutations.
  *
- * Affected queries:
- *   - invoices list (always)
- *   - dashboard (always — revenue KPI changes)
- *   - invoice detail (only for update/delete/payment)
- *   - customer detail (only if the invoice has a customerId)
- *   - payments (only for payment mutations)
+ * ─── Mutation types ─────────────────────────────────────────────────────────
+ * 'create'     → invoices.all (new draft — NO dashboard, draft isn't 'paid')
+ * 'duplicate'  → invoices.all (new draft — NO dashboard)
+ * 'update'     → invoices.all + invoices.detail(id) + dashboard.all + customers.detail(id)
+ * 'delete'     → invoices.all + invoices.detail(id) + dashboard.all + customers.detail(id)
+ * 'status'     → invoices.all + invoices.detail(id) + dashboard.all + customers.detail(id)
+ * 'mark_paid'  → invoices.all + invoices.detail(id) + dashboard.all + customers.detail(id)
+ * 'reopen'     → invoices.all + invoices.detail(id) + dashboard.all + customers.detail(id)
+ * 'send'       → invoices.all + invoices.detail(id) (NO dashboard)
+ * 'reminder'   → invoices.all + invoices.detail(id) (NO dashboard)
+ * 'approve'    → invoices.all + invoices.detail(id) (NO dashboard)
+ *
+ * ─── Dashboard consumption (verified Phase 1.9d audit) ──────────────────────
+ * Dashboard aggregates ONLY 'paid' invoices: db.invoice.aggregate({status:'paid'}).
+ * So dashboard invalidation is required ONLY for mutations that change status
+ * to/from 'paid', change total of a paid invoice, or delete a paid invoice.
+ *
+ * ─── Customer detail consumption (verified Phase 1.9d audit) ────────────────
+ * /api/customers/[id] returns invoices + computes totalRevenue, outstandingBalance,
+ * totalInvoices. So customer detail IS affected by mutations that change invoice
+ * status/total/existence.
+ *
+ * ─── Payments: NOT invalidated ──────────────────────────────────────────────
+ * No /api/payments route. No usePayments hook. qk.payments.* has zero consumers.
+ *
+ * ─── Invoice RQ cache: NOT YET ACTIVE ───────────────────────────────────────
+ * invoices-view uses local state (useState + authFetch), NOT React Query. So
+ * qk.invoices.* invalidations are currently no-ops. Caller MUST keep its
+ * existing setInvoices(prev => ...) local state updates.
  */
 export function getInvoiceInvalidations(opts: InvalidationContext): QueryKey[] {
   const { mutation, data, variables } = opts;
-  const keys: QueryKey[] = [qk.invoices.all, qk.dashboard.all];
+  const keys: QueryKey[] = [];
 
-  // Invoice detail
   const invoiceId = data?.id ?? variables?.id;
-  if ((mutation === 'update' || mutation === 'delete' || mutation === 'payment') && invoiceId) {
-    keys.push(qk.invoices.detail(invoiceId));
-  }
-
-  // Customer detail — invoice affects customer balance
   const customerId = data?.customerId ?? variables?.customerId;
-  if (customerId) {
-    keys.push(qk.customers.detail(customerId));
+
+  // Mutations that DON'T affect dashboard (create draft, duplicate draft, send/reminder/approve)
+  const noDashboardMutations = ['create', 'duplicate', 'send', 'reminder', 'approve'];
+  if (noDashboardMutations.includes(mutation)) {
+    keys.push(qk.invoices.all);
+    if (invoiceId) keys.push(qk.invoices.detail(invoiceId));
+    return keys;
   }
 
-  // Payments — only for payment-related mutations
-  if (mutation === 'payment' || mutation === 'refund') {
-    keys.push(qk.payments.all);
-    if (customerId) keys.push(qk.payments.forCustomer(customerId));
-    if (invoiceId) keys.push(qk.payments.forInvoice(invoiceId));
-  }
+  // Mutations that DO affect dashboard (update, delete, status, mark_paid, reopen)
+  keys.push(qk.invoices.all, qk.dashboard.all);
+  if (invoiceId) keys.push(qk.invoices.detail(invoiceId));
+  if (customerId) keys.push(qk.customers.detail(customerId));
 
   return keys;
 }
@@ -160,32 +180,55 @@ export function getInvoiceInvalidations(opts: InvalidationContext): QueryKey[] {
 /**
  * Dependency-aware invalidation for Lead mutations.
  *
- * Affected queries:
- *   - leads list (always)
- *   - dashboard (always — lead count KPI changes)
- *   - lead detail (only for update/delete)
- *   - customers list (only for convert — lead→customer conversion)
- *   - jobs list (only for convert — lead→job conversion)
- *   - customer detail (only for convert, if a customer was created)
- *   - job detail (only for convert, if a job was created)
+ * ─── Mutation types ─────────────────────────────────────────────────────────
+ * 'create'       → leads.all + dashboard.all (new lead affects count + groupBy + recent)
+ * 'update'       → leads.all + leads.detail(id) + dashboard.all (status/source/value changes)
+ * 'delete'       → leads.all + leads.detail(id) + dashboard.all (count + groupBy change)
+ * 'status'       → leads.all + leads.detail(id) + dashboard.all (groupBy status change)
+ * 'convert'      → leads.all + leads.detail(id) + dashboard.all + customers.all +
+ *                  customers.detail(newCustomerId) + jobs.all + jobs.detail(newJobId) +
+ *                  jobs.calendar.all() + dispatch.all
+ * 'note'         → leads.detail(id) ONLY (notesJson not consumed by dashboard or list)
+ *
+ * ─── Dashboard consumption (verified Phase 1.9c audit) ──────────────────────
+ * The dashboard API consumes: lead.count, lead.groupBy(status), lead.groupBy(source),
+ * lead.findMany(recent 5). NONE of these read notesJson. So note-only updates
+ * must NOT invalidate qk.dashboard.all.
+ *
+ * ─── Conversion (verified Phase 1.9c audit) ─────────────────────────────────
+ * /api/leads/convert creates a Customer + Job and updates the Lead (status→won).
+ * Response returns { customer: {id}, job: {id}, lead } so detail IDs are available.
  */
 export function getLeadInvalidations(opts: InvalidationContext): QueryKey[] {
   const { mutation, data, variables } = opts;
+
+  const leadId = data?.id ?? variables?.id;
+
+  // 'note' — narrowest scope: only detail (notes don't affect list or dashboard)
+  if (mutation === 'note') {
+    if (leadId) return [qk.leads.detail(leadId)];
+    return [];
+  }
+
   const keys: QueryKey[] = [qk.leads.all, qk.dashboard.all];
 
-  // Lead detail
-  const leadId = data?.id ?? variables?.id;
-  if ((mutation === 'update' || mutation === 'delete') && leadId) {
+  // Lead detail — for update/delete/status/convert
+  if ((mutation === 'update' || mutation === 'delete' || mutation === 'status' || mutation === 'convert') && leadId) {
     keys.push(qk.leads.detail(leadId));
   }
 
-  // Convert mutation affects multiple entities
+  // Convert mutation affects multiple entities (creates Customer + Job)
   if (mutation === 'convert') {
-    keys.push(qk.customers.all, qk.jobs.all, qk.jobs.calendar.all());
-    // If the conversion created a customer, invalidate its detail
+    keys.push(
+      qk.customers.all,
+      qk.jobs.all,
+      qk.jobs.calendar.all(),
+      qk.dispatch.all,
+    );
+    // Invalidate the newly-created customer's detail
     const newCustomerId = data?.customerId ?? data?.customer?.id;
     if (newCustomerId) keys.push(qk.customers.detail(newCustomerId));
-    // If the conversion created a job, invalidate its detail
+    // Invalidate the newly-created job's detail
     const newJobId = data?.jobId ?? data?.job?.id;
     if (newJobId) keys.push(qk.jobs.detail(newJobId));
   }
