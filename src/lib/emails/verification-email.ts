@@ -160,7 +160,7 @@ export async function verifyEmailToken(
           .select('id, email, emailVerified, emailVerifyTokenExpiresAt')
           .eq('emailVerifyTokenHash', tokenHash)
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (directError) {
           lastDbError = directError.message || JSON.stringify(directError);
@@ -276,7 +276,7 @@ export async function verifyEmailToken(
           .from('User')
           .select('emailVerified')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
         if (recheck) {
           updatedUser = { emailVerified: recheck.emailVerified === true || recheck.emailVerified === 'true' };
         }

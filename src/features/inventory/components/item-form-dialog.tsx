@@ -186,16 +186,18 @@ export function ItemFormDialog({
             </div>
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="item-unit">Unit</Label>
-            <Select value={form.unit} onValueChange={(v) => setForm({ ...form, unit: v })}>
-              <SelectTrigger id="item-unit"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {UNITS.map((u) => (
-                  <SelectItem key={u} value={u} className="capitalize">{u}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="item-unit">Unit</Label>
+              <Select value={form.unit} onValueChange={(v) => setForm({ ...form, unit: v })}>
+                <SelectTrigger id="item-unit"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {UNITS.map((u) => (
+                    <SelectItem key={u} value={u} className="capitalize">{u}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -260,22 +262,6 @@ export function ItemFormDialog({
                 onChange={(e) => setForm({ ...form, reorderQty: e.target.value })}
               />
             </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="item-supplier">Supplier</Label>
-            <Select
-              value={form.supplierId || 'none'}
-              onValueChange={(v) => setForm({ ...form, supplierId: v === 'none' ? '' : v })}
-            >
-              <SelectTrigger id="item-supplier"><SelectValue placeholder="No supplier" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No supplier</SelectItem>
-                {suppliers.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="grid gap-2">

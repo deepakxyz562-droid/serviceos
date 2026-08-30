@@ -157,6 +157,35 @@ export function DataTable<T>({
     });
   };
 
+  // ── Hooks MUST be called BEFORE any early returns (Rules of Hooks) ──────
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: sortedData.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => estimateRowHeight,
+    overscan: 10,
+    enabled: virtualized,
+  });
+
+  const renderRow = (row: T, virtualStyle?: React.CSSProperties) => (
+    <TableRow
+      key={rowKey(row)}
+      className={cn(onRowClick && 'cursor-pointer')}
+      onClick={() => onRowClick?.(row)}
+      style={virtualStyle}
+    >
+      {columns.map((col) => (
+        <TableCell
+          key={col.key}
+          className={cn(col.hideOnMobile && 'hidden sm:table-cell', col.className)}
+        >
+          {col.render(row)}
+        </TableCell>
+      ))}
+    </TableRow>
+  );
+
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -216,36 +245,6 @@ export function DataTable<T>({
   }
 
   // ── Data table ─────────────────────────────────────────────────────────────
-  // For virtualized mode, wrap in a scroll container and render only visible rows.
-  // For non-virtualized mode, render all rows (existing behavior).
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-
-  const virtualizer = useVirtualizer({
-    count: sortedData.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => estimateRowHeight,
-    overscan: 10,
-    enabled: virtualized,
-  });
-
-  const renderRow = (row: T, virtualStyle?: React.CSSProperties) => (
-    <TableRow
-      key={rowKey(row)}
-      className={cn(onRowClick && 'cursor-pointer')}
-      onClick={() => onRowClick?.(row)}
-      style={virtualStyle}
-    >
-      {columns.map((col) => (
-        <TableCell
-          key={col.key}
-          className={cn(col.hideOnMobile && 'hidden sm:table-cell', col.className)}
-        >
-          {col.render(row)}
-        </TableCell>
-      ))}
-    </TableRow>
-  );
-
   return (
     <div className={cn('rounded-md border', className)}>
       {virtualized ? (

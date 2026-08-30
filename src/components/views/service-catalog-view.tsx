@@ -197,9 +197,10 @@ export function ServiceCatalogView() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [activeCount, setActiveCount] = useState(0);
   const [inactiveCount, setInactiveCount] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
+  const [categoriesCount, setCategoriesCount] = useState(0);
 
   // Dialog state
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -216,6 +217,7 @@ export function ServiceCatalogView() {
       setLoading(true);
       const params = new URLSearchParams();
       if (searchQuery) params.set('search', searchQuery);
+      if (categoryFilter && categoryFilter !== 'all') params.set('category', categoryFilter);
       params.set('limit', String(demoPageSize));
 
       const qs = params.toString();
@@ -224,7 +226,7 @@ export function ServiceCatalogView() {
 
       setServices(data.services);
 
-      // Compute stats from the full list
+      // Compute stats from the full list (no category/search filter for stats)
       const statsParams = new URLSearchParams();
       statsParams.set('limit', '100');
       const statsData = await apiGet<{ services: Service[] }>(`/api/services?${statsParams.toString()}`);
@@ -232,13 +234,14 @@ export function ServiceCatalogView() {
 
       setActiveCount(allServices.filter((s) => s.isActive).length);
       setInactiveCount(allServices.filter((s) => !s.isActive).length);
-      setTotalCount(allServices.length);
+      const uniqueCategories = new Set(allServices.map((s) => s.category));
+      setCategoriesCount(uniqueCategories.size);
     } catch (err) {
       console.error('Failed to fetch services:', err);
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, demoPageSize]);
+  }, [searchQuery, categoryFilter, demoPageSize]);
 
   useEffect(() => {
     fetchServices();
@@ -390,21 +393,6 @@ export function ServiceCatalogView() {
             onChange={(e) => setForm({ ...form, basePrice: e.target.value })}
           />
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor="duration">Service Duration</Label>
-          <Select value={form.duration} onValueChange={(val) => setForm({ ...form, duration: val })}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select duration" />
-            </SelectTrigger>
-            <SelectContent>
-              {DURATION_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
       {/* Cost + Markup → auto-calculated unit price */}
@@ -452,14 +440,34 @@ export function ServiceCatalogView() {
         </p>
       )}
 
-      <div className="grid gap-2">
-        <Label htmlFor="icon">Icon (Optional)</Label>
-        <Input
-          id="icon"
-          placeholder="e.g. wrench, brush, hammer"
-          value={form.icon}
-          onChange={(e) => setForm({ ...form, icon: e.target.value })}
-        />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="duration">Service Duration</Label>
+          <Select value={form.duration} onValueChange={(val) => setForm({ ...form, duration: val })}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select duration" />
+            </SelectTrigger>
+            <SelectContent>
+              {DURATION_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground">
+            Duration and unit price will scale based on quantity.
+          </p>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="icon">Icon</Label>
+          <Input
+            id="icon"
+            placeholder="e.g. wrench, brush"
+            value={form.icon}
+            onChange={(e) => setForm({ ...form, icon: e.target.value })}
+          />
+        </div>
       </div>
 
       {/* Online Booking section */}
@@ -676,12 +684,12 @@ export function ServiceCatalogView() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="size-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <Tag className="size-4 text-blue-600" />
+              <div className="size-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <Tag className="size-4 text-amber-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{totalCount}</p>
-                <p className="text-xs text-muted-foreground">Total Services</p>
+                <p className="text-2xl font-bold">{categoriesCount}</p>
+                <p className="text-xs text-muted-foreground">Categories</p>
               </div>
             </div>
           </CardContent>

@@ -372,9 +372,26 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    const existingJob = await db.job.findUnique({
-      where: { id },
-    });
+    let existingJob: any = null;
+    try {
+      existingJob = await db.job.findUnique({
+        where: { id },
+      });
+    } catch {
+      try {
+        const { getSupabaseAdmin } = await import('@/lib/supabase-db');
+        const adminClient = getSupabaseAdmin();
+        const { data: directJob } = await adminClient
+          .from('Job')
+          .select('*')
+          .eq('id', id)
+          .limit(1)
+          .maybeSingle();
+        if (directJob) existingJob = directJob;
+      } catch (e) {
+        console.error('[Jobs PUT] Supabase fallback failed:', e);
+      }
+    }
 
     if (!existingJob) {
       return NextResponse.json(
@@ -671,21 +688,23 @@ export async function PUT(
       updateData.cancelledAt = null;
     }
 
-    const job = await db.job.update({
-      where: { id },
-      data: updateData,
-      include: {
-        assignee: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            role: true,
-            status: true,
-            avatar: true,
+    let job: any = null;
+    try {
+      job = await db.job.update({
+        where: { id },
+        data: updateData,
+        include: {
+          assignee: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              role: true,
+              status: true,
+              avatar: true,
+            },
           },
-        },
-        customer: {
+          customer: {
           select: {
             id: true,
             name: true,
@@ -695,6 +714,29 @@ export async function PUT(
         },
       },
     });
+    } catch (updateErr) {
+      // Supabase adapter threw on db.job.update — try direct Supabase REST update
+      console.error('[Jobs PUT] db.job.update threw, trying Supabase fallback:', updateErr);
+      try {
+        const { getSupabaseAdmin } = await import('@/lib/supabase-db');
+        const adminClient = getSupabaseAdmin();
+        const updatePayload: Record<string, unknown> = { ...updateData, updatedAt: new Date().toISOString() };
+        const { data: updated, error: updateError } = await adminClient
+          .from('Job')
+          .update(updatePayload)
+          .eq('id', id)
+          .select('*')
+          .maybeSingle();
+        if (updateError) {
+          console.error('[Jobs PUT] Supabase fallback update error:', updateError.message);
+          return NextResponse.json({ error: 'Failed to update job' }, { status: 500 });
+        }
+        job = updated;
+      } catch (fallbackErr) {
+        console.error('[Jobs PUT] Supabase fallback threw:', fallbackErr);
+        return NextResponse.json({ error: 'Failed to update job' }, { status: 500 });
+      }
+    }
 
     // ── Auto-geocode when the address changes (or is cleared) ──
     // Mirrors POST /api/jobs behavior: fire-and-forget, never blocks the
@@ -914,9 +956,26 @@ export async function DELETE(
     }
     const { id } = await params;
 
-    const existingJob = await db.job.findUnique({
-      where: { id },
-    });
+    let existingJob: any = null;
+    try {
+      existingJob = await db.job.findUnique({
+        where: { id },
+      });
+    } catch {
+      try {
+        const { getSupabaseAdmin } = await import('@/lib/supabase-db');
+        const adminClient = getSupabaseAdmin();
+        const { data: directJob } = await adminClient
+          .from('Job')
+          .select('*')
+          .eq('id', id)
+          .limit(1)
+          .maybeSingle();
+        if (directJob) existingJob = directJob;
+      } catch (e) {
+        console.error('[Jobs DELETE] Supabase fallback failed:', e);
+      }
+    }
 
     if (!existingJob) {
       return NextResponse.json(
