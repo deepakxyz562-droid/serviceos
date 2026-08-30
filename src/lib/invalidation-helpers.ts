@@ -339,7 +339,9 @@ export function getContactInvalidations(opts: InvalidationContext): QueryKey[] {
  */
 export function getBookingInvalidations(opts: InvalidationContext): QueryKey[] {
   const { mutation, data, variables } = opts;
-  const keys: QueryKey[] = [qk.bookings.all, qk.dashboard.all, qk.jobs.calendar.all()];
+  // Dashboard does NOT consume bookings (verified Phase 1.x review).
+  // Bookings appear on calendar + affect customer/employee detail.
+  const keys: QueryKey[] = [qk.bookings.all, qk.jobs.calendar.all()];
 
   const bookingId = data?.id ?? variables?.id;
   if ((mutation === 'update' || mutation === 'delete') && bookingId) {
@@ -392,7 +394,9 @@ export function getEmployeeInvalidations(opts: InvalidationContext): QueryKey[] 
  */
 export function getExpenseInvalidations(opts: InvalidationContext): QueryKey[] {
   const { mutation, data, variables } = opts;
-  const keys: QueryKey[] = [qk.expenses.all, qk.dashboard.all];
+  // Dashboard does NOT consume expenses (verified Phase 1.x review).
+  // Only invalidate expenses cache + detail.
+  const keys: QueryKey[] = [qk.expenses.all];
 
   const expenseId = data?.id ?? variables?.id;
   if ((mutation === 'update' || mutation === 'delete') && expenseId) {
@@ -416,14 +420,15 @@ export function getExpenseInvalidations(opts: InvalidationContext): QueryKey[] {
  */
 export function getQuoteInvalidations(opts: InvalidationContext): QueryKey[] {
   const { mutation, data, variables } = opts;
-  const keys: QueryKey[] = [qk.quotes.all, qk.dashboard.all];
+  // Dashboard does NOT consume quotes (verified Phase  1.x review).
+  const keys: QueryKey[] = [qk.quotes.all];
 
   const quoteId = data?.id ?? variables?.id;
   if ((mutation === 'update' || mutation === 'delete') && quoteId) {
     keys.push(qk.quotes.detail(quoteId));
   }
 
-  // Convert-to-job creates a job, so invalidate jobs + calendar
+  // Convert-to-job creates a job, so invalidate jobs + calendar + dispatch
   if (mutation === 'convert-to-job' || mutation === 'convert') {
     keys.push(qk.jobs.all, qk.jobs.calendar.all(), qk.dispatch.all);
     const newJobId = data?.jobId ?? data?.job?.id;
