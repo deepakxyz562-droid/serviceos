@@ -15,6 +15,7 @@ import {
   X,
   ToggleLeft,
   ToggleRight,
+  Calendar,
 } from 'lucide-react';
 import {
   Card,
@@ -63,6 +64,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
+import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -85,21 +87,58 @@ interface ServiceForm {
   name: string;
   description: string;
   category: string;
+  costPrice: string;
+  markup: string;
   basePrice: string;
   duration: string;
   icon: string;
   isActive: boolean;
+  isBookable: boolean;
+  isOnlineBookable: boolean;
 }
 
 const EMPTY_FORM: ServiceForm = {
   name: '',
   description: '',
   category: 'general',
+  costPrice: '0',
+  markup: '0',
   basePrice: '0',
   duration: '60',
   icon: '',
   isActive: true,
+  isBookable: false,
+  isOnlineBookable: false,
 };
+
+const DURATION_OPTIONS = [
+  { value: '15', label: '15m' },
+  { value: '30', label: '30m' },
+  { value: '45', label: '45m' },
+  { value: '60', label: '1h' },
+  { value: '90', label: '1h 30m' },
+  { value: '120', label: '2h' },
+  { value: '150', label: '2h 30m' },
+  { value: '180', label: '3h' },
+  { value: '210', label: '3h 30m' },
+  { value: '240', label: '4h' },
+  { value: '270', label: '4h 30m' },
+  { value: '300', label: '5h' },
+  { value: '330', label: '5h 30m' },
+  { value: '360', label: '6h' },
+  { value: '390', label: '6h 30m' },
+  { value: '420', label: '7h' },
+  { value: '450', label: '7h 30m' },
+  { value: '480', label: '8h' },
+  { value: '510', label: '8h 30m' },
+  { value: '540', label: '9h' },
+  { value: '570', label: '9h 30m' },
+  { value: '600', label: '10h' },
+  { value: '630', label: '10h 30m' },
+  { value: '660', label: '11h' },
+  { value: '690', label: '11h 30m' },
+  { value: '720', label: '12h' },
+];
 
 const CATEGORIES = [
   'general',
@@ -150,6 +189,8 @@ function formatDuration(minutes: number): string {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function ServiceCatalogView() {
+  const { format, currency } = useCompanyCurrency();
+  const currencySymbol = currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
   // Demo-mode page size cap (5 for demo tenant, else 100)
   const demoPageSize = useDemoPageSize(100);
 
@@ -221,10 +262,14 @@ export function ServiceCatalogView() {
       name: service.name,
       description: service.description || '',
       category: service.category,
+      costPrice: String(service.costPrice || 0),
+      markup: String(service.markup || 0),
       basePrice: String(service.basePrice),
       duration: String(service.duration),
       icon: service.icon || '',
       isActive: service.isActive,
+      isBookable: service.isBookable || false,
+      isOnlineBookable: service.isOnlineBookable || false,
     });
     setEditDialogOpen(true);
   };
@@ -242,10 +287,14 @@ export function ServiceCatalogView() {
         name: form.name.trim(),
         description: form.description.trim() || null,
         category: form.category,
+        costPrice: parseFloat(form.costPrice) || 0,
+        markup: parseFloat(form.markup) || 0,
         basePrice: parseFloat(form.basePrice) || 0,
         duration: parseInt(form.duration) || 60,
         icon: form.icon.trim() || null,
         isActive: form.isActive,
+        isBookable: form.isBookable,
+        isOnlineBookable: form.isOnlineBookable,
       });
       setAddDialogOpen(false);
       resetForm();
@@ -265,10 +314,14 @@ export function ServiceCatalogView() {
         name: form.name.trim(),
         description: form.description.trim() || null,
         category: form.category,
+        costPrice: parseFloat(form.costPrice) || 0,
+        markup: parseFloat(form.markup) || 0,
         basePrice: parseFloat(form.basePrice) || 0,
         duration: parseInt(form.duration) || 60,
         icon: form.icon.trim() || null,
         isActive: form.isActive,
+        isBookable: form.isBookable,
+        isOnlineBookable: form.isOnlineBookable,
       });
       setEditDialogOpen(false);
       setSelectedService(null);
@@ -344,7 +397,7 @@ export function ServiceCatalogView() {
           </Select>
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="basePrice">Base Price ($)</Label>
+          <Label htmlFor="basePrice">Unit Price ({currencySymbol})</Label>
           <Input
             id="basePrice"
             type="number"
@@ -356,17 +409,70 @@ export function ServiceCatalogView() {
           />
         </div>
       </div>
+
+      {/* Cost + Markup → auto-calculated unit price */}
       <div className="grid grid-cols-2 gap-4">
         <div className="grid gap-2">
-          <Label htmlFor="duration">Duration (minutes)</Label>
+          <Label htmlFor="costPrice">Cost ({currencySymbol})</Label>
           <Input
-            id="duration"
+            id="costPrice"
             type="number"
-            min="1"
-            placeholder="60"
-            value={form.duration}
-            onChange={(e) => setForm({ ...form, duration: e.target.value })}
+            step="0.01"
+            min="0"
+            placeholder="0.00"
+            value={form.costPrice}
+            onChange={(e) => {
+              const newCost = e.target.value;
+              const cost = parseFloat(newCost) || 0;
+              const markup = parseFloat(form.markup) || 0;
+              const calculatedPrice = (cost + (cost * markup / 100)).toFixed(2);
+              setForm({ ...form, costPrice: newCost, basePrice: calculatedPrice });
+            }}
           />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="markup">Markup (%)</Label>
+          <Input
+            id="markup"
+            type="number"
+            step="1"
+            min="0"
+            placeholder="0"
+            value={form.markup}
+            onChange={(e) => {
+              const newMarkup = e.target.value;
+              const cost = parseFloat(form.costPrice) || 0;
+              const markup = parseFloat(newMarkup) || 0;
+              const calculatedPrice = (cost + (cost * markup / 100)).toFixed(2);
+              setForm({ ...form, markup: newMarkup, basePrice: calculatedPrice });
+            }}
+          />
+        </div>
+      </div>
+      {parseFloat(form.costPrice) > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Unit price auto-calculated: {currencySymbol}{form.basePrice} = {currencySymbol}{form.costPrice} + {form.markup}% markup
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="duration">Service Duration</Label>
+          <Select value={form.duration} onValueChange={(val) => setForm({ ...form, duration: val })}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select duration" />
+            </SelectTrigger>
+            <SelectContent>
+              {DURATION_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground">
+            Duration and unit price will scale based on quantity.
+          </p>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="icon">Icon</Label>
@@ -378,6 +484,38 @@ export function ServiceCatalogView() {
           />
         </div>
       </div>
+
+      {/* Online Booking section */}
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 p-3 space-y-3">
+        <div className="flex items-center gap-2">
+          <Calendar className="size-4 text-emerald-600" />
+          <span className="text-sm font-medium">Online Booking</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          These settings control marketplace visibility and online booking.
+        </p>
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label className="text-sm">Bookable</Label>
+            <p className="text-xs text-muted-foreground">Allow customers to book this service</p>
+          </div>
+          <Switch
+            checked={form.isBookable}
+            onCheckedChange={(checked) => setForm({ ...form, isBookable: checked })}
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label className="text-sm">Online booking enabled</Label>
+            <p className="text-xs text-muted-foreground">Show on marketplace detail page for online booking</p>
+          </div>
+          <Switch
+            checked={form.isOnlineBookable}
+            onCheckedChange={(checked) => setForm({ ...form, isOnlineBookable: checked })}
+          />
+        </div>
+      </div>
+
       <div className="flex items-center justify-between rounded-lg border p-3">
         <div className="space-y-0.5">
           <Label>Active</Label>

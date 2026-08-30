@@ -499,15 +499,27 @@ export default function HomePageClient() {
                       ? `${window.location.pathname}?${params.toString()}`
                       : window.location.pathname;
                     window.history.replaceState({}, '', cleanUrl);
-                    // Reload to pick up the new auth state
+                    // Show success toast before reload
+                    toast.success('Email verified successfully!', {
+                      description: 'Welcome to Fieseros. Let\'s set up your account.',
+                    });
+                    // Reload to pick up the new auth state — the checkSession
+                    // function will detect onboardingCompleted=false and show
+                    // the onboarding wizard automatically.
                     window.location.reload();
                     return;
                   }
                 } else {
-                  // Verification failed — show error but don't crash
+                  // Verification failed — show VISIBLE error to the user
+                  toast.error('Email verification failed', {
+                    description: data.error || 'Please try again or contact support.',
+                  });
                   console.error('[verify-email] Verification failed:', data.error);
                 }
               } catch (verifyErr) {
+                toast.error('Email verification failed', {
+                  description: 'Network error. Please check your connection and try again.',
+                });
                 console.error('[verify-email] Network error:', verifyErr);
               }
               // Strip the verify params even on failure (don't loop)

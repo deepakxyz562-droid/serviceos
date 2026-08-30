@@ -84,19 +84,67 @@ export async function verifyEmailToken(
   try {
     const tokenHash = hashToken(rawToken);
 
-    // Find user by token hash. The lookup is indexed (User.emailVerifyTokenHash
-    // @@index). We don't use timingSafeEqual here because the DB lookup by hash
-    // is constant-time-equivalent (the hash itself is the secret; an attacker
-    // can't enumerate hashes without compromising the DB).
-    const user = await db.user.findFirst({
-      where: { emailVerifyTokenHash: tokenHash },
-      select: {
-        id: true,
-        email: true,
-        emailVerified: true,
-        emailVerifyTokenExpiresAt: true,
-      },
-    });
+    // Find user by token hash. Try the Prisma adapter first, then fall back
+    // to a direct Supabase REST query if the adapter throws (the Supabase
+    // adapter can fail on certain column lookups like emailVerifyTokenHash).
+    let user: { id: string; email: string; emailVerified: boolean; emailVerifyTokenExpiresAt: Date | null } | null = null;
+
+    try {
+      user = await db.user.findFirst({
+        where: { emailVerifyTokenHash: tokenHash },
+        select: {
+          id: true,
+          email: true,
+          emailVerified: true,
+          emailVerifyTokenExpiresAt: true,
+        },
+      });
+    } catch (findFirstErr) {
+      // The Supabase adapter threw on findFirst. Try a direct Supabase REST query.
+      logger.warn(
+        { component: 'email-verification', tokenHashPrefix: tokenHash.substring(0, 8), err: findFirstErr },
+        'db.user.findFirst threw — trying direct Supabase REST fallback for lookup',
+      );
+
+      try {
+        const { getSupabaseAdmin } = await import('@/lib/supabase-db');
+        const adminClient = getSupabaseAdmin();
+
+        const { data: directUser, error: directError } = await adminClient
+          .from('User')
+          .select('id, email, emailVerified, emailVerifyTokenExpiresAt')
+          .eq('emailVerifyTokenHash', tokenHash)
+          .limit(1)
+          .single();
+
+        if (directError) {
+          logger.error(
+            { component: 'email-verification', supabaseError: directError.message },
+            'Direct Supabase REST lookup also failed',
+          );
+        }
+
+        if (directUser) {
+          user = {
+            id: directUser.id,
+            email: directUser.email,
+            emailVerified: directUser.emailVerified === true || directUser.emailVerified === 'true',
+            emailVerifyTokenExpiresAt: directUser.emailVerifyTokenExpiresAt
+              ? new Date(directUser.emailVerifyTokenExpiresAt)
+              : null,
+          };
+          logger.info(
+            { component: 'email-verification', userId: user.id },
+            'User found via direct Supabase REST fallback',
+          );
+        }
+      } catch (fallbackErr) {
+        logger.error(
+          { component: 'email-verification', err: fallbackErr },
+          'Direct Supabase REST lookup threw an exception',
+        );
+      }
+    }
 
     if (!user) {
       return { ok: false, error: 'Invalid or already-used verification token.' };
@@ -150,10 +198,31 @@ export async function verifyEmailToken(
     }
 
     // CRITICAL: Re-fetch the user to verify the update actually persisted.
-    const updatedUser = await db.user.findUnique({
-      where: { id: user.id },
-      select: { emailVerified: true },
-    });
+    // Use try/catch + Supabase fallback (same pattern as the lookup above).
+    let updatedUser: { emailVerified: boolean } | null = null;
+    try {
+      updatedUser = await db.user.findUnique({
+        where: { id: user.id },
+        select: { emailVerified: true },
+      });
+    } catch (refetchErr) {
+      // Adapter threw on findUnique — try direct Supabase
+      logger.warn({ component: 'email-verification', userId: user.id, err: refetchErr }, 'db.user.findUnique threw on re-fetch — trying Supabase');
+      try {
+        const { getSupabaseAdmin } = await import('@/lib/supabase-db');
+        const adminClient = getSupabaseAdmin();
+        const { data: recheck } = await adminClient
+          .from('User')
+          .select('emailVerified')
+          .eq('id', user.id)
+          .single();
+        if (recheck) {
+          updatedUser = { emailVerified: recheck.emailVerified === true || recheck.emailVerified === 'true' };
+        }
+      } catch (e) {
+        logger.error({ component: 'email-verification', err: e }, 'Supabase re-fetch also failed');
+      }
+    }
 
     if (!updatedUser || !updatedUser.emailVerified) {
       // The Prisma/Supabase adapter update didn't persist.
