@@ -198,18 +198,46 @@ export function getLeadInvalidations(opts: InvalidationContext): QueryKey[] {
 /**
  * Dependency-aware invalidation for Customer mutations.
  *
- * Affected queries:
- *   - customers list (always)
- *   - dashboard (always — customer count KPI changes)
- *   - customer detail (only for update/delete)
- *   - customer timeline (only for update/delete)
- *   - customer 360 view (only for update/delete)
+ * ─── Mutation types ─────────────────────────────────────────────────────────
+ * 'create'  → customers.all + dashboard.all (new customer affects list + KPI)
+ * 'update'  → customers.all + customers.detail(id) + dashboard.all
+ * 'delete'  → customers.all + customers.detail(id) + dashboard.all
+ * 'portal'  → customers.all + customers.detail(id) (NO dashboard — portal
+ *             status doesn't affect KPIs; enable/disable/resend invitation)
+ * 'note'    → customers.detail(id) ONLY (notes don't affect list or dashboard)
+ *
+ * ─── Note on timeline refresh ────────────────────────────────────────────────
+ * The 'note' mutation invalidates qk.customers.detail(id), which prefix-matches
+ * the timeline cache key ['customers','detail',id,'timeline']. HOWEVER, the
+ * crm-view's timeline is currently local state (manual authFetch + useState),
+ * NOT a React Query cache entry. So the invalidation alone won't refresh it.
+ * The caller (crm-view) must keep its existing manual timeline refetch:
+ *   fetch timeline → setTimeline(...)
+ * This dual responsibility is intentional — see Phase 1.9 audit.
  */
 export function getCustomerInvalidations(opts: InvalidationContext): QueryKey[] {
   const { mutation, data, variables } = opts;
-  const keys: QueryKey[] = [qk.customers.all, qk.dashboard.all];
+  const keys: QueryKey[] = [];
 
   const customerId = data?.id ?? variables?.id;
+
+  if (mutation === 'note') {
+    // Narrowest scope — only detail (which catches timeline via prefix match
+    // IF timeline is an RQ query; crm-view's timeline is local state, so the
+    // caller must also do a manual refetch).
+    if (customerId) keys.push(qk.customers.detail(customerId));
+    return keys;
+  }
+
+  if (mutation === 'portal') {
+    // Portal enable/disable/resend — affects customer record but NOT dashboard
+    keys.push(qk.customers.all);
+    if (customerId) keys.push(qk.customers.detail(customerId));
+    return keys;
+  }
+
+  // create / update / delete — affects list + dashboard (customer count KPI)
+  keys.push(qk.customers.all, qk.dashboard.all);
   if ((mutation === 'update' || mutation === 'delete') && customerId) {
     keys.push(qk.customers.detail(customerId));
   }

@@ -1,7 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useCrmCustomers } from '@/hooks/use-crm-data';
+import {
+  useCrmCustomers,
+  useDeleteCustomer,
+  useEnableCustomerPortal,
+  useResendCustomerPortal,
+  useDisableCustomerPortal,
+  useAddCustomerNote,
+} from '@/hooks/use-crm-data';
 import {
   Users, Search, Plus, Phone, Mail, MapPin,
   MoreHorizontal, Pencil, Trash2, Eye, MessageCircle,
@@ -183,6 +190,16 @@ export function CrmView() {
   const customers: Customer[] = customersData ?? [];
   void rqError;
 
+  // ── Mutations (dependency-aware, auto-invalidate via getCustomerInvalidations) ──
+  // delete → customers.all + dashboard.all + customers.detail(id)
+  // portal → customers.all + customers.detail(id) (NO dashboard)
+  // note   → customers.detail(id) ONLY (+ manual timeline refetch below)
+  const deleteCustomer = useDeleteCustomer();
+  const enableCustomerPortal = useEnableCustomerPortal();
+  const resendCustomerPortal = useResendCustomerPortal();
+  const disableCustomerPortal = useDisableCustomerPortal();
+  const addCustomerNote = useAddCustomerNote();
+
   // Debounce search — 350ms matches the contacts-view pattern.
   useEffect(() => {
     const t = setTimeout(() => setDebouncedCustomerSearch(customerSearch), 350);
@@ -195,19 +212,16 @@ export function CrmView() {
   // fetchCustomers) on success. Deletion + portal invitations still live here.
   const handleDeleteCustomer = async (id: string) => {
     try {
-      const res = await authFetch(`/api/customers?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Customer deleted');
-        fetchCustomers();
-        if (selectedCustomer?.id === id) {
-          setFormMode('list');
-          setSelectedCustomer(null);
-        }
-      } else {
-        toast.error('Failed to delete customer');
+      await deleteCustomer.mutateAsync({ id });
+      toast.success('Customer deleted');
+      // No fetchCustomers() needed — useDeleteCustomer auto-invalidates
+      // qk.customers.all + qk.dashboard.all + qk.customers.detail(id).
+      if (selectedCustomer?.id === id) {
+        setFormMode('list');
+        setSelectedCustomer(null);
       }
-    } catch {
-      toast.error('Network error');
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete customer');
     }
   };
 
@@ -220,21 +234,21 @@ export function CrmView() {
     setInviteCopied(false);
     setInviteLoading(true);
     try {
-      const endpoint =
-        customer.invitationStatus === 'pending'
-          ? `/api/customers/${customer.id}/portal/resend`
-          : `/api/customers/${customer.id}/portal/enable`;
-      const res = await authFetch(endpoint, { method: 'POST' });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success && data.activationUrl) {
+      // useCrmMutation returns the parsed JSON response as `data`.
+      // The portal API returns { success, activationUrl } on success.
+      const data: any = customer.invitationStatus === 'pending'
+        ? await resendCustomerPortal.mutateAsync({ id: customer.id })
+        : await enableCustomerPortal.mutateAsync({ id: customer.id });
+      if (data?.success && data?.activationUrl) {
         setInviteUrl(data.activationUrl);
         toast.success(`Invitation link generated for ${customer.name}`);
-        fetchCustomers();
+        // No fetchCustomers() needed — portal mutations auto-invalidate
+        // qk.customers.all + qk.customers.detail(id) (NO dashboard).
       } else {
-        toast.error(data.error || 'Failed to generate invitation link');
+        toast.error(data?.error || 'Failed to generate invitation link');
       }
-    } catch {
-      toast.error('Network error');
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Network error');
     } finally {
       setInviteLoading(false);
     }
@@ -242,19 +256,11 @@ export function CrmView() {
 
   const handleDisablePortal = async (customer: Customer) => {
     try {
-      const res = await authFetch(
-        `/api/customers/${customer.id}/portal/disable`,
-        { method: 'POST' }
-      );
-      if (res.ok) {
-        toast.success(`Portal access disabled for ${customer.name}`);
-        fetchCustomers();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.error || 'Failed to disable portal access');
-      }
-    } catch {
-      toast.error('Network error');
+      await disableCustomerPortal.mutateAsync({ id: customer.id });
+      toast.success(`Portal access disabled for ${customer.name}`);
+      // No fetchCustomers() needed — useDisableCustomerPortal auto-invalidates.
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Failed to disable portal access');
     }
   };
 
@@ -380,29 +386,27 @@ export function CrmView() {
     if (!selectedCustomer || !notes.trim()) return;
     setNotesLoading(true);
     try {
-      const res = await authFetch(`/api/customers/${selectedCustomer.id}/timeline`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          entryType: 'note',
-          title: 'Note added',
-          description: notes,
-        }),
+      await addCustomerNote.mutateAsync({
+        id: selectedCustomer.id,
+        entryType: 'note',
+        title: 'Note added',
+        description: notes,
       });
-      if (res.ok) {
-        toast.success('Note saved');
-        setNotes('');
-        // Refresh timeline
-        const tRes = await authFetch(`/api/customers/${selectedCustomer.id}/timeline`);
-        if (tRes.ok) {
-          const data = await tRes.json();
-          setTimeline(Array.isArray(data?.entries) ? data.entries : []);
-        }
-      } else {
-        toast.error('Failed to save note');
+      toast.success('Note saved');
+      setNotes('');
+      // ─── Dual responsibility (per Phase 1.9 audit) ───────────────────────
+      // 1. React Query invalidation: useAddCustomerNote auto-invalidates
+      //    qk.customers.detail(id) — catches timeline IF it were an RQ query.
+      // 2. Manual timeline refetch: crm-view's timeline is LOCAL state (not
+      //    React Query), so the invalidation alone won't refresh it. This
+      //    manual refetch MUST stay until the timeline is migrated to RQ.
+      const tRes = await authFetch(`/api/customers/${selectedCustomer.id}/timeline`);
+      if (tRes.ok) {
+        const data = await tRes.json();
+        setTimeline(Array.isArray(data?.entries) ? data.entries : []);
       }
-    } catch {
-      toast.error('Network error');
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save note');
     } finally {
       setNotesLoading(false);
     }

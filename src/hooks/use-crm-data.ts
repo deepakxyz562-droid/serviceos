@@ -219,7 +219,7 @@ export function useExpenses() {
 //
 // Migration: Phase 1.8a — expenses-view.tsx is the first consumer.
 
-import { getExpenseInvalidations } from '@/lib/invalidation-helpers';
+import { getExpenseInvalidations, getCustomerInvalidations } from '@/lib/invalidation-helpers';
 
 export interface ExpenseCreateInput {
   category: string;
@@ -580,5 +580,83 @@ export function useCrmCustomers(params: { search?: string } = {}) {
       return data.customers ?? (Array.isArray(data) ? data : []);
     },
     staleTime: 10_000, // 10s — Freshness Contract: CRM customers
+  });
+}
+
+// ── Customer mutations (dependency-aware) ────────────────────────────────────
+//
+// These hooks use `useCrmMutation` + `getCustomerInvalidations` so every
+// mutation invalidates exactly the right cache keys:
+//   - delete: customers.all + dashboard.all + customers.detail(id)
+//   - portal (enable/disable/resend): customers.all + customers.detail(id)
+//     (NO dashboard — portal status doesn't affect KPIs)
+//   - note: customers.detail(id) ONLY (notes don't affect list or dashboard)
+//
+// NOTE: The 'note' mutation invalidates qk.customers.detail(id), which would
+// prefix-match a timeline cache key IF the timeline were an RQ query. But
+// crm-view's timeline is local state (manual authFetch + useState), so the
+// caller MUST keep its existing manual timeline refetch after the note
+// succeeds. This dual responsibility is intentional — see Phase 1.9 audit.
+//
+// Migration: Phase 1.9 — crm-view.tsx. CustomerFormSheet (create/update) is
+// OUT OF SCOPE (shared component, separate future migration).
+
+export interface CustomerDeleteInput {
+  id: string;
+}
+
+export interface CustomerPortalInput {
+  id: string;
+}
+
+export interface CustomerNoteInput {
+  id: string;
+  entryType: string;
+  title: string;
+  description: string;
+}
+
+export function useDeleteCustomer() {
+  return useCrmMutation<unknown, CustomerDeleteInput>({
+    url: ({ id }) => `/api/customers?id=${id}`,
+    method: 'DELETE',
+    invalidate: ({ variables }) =>
+      getCustomerInvalidations({ mutation: 'delete', variables }),
+  });
+}
+
+export function useEnableCustomerPortal() {
+  return useCrmMutation<unknown, CustomerPortalInput>({
+    url: ({ id }) => `/api/customers/${id}/portal/enable`,
+    method: 'POST',
+    invalidate: ({ variables }) =>
+      getCustomerInvalidations({ mutation: 'portal', variables }),
+  });
+}
+
+export function useResendCustomerPortal() {
+  return useCrmMutation<unknown, CustomerPortalInput>({
+    url: ({ id }) => `/api/customers/${id}/portal/resend`,
+    method: 'POST',
+    invalidate: ({ variables }) =>
+      getCustomerInvalidations({ mutation: 'portal', variables }),
+  });
+}
+
+export function useDisableCustomerPortal() {
+  return useCrmMutation<unknown, CustomerPortalInput>({
+    url: ({ id }) => `/api/customers/${id}/portal/disable`,
+    method: 'POST',
+    invalidate: ({ variables }) =>
+      getCustomerInvalidations({ mutation: 'portal', variables }),
+  });
+}
+
+export function useAddCustomerNote() {
+  return useCrmMutation<unknown, CustomerNoteInput>({
+    url: ({ id }) => `/api/customers/${id}/timeline`,
+    method: 'POST',
+    invalidate: ({ variables }) =>
+      getCustomerInvalidations({ mutation: 'note', variables }),
   });
 }
