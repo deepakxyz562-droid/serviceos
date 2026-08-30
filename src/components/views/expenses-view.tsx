@@ -68,7 +68,14 @@ import { toast } from 'sonner';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { authFetch } from '@/lib/client-auth';
 import { useAppStore } from '@/store/app-store';
-import { useExpensesFiltered } from '@/hooks/use-crm-data';
+import {
+  useExpensesFiltered,
+  useCreateExpense,
+  useUpdateExpense,
+  useDeleteExpense,
+  useChangeExpenseStatus,
+  useRejectExpense,
+} from '@/hooks/use-crm-data';
 
 // ============================================================
 // Types & constants
@@ -195,6 +202,16 @@ export function ExpensesView() {
   // `error` prop; derived from RQ's Error object.
   const error = rqError?.message ?? null;
 
+  // ── Mutations (dependency-aware, auto-invalidate expenses + dashboard) ──────
+  // These replace the manual `authFetch(...)` + `fetchExpenses()` pattern.
+  // Each mutation auto-invalidates qk.expenses.all + qk.dashboard.all via
+  // getExpenseInvalidations — no manual refetch needed.
+  const createExpense = useCreateExpense();
+  const updateExpense = useUpdateExpense();
+  const deleteExpense = useDeleteExpense();
+  const changeExpenseStatus = useChangeExpenseStatus();
+  const rejectExpense = useRejectExpense();
+
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
@@ -314,18 +331,11 @@ export function ExpensesView() {
   // ── Actions ──────────────────────────────────────────────────────────────
   const handleStatusChange = async (exp: Expense, newStatus: ExpenseStatus) => {
     try {
-      const res = await authFetch(`/api/expenses/${exp.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to update status');
-      }
+      await changeExpenseStatus.mutateAsync({ id: exp.id, status: newStatus });
       toast.success(`Expense ${exp.number} ${newStatus}`);
-      fetchExpenses();
-    } catch (e) {
+      // No fetchExpenses() needed — useChangeExpenseStatus auto-invalidates
+      // qk.expenses.all + qk.dashboard.all via getExpenseInvalidations.
+    } catch (e: any) {
       toast.error(e instanceof Error ? e.message : 'Failed to update status');
     }
   };
@@ -333,15 +343,11 @@ export function ExpensesView() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      const res = await authFetch(`/api/expenses/${deleteTarget.id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to delete expense');
-      }
+      await deleteExpense.mutateAsync({ id: deleteTarget.id });
       toast.success(`Expense ${deleteTarget.number} deleted`);
       setDeleteTarget(null);
-      fetchExpenses();
-    } catch (e) {
+      // No fetchExpenses() needed — useDeleteExpense auto-invalidates.
+    } catch (e: any) {
       toast.error(e instanceof Error ? e.message : 'Failed to delete expense');
     }
   };
@@ -349,20 +355,15 @@ export function ExpensesView() {
   const handleRejectConfirm = async () => {
     if (!rejectTarget) return;
     try {
-      const res = await authFetch(`/api/expenses/${rejectTarget.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'rejected', rejectedReason: rejectReason.trim() || 'Rejected by approver' }),
+      await rejectExpense.mutateAsync({
+        id: rejectTarget.id,
+        rejectedReason: rejectReason.trim() || 'Rejected by approver',
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to reject expense');
-      }
       toast.success(`Expense ${rejectTarget.number} rejected`);
       setRejectTarget(null);
       setRejectReason('');
-      fetchExpenses();
-    } catch (e) {
+      // No fetchExpenses() needed — useRejectExpense auto-invalidates.
+    } catch (e: any) {
       toast.error(e instanceof Error ? e.message : 'Failed to reject expense');
     }
   };
@@ -501,7 +502,8 @@ export function ExpensesView() {
           onSaved={() => {
             setCreateOpen(false);
             setEditing(null);
-            fetchExpenses();
+            // No fetchExpenses() needed — useCreateExpense/useUpdateExpense
+            // auto-invalidate qk.expenses.all via getExpenseInvalidations.
           }}
         />
       )}
@@ -664,6 +666,10 @@ function ExpenseFormDialog({ open, editing, isEmployee, currency, onClose, onSav
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Mutation hooks — auto-invalidate qk.expenses.all + qk.dashboard.all
+  const createExpense = useCreateExpense();
+  const updateExpense = useUpdateExpense();
+
   const [jobs, setJobs] = useState<{ id: string; title: string }[]>([]);
   useEffect(() => {
     // Load jobs for the optional selector (best-effort).
@@ -732,20 +738,17 @@ function ExpenseFormDialog({ open, editing, isEmployee, currency, onClose, onSav
         notes: notes.trim() || undefined,
         receiptUrl: receiptUrl || undefined,
       };
-      const url = editing ? `/api/expenses/${editing.id}` : '/api/expenses';
-      const method = editing ? 'PATCH' : 'POST';
-      const res = await authFetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to save expense');
+      // useCrmMutation auto-includes Content-Type + JSON.stringify.
+      // useCreateExpense/useUpdateExpense auto-invalidate qk.expenses.all +
+      // qk.dashboard.all via getExpenseInvalidations.
+      if (editing) {
+        await updateExpense.mutateAsync({ id: editing.id, ...payload });
+      } else {
+        await createExpense.mutateAsync(payload);
       }
       toast.success(editing ? `Expense ${editing.number} updated` : 'Expense submitted');
       onSaved();
-    } catch (e) {
+    } catch (e: any) {
       toast.error(e instanceof Error ? e.message : 'Failed to save expense');
     } finally {
       setSaving(false);

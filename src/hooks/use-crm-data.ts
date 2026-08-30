@@ -209,7 +209,86 @@ export function useExpenses() {
   });
 }
 
-// ── Dependency-aware mutation helper ─────────────────────────────────────────
+// ── Expense mutations (dependency-aware) ─────────────────────────────────────
+//
+// These hooks use `useCrmMutation` + `getExpenseInvalidations` so every
+// mutation invalidates exactly the right cache keys:
+//   - qk.expenses.all (lists)
+//   - qk.dashboard.all (totals)
+//   - qk.expenses.detail(id) (for update/delete/status-change)
+//
+// Migration: Phase 1.8a — expenses-view.tsx is the first consumer.
+
+import { getExpenseInvalidations } from '@/lib/invalidation-helpers';
+
+export interface ExpenseCreateInput {
+  category: string;
+  description: string;
+  amount: number;
+  currency?: string;
+  expenseDate: string;
+  jobId?: string;
+  notes?: string;
+  receiptUrl?: string;
+}
+
+export interface ExpenseUpdateInput extends Partial<ExpenseCreateInput> {
+  id: string;
+}
+
+export interface ExpenseStatusChangeInput {
+  id: string;
+  status: string;
+}
+
+export interface ExpenseRejectInput {
+  id: string;
+  rejectedReason?: string;
+}
+
+export function useCreateExpense() {
+  return useCrmMutation<unknown, ExpenseCreateInput>({
+    url: '/api/expenses',
+    method: 'POST',
+    invalidate: ({ data }) => getExpenseInvalidations({ mutation: 'create', data }),
+  });
+}
+
+export function useUpdateExpense() {
+  return useCrmMutation<unknown, ExpenseUpdateInput>({
+    url: ({ id }) => `/api/expenses/${id}`,
+    method: 'PATCH',
+    invalidate: ({ data, variables }) =>
+      getExpenseInvalidations({ mutation: 'update', data, variables }),
+  });
+}
+
+export function useDeleteExpense() {
+  return useCrmMutation<{ success: true }, { id: string }>({
+    url: ({ id }) => `/api/expenses/${id}`,
+    method: 'DELETE',
+    invalidate: ({ variables }) =>
+      getExpenseInvalidations({ mutation: 'delete', variables }),
+  });
+}
+
+export function useChangeExpenseStatus() {
+  return useCrmMutation<unknown, ExpenseStatusChangeInput>({
+    url: ({ id }) => `/api/expenses/${id}`,
+    method: 'PATCH',
+    invalidate: ({ data, variables }) =>
+      getExpenseInvalidations({ mutation: 'update', data, variables }),
+  });
+}
+
+export function useRejectExpense() {
+  return useCrmMutation<unknown, ExpenseRejectInput>({
+    url: ({ id }) => `/api/expenses/${id}`,
+    method: 'PATCH',
+    invalidate: ({ data, variables }) =>
+      getExpenseInvalidations({ mutation: 'update', data, variables }),
+  });
+}
 
 /**
  * Generic CRM mutation hook with dependency-aware cache invalidation.
