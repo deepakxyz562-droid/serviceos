@@ -117,8 +117,20 @@ If you deploy to Coolify without setting up the daily master cron on cron-job.or
 
 **The daily master cron is critical for the app to function correctly.**
 
-## vercel.json is ignored on Coolify
+## Deployment target: Coolify + Supabase (no Vercel/Netlify)
 
-The `vercel.json` file in this repo is only used when deploying to Vercel. On Coolify, it has no effect — that's why you MUST set up the external cron via cron-job.org.
+This project deploys on **Coolify + Supabase** (not Vercel, not Netlify). The `vercel.json` and `netlify.toml` files have been removed — all cron scheduling goes through cron-job.org as documented above.
 
-If you ever migrate back to Vercel, the `vercel.json` cron config will work automatically (and you can remove the `daily-master` job from cron-job.org to avoid double-execution).
+The Dockerfile builds a Next.js standalone image (`output: "standalone"` in `next.config.ts`) which Coolify runs directly as `bun run server.js` on port 3000. No platform-specific build or runtime coupling remains.
+
+## Cron routes not yet wired to cron-job.org
+
+The following cron-shaped endpoints exist in the codebase but are **not** in `cron-job-org-import.json`. Verify whether they need external scheduling:
+
+| Endpoint | Auth | Status |
+|---|---|---|
+| `/api/cron/ai-cleanup` | `verifyCronAuth` (CRON_SECRET) | Releases stale AI call reservations + phone-number release saga. Recommend adding to cron-job.org at `*/15 * * * *` (every 15 min). |
+| `/api/social/publish-due` | `SOCIAL_PUBLISH_TOKEN` (separate secret) | Publishes scheduled social posts. Needs its own cron-job.org entry if social scheduling is used. |
+| `/api/journey/process-scheduled` | `verifyCronAuth` | Processes scheduled journey automations. Needs cron-job.org entry if journey scheduling is used. |
+
+To add any of these to cron-job.org, follow the same pattern: POST method, `x-cron-secret` header, appropriate schedule.
