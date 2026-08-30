@@ -312,9 +312,47 @@ const INTENT_RULES: IntentRule[] = [
 const conversationStore = new Map<string, Conversation>()
 let conversationIdCounter = 0
 
+// Cap the in-memory store to prevent unbounded growth (memory leak guard).
+// When the cap is exceeded we first drop already-archived conversations, then
+// evict the oldest by lastMessageAt.
+const CONVERSATION_STORE_MAX_ENTRIES = 500
+
 function generateConversationId(): string {
   conversationIdCounter++
   return `conv_${Date.now()}_${conversationIdCounter}`
+}
+
+/**
+ * Prune the conversation store to keep it bounded.
+ *  1. Drop every entry whose state is 'archived' (cheap wins first).
+ *  2. If still over the cap, evict the oldest entries by lastMessageAt
+ *     (LRU-ish — least-recently-messaged conversations get dropped first).
+ *
+ * Called after every `conversationStore.set(...)` so the cap is enforced
+ * at write time, without changing the read path.
+ */
+function pruneConversationStore(): void {
+  // Step 1: drop archived conversations.
+  for (const [key, conv] of Array.from(conversationStore)) {
+    if (conv.state === 'archived') {
+      conversationStore.delete(key)
+    }
+  }
+
+  // Step 2: if still over the cap, evict oldest by lastMessageAt.
+  if (conversationStore.size > CONVERSATION_STORE_MAX_ENTRIES) {
+    const overflow = conversationStore.size - CONVERSATION_STORE_MAX_ENTRIES
+    // Materialize into an array and sort ascending by lastMessageAt so we
+    // evict the oldest first. This is O(n log n) but only runs when we're
+    // already over the cap, which should be rare.
+    const sorted = Array.from(conversationStore.entries()).sort(
+      (a, b) => a[1].lastMessageAt.getTime() - b[1].lastMessageAt.getTime()
+    )
+    for (let i = 0; i < overflow; i++) {
+      const entry = sorted[i]
+      if (entry) conversationStore.delete(entry[0])
+    }
+  }
 }
 
 // ─── Intent Detection ─────────────────────────────────────────────────────────
@@ -488,6 +526,7 @@ export async function findOrCreateConversation(
   }
 
   conversationStore.set(normalizedPhone, conversation)
+  pruneConversationStore()
   return conversation
 }
 
@@ -576,6 +615,7 @@ export async function transitionState(
 
   // Update cache
   conversationStore.set(conversation.phone, conversation)
+  pruneConversationStore()
 
   return conversation
 }
@@ -1484,6 +1524,7 @@ export async function handleInboundMessage(
 
   // 10. Update cache
   conversationStore.set(conversation.phone, conversation)
+  pruneConversationStore()
   conversation.updatedAt = new Date()
 
   // 11. Fire inbound message event
@@ -1692,6 +1733,7 @@ export async function handleButtonReply(
 
   // Update cache
   conversationStore.set(conversation.phone, conversation)
+  pruneConversationStore()
   conversation.updatedAt = new Date()
 
   // Fire button reply event
@@ -1879,6 +1921,12 @@ export function getActiveConversations(): Conversation[] {
 
 /**
  * Archive a conversation that has been inactive.
+ *
+ * NOTE: in addition to transitioning the conversation to the 'archived'
+ * state (which fires the state-changed event for listeners), this now
+ * DELETEs the entry from the in-memory Map outright. Previously the
+ * entry was left behind as an 'archived' stub that just accumulated
+ * forever — a slow memory leak.
  */
 export async function archiveInactiveConversations(
   maxInactiveMs: number = 24 * 60 * 60 * 1000 // 24 hours
@@ -1887,7 +1935,13 @@ export async function archiveInactiveConversations(
   let archived = 0
 
   for (const [phone, conv] of Array.from(conversationStore)) {
-    if (conv.state === 'archived') continue
+    if (conv.state === 'archived') {
+      // Defensive: any leftover archived stubs shouldn't be in the store
+      // at all (pruneConversationStore drops them on every write), but if
+      // one slipped through, drop it now.
+      conversationStore.delete(phone)
+      continue
+    }
 
     const inactiveMs = now - conv.lastMessageAt.getTime()
     if (inactiveMs > maxInactiveMs) {
@@ -1895,7 +1949,12 @@ export async function archiveInactiveConversations(
         trigger: 'auto_archive',
         metadata: { inactiveMs },
       })
-      conv.state = 'archived'
+      // Delete from the in-memory store entirely rather than leaving an
+      // 'archived' stub behind. transitionState() will already have
+      // called pruneConversationStore() (which also drops archived
+      // entries), but we delete explicitly here so the contract is
+      // obvious at the call site.
+      conversationStore.delete(phone)
       archived++
     }
   }

@@ -41,6 +41,39 @@ const EMPTY: IpLocation = {
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const cache = new Map<string, { data: IpLocation; ts: number }>()
 
+// Cap the in-memory cache to prevent unbounded growth (memory leak guard).
+// When the cap is exceeded we first drop expired entries, then evict the
+// oldest (front of the Map — JS Maps preserve insertion order, so the
+// front is the oldest entry, which is a reasonable LRU approximation).
+const CACHE_MAX_ENTRIES = 500
+
+/**
+ * Prune the IP-geolocation cache to keep it bounded.
+ *  1. Drop every entry whose TTL has expired.
+ *  2. If still over the cap, evict the oldest entries (front of the Map).
+ *
+ * Called after every `cache.set(...)` so the cap is enforced at write
+ * time, without changing the read path.
+ */
+function pruneCache(): void {
+  const now = Date.now()
+  // Step 1: drop expired entries.
+  for (const [key, entry] of Array.from(cache)) {
+    if (now - entry.ts > CACHE_TTL_MS) {
+      cache.delete(key)
+    }
+  }
+  // Step 2: if still over the cap, evict the oldest (front of the Map).
+  if (cache.size > CACHE_MAX_ENTRIES) {
+    const overflow = cache.size - CACHE_MAX_ENTRIES
+    const iter = cache.keys()
+    for (let i = 0; i < overflow; i++) {
+      const key = iter.next().value
+      if (key) cache.delete(key)
+    }
+  }
+}
+
 /**
  * Resolve the client's approximate location from their IP address.
  * Call this from server components / API routes where you have a NextRequest.
@@ -111,6 +144,7 @@ export async function getIpLocation(
       accuracy: 'ip',
     }
     cache.set(ip, { data: result, ts: Date.now() })
+    pruneCache()
     return result
   } catch {
     return EMPTY

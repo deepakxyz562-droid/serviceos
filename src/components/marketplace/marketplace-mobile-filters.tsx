@@ -99,6 +99,9 @@ export function MarketplaceMobileFilters({
   const trustFullyVerified = useMarketplaceSearch((s) => s.trustFullyVerified);
   const trustRatingHigh = useMarketplaceSearch((s) => s.trustRatingHigh);
   const trustEmergency = useMarketplaceSearch((s) => s.trustEmergency);
+  const bookOnline = useMarketplaceSearch((s) => s.bookOnline);
+  const buyProduct = useMarketplaceSearch((s) => s.buyProduct);
+  const requestQuote = useMarketplaceSearch((s) => s.requestQuote);
 
   const activeFilterCount = React.useMemo(() => {
     return [
@@ -107,8 +110,11 @@ export function MarketplaceMobileFilters({
       trustFullyVerified,
       trustRatingHigh,
       trustEmergency,
+      bookOnline,
+      buyProduct,
+      requestQuote,
     ].filter(Boolean).length;
-  }, [verticalFilter, industryFilter, trustFullyVerified, trustRatingHigh, trustEmergency]);
+  }, [verticalFilter, industryFilter, trustFullyVerified, trustRatingHigh, trustEmergency, bookOnline, buyProduct, requestQuote]);
 
   // ── Auto-close the sheet after the user picks a top-level category ────
   // This mirrors the desktop UX where clicking a sidebar link filters the

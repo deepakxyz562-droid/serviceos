@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Cookie } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -23,6 +22,11 @@ import { updateAnalyticsConsent } from "@/lib/analytics/consent";
  * inside an effect is flagged because it can cause cascading renders). A local
  * `dismissed` state is used to hide the banner immediately after a click,
  * before the next render reads the freshly written localStorage value.
+ *
+ * PERF: previously used framer-motion for the slide-up animation. Since this
+ * component renders in the root layout, framer-motion (~50KB+ gz) was shipped
+ * on EVERY page of the site for a single non-essential animation. Replaced
+ * with CSS transitions (transform + opacity) — same visual effect, zero JS.
  */
 
 const CONSENT_KEY = "fieseros_consent";
@@ -111,6 +115,9 @@ const getClientSnapshot = (): boolean => {
 
 const getServerSnapshot = (): boolean => false;
 
+// Duration of the CSS exit transition (must match the `duration-300` class).
+const EXIT_ANIMATION_MS = 300;
+
 export function CookieConsentBanner() {
   const shouldShow = useSyncExternalStore(
     subscribeConsent,
@@ -118,7 +125,9 @@ export function CookieConsentBanner() {
     getServerSnapshot,
   );
   const [dismissed, setDismissed] = useState(false);
-  const prefersReducedMotion = useReducedMotion();
+  // `leaving` keeps the element mounted during the CSS exit transition so
+  // it animates out instead of vanishing instantly (replicates AnimatePresence).
+  const [leaving, setLeaving] = useState(false);
 
   const visible = shouldShow && !dismissed;
 
@@ -151,6 +160,19 @@ export function CookieConsentBanner() {
     };
   }, [visible]);
 
+  // Trigger the exit transition when `visible` goes false. Keep the element
+  // mounted for EXIT_ANIMATION_MS so the CSS transition can play, then unmount.
+  useEffect(() => {
+    if (visible) {
+      setLeaving(false);
+      return;
+    }
+    // If we were previously visible (element is mounted), start the exit.
+    setLeaving(true);
+    const timer = setTimeout(() => setLeaving(false), EXIT_ANIMATION_MS);
+    return () => clearTimeout(timer);
+  }, [visible]);
+
   const handleAcceptAll = () => {
     writeConsent({ ...ACCEPT_ALL, timestamp: Date.now() });
     // Push the decision to Google Consent Mode v2 so GA4 starts writing
@@ -167,122 +189,121 @@ export function CookieConsentBanner() {
     setDismissed(true);
   };
 
-  const motionProps = prefersReducedMotion
-    ? {
-        initial: { opacity: 0 },
-        animate: { opacity: 1 },
-        exit: { opacity: 0 },
-      }
-    : {
-        initial: { y: 100, opacity: 0 },
-        animate: { y: 0, opacity: 1 },
-        exit: { y: 100, opacity: 0 },
-        transition: { type: "spring" as const, stiffness: 280, damping: 30 },
-      };
+  // `mounted` = the element is in the DOM (either entering or leaving).
+  // `entering` = the element should be in its final (visible) position.
+  const mounted = visible || leaving;
+  const entering = visible;
+
+  if (!mounted) return null;
 
   return (
-    <AnimatePresence>
-      {visible ? (
-        <motion.div
-          key="cookie-consent-banner"
-          role="dialog"
-          aria-live="polite"
-          aria-label="Cookie consent"
-          // pointer-events-none on the wrapper so the full-width fixed strip
-          // never blocks clicks to content ABOVE/AROUND the visible card.
-          // The inner Card re-enables pointer events on its own area.
-          className="pointer-events-none fixed bottom-0 left-0 right-0 z-[60] px-3 pb-3 sm:bottom-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:max-w-2xl w-full sm:w-auto sm:px-0 sm:pb-0"
-          {...motionProps}
-        >
-          <Card className="pointer-events-auto gap-0 rounded-none border-border bg-white p-0 shadow-lg sm:rounded-xl sm:p-6">
-            {/* ── Mobile: compact single-line bar (~52px tall) ──────────────
-                On short viewports the full card (~260px) overlaps hero CTAs.
-                The mobile bar keeps just the essentials: a one-line message
-                + two buttons. The full card with icon/title/paragraph is
-                shown on sm+ where there's room. */}
-            <div className="flex items-center gap-2 px-3 py-2 sm:hidden">
-              <Cookie className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />
-              <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                We use cookies.{" "}
-                <Link href="/cookie-policy" className="font-medium text-emerald-700 underline underline-offset-2">
-                  Policy
-                </Link>
-              </p>
+    <div
+      key="cookie-consent-banner"
+      role="dialog"
+      aria-live="polite"
+      aria-label="Cookie consent"
+      // pointer-events-none on the wrapper so the full-width fixed strip
+      // never blocks clicks to content ABOVE/AROUND the visible card.
+      // The inner Card re-enables pointer events on its own area.
+      //
+      // CSS transition replaces framer-motion: slide-up + fade.
+      // `motion-reduce:` disables the transform for users who prefer reduced
+      // motion (same accessibility behavior as useReducedMotion()).
+      className={
+        "pointer-events-none fixed bottom-0 left-0 right-0 z-[60] px-3 pb-3 transition-all duration-300 ease-out sm:bottom-4 sm:left-1/2 sm:right-auto sm:max-w-2xl w-full sm:w-auto sm:px-0 sm:pb-0 " +
+        (entering
+          ? "translate-y-0 opacity-100 sm:-translate-x-1/2"
+          : "translate-y-full opacity-0 sm:-translate-x-1/2") +
+        " motion-reduce:transition-none motion-reduce:translate-y-0"
+      }
+    >
+      <Card className="pointer-events-auto gap-0 rounded-none border-border bg-white p-0 shadow-lg sm:rounded-xl sm:p-6">
+        {/* ── Mobile: compact single-line bar (~52px tall) ──────────────
+            On short viewports the full card (~260px) overlaps hero CTAs.
+            The mobile bar keeps just the essentials: a one-line message
+            + two buttons. The full card with icon/title/paragraph is
+            shown on sm+ where there's room. */}
+        <div className="flex items-center gap-2 px-3 py-2 sm:hidden">
+          <Cookie className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />
+          <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+            We use cookies.{" "}
+            <Link href="/cookie-policy" className="font-medium text-emerald-700 underline underline-offset-2">
+              Policy
+            </Link>
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            className="h-7 shrink-0 px-2.5 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+            onClick={handleAcceptAll}
+          >
+            Accept
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 shrink-0 px-2.5 text-xs border-border bg-background text-foreground hover:bg-accent"
+            onClick={handleNecessaryOnly}
+          >
+            Necessary
+          </Button>
+        </div>
+
+        {/* ── Desktop: full card with icon + title + paragraph ─────────── */}
+        <div className="hidden sm:flex sm:flex-row sm:items-start sm:gap-4 sm:p-0">
+          <div className="hidden sm:flex sm:h-10 sm:w-10 sm:shrink-0 sm:items-center sm:justify-center sm:rounded-lg sm:bg-emerald-50">
+            <Cookie className="h-5 w-5 text-emerald-700" aria-hidden="true" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-semibold text-foreground">
+              We value your privacy
+            </h2>
+            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+              Fieseros uses cookies to operate our service, improve
+              performance, and provide analytics. By clicking{" "}
+              <span className="font-medium text-foreground">
+                &quot;Accept all&quot;
+              </span>
+              , you consent to our use of cookies. See our{" "}
+              <Link
+                href="/cookie-policy"
+                className="font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-800"
+              >
+                Cookie Policy
+              </Link>
+              .
+            </p>
+
+            <div className="mt-4 flex flex-row flex-wrap items-center gap-2">
               <Button
                 type="button"
                 size="sm"
-                className="h-7 shrink-0 px-2.5 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
                 onClick={handleAcceptAll}
               >
-                Accept
+                Accept all
               </Button>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                className="h-7 shrink-0 px-2.5 text-xs border-border bg-background text-foreground hover:bg-accent"
+                className="border-border bg-background text-foreground hover:bg-accent"
                 onClick={handleNecessaryOnly}
               >
-                Necessary
+                Necessary only
               </Button>
+              <Link
+                href="/cookie-policy"
+                className="inline-flex h-9 items-center justify-center rounded-md px-0 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              >
+                Cookie Policy
+              </Link>
             </div>
-
-            {/* ── Desktop: full card with icon + title + paragraph ─────────── */}
-            <div className="hidden sm:flex sm:flex-row sm:items-start sm:gap-4 sm:p-0">
-              <div className="hidden sm:flex sm:h-10 sm:w-10 sm:shrink-0 sm:items-center sm:justify-center sm:rounded-lg sm:bg-emerald-50">
-                <Cookie className="h-5 w-5 text-emerald-700" aria-hidden="true" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-semibold text-foreground">
-                  We value your privacy
-                </h2>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                  Fieseros uses cookies to operate our service, improve
-                  performance, and provide analytics. By clicking{" "}
-                  <span className="font-medium text-foreground">
-                    &quot;Accept all&quot;
-                  </span>
-                  , you consent to our use of cookies. See our{" "}
-                  <Link
-                    href="/cookie-policy"
-                    className="font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-800"
-                  >
-                    Cookie Policy
-                  </Link>
-                  .
-                </p>
-
-                <div className="mt-4 flex flex-row flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="bg-primary text-primary-foreground hover:bg-primary/90"
-                    onClick={handleAcceptAll}
-                  >
-                    Accept all
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="border-border bg-background text-foreground hover:bg-accent"
-                    onClick={handleNecessaryOnly}
-                  >
-                    Necessary only
-                  </Button>
-                  <Link
-                    href="/cookie-policy"
-                    className="inline-flex h-9 items-center justify-center rounded-md px-0 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                  >
-                    Cookie Policy
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+          </div>
+        </div>
+      </Card>
+    </div>
   );
 }
 

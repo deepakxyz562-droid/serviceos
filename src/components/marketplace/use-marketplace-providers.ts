@@ -97,6 +97,12 @@ export interface UseMarketplaceProvidersParams {
   trustRatingHigh: boolean;
   /** Trust filter: only 24/7 emergency providers. */
   trustEmergency: boolean;
+  /** Service filter: only providers with online bookable services. */
+  bookOnline: boolean;
+  /** Service filter: only providers with products sellable online. */
+  buyProduct: boolean;
+  /** Service filter: only providers who accept quote requests. */
+  requestQuote: boolean;
   /** Minimum rating filter (0 = no filter, > 0 excludes unrated). Server-side. */
   minRating: number;
   /** Claimed status filter: 'all' | 'claimed' | 'unclaimed'. Server-side. */
@@ -161,6 +167,9 @@ function buildQueryKey(params: UseMarketplaceProvidersParams) {
       trustFullyVerified: params.trustFullyVerified,
       trustRatingHigh: params.trustRatingHigh,
       trustEmergency: params.trustEmergency,
+      bookOnline: params.bookOnline,
+      buyProduct: params.buyProduct,
+      requestQuote: params.requestQuote,
       minRating: params.minRating,
       claimedFilter: params.claimedFilter,
       userLat: params.userLat ?? 'none',
@@ -192,6 +201,9 @@ async function fetchPage(
   if (params.trustFullyVerified) url.searchParams.set('trustFullyVerified', 'true');
   if (params.trustRatingHigh) url.searchParams.set('trustRatingHigh', 'true');
   if (params.trustEmergency) url.searchParams.set('trustEmergency', 'true');
+  if (params.bookOnline) url.searchParams.set('bookOnline', 'true');
+  if (params.buyProduct) url.searchParams.set('buyProduct', 'true');
+  if (params.requestQuote) url.searchParams.set('requestQuote', 'true');
   // ── New server-side filters (Phase 2) ──
   if (params.minRating > 0) url.searchParams.set('minRating', String(params.minRating));
   if (params.claimedFilter !== 'all') url.searchParams.set('claimedFilter', params.claimedFilter);

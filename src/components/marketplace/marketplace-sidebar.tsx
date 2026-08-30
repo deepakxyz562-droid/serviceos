@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Building2, ShieldCheck, Star, Zap, CheckCircle2, Wallet, ChevronRight, Loader2, MapPin } from 'lucide-react';
+import { Building2, ShieldCheck, Star, Zap, CheckCircle2, Wallet, ChevronRight, Loader2, MapPin, Calendar, ShoppingCart, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMarketplaceSearch } from './use-marketplace-search';
 import { useMarketplaceCounts } from './use-marketplace-counts';
@@ -85,6 +85,12 @@ export function MarketplaceSidebar({
   const trustEmergency = useMarketplaceSearch((s) => s.trustEmergency);
   const toggleTrustFullyVerified = useMarketplaceSearch((s) => s.toggleTrustFullyVerified);
   const toggleTrustRatingHigh = useMarketplaceSearch((s) => s.toggleTrustRatingHigh);
+  const bookOnline = useMarketplaceSearch((s) => s.bookOnline);
+  const buyProduct = useMarketplaceSearch((s) => s.buyProduct);
+  const requestQuote = useMarketplaceSearch((s) => s.requestQuote);
+  const toggleBookOnline = useMarketplaceSearch((s) => s.toggleBookOnline);
+  const toggleBuyProduct = useMarketplaceSearch((s) => s.toggleBuyProduct);
+  const toggleRequestQuote = useMarketplaceSearch((s) => s.toggleRequestQuote);
 
   const radiusKm = useMarketplaceSearch((s) => s.radiusKm);
   const setRadiusKm = useMarketplaceSearch((s) => s.setRadiusKm);
@@ -280,6 +286,9 @@ export function MarketplaceSidebar({
     trustFullyVerified ||
     trustRatingHigh ||
     trustEmergency ||
+    bookOnline ||
+    buyProduct ||
+    requestQuote ||
     minRating > 0 ||
     claimedFilter !== 'all'
   );
@@ -613,6 +622,48 @@ export function MarketplaceSidebar({
                 <Checkbox checked={trustRatingHigh} />
                 <Star className="h-4 w-4 text-muted-foreground" />
                 <span className="text-foreground text-xs font-medium">Rating 4.8 and above</span>
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        {/* ─── Service filters ───────────────────────────────────────────── */}
+        <div>
+          <h2 className="mb-2 border-b border-border pb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Service filters
+          </h2>
+          <ul className="space-y-1">
+            <li>
+              <button
+                type="button"
+                onClick={toggleBookOnline}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+              >
+                <Checkbox checked={bookOnline} />
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span className="text-foreground text-xs font-medium">Book Online</span>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={toggleBuyProduct}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+              >
+                <Checkbox checked={buyProduct} />
+                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                <span className="text-foreground text-xs font-medium">Buy Product</span>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={toggleRequestQuote}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+              >
+                <Checkbox checked={requestQuote} />
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                <span className="text-foreground text-xs font-medium">Request a Quote</span>
               </button>
             </li>
           </ul>

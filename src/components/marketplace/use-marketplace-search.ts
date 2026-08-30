@@ -120,6 +120,12 @@ interface MarketplaceSearchState {
   trustRatingHigh: boolean;
   /** Trust filter: only show providers offering 24/7 emergency dispatch. */
   trustEmergency: boolean;
+  /** Service filter: only show providers with online bookable services. */
+  bookOnline: boolean;
+  /** Service filter: only show providers with products sellable online. */
+  buyProduct: boolean;
+  /** Service filter: only show providers who accept quote requests. */
+  requestQuote: boolean;
   /**
    * ISO country code (e.g. 'US', 'AU', 'CA') used to filter providers by
    * country on the API + counts endpoint. null = no country filter (show
@@ -256,6 +262,9 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>()(
       trustFullyVerified: false,
       trustRatingHigh: false,
       trustEmergency: false,
+      bookOnline: false,
+      buyProduct: false,
+      requestQuote: false,
       // No country filter until MarketplaceBrowser seeds it from the server's
       // GeoIP-detected country on mount. null = global results on first paint
       // (briefly — the seed happens in a layout effect before paint whenever
@@ -300,6 +309,9 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>()(
       toggleTrustFullyVerified: () => set((s) => ({ trustFullyVerified: !s.trustFullyVerified })),
       toggleTrustRatingHigh: () => set((s) => ({ trustRatingHigh: !s.trustRatingHigh })),
       toggleTrustEmergency: () => set((s) => ({ trustEmergency: !s.trustEmergency })),
+      toggleBookOnline: () => set((s) => ({ bookOnline: !s.bookOnline })),
+      toggleBuyProduct: () => set((s) => ({ buyProduct: !s.buyProduct })),
+      toggleRequestQuote: () => set((s) => ({ requestQuote: !s.requestQuote })),
       setRadiusKm: (v) => set({ radiusKm: v }),
       setMinRating: (v) => set({ minRating: v }),
       setClaimedFilter: (v) => set({ claimedFilter: v }),
@@ -332,6 +344,9 @@ export const useMarketplaceSearch = create<MarketplaceSearchState>()(
         trustFullyVerified: state.trustFullyVerified,
         trustRatingHigh: state.trustRatingHigh,
         trustEmergency: state.trustEmergency,
+        bookOnline: state.bookOnline,
+        buyProduct: state.buyProduct,
+        requestQuote: state.requestQuote,
         countryFilter: state.countryFilter,
         radiusKm: state.radiusKm,
         minRating: state.minRating,

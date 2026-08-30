@@ -43,6 +43,39 @@ interface CacheEntry {
 }
 const cache = new Map<string, CacheEntry>()
 
+// Cap the in-memory cache to prevent unbounded growth (memory leak guard).
+// When the cap is exceeded we first drop expired entries, then evict the
+// oldest (front of the Map — JS Maps preserve insertion order, so the
+// front is the oldest entry, which is a reasonable LRU approximation).
+const CACHE_MAX_ENTRIES = 200
+
+/**
+ * Prune the geocode cache to keep it bounded.
+ *  1. Drop every entry whose TTL has expired.
+ *  2. If still over the cap, evict the oldest entries (front of the Map).
+ *
+ * Called after every `cache.set(...)` so the cap is enforced at write
+ * time, without changing the read path.
+ */
+function pruneCache(): void {
+  const now = Date.now()
+  // Step 1: drop expired entries.
+  for (const [key, entry] of Array.from(cache)) {
+    if (now - entry.ts > CACHE_TTL_MS) {
+      cache.delete(key)
+    }
+  }
+  // Step 2: if still over the cap, evict the oldest (front of the Map).
+  if (cache.size > CACHE_MAX_ENTRIES) {
+    const overflow = cache.size - CACHE_MAX_ENTRIES
+    const iter = cache.keys()
+    for (let i = 0; i < overflow; i++) {
+      const key = iter.next().value
+      if (key) cache.delete(key)
+    }
+  }
+}
+
 export interface GeocodeCoords {
   latitude: number
   longitude: number
@@ -97,11 +130,13 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
     if (res.status === 429 || res.status === 503) {
       const result: GeocodeResult = { ok: false, reason: 'rate_limited' }
       cache.set(trimmed, { result, ts: Date.now() })
+      pruneCache()
       return result
     }
     if (!res.ok) {
       const result: GeocodeResult = { ok: false, reason: 'network' }
       cache.set(trimmed, { result, ts: Date.now() })
+      pruneCache()
       return result
     }
 
@@ -109,12 +144,14 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
     if (!Array.isArray(data) || data.length === 0) {
       const result: GeocodeResult = { ok: false, reason: 'no_result' }
       cache.set(trimmed, { result, ts: Date.now() })
+      pruneCache()
       return result
     }
     const first = data[0] as { lat?: string; lon?: string; display_name?: string }
     if (!first.lat || !first.lon) {
       const result: GeocodeResult = { ok: false, reason: 'no_result' }
       cache.set(trimmed, { result, ts: Date.now() })
+      pruneCache()
       return result
     }
 
@@ -123,6 +160,7 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       const result: GeocodeResult = { ok: false, reason: 'no_result' }
       cache.set(trimmed, { result, ts: Date.now() })
+      pruneCache()
       return result
     }
 
@@ -133,6 +171,7 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
       displayName: first.display_name,
     }
     cache.set(trimmed, { result, ts: Date.now() })
+    pruneCache()
     return result
   } catch {
     return { ok: false, reason: 'network' }

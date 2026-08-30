@@ -32,6 +32,39 @@ interface CacheEntry<T> {
 
 const store = new Map<string, CacheEntry<unknown>>();
 
+// Cap the in-memory store to prevent unbounded growth (memory leak guard).
+// When the cap is exceeded we first drop expired entries, then evict the
+// oldest (front of the Map — JS Maps preserve insertion order, so the
+// front is the oldest entry, which is a reasonable LRU approximation).
+const MAX_ENTRIES = 500;
+
+/**
+ * Prune the TTL cache to keep it bounded.
+ *  1. Drop every entry whose TTL has expired.
+ *  2. If still over the cap, evict the oldest entries (front of the Map).
+ *
+ * Called after every `ttlCacheSet(...)` so the cap is enforced at write
+ * time, without changing the read path.
+ */
+function prune(): void {
+  const now = Date.now();
+  // Step 1: drop expired entries.
+  for (const [key, entry] of Array.from(store)) {
+    if (now > entry.expiresAt) {
+      store.delete(key);
+    }
+  }
+  // Step 2: if still over the cap, evict the oldest (front of the Map).
+  if (store.size > MAX_ENTRIES) {
+    const overflow = store.size - MAX_ENTRIES;
+    const iter = store.keys();
+    for (let i = 0; i < overflow; i++) {
+      const key = iter.next().value;
+      if (key) store.delete(key);
+    }
+  }
+}
+
 /**
  * Get a cached value if it exists and hasn't expired.
  * Returns undefined otherwise (caller should compute + set).
@@ -51,6 +84,7 @@ export function ttlCacheGet<T>(key: string): T | undefined {
  */
 export function ttlCacheSet<T>(key: string, value: T, ttlMs: number): void {
   store.set(key, { value, expiresAt: Date.now() + ttlMs });
+  prune();
 }
 
 /**

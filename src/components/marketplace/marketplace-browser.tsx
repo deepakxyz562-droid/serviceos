@@ -193,6 +193,9 @@ export function MarketplaceBrowser({
   const trustFullyVerified = useMarketplaceSearch((s) => s.trustFullyVerified);
   const trustRatingHigh = useMarketplaceSearch((s) => s.trustRatingHigh);
   const trustEmergency = useMarketplaceSearch((s) => s.trustEmergency);
+  const bookOnline = useMarketplaceSearch((s) => s.bookOnline);
+  const buyProduct = useMarketplaceSearch((s) => s.buyProduct);
+  const requestQuote = useMarketplaceSearch((s) => s.requestQuote);
   const radiusKm = useMarketplaceSearch((s) => s.radiusKm);
   const setRadiusKm = useMarketplaceSearch((s) => s.setRadiusKm);
   const minRating = useMarketplaceSearch((s) => s.minRating);
@@ -263,6 +266,9 @@ export function MarketplaceBrowser({
       !trustFullyVerified &&
       !trustRatingHigh &&
       !trustEmergency &&
+      !bookOnline &&
+      !buyProduct &&
+      !requestQuote &&
       minRating === 0 &&
       claimedFilter === 'all' &&
       effectiveRadiusKm === null
@@ -278,6 +284,9 @@ export function MarketplaceBrowser({
     trustFullyVerified,
     trustRatingHigh,
     trustEmergency,
+    bookOnline,
+    buyProduct,
+    requestQuote,
     minRating,
     claimedFilter,
     effectiveRadiusKm,
@@ -302,6 +311,9 @@ export function MarketplaceBrowser({
       trustFullyVerified,
       trustRatingHigh,
       trustEmergency,
+      bookOnline,
+      buyProduct,
+      requestQuote,
       // Phase 2 server-side filters:
       minRating,
       claimedFilter,
