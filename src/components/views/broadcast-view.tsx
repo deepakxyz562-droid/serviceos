@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { authFetch } from '@/lib/client-auth';
+import { MultiCustomerSelect } from '@/components/shared/multi-customer-select';
 import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 import { CAMPAIGN_TIMEZONES_GROUPED, detectBrowserTimezone } from '@/lib/timezones';
 
@@ -1113,38 +1114,11 @@ export function BroadcastView() {
                   <Label className="text-xs text-muted-foreground flex items-center gap-1">
                     <UserCheck className="size-3" /> Select Customers ({createForm.customerIds.length} selected)
                   </Label>
-                  <div className="border rounded-md max-h-48 overflow-y-auto">
-                    {isLoadingCustomers ? (
-                      <div className="p-3 text-xs text-muted-foreground">Loading customers...</div>
-                    ) : customers.length === 0 ? (
-                      <div className="p-3 text-xs text-muted-foreground">No customers found</div>
-                    ) : (
-                      customers.map(c => (
-                        <label
-                          key={c.id}
-                          className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border-b last:border-0"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={createForm.customerIds.includes(c.id)}
-                            onChange={e => {
-                              const next = e.target.checked
-                                ? [...createForm.customerIds, c.id]
-                                : createForm.customerIds.filter(id => id !== c.id);
-                              setCreateForm({ ...createForm, customerIds: next });
-                            }}
-                            className="rounded"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-medium truncate">{c.name}</div>
-                            <div className="text-[10px] text-muted-foreground truncate">
-                              {c.email || 'no email'} · {c.phone || 'no phone'}
-                            </div>
-                          </div>
-                        </label>
-                      ))
-                    )}
-                  </div>
+                  <MultiCustomerSelect
+                    value={createForm.customerIds}
+                    onChange={(ids) => setCreateForm({ ...createForm, customerIds: ids })}
+                    placeholder="Search customers to add…"
+                  />
                 </div>
               )}
               {(createForm.audienceMode === 'segment' || createForm.audienceMode === 'mixed') && (
@@ -1416,38 +1390,15 @@ export function BroadcastView() {
                   <Label className="text-xs text-muted-foreground flex items-center gap-1">
                     <UserCheck className="size-3" /> Select Customers ({editForm.customerIds.length} selected)
                   </Label>
-                  <div className="border rounded-md max-h-48 overflow-y-auto">
-                    {isLoadingCustomers ? (
-                      <div className="p-3 text-xs text-muted-foreground">Loading customers...</div>
-                    ) : customers.length === 0 ? (
-                      <div className="p-3 text-xs text-muted-foreground">No customers found</div>
-                    ) : (
-                      customers.map(c => (
-                        <label
-                          key={c.id}
-                          className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border-b last:border-0"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={editForm.customerIds.includes(c.id)}
-                            onChange={e => {
-                              const next = e.target.checked
-                                ? [...editForm.customerIds, c.id]
-                                : editForm.customerIds.filter(id => id !== c.id);
-                              setEditForm({ ...editForm, customerIds: next });
-                            }}
-                            className="rounded"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-medium truncate">{c.name}</div>
-                            <div className="text-[10px] text-muted-foreground truncate">
-                              {c.email || 'no email'} · {c.phone || 'no phone'}
-                            </div>
-                          </div>
-                        </label>
-                      ))
-                    )}
-                  </div>
+                  <MultiCustomerSelect
+                    value={editForm.customerIds}
+                    onChange={(ids) => setEditForm({ ...editForm, customerIds: ids })}
+                    initialCustomers={editForm.customerIds
+                      .map((id) => customers.find((c) => c.id === id))
+                      .filter((c): c is NonNullable<typeof c> => !!c)
+                      .map((c) => ({ id: c.id, name: c.name, phone: c.phone, email: c.email }))}
+                    placeholder="Search customers to add…"
+                  />
                 </div>
               )}
               {(editForm.audienceMode === 'segment' || editForm.audienceMode === 'mixed') && (

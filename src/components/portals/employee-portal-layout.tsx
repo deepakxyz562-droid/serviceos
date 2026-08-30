@@ -96,7 +96,7 @@ import {
   emptyLineItem,
   lineItemsSubtotal,
   parseLineItems,
-} from '@/components/views/leads-view';
+} from '@/features/line-items';
 import { JobExpensesSection } from '@/components/job/job-expenses-section';
 import { ScheduledVisitsSection } from '@/components/job/scheduled-visits-section';
 import { StatusBadge } from '@/components/job/status-badge';

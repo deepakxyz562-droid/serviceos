@@ -40,6 +40,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   Mail, Send, Loader2, CheckCircle2, ShieldAlert, Ban,
   RefreshCw, History, Settings as SettingsIcon, Plus,
@@ -1247,60 +1248,14 @@ function SentTab() {
               <CardDescription>Newest first — paginated 20 per page.</CardDescription>
             </CardHeader>
             <CardContent>
-              {historyLoading ? (
-                <TableSkeleton rows={5} />
-              ) : communications.length === 0 ? (
-                <EmptyState
-                  icon={Mail}
-                  title="No outreach emails yet"
-                  subtitle={`No EmailCommunication rows for ${selectedTenant?.name ?? 'this tenant'}.`}
-                />
-              ) : (
-                <div className="rounded-md border border-border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Subject</TableHead>
-                        <TableHead>Recipient</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Sent by</TableHead>
-                        <TableHead>Outcome</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {communications.map((c) => {
-                        const badge = getStatusBadge(c.status);
-                        return (
-                          <TableRow key={c.id}>
-                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                              {formatDateTime(c.sentAt || c.createdAt)}
-                            </TableCell>
-                            <TableCell className="font-medium text-foreground max-w-xs truncate" title={c.subject}>
-                              {c.subject || '—'}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{c.recipientEmail}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className={badge.className}>{badge.label}</Badge>
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {c.sentByName || c.sentByEmail || '—'}
-                            </TableCell>
-                            <TableCell className="text-xs">
-                              {c.deliveredAt && <span className="text-emerald-600 dark:text-emerald-400">Delivered {timeAgo(c.deliveredAt)}</span>}
-                              {c.bouncedAt && <span className="text-red-600 dark:text-red-400" title={c.bouncedReason || ''}>Bounced {timeAgo(c.bouncedAt)}</span>}
-                              {c.complainedAt && <span className="text-amber-600 dark:text-amber-400">Complained {timeAgo(c.complainedAt)}</span>}
-                              {!c.deliveredAt && !c.bouncedAt && !c.complainedAt && (
-                                <span className="text-muted-foreground">Pending</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
+              <DataTable
+                columns={historyColumns}
+                data={communications}
+                rowKey={(c) => c.id}
+                loading={historyLoading}
+                emptyMessage="No outreach emails yet"
+                emptyIcon={Mail}
+              />
             </CardContent>
           </Card>
         </>
@@ -1392,76 +1347,14 @@ function SuppressionsTab() {
           </div>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <TableSkeleton rows={5} />
-          ) : rows.length === 0 ? (
-            <EmptyState
-              icon={ShieldAlert}
-              title={showResolved ? 'No resolved suppressions' : 'No active suppressions'}
-              subtitle={showResolved
-                ? 'No emails have been unsuppressed yet.'
-                : 'No emails are currently suppressed. New bounces/complaints will appear here.'}
-            />
-          ) : (
-            <div className="rounded-md border border-border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Tenant</TableHead>
-                    <TableHead>Reason</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead>{showResolved ? 'Resolved' : 'Created'}</TableHead>
-                    {showResolved && <TableHead>Resolve reason</TableHead>}
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((r) => {
-                    const badge = getSuppressionReasonBadge(r.reason);
-                    return (
-                      <TableRow key={r.id}>
-                        <TableCell className="font-mono text-xs text-foreground">{r.email}</TableCell>
-                        <TableCell className="text-xs">
-                          {r.tenantName ? (
-                            <span className="text-foreground">{r.tenantName}</span>
-                          ) : (
-                            <Badge variant="outline" className="bg-muted text-muted-foreground border-border">Platform-wide</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={badge.className}>{badge.label}</Badge>
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{r.source}{r.provider ? ` · ${r.provider}` : ''}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                          {showResolved && r.resolvedAt ? formatDate(r.resolvedAt) : formatDate(r.createdAt)}
-                        </TableCell>
-                        {showResolved && (
-                          <TableCell className="text-xs text-muted-foreground">
-                            {r.resolveReason || '—'}
-                          </TableCell>
-                        )}
-                        <TableCell className="text-right">
-                          {!showResolved && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 text-emerald-600 hover:text-emerald-700"
-                              onClick={() => handleUnsuppress(r)}
-                              disabled={unsuppressingId === r.id}
-                            >
-                              {unsuppressingId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <Ban className="size-3.5 mr-1" />}
-                              Unsuppress
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <DataTable
+            columns={suppressionColumns}
+            data={rows}
+            rowKey={(r) => r.id}
+            loading={loading}
+            emptyMessage={showResolved ? 'No resolved suppressions' : 'No active suppressions'}
+            emptyIcon={ShieldAlert}
+          />
         </CardContent>
       </Card>
 

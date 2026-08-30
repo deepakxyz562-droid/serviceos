@@ -29,9 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select';
@@ -40,7 +38,7 @@ import {
 } from '@/components/ui/tooltip';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-  SectionHeader, KpiCard, TableSkeleton, EmptyState,
+  SectionHeader, KpiCard, EmptyState,
 } from '@/components/views/superadmin/_shared';
 import {
   BACKUP_MODEL_GROUPS,
@@ -305,6 +303,77 @@ export function BackupSection() {
     setSelected(new Set());
   }
 
+  // ─── Columns ──────────────────────────────────────────────────────────────
+  const backupTableColumns: Column<PreviewTable>[] = [
+    {
+      key: 'select', header: '', render: (t) => (
+        <Checkbox
+          checked={selected.has(t.name)}
+          onCheckedChange={() => toggleSelect(t.name)}
+          onClick={(e) => e.stopPropagation()}
+          className="size-4"
+        />
+      ), className: 'w-10 pl-3',
+    },
+    {
+      key: 'status', header: '', render: (t) => (
+        t.error ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <AlertTriangle className="size-3.5 text-amber-500" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p className="text-xs">{t.error}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : t.count > 0 ? (
+          <CheckCircle2 className="size-3.5 text-emerald-500" />
+        ) : (
+          <span className="size-3.5 inline-block" />
+        )
+      ), className: 'w-10',
+    },
+    {
+      key: 'table', header: 'Table', render: (t) => (
+        <div className="font-mono text-xs">
+          <div className="font-medium text-foreground">{t.name}</div>
+          <div className="text-muted-foreground">db.{t.camel}</div>
+        </div>
+      ),
+    },
+    {
+      key: 'group', header: 'Group', render: (t) => (
+        <Badge variant="outline" className="text-[10px] font-normal">
+          {groupOf(t.name)}
+        </Badge>
+      ),
+    },
+    { key: 'rows', header: 'Rows', render: (t) => <span className="text-right font-mono text-xs block">{formatNumber(t.count)}</span>, className: 'text-right' },
+    { key: 'size', header: 'Est. Size', render: (t) => <span className="text-right font-mono text-xs text-muted-foreground block">{estimateSize(t.count)}</span>, className: 'text-right' },
+    {
+      key: 'actions', header: '', render: (t) => (
+        <div className="pr-3">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+            disabled={downloading || t.count === 0}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDownloadOne(t.name);
+            }}
+          >
+            <Download className="size-3" />
+          </Button>
+        </div>
+      ), className: 'w-10',
+    },
+  ];
+
   // ─── Render ──────────────────────────────────────────────────────────────
   return (
     <section className="space-y-6">
@@ -522,99 +591,15 @@ export function BackupSection() {
             </CardHeader>
 
             <CardContent className="p-0">
-              {filteredTables.length === 0 ? (
-                <EmptyState
-                  icon={TableIcon}
-                  title="No tables match your filters"
-                  subtitle='Try clearing the search or disabling "Hide empty".'
-                />
-              ) : (
-                <div className="max-h-[600px] overflow-y-auto">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-card z-10">
-                      <TableRow>
-                        <TableHead className="w-10"></TableHead>
-                        <TableHead className="w-10"></TableHead>
-                        <TableHead>Table</TableHead>
-                        <TableHead>Group</TableHead>
-                        <TableHead className="text-right">Rows</TableHead>
-                        <TableHead className="text-right">Est. Size</TableHead>
-                        <TableHead className="w-10"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredTables.map((t) => {
-                        const isSelected = selected.has(t.name);
-                        return (
-                          <TableRow
-                            key={t.name}
-                            className={cn('cursor-pointer hover:bg-muted/50', isSelected && 'bg-primary/5')}
-                            onClick={() => toggleSelect(t.name)}
-                          >
-                            <TableCell className="pl-3">
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() => toggleSelect(t.name)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="size-4"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              {t.error ? (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span>
-                                        <AlertTriangle className="size-3.5 text-amber-500" />
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-xs">
-                                      <p className="text-xs">{t.error}</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              ) : t.count > 0 ? (
-                                <CheckCircle2 className="size-3.5 text-emerald-500" />
-                              ) : (
-                                <span className="size-3.5 inline-block" />
-                              )}
-                            </TableCell>
-                            <TableCell className="font-mono text-xs">
-                              <div className="font-medium text-foreground">{t.name}</div>
-                              <div className="text-muted-foreground">db.{t.camel}</div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-[10px] font-normal">
-                                {groupOf(t.name)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-xs">
-                              {formatNumber(t.count)}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                              {estimateSize(t.count)}
-                            </TableCell>
-                            <TableCell className="pr-3">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 px-2 text-xs"
-                                disabled={downloading || t.count === 0}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDownloadOne(t.name);
-                                }}
-                              >
-                                <Download className="size-3" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
+              <DataTable
+                columns={backupTableColumns}
+                data={filteredTables}
+                rowKey={(t) => t.name}
+                emptyMessage="No tables match your filters"
+                emptyIcon={TableIcon}
+                onRowClick={(t) => toggleSelect(t.name)}
+                className="max-h-[600px]"
+              />
             </CardContent>
           </Card>
 

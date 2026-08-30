@@ -35,6 +35,7 @@ import { getIndustry } from '@/lib/industry-catalog';
 import { mpUrl, type ProviderProfileResponse } from './types';
 import { InstantBookingDialog } from './instant-booking-dialog';
 import { QuoteRequestDialog } from './quote-request-dialog';
+import { SafeImage } from './safe-image';
 
 interface ProviderProfileProps {
   /** Either tenant id or slug */
@@ -226,10 +227,13 @@ export function ProviderProfile({ slug, onBack, backHref, initialData }: Provide
       {tenant.coverImage ? (
         <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-600">
           <div className="h-44 sm:h-56">
-            <img
+            <SafeImage
               src={tenant.coverImage}
               alt=""
               className="h-full w-full object-cover opacity-90"
+              priority={true}
+              maxWidth={1200}
+              maxHeight={600}
             />
           </div>
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
@@ -448,10 +452,12 @@ export function ProviderProfile({ slug, onBack, backHref, initialData }: Provide
                       key={`${src}-${i}`}
                       className="aspect-square overflow-hidden rounded-md border bg-muted"
                     >
-                      <img
+                      <SafeImage
                         src={src}
                         alt={`${tenant.name} portfolio photo ${i + 1}`}
                         className="h-full w-full object-cover transition-transform duration-300 hover:scale-110"
+                        maxWidth={400}
+                        maxHeight={400}
                       />
                     </div>
                   ))}

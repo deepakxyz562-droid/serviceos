@@ -2,19 +2,16 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  MessageSquare, Globe, Facebook, Instagram, Target, Phone,
-  Send, Search, Settings, Wifi, Users,
+  MessageSquare,
+  Send, Search, Settings,
   CheckCheck, Loader2,
   ExternalLink, Sparkles, X, Filter,
-  Mail, MessageCircle, User,
   BarChart3, Inbox, UserCheck, UserPlus,
-  StickyNote, Clock, ChevronDown, Zap, ChevronRight, Star, Briefcase, Contact as ContactIcon,
+  StickyNote, Clock,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,173 +24,38 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
-import { CHANNELS as ALL_CHANNEL_DEFS, getChannel } from '@/lib/channel-meta';
 // AutoReplyCard moved to channels-view.tsx (Channels & Credentials settings page).
+import {
+  ALL_CHANNELS,
+  ChannelBadge,
+  ChannelIcon,
+  formatTime,
+  getChannelMeta,
+  getInitials,
+} from '@/features/omnichannel/utils/omnichannel-helpers';
+import type {
+  ChannelType,
+  Conversation,
+  ConversationMessage,
+  LeadInfo,
+  OmnichannelStats,
+  CustomerContext,
+} from '@/features/omnichannel/types';
+import { ConversationDetailPanel } from '@/features/omnichannel/components/conversation-detail-panel';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-
-type ChannelType = 'whatsapp' | 'messenger' | 'instagram' | 'sms' | 'email' | 'livechat' | 'webwidget' | 'googlebusiness' | 'teams' | 'slack' | 'website' | 'facebook' | 'google_ads' | 'justdial' | 'phone' | 'manual';
-
-interface ConversationMessage {
-  id: string;
-  conversationId: string;
-  content: string;
-  sender: 'customer' | 'agent' | 'system';
-  senderName?: string;
-  timestamp: string;
-  channel: ChannelType;
-}
-
-interface LeadInfo {
-  id: string;
-  name: string;
-  status: string;
-  value?: number;
-  source: string;
-  createdAt: string;
-}
-
-interface Conversation {
-  id: string;
-  customerName: string;
-  customerPhone?: string;
-  customerEmail?: string;
-  channel: ChannelType;
-  lastMessage: string;
-  lastMessageTime: string;
-  unreadCount: number;
-  status: 'active' | 'closed' | 'pending';
-  leadId?: string;
-  lead?: LeadInfo;
-  messages: ConversationMessage[];
-  autoLeadCreated?: boolean;
-  // Active assignee — surfaced by the conversations API via the
-  // ConversationAssignment join. The conversation card shows a UserCheck
-  // icon (emerald) when assigned, UserPlus (muted) when unassigned.
-  assigneeId?: string;
-  assigneeName?: string;
-}
-
-interface OmnichannelStats {
-  totalConversations: number;
-  leadsToday: number;
-  activeChannels: number;
-  unreadCount: number;
-  byChannel: Record<ChannelType, { conversations: number; leads: number }>;
-}
-
-// Auto-Reply config types, defaults, and the AutoReplyCard component now live
-// in src/components/settings/sections/auto-reply-card.tsx and are rendered in
-// the Channels & Credentials settings page (channels-view.tsx), not here.
-
-// ─── Channel Metadata ───────────────────────────────────────────────────────
-// Channel styling is now sourced from the centralized registry in
-// src/lib/channel-meta.ts. The getChannelMeta() helper below falls back to a
-// DEFAULT_META for unknown/legacy channels (old conversations stored before
-// the registry existed).
-
-const DEFAULT_META = {
-  label: 'Other',
-  icon: MessageCircle,
-  color: 'slate',
-  bgColor: 'bg-slate-100',
-  borderColor: 'border-slate-200',
-  textColor: 'text-slate-700',
-  badgeBg: 'bg-slate-500',
-  _brandColor: '#64748B',
-};
-
-function getChannelMeta(channel: string) {
-  // Try the new registry first, fall back to legacy for old conversation data
-  const fromRegistry = getChannel(channel);
-  if (fromRegistry) {
-    return {
-      label: fromRegistry.label,
-      icon: fromRegistry.icon,
-      color: fromRegistry.color,
-      bgColor: fromRegistry.badgeClass.split(' ')[0], // approximate
-      borderColor: 'border-transparent',
-      textColor: fromRegistry.iconClass,
-      badgeBg: fromRegistry.badgeClass,
-      _brandColor: fromRegistry.color,
-    };
-  }
-  // Legacy fallback for old conversations
-  const legacyMap: Record<string, { label: string; icon: React.ElementType; brandColor: string }> = {
-    website: { label: 'Website', icon: Globe, brandColor: '#3B82F6' },
-    facebook: { label: 'Facebook', icon: Facebook, brandColor: '#0084FF' },
-    google_ads: { label: 'Google Ads', icon: Target, brandColor: '#4285F4' },
-    justdial: { label: 'JustDial', icon: Phone, brandColor: '#F59E0B' },
-    phone: { label: 'Phone', icon: Phone, brandColor: '#06B6D4' },
-    manual: { label: 'Manual', icon: User, brandColor: '#64748B' },
-  };
-  const legacy = legacyMap[channel];
-  if (legacy) {
-    return {
-      label: legacy.label,
-      icon: legacy.icon,
-      color: 'slate',
-      bgColor: 'bg-slate-100',
-      borderColor: 'border-slate-200',
-      textColor: 'text-slate-700',
-      badgeBg: 'bg-slate-500',
-      _brandColor: legacy.brandColor,
-    };
-  }
-  return { ...DEFAULT_META, _brandColor: '#64748B' };
-}
-
-// Channels shown in the inbox filter bar — use the 10 from the registry, plus legacy fallbacks
-const ALL_CHANNELS: string[] = ALL_CHANNEL_DEFS.map(c => c.id);
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function formatTime(iso: string): string {
-  const date = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-
-  if (diffMin < 1) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
-}
-
-function getInitials(name: string): string {
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-}
+//
+// ChannelType / Conversation / ConversationMessage / LeadInfo / OmnichannelStats
+// / CustomerContext types now live in `@/features/omnichannel/types` (imported
+// above).
+//
+// The DEFAULT_META / getChannelMeta / ALL_CHANNELS helpers and the
+// ChannelIcon / ChannelBadge components now live in
+// `@/features/omnichannel/utils/omnichannel-helpers` (imported above).
+//
+// The formatTime / getInitials helpers also live there.
 
 const API_BASE = '/api/omnichannel';
-
-// ─── Channel Icon Component ─────────────────────────────────────────────────
-
-function ChannelIcon({ channel, size = 'sm' }: { channel: string; size?: 'sm' | 'md' | 'lg' }) {
-  const meta = getChannelMeta(channel);
-  const Icon = meta.icon;
-  const sizeClasses = size === 'sm' ? 'size-3' : size === 'md' ? 'size-4' : 'size-5';
-  return <Icon className={sizeClasses} />;
-}
-
-function ChannelBadge({ channel, compact = false }: { channel: string; compact?: boolean }) {
-  const meta = getChannelMeta(channel);
-  return (
-    <Badge
-      variant="outline"
-      className={cn(
-        'gap-1 font-medium',
-        compact ? 'text-[10px] px-1.5 py-0 h-5' : 'text-xs px-2 py-0.5',
-        meta.bgColor, meta.textColor, meta.borderColor
-      )}
-    >
-      <ChannelIcon channel={channel} size={compact ? 'sm' : 'sm'} />
-      {!compact && meta.label}
-    </Badge>
-  );
-}
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
@@ -1003,315 +865,17 @@ export function OmnichannelView() {
               independently when content overflows. */}
           <div className="w-72 flex-shrink-0 border-l bg-background hidden lg:flex flex-col min-h-0">
             {selectedConversation ? (
-              <ScrollArea className="flex-1 min-h-0">
-                <div className="p-4 space-y-4">
-                  {/* Customer Info Card with cover image */}
-                  <Card className="shadow-none overflow-hidden">
-                    {/* Cover banner — gradient using the channel brand color */}
-                    <div
-                      className="h-20 relative"
-                      style={{
-                        background: `linear-gradient(135deg, ${getChannelMeta(selectedConversation.channel)._brandColor}40, ${getChannelMeta(selectedConversation.channel)._brandColor}80)`,
-                      }}
-                    >
-                      <div className="absolute top-2 right-2">
-                        <ChannelBadge channel={selectedConversation.channel} compact />
-                      </div>
-                    </div>
-                    <CardHeader className="pb-3 pt-0 px-4 -mt-8">
-                      <Avatar className="size-16 border-4 border-background">
-                        <AvatarFallback className="text-lg font-medium bg-slate-100 dark:bg-slate-800">
-                          {getInitials(selectedConversation.customerName)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <CardTitle className="text-base font-semibold mt-2 truncate">{selectedConversation.customerName}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-4 space-y-2 overflow-hidden">
-                      {selectedConversation.customerPhone && (
-                        <div className="flex items-center gap-2 text-sm min-w-0">
-                          <Phone className="size-3.5 text-muted-foreground flex-shrink-0" />
-                          <span className="truncate">{selectedConversation.customerPhone}</span>
-                        </div>
-                      )}
-                      {selectedConversation.customerEmail && (
-                        <div className="flex items-center gap-2 text-sm min-w-0">
-                          <Globe className="size-3.5 text-muted-foreground flex-shrink-0" />
-                          <span className="truncate">{selectedConversation.customerEmail}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">Status:</span>
-                        <Badge variant="outline" className={cn(
-                          'text-xs',
-                          selectedConversation.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                          selectedConversation.status === 'closed' ? 'bg-slate-50 text-slate-500 border-slate-200' :
-                          'bg-amber-50 text-amber-700 border-amber-200'
-                        )}>
-                          {selectedConversation.status}
-                        </Badge>
-                      </div>
-                      {/* Assignee row — shows who is handling this conversation.
-                          Includes a quick toggle button to assign/unassign. */}
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">Assignee:</span>
-                        {selectedConversation.assigneeId ? (
-                          <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
-                            <UserCheck className="size-3 mr-1" />
-                            {selectedConversation.assigneeName || 'Assigned'}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
-                            Unassigned
-                          </Badge>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => handleToggleAssign(selectedConversation, e)}
-                          disabled={assignBusy === selectedConversation.id}
-                          className="ml-auto text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-medium disabled:opacity-50"
-                        >
-                          {selectedConversation.assigneeId ? 'Unassign' : 'Assign to me'}
-                        </button>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Lead Details Card */}
-                  {selectedConversation.lead && (
-                    <Card className="shadow-none border-emerald-200 dark:border-emerald-800">
-                      <CardHeader className="pb-3 pt-4 px-4">
-                        <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-                          <Sparkles className="size-3.5 text-emerald-500" />
-                          Lead Details
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 pb-4 space-y-2">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Name</p>
-                          <p className="text-sm font-medium">{selectedConversation.lead.name}</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div>
-                            <p className="text-xs text-muted-foreground">Status</p>
-                            <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
-                              {selectedConversation.lead.status}
-                            </Badge>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">Source</p>
-                            <Badge variant="outline" className="text-xs">
-                              {selectedConversation.lead.source}
-                            </Badge>
-                          </div>
-                        </div>
-                        {selectedConversation.lead.value !== undefined && selectedConversation.lead.value > 0 && (
-                          <div>
-                            <p className="text-xs text-muted-foreground">Value</p>
-                            <p className="text-sm font-semibold">₹{selectedConversation.lead.value.toLocaleString('en-IN')}</p>
-                          </div>
-                        )}
-                        <div>
-                          <p className="text-xs text-muted-foreground">Created</p>
-                          <p className="text-xs">{new Date(selectedConversation.lead.createdAt).toLocaleString('en-IN')}</p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* ── Stats Grid (Reviews / Jobs / Contacts) ──
-                      Reference design maps social stats (Tweets/Followers/
-                      Following) to our CRM data: Reviews, Jobs, Contacts. */}
-                  <Card className="shadow-none">
-                    <CardContent className="px-4 py-3">
-                      {contextLoading ? (
-                        <div className="flex items-center justify-center py-2">
-                          <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                          <div className="flex flex-col items-center gap-0.5 py-1">
-                            <Star className="size-3.5 text-amber-500 mb-0.5" />
-                            <span className="text-lg font-bold text-foreground">
-                              {customerContext?.stats.reviews ?? 0}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Reviews</span>
-                          </div>
-                          <div className="flex flex-col items-center gap-0.5 py-1 border-x">
-                            <Briefcase className="size-3.5 text-emerald-500 mb-0.5" />
-                            <span className="text-lg font-bold text-foreground">
-                              {customerContext?.stats.jobs ?? 0}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Jobs</span>
-                          </div>
-                          <div className="flex flex-col items-center gap-0.5 py-1">
-                            <ContactIcon className="size-3.5 text-sky-500 mb-0.5" />
-                            <span className="text-lg font-bold text-foreground">
-                              {customerContext?.stats.contacts ?? 0}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Contacts</span>
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* ── Survey Results Accordion (→ customer Reviews) ── */}
-                  <Card className="shadow-none">
-                    <button
-                      type="button"
-                      onClick={() => setShowSurveyResults(!showSurveyResults)}
-                      className="w-full flex items-center justify-between px-4 pt-4 pb-2 text-left"
-                    >
-                      <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-                        <Star className="size-3.5 text-amber-500" />
-                        Survey Results
-                        {customerContext && customerContext.reviews.length > 0 && (
-                          <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-1">
-                            {customerContext.reviews.length}
-                          </Badge>
-                        )}
-                      </CardTitle>
-                      <ChevronRight className={cn(
-                        'size-4 text-muted-foreground transition-transform',
-                        showSurveyResults && 'rotate-90'
-                      )} />
-                    </button>
-                    {showSurveyResults && (
-                      <CardContent className="px-4 pb-4 space-y-2">
-                        {!customerContext || customerContext.reviews.length === 0 ? (
-                          <p className="text-xs text-muted-foreground py-2 text-center">
-                            No reviews yet
-                          </p>
-                        ) : (
-                          customerContext.reviews.map(r => (
-                            <div key={r.id} className="rounded-md border p-2.5 space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-medium text-foreground">
-                                  {r.authorName || 'Verified Customer'}
-                                </span>
-                                <div className="flex items-center gap-0.5">
-                                  {Array.from({ length: 5 }).map((_, i) => (
-                                    <Star
-                                      key={i}
-                                      className={cn(
-                                        'size-2.5',
-                                        i < r.rating
-                                          ? 'fill-amber-400 text-amber-400'
-                                          : 'text-muted-foreground/30'
-                                      )}
-                                    />
-                                  ))}
-                                </div>
-                              </div>
-                              {r.comment && (
-                                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
-                                  {r.comment}
-                                </p>
-                              )}
-                              <p className="text-[10px] text-muted-foreground">
-                                {new Date(r.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                {r.source !== 'internal' && <span className="ml-1">· via {r.source}</span>}
-                              </p>
-                            </div>
-                          ))
-                        )}
-                      </CardContent>
-                    )}
-                  </Card>
-
-                  {/* ── Case History Accordion (→ past Jobs) ── */}
-                  <Card className="shadow-none">
-                    <button
-                      type="button"
-                      onClick={() => setShowCaseHistory(!showCaseHistory)}
-                      className="w-full flex items-center justify-between px-4 pt-4 pb-2 text-left"
-                    >
-                      <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-                        <Briefcase className="size-3.5 text-emerald-500" />
-                        Case History
-                        {customerContext && customerContext.jobs.length > 0 && (
-                          <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-1">
-                            {customerContext.jobs.length}
-                          </Badge>
-                        )}
-                      </CardTitle>
-                      <ChevronRight className={cn(
-                        'size-4 text-muted-foreground transition-transform',
-                        showCaseHistory && 'rotate-90'
-                      )} />
-                    </button>
-                    {showCaseHistory && (
-                      <CardContent className="px-4 pb-4 space-y-2">
-                        {!customerContext || customerContext.jobs.length === 0 ? (
-                          <p className="text-xs text-muted-foreground py-2 text-center">
-                            No job history
-                          </p>
-                        ) : (
-                          customerContext.jobs.map(j => (
-                            <div key={j.id} className="rounded-md border p-2.5 space-y-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs font-medium text-foreground truncate flex-1">
-                                  {j.title}
-                                </span>
-                                <Badge variant="outline" className={cn(
-                                  'text-[9px] px-1.5 h-4 whitespace-nowrap',
-                                  j.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400' :
-                                  j.status === 'cancelled' ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-950 dark:text-red-400' :
-                                  'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400'
-                                )}>
-                                  {j.status}
-                                </Badge>
-                              </div>
-                              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                                <span>
-                                  {j.jobNumber ? `#${j.jobNumber} · ` : ''}
-                                  {new Date(j.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
-                                </span>
-                                {j.quotedAmount != null && j.quotedAmount > 0 && (
-                                  <span className="font-medium text-foreground">
-                                    ₹{j.quotedAmount.toLocaleString('en-IN')}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </CardContent>
-                    )}
-                  </Card>
-
-                  {/* Channel Info Card */}
-                  <Card className="shadow-none">
-                    <CardHeader className="pb-3 pt-4 px-4">
-                      <CardTitle className="text-sm font-semibold">Channel Info</CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-4 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <ChannelBadge channel={selectedConversation.channel} />
-                      </div>
-                      {selectedConversation.autoLeadCreated && (
-                        <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-                          <Sparkles className="size-3" />
-                          <span>Lead auto-created from this channel</span>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Quick Actions */}
-                  <Card className="shadow-none">
-                    <CardHeader className="pb-3 pt-4 px-4">
-                      <CardTitle className="text-sm font-semibold">Quick Actions</CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-4 space-y-2">
-                      <Button variant="outline" size="sm" className="w-full justify-start gap-2">
-                        <MessageSquare className="size-3.5" />
-                        Send WhatsApp
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </div>
-              </ScrollArea>
+              <ConversationDetailPanel
+                conversation={selectedConversation}
+                customerContext={customerContext}
+                contextLoading={contextLoading}
+                showSurveyResults={showSurveyResults}
+                onShowSurveyResultsChange={setShowSurveyResults}
+                showCaseHistory={showCaseHistory}
+                onShowCaseHistoryChange={setShowCaseHistory}
+                onToggleAssign={handleToggleAssign}
+                assignBusy={assignBusy}
+              />
             ) : (
               <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
                 <p>Select a conversation</p>

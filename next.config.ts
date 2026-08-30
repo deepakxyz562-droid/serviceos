@@ -1,4 +1,16 @@
 import type { NextConfig } from "next";
+import bundleAnalyzer from "@next/bundle-analyzer";
+
+// Bundle analyzer — wraps the Next.js config to add @next/bundle-analyzer
+// when ANALYZE=true is set. Produces an interactive treemap of the production
+// JS bundle so we can identify heavy dependencies and code-split opportunities.
+//
+// Usage:
+//   ANALYZE=true bun run build
+//   # Opens .next/analyze/client.html in your browser
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+});
 
 // Fieseros demo - trigger dev server restart
 const nextConfig: NextConfig = {
@@ -201,4 +213,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);

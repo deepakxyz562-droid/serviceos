@@ -1,3 +1,0 @@
-{
-  "/api/workflows/[id]/versions/[versionId]/route": "app/api/workflows/[id]/versions/[versionId]/route.js"
-}

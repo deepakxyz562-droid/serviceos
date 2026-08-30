@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 
 import {
   KpiCard,
@@ -284,6 +284,53 @@ export function SecurityCenterSection() {
     toast.success(`API key “${label}” revoked`);
   };
 
+  const failedLoginColumns: Column<FailedLogin>[] = [
+    { key: 'time', header: 'Time', render: (r) => <span className="text-xs text-muted-foreground whitespace-nowrap">{mounted ? timeAgo(isoMinutesAgo(r.minsAgo)) : '—'}</span> },
+    { key: 'email', header: 'Email', render: (r) => <span className="font-medium text-foreground truncate max-w-[160px] block">{r.email}</span> },
+    { key: 'ip', header: 'IP', render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.ip}</span>, hideOnMobile: true },
+    { key: 'reason', header: 'Reason', render: (r) => <span className="text-xs text-muted-foreground">{r.reason}</span>, hideOnMobile: true },
+    {
+      key: 'status', header: 'Status', render: (r) => (
+        <Badge variant="outline" className={cn('text-[10px] capitalize', getStatusBadgeClasses(r.status))}>
+          {r.status}
+        </Badge>
+      ),
+    },
+  ];
+
+  const apiKeyColumns: Column<ApiKey>[] = [
+    {
+      key: 'label', header: 'Label', render: (k) => (
+        <div className="flex items-center gap-2">
+          <Key className="size-3.5 text-muted-foreground" />
+          <span className="font-medium text-foreground text-sm">{k.label}</span>
+        </div>
+      ),
+    },
+    { key: 'workspace', header: 'Workspace', render: (k) => <span className="text-xs text-muted-foreground truncate max-w-[120px] block">{k.workspace}</span>, hideOnMobile: true },
+    { key: 'scopes', header: 'Scopes', render: (k) => <span className="text-xs text-muted-foreground font-mono">{k.scopes}</span>, hideOnMobile: true },
+    { key: 'lastUsed', header: 'Last used', render: (k) => <span className="text-xs text-muted-foreground whitespace-nowrap">{mounted ? timeAgo(isoMinutesAgo(k.minsAgo)) : '—'}</span>, hideOnMobile: true },
+    {
+      key: 'actions', header: 'Actions', render: (k) => (
+        <div className="text-right">
+          <div className="flex items-center justify-end gap-2">
+            <Badge variant="outline" className={cn('text-[10px] capitalize', getStatusBadgeClasses(k.status))}>
+              {k.status}
+            </Badge>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-red-600 dark:text-red-400 hover:bg-red-500/10"
+              onClick={() => handleRevokeKey(k.label)}
+            >
+              Revoke
+            </Button>
+          </div>
+        </div>
+      ), className: 'text-right',
+    },
+  ];
+
   return (
     <section className="space-y-6">
       <SectionHeader
@@ -317,45 +364,13 @@ export function SecurityCenterSection() {
             <CardDescription>Last 24 hours across all workspaces.</CardDescription>
           </CardHeader>
           <CardContent className="pt-2">
-            <div className="rounded-lg border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Time</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead className="hidden md:table-cell">IP</TableHead>
-                    <TableHead className="hidden lg:table-cell">Reason</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {failedLogins.map((row) => (
-                    <TableRow key={`${row.email}-${row.minsAgo}`}>
-                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                        {mounted ? timeAgo(isoMinutesAgo(row.minsAgo)) : '—'}
-                      </TableCell>
-                      <TableCell className="font-medium text-foreground truncate max-w-[160px]">
-                        {row.email}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell font-mono text-xs text-muted-foreground">
-                        {row.ip}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
-                        {row.reason}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={cn('text-[10px] capitalize', getStatusBadgeClasses(row.status))}
-                        >
-                          {row.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <DataTable
+              columns={failedLoginColumns}
+              data={failedLogins}
+              rowKey={(r) => `${r.email}-${r.minsAgo}`}
+              emptyMessage="No failed login attempts"
+              emptyIcon={AlertTriangle}
+            />
           </CardContent>
         </Card>
 
@@ -409,58 +424,13 @@ export function SecurityCenterSection() {
             <CardDescription>Issued credentials across all workspaces.</CardDescription>
           </CardHeader>
           <CardContent className="pt-2">
-            <div className="rounded-lg border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Label</TableHead>
-                    <TableHead className="hidden md:table-cell">Workspace</TableHead>
-                    <TableHead className="hidden lg:table-cell">Scopes</TableHead>
-                    <TableHead className="hidden sm:table-cell">Last used</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {API_KEYS.map((k) => (
-                    <TableRow key={k.label}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Key className="size-3.5 text-muted-foreground" />
-                          <span className="font-medium text-foreground text-sm">{k.label}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-xs text-muted-foreground truncate max-w-[120px]">
-                        {k.workspace}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-xs text-muted-foreground font-mono">
-                        {k.scopes}
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell text-xs text-muted-foreground whitespace-nowrap">
-                        {mounted ? timeAgo(isoMinutesAgo(k.minsAgo)) : '—'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Badge
-                            variant="outline"
-                            className={cn('text-[10px] capitalize', getStatusBadgeClasses(k.status))}
-                          >
-                            {k.status}
-                          </Badge>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 px-2 text-red-600 dark:text-red-400 hover:bg-red-500/10"
-                            onClick={() => handleRevokeKey(k.label)}
-                          >
-                            Revoke
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <DataTable
+              columns={apiKeyColumns}
+              data={API_KEYS}
+              rowKey={(k) => k.label}
+              emptyMessage="No API keys issued"
+              emptyIcon={Key}
+            />
           </CardContent>
         </Card>
 

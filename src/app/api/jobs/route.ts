@@ -47,7 +47,27 @@ async function resolveWorkspaceId(
   provided: string | null | undefined,
   authUser: Awaited<ReturnType<typeof getAuthUser>>,
 ): Promise<string | null> {
-  if (provided) return provided
+  // SECURITY: if the caller provided a workspaceId, validate it belongs to
+  // their tenant before using it. Without this, a user from tenant A could
+  // inject body.workspaceId = <tenant B's workspace> and create jobs in
+  // another tenant's context.
+  if (provided) {
+    if (authUser?.isSuperAdmin) return provided
+    if (authUser?.tenantId) {
+      try {
+        const ws = await db.workspace.findFirst({
+          where: { id: provided, tenantId: authUser.tenantId },
+          select: { id: true },
+        })
+        if (ws) return provided
+        // Provided workspace doesn't belong to caller's tenant — fall through
+        // to session-derived resolution instead of trusting it.
+      } catch (e) {
+        console.error('[Jobs POST] Failed to validate provided workspaceId:', e)
+      }
+    }
+    // Fall through to session-based resolution
+  }
   if (authUser?.workspaceId) return authUser.workspaceId
   try {
     if (authUser?.tenantId) {
@@ -372,6 +392,15 @@ export async function POST(request: NextRequest) {
     if (crmGuard) return crmGuard;
     const body = await request.json()
     const authUser = await getAuthUser()
+    // SECURITY: enforce 401 — previously authUser could be null and the code
+    // used `authUser!.tenantId!` (non-null assertion) which would throw a
+    // TypeError → 500 instead of a clean 401.
+    if (!authUser) {
+      return NextResponse.json(
+        { error: 'Authentication required', code: 'UNAUTHENTICATED' },
+        { status: 401 }
+      );
+    }
 
     // Resolve workspaceId so the job has proper workspace → tenant context.
     // The Create Job form does not send workspaceId; without this, the job

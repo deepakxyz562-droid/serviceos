@@ -1,223 +1,65 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { ReactNode } from 'react';
 import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 import {
   Calendar, ChevronLeft, ChevronRight, Clock, Plus, MapPin, User,
-  Briefcase, LayoutGrid, List, X, ArrowRight, Eye,
-  MoreHorizontal, Users, CheckCircle2, Sparkles, CalendarClock, Ban,
-  CalendarDays, Filter,
+  Briefcase, LayoutGrid, List, ArrowRight,
+  CalendarDays, Filter, CalendarClock, Users,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuLabel,
-} from '@/components/ui/dropdown-menu';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-
-// ─── Types ──────────────────────────────────────────────────────────────────
-
-type ViewMode = 'month' | 'week' | 'day' | 'agenda';
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  type: 'booking' | 'job';
-  status: string;
-  scheduledAt: string | null;
-  scheduledEndTime?: string | null;
-  customerName?: string;
-  employeeName?: string;
-  address?: string;
-  duration?: number;
-  priority?: string;
-  jobType?: string;
-  description?: string;
-  employee?: { id: string; name: string; avatar?: string };
-}
-
-interface Booking {
-  id: string;
-  title: string;
-  description?: string;
-  status: string;
-  source: string;
-  customerId?: string;
-  customerName?: string;
-  customerPhone?: string;
-  customerEmail?: string;
-  employeeId?: string;
-  employee?: { id: string; name: string; avatar?: string };
-  serviceId?: string;
-  address?: string;
-  scheduledAt?: string;
-  scheduledEndTime?: string;
-  duration: number;
-  notes?: string;
-  createdAt: string;
-}
-
-interface Job {
-  id: string;
-  title: string;
-  description?: string;
-  status: string;
-  priority: string;
-  type: string;
-  address?: string;
-  scheduledAt?: string;
-  customerName?: string;
-  assigneeId?: string;
-  assigneeName?: string;
-  notes?: string;
-  createdAt: string;
-}
-
-interface BookingFormData {
-  title: string;
-  customerName: string;
-  employee: string;
-  scheduledAt: string;
-  scheduledEndTime: string;
-  duration: number;
-  address: string;
-  source: string;
-  notes: string;
-}
-
-// ─── Constants ──────────────────────────────────────────────────────────────
-
-const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const DAYS_OF_WEEK_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-const STATUS_CONFIG: Record<string, { label: string; dot: string; bg: string; text: string; border: string }> = {
-  pending:        { label: 'Pending',    dot: 'bg-amber-500',    bg: 'bg-amber-50',    text: 'text-amber-700',    border: 'border-amber-200' },
-  confirmed:      { label: 'Confirmed',  dot: 'bg-sky-500',      bg: 'bg-sky-50',      text: 'text-sky-700',      border: 'border-sky-200' },
-  assigned:       { label: 'Assigned',   dot: 'bg-teal-500',     bg: 'bg-teal-50',     text: 'text-teal-700',     border: 'border-teal-200' },
-  in_progress:    { label: 'In Progress',dot: 'bg-emerald-500',  bg: 'bg-emerald-50',  text: 'text-emerald-700',  border: 'border-emerald-200' },
-  completed:      { label: 'Completed',  dot: 'bg-green-500',    bg: 'bg-green-50',    text: 'text-green-700',    border: 'border-green-200' },
-  cancelled:      { label: 'Cancelled',  dot: 'bg-red-500',      bg: 'bg-red-50',      text: 'text-red-700',      border: 'border-red-200' },
-  no_show:        { label: 'No Show',    dot: 'bg-gray-500',     bg: 'bg-gray-50',     text: 'text-gray-700',     border: 'border-gray-200' },
-};
-
-function getStatusConfig(status: string) {
-  return STATUS_CONFIG[status] || STATUS_CONFIG.pending;
-}
-
-const EMPTY_FORM = (): BookingFormData => ({
-  title: '', customerName: '', employee: '', scheduledAt: '', scheduledEndTime: '',
-  duration: 60, address: '', source: 'manual', notes: '',
-});
-
-// ─── Date Helpers ───────────────────────────────────────────────────────────
-
-function getCalendarDays(year: number, month: number): (number | null)[] {
-  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
-  const days: (number | null)[] = [];
-  for (let i = 0; i < totalCells; i++) {
-    if (i < firstDay || i >= firstDay + daysInMonth) {
-      days.push(null);
-    } else {
-      days.push(i - firstDay + 1);
-    }
-  }
-  return days;
-}
-
-function getWeekDays(date: Date): Date[] {
-  const startOfWeek = new Date(date);
-  const day = startOfWeek.getDay();
-  startOfWeek.setDate(startOfWeek.getDate() - day);
-  const days: Date[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(startOfWeek);
-    d.setDate(startOfWeek.getDate() + i);
-    days.push(d);
-  }
-  return days;
-}
-
-function dateKey(year: number, month: number, day: number): string {
-  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
-
-function dateKeyFromDate(d: Date): string {
-  return dateKey(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function startOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function isToday(year: number, month: number, day: number): boolean {
-  const now = new Date();
-  return now.getFullYear() === year && now.getMonth() === month && now.getDate() === day;
-}
-
-function formatTime(dateStr?: string | null): string {
-  if (!dateStr) return '';
-  try {
-    return new Date(dateStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-  } catch {
-    return '';
-  }
-}
-
-function formatCompactTime(dateStr?: string | null): string {
-  if (!dateStr) return '';
-  try {
-    return new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  } catch {
-    return '';
-  }
-}
-
-function formatHourLabel(hour: number): string {
-  if (hour === 0) return '12 AM';
-  if (hour < 12) return `${hour} AM`;
-  if (hour === 12) return '12 PM';
-  return `${hour - 12} PM`;
-}
-
-function formatTimeRange(start?: string | null, end?: string | null): string {
-  const s = formatTime(start);
-  const e = formatTime(end);
-  if (s && e) return `${s} – ${e}`;
-  if (s) return s;
-  return '';
-}
-
-function getInitials(name: string): string {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-}
+import {
+  DAYS_OF_WEEK,
+  DAYS_OF_WEEK_FULL,
+  MONTHS,
+  STATUS_CONFIG,
+  getStatusConfig,
+  EMPTY_FORM,
+  getCalendarDays,
+  getWeekDays,
+  dateKey,
+  dateKeyFromDate,
+  startOfDay,
+  isToday,
+  formatTime,
+  formatCompactTime,
+  formatHourLabel,
+  formatTimeRange,
+  getInitials,
+} from '@/features/calendar/utils/calendar-helpers';
+import type {
+  ViewMode,
+  CalendarEvent,
+  Booking,
+  Job,
+  BookingFormData,
+} from '@/features/calendar/types';
+import { BookingFormDialog } from '@/features/calendar/components/booking-form-dialog';
+import {
+  DayDetailSidebar,
+  DayDetailDialog,
+  EventActionsMenu,
+} from '@/features/calendar/components/day-detail-dialog';
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -674,91 +516,23 @@ export function CalendarView() {
   /**
    * Render the action dropdown menu for a single booking event card.
    * Returns null for job events (no booking actions apply).
+   *
+   * Delegates to the shared {@link EventActionsMenu} component so the menu's
+   * ~80 lines of JSX live in `src/features/calendar/components/day-detail-dialog.tsx`.
    */
-  const renderEventActions = (evt: CalendarEvent) => {
-    if (evt.type !== 'booking') return null;
-    const isAssigned = !!evt.employee?.id;
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="size-6 p-0 shrink-0 hover:bg-background/80"
-            aria-label="Booking actions"
-            disabled={actionInProgress}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoreHorizontal className="size-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          {/* Assign / Change Employee with sub-menu of employees */}
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Users className="size-4 mr-2" />
-              {isAssigned ? 'Change Employee' : 'Assign Employee'}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="max-h-[280px] overflow-y-auto">
-              {employees.length === 0 ? (
-                <DropdownMenuItem disabled>No employees available</DropdownMenuItem>
-              ) : (
-                employees.map((emp) => (
-                  <DropdownMenuItem
-                    key={emp.id}
-                    onClick={() => handleEventAssign(evt, emp.id)}
-                  >
-                    <User className="size-3.5 mr-2 text-muted-foreground" />
-                    {emp.name}
-                  </DropdownMenuItem>
-                ))
-              )}
-              {isAssigned && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="text-red-600 focus:text-red-600"
-                    onClick={() => handleEventAssign(evt, '')}
-                  >
-                    <Ban className="size-3.5 mr-2" /> Unassign
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-
-          <DropdownMenuItem onClick={() => handleEventAutoAssign(evt)}>
-            <Sparkles className="size-4 mr-2" /> Auto Assign
-          </DropdownMenuItem>
-
-          <DropdownMenuItem onClick={() => handleEventCreateJob(evt)}>
-            <Briefcase className="size-4 mr-2" /> Create Job
-          </DropdownMenuItem>
-
-          <DropdownMenuSeparator />
-
-          <DropdownMenuItem
-            onClick={() => handleEventMarkCompleted(evt)}
-            disabled={evt.status === 'completed'}
-          >
-            <CheckCircle2 className="size-4 mr-2" /> Mark Completed
-          </DropdownMenuItem>
-
-          <DropdownMenuItem onClick={() => openRescheduleDialog(evt)}>
-            <CalendarClock className="size-4 mr-2" /> Reschedule
-          </DropdownMenuItem>
-
-          <DropdownMenuItem
-            className="text-red-600 focus:text-red-600"
-            onClick={() => handleEventCancel(evt)}
-            disabled={evt.status === 'cancelled'}
-          >
-            <Ban className="size-4 mr-2" /> Cancel Booking
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
-  };
+  const renderEventActions = (evt: CalendarEvent): ReactNode => (
+    <EventActionsMenu
+      evt={evt}
+      employees={employees}
+      actionInProgress={actionInProgress}
+      onAssign={handleEventAssign}
+      onAutoAssign={handleEventAutoAssign}
+      onCreateJob={handleEventCreateJob}
+      onMarkCompleted={handleEventMarkCompleted}
+      onReschedule={openRescheduleDialog}
+      onCancel={handleEventCancel}
+    />
+  );
 
   // ─── Selected Date Events ───────────────────────────────────────────────
 
@@ -1465,304 +1239,17 @@ export function CalendarView() {
   };
 
   // ─── Event Detail Panel ─────────────────────────────────────────────────
-
-  const renderEventDetail = () => {
-    if (!showDetailPanel || !selectedDate) return null;
-
-    return (
-      <div className="lg:w-80 shrink-0">
-        <Card className="h-full">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold">{selectedDateLabel}</CardTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => {
-                  setShowDetailPanel(false);
-                  setSelectedDate(null);
-                }}
-              >
-                <X className="size-4" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {selectedDateEvents.length === 0 ? (
-              <div className="text-center py-8">
-                <Calendar className="size-10 text-muted-foreground/40 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">No events scheduled</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
-                  onClick={() => {
-                    if (selectedDate) openCreateForDateTime(selectedDate, 9);
-                  }}
-                >
-                  <Plus className="size-3.5 mr-1" /> Add Event
-                </Button>
-              </div>
-            ) : (
-              <ScrollArea className="max-h-[400px]">
-                <div className="space-y-2.5">
-                  {selectedDateEvents.map((evt) => {
-                    const cfg = getStatusConfig(evt.status);
-                    const isJob = evt.type === 'job';
-
-                    return (
-                      <div
-                        key={evt.id}
-                        className={`rounded-lg border ${cfg.border} ${cfg.bg} p-3 transition-colors hover:shadow-sm`}
-                      >
-                        <div className="flex items-start gap-2.5">
-                          <div className={`shrink-0 size-8 rounded-md flex items-center justify-center ${
-                            isJob ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30'
-                          }`}>
-                            {isJob ? (
-                              <Briefcase className="size-4 text-orange-600 dark:text-orange-400" />
-                            ) : (
-                              <Calendar className="size-4 text-emerald-600 dark:text-emerald-400" />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-1">
-                              <p className="text-sm font-semibold text-foreground truncate">{evt.title}</p>
-                              {/* 3-dot action menu — bookings only */}
-                              {!isJob && renderEventActions(evt)}
-                            </div>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-5 ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-                                <span className={`size-1.5 rounded-full ${cfg.dot} mr-1`} />
-                                {cfg.label}
-                              </Badge>
-                              <span className="text-[10px] text-muted-foreground capitalize">
-                                {isJob ? 'Job' : 'Booking'}
-                              </span>
-                              {evt.employeeName && (
-                                <span className="text-[10px] text-muted-foreground truncate">
-                                  · {evt.employeeName}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-2 space-y-1 ml-[42px]">
-                          {evt.scheduledAt && (
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <Clock className="size-3 shrink-0" />
-                              <span>
-                                {formatTime(evt.scheduledAt)}
-                                {evt.scheduledEndTime ? ` – ${formatTime(evt.scheduledEndTime)}` : ''}
-                              </span>
-                              {evt.duration && (
-                                <span className="text-muted-foreground/70">({evt.duration}min)</span>
-                              )}
-                            </div>
-                          )}
-                          {evt.customerName && (
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <User className="size-3 shrink-0" />
-                              <span>{evt.customerName}</span>
-                            </div>
-                          )}
-                          {evt.address && (
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <MapPin className="size-3 shrink-0" />
-                              <span className="truncate">{evt.address}</span>
-                            </div>
-                          )}
-                          {isJob && evt.priority && (
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <ArrowRight className="size-3 shrink-0" />
-                              <span className="capitalize">Priority: {evt.priority}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    );
-  };
+  //
+  // The desktop sidebar + mobile dialog JSX now live in
+  // `src/features/calendar/components/day-detail-dialog.tsx` — see
+  // {@link DayDetailSidebar} and {@link DayDetailDialog}. They are wired in
+  // the main return below.
 
   // ─── Create Booking Dialog ──────────────────────────────────────────────
-
-  const renderCreateDialog = () => (
-    <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <div className="size-8 rounded-md bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-              <Plus className="size-4 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            New Booking
-          </DialogTitle>
-          <DialogDescription>
-            Schedule a new booking or appointment.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-4 py-4">
-          {/* Title */}
-          <div className="grid gap-2">
-            <Label htmlFor="title" className="text-sm font-medium">Title *</Label>
-            <Input
-              id="title"
-              placeholder="e.g., Home Cleaning"
-              value={form.title}
-              onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-            />
-          </div>
-
-          {/* Customer Name */}
-          <div className="grid gap-2">
-            <Label htmlFor="customerName" className="text-sm font-medium">Customer Name</Label>
-            <Input
-              id="customerName"
-              placeholder="Customer name"
-              value={form.customerName}
-              onChange={(e) => setForm((prev) => ({ ...prev, customerName: e.target.value }))}
-            />
-          </div>
-
-          {/* Employee */}
-          <div className="grid gap-2">
-            <Label className="text-sm font-medium">Assign Employee</Label>
-            <Select
-              value={form.employee}
-              onValueChange={(val) => setForm((prev) => ({ ...prev, employee: val }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select employee" />
-              </SelectTrigger>
-              <SelectContent>
-                {employees.map((emp) => (
-                  <SelectItem key={emp.id} value={emp.id}>
-                    {emp.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Date & Time */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="scheduledAt" className="text-sm font-medium">Start Date & Time</Label>
-              <Input
-                id="scheduledAt"
-                type="datetime-local"
-                value={form.scheduledAt}
-                onChange={(e) => setForm((prev) => ({ ...prev, scheduledAt: e.target.value }))}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="scheduledEndTime" className="text-sm font-medium">End Date & Time</Label>
-              <Input
-                id="scheduledEndTime"
-                type="datetime-local"
-                value={form.scheduledEndTime}
-                onChange={(e) => setForm((prev) => ({ ...prev, scheduledEndTime: e.target.value }))}
-              />
-            </div>
-          </div>
-
-          {/* Duration */}
-          <div className="grid gap-2">
-            <Label htmlFor="duration" className="text-sm font-medium">Duration (minutes)</Label>
-            <Select
-              value={String(form.duration)}
-              onValueChange={(val) => setForm((prev) => ({ ...prev, duration: parseInt(val) }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="30">30 minutes</SelectItem>
-                <SelectItem value="60">1 hour</SelectItem>
-                <SelectItem value="90">1.5 hours</SelectItem>
-                <SelectItem value="120">2 hours</SelectItem>
-                <SelectItem value="180">3 hours</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Address */}
-          <div className="grid gap-2">
-            <Label htmlFor="address" className="text-sm font-medium">Address</Label>
-            <Input
-              id="address"
-              placeholder="Service location"
-              value={form.address}
-              onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
-            />
-          </div>
-
-          {/* Source */}
-          <div className="grid gap-2">
-            <Label className="text-sm font-medium">Source</Label>
-            <Select
-              value={form.source}
-              onValueChange={(val) => setForm((prev) => ({ ...prev, source: val }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="manual">Manual</SelectItem>
-                <SelectItem value="phone">Phone</SelectItem>
-                <SelectItem value="website">Website</SelectItem>
-                <SelectItem value="whatsapp">WhatsApp</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Notes */}
-          <div className="grid gap-2">
-            <Label htmlFor="notes" className="text-sm font-medium">Notes</Label>
-            <Textarea
-              id="notes"
-              placeholder="Additional notes..."
-              value={form.notes}
-              onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-              rows={3}
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setShowCreateDialog(false);
-              setForm(EMPTY_FORM());
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleCreateBooking}
-            disabled={saving || !form.title.trim()}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white"
-          >
-            {saving ? (
-              <><span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />Creating...</>
-            ) : (
-              <><Plus className="size-4 mr-1.5" />Create Booking</>
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+  //
+  // The dialog JSX now lives in
+  // `src/features/calendar/components/booking-form-dialog.tsx` — see
+  // {@link BookingFormDialog}. It's wired in the main return below.
 
   // ─── Main Render ────────────────────────────────────────────────────────
 
@@ -2010,7 +1497,19 @@ export function CalendarView() {
             {/* Detail panel — desktop only, hidden for agenda view */}
             {viewMode !== 'agenda' && (
               <div className="hidden lg:block">
-                {renderEventDetail()}
+                <DayDetailSidebar
+                  open={showDetailPanel && !!selectedDate}
+                  selectedDateLabel={selectedDateLabel}
+                  selectedDateEvents={selectedDateEvents}
+                  onClose={() => {
+                    setShowDetailPanel(false);
+                    setSelectedDate(null);
+                  }}
+                  onAddEvent={() => {
+                    if (selectedDate) openCreateForDateTime(selectedDate, 9);
+                  }}
+                  renderActions={renderEventActions}
+                />
               </div>
             )}
           </div>
@@ -2018,113 +1517,38 @@ export function CalendarView() {
       )}
 
       {/* Mobile: Event Detail Dialog */}
-      {showDetailPanel && selectedDate && (
-        <div className="lg:hidden">
-          <Dialog open={showDetailPanel} onOpenChange={(open) => {
+      <div className="lg:hidden">
+        <DayDetailDialog
+          open={showDetailPanel && !!selectedDate}
+          onOpenChange={(open) => {
             if (!open) {
               setShowDetailPanel(false);
               setSelectedDate(null);
             }
-          }}>
-            <DialogContent className="max-w-[95vw] max-h-[80vh]">
-              <DialogHeader>
-                <DialogTitle className="text-sm">{selectedDateLabel}</DialogTitle>
-              </DialogHeader>
-              {selectedDateEvents.length === 0 ? (
-                <div className="text-center py-6">
-                  <Calendar className="size-8 text-muted-foreground/40 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">No events scheduled</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-3 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
-                    onClick={() => {
-                      setShowDetailPanel(false);
-                      if (selectedDate) openCreateForDateTime(selectedDate, 9);
-                    }}
-                  >
-                    <Plus className="size-3.5 mr-1" /> Add Event
-                  </Button>
-                </div>
-              ) : (
-                <ScrollArea className="max-h-[50vh]">
-                  <div className="space-y-2.5">
-                    {selectedDateEvents.map((evt) => {
-                      const cfg = getStatusConfig(evt.status);
-                      const isJob = evt.type === 'job';
-                      return (
-                        <div
-                          key={evt.id}
-                          className={`rounded-lg border ${cfg.border} ${cfg.bg} p-3`}
-                        >
-                          <div className="flex items-start gap-2.5">
-                            <div className={`shrink-0 size-8 rounded-md flex items-center justify-center ${
-                              isJob ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30'
-                            }`}>
-                              {isJob ? (
-                                <Briefcase className="size-4 text-orange-600 dark:text-orange-400" />
-                              ) : (
-                                <Calendar className="size-4 text-emerald-600 dark:text-emerald-400" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between gap-1">
-                                <p className="text-sm font-semibold text-foreground truncate">{evt.title}</p>
-                                {/* 3-dot action menu — bookings only */}
-                                {!isJob && renderEventActions(evt)}
-                              </div>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-5 ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-                                  <span className={`size-1.5 rounded-full ${cfg.dot} mr-1`} />
-                                  {cfg.label}
-                                </Badge>
-                                <span className="text-[10px] text-muted-foreground capitalize">
-                                  {isJob ? 'Job' : 'Booking'}
-                                </span>
-                                {evt.employeeName && (
-                                  <span className="text-[10px] text-muted-foreground truncate">
-                                    · {evt.employeeName}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="mt-2 space-y-1 ml-[42px]">
-                            {evt.scheduledAt && (
-                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <Clock className="size-3 shrink-0" />
-                                <span>
-                                  {formatTime(evt.scheduledAt)}
-                                  {evt.scheduledEndTime ? ` – ${formatTime(evt.scheduledEndTime)}` : ''}
-                                </span>
-                              </div>
-                            )}
-                            {evt.customerName && (
-                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <User className="size-3 shrink-0" />
-                                <span>{evt.customerName}</span>
-                              </div>
-                            )}
-                            {evt.address && (
-                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <MapPin className="size-3 shrink-0" />
-                                <span className="truncate">{evt.address}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-              )}
-            </DialogContent>
-          </Dialog>
-        </div>
-      )}
+          }}
+          selectedDateLabel={selectedDateLabel}
+          selectedDateEvents={selectedDateEvents}
+          onAddEvent={() => {
+            if (selectedDate) {
+              setShowDetailPanel(false);
+              openCreateForDateTime(selectedDate, 9);
+            }
+          }}
+          renderActions={renderEventActions}
+        />
+      </div>
 
       {/* Create Booking Dialog */}
-      {renderCreateDialog()}
+      <BookingFormDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        form={form}
+        onFormChange={setForm}
+        employees={employees}
+        saving={saving}
+        onCreate={handleCreateBooking}
+        onReset={() => setForm(EMPTY_FORM())}
+      />
 
       {/* ─── Reschedule Booking Dialog ──────────────────────────────────────── */}
       <Dialog

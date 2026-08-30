@@ -41,6 +41,12 @@
     "examples",
     "skills",
     "mini-services",
-    "daemon.js"
+    "daemon.js",
+    "mobile-app",
+    "standalone",
+    "e2e",
+    "prisma/seed-users.ts",
+    "prisma/seed.ts",
+    "prisma/seed-crm.ts"
   ]
 }

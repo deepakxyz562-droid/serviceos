@@ -22,9 +22,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { CampaignProviderGate } from '@/components/marketing/campaign-provider-gate';
@@ -228,6 +226,88 @@ export function EmailCampaignsView() {
       setIsSending(false);
     }
   };
+
+  // ── DataTable columns ─────────────────────────────────────────────────────
+  // Columns for the "Last Campaign Result" table (per-recipient send outcomes).
+  const resultColumns: Column<SendResult>[] = [
+    {
+      key: 'recipient',
+      header: 'Recipient',
+      render: (r) => <span className="font-mono text-xs">{r.email}</span>,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (r) => r.success ? (
+        <Badge className="bg-emerald-100 text-emerald-700">
+          <CheckCircle2 className="size-3 mr-1" /> Sent
+        </Badge>
+      ) : (
+        <Badge className="bg-rose-100 text-rose-700">
+          <XCircle className="size-3 mr-1" /> Failed
+        </Badge>
+      ),
+    },
+    {
+      key: 'message',
+      header: 'Message ID / Error',
+      render: (r) => (
+        <span className="font-mono text-xs text-muted-foreground">
+          {r.success ? (r.simulated ? 'SIMULATED' : r.messageId) : r.error}
+        </span>
+      ),
+    },
+  ];
+
+  // Columns for the "Recent Email Logs" table.
+  const logColumns: Column<LogEntry>[] = [
+    {
+      key: 'recipient',
+      header: 'Recipient',
+      render: (l) => (
+        <div className="font-mono text-xs">
+          {l.recipient}
+          {l.recipientName ? <div className="text-muted-foreground">{l.recipientName}</div> : null}
+        </div>
+      ),
+    },
+    {
+      key: 'subject',
+      header: 'Subject',
+      render: (l) => {
+        const meta = (() => { try { return JSON.parse(l.metadataJson || '{}') } catch { return {} } })();
+        return (
+          <span className="text-xs">
+            {l.subject?.slice(0, 60) || '—'}{meta.simulated ? ' (sim)' : ''}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (l) => (
+        <Badge
+          variant="outline"
+          className={cn(
+            l.status === 'sent' && 'bg-emerald-100 text-emerald-700 border-emerald-200',
+            l.status === 'failed' && 'bg-rose-100 text-rose-700 border-rose-200'
+          )}
+        >
+          {l.status}
+        </Badge>
+      ),
+    },
+    {
+      key: 'when',
+      header: 'When',
+      render: (l) => (
+        <span className="text-xs text-muted-foreground">
+          {new Date(l.createdAt).toLocaleString()}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6 w-full">
@@ -442,37 +522,12 @@ export function EmailCampaignsView() {
               </div>
             </div>
             <Separator className="mb-3" />
-            <div className="rounded-md border max-h-72 overflow-y-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Recipient</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Message ID / Error</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {lastResult.results.map((r, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-mono text-xs">{r.email}</TableCell>
-                      <TableCell>
-                        {r.success ? (
-                          <Badge className="bg-emerald-100 text-emerald-700">
-                            <CheckCircle2 className="size-3 mr-1" /> Sent
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-rose-100 text-rose-700">
-                            <XCircle className="size-3 mr-1" /> Failed
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {r.success ? (r.simulated ? 'SIMULATED' : r.messageId) : r.error}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className="max-h-72 overflow-y-auto">
+              <DataTable
+                columns={resultColumns}
+                data={lastResult.results}
+                rowKey={(r) => r.contactId}
+              />
             </div>
           </CardContent>
         </Card>
@@ -485,52 +540,16 @@ export function EmailCampaignsView() {
             <CardTitle className="text-base">Recent Email Logs</CardTitle>
           </CardHeader>
           <CardContent>
-            {logs.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                No email logs yet. Send a campaign to see logs here.
-              </div>
-            ) : (
-              <div className="max-h-96 rounded-md border overflow-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Recipient</TableHead>
-                      <TableHead>Subject</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>When</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {logs.map((l) => {
-                      const meta = (() => { try { return JSON.parse(l.metadataJson || '{}') } catch { return {} } })()
-                      return (
-                        <TableRow key={l.id}>
-                          <TableCell className="font-mono text-xs">
-                            {l.recipient}
-                            {l.recipientName ? <div className="text-muted-foreground">{l.recipientName}</div> : null}
-                          </TableCell>
-                          <TableCell className="text-xs">{l.subject?.slice(0, 60) || '—'}{meta.simulated ? ' (sim)' : ''}</TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                l.status === 'sent' && 'bg-emerald-100 text-emerald-700 border-emerald-200',
-                                l.status === 'failed' && 'bg-rose-100 text-rose-700 border-rose-200'
-                              )}
-                            >
-                              {l.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {new Date(l.createdAt).toLocaleString()}
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+            <div className="max-h-96 overflow-auto">
+              <DataTable
+                columns={logColumns}
+                data={logs}
+                rowKey={(l) => l.id}
+                loading={isLoading}
+                emptyMessage="No email logs yet. Send a campaign to see logs here."
+                emptyIcon={Mail}
+              />
+            </div>
           </CardContent>
         </Card>
       )}

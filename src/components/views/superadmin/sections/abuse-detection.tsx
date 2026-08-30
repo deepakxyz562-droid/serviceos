@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 
@@ -314,6 +314,63 @@ export function AbuseDetectionSection() {
     toast.success(`Workspace “${name}” suspended`);
   };
 
+  const flaggedWorkspaceColumns: Column<FlaggedWorkspace>[] = [
+    { key: 'name', header: 'Workspace', render: (w) => <span className="font-medium text-foreground">{w.name}</span> },
+    {
+      key: 'plan', header: 'Plan', render: (w) => (
+        <Badge variant="outline" className={cn('text-[10px] capitalize', getPlanBadgeClasses(w.plan))}>
+          {w.plan}
+        </Badge>
+      ), hideOnMobile: true,
+    },
+    { key: 'violations', header: 'Violations', render: (w) => <span className="text-sm text-muted-foreground font-mono">{w.violations}</span>, hideOnMobile: true },
+    {
+      key: 'risk', header: 'Risk Score', render: (w) => (
+        <div className="flex items-center gap-2 min-w-[140px]">
+          <Progress value={w.riskScore} className={cn('h-1.5', riskProgressClass(w.riskLevel))} />
+          <span className="text-[11px] font-mono text-muted-foreground w-8 text-right">{w.riskScore}</span>
+          <Badge variant="outline" className={cn('text-[10px] capitalize', riskBadgeClasses(w.riskLevel))}>{w.riskLevel}</Badge>
+        </div>
+      ), className: 'min-w-[160px]',
+    },
+    {
+      key: 'status', header: 'Status', render: (w) => (
+        <Badge
+          variant="outline"
+          className={cn(
+            'text-[10px] capitalize',
+            w.status === 'suspended'
+              ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20'
+              : w.status === 'flagged'
+                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                : 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
+          )}
+        >
+          {w.status.replace('-', ' ')}
+        </Badge>
+      ),
+    },
+    {
+      key: 'actions', header: 'Actions', render: (w) => (
+        <div className="text-right">
+          <div className="flex items-center justify-end gap-1.5">
+            <Button size="sm" variant="outline" className="h-7" onClick={() => handleReview(w.name)}>
+              <Search className="size-3.5 mr-1" />Review
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+              onClick={() => handleSuspend(w.name)}
+            >
+              <Ban className="size-3.5 mr-1" />Suspend
+            </Button>
+          </div>
+        </div>
+      ), className: 'text-right',
+    },
+  ];
+
   return (
     <section className="space-y-6">
       <SectionHeader
@@ -345,92 +402,13 @@ export function AbuseDetectionSection() {
           <CardDescription>Workspaces currently flagged by detection rules.</CardDescription>
         </CardHeader>
         <CardContent className="pt-2">
-          <div className="rounded-lg border border-border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Workspace</TableHead>
-                  <TableHead className="hidden sm:table-cell">Plan</TableHead>
-                  <TableHead className="hidden md:table-cell">Violations</TableHead>
-                  <TableHead className="min-w-[160px]">Risk Score</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {flaggedWorkspaces.map((w) => (
-                  <TableRow key={w.name}>
-                    <TableCell className="font-medium text-foreground">{w.name}</TableCell>
-                    <TableCell className="hidden sm:table-cell">
-                      <Badge
-                        variant="outline"
-                        className={cn('text-[10px] capitalize', getPlanBadgeClasses(w.plan))}
-                      >
-                        {w.plan}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-sm text-muted-foreground font-mono">
-                      {w.violations}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 min-w-[140px]">
-                        <Progress
-                          value={w.riskScore}
-                          className={cn('h-1.5', riskProgressClass(w.riskLevel))}
-                        />
-                        <span className="text-[11px] font-mono text-muted-foreground w-8 text-right">
-                          {w.riskScore}
-                        </span>
-                        <Badge
-                          variant="outline"
-                          className={cn('text-[10px] capitalize', riskBadgeClasses(w.riskLevel))}
-                        >
-                          {w.riskLevel}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          'text-[10px] capitalize',
-                          w.status === 'suspended'
-                            ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20'
-                            : w.status === 'flagged'
-                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                              : 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
-                        )}
-                      >
-                        {w.status.replace('-', ' ')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7"
-                          onClick={() => handleReview(w.name)}
-                        >
-                          <Search className="size-3.5 mr-1" />
-                          Review
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
-                          onClick={() => handleSuspend(w.name)}
-                        >
-                          <Ban className="size-3.5 mr-1" />
-                          Suspend
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataTable
+            columns={flaggedWorkspaceColumns}
+            data={flaggedWorkspaces}
+            rowKey={(w) => w.name}
+            emptyMessage="No flagged workspaces"
+            emptyIcon={ShieldAlert}
+          />
         </CardContent>
       </Card>
 

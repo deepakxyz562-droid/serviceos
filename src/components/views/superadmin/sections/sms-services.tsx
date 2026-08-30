@@ -13,9 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   MessageSquare, Send, CheckCircle2, DollarSign, ChevronRight, Settings2,
 } from 'lucide-react';
@@ -113,48 +111,13 @@ export function SMSServicesSection() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border border-border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>From Number</TableHead>
-                  <TableHead className="text-right">Sent (24h)</TableHead>
-                  <TableHead className="w-40">Delivery</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {SMS_PROVIDERS.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-medium text-foreground">{p.name}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{p.fromNumber}</TableCell>
-                    <TableCell className="text-right tabular-nums">{p.sent24h.toLocaleString('en-US')}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Progress value={p.deliveryRate} className="h-1.5" />
-                        <span className="text-xs tabular-nums text-muted-foreground w-12 text-right">
-                          {p.deliveryRate.toFixed(1)}%
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cn('capitalize', getStatusBadgeClasses(p.status))}>
-                        {p.status === 'active' ? 'Active' : 'Degraded'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="h-8 gap-1.5">
-                        <Settings2 className="size-3.5" />
-                        Configure
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataTable
+            columns={smsProviderColumns}
+            data={SMS_PROVIDERS}
+            rowKey={(p) => p.id}
+            emptyMessage="No SMS providers connected"
+            emptyIcon={MessageSquare}
+          />
         </CardContent>
       </Card>
 
@@ -166,30 +129,13 @@ export function SMSServicesSection() {
             <CardDescription>Top sending destinations and delivery rates.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border border-border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Country</TableHead>
-                    <TableHead className="text-right">Sent</TableHead>
-                    <TableHead className="w-32">Delivery</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {SMS_COUNTRY_STATS.map((c) => (
-                    <TableRow key={c.country}>
-                      <TableCell className="font-medium text-foreground">{c.country}</TableCell>
-                      <TableCell className="text-right tabular-nums">{c.sent.toLocaleString('en-US')}</TableCell>
-                      <TableCell>
-                        <span className="text-xs tabular-nums text-muted-foreground">
-                          {c.deliveryRate.toFixed(1)}%
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <DataTable
+              columns={smsCountryColumns}
+              data={SMS_COUNTRY_STATS}
+              rowKey={(c) => c.country}
+              emptyMessage="No country data"
+              emptyIcon={MessageSquare}
+            />
           </CardContent>
         </Card>
 
@@ -233,3 +179,42 @@ export function SMSServicesSection() {
     </section>
   );
 }
+
+const smsProviderColumns: Column<SmsProviderRow>[] = [
+  { key: 'name', header: 'Provider', render: (p) => <span className="font-medium text-foreground">{p.name}</span> },
+  { key: 'fromNumber', header: 'From Number', render: (p) => <span className="font-mono text-xs text-muted-foreground">{p.fromNumber}</span> },
+  { key: 'sent24h', header: 'Sent (24h)', render: (p) => <span className="text-right tabular-nums block">{p.sent24h.toLocaleString('en-US')}</span>, className: 'text-right' },
+  {
+    key: 'delivery', header: 'Delivery', render: (p) => (
+      <div className="flex items-center gap-2">
+        <Progress value={p.deliveryRate} className="h-1.5" />
+        <span className="text-xs tabular-nums text-muted-foreground w-12 text-right">
+          {p.deliveryRate.toFixed(1)}%
+        </span>
+      </div>
+    ), className: 'w-40',
+  },
+  {
+    key: 'status', header: 'Status', render: (p) => (
+      <Badge variant="outline" className={cn('capitalize', getStatusBadgeClasses(p.status))}>
+        {p.status === 'active' ? 'Active' : 'Degraded'}
+      </Badge>
+    ),
+  },
+  {
+    key: 'actions', header: 'Actions', render: () => (
+      <div className="text-right">
+        <Button variant="ghost" size="sm" className="h-8 gap-1.5">
+          <Settings2 className="size-3.5" />
+          Configure
+        </Button>
+      </div>
+    ), className: 'text-right',
+  },
+];
+
+const smsCountryColumns: Column<SmsCountryStat>[] = [
+  { key: 'country', header: 'Country', render: (c) => <span className="font-medium text-foreground">{c.country}</span> },
+  { key: 'sent', header: 'Sent', render: (c) => <span className="text-right tabular-nums block">{c.sent.toLocaleString('en-US')}</span>, className: 'text-right' },
+  { key: 'delivery', header: 'Delivery', render: (c) => <span className="text-xs tabular-nums text-muted-foreground">{c.deliveryRate.toFixed(1)}%</span>, className: 'w-32' },
+];

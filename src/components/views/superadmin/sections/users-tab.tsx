@@ -14,14 +14,10 @@ import { useState, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -33,7 +29,7 @@ import {
 } from 'lucide-react';
 
 import {
-  TableSkeleton, EmptyState, ROLE_BADGE_CLASSES,
+  ROLE_BADGE_CLASSES,
 } from '@/components/views/superadmin/_shared';
 import type { UserRecord } from '@/components/views/superadmin/types';
 
@@ -107,6 +103,47 @@ export function UsersTab({ users, usersLoading }: UsersTabProps) {
     }
   };
 
+  const userColumns: Column<UserRecord>[] = [
+    { key: 'name', header: 'Name', render: (u) => <span className="font-medium text-foreground">{u.name}</span> },
+    { key: 'email', header: 'Email', render: (u) => <span className="text-muted-foreground">{u.email}</span> },
+    {
+      key: 'role', header: 'Role', render: (u) => (
+        <Badge variant="outline" className={cn('capitalize text-[10px]', ROLE_BADGE_CLASSES[u.role] || ROLE_BADGE_CLASSES.employee)}>
+          {u.role}
+        </Badge>
+      ),
+    },
+    {
+      key: 'status', header: 'Status', render: (u) => (
+        <Badge variant="outline" className={cn('text-[10px]', u.isActive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20')}>
+          {u.isActive ? 'Active' : 'Inactive'}
+        </Badge>
+      ),
+    },
+    { key: 'tenant', header: 'Tenant', render: (u) => <span className="text-muted-foreground text-sm">{u.tenantName || '—'}</span> },
+    {
+      key: 'actions', header: 'Actions', render: (u) => (
+        <div className="flex items-center justify-end gap-0.5">
+          {u.isActive ? (
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => setActionDialog({ user: u, action: 'deactivate' })} title="Deactivate">
+              <Ban className="size-3.5" />
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => setActionDialog({ user: u, action: 'activate' })} title="Activate">
+              <CheckCircle2 className="size-3.5" />
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-sky-600 hover:text-sky-700" onClick={() => { setNewRole(u.role); setActionDialog({ user: u, action: 'change_role' }); }} title="Change Role">
+            <UserCog className="size-3.5" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => { setDeleteConfirmText(''); setActionDialog({ user: u, action: 'delete' }); }} title="Delete User">
+            <Trash2 className="size-3.5" />
+          </Button>
+        </div>
+      ), className: 'text-right',
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3">
@@ -126,64 +163,15 @@ export function UsersTab({ users, usersLoading }: UsersTabProps) {
         </Select>
       </div>
 
-      {usersLoading ? <TableSkeleton /> : filteredUsers.length === 0 ? (
-        <EmptyState icon={Users} title="No users found" subtitle="Try adjusting your search or filters." />
-      ) : (
-        <Card className="card-shadow">
-          <ScrollArea className="max-h-[calc(100vh-320px)]">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredUsers.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium text-foreground">{user.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{user.email}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cn('capitalize text-[10px]', ROLE_BADGE_CLASSES[user.role] || ROLE_BADGE_CLASSES.employee)}>
-                        {user.role}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cn('text-[10px]', user.isActive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20')}>
-                        {user.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{user.tenantName || '—'}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-0.5">
-                        {user.isActive ? (
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => setActionDialog({ user, action: 'deactivate' })} title="Deactivate">
-                            <Ban className="size-3.5" />
-                          </Button>
-                        ) : (
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => setActionDialog({ user, action: 'activate' })} title="Activate">
-                            <CheckCircle2 className="size-3.5" />
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-sky-600 hover:text-sky-700" onClick={() => { setNewRole(user.role); setActionDialog({ user, action: 'change_role' }); }} title="Change Role">
-                          <UserCog className="size-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => { setDeleteConfirmText(''); setActionDialog({ user, action: 'delete' }); }} title="Delete User">
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </ScrollArea>
-        </Card>
-      )}
+      <DataTable
+        columns={userColumns}
+        data={filteredUsers}
+        rowKey={(u) => u.id}
+        loading={usersLoading}
+        emptyMessage="No users found"
+        emptyIcon={Users}
+        className="max-h-[calc(100vh-320px)]"
+      />
 
       {/* Action Dialog */}
       <Dialog open={!!actionDialog} onOpenChange={(open) => { if (!open) setActionDialog(null); }}>

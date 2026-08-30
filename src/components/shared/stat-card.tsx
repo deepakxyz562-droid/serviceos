@@ -9,6 +9,10 @@ interface StatCardProps {
   value: string | number;
   icon: LucideIcon;
   color?: string;
+  /** Optional small subtitle rendered below the value (muted). */
+  sub?: string;
+  /** Override the icon container background (default: `bg-muted/60`). */
+  iconBg?: string;
   trend?: {
     value: number;
     label: string;
@@ -25,6 +29,8 @@ export function StatCard({
   value,
   icon: Icon,
   color = 'text-emerald-600 dark:text-emerald-400',
+  sub,
+  iconBg,
   trend,
   className,
 }: StatCardProps) {
@@ -43,6 +49,9 @@ export function StatCard({
           <p className="text-2xl font-bold mt-1.5 tracking-tight text-foreground truncate">
             {value}
           </p>
+          {sub && (
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">{sub}</p>
+          )}
           {trend && (
             <div className="flex items-center gap-1.5 mt-2">
               <span
@@ -63,7 +72,7 @@ export function StatCard({
         <div
           className={cn(
             'flex items-center justify-center size-10 rounded-xl shrink-0',
-            'bg-muted/60'
+            iconBg || 'bg-muted/60'
           )}
         >
           <Icon className={cn('size-5', color)} />

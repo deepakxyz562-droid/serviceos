@@ -13,7 +13,6 @@
 import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -21,10 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -34,7 +30,7 @@ import {
 } from 'lucide-react';
 
 import {
-  KpiCard, TableSkeleton, EmptyState, getPlanBadgeClasses,
+  KpiCard, getPlanBadgeClasses,
 } from '@/components/views/superadmin/_shared';
 import type { CreditInfo } from '@/components/views/superadmin/types';
 
@@ -102,6 +98,55 @@ export function CreditsTab({ creditsData, creditsLoading, fetchAllCredits }: Cre
     }
   };
 
+  const creditColumns: Column<CreditInfo>[] = [
+    { key: 'tenant', header: 'Tenant', render: (c) => <span className="font-medium text-foreground">{c.tenantName}</span> },
+    { key: 'plan', header: 'Plan', render: (c) => <Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadgeClasses(c.plan))}>{c.plan}</Badge> },
+    {
+      key: 'whatsapp', header: 'WhatsApp Credits', render: (c) => {
+        const isPaidWithOwnWhatsApp = c.plan !== 'trial' && c.ownWhatsappConnected;
+        if (isPaidWithOwnWhatsApp) {
+          return <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Unlimited</Badge>;
+        }
+        return (
+          <div className="flex items-center justify-center gap-2">
+            <Progress value={c.trialWhatsappCredits > 0 ? (c.trialWhatsappUsed / c.trialWhatsappCredits) * 100 : 0} className="h-1.5 w-16" />
+            <span className={cn('text-xs', c.trialWhatsappUsed >= c.trialWhatsappCredits ? 'text-red-600 dark:text-red-400 font-medium' : 'text-muted-foreground')}>
+              {c.trialWhatsappUsed}/{c.trialWhatsappCredits}
+            </span>
+          </div>
+        );
+      }, className: 'text-center',
+    },
+    {
+      key: 'platformWa', header: 'Platform WA', render: (c) => (
+        c.platformWhatsappEnabled ? <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 inline-block" /> : <XCircle className="size-4 text-red-600 dark:text-red-400 inline-block" />
+      ), className: 'text-center',
+    },
+    {
+      key: 'ownWa', header: 'Own WA', render: (c) => (
+        c.ownWhatsappConnected ? <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 inline-block" /> : <XCircle className="size-4 text-muted-foreground inline-block" />
+      ), className: 'text-center',
+    },
+    {
+      key: 'emailProvider', header: 'Email Provider', render: (c) => (
+        c.ownEmailProviderConnected ? (
+          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Own</Badge>
+        ) : (
+          <Badge variant="outline" className="text-[10px] text-muted-foreground">Platform</Badge>
+        )
+      ), className: 'text-center',
+    },
+    {
+      key: 'actions', header: 'Actions', render: (c) => (
+        <div className="text-right">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleEdit(c)} title="Edit Credits">
+            <Edit3 className="size-3.5" />
+          </Button>
+        </div>
+      ), className: 'text-right',
+    },
+  ];
+
   return (
     <div className="space-y-4">
       {/* Credit Overview Stats */}
@@ -124,68 +169,15 @@ export function CreditsTab({ creditsData, creditsLoading, fetchAllCredits }: Cre
       </div>
 
       {/* Table */}
-      {creditsLoading && creditsData.length === 0 ? <TableSkeleton /> : filteredCredits.length === 0 ? (
-        <EmptyState icon={Wallet} title="No credit data found" subtitle="Credit data loads after tenants are fetched." />
-      ) : (
-        <Card className="card-shadow">
-          <ScrollArea className="max-h-[calc(100vh-380px)]">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead className="text-center">WhatsApp Credits</TableHead>
-                  <TableHead className="text-center">Platform WA</TableHead>
-                  <TableHead className="text-center">Own WA</TableHead>
-                  <TableHead className="text-center">Email Provider</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredCredits.map((credit) => {
-                  const isPaidWithOwnWhatsApp = credit.plan !== 'trial' && credit.ownWhatsappConnected;
-                  return (
-                    <TableRow key={credit.tenantId}>
-                      <TableCell className="font-medium text-foreground">{credit.tenantName}</TableCell>
-                      <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadgeClasses(credit.plan))}>{credit.plan}</Badge></TableCell>
-                      <TableCell className="text-center">
-                        {isPaidWithOwnWhatsApp ? (
-                          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Unlimited</Badge>
-                        ) : (
-                          <div className="flex items-center justify-center gap-2">
-                            <Progress value={credit.trialWhatsappCredits > 0 ? (credit.trialWhatsappUsed / credit.trialWhatsappCredits) * 100 : 0} className="h-1.5 w-16" />
-                            <span className={cn('text-xs', credit.trialWhatsappUsed >= credit.trialWhatsappCredits ? 'text-red-600 dark:text-red-400 font-medium' : 'text-muted-foreground')}>
-                              {credit.trialWhatsappUsed}/{credit.trialWhatsappCredits}
-                            </span>
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {credit.platformWhatsappEnabled ? <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 inline-block" /> : <XCircle className="size-4 text-red-600 dark:text-red-400 inline-block" />}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {credit.ownWhatsappConnected ? <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 inline-block" /> : <XCircle className="size-4 text-muted-foreground inline-block" />}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {credit.ownEmailProviderConnected ? (
-                          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Own</Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground">Platform</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleEdit(credit)} title="Edit Credits">
-                          <Edit3 className="size-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </ScrollArea>
-        </Card>
-      )}
+      <DataTable
+        columns={creditColumns}
+        data={filteredCredits}
+        rowKey={(credit) => credit.tenantId}
+        loading={creditsLoading && creditsData.length === 0}
+        emptyMessage="No credit data found"
+        emptyIcon={Wallet}
+        className="max-h-[calc(100vh-380px)]"
+      />
 
       {/* Edit Credits Dialog */}
       <Dialog open={!!editDialog} onOpenChange={(open) => { if (!open) setEditDialog(null); }}>
@@ -234,3 +226,4 @@ export function CreditsTab({ creditsData, creditsLoading, fetchAllCredits }: Cre
     </div>
   );
 }
+

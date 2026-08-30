@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { resolveTenantId, resolveWorkspaceId } from '@/lib/api-auth';
 
 // ─── GET /api/forms ────────────────────────────────────────────────────────
-// List all forms for a tenant (query param: tenantId). Return forms with response counts.
+// List all forms for a tenant. Return forms with response counts.
 // Requires authentication — form definitions contain field names, slugs, and configuration.
+// SECURITY: tenantId is ALWAYS derived from the authenticated session, never
+// from the query string (closes a cross-tenant read vector).
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,15 +17,19 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId');
     const type = searchParams.get('type');
     const status = searchParams.get('status');
     const search = searchParams.get('search');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
 
+    // Derive tenantId from the session — ignore ?tenantId= for non-super-admins
+    const tenantId = resolveTenantId(authUser, searchParams.get('tenantId'));
+    const workspaceId = resolveWorkspaceId(authUser, searchParams.get('workspaceId'));
+
     const where: Record<string, unknown> = {};
     if (tenantId) where.tenantId = tenantId;
+    if (!tenantId && workspaceId) where.workspaceId = workspaceId;
     if (type) where.type = type;
     if (status) where.status = status;
     if (search) {
@@ -108,6 +115,11 @@ async function generateUniqueSlug(baseName: string): Promise<string> {
 
 export async function POST(request: NextRequest) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       name,
@@ -123,15 +135,16 @@ export async function POST(request: NextRequest) {
       whatsappAiGenerated,
       embedScriptEnabled,
       embedIframeEnabled,
-      tenantId,
-      workspaceId,
-      createdById,
       slug: providedSlug,
     } = body;
 
     if (!name) {
       return NextResponse.json({ error: 'Form name is required' }, { status: 400 });
     }
+
+    // SECURITY: derive tenantId/workspaceId from the session, never from the body
+    const tenantId = resolveTenantId(authUser, body.tenantId);
+    const workspaceId = resolveWorkspaceId(authUser, body.workspaceId);
 
     // Auto-generate slug from name if not provided
     const slug = providedSlug || await generateUniqueSlug(name);
@@ -163,7 +176,7 @@ export async function POST(request: NextRequest) {
         slug,
         tenantId: tenantId || null,
         workspaceId: workspaceId || null,
-        createdById: createdById || null,
+        createdById: authUser.id,
       },
       include: {
         _count: { select: { responses: true } },

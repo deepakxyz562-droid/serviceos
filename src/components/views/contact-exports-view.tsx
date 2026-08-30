@@ -18,10 +18,7 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-import { Skeleton } from '@/components/ui/skeleton';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -272,42 +269,50 @@ export function ContactExportsView() {
     downloadBlob(`\uFEFF${content}`, 'text/csv;charset=utf-8;', filename);
   };
 
-  // ── Render ──
-  if (isLoading) {
-    return (
-      <div className="space-y-6 w-full">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Skeleton className="size-10 rounded-lg" />
-            <div>
-              <Skeleton className="h-5 w-28" />
-              <Skeleton className="h-3 w-44 mt-1" />
-            </div>
+  // ── DataTable columns ─────────────────────────────────────────────────────
+  const exportColumns: Column<ContactExport>[] = [
+    {
+      key: 'format',
+      header: 'Format',
+      render: (ex) => {
+        const fmt = FORMATS.find(f => f.value === ex.format);
+        const Icon = fmt?.icon || FileText;
+        return (
+          <div className="flex items-center gap-2">
+            <Icon className="size-4 text-emerald-600" />
+            <Badge variant="outline" className="text-[10px] uppercase">
+              {ex.format}
+            </Badge>
           </div>
-          <Skeleton className="h-9 w-32" />
-        </div>
-        <Card className="p-4 space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
-          ))}
-        </Card>
-      </div>
-    );
-  }
+        );
+      },
+    },
+    {
+      key: 'filter',
+      header: 'Filter',
+      render: (ex) => (
+        <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap max-h-12 overflow-hidden">
+          {prettyPrintFilter(ex.filterJson)}
+        </pre>
+      ),
+    },
+    {
+      key: 'exported',
+      header: 'Exported',
+      render: (ex) => <span className="font-medium text-emerald-700">{ex.totalExported}</span>,
+      className: 'text-right',
+      headerClassName: 'text-right',
+      sortField: 'totalExported',
+    },
+    {
+      key: 'created',
+      header: 'Created',
+      render: (ex) => <span className="text-xs text-muted-foreground">{formatDate(ex.createdAt)}</span>,
+      sortField: 'createdAt',
+    },
+  ];
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-96 text-muted-foreground">
-        <Download className="size-12 mb-4 opacity-20" />
-        <p className="text-lg font-medium">Failed to load exports</p>
-        <p className="text-sm mt-1">{error}</p>
-        <Button className="mt-4" variant="outline" onClick={() => loadExports(1)}>
-          <Loader2 className="size-4 mr-1.5" /> Retry
-        </Button>
-      </div>
-    );
-  }
-
+  // ── Render ──
   return (
     <div className="space-y-6 w-full">
       {/* Header */}
@@ -338,62 +343,20 @@ export function ContactExportsView() {
       </div>
 
       {/* Table */}
-      {filteredExports.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-          <Download className="size-12 mb-4 opacity-20" />
-          <p className="text-lg font-medium">No exports yet</p>
-          <p className="text-sm mt-1">Create your first contact export</p>
-          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700" onClick={openCreate}>
-            <Plus className="size-4 mr-1.5" /> New Export
-          </Button>
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <div className="max-h-[65vh] overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Format</TableHead>
-                    <TableHead>Filter</TableHead>
-                    <TableHead className="text-right">Exported</TableHead>
-                    <TableHead>Created</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredExports.map(ex => {
-                    const fmt = FORMATS.find(f => f.value === ex.format);
-                    const Icon = fmt?.icon || FileText;
-                    return (
-                      <TableRow key={ex.id} className="hover:bg-muted/50">
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Icon className="size-4 text-emerald-600" />
-                            <Badge variant="outline" className="text-[10px] uppercase">
-                              {ex.format}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap max-h-12 overflow-hidden">
-                            {prettyPrintFilter(ex.filterJson)}
-                          </pre>
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-emerald-700">
-                          {ex.totalExported}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {formatDate(ex.createdAt)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardContent className="p-0">
+          <DataTable
+            columns={exportColumns}
+            data={filteredExports}
+            rowKey={(ex) => ex.id}
+            loading={isLoading}
+            error={error}
+            onRetry={() => loadExports(1)}
+            emptyMessage="No exports yet"
+            emptyIcon={Download}
+          />
+        </CardContent>
+      </Card>
 
       {/* Pagination */}
       {totalPages > 1 && (

@@ -38,6 +38,7 @@ import { Badge } from '@/components/ui/badge';
 import { INDUSTRY_CATALOG } from '@/lib/industry-catalog';
 import { toast } from 'sonner';
 import { mpUrl, type QuoteRequestResponse, type Urgency } from './types';
+import { SafeImage } from './safe-image';
 
 interface QuoteRequestDialogProps {
   open: boolean;
@@ -429,10 +430,12 @@ export function QuoteRequestDialog({
                       key={`${url}-${idx}`}
                       className="group relative h-16 w-16 overflow-hidden rounded-md border bg-muted"
                     >
-                      <img
+                      <SafeImage
                         src={url}
                         alt={`Customer-uploaded photo ${idx + 1} attached to quote request`}
                         className="h-full w-full object-cover"
+                        maxWidth={400}
+                        maxHeight={300}
                         onError={(e) => {
                           (e.currentTarget as HTMLImageElement).style.display = 'none';
                         }}

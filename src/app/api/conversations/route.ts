@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { resolveTenantId, resolveWorkspaceId } from '@/lib/api-auth'
 import { cache } from '@/lib/cache'
 import { cachedJson } from '@/lib/cache-headers'
 
@@ -13,12 +14,19 @@ const CONVERSATION_LIST_CACHE_TTL = 60_000
 // (where.customerId = authUser.id). tenantId is skipped for customers — if
 // Customer.workspaceId is null (broken Customer→Workspace→Tenant chain),
 // tenantId can't be resolved and the conversation list would return empty.
+//
+// SECURITY: unauthenticated requests get 401. Previously this route fell
+// back to ?tenantId= from the query string, allowing anyone to read any
+// tenant's conversations.
 export async function GET(request: NextRequest) {
   try {
     const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required', code: 'UNAUTHENTICATED' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
-    const tenantId = searchParams.get('tenantId')
     const phone = searchParams.get('phone')
     const channel = searchParams.get('channel') // whatsapp | sms | website | ...
     const page = parseInt(searchParams.get('page') || '1')
@@ -31,15 +39,19 @@ export async function GET(request: NextRequest) {
     // Customers: scope by customerId (privacy + resilience). Ignore any
     // tenantId/customerId query params — the customer can ONLY ever see
     // their own conversations.
-    // Admins/employees: scope by tenantId (+ optional customerId filter).
-    if (authUser?.role === 'customer') {
+    // Admins/employees: scope by tenantId derived from the session (+ optional
+    // customerId filter). Super-admins may target any tenant via ?tenantId=.
+    if (authUser.role === 'customer') {
       where.customerId = authUser.id
-    } else if (authUser?.tenantId) {
-      where.tenantId = authUser.tenantId
-      if (customerIdParam) where.customerId = customerIdParam
-    } else if (tenantId) {
-      where.tenantId = tenantId
-      if (customerIdParam) where.customerId = customerIdParam
+    } else {
+      const tenantId = resolveTenantId(authUser, searchParams.get('tenantId'))
+      if (tenantId) {
+        where.tenantId = tenantId
+        if (customerIdParam) where.customerId = customerIdParam
+      } else {
+        // Authenticated but no tenant — return empty (don't leak data)
+        return NextResponse.json({ conversations: [], pagination: { page, limit, total: 0, totalPages: 0 } })
+      }
     }
 
     if (status) where.status = status
@@ -50,7 +62,7 @@ export async function GET(request: NextRequest) {
     // The dashboard polls /api/conversations?status=active every 60s —
     // caching means most polls hit the cache instead of the DB.
     const isCacheable = !phone
-    const cacheKey = `conversations:${authUser?.id || 'anon'}:${authUser?.tenantId || tenantId || ''}:${status || ''}:${channel || ''}:${customerIdParam || ''}:${page}:${limit}`
+    const cacheKey = `conversations:${authUser.id}:${authUser.tenantId || ''}:${status || ''}:${channel || ''}:${customerIdParam || ''}:${page}:${limit}`
 
     if (isCacheable) {
       const cached = cache.get<{ conversations: unknown[]; pagination: unknown }>(cacheKey)
@@ -116,6 +128,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required', code: 'UNAUTHENTICATED' }, { status: 401 })
+    }
     const body = await request.json()
 
     const {
@@ -127,13 +142,15 @@ export async function POST(request: NextRequest) {
       jobId,
       status,
       currentStage,
-      tenantId,
-      workspaceId,
     } = body
 
     if (!customerPhone) {
       return NextResponse.json({ error: 'customerPhone is required' }, { status: 400 })
     }
+
+    // SECURITY: derive tenantId/workspaceId from the session, never from the body
+    const tenantId = resolveTenantId(authUser, body.tenantId)
+    const workspaceId = resolveWorkspaceId(authUser, body.workspaceId)
 
     // Generate a unique conversationId
     const conversationId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -149,7 +166,7 @@ export async function POST(request: NextRequest) {
         jobId: jobId || null,
         status: status || 'active',
         currentStage: currentStage || 'greeting',
-        tenantId: tenantId || authUser?.tenantId || null,
+        tenantId: tenantId || null,
         workspaceId: workspaceId || null,
       },
       include: {

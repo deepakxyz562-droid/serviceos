@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
@@ -171,6 +171,27 @@ export function AuthenticationSection() {
   const handleRevokeSession = (user: string) => {
     toast.success(`Session revoked for ${user}`);
   };
+
+  const sessionColumns: Column<ActiveSession>[] = [
+    { key: 'user', header: 'User', render: (s) => <span className="font-medium text-foreground truncate max-w-[140px] block">{s.user}</span> },
+    { key: 'device', header: 'Device', render: (s) => <span className="text-muted-foreground text-xs">{s.device}</span>, hideOnMobile: true },
+    { key: 'ip', header: 'IP', render: (s) => <span className="font-mono text-xs text-muted-foreground">{s.ip}</span>, hideOnMobile: true },
+    { key: 'lastActive', header: 'Last active', render: (s) => <span className="text-xs text-muted-foreground">{mounted ? timeAgo(isoMinutesAgo(s.minsAgo)) : '—'}</span> },
+    {
+      key: 'actions', header: 'Actions', render: (s) => (
+        <div className="text-right">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-red-600 dark:text-red-400 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+            onClick={() => handleRevokeSession(s.user)}
+          >
+            Revoke
+          </Button>
+        </div>
+      ), className: 'text-right',
+    },
+  ];
 
   return (
     <section className="space-y-6">
@@ -322,47 +343,13 @@ export function AuthenticationSection() {
             </div>
           </CardHeader>
           <CardContent className="pt-2">
-            <div className="rounded-lg border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead className="hidden sm:table-cell">Device</TableHead>
-                    <TableHead className="hidden md:table-cell">IP</TableHead>
-                    <TableHead>Last active</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ACTIVE_SESSIONS.map((s) => (
-                    <TableRow key={s.user}>
-                      <TableCell className="font-medium text-foreground truncate max-w-[140px]">
-                        {s.user}
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell text-muted-foreground text-xs">
-                        {s.device}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell font-mono text-xs text-muted-foreground">
-                        {s.ip}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {mounted ? timeAgo(isoMinutesAgo(s.minsAgo)) : '—'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2 text-red-600 dark:text-red-400 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
-                          onClick={() => handleRevokeSession(s.user)}
-                        >
-                          Revoke
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <DataTable
+              columns={sessionColumns}
+              data={ACTIVE_SESSIONS}
+              rowKey={(s) => s.user}
+              emptyMessage="No active sessions"
+              emptyIcon={Lock}
+            />
             <p className="text-[11px] text-muted-foreground mt-2 flex items-center gap-1.5">
               <CheckCircle2 className="size-3.5 text-emerald-500" />
               {TOTAL_ACTIVE_SESSIONS} active sessions across all workspaces

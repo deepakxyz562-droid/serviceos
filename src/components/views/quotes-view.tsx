@@ -3,22 +3,17 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
   FileText, Plus, Search, Send, MoreHorizontal, DollarSign,
-  Clock, CheckCircle2, AlertCircle, XCircle, Eye, Trash2,
-  X, PlusCircle, MinusCircle, ArrowUpDown, ChevronUp, ChevronDown,
-  CalendarDays, Calculator, MessageCircle, Phone, ShoppingCart, Tag,
-  Percent, Receipt, Copy, Edit3, Loader2,
-  User, Mail, MapPin, Briefcase, StickyNote, Printer, ScrollText, Pencil,
+  Clock, CheckCircle2, XCircle, Eye, Trash2,
+  ArrowUpDown, ChevronUp, ChevronDown,
+  Calculator, Mail, Copy,
+  Edit3, Loader2, Receipt,
   Sparkles, Lock,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -28,309 +23,45 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { authFetch } from '@/lib/client-auth';
-import { FormSectionCard } from '@/components/shared/form-section-card';
 import { useFeatureAccess } from '@/hooks/use-tenant-plan';
 import { openUpgradeModal } from '@/components/layout/upgrade-modal';
 import {
   AiQuoteGeneratorDialog,
   type AiGeneratedQuote,
 } from '@/components/quotes/ai-quote-generator-dialog';
-import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
 
-// ============================================================
-// Types
-// ============================================================
-
-type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired';
-
-interface ServiceCatalogItem {
-  id: string;
-  name: string;
-  category: string;
-  basePrice: number;
-  description?: string;
-}
-
-interface QuoteServiceItem {
-  id: string;
-  serviceId: string;
-  name: string;
-  price: number;
-  quantity: number;
-}
-
-interface QuoteAddOn {
-  id: string;
-  name: string;
-  price: number;
-}
-
-interface Quote {
-  id: string;
-  title: string;
-  description?: string;
-  customerName: string;
-  customerId: string;
-  customerPhone?: string;
-  services: QuoteServiceItem[];
-  addOns: QuoteAddOn[];
-  subtotal: number;
-  discountType: 'fixed' | 'percentage';
-  discountValue: number;
-  discount: number;
-  taxRate: number;
-  tax: number;
-  total: number;
-  status: QuoteStatus;
-  validUntil: string;
-  whatsappSent: boolean;
-  emailSent: boolean;
-  createdAt: string;
-  currency?: string;       // Transaction currency
-  exchangeRate?: number;   // Rate at creation
-  baseCurrency?: string;   // Base currency at creation
-  baseAmount?: number;     // Amount in base currency
-}
-
-interface QuoteFormData {
-  title: string;
-  description: string;
-  customerId: string;
-  customerName: string;
-  services: QuoteServiceItem[];
-  addOns: QuoteAddOn[];
-  discountType: 'fixed' | 'percentage';
-  discountValue: number;
-  taxRate: number;
-  validUntil: string;
-}
-
-interface Customer {
-  id: string;
-  name: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  workspaceId?: string;
-  preferredCurrency?: string;
-}
-
-// ============================================================
-// Constants
-// ============================================================
-
-const STATUS_CONFIG: Record<QuoteStatus, { label: string; bg: string; text: string; border: string; icon: React.ReactNode }> = {
-  draft: { label: 'Draft', bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200', icon: <FileText className="size-3" /> },
-  sent: { label: 'Sent', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', icon: <Send className="size-3" /> },
-  accepted: { label: 'Accepted', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: <CheckCircle2 className="size-3" /> },
-  rejected: { label: 'Rejected', bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: <XCircle className="size-3" /> },
-  expired: { label: 'Expired', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: <Clock className="size-3" /> },
-};
-
-
-const MOCK_SERVICE_CATALOG: ServiceCatalogItem[] = [
-  { id: 's1', name: 'Window Cleaning', category: 'Cleaning', basePrice: 120, description: 'Interior & exterior window cleaning' },
-  { id: 's2', name: 'Gutter Cleaning', category: 'Cleaning', basePrice: 80, description: 'Full gutter clearing and flush' },
-  { id: 's3', name: 'Deep House Cleaning', category: 'Cleaning', basePrice: 250, description: 'Full deep clean of property' },
-  { id: 's4', name: 'Carpet Cleaning', category: 'Cleaning', basePrice: 150, description: 'Professional carpet steam clean' },
-  { id: 's5', name: 'Plumbing Repair', category: 'Maintenance', basePrice: 95, description: 'General plumbing repair service' },
-  { id: 's6', name: 'Electrical Work', category: 'Maintenance', basePrice: 120, description: 'Electrical repair and installation' },
-  { id: 's7', name: 'Solar Panel Cleaning', category: 'Specialist', basePrice: 50, description: 'Per panel cleaning' },
-  { id: 's8', name: 'Pest Control Treatment', category: 'Specialist', basePrice: 180, description: 'Full property pest treatment' },
-  { id: 's9', name: 'Painting (per room)', category: 'Decorating', basePrice: 350, description: 'Full room painting service' },
-  { id: 's10', name: 'Garden Maintenance', category: 'Outdoor', basePrice: 75, description: 'Lawn mowing, weeding, tidying' },
-];
-
-const EMPTY_SERVICE_ITEM = (): QuoteServiceItem => ({
-  id: `qs_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-  serviceId: '', name: '', price: 0, quantity: 1,
-});
-
-const EMPTY_ADD_ON = (): QuoteAddOn => ({
-  id: `qa_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-  name: '', price: 0,
-});
-
-const EMPTY_FORM = (): QuoteFormData => ({
-  title: '', description: '', customerId: '', customerName: '',
-  services: [EMPTY_SERVICE_ITEM()],
-  addOns: [],
-  discountType: 'fixed', discountValue: 0, taxRate: 20, validUntil: '',
-});
-
-// ============================================================
-// Helpers
-// ============================================================
-
-function formatShortDate(dateStr: string): string {
-  if (!dateStr) return '—';
-  try {
-    const d = new Date(dateStr + 'T00:00:00');
-    if (isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric' });
-  } catch { return '—'; }
-}
-
-function calcDiscount(subtotal: number, type: 'fixed' | 'percentage', value: number): number {
-  if (type === 'percentage') return subtotal * (value / 100);
-  return value;
-}
-
-function calcSummary(services: QuoteServiceItem[], addOns: QuoteAddOn[], discountType: 'fixed' | 'percentage', discountValue: number, taxRate: number) {
-  const servicesTotal = services.reduce((s, item) => s + item.price * item.quantity, 0);
-  const addOnsTotal = addOns.reduce((s, a) => s + a.price, 0);
-  const subtotal = servicesTotal + addOnsTotal;
-  const discount = calcDiscount(subtotal, discountType, discountValue);
-  const afterDiscount = subtotal - discount;
-  const tax = afterDiscount * (taxRate / 100);
-  const total = afterDiscount + tax;
-  return { servicesTotal, addOnsTotal, subtotal, discount, tax, total };
-}
-
-/**
- * Normalize a quote coming back from the API into the component's Quote type.
- *
- * The GET /api/quotes endpoint returns a pre-formatted object where
- * `services` / `addOns` are already arrays and `discountValue` is computed.
- * The POST /api/quotes and PUT /api/quotes/[id] endpoints return the raw
- * Prisma row where those arrays live inside `itemsJson` / `addOnsJson` as
- * JSON strings and `discountValue` is not present. This helper handles both
- * shapes so the rest of the UI always works against a consistent Quote.
- */
-function normalizeQuote(raw: any, customers: Customer[]): Quote {
-  let services: QuoteServiceItem[] = [];
-  if (Array.isArray(raw.services)) {
-    services = raw.services as QuoteServiceItem[];
-  } else if (raw.itemsJson) {
-    try { services = JSON.parse(raw.itemsJson) as QuoteServiceItem[]; } catch { services = []; }
-  }
-
-  let addOns: QuoteAddOn[] = [];
-  if (Array.isArray(raw.addOns)) {
-    addOns = raw.addOns as QuoteAddOn[];
-  } else if (raw.addOnsJson) {
-    try { addOns = JSON.parse(raw.addOnsJson) as QuoteAddOn[]; } catch { addOns = []; }
-  }
-
-  const customer = raw.customerId ? customers.find((c) => c.id === raw.customerId) : undefined;
-  const customerName = raw.customerName || customer?.name || 'Unknown';
-  const customerPhone = raw.customerPhone || customer?.phone;
-
-  const toDateStr = (v: unknown): string => {
-    if (!v) return '';
-    if (typeof v === 'string') return v.split('T')[0];
-    try { return new Date(v as any).toISOString().split('T')[0]; } catch { return ''; }
-  };
-
-  let discountValue: number;
-  if (raw.discountValue !== undefined && raw.discountValue !== null) {
-    discountValue = Number(raw.discountValue);
-  } else if (raw.discountType === 'percentage' && Number(raw.subtotal) > 0) {
-    discountValue = Math.round((Number(raw.discount) / Number(raw.subtotal)) * 100);
-  } else {
-    discountValue = Number(raw.discount) || 0;
-  }
-
-  return {
-    id: raw.id,
-    title: raw.title || '',
-    description: raw.description || undefined,
-    customerName,
-    customerId: raw.customerId || '',
-    customerPhone,
-    services,
-    addOns,
-    subtotal: Number(raw.subtotal) || 0,
-    discountType: raw.discountType === 'percentage' ? 'percentage' : 'fixed',
-    discountValue,
-    discount: Number(raw.discount) || 0,
-    taxRate: Number(raw.taxRate) || 0,
-    tax: Number(raw.tax) || 0,
-    total: Number(raw.total) || 0,
-    status: (raw.status as QuoteStatus) || 'draft',
-    validUntil: toDateStr(raw.validUntil),
-    whatsappSent: !!raw.whatsappSent,
-    emailSent: !!raw.emailSent,
-    createdAt: toDateStr(raw.createdAt),
-    currency: raw.currency,
-    exchangeRate: raw.exchangeRate !== undefined ? Number(raw.exchangeRate) : undefined,
-    baseCurrency: raw.baseCurrency,
-    baseAmount: raw.baseAmount !== undefined ? Number(raw.baseAmount) : undefined,
-  };
-}
-
-// ============================================================
-// Email Preview Component
-// ============================================================
-
-function EmailPreview({ quote }: { quote: Quote | null }) {
-  const { format: fmt } = useCompanyCurrency();
-  if (!quote) return null;
-  return (
-    <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 max-w-md mx-auto">
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm text-slate-800 dark:text-slate-200">
-        <div className="bg-teal-700 h-1.5 w-full" />
-        <div className="p-5 space-y-4">
-          <div>
-            <p className="text-[11px] font-bold text-teal-700 dark:text-teal-400 uppercase tracking-wider">Fieseros Quote</p>
-            <h3 className="font-bold text-lg text-slate-900 dark:text-white mt-0.5">Quote: {quote.title}</h3>
-            <p className="text-xs text-slate-500">Prepared for <span className="font-medium text-slate-700 dark:text-slate-300">{quote.customerName}</span></p>
-          </div>
-
-          <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs space-y-1.5">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Subtotal:</span>
-              <span className="font-medium">{fmt(quote.subtotal)}</span>
-            </div>
-            {quote.discount > 0 && (
-              <div className="flex justify-between text-red-600">
-                <span>Discount:</span>
-                <span>-{fmt(quote.discount)}</span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span className="text-slate-500">Tax ({quote.taxRate}%):</span>
-              <span>{fmt(quote.tax)}</span>
-            </div>
-            <div className="flex justify-between font-bold text-sm text-slate-900 dark:text-white pt-1.5 border-t border-slate-200 dark:border-slate-700">
-              <span>Total Quote Value:</span>
-              <span className="text-teal-700 dark:text-teal-400">{fmt(quote.total)}</span>
-            </div>
-          </div>
-
-          <div className="text-center pt-1">
-            <span className="inline-block bg-teal-700 text-white font-semibold text-xs px-5 py-2.5 rounded-lg shadow-sm">
-              Review & Approve Quote →
-            </span>
-          </div>
-
-          {quote.services.length > 0 && (
-            <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-              <p className="font-semibold text-slate-700 dark:text-slate-300">Line Items:</p>
-              {quote.services.map((s) => (
-                <div key={s.id} className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span>{s.name} (x{s.quantity})</span>
-                  <span className="font-mono">{fmt(s.price * s.quantity)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {quote.description && (
-            <div className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 p-2.5 rounded-lg border-l-2 border-teal-700">
-              <span className="font-semibold text-slate-700 dark:text-slate-300">Notes:</span> {quote.description}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+// ── Phase 5B extraction ─────────────────────────────────────────────────────
+// Types, helpers, EmailPreview, NewQuotePage and QuoteDetailPage were
+// extracted to src/features/quotes/* and are re-imported here. The parent
+// QuotesView component owns all state + handlers and threads them through
+// as props (mirrors the Phase 5A invoices-view extraction pattern).
+import type {
+  Customer,
+  Quote,
+  QuoteFormData,
+  QuoteServiceItem,
+  QuoteAddOn,
+  QuoteStatus,
+} from '@/features/quotes/types';
+import {
+  STATUS_CONFIG,
+  MOCK_SERVICE_CATALOG,
+  EMPTY_SERVICE_ITEM,
+  EMPTY_ADD_ON,
+  EMPTY_FORM,
+  formatShortDate,
+  calcSummary,
+  normalizeQuote,
+} from '@/features/quotes/utils/quote-helpers';
+import { renderStatusBadge } from '@/features/quotes/components/quote-shared';
+import { EmailPreview } from '@/features/quotes/components/email-preview';
+import { NewQuotePage } from '@/features/quotes/components/new-quote-page';
+import { QuoteDetailPage } from '@/features/quotes/components/quote-detail-page';
 
 // ============================================================
 // Main Component
@@ -888,788 +619,39 @@ export function QuotesView() {
     }
   };
 
-  const renderStatusBadge = (status: QuoteStatus) => {
-    const config = STATUS_CONFIG[status];
-    return (
-      <Badge variant="outline" className={`text-[10px] h-5 ${config.bg} ${config.text} ${config.border}`}>
-        {config.icon}
-        <span className="ml-1">{config.label}</span>
-      </Badge>
-    );
-  };
-
-  // ============================================================
-  // Render: Quote Detail Page (Jobber-style full page)
-  // ============================================================
-  const renderQuoteDetailPage = () => {
-    if (!selectedQuote) return null;
-    const quote = selectedQuote;
-    const customer = customers.find((c) => c.id === quote.customerId);
-
-    const detailRows: { label: string; value: React.ReactNode }[] = [
-      { label: 'Quote #', value: <span className="font-mono">#{quote.id.slice(-6).toUpperCase()}</span> },
-      { label: 'Created', value: <span>{formatShortDate(quote.createdAt)}</span> },
-      {
-        label: 'Status',
-        value: (
-          <span className="inline-flex items-center gap-1.5">
-            <span className={cn('size-2 rounded-full', {
-              'bg-gray-400': quote.status === 'draft',
-              'bg-blue-500': quote.status === 'sent',
-              'bg-emerald-500': quote.status === 'accepted',
-              'bg-red-500': quote.status === 'rejected',
-              'bg-amber-500': quote.status === 'expired',
-            })} />
-            <span className="capitalize">{STATUS_CONFIG[quote.status].label}</span>
-          </span>
-        ),
-      },
-      { label: 'Valid until', value: <span>{formatShortDate(quote.validUntil)}</span> },
-      {
-        label: 'Email sent',
-        value: quote.emailSent || quote.whatsappSent
-          ? <span className="text-emerald-700 font-medium">Yes</span>
-          : <span className="text-muted-foreground">No</span>,
-      },
-      { label: 'Currency', value: <span>{quote.currency || currency}</span> },
-    ];
-
-    return (
-      <div className="w-full space-y-6">
-        {/* ─── Sticky page header (Back + title + actions) ────────── */}
-        <div className="form-page-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-2">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                type="button"
-                onClick={closeQuoteDetail}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              >
-                <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-                <span className="hidden sm:inline">Back</span>
-              </button>
-              <Separator orientation="vertical" className="h-8 bg-border/60 hidden sm:block" />
-              <div className="flex items-center justify-center size-9 rounded-lg shrink-0 shadow-sm bg-emerald-600">
-                <Receipt className="size-5 text-white" strokeWidth={2.2} />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {renderStatusBadge(quote.status)}
-                  <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground leading-tight truncate">{quote.title}</h2>
-                  <button title="Edit quote" onClick={() => openEditDialog(quote)} className="text-muted-foreground hover:text-emerald-600 transition-colors shrink-0">
-                    <Pencil className="size-4" />
-                  </button>
-                </div>
-                <p className="text-xs text-muted-foreground line-clamp-1">Quote for {quote.customerName}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 flex-wrap">
-              <button
-                type="button"
-                onClick={() => handleCreateSimilar(quote)}
-                title="Create similar quote"
-                className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm"
-              >
-                <Copy className="size-4 mr-1.5" /> Create Similar Quote
-              </button>
-              <button
-                type="button"
-                onClick={() => openEditDialog(quote)}
-                className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors"
-              >
-                <Edit3 className="size-4 mr-1.5" /> Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSendEmail(quote)}
-                title="Send via Email"
-                className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm"
-              >
-                <Mail className="size-4 mr-1.5" />
-                <span>Send Email</span>
-              </button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button title="More actions" className="inline-flex items-center justify-center size-9 rounded-lg text-foreground border border-border bg-background hover:bg-muted transition-colors">
-                    <MoreHorizontal className="size-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => openPreviewDialog(quote)}>
-                    <Eye className="size-3.5 mr-2" /> Email Preview
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDuplicateQuote(quote)}>
-                    <Copy className="size-3.5 mr-2" /> Duplicate
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => toast.info('PDF download coming soon')}>
-                    <Printer className="size-3.5 mr-2" /> Print / PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" onClick={() => handleDeleteQuote(quote.id)}>
-                    <Trash2 className="size-3.5 mr-2" /> Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </div>
-
-        {/* ─── Two-column layout ─────────────────────────────────── */}
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start">
-          {/* ── Left column: main quote details ── */}
-          <div className="space-y-6 min-w-0">
-            {/* Client card */}
-            <FormSectionCard icon={User} title="Client">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="size-2 rounded-full bg-blue-500 shrink-0" />
-                    <p className="text-base font-semibold text-foreground truncate">{quote.customerName || 'No client linked'}</p>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button title="Client actions" className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
-                        <MoreHorizontal className="size-4" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openEditDialog(quote)}>
-                        <Edit3 className="size-3.5 mr-2" /> Edit Quote
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleSendEmail(quote)}>
-                        <Mail className="size-3.5 mr-2" /> Send Email
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Property Address</p>
-                  <div className="flex items-start gap-2 text-sm text-foreground mt-0.5">
-                    <MapPin className="size-4 mt-0.5 shrink-0 text-muted-foreground" />
-                    <span>{customer?.address || '—'}</span>
-                  </div>
-                </div>
-                {quote.customerPhone && (
-                  <a href={`tel:${quote.customerPhone}`} className="flex items-center gap-2 text-sm text-emerald-700 hover:underline">
-                    <Phone className="size-4" /> {quote.customerPhone}
-                  </a>
-                )}
-                {customer?.email && (
-                  <a href={`mailto:${customer.email}`} className="flex items-center gap-2 text-sm text-emerald-700 hover:underline">
-                    <Mail className="size-4" /> {customer.email}
-                  </a>
-                )}
-                {!quote.customerPhone && !customer?.email && !customer?.address && (
-                  <p className="text-sm text-muted-foreground italic">No contact details on file.</p>
-                )}
-              </div>
-            </FormSectionCard>
-
-            {/* Quote details card */}
-            <FormSectionCard icon={FileText} title="Quote details">
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-                {detailRows.map((row, i) => (
-                  <div key={i} className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-0">
-                    <dt className="text-sm text-muted-foreground shrink-0">{row.label}</dt>
-                    <dd className="text-sm font-medium text-foreground text-right min-w-0 break-words">{row.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </FormSectionCard>
-
-            {/* Product / Service card */}
-            <FormSectionCard
-              icon={Briefcase}
-              title="Product / Service"
-              action={
-                <button onClick={() => openEditDialog(quote)} className="text-muted-foreground hover:text-emerald-600 transition-colors" title="Edit services">
-                  <Pencil className="size-4" />
-                </button>
-              }
-            >
-              {quote.services.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No line items added to this quote.</p>
-              ) : (
-                <div className="space-y-4">
-                  <div className="overflow-x-auto -mx-2">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-xs text-muted-foreground border-b border-border/60">
-                          <th className="px-2 py-2 font-medium">Line Item</th>
-                          <th className="px-2 py-2 font-medium text-center">Quantity</th>
-                          <th className="px-2 py-2 font-medium text-right">Unit Price</th>
-                          <th className="px-2 py-2 font-medium text-right">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {quote.services.map((s) => (
-                          <tr key={s.id} className="border-b border-border/40 last:border-0">
-                            <td className="px-2 py-2.5 font-medium text-foreground">{s.name || 'Custom item'}</td>
-                            <td className="px-2 py-2.5 text-center text-muted-foreground">{s.quantity || 1}</td>
-                            <td className="px-2 py-2.5 text-right text-muted-foreground">{format(s.price)}</td>
-                            <td className="px-2 py-2.5 text-right font-semibold text-foreground">{format(s.price * s.quantity)}</td>
-                          </tr>
-                        ))}
-                        {quote.addOns.map((a) => (
-                          <tr key={a.id} className="border-b border-border/40 last:border-0 bg-muted/20">
-                            <td className="px-2 py-2.5 font-medium text-foreground">
-                              {a.name || 'Add-on'}
-                              <span className="block text-xs text-muted-foreground font-normal">Add-on</span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center text-muted-foreground">1</td>
-                            <td className="px-2 py-2.5 text-right text-muted-foreground">{format(a.price)}</td>
-                            <td className="px-2 py-2.5 text-right font-semibold text-foreground">{format(a.price)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="flex justify-end">
-                    <div className="w-full max-w-xs space-y-1.5">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Subtotal</span>
-                        <span className="font-medium">{format(quote.subtotal)}</span>
-                      </div>
-                      {quote.discount > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Discount {quote.discountType === 'percentage' ? `(${quote.discountValue}%)` : ''}
-                          </span>
-                          <span className="font-medium text-red-600">-{format(quote.discount)}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Tax ({quote.taxRate}%)</span>
-                        <span className="font-medium">+{format(quote.tax)}</span>
-                      </div>
-                      <Separator className="my-1 bg-border/60" />
-                      <div className="flex justify-between text-base font-bold">
-                        <span>Total</span>
-                        <span className="text-emerald-700">{format(quote.total)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </FormSectionCard>
-
-            {/* Contract / Disclaimer card */}
-            <FormSectionCard
-              icon={ScrollText}
-              title="Contract / Disclaimer"
-              action={
-                <button onClick={() => openEditDialog(quote)} className="text-muted-foreground hover:text-emerald-600 transition-colors" title="Edit terms">
-                  <Pencil className="size-4" />
-                </button>
-              }
-            >
-              <p className="text-sm text-foreground whitespace-pre-wrap">
-                {quote.description || 'This quote is valid for the next 30 days, after which values may be subject to change. Please review the line items above and let us know if you have any questions or would like to make adjustments.'}
-              </p>
-            </FormSectionCard>
-          </div>
-
-          {/* ── Right column: sidebar ── */}
-          <div className="space-y-6 xl:sticky xl:top-4">
-            {/* Quick actions */}
-            <FormSectionCard icon={Briefcase} title="Actions">
-              <div className="grid grid-cols-1 gap-2">
-                <button
-                  onClick={() => handleSendEmail(quote)}
-                  className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm"
-                >
-                  <Mail className="size-4" /> Send Email
-                </button>
-                <button
-                  onClick={() => { openPreviewDialog(quote); }}
-                  className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors"
-                >
-                  <Eye className="size-4" /> Email Preview
-                </button>
-                <button
-                  onClick={() => openEditDialog(quote)}
-                  className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors"
-                >
-                  <Edit3 className="size-4" /> Edit quote
-                </button>
-                <button
-                  onClick={() => toast.info('PDF download coming soon')}
-                  className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors"
-                >
-                  <Printer className="size-4" /> Print / PDF
-                </button>
-              </div>
-            </FormSectionCard>
-
-            {/* Notes */}
-            <FormSectionCard
-              icon={StickyNote}
-              title="Notes"
-              action={
-                <button
-                  onClick={() => toast.info('Notes editor coming soon')}
-                  className="inline-flex items-center justify-center size-7 rounded-md text-emerald-700 border border-emerald-600/40 bg-emerald-500/5 hover:bg-emerald-500/15 transition-colors"
-                  title="Add note"
-                >
-                  <Plus className="size-4" />
-                </button>
-              }
-            >
-              <div className="space-y-2">
-                <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2.5">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <p className="text-xs font-medium text-foreground">Fieseros</p>
-                    <p className="text-[11px] text-muted-foreground">{formatShortDate(quote.createdAt)}</p>
-                  </div>
-                  <p className="text-sm text-foreground whitespace-pre-wrap">
-                    {quote.description || 'Quote created.'}
-                  </p>
-                  <div className="mt-2">
-                    <Badge variant="outline" className="text-[10px] h-5 bg-muted/40 text-muted-foreground border-border/60">
-                      Linked note
-                    </Badge>
-                  </div>
-                </div>
-                {(quote.emailSent || quote.whatsappSent) && (
-                  <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <p className="text-xs font-medium text-emerald-800">System</p>
-                      <p className="text-[11px] text-emerald-700">{formatShortDate(quote.createdAt)}</p>
-                    </div>
-                    <p className="text-sm text-emerald-900">Quote sent via Email</p>
-                    <div className="mt-2">
-                      <Badge variant="outline" className="text-[10px] h-5 bg-emerald-100 text-emerald-700 border-emerald-200">
-                        <Mail className="size-3 mr-1" /> Sent
-                      </Badge>
-                    </div>
-                  </div>
-                )}
-                {!quote.emailSent && !quote.whatsappSent && !quote.description && (
-                  <p className="text-sm text-muted-foreground italic">No notes yet.</p>
-                )}
-              </div>
-            </FormSectionCard>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ============================================================
-  // New Quote Full Page (replaces modal dialog)
-  // ============================================================
-
-  const renderNewQuotePage = () => {
-    return (
-      <div className="w-full space-y-6">
-        {/* ─── Sticky page header (Back + title + actions) ────────── */}
-        <div className="form-page-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-2">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                type="button"
-                onClick={closeCreatePage}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              >
-                <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-                <span className="hidden sm:inline">Back</span>
-              </button>
-              <Separator orientation="vertical" className="h-8 bg-border/60 hidden sm:block" />
-              <div className="flex items-center justify-center size-9 rounded-lg shrink-0 shadow-sm bg-emerald-600">
-                <Plus className="size-5 text-white" strokeWidth={2.2} />
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground leading-tight">
-                  {editingQuoteId ? 'Edit Quote' : 'New Quote'}
-                </h2>
-                <p className="text-xs text-muted-foreground line-clamp-1">
-                  {editingQuoteId ? 'Update the quote details below' : 'Fill in the details to create a new quote'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button variant="outline" onClick={closeCreatePage} disabled={saving}>
-                Cancel
-              </Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveQuote} disabled={saving}>
-                {saving ? (
-                  <><Loader2 className="size-4 mr-1.5 animate-spin" /> Saving...</>
-                ) : editingQuoteId ? (
-                  'Update Quote'
-                ) : (
-                  <><Plus className="size-4 mr-1.5" /> Create Quote</>
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* ─── Main content: two-column layout ───────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
-          {/* Left column: form fields */}
-          <div className="space-y-6">
-            {/* AI auto-fill banner */}
-            <div className="rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 dark:bg-emerald-950/20 dark:border-emerald-900 dark:from-emerald-950/30 dark:to-teal-950/20 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-start gap-3 min-w-0">
-                <span className="flex items-center justify-center size-9 rounded-lg bg-emerald-600 shrink-0 shadow-sm">
-                  <Sparkles className="size-5 text-white" />
-                </span>
-                <div className="min-w-0">
-                  <p className="font-semibold text-foreground flex items-center gap-2">
-                    Auto-fill with AI
-                    {aiQuoteLocked && (
-                      <Badge variant="outline" className="text-[10px] h-5 bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800">
-                        <Lock className="size-3 mr-1" /> Pro
-                      </Badge>
-                    )}
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    Describe the job and let AI build the entire quote — line items, pricing, timeline, and risk assessment.
-                  </p>
-                </div>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={openAiQuoteDialog}
-                className="border-emerald-600/50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/40 shrink-0"
-              >
-                {aiQuoteLocked ? (
-                  <Lock className="size-4 mr-1.5" />
-                ) : (
-                  <Sparkles className="size-4 mr-1.5" />
-                )}
-                Auto-fill with AI
-              </Button>
-            </div>
-
-            {/* Quote metadata */}
-            <FormSectionCard icon={FileText} title="Quote Details">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Title *</Label>
-                  <Input
-                    placeholder="e.g., Window Cleaning"
-                    value={form.title}
-                    onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Client *</Label>
-                  <Select
-                    value={form.customerId}
-                    onValueChange={(val) => {
-                      const customer = customers.find((c) => c.id === val);
-                      setForm((prev) => ({ ...prev, customerId: val, customerName: customer?.name || '' }));
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a client" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.length === 0 ? (
-                        <SelectItem value="_none" disabled>No customers available</SelectItem>
-                      ) : (
-                        customers.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                <div className="space-y-2">
-                  <Label>Quote #</Label>
-                  <Input
-                    placeholder="Auto-generated"
-                    disabled
-                    className="bg-muted/30 font-mono text-sm"
-                    value={editingQuoteId ? `#${editingQuoteId.slice(-6).toUpperCase()}` : 'Auto'}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Valid Until *</Label>
-                  <Input
-                    type="date"
-                    value={form.validUntil}
-                    onChange={(e) => setForm((prev) => ({ ...prev, validUntil: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2 mt-4">
-                <Label>Description</Label>
-                <Textarea
-                  placeholder="Quote description or notes..."
-                  value={form.description}
-                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                  rows={2}
-                  className="text-sm"
-                />
-              </div>
-            </FormSectionCard>
-
-            {/* Product / Service section */}
-            <FormSectionCard
-              icon={ShoppingCart}
-              title="Product / Service"
-              action={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
-                  onClick={handleAddServiceItem}
-                >
-                  <PlusCircle className="size-3.5 mr-1" /> Add Line Item
-                </Button>
-              }
-            >
-              <div className="space-y-3">
-                {/* Header row */}
-                <div className="grid grid-cols-[1fr_80px_100px_100px_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
-                  <span>Name</span>
-                  <span>Qty</span>
-                  <span>Unit Price</span>
-                  <span className="text-right">Total</span>
-                  <span></span>
-                </div>
-                {form.services.map((item) => (
-                  <div key={item.id} className="space-y-2">
-                    <div className="grid grid-cols-[1fr_80px_100px_100px_32px] gap-2 items-center">
-                      <Select
-                        value={item.serviceId}
-                        onValueChange={(val) => handleServiceSelect(item.id, val)}
-                      >
-                        <SelectTrigger className="h-9 text-sm">
-                          <SelectValue placeholder="Select service..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {MOCK_SERVICE_CATALOG.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.name} — {format(s.basePrice)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        type="number" min={1}
-                        value={item.quantity}
-                        onChange={(e) => handleServiceFieldChange(item.id, 'quantity', parseInt(e.target.value) || 1)}
-                        className="h-9 text-sm"
-                        placeholder="Qty"
-                      />
-                      <Input
-                        type="number" min={0}
-                        value={item.price}
-                        onChange={(e) => handleServiceFieldChange(item.id, 'price', parseFloat(e.target.value) || 0)}
-                        className="h-9 text-sm"
-                        placeholder="Price"
-                      />
-                      <div className="text-right text-sm font-medium pr-1">
-                        {format(item.price * item.quantity)}
-                      </div>
-                      <Button
-                        variant="ghost" size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-red-600"
-                        disabled={form.services.length <= 1}
-                        onClick={() => handleRemoveServiceItem(item.id)}
-                      >
-                        <MinusCircle className="size-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </FormSectionCard>
-
-            {/* Add-ons section */}
-            <FormSectionCard
-              icon={PlusCircle}
-              title="Add-ons"
-              action={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
-                  onClick={handleAddAddOn}
-                >
-                  <PlusCircle className="size-3.5 mr-1" /> Add Add-on
-                </Button>
-              }
-            >
-              {form.addOns.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-2">No add-ons added yet</p>
-              ) : (
-                <div className="space-y-2">
-                  {form.addOns.map((addon) => (
-                    <div key={addon.id} className="grid grid-cols-[1fr_120px_32px] gap-2 items-center">
-                      <Input
-                        placeholder="Add-on name"
-                        value={addon.name}
-                        onChange={(e) => handleAddOnChange(addon.id, 'name', e.target.value)}
-                        className="h-9 text-sm"
-                      />
-                      <Input
-                        type="number" min={0}
-                        value={addon.price}
-                        onChange={(e) => handleAddOnChange(addon.id, 'price', parseFloat(e.target.value) || 0)}
-                        className="h-9 text-sm"
-                        placeholder="Price"
-                      />
-                      <Button
-                        variant="ghost" size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-red-600"
-                        onClick={() => handleRemoveAddOn(addon.id)}
-                      >
-                        <MinusCircle className="size-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </FormSectionCard>
-
-            {/* Contract / Disclaimer section */}
-            <FormSectionCard icon={ScrollText} title="Contract / Disclaimer">
-              <Textarea
-                defaultValue="This quote is valid for the next 30 days, after which values may be subject to change."
-                rows={3}
-                className="text-sm"
-                placeholder="Add contract or disclaimer text..."
-              />
-              <label className="flex items-center gap-2 mt-2 text-sm text-muted-foreground cursor-pointer">
-                <input type="checkbox" className="rounded border-border" />
-                Apply to all future quotes
-              </label>
-            </FormSectionCard>
-
-            {/* Notes section */}
-            <FormSectionCard icon={StickyNote} title="Notes">
-              <Textarea
-                placeholder="Leave an internal note for yourself or a team member"
-                rows={3}
-                className="text-sm"
-                value={form.description}
-                onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-              />
-            </FormSectionCard>
-          </div>
-
-          {/* Right column: summary sidebar */}
-          <div className="space-y-4 lg:sticky lg:top-4">
-            <Card>
-              <CardContent className="p-5">
-                <h4 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-1.5">
-                  <Calculator className="size-4 text-emerald-600" /> Summary
-                </h4>
-                <div className="space-y-2.5">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
-                    <span className="font-medium">{format(formSummary.subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      Discount {form.discountType === 'percentage' ? `(${form.discountValue}%)` : ''}
-                    </span>
-                    <span className="font-medium text-red-600">-{format(formSummary.discount)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Tax ({form.taxRate}%)</span>
-                    <span className="font-medium">+{format(formSummary.tax)}</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between text-base font-bold">
-                    <span>Total</span>
-                    <span className="text-emerald-700">{format(formSummary.total)}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Discount settings */}
-            <Card>
-              <CardContent className="p-5">
-                <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
-                  <Tag className="size-4 text-emerald-600" /> Discount
-                </h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Type</Label>
-                    <Select
-                      value={form.discountType}
-                      onValueChange={(val: 'fixed' | 'percentage') => setForm((prev) => ({ ...prev, discountType: val }))}
-                    >
-                      <SelectTrigger className="h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fixed">Fixed ({symbol})</SelectItem>
-                        <SelectItem value="percentage">Percentage (%)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Value</Label>
-                    <Input
-                      type="number" min={0}
-                      value={form.discountValue}
-                      onChange={(e) => setForm((prev) => ({ ...prev, discountValue: parseFloat(e.target.value) || 0 }))}
-                      className="h-9 text-sm"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Tax settings */}
-            <Card>
-              <CardContent className="p-5">
-                <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
-                  <Percent className="size-4 text-emerald-600" /> Tax
-                </h4>
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="number" min={0} max={100}
-                    value={form.taxRate}
-                    onChange={(e) => setForm((prev) => ({ ...prev, taxRate: parseFloat(e.target.value) || 0 }))}
-                    className="h-9 text-sm w-24"
-                  />
-                  <span className="text-sm text-muted-foreground">% rate</span>
-                  <span className="text-sm ml-auto font-medium">{format(formSummary.tax)}</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* WhatsApp Preview button */}
-            {form.customerId && form.title && (
-              <Button
-                variant="outline"
-                className="w-full border-emerald-600 text-emerald-600 hover:bg-emerald-50"
-                onClick={() => {
-                  const summary = calcSummary(form.services, form.addOns, form.discountType, form.discountValue, form.taxRate);
-                  const customer = customers.find((c) => c.id === form.customerId);
-                  const previewQuote: Quote = {
-                    id: 'preview', title: form.title, description: form.description,
-                    customerName: customer?.name || form.customerName,
-                    customerId: form.customerId, customerPhone: customer?.phone,
-                    services: form.services, addOns: form.addOns,
-                    ...summary,
-                    discountType: form.discountType, discountValue: form.discountValue, taxRate: form.taxRate,
-                    status: 'draft', validUntil: form.validUntil, whatsappSent: false,
-                    createdAt: new Date().toISOString().split('T')[0],
-                    currency: currency, exchangeRate: 1, baseCurrency: currency, baseAmount: summary.total,
-                  };
-                  setSelectedQuote(previewQuote);
-                  setShowPreviewDialog(true);
-                }}
-              >
-                <MessageCircle className="size-4 mr-1.5" /> Preview WhatsApp
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
+  // ── Preview WhatsApp / Email dialog trigger from the New Quote form ──────
+  // Builds a synthetic preview Quote from the current form state and opens
+  // the EmailPreview dialog. The parent owns `selectedQuote` and
+  // `showPreviewDialog` state, so the construction stays here (mirrors the
+  // closure that used to live inline inside `renderNewQuotePage`).
+  const handlePreviewWhatsApp = () => {
+    const summary = calcSummary(form.services, form.addOns, form.discountType, form.discountValue, form.taxRate);
+    const customer = customers.find((c) => c.id === form.customerId);
+    const previewQuote: Quote = {
+      id: 'preview',
+      title: form.title,
+      description: form.description,
+      customerName: customer?.name || form.customerName,
+      customerId: form.customerId,
+      customerPhone: customer?.phone,
+      services: form.services,
+      addOns: form.addOns,
+      ...summary,
+      discountType: form.discountType,
+      discountValue: form.discountValue,
+      taxRate: form.taxRate,
+      status: 'draft',
+      validUntil: form.validUntil,
+      whatsappSent: false,
+      emailSent: false,
+      createdAt: new Date().toISOString().split('T')[0],
+      currency: currency,
+      exchangeRate: 1,
+      baseCurrency: currency,
+      baseAmount: summary.total,
+    };
+    setSelectedQuote(previewQuote);
+    setShowPreviewDialog(true);
   };
 
   // ============================================================
@@ -1679,9 +661,43 @@ export function QuotesView() {
   return (
     <div className="space-y-6 w-full">
       {formMode === 'create' ? (
-        renderNewQuotePage()
+        <NewQuotePage
+          editingQuoteId={editingQuoteId}
+          form={form}
+          setForm={setForm}
+          onSave={handleSaveQuote}
+          onCancel={closeCreatePage}
+          saving={saving}
+          customers={customers}
+          onOpenAiDialog={openAiQuoteDialog}
+          aiLocked={aiQuoteLocked}
+          onAddServiceItem={handleAddServiceItem}
+          onRemoveServiceItem={handleRemoveServiceItem}
+          onServiceSelect={handleServiceSelect}
+          onServiceFieldChange={handleServiceFieldChange}
+          onAddAddOn={handleAddAddOn}
+          onRemoveAddOn={handleRemoveAddOn}
+          onAddOnChange={handleAddOnChange}
+          formSummary={formSummary}
+          currency={currency}
+          format={format}
+          symbol={symbol}
+          onPreviewWhatsApp={handlePreviewWhatsApp}
+        />
       ) : formMode === 'detail' ? (
-        renderQuoteDetailPage()
+        <QuoteDetailPage
+          quote={selectedQuote}
+          customers={customers}
+          onBack={closeQuoteDetail}
+          onEdit={openEditDialog}
+          onCreateSimilar={handleCreateSimilar}
+          onSendEmail={handleSendEmail}
+          onPreviewEmail={openPreviewDialog}
+          onDuplicate={handleDuplicateQuote}
+          onDelete={handleDeleteQuote}
+          currency={currency}
+          format={format}
+        />
       ) : (
         <>
       {/* ── Header ───────────────────────────────────────────────── */}

@@ -27,6 +27,8 @@ import { updateAnalyticsConsent } from "@/lib/analytics/consent";
  * component renders in the root layout, framer-motion (~50KB+ gz) was shipped
  * on EVERY page of the site for a single non-essential animation. Replaced
  * with CSS transitions (transform + opacity) — same visual effect, zero JS.
+ * The exit animation is handled by a 300ms timeout that keeps the element
+ * mounted while transitioning out, replicating AnimatePresence behavior.
  */
 
 const CONSENT_KEY = "fieseros_consent";
@@ -35,6 +37,9 @@ const CONSENT_KEY = "fieseros_consent";
 // CONSENT_KEY (which is a permanent decision), this is just a "defer" so the
 // banner can reappear on a future visit and actually get a decision.
 const DEFERRED_KEY = "fieseros_consent_deferred";
+
+// Duration of the CSS exit transition (must match the `duration-300` class).
+const EXIT_ANIMATION_MS = 300;
 
 type ConsentPreferences = {
   necessary: boolean;
@@ -114,9 +119,6 @@ const getClientSnapshot = (): boolean => {
 };
 
 const getServerSnapshot = (): boolean => false;
-
-// Duration of the CSS exit transition (must match the `duration-300` class).
-const EXIT_ANIMATION_MS = 300;
 
 export function CookieConsentBanner() {
   const shouldShow = useSyncExternalStore(

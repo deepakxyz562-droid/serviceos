@@ -9,22 +9,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useCallback } from 'react';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { Search, RefreshCw, FileText } from 'lucide-react';
 
-import {
-  TableSkeleton, EmptyState, formatDateTime,
-} from '@/components/views/superadmin/_shared';
+import { formatDateTime } from '@/components/views/superadmin/_shared';
 import type { AuditLog, Tenant } from '@/components/views/superadmin/types';
 
 export interface AuditLogsTabProps {
@@ -79,44 +71,36 @@ export function AuditLogsTab({ tenants }: AuditLogsTabProps) {
         </Button>
       </div>
 
-      {loading ? <TableSkeleton /> : logs.length === 0 ? (
-        <EmptyState icon={FileText} title="No audit logs found" subtitle="Audit logs will appear here as platform activity occurs." />
-      ) : (
-        <Card className="card-shadow">
-          <ScrollArea className="max-h-[calc(100vh-320px)]">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Action</TableHead>
-                  <TableHead>Resource</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>IP</TableHead>
-                  <TableHead>When</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {logs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell>
-                      <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20">
-                        {log.action}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-foreground text-sm">
-                      {log.resourceType ? `${log.resourceType}${log.resourceId ? ` #${log.resourceId.slice(0, 8)}` : ''}` : '—'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-xs font-mono">{log.userId ? log.userId.slice(0, 8) + '…' : '—'}</TableCell>
-                    <TableCell className="text-muted-foreground text-xs font-mono">{log.tenantId ? log.tenantId.slice(0, 8) + '…' : '—'}</TableCell>
-                    <TableCell className="text-muted-foreground text-xs font-mono">{log.ip || '—'}</TableCell>
-                    <TableCell className="text-muted-foreground text-xs">{formatDateTime(log.createdAt)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </ScrollArea>
-        </Card>
-      )}
+      <DataTable
+        columns={auditLogColumns}
+        data={logs}
+        rowKey={(log) => log.id}
+        loading={loading}
+        emptyMessage="No audit logs found"
+        emptyIcon={FileText}
+        className="max-h-[calc(100vh-320px)]"
+      />
     </div>
   );
 }
+
+const auditLogColumns: Column<AuditLog>[] = [
+  {
+    key: 'action', header: 'Action', render: (log) => (
+      <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20">
+        {log.action}
+      </Badge>
+    ),
+  },
+  {
+    key: 'resource', header: 'Resource', render: (log) => (
+      <span className="text-foreground text-sm">
+        {log.resourceType ? `${log.resourceType}${log.resourceId ? ` #${log.resourceId.slice(0, 8)}` : ''}` : '—'}
+      </span>
+    ),
+  },
+  { key: 'user', header: 'User', render: (log) => <span className="text-muted-foreground text-xs font-mono">{log.userId ? log.userId.slice(0, 8) + '…' : '—'}</span> },
+  { key: 'tenant', header: 'Tenant', render: (log) => <span className="text-muted-foreground text-xs font-mono">{log.tenantId ? log.tenantId.slice(0, 8) + '…' : '—'}</span> },
+  { key: 'ip', header: 'IP', render: (log) => <span className="text-muted-foreground text-xs font-mono">{log.ip || '—'}</span> },
+  { key: 'when', header: 'When', render: (log) => <span className="text-muted-foreground text-xs">{formatDateTime(log.createdAt)}</span> },
+];

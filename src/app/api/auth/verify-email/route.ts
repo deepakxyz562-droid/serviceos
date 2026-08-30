@@ -29,68 +29,75 @@ import { generateToken, COOKIE_OPTIONS } from '@/lib/auth';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const token = searchParams.get('token');
+  try {
+    const { searchParams } = new URL(request.url);
+    const token = searchParams.get('token');
 
-  if (!token) {
+    if (!token) {
+      return NextResponse.json(
+        { ok: false, error: 'Missing verification token.' },
+        { status: 400 },
+      );
+    }
+
+    const result = await verifyEmailToken(token);
+
+    if (!result.ok) {
+      const status = /expired/i.test(result.error)
+        ? 410
+        : /already verified/i.test(result.error)
+          ? 400
+          : 404;
+      return NextResponse.json({ ok: false, error: result.error }, { status });
+    }
+
+    // Fetch full user and tenant for auto-login
+    const user = await db.user.findUnique({
+      where: { id: result.userId },
+      include: { tenant: true },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { ok: true, message: 'Your email has been verified. You can now log in.' },
+        { status: 200 }
+      );
+    }
+
+    const authUser = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      tenantId: user.tenantId,
+      workspaceId: user.workspaceId,
+      avatar: user.avatar,
+      isSuperAdmin: user.isSuperAdmin || false,
+    };
+    const sessionToken = generateToken(authUser);
+
+    const response = NextResponse.json({
+      ok: true,
+      message: 'Your email has been verified.',
+      token: sessionToken,
+      user: authUser,
+      tenant: user.tenant,
+    });
+
+    // Set auth cookie — MUST use the same pattern as the login route
+    response.cookies.set({
+      ...COOKIE_OPTIONS,
+      value: sessionToken,
+    });
+    return response;
+
+  } catch (err) {
+    // Safety net: if ANYTHING throws (DB connection, JWT generation, etc.),
+    // return a proper JSON error instead of a 500 with empty body.
+    console.error('[verify-email] Unhandled error:', err);
     return NextResponse.json(
-      { ok: false, error: 'Missing verification token.' },
-      { status: 400 },
+      { ok: false, error: 'An error occurred during email verification. Please try again or contact support.' },
+      { status: 500 },
     );
   }
-
-  const result = await verifyEmailToken(token);
-
-  if (!result.ok) {
-    const status = /expired/i.test(result.error)
-      ? 410
-      : /already verified/i.test(result.error)
-        ? 400
-        : 404;
-    return NextResponse.json({ ok: false, error: result.error }, { status });
-  }
-
-  // Fetch full user and tenant for auto-login
-  const user = await db.user.findUnique({
-    where: { id: result.userId },
-    include: { tenant: true },
-  });
-
-  if (!user) {
-    return NextResponse.json(
-      { ok: true, message: 'Your email has been verified. You can now log in.' },
-      { status: 200 }
-    );
-  }
-
-  const authUser = {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    tenantId: user.tenantId,
-    workspaceId: user.workspaceId,
-    avatar: user.avatar,
-    isSuperAdmin: user.isSuperAdmin || false,
-  };
-  const sessionToken = generateToken(authUser);
-
-  const response = NextResponse.json({
-    ok: true,
-    message: 'Your email has been verified.',
-    token: sessionToken,
-    user: authUser,
-    tenant: user.tenant,
-  });
-
-  // Set auth cookie — MUST use the same pattern as the login route
-  // (spread COOKIE_OPTIONS + value). The previous code passed the cookie
-  // name as a string arg AND in COOKIE_OPTIONS, which could cause the
-  // cookie to not be properly set — leaving a stale admin cookie active
-  // and causing a data leak (superadmin sees all tenants' data).
-  response.cookies.set({
-    ...COOKIE_OPTIONS,
-    value: sessionToken,
-  });
-  return response;
 }

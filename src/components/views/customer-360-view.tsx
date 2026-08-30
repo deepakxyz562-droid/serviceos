@@ -1,37 +1,38 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+/**
+ * Customer360View — top-level Customer 360° page.
+ *
+ * Phase 6B2 refactor: the 8 inline tab sections, the 4 inline dialogs
+ * (booking create, invoice create, note edit, note delete), the inline
+ * sub-components (KpiCard, HealthScoreGauge, StarRating, TimelineGroup,
+ * ChatBubble), the inline skeletons, the customer-list branch, and the
+ * left profile panel have all been extracted to `src/features/customers/`.
+ *
+ * This file owns: state (selected customer + search/sort/view-layout +
+ * active tab + dialog form state), the 5 write handlers (create booking,
+ * create invoice, convert quote → job, add/edit/delete note), the 360°
+ * + bookings React Query subscriptions, the derived state (filtered
+ * customers, stats, health score, grouped timeline, customer tags,
+ * last-active time, filtered jobs), and the 360° layout shell (top bar
+ * + profile panel + KPI row + Tabs shell with 8 TabsContent slots + 4
+ * form dialogs + V1.5 CommunicationComposer).
+ *
+ * The customer-list branch (no selection) is delegated to the extracted
+ * `CustomerListView` component.
+ */
+
+import { useState, useMemo, useCallback } from 'react';
 import {
-  User, Search, Phone, Mail, MapPin, MessageSquare, Calendar, DollarSign,
-  Wrench, Activity, Clock, Star, Tag, Plus, Send, FileText, Zap,
-  ChevronRight, X, CheckCircle2, AlertCircle,
-  ArrowUpRight, Receipt, MessageCircle, FileStack,
-  Bot, Sparkles, Users, StickyNote,
-  ArrowUpDown, Upload, Image, File,
-  PhoneCall, Heart, Workflow, Loader2,
-  ShoppingCart, Package, Truck,
+  Activity, Clock, Wrench, FileText, Receipt, DollarSign,
+  MessageCircle, StickyNote, ChevronRight, Calendar, CheckCircle2,
+  Star, AlertCircle,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
 import {
@@ -40,458 +41,54 @@ import {
   useBookings,
 } from '@/hooks/queries/use-supabase-queries';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
-import { TimelineSection } from '@/components/customer/timeline-section';
 import { CommunicationComposer } from '@/components/communication/composer';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map(w => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function formatDateTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function timeAgo(iso: string): string {
-  try {
-    const diff = Date.now() - new Date(iso).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    if (days < 30) return `${days}d ago`;
-    return `${Math.floor(days / 30)}mo ago`;
-  } catch {
-    return '';
-  }
-}
-
-function isToday(date: Date | string): boolean {
-  const d = new Date(date);
-  const now = new Date();
-  return d.toDateString() === now.toDateString();
-}
-
-function isYesterday(date: Date | string): boolean {
-  const d = new Date(date);
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  return d.toDateString() === yesterday.toDateString();
-}
-
-function isThisWeek(date: Date | string): boolean {
-  const d = new Date(date);
-  const now = new Date();
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - now.getDay());
-  weekStart.setHours(0, 0, 0, 0);
-  return d >= weekStart;
-}
-
-/** Get a tag-based left border color for customer cards */
-function getTagBorderColor(tags: string[]): string {
-  if (tags.includes('VIP')) return 'border-l-amber-500';
-  if (tags.includes('High-Value')) return 'border-l-teal-500';
-  return 'border-l-emerald-500';
-}
-
-/** Compute a health score 0-100 based on activity, spending, engagement */
-function computeHealthScore(stats: { totalRevenue: number; completedJobs: number; avgRating: number; outstandingBalance: number; totalBookings: number }): number {
-  let score = 0;
-  // Revenue contribution (0-30)
-  score += Math.min(30, (stats.totalRevenue / 5000) * 30);
-  // Completed jobs contribution (0-25)
-  score += Math.min(25, stats.completedJobs * 5);
-  // Rating contribution (0-25)
-  score += stats.avgRating > 0 ? (stats.avgRating / 5) * 25 : 0;
-  // Engagement via bookings (0-20)
-  score += Math.min(20, stats.totalBookings * 4);
-  // Penalty for outstanding balance
-  if (stats.outstandingBalance > 0) {
-    score -= Math.min(15, (stats.outstandingBalance / 3000) * 15);
-  }
-  return Math.round(Math.max(0, Math.min(100, score)));
-}
-
-/** Return color class based on health score */
-function healthScoreColor(score: number): string {
-  if (score >= 70) return 'text-emerald-500';
-  if (score >= 40) return 'text-amber-500';
-  return 'text-red-500';
-}
-
-function healthScoreStroke(score: number): string {
-  if (score >= 70) return 'stroke-emerald-500';
-  if (score >= 40) return 'stroke-amber-500';
-  return 'stroke-red-500';
-}
-
-// ─── Status Color Maps ──────────────────────────────────────────────────────
-
-const jobStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  pending: { label: 'Pending', color: 'text-muted-foreground', bg: 'bg-muted border-border' },
-  assigned: { label: 'Assigned', color: 'text-sky-700', bg: 'bg-sky-100 border-sky-200' },
-  in_progress: { label: 'In Progress', color: 'text-amber-700', bg: 'bg-amber-100 border-amber-200' },
-  completed: { label: 'Completed', color: 'text-emerald-700', bg: 'bg-emerald-100 border-emerald-200' },
-  cancelled: { label: 'Cancelled', color: 'text-red-700', bg: 'bg-red-100 border-red-200' },
-};
-
-const invoiceStatusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
-  draft: { label: 'Draft', color: 'text-muted-foreground', bg: 'bg-muted border-border', icon: FileText },
-  sent: { label: 'Sent', color: 'text-sky-700', bg: 'bg-sky-100 border-sky-200', icon: Send },
-  pending: { label: 'Pending', color: 'text-amber-700', bg: 'bg-amber-100 border-amber-200', icon: Clock },
-  pending_approval: { label: 'Pending Approval', color: 'text-amber-700', bg: 'bg-amber-100 border-amber-200', icon: Clock },
-  paid: { label: 'Paid', color: 'text-emerald-700', bg: 'bg-emerald-100 border-emerald-200', icon: CheckCircle2 },
-  overdue: { label: 'Overdue', color: 'text-red-700', bg: 'bg-red-100 border-red-200', icon: AlertCircle },
-  cancelled: { label: 'Cancelled', color: 'text-muted-foreground', bg: 'bg-muted border-border', icon: X },
-};
-
-const quoteStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  draft: { label: 'Draft', color: 'text-muted-foreground', bg: 'bg-muted border-border' },
-  sent: { label: 'Sent', color: 'text-sky-700', bg: 'bg-sky-100 border-sky-200' },
-  accepted: { label: 'Accepted', color: 'text-emerald-700', bg: 'bg-emerald-100 border-emerald-200' },
-  rejected: { label: 'Rejected', color: 'text-red-700', bg: 'bg-red-100 border-red-200' },
-  expired: { label: 'Expired', color: 'text-muted-foreground', bg: 'bg-muted border-border' },
-};
-
-const bookingStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  pending: { label: 'Pending', color: 'text-amber-700', bg: 'bg-amber-100 border-amber-200' },
-  confirmed: { label: 'Confirmed', color: 'text-sky-700', bg: 'bg-sky-100 border-sky-200' },
-  completed: { label: 'Completed', color: 'text-emerald-700', bg: 'bg-emerald-100 border-emerald-200' },
-  cancelled: { label: 'Cancelled', color: 'text-red-700', bg: 'bg-red-100 border-red-200' },
-  no_show: { label: 'No Show', color: 'text-muted-foreground', bg: 'bg-muted border-border' },
-};
-
-const tagColors: Record<string, string> = {
-  VIP: 'bg-amber-100 text-amber-700 border-amber-200',
-  'Repeat Customer': 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  'High-Value': 'bg-teal-100 text-teal-700 border-teal-200',
-  'At-Risk': 'bg-red-100 text-red-700 border-red-200',
-  premium: 'bg-amber-100 text-amber-700 border-amber-200',
-  repeat: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  'New Lead': 'bg-sky-100 text-sky-700 border-sky-200',
-  Commercial: 'bg-violet-100 text-violet-700 border-violet-200',
-};
-
-const timelineEventTypeConfig: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
-  message: { icon: MessageSquare, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
-  booking: { icon: Calendar, color: 'text-sky-600', bg: 'bg-sky-500/10' },
-  job_update: { icon: Wrench, color: 'text-amber-600', bg: 'bg-amber-500/10' },
-  payment: { icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
-  campaign: { icon: Send, color: 'text-violet-600', bg: 'bg-violet-500/10' },
-  note: { icon: StickyNote, color: 'text-amber-600', bg: 'bg-amber-500/10' },
-  call: { icon: Phone, color: 'text-sky-600', bg: 'bg-sky-500/10' },
-  form_submission: { icon: FileText, color: 'text-violet-600', bg: 'bg-violet-500/10' },
-  lead: { icon: ArrowUpRight, color: 'text-sky-600', bg: 'bg-sky-500/10' },
-  job_created: { icon: Wrench, color: 'text-amber-600', bg: 'bg-amber-500/10' },
-  job_completed: { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
-  invoice_paid: { icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
-  invoice_created: { icon: Receipt, color: 'text-amber-600', bg: 'bg-amber-500/10' },
-  review: { icon: Star, color: 'text-amber-600', bg: 'bg-amber-500/10' },
-  whatsapp_sent: { icon: MessageSquare, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
-  lead_converted: { icon: Sparkles, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
-  order_created: { icon: ShoppingCart, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
-  order_delivered: { icon: Package, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
-  order_shipped: { icon: Truck, color: 'text-sky-600', bg: 'bg-sky-500/10' },
-  order_cancelled: { icon: X, color: 'text-red-600', bg: 'bg-red-500/10' },
-};
-
-const ORDER_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  pending: { label: 'Pending', cls: 'bg-amber-100 text-amber-700 border-amber-200' },
-  confirmed: { label: 'Confirmed', cls: 'bg-sky-100 text-sky-700 border-sky-200' },
-  processing: { label: 'Processing', cls: 'bg-violet-100 text-violet-700 border-violet-200' },
-  shipped: { label: 'Shipped', cls: 'bg-sky-100 text-sky-700 border-sky-200' },
-  delivered: { label: 'Delivered', cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-  cancelled: { label: 'Cancelled', cls: 'bg-red-100 text-red-700 border-red-200' },
-  refunded: { label: 'Refunded', cls: 'bg-muted text-muted-foreground border-border' },
-};
-
-// ─── Loading Skeleton ────────────────────────────────────────────────────────
-
-function ProfileSkeleton() {
-  return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center gap-4">
-        <Skeleton className="size-16 rounded-full" />
-        <div className="space-y-2 flex-1">
-          <Skeleton className="h-6 w-40" />
-          <Skeleton className="h-4 w-56" />
-          <Skeleton className="h-4 w-32" />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Skeleton className="h-4 w-48" />
-        <Skeleton className="h-4 w-36" />
-        <Skeleton className="h-4 w-52" />
-      </div>
-      <div className="flex gap-2">
-        <Skeleton className="h-8 w-28" />
-        <Skeleton className="h-8 w-24" />
-        <Skeleton className="h-8 w-28" />
-      </div>
-    </div>
-  );
-}
-
-function KpiSkeleton() {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Card key={i} className="bg-card border-border">
-          <CardContent className="p-4">
-            <Skeleton className="h-4 w-16 mb-2" />
-            <Skeleton className="h-7 w-24" />
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-function TimelineSkeleton() {
-  return (
-    <div className="space-y-4">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="flex items-start gap-3">
-          <Skeleton className="size-9 rounded-full shrink-0" />
-          <div className="space-y-1.5 flex-1">
-            <Skeleton className="h-4 w-48" />
-            <Skeleton className="h-3 w-64" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── KPI Card (enhanced with colored border) ─────────────────────────────────
-
-function KpiCard({
-  label,
-  value,
-  icon: Icon,
-  accent = 'text-emerald-400',
-  borderColor = 'border-l-emerald-500',
-}: {
-  label: string;
-  value: string | number;
-  icon: React.ElementType;
-  accent?: string;
-  borderColor?: string;
-}) {
-  return (
-    <Card className={cn(
-      'bg-card border-border border-l-4 transition-all duration-200 hover:shadow-md',
-      borderColor
-    )}>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs text-muted-foreground font-medium">{label}</span>
-          <Icon className={cn('size-4', accent)} />
-        </div>
-        <div className="flex items-end gap-2">
-          <p className="text-2xl font-extrabold text-foreground">{value}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ─── Health Score Gauge ──────────────────────────────────────────────────────
-
-function HealthScoreGauge({ score }: { score: number }) {
-  const radius = 28;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
-
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="relative size-16">
-        <svg className="size-16 -rotate-90" viewBox="0 0 64 64">
-          <circle cx="32" cy="32" r={radius} fill="none" className="stroke-muted" strokeWidth="5" />
-          <circle
-            cx="32" cy="32" r={radius} fill="none"
-            className={healthScoreStroke(score)}
-            strokeWidth="5"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-            style={{ transition: 'stroke-dashoffset 0.6s ease-in-out' }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className={cn('text-sm font-extrabold', healthScoreColor(score))}>{score}</span>
-        </div>
-      </div>
-      <div className="flex items-center gap-1">
-        <Heart className={cn('size-3', healthScoreColor(score))} />
-        <span className="text-[10px] font-medium text-muted-foreground">Health</span>
-      </div>
-    </div>
-  );
-}
-
-// ─── Star Rating ─────────────────────────────────────────────────────────────
-
-function StarRating({ rating, max = 5 }: { rating: number; max?: number }) {
-  return (
-    <div className="flex items-center gap-0.5">
-      {Array.from({ length: max }).map((_, i) => (
-        <Star
-          key={i}
-          className={cn(
-            'size-3.5',
-            i < Math.round(rating)
-              ? 'text-amber-400 fill-amber-400'
-              : 'text-muted-foreground'
-          )}
-        />
-      ))}
-    </div>
-  );
-}
-
-// ─── Timeline Event Group ────────────────────────────────────────────────────
-
-function TimelineGroup({
-  label,
-  events,
-}: {
-  label: string;
-  events: any[];
-}) {
-  return (
-    <div className="space-y-3">
-      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</h4>
-      <div className="space-y-1">
-        {events.map((event, i) => {
-          const config = timelineEventTypeConfig[event.eventType || event.type] ||
-            timelineEventTypeConfig.message;
-          const Icon = config.icon;
-          return (
-            <div
-              key={event.id || i}
-              className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-accent/50 transition-all duration-200 group"
-            >
-              <div className={cn('size-9 rounded-full flex items-center justify-center shrink-0', config.bg)}>
-                <Icon className={cn('size-4', config.color)} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {event.title || event.description || 'Event'}
-                  </p>
-                  <span className="text-[11px] text-muted-foreground shrink-0">
-                    {event.createdAt ? timeAgo(event.createdAt) : ''}
-                  </span>
-                </div>
-                {event.description && event.title && (
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">{event.description}</p>
-                )}
-                {event.actorName && (
-                  <p className="text-[11px] text-muted-foreground mt-0.5">by {event.actorName}</p>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── Chat Bubble (enhanced) ──────────────────────────────────────────────────
-
-function ChatBubble({
-  message,
-  isCustomer,
-  showAvatar = false,
-}: {
-  message: any;
-  isCustomer: boolean;
-  showAvatar?: boolean;
-}) {
-  return (
-    <div className={cn('flex gap-2', isCustomer ? 'justify-start' : 'justify-end')}>
-      {isCustomer && showAvatar && (
-        <div className="size-7 rounded-full bg-emerald-600/20 flex items-center justify-center shrink-0 mt-1">
-          <User className="size-3.5 text-emerald-400" />
-        </div>
-      )}
-      <div
-        className={cn(
-          'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm',
-          isCustomer
-            ? 'bg-muted text-foreground rounded-bl-md rounded-tl-xl'
-            : 'bg-primary text-primary-foreground rounded-br-md rounded-tr-xl'
-        )}
-      >
-        <p>{message.body || message.lastMessageBody || message.content || ''}</p>
-        <p className={cn('text-[10px] mt-1', isCustomer ? 'text-muted-foreground' : 'text-primary-foreground/70')}>
-          {message.createdAt ? formatDateTime(message.createdAt) : ''}
-        </p>
-      </div>
-      {!isCustomer && showAvatar && (
-        <div className="size-7 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-1">
-          <Bot className="size-3.5 text-primary" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Sort type ───────────────────────────────────────────────────────────────
-
-type SortOption = 'name' | 'recent' | 'value';
-
-// ─── Main Component ─────────────────────────────────────────────────────────
+import { CustomerListView } from '@/features/customers/components/customer-list-view';
+import { CustomerProfilePanel } from '@/features/customers/components/customer-profile-panel';
+import { KpiCard } from '@/features/customers/components/kpi-card';
+import { BookingCreateDialog } from '@/features/customers/components/booking-create-dialog';
+import { InvoiceCreateDialog } from '@/features/customers/components/invoice-create-dialog';
+import { NoteEditDialog, NoteDeleteDialog } from '@/features/customers/components/note-dialogs';
+import { useCustomer360Actions } from '@/features/customers/hooks/use-customer-360-actions';
+import { OverviewTab } from '@/features/customers/components/tabs/overview-tab';
+import { TimelineTab } from '@/features/customers/components/tabs/timeline-tab';
+import { CommunicationTab } from '@/features/customers/components/tabs/communication-tab';
+import { NotesTab } from '@/features/customers/components/tabs/notes-tab';
+import { JobsTab } from '@/features/customers/components/tabs/jobs-tab';
+import { InvoicesTab } from '@/features/customers/components/tabs/invoices-tab';
+import { QuotesTab } from '@/features/customers/components/tabs/quotes-tab';
+import { PaymentsTab } from '@/features/customers/components/tabs/payments-tab';
+import {
+  computeHealthScore,
+  groupTimelineEvents,
+  parseTags,
+  timeAgo,
+} from '@/features/customers/utils/customer-helpers';
+import type {
+  Customer360Tab,
+  CustomerStats,
+  InvoiceLineItem,
+  NoteEditState,
+  SortOption,
+  ViewLayout,
+} from '@/features/customers/types';
 
 export function Customer360View() {
   const { auth } = useAppStore();
-  const { currency, format, formatCompact, symbol } = useCompanyCurrency();
+  const { format } = useCompanyCurrency();
   const tenantId = auth?.tenant?.id;
 
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState<Customer360Tab>('overview');
   const [sortBy, setSortBy] = useState<SortOption>('name');
-  const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
+  const [viewLayout, setViewLayout] = useState<ViewLayout>('grid');
 
-  // QueryClient for invalidating queries after mutations
+  // QueryClient for invalidating queries after mutations (used by composer onSent).
   const queryClient = useQueryClient();
 
   // Booking creation dialog state
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
-  const [creatingBooking, setCreatingBooking] = useState(false);
   const [bookingTitle, setBookingTitle] = useState('');
   const [bookingScheduledAt, setBookingScheduledAt] = useState('');
   const [bookingAddress, setBookingAddress] = useState('');
@@ -499,21 +96,18 @@ export function Customer360View() {
 
   // Invoice creation dialog state
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
-  const [creatingInvoice, setCreatingInvoice] = useState(false);
-  const [invoiceItems, setInvoiceItems] = useState<{ description: string; quantity: number; rate: number }[]>([{ description: '', quantity: 1, rate: 0 }]);
+  const [invoiceItems, setInvoiceItems] = useState<InvoiceLineItem[]>([
+    { description: '', quantity: 1, rate: 0 },
+  ]);
   const [invoiceDueDate, setInvoiceDueDate] = useState('');
   const [invoiceNotes, setInvoiceNotes] = useState('');
 
   // Jobs tab status filter
   const [jobStatusFilter, setJobStatusFilter] = useState<string>('all');
 
-  // Convert Quote → Job state
-  const [convertingQuoteId, setConvertingQuoteId] = useState<string | null>(null);
-
   // Notes tab state
   const [noteText, setNoteText] = useState('');
-  const [addingNote, setAddingNote] = useState(false);
-  const [editingNote, setEditingNote] = useState<{ id: string; title: string; description: string } | null>(null);
+  const [editingNote, setEditingNote] = useState<NoteEditState | null>(null);
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
 
   // V1.5: Communication composer state
@@ -526,7 +120,7 @@ export function Customer360View() {
   const { data: customer360, isLoading: customer360Loading } = useCustomer360(selectedCustomerId || '');
 
   // Fetch bookings for selected customer
-  const { data: bookingsData, isLoading: bookingsLoading } = useBookings(selectedCustomerId || undefined);
+  const { data: bookingsData } = useBookings(selectedCustomerId || undefined);
 
   // Filtered + sorted customer list
   const filteredCustomers = useMemo(() => {
@@ -541,11 +135,9 @@ export function Customer360View() {
           c.email?.toLowerCase().includes(q)
       );
     }
-    // Sort
     return [...filtered].sort((a: any, b: any) => {
       if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '');
       if (sortBy === 'recent') return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-      // value: approximate by totalRevenue if available
       return ((b.totalRevenue || 0) as number) - ((a.totalRevenue || 0) as number);
     });
   }, [customers, searchQuery, sortBy]);
@@ -560,7 +152,7 @@ export function Customer360View() {
   const bookings: any[] = bookingsData?.bookings || (Array.isArray(bookingsData) ? bookingsData : []);
 
   // Computed stats
-  const stats = useMemo(() => {
+  const stats = useMemo<CustomerStats>(() => {
     const completedJobs = jobs.filter(j => j.status === 'completed');
     const paidInvoices = invoices.filter(i => i.status === 'paid');
     const pendingInvoices = invoices.filter(
@@ -587,62 +179,14 @@ export function Customer360View() {
   // Health score
   const healthScore = useMemo(() => computeHealthScore(stats), [stats]);
 
-  // Grouped timeline
-  const groupedTimeline = useMemo(() => {
-    const groups: { label: string; events: any[] }[] = [];
-    const today: any[] = [];
-    const yesterday: any[] = [];
-    const thisWeek: any[] = [];
-    const earlier: any[] = [];
-
-    timelineEvents.forEach(event => {
-      if (!event.createdAt) {
-        earlier.push(event);
-        return;
-      }
-      if (isToday(event.createdAt)) today.push(event);
-      else if (isYesterday(event.createdAt)) yesterday.push(event);
-      else if (isThisWeek(event.createdAt)) thisWeek.push(event);
-      else earlier.push(event);
-    });
-
-    if (today.length > 0) groups.push({ label: 'Today', events: today });
-    if (yesterday.length > 0) groups.push({ label: 'Yesterday', events: yesterday });
-    if (thisWeek.length > 0) groups.push({ label: 'This Week', events: thisWeek });
-    if (earlier.length > 0) groups.push({ label: 'Earlier', events: earlier });
-
-    return groups;
-  }, [timelineEvents]);
+  // Grouped timeline (Today / Yesterday / This Week / Earlier)
+  const groupedTimeline = useMemo(
+    () => groupTimelineEvents(timelineEvents),
+    [timelineEvents]
+  );
 
   // Parse tags from customer data
-  const customerTags = useMemo(() => {
-    if (!customer) return [];
-    const raw = (customer as any).tags;
-    if (Array.isArray(raw)) return raw;
-    if (typeof raw === 'string') {
-      try {
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : raw ? [raw] : [];
-      } catch {
-        return raw ? [raw] : [];
-      }
-    }
-    return [];
-  }, [customer]);
-
-  // Parse tags for list items
-  function parseTags(raw: any): string[] {
-    if (Array.isArray(raw)) return raw;
-    if (typeof raw === 'string') {
-      try {
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : raw ? [raw] : [];
-      } catch {
-        return raw ? [raw] : [];
-      }
-    }
-    return [];
-  }
+  const customerTags = useMemo(() => parseTags((customer as any)?.tags), [customer]);
 
   // Find last activity date from timeline
   const lastActiveTime = useMemo(() => {
@@ -653,453 +197,108 @@ export function Customer360View() {
     return sorted[0]?.createdAt ? timeAgo(sorted[0].createdAt) : '';
   }, [timelineEvents]);
 
-  // ─── Create Booking handler ───────────────────────────────────────────────
-  const handleCreateBooking = useCallback(async () => {
-    if (!customer || !bookingTitle.trim()) {
-      toast.error('Title is required');
-      return;
-    }
-    setCreatingBooking(true);
-    try {
-      const res = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: bookingTitle.trim(),
-          customerId: customer.id,
-          customerName: customer.name,
-          customerPhone: customer.phone,
-          customerEmail: customer.email,
-          scheduledAt: bookingScheduledAt || undefined,
-          address: bookingAddress.trim() || undefined,
-          notes: bookingNotes.trim() || undefined,
-          source: 'manual',
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to create booking');
-      }
-      toast.success('Booking created successfully');
-      setBookingDialogOpen(false);
-      setBookingTitle(''); setBookingScheduledAt(''); setBookingAddress(''); setBookingNotes('');
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      queryClient.invalidateQueries({ queryKey: ['customer360', customer.id] });
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to create booking');
-    } finally {
-      setCreatingBooking(false);
-    }
-  }, [customer, bookingTitle, bookingScheduledAt, bookingAddress, bookingNotes, queryClient]);
-
-  // ─── Create Invoice handler ───────────────────────────────────────────────
-  const handleCreateInvoice = useCallback(async () => {
-    if (!customer) return;
-    const validItems = invoiceItems.filter(it => it.description.trim() && it.quantity > 0 && it.rate >= 0);
-    if (validItems.length === 0) {
-      toast.error('Add at least one valid line item');
-      return;
-    }
-    setCreatingInvoice(true);
-    try {
-      const res = await fetch('/api/invoices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerId: customer.id,
-          items: validItems,
-          dueDate: invoiceDueDate || undefined,
-          notes: invoiceNotes.trim() || undefined,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to create invoice');
-      }
-      toast.success('Invoice created successfully');
-      setInvoiceDialogOpen(false);
-      setInvoiceItems([{ description: '', quantity: 1, rate: 0 }]);
-      setInvoiceDueDate(''); setInvoiceNotes('');
-      queryClient.invalidateQueries({ queryKey: ['customer360', customer.id] });
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to create invoice');
-    } finally {
-      setCreatingInvoice(false);
-    }
-  }, [customer, invoiceItems, invoiceDueDate, invoiceNotes, queryClient]);
-
   // Filtered jobs based on the Jobs tab status filter
   const filteredJobs = useMemo(
     () => (jobStatusFilter === 'all' ? jobs : jobs.filter(j => j.status === jobStatusFilter)),
     [jobs, jobStatusFilter]
   );
 
-  // ─── Convert Quote → Job handler ───────────────────────────────────────────
-  const handleConvertQuoteToJob = async (quoteId: string) => {
-    setConvertingQuoteId(quoteId);
-    try {
-      const res = await fetch(`/api/quotes/${quoteId}/convert-to-job`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) {
-        if (res.status === 409 && data.jobId) {
-          toast.info('This quote was already converted to a job');
-        } else {
-          toast.error(data.error || 'Failed to convert quote to job');
-        }
-      } else {
-        toast.success('Quote converted to job successfully');
-      }
-      // Invalidate the customer360 query to refresh quotes
-      queryClient.invalidateQueries({ queryKey: ['customer360', selectedCustomerId] });
-    } catch {
-      toast.error('Failed to convert quote to job');
-    } finally {
-      setConvertingQuoteId(null);
-    }
-  };
+  // ─── Write-action handlers (createBooking / createInvoice / convertQuoteToJob
+  // / addNote / editNote / deleteNote) + their in-flight flags live in the
+  // `useCustomer360Actions` hook so the parent doesn't have to wire 4 extra
+  // useState + 4 finally blocks. The parent still owns the form-field state
+  // because the dialogs are controlled and need the values to render.
+  const resetBookingForm = useCallback(() => {
+    setBookingDialogOpen(false);
+    setBookingTitle('');
+    setBookingScheduledAt('');
+    setBookingAddress('');
+    setBookingNotes('');
+  }, []);
+  const resetInvoiceForm = useCallback(() => {
+    setInvoiceDialogOpen(false);
+    setInvoiceItems([{ description: '', quantity: 1, rate: 0 }]);
+    setInvoiceDueDate('');
+    setInvoiceNotes('');
+  }, []);
+  const resetNoteText = useCallback(() => setNoteText(''), []);
 
-  // ─── Add Note handler ──────────────────────────────────────────────────────
-  const handleAddNote = async () => {
-    if (!noteText.trim() || !selectedCustomerId) return;
-    setAddingNote(true);
-    try {
-      const res = await fetch(`/api/customers/${selectedCustomerId}/timeline`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entryType: 'note', title: noteText.trim().slice(0, 200), description: noteText.trim() }),
-      });
-      if (!res.ok) throw new Error('Failed to add note');
-      toast.success('Note added');
-      setNoteText('');
-      queryClient.invalidateQueries({ queryKey: ['customer360', selectedCustomerId] });
-    } catch {
-      toast.error('Failed to add note');
-    } finally {
-      setAddingNote(false);
-    }
-  };
+  const {
+    creatingBooking,
+    creatingInvoice,
+    addingNote,
+    convertingQuoteId,
+    createBooking,
+    createInvoice,
+    convertQuoteToJob,
+    addNote,
+    editNote,
+    deleteNote,
+  } = useCustomer360Actions({
+    customerId: selectedCustomerId,
+    customer,
+    resetBookingForm,
+    resetInvoiceForm,
+    resetNoteText,
+  });
 
-  // ─── Edit Note handler ─────────────────────────────────────────────────────
-  const handleEditNote = async () => {
-    if (!editingNote || !selectedCustomerId) return;
-    try {
-      const res = await fetch(`/api/customers/${selectedCustomerId}/timeline/${editingNote.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: editingNote.title, description: editingNote.description }),
-      });
-      if (!res.ok) throw new Error('Failed to edit note');
-      toast.success('Note updated');
-      setEditingNote(null);
-      queryClient.invalidateQueries({ queryKey: ['customer360', selectedCustomerId] });
-    } catch {
-      toast.error('Failed to edit note');
-    }
-  };
+  // Wrap the hook handlers with the parent-side dialog close so the dialog
+  // dismisses immediately after the API call returns success. The hook owns
+  // the in-flight flag; the parent owns the dialog open/close state.
+  const handleCreateBooking = useCallback(async () => {
+    await createBooking({
+      title: bookingTitle,
+      scheduledAt: bookingScheduledAt,
+      address: bookingAddress,
+      notes: bookingNotes,
+    });
+  }, [createBooking, bookingTitle, bookingScheduledAt, bookingAddress, bookingNotes]);
 
-  // ─── Delete Note handler ───────────────────────────────────────────────────
-  const handleDeleteNote = async () => {
-    if (!deletingNoteId || !selectedCustomerId) return;
-    try {
-      const res = await fetch(`/api/customers/${selectedCustomerId}/timeline/${deletingNoteId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete note');
-      toast.success('Note deleted');
-      setDeletingNoteId(null);
-      queryClient.invalidateQueries({ queryKey: ['customer360', selectedCustomerId] });
-    } catch {
-      toast.error('Failed to delete note');
-    }
-  };
+  const handleCreateInvoice = useCallback(async () => {
+    await createInvoice({
+      items: invoiceItems,
+      dueDate: invoiceDueDate,
+      notes: invoiceNotes,
+    });
+  }, [createInvoice, invoiceItems, invoiceDueDate, invoiceNotes]);
+
+  const handleAddNote = useCallback(async () => {
+    await addNote(noteText);
+  }, [addNote, noteText]);
+
+  const handleEditNote = useCallback(async () => {
+    if (!editingNote) return;
+    await editNote(editingNote);
+    setEditingNote(null);
+  }, [editingNote, editNote]);
+
+  const handleDeleteNote = useCallback(async () => {
+    if (!deletingNoteId) return;
+    await deleteNote(deletingNoteId);
+    setDeletingNoteId(null);
+  }, [deletingNoteId, deleteNote]);
 
   // ─── No customer selected — show list ─────────────────────────────────────
   if (!selectedCustomerId) {
     return (
-      <div className="h-full flex flex-col bg-background">
-        {/* Hero Header with gradient */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-emerald-600/10 via-background to-teal-600/5 px-6 pt-8 pb-6">
-          <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/5 to-transparent pointer-events-none" />
-          <div className="relative flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center justify-center size-12 rounded-xl bg-emerald-600/15 shadow-sm">
-                <Users className="size-6 text-emerald-500" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-extrabold text-foreground tracking-tight">Customer 360&deg;</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">Everything about a customer on a single screen</p>
-              </div>
-            </div>
-            <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
-              <Badge variant="outline" className="bg-card border-border text-muted-foreground">
-                {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''}
-              </Badge>
-            </div>
-          </div>
-        </div>
-
-        {/* Search + Sort + View Layout Switcher */}
-        <div className="px-6 pb-4 flex flex-col sm:flex-row items-center gap-3 justify-between">
-          <div className="relative flex-1 max-w-md w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input
-              placeholder="Search customers by name, phone, email..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="pl-9 bg-card border-border text-foreground placeholder:text-muted-foreground h-10"
-            />
-          </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-            <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-0.5">
-              {(['name', 'recent', 'value'] as SortOption[]).map(option => (
-                <Button
-                  key={option}
-                  size="sm"
-                  variant={sortBy === option ? 'default' : 'ghost'}
-                  className={cn(
-                    'h-7 text-xs px-2.5 rounded-md transition-all duration-200 cursor-pointer',
-                    sortBy === option
-                      ? 'bg-accent text-accent-foreground shadow-xs'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                  onClick={() => setSortBy(option)}
-                >
-                  {option === 'name' && 'Name'}
-                  {option === 'recent' && 'Recent'}
-                  {option === 'value' && 'Value'}
-                </Button>
-              ))}
-            </div>
-
-            {/* Layout Switcher Toggle: Cards vs Table */}
-            <div className="flex items-center gap-1 bg-muted p-1 rounded-lg border border-border">
-              <button
-                type="button"
-                onClick={() => setViewLayout('grid')}
-                className={cn(
-                  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer',
-                  viewLayout === 'grid' ? 'bg-background text-emerald-700 shadow-2xs' : 'text-muted-foreground hover:text-foreground'
-                )}
-                title="Grid Cards View"
-              >
-                <LayoutGrid className="size-3.5" /> Cards
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewLayout('table')}
-                className={cn(
-                  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer',
-                  viewLayout === 'table' ? 'bg-background text-emerald-700 shadow-2xs' : 'text-muted-foreground hover:text-foreground'
-                )}
-                title="Table View"
-              >
-                <List className="size-3.5" /> Table
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Customer Content */}
-        <div className="flex-1 min-h-0 px-6 pb-6">
-          {customersLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <Card key={i} className="bg-card border-border">
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <Skeleton className="size-12 rounded-full" />
-                    <div className="space-y-2 flex-1">
-                      <Skeleton className="h-4 w-28" />
-                      <Skeleton className="h-3 w-36" />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : filteredCustomers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="relative mb-6">
-                <div className="size-20 rounded-2xl bg-muted/50 flex items-center justify-center">
-                  <Users className="size-10 text-muted-foreground/60" />
-                </div>
-                <div className="absolute -bottom-1 -right-1 size-8 rounded-lg bg-muted flex items-center justify-center">
-                  <Search className="size-4 text-muted-foreground/80" />
-                </div>
-              </div>
-              <h3 className="text-lg font-semibold text-foreground">No customers found</h3>
-              <p className="text-sm text-muted-foreground max-w-md mt-1">
-                {searchQuery
-                  ? 'Try adjusting your search query'
-                  : 'Customers will appear here once they are added'}
-              </p>
-              {searchQuery && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-4 border-border text-muted-foreground hover:bg-accent hover:text-foreground"
-                  onClick={() => setSearchQuery('')}
-                >
-                  Clear search
-                </Button>
-              )}
-            </div>
-          ) : viewLayout === 'grid' ? (
-            /* ─── Cards Grid ───────────────────────────────────────────── */
-            <ScrollArea className="h-full">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredCustomers.map((c: any) => {
-                  const tags = parseTags((c as any).tags);
-                  const primaryTag = tags[0];
-
-                  return (
-                    <Card
-                      key={c.id}
-                      className="group relative bg-card border-slate-200/90 dark:border-slate-800 rounded-xl cursor-pointer transition-all duration-200 hover:shadow-md hover:border-emerald-500/40 p-4 space-y-3 flex flex-col justify-between"
-                      onClick={() => setSelectedCustomerId(c.id)}
-                    >
-                      <div className="space-y-3">
-                        <div className="flex items-start gap-3">
-                          <Avatar className="size-11 border-2 border-emerald-100 dark:border-emerald-950 shrink-0">
-                            <AvatarFallback className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 font-bold text-sm">
-                              {getInitials(c.name || '?')}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-slate-900 dark:text-slate-100 truncate group-hover:text-emerald-600 transition-colors">
-                              {c.name}
-                            </h4>
-                            <div className="flex items-center justify-between gap-1 text-xs text-slate-500 dark:text-slate-400">
-                              <span className="truncate">{c.phone || 'No phone'}</span>
-                              {c.phone && (
-                                <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                  <a
-                                    href={`tel:${c.phone}`}
-                                    className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
-                                    title="Call customer"
-                                  >
-                                    <Phone className="size-3.5" />
-                                  </a>
-                                  <a
-                                    href={`https://wa.me/${c.phone.replace(/\D/g, '')}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
-                                    title="WhatsApp customer"
-                                  >
-                                    <MessageSquare className="size-3.5" />
-                                  </a>
-                                </div>
-                              )}
-                            </div>
-                            {c.email && (
-                              <p className="text-xs text-slate-400 truncate">{c.email}</p>
-                            )}
-                          </div>
-                        </div>
-
-                        {c.address && (
-                          <div className="flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-1 pt-1">
-                            <MapPin className="size-3.5 shrink-0 text-slate-400 mt-0.5" />
-                            <span className="truncate">{c.address}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-slate-400">Since {formatDate(c.createdAt)}</span>
-                        {primaryTag && (
-                          <Badge variant="outline" className={cn('text-[9px] px-1.5 py-0', tagColors[primaryTag] || 'bg-muted text-muted-foreground')}>
-                            {primaryTag}
-                          </Badge>
-                        )}
-                        <ChevronRight className="size-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            </ScrollArea>
-          ) : (
-            /* ─── Table View ───────────────────────────────────────────── */
-            <Card className="border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
-              <ScrollArea className="h-[600px]">
-                <Table>
-                  <TableHeader className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10">
-                    <TableRow>
-                      <TableHead className="font-bold">Customer</TableHead>
-                      <TableHead className="font-bold">Phone</TableHead>
-                      <TableHead className="font-bold">Email</TableHead>
-                      <TableHead className="font-bold">Address</TableHead>
-                      <TableHead className="font-bold">Created</TableHead>
-                      <TableHead className="text-right font-bold w-[120px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredCustomers.map((c: any) => (
-                      <TableRow
-                        key={c.id}
-                        className="cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-900/50 transition-colors"
-                        onClick={() => setSelectedCustomerId(c.id)}
-                      >
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="size-8 border border-emerald-100 dark:border-emerald-950 shrink-0">
-                              <AvatarFallback className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 font-bold text-xs">
-                                {getInitials(c.name || '?')}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">{c.name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <div className="flex items-center gap-1">
-                            <span>{c.phone || '—'}</span>
-                            {c.phone && (
-                              <div className="flex items-center gap-0.5 ml-auto" onClick={(e) => e.stopPropagation()}>
-                                <a
-                                  href={`tel:${c.phone}`}
-                                  className="p-1 text-slate-400 hover:text-emerald-600 transition-colors"
-                                  title="Call"
-                                >
-                                  <Phone className="size-3" />
-                                </a>
-                                <a
-                                  href={`https://wa.me/${c.phone.replace(/\D/g, '')}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="p-1 text-slate-400 hover:text-emerald-600 transition-colors"
-                                  title="WhatsApp"
-                                >
-                                  <MessageSquare className="size-3" />
-                                </a>
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs text-slate-500 truncate max-w-[160px]">{c.email || '—'}</TableCell>
-                        <TableCell className="text-xs text-slate-500 truncate max-w-[180px]">{c.address || '—'}</TableCell>
-                        <TableCell className="text-xs text-slate-400">{formatDate(c.createdAt)}</TableCell>
-                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            size="sm"
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] h-7 px-2.5 font-semibold"
-                            onClick={() => setSelectedCustomerId(c.id)}
-                          >
-                            Profile 360°
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </Card>
-          )}
-        </div>
-      </div>
+      <CustomerListView
+        customersLoading={customersLoading}
+        filteredCustomers={filteredCustomers}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+        viewLayout={viewLayout}
+        setViewLayout={setViewLayout}
+        onSelectCustomer={setSelectedCustomerId}
+      />
     );
   }
 
   // ─── Customer Selected — show 360 view ─────────────────────────────────────
   const c = customer;
+  const tabTriggerClass = "data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200";
+  const tabCountBadgeClass = "size-4 rounded-full p-0 text-[9px] bg-muted text-muted-foreground flex items-center justify-center";
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -1121,337 +320,75 @@ export function Customer360View() {
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
-        {/* ─── Left Sidebar — Profile Panel ─────────────────────────────────── */}
-        <div className="w-full lg:w-80 xl:w-96 border-b lg:border-b-0 lg:border-r border-border shrink-0">
-          <ScrollArea className="h-full max-h-[calc(100vh-8rem)]">
-            {customer360Loading ? (
-              <ProfileSkeleton />
-            ) : c ? (
-              <div className="space-y-0">
-                {/* Profile Header with gradient */}
-                <div className="relative bg-gradient-to-br from-emerald-600/15 via-emerald-600/5 to-transparent p-5">
-                  <div className="flex items-start gap-4">
-                    <Avatar className="size-16 border-2 border-emerald-600/30 shadow-md">
-                      <AvatarFallback className="bg-emerald-600/20 text-emerald-400 text-xl font-bold">
-                        {getInitials(c.name || '?')}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-lg font-bold text-foreground truncate">{c.name}</h2>
-                        {lastActiveTime && (
-                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-card border-border text-muted-foreground shrink-0">
-                            <Clock className="size-2.5 mr-0.5" />
-                            {lastActiveTime}
-                          </Badge>
-                        )}
-                      </div>
-                      {c.email && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 truncate mt-0.5">
-                          <Mail className="size-3 shrink-0" /> {c.email}
-                        </p>
-                      )}
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                        <Phone className="size-3 shrink-0" /> {c.phone}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Tags */}
-                  {customerTags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-3">
-                      {customerTags.map((tag: string) => (
-                        <Badge
-                          key={tag}
-                          variant="outline"
-                          className={cn(
-                            'text-[10px] px-2 py-0.5 rounded-md',
-                            tagColors[tag] || 'bg-muted text-muted-foreground border-border'
-                          )}
-                        >
-                          <Tag className="size-2.5 mr-1" />
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-5 space-y-6">
-                  {/* Health Score */}
-                  <div className="flex items-center justify-between">
-                    <HealthScoreGauge score={healthScore} />
-                    <div className="text-right">
-                      <p className="text-xs font-medium text-muted-foreground">Customer Health</p>
-                      <p className={cn('text-sm font-bold', healthScoreColor(healthScore))}>
-                        {healthScore >= 70 ? 'Excellent' : healthScore >= 40 ? 'Fair' : 'Needs Attention'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Contact Details */}
-                  <div className="space-y-2.5">
-                    {c.whatsappId && (
-                      <div className="flex items-center gap-2.5 text-sm">
-                        <MessageSquare className="size-4 text-emerald-500 shrink-0" />
-                        <span className="text-muted-foreground truncate">{c.whatsappId}</span>
-                      </div>
-                    )}
-                    {c.address && (
-                      <div className="flex items-start gap-2.5 text-sm">
-                        <MapPin className="size-4 text-muted-foreground shrink-0 mt-0.5" />
-                        <span className="text-muted-foreground">{c.address}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2.5 text-sm">
-                      <Calendar className="size-4 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground">
-                        Customer since{' '}
-                        <span className="text-foreground font-medium">{formatDate(c.createdAt)}</span>
-                      </span>
-                    </div>
-                  </div>
-
-                  <Separator className="bg-border" />
-
-                  {/* Quick Actions — icon row with prominent WhatsApp */}
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                      Quick Actions
-                    </p>
-                    <div className="flex items-center gap-2">
-                      {/* WhatsApp — prominent */}
-                      <Button
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-foreground gap-2 flex-1 transition-all duration-200 shadow-sm"
-                        onClick={() => {
-                          if (c.phone) {
-                            const phone = c.phone.replace(/[^0-9]/g, '');
-                            window.open(`https://wa.me/${phone}`, '_blank');
-                          } else {
-                            toast.warning('No phone number available');
-                          }
-                        }}
-                      >
-                        <MessageSquare className="size-3.5" /> WhatsApp
-                      </Button>
-                      {/* Multi-channel Message composer */}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-2 flex-1 border-emerald-600/40 text-emerald-700 hover:bg-emerald-500/10 transition-all duration-200"
-                        onClick={() => setComposerOpen(true)}
-                        title="Compose multi-channel message"
-                      >
-                        <Send className="size-3.5" /> Message
-                      </Button>
-                      {/* Icon-only round buttons */}
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        className="size-9 rounded-full border-border text-muted-foreground hover:bg-accent hover:text-foreground transition-all duration-200"
-                        onClick={() => {
-                          if (c.phone) {
-                            window.location.href = `tel:${c.phone}`;
-                          } else {
-                            toast.warning('No phone number available');
-                          }
-                        }}
-                        title="Call customer"
-                      >
-                        <PhoneCall className="size-3.5" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        className="size-9 rounded-full border-border text-muted-foreground hover:bg-accent hover:text-foreground transition-all duration-200"
-                        onClick={() => setBookingDialogOpen(true)}
-                        title="Create Booking"
-                      >
-                        <Calendar className="size-3.5" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        className="size-9 rounded-full border-border text-muted-foreground hover:bg-accent hover:text-foreground transition-all duration-200"
-                        onClick={() => setInvoiceDialogOpen(true)}
-                        title="Create Invoice"
-                      >
-                        <Receipt className="size-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  <Separator className="bg-border" />
-
-                  {/* Mini Stats — card containers with colored top borders */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
-                      <p className="text-lg font-extrabold text-emerald-500">
-                        {format(stats.totalRevenue)}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground font-medium">Revenue</p>
-                    </div>
-                    <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-sky-500 shadow-sm">
-                      <p className="text-lg font-extrabold text-foreground">{stats.totalJobs}</p>
-                      <p className="text-[10px] text-muted-foreground font-medium">Total Jobs</p>
-                    </div>
-                    <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-amber-500 shadow-sm">
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="text-lg font-extrabold text-amber-500">
-                          {stats.avgRating > 0 ? stats.avgRating : '\u2014'}
-                        </span>
-                        {stats.avgRating > 0 && <StarRating rating={stats.avgRating} />}
-                      </div>
-                      <p className="text-[10px] text-muted-foreground font-medium">Avg Rating</p>
-                    </div>
-                    <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-red-500 shadow-sm">
-                      <p className="text-lg font-extrabold text-foreground">{stats.completedJobs}</p>
-                      <p className="text-[10px] text-muted-foreground font-medium">Completed</p>
-                    </div>
-                  </div>
-
-                  {/* Outstanding Balance — enhanced with pulsing dot */}
-                  {stats.outstandingBalance > 0 && (
-                    <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3.5 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="relative flex size-2.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-                            <span className="relative inline-flex rounded-full size-2.5 bg-red-500" />
-                          </span>
-                          <span className="text-xs text-destructive font-semibold">Outstanding Balance</span>
-                        </div>
-                        <span className="text-sm font-extrabold text-destructive">
-                          {format(stats.outstandingBalance)}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="p-6 text-center">
-                <AlertCircle className="size-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Could not load customer details</p>
-              </div>
-            )}
-          </ScrollArea>
-        </div>
+        <CustomerProfilePanel
+          customer={c}
+          customerTags={customerTags}
+          customer360Loading={customer360Loading}
+          lastActiveTime={lastActiveTime}
+          healthScore={healthScore}
+          stats={stats}
+          format={format}
+          onOpenComposer={() => setComposerOpen(true)}
+          onOpenBookingDialog={() => setBookingDialogOpen(true)}
+          onOpenInvoiceDialog={() => setInvoiceDialogOpen(true)}
+        />
 
         {/* ─── Main Content Area ─────────────────────────────────────────────── */}
         <div className="flex-1 min-h-0 flex flex-col">
           {/* KPI Cards Row */}
           <div className="p-4 border-b border-border shrink-0">
             {customer360Loading ? (
-              <KpiSkeleton />
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border border-border p-4 space-y-2">
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-7 w-24" />
+                  </div>
+                ))}
+              </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-                <KpiCard
-                  label="Total Bookings"
-                  value={stats.totalBookings}
-                  icon={Calendar}
-                  accent="text-sky-400"
-                  borderColor="border-l-sky-500"
-                />
-                <KpiCard
-                  label="Total Revenue"
-                  value={format(stats.totalRevenue)}
-                  icon={DollarSign}
-                  accent="text-emerald-400"
-                  borderColor="border-l-emerald-500"
-                />
-                <KpiCard
-                  label="Completed Jobs"
-                  value={stats.completedJobs}
-                  icon={CheckCircle2}
-                  accent="text-emerald-400"
-                  borderColor="border-l-emerald-500"
-                />
-                <KpiCard
-                  label="Avg Rating"
-                  value={stats.avgRating > 0 ? `${stats.avgRating} / 5` : '\u2014'}
-                  icon={Star}
-                  accent="text-amber-400"
-                  borderColor="border-l-amber-500"
-                />
-                <KpiCard
-                  label="Outstanding"
-                  value={format(stats.outstandingBalance)}
-                  icon={AlertCircle}
-                  accent={stats.outstandingBalance > 0 ? 'text-red-400' : 'text-muted-foreground'}
-                  borderColor="border-l-red-500"
-                />
+                <KpiCard label="Total Bookings" value={stats.totalBookings} icon={Calendar} accent="text-sky-400" borderColor="border-l-sky-500" />
+                <KpiCard label="Total Revenue" value={format(stats.totalRevenue)} icon={DollarSign} accent="text-emerald-400" borderColor="border-l-emerald-500" />
+                <KpiCard label="Completed Jobs" value={stats.completedJobs} icon={CheckCircle2} accent="text-emerald-400" borderColor="border-l-emerald-500" />
+                <KpiCard label="Avg Rating" value={stats.avgRating > 0 ? `${stats.avgRating} / 5` : '\u2014'} icon={Star} accent="text-amber-400" borderColor="border-l-amber-500" />
+                <KpiCard label="Outstanding" value={format(stats.outstandingBalance)} icon={AlertCircle} accent={stats.outstandingBalance > 0 ? 'text-red-400' : 'text-muted-foreground'} borderColor="border-l-red-500" />
               </div>
             )}
           </div>
 
           {/* Tabs */}
           <div className="flex-1 min-h-0">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Customer360Tab)} className="h-full flex flex-col">
               <div className="border-b border-border px-4 shrink-0">
                 <TabsList className="bg-transparent h-11 gap-0.5 p-0 overflow-x-auto">
-                  <TabsTrigger
-                    value="overview"
-                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
-                  >
+                  <TabsTrigger value="overview" className={tabTriggerClass}>
                     <Activity className="size-3.5" /> Overview
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="timeline"
-                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
-                  >
+                  <TabsTrigger value="timeline" className={tabTriggerClass}>
                     <Clock className="size-3.5" /> Timeline
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="jobs"
-                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
-                  >
+                  <TabsTrigger value="jobs" className={tabTriggerClass}>
                     <Wrench className="size-3.5" /> Jobs
-                    {jobs.length > 0 && (
-                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-muted text-muted-foreground flex items-center justify-center">
-                        {jobs.length}
-                      </Badge>
-                    )}
+                    {jobs.length > 0 && <Badge className={tabCountBadgeClass}>{jobs.length}</Badge>}
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="quotes"
-                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
-                  >
+                  <TabsTrigger value="quotes" className={tabTriggerClass}>
                     <FileText className="size-3.5" /> Quotes
-                    {quotes.length > 0 && (
-                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-muted text-muted-foreground flex items-center justify-center">
-                        {quotes.length}
-                      </Badge>
-                    )}
+                    {quotes.length > 0 && <Badge className={tabCountBadgeClass}>{quotes.length}</Badge>}
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="invoices"
-                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
-                  >
+                  <TabsTrigger value="invoices" className={tabTriggerClass}>
                     <Receipt className="size-3.5" /> Invoices
-                    {invoices.length > 0 && (
-                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-muted text-muted-foreground flex items-center justify-center">
-                        {invoices.length}
-                      </Badge>
-                    )}
+                    {invoices.length > 0 && <Badge className={tabCountBadgeClass}>{invoices.length}</Badge>}
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="payments"
-                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
-                  >
+                  <TabsTrigger value="payments" className={tabTriggerClass}>
                     <DollarSign className="size-3.5" /> Payments
                     {invoices.filter((i: any) => i.status === 'paid').length > 0 && (
-                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-muted text-muted-foreground flex items-center justify-center">
+                      <Badge className={tabCountBadgeClass}>
                         {invoices.filter((i: any) => i.status === 'paid').length}
                       </Badge>
                     )}
                   </TabsTrigger>
-
-                  <TabsTrigger
-                    value="communication"
-                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
-                  >
+                  <TabsTrigger value="communication" className={tabTriggerClass}>
                     <MessageCircle className="size-3.5" /> Communication
                     {conversations.length > 0 && (
                       <Badge className="size-4 rounded-full p-0 text-[9px] bg-emerald-600 text-foreground flex items-center justify-center">
@@ -1459,13 +396,10 @@ export function Customer360View() {
                       </Badge>
                     )}
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="notes"
-                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
-                  >
+                  <TabsTrigger value="notes" className={tabTriggerClass}>
                     <StickyNote className="size-3.5" /> Notes
                     {timelineEvents.filter((e: any) => e.entryType === 'note').length > 0 && (
-                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-muted text-muted-foreground flex items-center justify-center">
+                      <Badge className={tabCountBadgeClass}>
                         {timelineEvents.filter((e: any) => e.entryType === 'note').length}
                       </Badge>
                     )}
@@ -1474,1041 +408,131 @@ export function Customer360View() {
               </div>
 
               <div className="flex-1 min-h-0">
-                {/* ─── Overview Tab ─────────────────────────────────────────── */}
                 <TabsContent value="overview" className="h-full m-0">
-                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
-                    <div className="p-5 space-y-6">
-                      {/* Last 30 Days Summary Row */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div className="bg-card rounded-xl p-3 border border-border shadow-sm">
-                          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Last 30 Days</p>
-                          <p className="text-lg font-extrabold text-foreground mt-1">
-                            {timelineEvents.filter(e => {
-                              if (!e.createdAt) return false;
-                              const diff = Date.now() - new Date(e.createdAt).getTime();
-                              return diff < 30 * 24 * 60 * 60 * 1000;
-                            }).length}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">Events</p>
-                        </div>
-                        <div className="bg-card rounded-xl p-3 border border-border shadow-sm">
-                          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Last 30 Days</p>
-                          <p className="text-lg font-extrabold text-foreground mt-1">
-                            {jobs.filter(j => {
-                              if (!j.createdAt) return false;
-                              const diff = Date.now() - new Date(j.createdAt).getTime();
-                              return diff < 30 * 24 * 60 * 60 * 1000;
-                            }).length}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">New Jobs</p>
-                        </div>
-                        <div className="bg-card rounded-xl p-3 border border-border shadow-sm">
-                          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Last 30 Days</p>
-                          <p className="text-lg font-extrabold text-emerald-500 mt-1">
-                            {format(invoices.filter(i => {
-                              if (!i.paidAt) return false;
-                              const diff = Date.now() - new Date(i.paidAt).getTime();
-                              return diff < 30 * 24 * 60 * 60 * 1000 && i.status === 'paid';
-                            }).reduce((s, i) => s + (i.total || 0), 0))}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">Revenue</p>
-                        </div>
-                        <div className="bg-card rounded-xl p-3 border border-border shadow-sm">
-                          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Last 30 Days</p>
-                          <p className="text-lg font-extrabold text-foreground mt-1">
-                            {conversations.filter(c => {
-                              if (!c.lastMessageAt) return false;
-                              const diff = Date.now() - new Date(c.lastMessageAt).getTime();
-                              return diff < 30 * 24 * 60 * 60 * 1000;
-                            }).length}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">Conversations</p>
-                        </div>
-                      </div>
-
-                      {/* Timeline */}
-                      {customer360Loading ? (
-                        <TimelineSkeleton />
-                      ) : groupedTimeline.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 text-center">
-                          <Clock className="size-10 text-muted-foreground mb-3" />
-                          <h3 className="text-base font-semibold text-foreground">
-                            No activity yet
-                          </h3>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Activity timeline will populate as the customer interacts
-                          </p>
-                        </div>
-                      ) : (
-                        groupedTimeline.map(group => (
-                          <TimelineGroup
-                            key={group.label}
-                            label={group.label}
-                            events={group.events}
-                          />
-                        ))
-                      )}
-
-                      {/* Recent Jobs Quick View */}
-                      {jobs.length > 0 && (
-                        <div className="space-y-3">
-                          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                            Recent Jobs
-                          </h4>
-                          <div className="space-y-2">
-                            {jobs.slice(0, 3).map(job => {
-                              const statusCfg = jobStatusConfig[job.status] || jobStatusConfig.pending;
-                              return (
-                                <div
-                                  key={job.id}
-                                  className="flex items-center justify-between p-3 bg-card rounded-xl border border-border hover:shadow-sm transition-all duration-200"
-                                >
-                                  <div className="flex items-center gap-3 min-w-0">
-                                    <div className="size-8 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
-                                      <Wrench className="size-3.5 text-amber-500" />
-                                    </div>
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-medium text-foreground truncate">
-                                        {job.title || job.service || 'Service'}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground">
-                                        {job.assigneeName || 'Unassigned'} &middot;{' '}
-                                        {formatDate(job.createdAt)}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <Badge
-                                    variant="outline"
-                                    className={cn(
-                                      'text-[10px] shrink-0 rounded-md',
-                                      statusCfg.bg,
-                                      statusCfg.color
-                                    )}
-                                  >
-                                    {statusCfg.label}
-                                  </Badge>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </ScrollArea>
+                  <OverviewTab
+                    customer360Loading={customer360Loading}
+                    timelineEvents={timelineEvents}
+                    jobs={jobs}
+                    invoices={invoices}
+                    conversations={conversations}
+                    groupedTimeline={groupedTimeline}
+                    format={format}
+                  />
                 </TabsContent>
 
-                {/* ─── Timeline Tab ────────────────────────────────────────── */}
                 <TabsContent value="timeline" className="h-full m-0">
-                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
-                    <div className="p-5">
-                      {customer?.id ? (
-                        <TimelineSection customerId={customer.id} />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-16 text-center">
-                          <Clock className="size-10 text-muted-foreground mb-3" />
-                          <p className="text-sm text-muted-foreground">
-                            Select a customer to view their unified timeline.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </ScrollArea>
+                  <TimelineTab customerId={customer?.id} />
                 </TabsContent>
 
-                {/* ─── Communication Tab ────────────────────────────────────── */}
                 <TabsContent value="communication" className="h-full m-0">
-                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
-                    <div className="p-5 space-y-6">
-                      {customer360Loading ? (
-                        <div className="space-y-4">
-                          {Array.from({ length: 3 }).map((_, i) => (
-                            <div key={i} className="flex gap-3">
-                              <Skeleton className="size-8 rounded-full" />
-                              <Skeleton className="h-12 w-64 rounded-xl" />
-                            </div>
-                          ))}
-                        </div>
-                      ) : conversations.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 text-center">
-                          <MessageCircle className="size-10 text-muted-foreground mb-3" />
-                          <h3 className="text-base font-semibold text-foreground">
-                            No conversations
-                          </h3>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Conversations from WhatsApp, SMS, and Email will appear here
-                          </p>
-                        </div>
-                      ) : (
-                        conversations.map((conv: any) => (
-                          <Card
-                            key={conv.id}
-                            className="bg-card border-border rounded-xl overflow-hidden"
-                          >
-                            {/* Conversation header */}
-                            <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b border-border bg-muted/30">
-                              <div className="flex items-center gap-2">
-                                <div className="size-7 rounded-full bg-emerald-600/20 flex items-center justify-center">
-                                  <User className="size-3.5 text-emerald-400" />
-                                </div>
-                                <div>
-                                  <p className="text-sm font-semibold text-foreground">
-                                    {conv.customerName || conv.customerPhone || 'Conversation'}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    'text-[10px] rounded-md',
-                                    conv.channel === 'whatsapp'
-                                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-700'
-                                      : 'bg-muted text-muted-foreground border-border'
-                                  )}
-                                >
-                                  {conv.channel || 'chat'}
-                                </Badge>
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    'text-[10px] rounded-md',
-                                    conv.status === 'active'
-                                      ? 'bg-sky-500/10 text-sky-400 border-sky-800'
-                                      : 'bg-muted text-muted-foreground border-border'
-                                  )}
-                                >
-                                  {conv.status}
-                                </Badge>
-                              </div>
-                            </div>
-                            {/* Chat area */}
-                            <CardContent className="p-4 space-y-2.5 bg-background">
-                              {conv.lastMessageBody && (
-                                <ChatBubble
-                                  message={conv}
-                                  isCustomer={conv.lastDirection !== 'outbound'}
-                                  showAvatar
-                                />
-                              )}
-                              {conv.messagesJson && (() => {
-                                try {
-                                  const msgs = JSON.parse(conv.messagesJson);
-                                  if (Array.isArray(msgs) && msgs.length > 0) {
-                                    return msgs.slice(-5).map((msg: any, idx: number) => (
-                                      <ChatBubble
-                                        key={idx}
-                                        message={msg}
-                                        isCustomer={msg.senderType === 'customer'}
-                                        showAvatar
-                                      />
-                                    ));
-                                  }
-                                } catch { /* ignore parse errors */ }
-                                return null;
-                              })()}
-                              <p className="text-[10px] text-muted-foreground text-right pt-1">
-                                {conv.lastMessageAt
-                                  ? formatDateTime(conv.lastMessageAt)
-                                  : ''}
-                              </p>
-                            </CardContent>
-                          </Card>
-                        ))
-                      )}
-                    </div>
-                  </ScrollArea>
+                  <CommunicationTab
+                    conversations={conversations}
+                    customer360Loading={customer360Loading}
+                  />
                 </TabsContent>
 
-                {/* ─── Notes Tab ────────────────────────────────────────────── */}
                 <TabsContent value="notes" className="h-full m-0">
-                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
-                    <div className="p-5 space-y-4">
-                      {/* Add Note box */}
-                      <div className="bg-card rounded-xl border border-border p-4 space-y-3">
-                        <div className="flex items-center gap-2">
-                          <StickyNote className="size-4 text-amber-500" />
-                          <h4 className="text-sm font-semibold text-foreground">Add Note</h4>
-                        </div>
-                        <Textarea
-                          placeholder="Type a note about this customer..."
-                          value={noteText}
-                          onChange={(e) => setNoteText(e.target.value)}
-                          className="min-h-[80px] resize-none bg-background"
-                        />
-                        <div className="flex justify-end">
-                          <Button
-                            size="sm"
-                            className="bg-emerald-600 hover:bg-emerald-700 text-foreground gap-1.5"
-                            onClick={handleAddNote}
-                            disabled={!noteText.trim() || addingNote}
-                          >
-                            {addingNote ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
-                            Add Note
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* Notes list */}
-                      {customer360Loading ? (
-                        <div className="space-y-3">
-                          {Array.from({ length: 3 }).map((_, i) => (
-                            <div key={i} className="h-20 bg-muted animate-pulse rounded-lg" />
-                          ))}
-                        </div>
-                      ) : (() => {
-                        const notes = timelineEvents.filter((e: any) => e.entryType === 'note');
-                        if (notes.length === 0) {
-                          return (
-                            <div className="flex flex-col items-center justify-center py-12 text-center">
-                              <StickyNote className="size-10 text-muted-foreground mb-3" />
-                              <h3 className="text-sm font-semibold text-foreground">No notes yet</h3>
-                              <p className="text-xs text-muted-foreground mt-1">Notes added above will appear here</p>
-                            </div>
-                          );
-                        }
-                        return (
-                          <div className="space-y-2">
-                            {notes.map((note: any) => {
-                              const isUserNote = note.actorType === 'user' && note.sourceType === 'Manual';
-                              return (
-                                <div key={note.id} className="bg-card rounded-xl border border-border p-3 hover:shadow-sm transition-all duration-200">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                                      <div className="size-7 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                                        <StickyNote className="size-3 text-amber-500" />
-                                      </div>
-                                      <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-medium text-foreground">{note.title}</p>
-                                        {note.description && (
-                                          <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">{note.description}</p>
-                                        )}
-                                        <div className="flex items-center gap-2 mt-1.5">
-                                          <p className="text-[10px] text-muted-foreground">
-                                            {note.actorName || 'System'} \u00B7 {formatDateTime(note.eventDate || note.createdAt)}
-                                          </p>
-                                          {note.updatedAt && note.createdAt && new Date(note.updatedAt).getTime() > new Date(note.createdAt).getTime() + 1000 && (
-                                            <span className="text-[10px] text-muted-foreground italic">\u00B7 edited</span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                    {isUserNote && (
-                                      <div className="flex items-center gap-1 shrink-0">
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          className="size-7 p-0 text-muted-foreground hover:text-foreground"
-                                          onClick={() => setEditingNote({ id: note.id, title: note.title, description: note.description || '' })}
-                                        >
-                                          <FileText className="size-3" />
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          className="size-7 p-0 text-muted-foreground hover:text-red-500"
-                                          onClick={() => setDeletingNoteId(note.id)}
-                                        >
-                                          <X className="size-3" />
-                                        </Button>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </ScrollArea>
+                  <NotesTab
+                    customer360Loading={customer360Loading}
+                    timelineEvents={timelineEvents}
+                    noteText={noteText}
+                    setNoteText={setNoteText}
+                    addingNote={addingNote}
+                    onAddNote={handleAddNote}
+                    onEditNote={setEditingNote}
+                    onRequestDeleteNote={setDeletingNoteId}
+                  />
                 </TabsContent>
-                {/* ─── Jobs Tab ─────────────────────────────────────────────── */}
+
                 <TabsContent value="jobs" className="h-full m-0">
-                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
-                    <div className="p-5 space-y-4">
-                      {customer360Loading ? (
-                        <>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            {Array.from({ length: 4 }).map((_, i) => (
-                              <Skeleton key={i} className="h-20 w-full rounded-xl" />
-                            ))}
-                          </div>
-                          {Array.from({ length: 4 }).map((_, i) => (
-                            <Skeleton key={i} className="h-16 w-full rounded-lg" />
-                          ))}
-                        </>
-                      ) : jobs.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 text-center">
-                          <Wrench className="size-10 text-muted-foreground mb-3" />
-                          <h3 className="text-base font-semibold text-foreground">
-                            No jobs yet
-                          </h3>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Jobs assigned to this customer will appear here
-                          </p>
-                        </div>
-                      ) : (
-                        <>
-                          {/* Jobs Summary Stats */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            <div className="bg-card rounded-xl p-3 border border-border shadow-sm">
-                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Total Jobs</p>
-                              <p className="text-lg font-extrabold text-foreground mt-1">{jobs.length}</p>
-                            </div>
-                            <div className="bg-card rounded-xl p-3 border border-border shadow-sm border-t-2 border-t-emerald-500">
-                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Completed</p>
-                              <p className="text-lg font-extrabold text-emerald-500 mt-1">
-                                {jobs.filter(j => j.status === 'completed').length}
-                              </p>
-                            </div>
-                            <div className="bg-card rounded-xl p-3 border border-border shadow-sm border-t-2 border-t-amber-500">
-                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">In Progress</p>
-                              <p className="text-lg font-extrabold text-amber-500 mt-1">
-                                {jobs.filter(j => j.status === 'in_progress').length}
-                              </p>
-                            </div>
-                            <div className="bg-card rounded-xl p-3 border border-border shadow-sm border-t-2 border-t-red-500">
-                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Cancelled</p>
-                              <p className="text-lg font-extrabold text-red-500 mt-1">
-                                {jobs.filter(j => j.status === 'cancelled').length}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Filter + count row */}
-                          <div className="flex items-center justify-between flex-wrap gap-2">
-                            <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-0.5 flex-wrap">
-                              {([
-                                { key: 'all', label: 'All' },
-                                { key: 'pending', label: 'Pending' },
-                                { key: 'in_progress', label: 'In Progress' },
-                                { key: 'completed', label: 'Completed' },
-                                { key: 'cancelled', label: 'Cancelled' },
-                              ] as const).map(opt => (
-                                <Button
-                                  key={opt.key}
-                                  size="sm"
-                                  variant={jobStatusFilter === opt.key ? 'default' : 'ghost'}
-                                  className={cn(
-                                    'h-7 text-xs px-2.5 rounded-md transition-all duration-200',
-                                    jobStatusFilter === opt.key
-                                      ? 'bg-accent text-accent-foreground shadow-sm'
-                                      : 'text-muted-foreground hover:text-foreground'
-                                  )}
-                                  onClick={() => setJobStatusFilter(opt.key)}
-                                >
-                                  {opt.label}
-                                </Button>
-                              ))}
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              Showing {filteredJobs.length} of {jobs.length} jobs
-                            </p>
-                          </div>
-
-                          {filteredJobs.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-12 text-center">
-                              <Wrench className="size-8 text-muted-foreground mb-2" />
-                              <p className="text-sm font-medium text-foreground">No jobs match this filter</p>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Try selecting a different status filter
-                              </p>
-                            </div>
-                          ) : (
-                            filteredJobs.map(job => {
-                          const statusCfg =
-                            jobStatusConfig[job.status] || jobStatusConfig.pending;
-                          // Compute a fake progress for in_progress jobs
-                          const progressPct = job.status === 'completed' ? 100
-                            : job.status === 'in_progress' ? (job.progress ?? 55)
-                            : job.status === 'cancelled' ? 0
-                            : 0;
-                          return (
-                            <div
-                              key={job.id}
-                              className="p-4 bg-card rounded-xl border border-border hover:shadow-sm transition-all duration-200"
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <div
-                                    className={cn(
-                                      'size-10 rounded-full flex items-center justify-center shrink-0',
-                                      job.status === 'completed'
-                                        ? 'bg-emerald-500/10'
-                                        : job.status === 'in_progress'
-                                          ? 'bg-amber-500/10'
-                                          : job.status === 'cancelled'
-                                            ? 'bg-red-500/10'
-                                            : 'bg-muted/50'
-                                    )}
-                                  >
-                                    <Wrench
-                                      className={cn(
-                                        'size-4',
-                                        job.status === 'completed'
-                                          ? 'text-emerald-500'
-                                          : job.status === 'in_progress'
-                                            ? 'text-amber-500'
-                                            : job.status === 'cancelled'
-                                              ? 'text-red-500'
-                                              : 'text-muted-foreground'
-                                      )}
-                                    />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-medium text-foreground truncate">
-                                      {job.title || job.service || 'Service'}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {job.assigneeName || 'Unassigned'} &middot;{' '}
-                                      {formatDate(job.createdAt)}
-                                    </p>
-                                    {job.address && (
-                                      <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
-                                        <MapPin className="size-2.5" /> {job.address}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  {job.scheduledAt && (
-                                    <span className="text-[11px] text-muted-foreground hidden sm:block">
-                                      {formatDate(job.scheduledAt)}
-                                    </span>
-                                  )}
-                                  <Badge
-                                    variant="outline"
-                                    className={cn(
-                                      'text-[10px] rounded-md',
-                                      statusCfg.bg,
-                                      statusCfg.color
-                                    )}
-                                  >
-                                    {statusCfg.label}
-                                  </Badge>
-                                </div>
-                              </div>
-                              {/* Mini progress bar for in-progress jobs */}
-                              {job.status === 'in_progress' && (
-                                <div className="mt-3 space-y-1">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[10px] text-muted-foreground">Progress</span>
-                                    <span className="text-[10px] font-semibold text-amber-500">{progressPct}%</span>
-                                  </div>
-                                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                                    <div
-                                      className="h-full rounded-full bg-gradient-to-r from-amber-400 to-amber-500 transition-all duration-500"
-                                      style={{ width: `${progressPct}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </ScrollArea>
+                  <JobsTab
+                    jobs={jobs}
+                    filteredJobs={filteredJobs}
+                    jobStatusFilter={jobStatusFilter}
+                    setJobStatusFilter={setJobStatusFilter}
+                    customer360Loading={customer360Loading}
+                  />
                 </TabsContent>
 
-                {/* ─── Invoices Tab ─────────────────────────────────────────── */}
                 <TabsContent value="invoices" className="h-full m-0">
-                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
-                    <div className="p-5 space-y-6">
-                      {customer360Loading ? (
-                        Array.from({ length: 3 }).map((_, i) => (
-                          <Skeleton key={i} className="h-16 w-full rounded-lg" />
-                        ))
-                      ) : invoices.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 text-center">
-                          <Receipt className="size-10 text-muted-foreground mb-3" />
-                          <h3 className="text-base font-semibold text-foreground">
-                            No invoices
-                          </h3>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Invoices for this customer will appear here
-                          </p>
-                        </div>
-                      ) : (
-                        (() => {
-                          // ── Dynamic invoice status grouping ──────────────────────
-                          // Uses `invoiceStatusConfig` (defined above) as the single
-                          // source of truth for labels / colors / icons. Previously
-                          // this tab had 4 hardcoded buckets (paid / pending / overdue
-                          // / draft) which silently dropped invoices with status `sent`,
-                          // `pending_approval`, or `cancelled`. Now every non-empty
-                          // status group renders, with a final "Other" fallback so no
-                          // invoice is ever hidden.
-                          const STATUS_ORDER = ['paid', 'sent', 'pending_approval', 'pending', 'overdue', 'draft', 'cancelled'];
-                          const FALLBACK_CFG = { label: 'Other', color: 'text-muted-foreground', bg: 'bg-muted border-border', icon: FileText };
-
-                          // Group invoices by status.
-                          const groups = new Map<string, any[]>();
-                          for (const inv of invoices) {
-                            const status = inv.status || 'draft';
-                            if (!groups.has(status)) groups.set(status, []);
-                            groups.get(status)!.push(inv);
-                          }
-
-                          // Canonical groups (in display order) + any unrecognized statuses.
-                          const canonical = STATUS_ORDER.filter(s => groups.has(s));
-                          const others = [...groups.keys()].filter(s => !STATUS_ORDER.includes(s));
-
-                          return (
-                            <div className="space-y-6">
-                              {canonical.map(status => {
-                                const cfg = invoiceStatusConfig[status] || FALLBACK_CFG;
-                                const StatusIcon = cfg.icon || FileText;
-                                const groupInvoices = groups.get(status)!;
-                                return (
-                                  <div key={status} className="space-y-2">
-                                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                      <StatusIcon className={cn('size-3.5', cfg.color)} /> {cfg.label}
-                                      <span className="text-muted-foreground/60 normal-case font-normal">({groupInvoices.length})</span>
-                                    </h4>
-                                    {groupInvoices.map((inv: any) => {
-                                      const invCfg = invoiceStatusConfig[inv.status] || FALLBACK_CFG;
-                                      const InvIcon = invCfg.icon || FileText;
-                                      return (
-                                        <div
-                                          key={inv.id}
-                                          className={cn(
-                                            'flex items-center justify-between p-3 bg-card rounded-xl border border-border hover:shadow-sm transition-all duration-200',
-                                            status === 'overdue' && 'border-destructive/30 bg-destructive/5',
-                                            status === 'draft' && 'opacity-70',
-                                          )}
-                                        >
-                                          <div className="flex items-center gap-3 min-w-0">
-                                            <div className={cn('size-8 rounded-full flex items-center justify-center shrink-0', invCfg.bg)}>
-                                              <InvIcon className={cn('size-3.5', invCfg.color)} />
-                                            </div>
-                                            <div className="min-w-0">
-                                              <p className={cn('text-sm font-medium', status === 'draft' ? 'text-muted-foreground' : 'text-foreground')}>
-                                                {inv.number || inv.invoiceNumber || 'Invoice'}
-                                              </p>
-                                              <p className="text-xs text-muted-foreground">
-                                                {formatDate(inv.createdAt)}
-                                                {inv.paidAt && status === 'paid' ? ` \u00B7 Paid ${formatDate(inv.paidAt)}` : ''}
-                                                {inv.dueDate && status !== 'paid' ? ` \u00B7 Due ${formatDate(inv.dueDate)}` : ''}
-                                              </p>
-                                            </div>
-                                          </div>
-                                          <div className="flex items-center gap-2 shrink-0">
-                                            <span className={cn('text-sm font-bold', invCfg.color)}>
-                                              {format(inv.total)}
-                                            </span>
-                                            <Badge
-                                              variant="outline"
-                                              className={cn('text-[10px] rounded-md', invCfg.bg, invCfg.color)}
-                                            >
-                                              {invCfg.label}
-                                            </Badge>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                );
-                              })}
-
-                              {/* Fallback: any invoices with unrecognized statuses */}
-                              {others.length > 0 && (
-                                <div className="space-y-2">
-                                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                    <FileText className="size-3.5 text-muted-foreground" /> Other
-                                    <span className="text-muted-foreground/60 normal-case font-normal">
-                                      ({others.reduce((n, s) => n + groups.get(s)!.length, 0)})
-                                    </span>
-                                  </h4>
-                                  {others.flatMap(status =>
-                                    groups.get(status)!.map((inv: any) => {
-                                      const invCfg = FALLBACK_CFG;
-                                      const InvIcon = invCfg.icon;
-                                      return (
-                                        <div
-                                          key={inv.id}
-                                          className="flex items-center justify-between p-3 bg-card rounded-xl border border-border hover:shadow-sm transition-all duration-200"
-                                        >
-                                          <div className="flex items-center gap-3 min-w-0">
-                                            <div className={cn('size-8 rounded-full flex items-center justify-center shrink-0', invCfg.bg)}>
-                                              <InvIcon className={cn('size-3.5', invCfg.color)} />
-                                            </div>
-                                            <div className="min-w-0">
-                                              <p className="text-sm font-medium text-foreground">
-                                                {inv.number || inv.invoiceNumber || 'Invoice'}
-                                              </p>
-                                              <p className="text-xs text-muted-foreground">
-                                                {formatDate(inv.createdAt)}
-                                                {inv.dueDate ? ` \u00B7 Due ${formatDate(inv.dueDate)}` : ''}
-                                              </p>
-                                            </div>
-                                          </div>
-                                          <div className="flex items-center gap-2 shrink-0">
-                                            <span className={cn('text-sm font-bold', invCfg.color)}>
-                                              {format(inv.total)}
-                                            </span>
-                                            <Badge
-                                              variant="outline"
-                                              className={cn('text-[10px] rounded-md', invCfg.bg, invCfg.color)}
-                                            >
-                                              {inv.status || 'unknown'}
-                                            </Badge>
-                                          </div>
-                                        </div>
-                                      );
-                                    })
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()
-                      )}
-                    </div>
-                  </ScrollArea>
+                  <InvoicesTab
+                    invoices={invoices}
+                    customer360Loading={customer360Loading}
+                    format={format}
+                  />
                 </TabsContent>
 
-                {/* ─── Quotes Tab ────────────────────────────────────────────── */}
                 <TabsContent value="quotes" className="h-full m-0">
-                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
-                    <div className="p-5 space-y-4">
-                      {customer360Loading ? (
-                        <div className="space-y-3">
-                          {Array.from({ length: 3 }).map((_, i) => (
-                            <div key={i} className="h-20 bg-muted animate-pulse rounded-lg" />
-                          ))}
-                        </div>
-                      ) : quotes.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 text-center">
-                          <FileText className="size-10 text-muted-foreground mb-3" />
-                          <h3 className="text-base font-semibold text-foreground">No quotes</h3>
-                          <p className="text-xs text-muted-foreground mt-1">Quotes created for this customer will appear here</p>
-                        </div>
-                      ) : (
-                        <>
-                          {/* Summary */}
-                          <div className="grid grid-cols-3 gap-3">
-                            <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
-                              <p className="text-lg font-extrabold text-foreground">{quotes.length}</p>
-                              <p className="text-[10px] text-muted-foreground font-medium">Total Quotes</p>
-                            </div>
-                            <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
-                              <p className="text-lg font-extrabold text-emerald-500">{quotes.filter((q: any) => q.status === 'accepted').length}</p>
-                              <p className="text-[10px] text-muted-foreground font-medium">Accepted</p>
-                            </div>
-                            <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-amber-500 shadow-sm">
-                              <p className="text-lg font-extrabold text-foreground">{format(quotes.reduce((s: number, q: any) => s + (q.total || 0), 0))}</p>
-                              <p className="text-[10px] text-muted-foreground font-medium">Total Value</p>
-                            </div>
-                          </div>
-                          {/* Quote cards */}
-                          <div className="space-y-2">
-                            {quotes.map((quote: any) => {
-                              const cfg = quoteStatusConfig[quote.status] || quoteStatusConfig.draft;
-                              const items = (() => { try { return JSON.parse(quote.itemsJson || '[]'); } catch { return []; } })();
-                              const addOns = (() => { try { return JSON.parse(quote.addOnsJson || '[]'); } catch { return []; } })();
-                              const canConvert = quote.status === 'accepted' && !quote.jobId;
-                              const isConverted = !!quote.jobId;
-                              return (
-                                <div key={quote.id} className="bg-card rounded-xl border border-border p-4 hover:shadow-sm transition-all duration-200">
-                                  <div className="flex items-start justify-between gap-3 mb-2">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className="size-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
-                                        <FileText className="size-3.5 text-emerald-500" />
-                                      </div>
-                                      <div className="min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="text-sm font-medium text-foreground">{quote.title}</span>
-                                          <Badge variant="outline" className={cn('text-[10px] rounded-md', cfg.bg, cfg.color)}>{cfg.label}</Badge>
-                                          {isConverted && (
-                                            <Badge variant="outline" className="text-[10px] rounded-md bg-emerald-500/10 text-emerald-400 border-emerald-700">
-                                              <CheckCircle2 className="size-2.5 mr-0.5" /> Converted to Job
-                                            </Badge>
-                                          )}
-                                        </div>
-                                        <p className="text-xs text-muted-foreground mt-0.5">
-                                          {formatDate(quote.createdAt)}
-                                          {quote.validUntil ? ` \u00B7 Valid until ${formatDate(quote.validUntil)}` : ''}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                      <p className="text-sm font-bold text-foreground">{format(quote.total)}</p>
-                                      <p className="text-[10px] text-muted-foreground">{items.length + addOns.length} items</p>
-                                    </div>
-                                  </div>
-                                  {/* Line items preview */}
-                                  {(items.length > 0 || addOns.length > 0) && (
-                                    <div className="mt-2 pt-2 border-t border-border space-y-1">
-                                      {items.slice(0, 3).map((item: any, i: number) => (
-                                        <div key={i} className="flex justify-between text-xs text-muted-foreground">
-                                          <span className="truncate">{item.name || item.serviceName || 'Service'} \u00D7 {item.qty || item.quantity || 1}</span>
-                                          <span className="shrink-0 ml-2">{format((item.price || 0) * (item.qty || item.quantity || 1))}</span>
-                                        </div>
-                                      ))}
-                                      {addOns.slice(0, 2).map((addon: any, i: number) => (
-                                        <div key={`addon-${i}`} className="flex justify-between text-xs text-muted-foreground">
-                                          <span className="truncate">{addon.name || 'Add-on'}</span>
-                                          <span className="shrink-0 ml-2">{format(addon.price || 0)}</span>
-                                        </div>
-                                      ))}
-                                      {(items.length > 3 || addOns.length > 2) && (
-                                        <p className="text-[10px] text-muted-foreground italic">
-                                          +{Math.max(0, items.length - 3) + Math.max(0, addOns.length - 2)} more items
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
-                                  {/* Convert to Job button */}
-                                  {canConvert && (
-                                    <div className="mt-3 pt-3 border-t border-border">
-                                      <Button
-                                        size="sm"
-                                        className="bg-emerald-600 hover:bg-emerald-700 text-foreground gap-1.5 transition-all duration-200"
-                                        onClick={() => handleConvertQuoteToJob(quote.id)}
-                                        disabled={convertingQuoteId === quote.id}
-                                      >
-                                        {convertingQuoteId === quote.id ? (
-                                          <><Loader2 className="size-3.5 animate-spin" /> Converting...</>
-                                        ) : (
-                                          <><ArrowUpRight className="size-3.5" /> Convert to Job</>
-                                        )}
-                                      </Button>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </ScrollArea>
+                  <QuotesTab
+                    quotes={quotes}
+                    customer360Loading={customer360Loading}
+                    convertingQuoteId={convertingQuoteId}
+                    onConvertQuoteToJob={convertQuoteToJob}
+                    format={format}
+                  />
                 </TabsContent>
 
-                {/* ─── Payments Tab ─────────────────────────────────────────── */}
                 <TabsContent value="payments" className="h-full m-0">
-                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
-                    <div className="p-5 space-y-4">
-                      {(() => {
-                        const paidInvoices = invoices.filter((i: any) => i.status === 'paid');
-                        const totalPaid = paidInvoices.reduce((s: number, i: any) => s + (i.total || 0), 0);
-                        const avgPayment = paidInvoices.length > 0 ? totalPaid / paidInvoices.length : 0;
-                        if (customer360Loading) {
-                          return Array.from({ length: 3 }).map((_, i) => (
-                            <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
-                          ));
-                        }
-                        if (paidInvoices.length === 0) {
-                          return (
-                            <div className="flex flex-col items-center justify-center py-16 text-center">
-                              <DollarSign className="size-10 text-muted-foreground mb-3" />
-                              <h3 className="text-base font-semibold text-foreground">No payments recorded</h3>
-                              <p className="text-xs text-muted-foreground mt-1">Paid invoices will appear here</p>
-                            </div>
-                          );
-                        }
-                        return (
-                          <>
-                            <div className="grid grid-cols-3 gap-3">
-                              <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
-                                <p className="text-lg font-extrabold text-emerald-500">{format(totalPaid)}</p>
-                                <p className="text-[10px] text-muted-foreground font-medium">Total Paid</p>
-                              </div>
-                              <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
-                                <p className="text-lg font-extrabold text-foreground">{paidInvoices.length}</p>
-                                <p className="text-[10px] text-muted-foreground font-medium">Payments</p>
-                              </div>
-                              <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-sky-500 shadow-sm">
-                                <p className="text-lg font-extrabold text-foreground">{format(avgPayment)}</p>
-                                <p className="text-[10px] text-muted-foreground font-medium">Avg Payment</p>
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              {paidInvoices.map((inv: any) => (
-                                <div key={inv.id} className="bg-card rounded-xl border border-border p-3 hover:shadow-sm transition-all duration-200">
-                                  <div className="flex items-center justify-between gap-3">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className="size-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
-                                        <CheckCircle2 className="size-3.5 text-emerald-500" />
-                                      </div>
-                                      <div className="min-w-0">
-                                        <span className="text-sm font-medium text-foreground">{inv.number || 'Invoice'}</span>
-                                        <p className="text-xs text-muted-foreground">
-                                          {inv.paidAt ? `Paid ${formatDate(inv.paidAt)}` : formatDate(inv.createdAt)}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                      <p className="text-sm font-bold text-emerald-400">{format(inv.total)}</p>
-                                      <Badge variant="outline" className="text-[10px] rounded-md bg-emerald-500/10 text-emerald-400 border-emerald-700">Paid</Badge>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </ScrollArea>
-                </TabsContent>              </div>
+                  <PaymentsTab
+                    invoices={invoices}
+                    customer360Loading={customer360Loading}
+                    format={format}
+                  />
+                </TabsContent>
+              </div>
             </Tabs>
           </div>
         </div>
       </div>
 
       {/* ─── Create Booking Dialog ─────────────────────────────────────────── */}
-      <Dialog open={bookingDialogOpen} onOpenChange={setBookingDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>New Booking for {customer?.name}</DialogTitle>
-            <DialogDescription>Create a new booking — status will be auto-confirmed.</DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto min-h-0 space-y-3 py-2">
-            <div>
-              <Label className="text-xs">Title *</Label>
-              <Input value={bookingTitle} onChange={e => setBookingTitle(e.target.value)} placeholder="e.g. Deep cleaning service" />
-            </div>
-            <div>
-              <Label className="text-xs">Scheduled At</Label>
-              <Input type="datetime-local" value={bookingScheduledAt} onChange={e => setBookingScheduledAt(e.target.value)} />
-            </div>
-            <div>
-              <Label className="text-xs">Address</Label>
-              <Input value={bookingAddress} onChange={e => setBookingAddress(e.target.value)} placeholder="Service address" />
-            </div>
-            <div>
-              <Label className="text-xs">Notes</Label>
-              <Textarea value={bookingNotes} onChange={e => setBookingNotes(e.target.value)} rows={3} placeholder="Optional notes" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBookingDialogOpen(false)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreateBooking} disabled={creatingBooking}>
-              {creatingBooking ? <><Loader2 className="size-4 mr-1 animate-spin" /> Creating...</> : 'Create Booking'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BookingCreateDialog
+        open={bookingDialogOpen}
+        onOpenChange={setBookingDialogOpen}
+        customerName={c?.name}
+        bookingTitle={bookingTitle}
+        setBookingTitle={setBookingTitle}
+        bookingScheduledAt={bookingScheduledAt}
+        setBookingScheduledAt={setBookingScheduledAt}
+        bookingAddress={bookingAddress}
+        setBookingAddress={setBookingAddress}
+        bookingNotes={bookingNotes}
+        setBookingNotes={setBookingNotes}
+        creating={creatingBooking}
+        onCreate={handleCreateBooking}
+      />
 
       {/* ─── Create Invoice Dialog ─────────────────────────────────────────── */}
-      <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>New Invoice for {customer?.name}</DialogTitle>
-            <DialogDescription>Add line items. Invoice will be created as draft.</DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto min-h-0 space-y-3 py-2">
-            <div className="space-y-2">
-              {invoiceItems.map((item, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                  <div className="col-span-6">
-                    <Label className="text-xs">Description</Label>
-                    <Input value={item.description} onChange={e => {
-                      const next = [...invoiceItems]; next[idx] = { ...next[idx], description: e.target.value };
-                      setInvoiceItems(next);
-                    }} placeholder="Service or product" />
-                  </div>
-                  <div className="col-span-2">
-                    <Label className="text-xs">Qty</Label>
-                    <Input type="number" min="1" value={item.quantity} onChange={e => {
-                      const next = [...invoiceItems]; next[idx] = { ...next[idx], quantity: Number(e.target.value) };
-                      setInvoiceItems(next);
-                    }} />
-                  </div>
-                  <div className="col-span-3">
-                    <Label className="text-xs">Rate</Label>
-                    <Input type="number" min="0" step="0.01" value={item.rate} onChange={e => {
-                      const next = [...invoiceItems]; next[idx] = { ...next[idx], rate: Number(e.target.value) };
-                      setInvoiceItems(next);
-                    }} />
-                  </div>
-                  <div className="col-span-1">
-                    {invoiceItems.length > 1 && (
-                      <Button size="icon" variant="ghost" className="text-red-500" onClick={() => setInvoiceItems(invoiceItems.filter((_, i) => i !== idx))}>
-                        <X className="size-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <Button variant="outline" size="sm" onClick={() => setInvoiceItems([...invoiceItems, { description: '', quantity: 1, rate: 0 }])}>
-              <Plus className="size-3.5 mr-1" /> Add Line Item
-            </Button>
-            <div className="border-t pt-3 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-medium">{format(invoiceItems.reduce((s, it) => s + it.quantity * it.rate, 0))}</span>
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs">Due Date</Label>
-              <Input type="date" value={invoiceDueDate} onChange={e => setInvoiceDueDate(e.target.value)} />
-            </div>
-            <div>
-              <Label className="text-xs">Notes</Label>
-              <Textarea value={invoiceNotes} onChange={e => setInvoiceNotes(e.target.value)} rows={2} placeholder="Optional notes" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setInvoiceDialogOpen(false)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreateInvoice} disabled={creatingInvoice}>
-              {creatingInvoice ? <><Loader2 className="size-4 mr-1 animate-spin" /> Creating...</> : 'Create Invoice'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <InvoiceCreateDialog
+        open={invoiceDialogOpen}
+        onOpenChange={setInvoiceDialogOpen}
+        customerName={c?.name}
+        invoiceItems={invoiceItems}
+        setInvoiceItems={setInvoiceItems}
+        invoiceDueDate={invoiceDueDate}
+        setInvoiceDueDate={setInvoiceDueDate}
+        invoiceNotes={invoiceNotes}
+        setInvoiceNotes={setInvoiceNotes}
+        creating={creatingInvoice}
+        onCreate={handleCreateInvoice}
+        format={format}
+      />
 
       {/* ─── Edit Note Dialog ─────────────────────────────────────────── */}
-      <Dialog open={!!editingNote} onOpenChange={(open) => !open && setEditingNote(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Note</DialogTitle>
-            <DialogDescription>Make changes to this note. The update timestamp will be recorded.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Title</Label>
-              <Input
-                value={editingNote?.title || ''}
-                onChange={(e) => setEditingNote(prev => prev ? { ...prev, title: e.target.value } : null)}
-                placeholder="Note title"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Description</Label>
-              <Textarea
-                value={editingNote?.description || ''}
-                onChange={(e) => setEditingNote(prev => prev ? { ...prev, description: e.target.value } : null)}
-                placeholder="Note details..."
-                className="min-h-[100px] resize-none"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingNote(null)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-foreground" onClick={handleEditNote}>Save Changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <NoteEditDialog
+        open={!!editingNote}
+        editingNote={editingNote}
+        onChange={setEditingNote}
+        onCancel={() => setEditingNote(null)}
+        onSave={handleEditNote}
+      />
 
       {/* ─── Delete Note Confirmation ─────────────────────────────────── */}
-      <Dialog open={!!deletingNoteId} onOpenChange={(open) => !open && setDeletingNoteId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Note?</DialogTitle>
-            <DialogDescription>This action cannot be undone. The note will be permanently removed from the customer timeline.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingNoteId(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteNote}>Delete Note</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <NoteDeleteDialog
+        open={!!deletingNoteId}
+        onCancel={() => setDeletingNoteId(null)}
+        onConfirm={handleDeleteNote}
+      />
 
       {/* ─── V1.5: Communication Composer ────────────────────────────── */}
       <CommunicationComposer
@@ -2523,7 +547,6 @@ export function Customer360View() {
         relatedEntityId={c?.id}
         relatedEntityName={c?.name}
         onSent={() => {
-          // Invalidate the customer 360 query so the new timeline entry shows up
           queryClient.invalidateQueries({ queryKey: ['customer360', c?.id] });
         }}
       />

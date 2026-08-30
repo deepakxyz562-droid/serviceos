@@ -73,6 +73,12 @@ import { sendWebPushToUser } from '@/lib/web-push-send'
 // single event, short enough that a legitimately repeated event (e.g. a job
 // re-assigned 10 minutes later) still pushes.
 const PUSH_DEDUP_TTL_MS = 5 * 60 * 1000
+// MEMORY SAFETY: hard cap on entries (500). The existing opportunistic
+// cleanup only fires when size > 500 and only deletes EXPIRED entries — if
+// all 500 are still within their 5-min TTL, none get deleted and the map
+// stays at 500+ forever. With the LRU eviction below, we now guarantee the
+// cap is enforced regardless of TTL state.
+const PUSH_DEDUP_MAX_ENTRIES = 500
 const pushDedupCache = new Map<string, number>()
 
 /** Build the dedup cache key. */
@@ -112,12 +118,20 @@ export function markPushSent(
 ): void {
   const key = dedupKey(userId, eventType, resourceId)
   pushDedupCache.set(key, Date.now() + PUSH_DEDUP_TTL_MS)
-  // Opportunistic cleanup — prune expired entries every ~100 writes so the map
-  // doesn't grow unbounded in long-running processes.
-  if (pushDedupCache.size > 500) {
-    const now = Date.now()
-    for (const [k, exp] of pushDedupCache) {
-      if (now > exp) pushDedupCache.delete(k)
+  // Opportunistic cleanup — prune expired entries so the map doesn't grow
+  // unbounded in long-running processes.
+  const now = Date.now()
+  for (const [k, exp] of Array.from(pushDedupCache)) {
+    if (now > exp) pushDedupCache.delete(k)
+  }
+  // LRU eviction: if still over the hard cap after expired-entry cleanup,
+  // evict oldest entries (front of Map = least recently inserted).
+  if (pushDedupCache.size > PUSH_DEDUP_MAX_ENTRIES) {
+    const overflow = pushDedupCache.size - PUSH_DEDUP_MAX_ENTRIES
+    const iter = pushDedupCache.keys()
+    for (let i = 0; i < overflow; i++) {
+      const k = iter.next().value
+      if (k) pushDedupCache.delete(k)
     }
   }
 }

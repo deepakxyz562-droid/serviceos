@@ -13,7 +13,6 @@ import {
   Pencil,
   Eye,
   Trash2,
-  RotateCcw,
   Filter,
   X,
   CalendarDays,
@@ -53,6 +52,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   Table,
   TableBody,
@@ -319,6 +319,119 @@ export function PurchaseOrdersView() {
     }
   };
 
+  // ── DataTable columns ─────────────────────────────────────────────────
+  const poColumns: Column<PurchaseOrder>[] = [
+    {
+      key: 'poNumber',
+      header: 'PO Number',
+      render: (po) =>
+        po.poNumber || <span className="text-muted-foreground">{po.id.slice(0, 8)}</span>,
+      className: 'font-mono text-xs font-medium w-32',
+    },
+    {
+      key: 'supplier',
+      header: 'Supplier',
+      render: (po) => (
+        <span className="text-sm truncate max-w-[12rem] block" title={supplierName(po.supplierId)}>
+          {supplierName(po.supplierId)}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (po) => (
+        <Badge variant="outline" className={`capitalize ${STATUS_STYLES[po.status]}`}>
+          {po.status}
+        </Badge>
+      ),
+      className: 'w-28',
+    },
+    {
+      key: 'orderDate',
+      header: 'Order Date',
+      render: (po) => (
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
+          {formatDate(po.orderDate)}
+        </span>
+      ),
+      className: 'w-32',
+    },
+    {
+      key: 'expectedDate',
+      header: 'Expected',
+      render: (po) => (
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
+          {formatDate(po.expectedDate)}
+        </span>
+      ),
+      className: 'w-32',
+    },
+    {
+      key: 'total',
+      header: 'Total',
+      render: (po) => (
+        <span className="text-right text-sm font-semibold tabular-nums whitespace-nowrap block">
+          {format(po.totalAmount, po.currency || currency)}
+        </span>
+      ),
+      className: 'text-right w-32',
+    },
+    {
+      key: 'items',
+      header: 'Items',
+      render: (po) => (
+        <span className="text-right text-sm tabular-nums block">
+          {safeParseItems(po.itemsJson).length}
+        </span>
+      ),
+      className: 'text-right w-20',
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (po) => (
+        <div className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => handleView(po)}>
+                <Eye className="size-3.5 mr-2" /> View Details
+              </DropdownMenuItem>
+              {(po.status === 'sent' || po.status === 'partial') && (
+                <DropdownMenuItem onClick={() => setReceivingPO(po)}>
+                  <Truck className="size-3.5 mr-2" /> Receive Items
+                </DropdownMenuItem>
+              )}
+              {(po.status === 'draft' || po.status === 'sent') && (
+                <DropdownMenuItem onClick={() => { setEditing(po); setCreateOpen(true); }}>
+                  <Pencil className="size-3.5 mr-2" /> Edit
+                </DropdownMenuItem>
+              )}
+              {po.status !== 'cancelled' && po.status !== 'received' && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setCancelTarget(po)}
+                    className="text-red-600 focus:text-red-700"
+                  >
+                    <PackageX className="size-3.5 mr-2" /> Cancel PO
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+      className: 'w-12 text-right',
+    },
+  ];
+
   // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
@@ -388,124 +501,20 @@ export function PurchaseOrdersView() {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          {loading ? (
-            <div className="p-6 space-y-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : error ? (
-            <div className="p-10 text-center">
-              <p className="text-sm text-red-600 mb-3">{error}</p>
-              <Button variant="outline" size="sm" onClick={fetchPOs}>
-                <RotateCcw className="size-4 mr-1.5" /> Retry
-              </Button>
-            </div>
-          ) : purchaseOrders.length === 0 ? (
-            <div className="p-10 sm:p-16 text-center">
-              <div className="mx-auto mb-4 flex items-center justify-center size-14 rounded-full bg-muted">
-                <ClipboardList className="size-7 text-muted-foreground" />
-              </div>
-              <h3 className="text-base font-semibold">No purchase orders yet</h3>
-              <p className="text-sm text-muted-foreground mt-1 mb-4 max-w-sm mx-auto">
-                {search || statusFilter !== 'all'
-                  ? 'Try adjusting your filters.'
-                  : 'Create your first PO to order stock from a supplier.'}
-              </p>
-              <Button
-                onClick={() => { setEditing(null); setCreateOpen(true); }}
-                className="bg-emerald-600 hover:bg-emerald-700"
-                disabled={suppliers.length === 0 || items.length === 0}
-              >
-                <Plus className="size-4 mr-1.5" /> New PO
-              </Button>
-            </div>
-          ) : (
-            <div className="max-h-[calc(100vh-26rem)] overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableHead className="w-32">PO Number</TableHead>
-                    <TableHead>Supplier</TableHead>
-                    <TableHead className="w-28">Status</TableHead>
-                    <TableHead className="w-32">Order Date</TableHead>
-                    <TableHead className="w-32">Expected</TableHead>
-                    <TableHead className="text-right w-32">Total</TableHead>
-                    <TableHead className="text-right w-20">Items</TableHead>
-                    <TableHead className="w-12 text-right"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {purchaseOrders.map((po) => {
-                    const lineItems = safeParseItems(po.itemsJson);
-                    return (
-                      <TableRow key={po.id}>
-                        <TableCell className="font-mono text-xs font-medium">
-                          {po.poNumber || <span className="text-muted-foreground">{po.id.slice(0, 8)}</span>}
-                        </TableCell>
-                        <TableCell className="text-sm truncate max-w-[12rem]" title={supplierName(po.supplierId)}>
-                          {supplierName(po.supplierId)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={`capitalize ${STATUS_STYLES[po.status]}`}>
-                            {po.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {formatDate(po.orderDate)}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {formatDate(po.expectedDate)}
-                        </TableCell>
-                        <TableCell className="text-right text-sm font-semibold tabular-nums whitespace-nowrap">
-                          {format(po.totalAmount, po.currency || currency)}
-                        </TableCell>
-                        <TableCell className="text-right text-sm tabular-nums">
-                          {lineItems.length}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                <MoreHorizontal className="size-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuItem onClick={() => handleView(po)}>
-                                <Eye className="size-3.5 mr-2" /> View Details
-                              </DropdownMenuItem>
-                              {(po.status === 'sent' || po.status === 'partial') && (
-                                <DropdownMenuItem onClick={() => setReceivingPO(po)}>
-                                  <Truck className="size-3.5 mr-2" /> Receive Items
-                                </DropdownMenuItem>
-                              )}
-                              {(po.status === 'draft' || po.status === 'sent') && (
-                                <DropdownMenuItem onClick={() => { setEditing(po); setCreateOpen(true); }}>
-                                  <Pencil className="size-3.5 mr-2" /> Edit
-                                </DropdownMenuItem>
-                              )}
-                              {po.status !== 'cancelled' && po.status !== 'received' && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => setCancelTarget(po)}
-                                    className="text-red-600 focus:text-red-700"
-                                  >
-                                    <PackageX className="size-3.5 mr-2" /> Cancel PO
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <DataTable
+            columns={poColumns}
+            data={purchaseOrders}
+            rowKey={(po) => po.id}
+            loading={loading}
+            error={error}
+            onRetry={fetchPOs}
+            emptyMessage={
+              search || statusFilter !== 'all'
+                ? 'Try adjusting your filters.'
+                : 'No purchase orders yet'
+            }
+            emptyIcon={ClipboardList}
+          />
         </CardContent>
       </Card>
 

@@ -18,7 +18,7 @@ import {
   X,
   Filter,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -56,7 +56,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
-import { Skeleton } from '@/components/ui/skeleton';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
 
 // ── Types ──────────────────────────────────────────────────────
@@ -313,6 +313,176 @@ export function KnowledgeBaseView() {
     }
   };
 
+  // ── DataTable columns ─────────────────────────────────────
+  const articleColumns: Column<KnowledgeArticle>[] = [
+    {
+      key: 'title',
+      header: 'Title',
+      render: (a) => (
+        <span className="font-medium line-clamp-1" title={a.title}>
+          {a.title}
+        </span>
+      ),
+      sortField: 'title',
+    },
+    {
+      key: 'category',
+      header: 'Category',
+      render: (a) => (
+        <Badge className={CATEGORY_COLORS[a.category] || CATEGORY_COLORS.general}>
+          {CATEGORY_LABELS[a.category] || a.category}
+        </Badge>
+      ),
+      sortField: 'category',
+      className: 'w-32',
+    },
+    {
+      key: 'preview',
+      header: 'Preview',
+      render: (a) => (
+        <span className="text-sm text-muted-foreground line-clamp-1 max-w-xs">
+          {truncate(a.content, 100)}
+        </span>
+      ),
+      hideOnMobile: true,
+    },
+    {
+      key: 'visibility',
+      header: 'Visibility',
+      render: (a) =>
+        a.isPublic ? (
+          <Badge variant="outline" className="gap-1 text-emerald-600 border-emerald-300">
+            <Globe className="size-3" /> Public
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="gap-1 text-muted-foreground">
+            <Lock className="size-3" /> Private
+          </Badge>
+        ),
+      className: 'w-28',
+      hideOnMobile: true,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (a) =>
+        a.isActive ? (
+          <Badge variant="outline" className="text-emerald-600 border-emerald-300">
+            Active
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-orange-600 border-orange-300">
+            Inactive
+          </Badge>
+        ),
+      className: 'w-24',
+      hideOnMobile: true,
+    },
+    {
+      key: 'tags',
+      header: 'Tags',
+      render: (a) => {
+        const tags: string[] = (() => {
+          try {
+            const parsed = JSON.parse(a.tagsJson);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        })();
+        if (tags.length === 0) {
+          return <span className="text-xs text-muted-foreground">—</span>;
+        }
+        return (
+          <div className="flex flex-wrap gap-1">
+            {tags.slice(0, 2).map((tag, i) => (
+              <Badge key={i} variant="secondary" className="text-xs">
+                {tag}
+              </Badge>
+            ))}
+            {tags.length > 2 && (
+              <Badge variant="secondary" className="text-xs">
+                +{tags.length - 2}
+              </Badge>
+            )}
+          </div>
+        );
+      },
+      hideOnMobile: true,
+    },
+    {
+      key: 'views',
+      header: 'Views',
+      render: (a) => (
+        <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+          <Eye className="size-3.5" /> {a.viewCount}
+        </span>
+      ),
+      sortField: 'viewCount',
+      className: 'w-24',
+      hideOnMobile: true,
+    },
+    {
+      key: 'created',
+      header: 'Created',
+      render: (a) => (
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
+          {formatDate(a.createdAt)}
+        </span>
+      ),
+      sortField: 'createdAt',
+      className: 'w-28',
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (a) => (
+        <div className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openView(a);
+                }}
+              >
+                <Eye className="size-4 mr-2" /> View
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openEdit(a);
+                }}
+              >
+                <Pencil className="size-4 mr-2" /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-red-600 focus:text-red-600"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  confirmDelete(a);
+                }}
+              >
+                <Trash2 className="size-4 mr-2" /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+      className: 'w-12 text-right',
+    },
+  ];
+
   // ── Render: Article Form Dialog ────────────────────────────
   const renderFormDialog = (
     open: boolean,
@@ -547,178 +717,6 @@ export function KnowledgeBaseView() {
     </AlertDialog>
   );
 
-  // ── Render: Skeleton Loading ───────────────────────────────
-  const renderSkeletons = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <Card key={i}>
-          <CardHeader className="pb-2">
-            <Skeleton className="h-5 w-3/4" />
-            <Skeleton className="h-4 w-1/3 mt-1" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-4 w-full mb-2" />
-            <Skeleton className="h-4 w-5/6 mb-2" />
-            <Skeleton className="h-4 w-2/3" />
-            <div className="flex items-center justify-between mt-4">
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-4 w-16" />
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-
-  // ── Render: Empty State ────────────────────────────────────
-  const renderEmpty = () => (
-    <Card>
-      <CardContent className="p-12">
-        <div className="flex flex-col items-center justify-center text-center gap-4">
-          <div className="size-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-            <BookMarked className="size-8 text-emerald-600" />
-          </div>
-          <h3 className="text-lg font-semibold">
-            {search || categoryFilter !== 'all' || publicFilter !== 'all'
-              ? 'No articles match your filters'
-              : 'No articles yet'}
-          </h3>
-          <p className="text-sm text-muted-foreground max-w-md">
-            {search || categoryFilter !== 'all' || publicFilter !== 'all'
-              ? 'Try adjusting your search terms or filters to find what you\'re looking for.'
-              : 'Create your first knowledge base article to start building your documentation library.'}
-          </p>
-          {!search && categoryFilter === 'all' && publicFilter === 'all' && (
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => {
-                setForm(EMPTY_FORM);
-                setCreateOpen(true);
-              }}
-            >
-              <Plus className="size-4 mr-1.5" /> Create Article
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-
-  // ── Render: Article Card ───────────────────────────────────
-  const renderArticleCard = (article: KnowledgeArticle) => {
-    const tags: string[] = (() => {
-      try {
-        const parsed = JSON.parse(article.tagsJson);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        return [];
-      }
-    })();
-
-    return (
-      <Card
-        key={article.id}
-        className="group hover:shadow-md transition-shadow cursor-pointer"
-        onClick={() => openView(article)}
-      >
-        <CardHeader className="pb-2">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <CardTitle className="text-base leading-snug line-clamp-2">
-                {article.title}
-              </CardTitle>
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openView(article);
-                  }}
-                >
-                  <Eye className="size-4 mr-2" /> View
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openEdit(article);
-                  }}
-                >
-                  <Pencil className="size-4 mr-2" /> Edit
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="text-red-600 focus:text-red-600"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    confirmDelete(article);
-                  }}
-                >
-                  <Trash2 className="size-4 mr-2" /> Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap mt-1">
-            <Badge className={`text-xs ${CATEGORY_COLORS[article.category] || CATEGORY_COLORS.general}`}>
-              {CATEGORY_LABELS[article.category] || article.category}
-            </Badge>
-            {article.isPublic ? (
-              <Badge variant="outline" className="text-xs gap-0.5 text-emerald-600 border-emerald-300">
-                <Globe className="size-2.5" /> Public
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="text-xs gap-0.5 text-muted-foreground">
-                <Lock className="size-2.5" /> Private
-              </Badge>
-            )}
-            {!article.isActive && (
-              <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
-                Inactive
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground line-clamp-3 mb-3">
-            {truncate(article.content, 120)}
-          </p>
-
-          {tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-3">
-              {tags.slice(0, 3).map((tag, i) => (
-                <Badge key={i} variant="secondary" className="text-xs">
-                  {tag}
-                </Badge>
-              ))}
-              {tags.length > 3 && (
-                <Badge variant="secondary" className="text-xs">
-                  +{tags.length - 3}
-                </Badge>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
-            <span className="flex items-center gap-1">
-              <Eye className="size-3" /> {article.viewCount}
-            </span>
-            <span>{formatDate(article.createdAt)}</span>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
-
   // ── Main Render ────────────────────────────────────────────
   return (
     <div className="space-y-6 w-full">
@@ -873,16 +871,20 @@ export function KnowledgeBaseView() {
         </CardContent>
       </Card>
 
-      {/* Articles Grid */}
-      {loading ? (
-        renderSkeletons()
-      ) : articles.length === 0 ? (
-        renderEmpty()
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {articles.map(renderArticleCard)}
-        </div>
-      )}
+      {/* Articles Table */}
+      <DataTable
+        columns={articleColumns}
+        data={articles}
+        rowKey={(a) => a.id}
+        loading={loading}
+        onRowClick={(a) => openView(a)}
+        emptyMessage={
+          search || categoryFilter !== 'all' || publicFilter !== 'all'
+            ? 'No articles match your filters'
+            : 'No articles yet'
+        }
+        emptyIcon={BookMarked}
+      />
 
       {/* Dialogs */}
       {renderFormDialog(

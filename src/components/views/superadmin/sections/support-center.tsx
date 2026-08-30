@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 
@@ -124,34 +124,13 @@ export function SupportCenterSection() {
               <CardDescription>Support requests across all workspaces.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead><TableHead>Subject</TableHead><TableHead>Workspace</TableHead>
-                      <TableHead>Priority</TableHead><TableHead>Status</TableHead><TableHead>Assigned</TableHead>
-                      <TableHead>Updated</TableHead><TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {TICKETS.map((t) => (
-                      <TableRow key={t.id}>
-                        <TableCell className="font-mono text-xs">{t.id}</TableCell>
-                        <TableCell className="font-medium max-w-[240px] truncate">{t.subject}</TableCell>
-                        <TableCell className="text-muted-foreground">{t.workspace}</TableCell>
-                        <TableCell><Badge variant="outline" className={PRIORITY_BADGE[t.priority]}>{t.priority}</Badge></TableCell>
-                        <TableCell><Badge variant="outline" className={STATUS_BADGE[t.status]}>{t.status}</Badge></TableCell>
-                        <TableCell className="text-sm">{t.assigned}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(t.updated)}</TableCell>
-                        <TableCell className="text-right whitespace-nowrap">
-                          <Button size="sm" variant="ghost" onClick={() => toast.info(`Opening ${t.id}`)}><Eye className="size-4" /></Button>
-                          <Button size="sm" variant="ghost" onClick={() => toast.info(`Assigning ${t.id}`)}><UserPlus className="size-4" /></Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <DataTable
+                columns={ticketColumns}
+                data={TICKETS}
+                rowKey={(t) => t.id}
+                emptyMessage="No tickets found"
+                emptyIcon={Ticket}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -192,32 +171,13 @@ export function SupportCenterSection() {
               <CardDescription>People who have opened tickets across workspaces.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Workspace</TableHead>
-                      <TableHead>Tickets</TableHead><TableHead>CSAT</TableHead><TableHead>Last Contact</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {CUSTOMERS.map((c) => (
-                      <TableRow key={c.email}>
-                        <TableCell className="font-medium">{c.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{c.email}</TableCell>
-                        <TableCell className="text-muted-foreground">{c.workspace}</TableCell>
-                        <TableCell className="font-mono text-xs">{c.tickets}</TableCell>
-                        <TableCell>
-                          <span className="inline-flex items-center gap-1 text-xs font-medium">
-                            <Smile className="size-3.5 text-amber-500" />{c.csat}%
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(c.lastContact)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <DataTable
+                columns={customerColumns}
+                data={CUSTOMERS}
+                rowKey={(c) => c.email}
+                emptyMessage="No customers yet"
+                emptyIcon={LifeBuoy}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -225,3 +185,36 @@ export function SupportCenterSection() {
     </section>
   );
 }
+
+const ticketColumns: Column<TicketRow>[] = [
+  { key: 'id', header: 'ID', render: (t) => <span className="font-mono text-xs">{t.id}</span> },
+  { key: 'subject', header: 'Subject', render: (t) => <span className="font-medium max-w-[240px] truncate block">{t.subject}</span> },
+  { key: 'workspace', header: 'Workspace', render: (t) => <span className="text-muted-foreground">{t.workspace}</span> },
+  { key: 'priority', header: 'Priority', render: (t) => <Badge variant="outline" className={PRIORITY_BADGE[t.priority]}>{t.priority}</Badge> },
+  { key: 'status', header: 'Status', render: (t) => <Badge variant="outline" className={STATUS_BADGE[t.status]}>{t.status}</Badge> },
+  { key: 'assigned', header: 'Assigned', render: (t) => <span className="text-sm">{t.assigned}</span> },
+  { key: 'updated', header: 'Updated', render: (t) => <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(t.updated)}</span> },
+  {
+    key: 'actions', header: 'Actions', render: (t) => (
+      <div className="text-right whitespace-nowrap">
+        <Button size="sm" variant="ghost" onClick={() => toast.info(`Opening ${t.id}`)}><Eye className="size-4" /></Button>
+        <Button size="sm" variant="ghost" onClick={() => toast.info(`Assigning ${t.id}`)}><UserPlus className="size-4" /></Button>
+      </div>
+    ), className: 'text-right',
+  },
+];
+
+const customerColumns: Column<CustomerRow>[] = [
+  { key: 'name', header: 'Name', render: (c) => <span className="font-medium">{c.name}</span> },
+  { key: 'email', header: 'Email', render: (c) => <span className="text-muted-foreground">{c.email}</span> },
+  { key: 'workspace', header: 'Workspace', render: (c) => <span className="text-muted-foreground">{c.workspace}</span> },
+  { key: 'tickets', header: 'Tickets', render: (c) => <span className="font-mono text-xs">{c.tickets}</span> },
+  {
+    key: 'csat', header: 'CSAT', render: (c) => (
+      <span className="inline-flex items-center gap-1 text-xs font-medium">
+        <Smile className="size-3.5 text-amber-500" />{c.csat}%
+      </span>
+    ),
+  },
+  { key: 'lastContact', header: 'Last Contact', render: (c) => <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(c.lastContact)}</span> },
+];

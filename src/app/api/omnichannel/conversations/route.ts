@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { resolveTenantId } from '@/lib/api-auth'
 import { toISOString } from '@/lib/utils'
 
 // GET /api/omnichannel/conversations - List all conversations in the format the frontend expects
+// SECURITY: requires authentication. tenantId is derived from the session,
+// never from ?tenantId= (closes a cross-tenant read vector).
 export async function GET(request: NextRequest) {
   try {
     const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required', code: 'UNAUTHENTICATED' }, { status: 401 })
+    }
     const { searchParams } = new URL(request.url)
 
     const channel = searchParams.get('channel')
@@ -15,7 +21,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
 
-    const tenantId = authUser?.tenantId || searchParams.get('tenantId') || null
+    const tenantId = resolveTenantId(authUser, searchParams.get('tenantId'))
 
     // Build where clause
     const where: Record<string, unknown> = {}

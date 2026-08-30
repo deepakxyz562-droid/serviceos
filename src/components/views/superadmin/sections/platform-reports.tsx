@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 
 import { SectionHeader, DemoDataPill } from '@/components/views/superadmin/_shared';
 import { toast } from 'sonner';
@@ -101,6 +101,56 @@ export function PlatformReportsSection() {
   const handleSchedule = (name: string) => toast.info(`Schedule opened for "${name}"`);
   const handleUseTemplate = (name: string) => toast.success(`Template "${name}" applied`, { description: 'A new draft report was created.' });
 
+  const reportColumns: Column<ReportRow>[] = [
+    { key: 'name', header: 'Name', render: (r) => <span className="text-xs font-medium text-foreground">{r.name}</span> },
+    { key: 'type', header: 'Type', render: (r) => <span className="text-xs text-muted-foreground">{r.type}</span> },
+    {
+      key: 'schedule', header: 'Schedule', render: (r) => (
+        <Badge variant="outline" className="text-[10px] font-medium">
+          <CalendarClock className="size-3 mr-1 text-muted-foreground" />
+          {r.schedule}
+        </Badge>
+      ),
+    },
+    { key: 'lastGenerated', header: 'Last Generated', render: (r) => <span className="text-xs text-muted-foreground tabular-nums">{r.lastGenerated}</span> },
+    { key: 'format', header: 'Format', render: (r) => <Badge variant="outline" className={cn('text-[10px] font-mono font-semibold', formatBadgeClasses(r.format))}>{r.format}</Badge> },
+    {
+      key: 'status', header: 'Status', render: (r) => (
+        <Badge variant="outline" className={cn('text-[10px] font-semibold', statusBadgeClasses(r.status))}>
+          {r.status === 'Generating' && <Loader2 className="size-3 mr-1 animate-spin" />}
+          {r.status}
+        </Badge>
+      ),
+    },
+    {
+      key: 'actions', header: 'Actions', render: (r) => (
+        <div className="text-right">
+          <div className="inline-flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => handleDownload(r.name)}
+              aria-label={`Download ${r.name}`}
+              disabled={r.status !== 'Ready'}
+            >
+              <Download className="size-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => handleSchedule(r.name)}
+              aria-label={`Schedule ${r.name}`}
+            >
+              <CalendarClock className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+      ), className: 'text-right',
+    },
+  ];
+
   return (
     <section className="space-y-6">
       <SectionHeader
@@ -144,70 +194,13 @@ export function PlatformReportsSection() {
           <CardDescription>All configured &amp; one-off reports across the platform</CardDescription>
         </CardHeader>
         <CardContent className="p-0 sm:p-2">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Name</TableHead>
-                  <TableHead className="text-xs">Type</TableHead>
-                  <TableHead className="text-xs">Schedule</TableHead>
-                  <TableHead className="text-xs">Last Generated</TableHead>
-                  <TableHead className="text-xs">Format</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {REPORTS.map((r) => (
-                  <TableRow key={r.name}>
-                    <TableCell className="text-xs font-medium text-foreground py-2.5">{r.name}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground py-2.5">{r.type}</TableCell>
-                    <TableCell className="py-2.5">
-                      <Badge variant="outline" className="text-[10px] font-medium">
-                        <CalendarClock className="size-3 mr-1 text-muted-foreground" />
-                        {r.schedule}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground py-2.5 tabular-nums">{r.lastGenerated}</TableCell>
-                    <TableCell className="py-2.5">
-                      <Badge variant="outline" className={cn('text-[10px] font-mono font-semibold', formatBadgeClasses(r.format))}>
-                        {r.format}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="py-2.5">
-                      <Badge variant="outline" className={cn('text-[10px] font-semibold', statusBadgeClasses(r.status))}>
-                        {r.status === 'Generating' && <Loader2 className="size-3 mr-1 animate-spin" />}
-                        {r.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="py-2.5 text-right">
-                      <div className="inline-flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7"
-                          onClick={() => handleDownload(r.name)}
-                          aria-label={`Download ${r.name}`}
-                          disabled={r.status !== 'Ready'}
-                        >
-                          <Download className="size-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7"
-                          onClick={() => handleSchedule(r.name)}
-                          aria-label={`Schedule ${r.name}`}
-                        >
-                          <CalendarClock className="size-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataTable
+            columns={reportColumns}
+            data={REPORTS}
+            rowKey={(r) => r.name}
+            emptyMessage="No reports configured"
+            emptyIcon={FileText}
+          />
         </CardContent>
       </Card>
 

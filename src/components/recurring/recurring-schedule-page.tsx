@@ -59,6 +59,7 @@ import {
 } from '@/components/recurring/recurring-schedule-editor';
 
 import { apiGet, authFetch } from '@/lib/api';
+import { CustomerSelect } from '@/components/shared/customer-select';
 import {
   formatSchedulePreview,
   type RecurrenceInput,
@@ -142,20 +143,19 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
   const [loadingSchedule, setLoadingSchedule] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
 
-  // ─── Load supporting data (customers/employees/services/checklists) ──────
+  // ─── Load supporting data (employees/services/checklists) ──────────────
+  // NOTE: customers are NO LONGER fetched upfront — the CustomerSelect
+  // component does debounced server-side search on demand (max 10 results).
+  // A small customers array is still kept for initialCustomer lookup when
+  // editing an existing schedule (populated from the schedule's customer).
   const loadSupporting = useCallback(async () => {
     try {
       setLoadingSupporting(true);
-      const [custRes, empRes, svcRes, chkRes] = await Promise.all([
-        authFetch('/api/customers?limit=200'),
+      const [empRes, svcRes, chkRes] = await Promise.all([
         authFetch('/api/employees?limit=200'),
         authFetch('/api/services?limit=200'),
         authFetch('/api/checklists'),
       ]);
-      if (custRes.ok) {
-        const d = await custRes.json();
-        setCustomers(d.customers || d || []);
-      }
       if (empRes.ok) {
         const d = await empRes.json();
         setEmployees(d.employees || d || []);
@@ -170,7 +170,7 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
       }
     } catch (err) {
       console.error('[RecurringSchedulePage] failed to load supporting data:', err);
-      toast.error('Failed to load customers, employees, or services.');
+      toast.error('Failed to load employees or services.');
     } finally {
       setLoadingSupporting(false);
     }
@@ -514,34 +514,15 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
                   <Label htmlFor="customerId">
                     Customer <span className="text-destructive">*</span>
                   </Label>
-                  {customers.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-amber-300 bg-amber-50/60 dark:bg-amber-950/20 px-3 py-2.5 text-sm">
-                      <p className="font-medium text-amber-900 dark:text-amber-200">
-                        No customers yet
-                      </p>
-                      <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
-                        Create a customer first, then come back to set up this
-                        schedule.
-                      </p>
-                    </div>
-                  ) : (
-                    <Select
-                      value={form.customerId}
-                      onValueChange={(v) => set('customerId', v)}
-                    >
-                      <SelectTrigger id="customerId">
-                        <SelectValue placeholder="Select customer" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-72">
-                        {customers.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                            {c.phone ? ` · ${c.phone}` : ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
+                  <CustomerSelect
+                    value={form.customerId}
+                    onChange={(id) => set('customerId', id || '')}
+                    initialCustomer={form.customerId ? (() => {
+                      const c = customers.find((c) => c.id === form.customerId);
+                      return c ? { id: c.id, name: c.name, phone: c.phone } : null;
+                    })() : null}
+                    placeholder="Search customer…"
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="serviceId">Service (optional)</Label>

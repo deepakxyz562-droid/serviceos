@@ -15,10 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -35,7 +32,7 @@ import {
 } from 'recharts';
 
 import {
-  KpiCard, TableSkeleton, EmptyState,
+  KpiCard,
   getStatusBadgeClasses, getPlanBadgeClasses,
 } from '@/components/views/superadmin/_shared';
 import type { Subscription } from '@/components/views/superadmin/types';
@@ -106,6 +103,37 @@ export function SubscriptionsTab({ subscriptions, subsLoading, format }: Subscri
     }
   };
 
+  const subscriptionColumns: Column<Subscription>[] = [
+    { key: 'tenant', header: 'Tenant', render: (s) => <span className="font-medium text-foreground">{s.tenantName}</span> },
+    { key: 'plan', header: 'Plan', render: (s) => <Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadgeClasses(s.plan))}>{s.plan}</Badge> },
+    { key: 'status', header: 'Status', render: (s) => <Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadgeClasses(s.status))}>{s.status}</Badge> },
+    { key: 'amount', header: 'Amount', render: (s) => <span className="text-right text-foreground block">{format(s.amount)}</span>, className: 'text-right' },
+    {
+      key: 'actions', header: 'Actions', render: (s) => (
+        <div className="flex items-center justify-end gap-0.5">
+          {s.status === 'active' && (
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700" onClick={() => { setActionReason(''); setActionDialog({ sub: s, action: 'pause' }); }} title="Pause">
+              <Pause className="size-3.5" />
+            </Button>
+          )}
+          {s.status === 'paused' && (
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => setActionDialog({ sub: s, action: 'resume' })} title="Resume">
+              <PlayCircle className="size-3.5" />
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-sky-600 hover:text-sky-700" onClick={() => { setNewPlan(s.plan); setActionDialog({ sub: s, action: 'change_plan' }); }} title="Change Plan">
+            <Edit3 className="size-3.5" />
+          </Button>
+          {s.status !== 'cancelled' && (
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => { setActionReason(''); setActionDialog({ sub: s, action: 'cancel' }); }} title="Cancel">
+              <XCircle className="size-3.5" />
+            </Button>
+          )}
+        </div>
+      ), className: 'text-right',
+    },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Stats */}
@@ -166,55 +194,15 @@ export function SubscriptionsTab({ subscriptions, subsLoading, format }: Subscri
             </div>
           </CardHeader>
           <CardContent>
-            {subsLoading ? <TableSkeleton /> : filteredSubs.length === 0 ? (
-              <EmptyState icon={CreditCard} title="No subscriptions found" />
-            ) : (
-              <ScrollArea className="max-h-80">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead>Tenant</TableHead>
-                      <TableHead>Plan</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredSubs.map((sub) => (
-                      <TableRow key={sub.id}>
-                        <TableCell className="font-medium text-foreground">{sub.tenantName}</TableCell>
-                        <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadgeClasses(sub.plan))}>{sub.plan}</Badge></TableCell>
-                        <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadgeClasses(sub.status))}>{sub.status}</Badge></TableCell>
-                        <TableCell className="text-right text-foreground">{format(sub.amount)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-0.5">
-                            {sub.status === 'active' && (
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700" onClick={() => { setActionReason(''); setActionDialog({ sub, action: 'pause' }); }} title="Pause">
-                                <Pause className="size-3.5" />
-                              </Button>
-                            )}
-                            {sub.status === 'paused' && (
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => setActionDialog({ sub, action: 'resume' })} title="Resume">
-                                <PlayCircle className="size-3.5" />
-                              </Button>
-                            )}
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-sky-600 hover:text-sky-700" onClick={() => { setNewPlan(sub.plan); setActionDialog({ sub, action: 'change_plan' }); }} title="Change Plan">
-                              <Edit3 className="size-3.5" />
-                            </Button>
-                            {sub.status !== 'cancelled' && (
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => { setActionReason(''); setActionDialog({ sub, action: 'cancel' }); }} title="Cancel">
-                                <XCircle className="size-3.5" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            )}
+            <DataTable
+              columns={subscriptionColumns}
+              data={filteredSubs}
+              rowKey={(s) => s.id}
+              loading={subsLoading}
+              emptyMessage="No subscriptions found"
+              emptyIcon={CreditCard}
+              className="max-h-80"
+            />
           </CardContent>
         </Card>
       </div>

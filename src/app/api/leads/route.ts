@@ -187,6 +187,14 @@ export async function POST(request: NextRequest) {
     const crmGuard = await requireCrmTenant(request);
     if (crmGuard) return crmGuard;
     const authUser = await getAuthUser();
+    // SECURITY: enforce 401 — previously getAuthUser() was called but the
+    // null return was never checked, allowing unauthenticated lead creation.
+    if (!authUser) {
+      return NextResponse.json(
+        { error: 'Authentication required', code: 'UNAUTHENTICATED' },
+        { status: 401 }
+      );
+    }
 
     const body = await request.json();
     const {

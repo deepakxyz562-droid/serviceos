@@ -1,17 +1,25 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth, resolveTenantId, apiError } from '@/lib/api-auth'
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth()
+    if (!auth.ok) return auth.response
+    const { user } = auth
+
     const { searchParams } = new URL(request.url)
-    const tenantId = searchParams.get('tenantId')
     const type = searchParams.get('type')
     const status = searchParams.get('status')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
 
-    const where: Record<string, unknown> = {}
-    if (tenantId) where.tenantId = tenantId
+    const tenantId = resolveTenantId(user, searchParams.get('tenantId'))
+    if (!tenantId) {
+      return apiError(403, 'No tenant associated with this account', 'NO_TENANT')
+    }
+
+    const where: Record<string, unknown> = { tenantId }
     if (type) where.type = type
     if (status) where.status = status
 
@@ -44,7 +52,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth()
+    if (!auth.ok) return auth.response
+    const { user } = auth
+
     const body = await request.json()
+
+    const tenantId = resolveTenantId(user, body.tenantId)
+    if (!tenantId) {
+      return apiError(403, 'No tenant associated with this account', 'NO_TENANT')
+    }
 
     const form = await db.wAForm.create({
       data: {
@@ -55,8 +72,8 @@ export async function POST(request: NextRequest) {
         welcomeMessage: body.welcomeMessage,
         completionMessage: body.completionMessage,
         status: body.status || 'active',
-        tenantId: body.tenantId,
-        workspaceId: body.workspaceId,
+        tenantId,
+        workspaceId: body.workspaceId || user.workspaceId || null,
       },
     })
 

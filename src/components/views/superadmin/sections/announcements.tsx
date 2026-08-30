@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -167,45 +167,43 @@ export function AnnouncementsSection() {
           <CardDescription>Sent and scheduled platform-wide announcements.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Subject</TableHead><TableHead>Type</TableHead><TableHead>Audience</TableHead>
-                  <TableHead>Sent</TableHead><TableHead className="w-[180px]">Open Rate</TableHead><TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {RECENT.map((r) => (
-                  <TableRow key={r.subject}>
-                    <TableCell className="font-medium max-w-[280px] truncate">{r.subject}</TableCell>
-                    <TableCell><Badge variant="outline" className={TYPE_BADGE[r.type]}>{r.type}</Badge></TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{r.audience}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(r.sent)}</TableCell>
-                    <TableCell>
-                      {r.status === 'Scheduled' ? (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <Progress value={r.openRate} className="h-1.5 w-24" />
-                          <span className="text-xs font-mono text-muted-foreground w-9">{r.openRate}%</span>
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={r.status === 'Sent'
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'}>
-                        {r.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataTable
+            columns={announcementColumns}
+            data={RECENT}
+            rowKey={(r) => r.subject}
+            emptyMessage="No announcements yet"
+            emptyIcon={Megaphone}
+          />
         </CardContent>
       </Card>
     </section>
   );
 }
+
+const announcementColumns: Column<RecentRow>[] = [
+  { key: 'subject', header: 'Subject', render: (r) => <span className="font-medium max-w-[280px] truncate block">{r.subject}</span> },
+  { key: 'type', header: 'Type', render: (r) => <Badge variant="outline" className={TYPE_BADGE[r.type]}>{r.type}</Badge> },
+  { key: 'audience', header: 'Audience', render: (r) => <span className="text-muted-foreground text-sm">{r.audience}</span> },
+  { key: 'sent', header: 'Sent', render: (r) => <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(r.sent)}</span> },
+  {
+    key: 'openRate', header: 'Open Rate', render: (r) => (
+      r.status === 'Scheduled' ? (
+        <span className="text-xs text-muted-foreground">—</span>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Progress value={r.openRate} className="h-1.5 w-24" />
+          <span className="text-xs font-mono text-muted-foreground w-9">{r.openRate}%</span>
+        </div>
+      )
+    ), className: 'w-[180px]',
+  },
+  {
+    key: 'status', header: 'Status', render: (r) => (
+      <Badge variant="outline" className={r.status === 'Sent'
+        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'}>
+        {r.status}
+      </Badge>
+    ),
+  },
+];

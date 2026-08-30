@@ -41,11 +41,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { cn } from '@/lib/utils';
 import {
   Loader2, CheckCircle2, AlertTriangle, Save, Trash2, Copy,
@@ -350,6 +348,55 @@ export function SocialPublishingConfigSection() {
       toast.error('Failed to copy');
     }
   };
+
+  const featureFlagColumns: Column<PlatformConfig>[] = [
+    {
+      key: 'platform', header: 'Platform', render: (p) => (
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-foreground">{p.label}</span>
+          {!p.configured && (
+            <Badge variant="outline" className="text-[10px] text-amber-600 dark:text-amber-400 border-amber-500/30">
+              Not configured
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'enabled', header: 'Enabled', render: (p) => (
+        <div className="flex items-center justify-center">
+          <Switch
+            checked={p.flags.enabled}
+            onCheckedChange={(v) => handleToggleEnabled(p, v)}
+            disabled={!p.configured || togglingKey === p.key}
+            aria-label={`Toggle ${p.label}`}
+          />
+        </div>
+      ), className: 'w-24 text-center',
+    },
+    {
+      key: 'minPlan', header: 'Min Plan', render: (p) => (
+        <Select
+          value={p.flags.minPlan}
+          onValueChange={(v) => handleMinPlanChange(p, v as PlanKey)}
+          disabled={!p.configured || togglingKey === p.key}
+        >
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PLAN_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ), className: 'w-48',
+    },
+    { key: 'connectedTenants', header: 'Connected Tenants', render: (p) => <span className="text-right tabular-nums block">{p.connectedTenants}</span>, className: 'w-32 text-right' },
+    { key: 'totalAccounts', header: 'Total Accounts', render: (p) => <span className="text-right tabular-nums block">{p.totalAccounts}</span>, className: 'w-32 text-right' },
+  ];
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -672,70 +719,13 @@ export function SocialPublishingConfigSection() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border border-border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Platform</TableHead>
-                  <TableHead className="w-24 text-center">Enabled</TableHead>
-                  <TableHead className="w-48">Min Plan</TableHead>
-                  <TableHead className="w-32 text-right">Connected Tenants</TableHead>
-                  <TableHead className="w-32 text-right">Total Accounts</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {platforms.map((p) => (
-                  <TableRow key={p.key}>
-                    <TableCell className="font-medium text-foreground">
-                      <div className="flex items-center gap-2">
-                        <span>{p.label}</span>
-                        {!p.configured && (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] text-amber-600 dark:text-amber-400 border-amber-500/30"
-                          >
-                            Not configured
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Switch
-                        checked={p.flags.enabled}
-                        onCheckedChange={(v) => handleToggleEnabled(p, v)}
-                        disabled={!p.configured || togglingKey === p.key}
-                        aria-label={`Toggle ${p.label}`}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={p.flags.minPlan}
-                        onValueChange={(v) => handleMinPlanChange(p, v as PlanKey)}
-                        disabled={!p.configured || togglingKey === p.key}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PLAN_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {p.connectedTenants}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {p.totalAccounts}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataTable
+            columns={featureFlagColumns}
+            data={platforms}
+            rowKey={(p) => p.key}
+            emptyMessage="No platforms configured"
+            emptyIcon={FlaskConical}
+          />
           <p className="text-[11px] text-muted-foreground mt-2">
             Disabling a platform hides the &ldquo;Connect&rdquo; button in the tenant Social Accounts
             view. Existing connections remain active until their token expires.

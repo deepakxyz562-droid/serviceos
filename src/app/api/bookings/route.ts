@@ -143,9 +143,12 @@ export async function POST(request: NextRequest) {
       scheduledEndTime,
       duration,
       notes,
-      workspaceId,
       metadataJson,
     } = body;
+    // SECURITY: workspaceId is always derived from the session, never from
+    // the body (mirrors /api/customers). Prevents workspace→tenant invariant
+    // breaks.
+    const workspaceId = user.workspaceId;
 
     if (!title) {
       return NextResponse.json(

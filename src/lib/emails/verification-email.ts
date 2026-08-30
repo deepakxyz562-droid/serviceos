@@ -81,145 +81,169 @@ export async function verifyEmailToken(
     return { ok: false, error: 'Missing verification token.' };
   }
 
-  const tokenHash = hashToken(rawToken);
+  try {
+    const tokenHash = hashToken(rawToken);
 
-  // Find user by token hash. The lookup is indexed (User.emailVerifyTokenHash
-  // @@index). We don't use timingSafeEqual here because the DB lookup by hash
-  // is constant-time-equivalent (the hash itself is the secret; an attacker
-  // can't enumerate hashes without compromising the DB).
-  const user = await db.user.findFirst({
-    where: { emailVerifyTokenHash: tokenHash },
-    select: {
-      id: true,
-      email: true,
-      emailVerified: true,
-      emailVerifyTokenExpiresAt: true,
-    },
-  });
-
-  if (!user) {
-    return { ok: false, error: 'Invalid or already-used verification token.' };
-  }
-
-  if (user.emailVerified) {
-    // Already verified — token should have been cleared. Clear it now (defensive) and return success for auto-login.
-    await db.user.update({
-      where: { id: user.id },
-      data: { emailVerifyTokenHash: null, emailVerifyTokenExpiresAt: null },
+    // Find user by token hash. The lookup is indexed (User.emailVerifyTokenHash
+    // @@index). We don't use timingSafeEqual here because the DB lookup by hash
+    // is constant-time-equivalent (the hash itself is the secret; an attacker
+    // can't enumerate hashes without compromising the DB).
+    const user = await db.user.findFirst({
+      where: { emailVerifyTokenHash: tokenHash },
+      select: {
+        id: true,
+        email: true,
+        emailVerified: true,
+        emailVerifyTokenExpiresAt: true,
+      },
     });
-    return { ok: true, userId: user.id, email: user.email };
-  }
 
-  const now = Date.now();
-  const expiresAtMs = user.emailVerifyTokenExpiresAt?.getTime() ?? 0;
-  if (expiresAtMs < now) {
-    // Expired — clear the stale token so it can't be retried.
-    await db.user.update({
-      where: { id: user.id },
-      data: { emailVerifyTokenHash: null, emailVerifyTokenExpiresAt: null },
-    });
-    return { ok: false, error: 'This verification link has expired. Please request a new one.' };
-  }
+    if (!user) {
+      return { ok: false, error: 'Invalid or already-used verification token.' };
+    }
 
-  // Success: mark verified + clear token (single-use).
-  await db.user.update({
-    where: { id: user.id },
-    data: {
-      emailVerified: true,
-      emailVerifiedAt: new Date(),
-      emailVerifyTokenHash: null,
-      emailVerifyTokenExpiresAt: null,
-    },
-  });
+    if (user.emailVerified) {
+      // Already verified — token should have been cleared. Clear it now (defensive) and return success for auto-login.
+      try {
+        await db.user.update({
+          where: { id: user.id },
+          data: { emailVerifyTokenHash: null, emailVerifyTokenExpiresAt: null },
+        });
+      } catch (e) {
+        logger.warn({ component: 'email-verification', userId: user.id, err: e }, 'Failed to clear already-verified token (non-fatal)');
+      }
+      return { ok: true, userId: user.id, email: user.email };
+    }
 
-  // CRITICAL: Re-fetch the user to verify the update actually persisted.
-  // The Supabase adapter can silently fail to update certain columns
-  // (e.g. if there's a column-level constraint or adapter serialization
-  // issue). Without this check, we'd return { ok: true } even though
-  // emailVerified is still false in the DB → user gets auto-logged in
-  // temporarily but can't log in again (login route checks emailVerified).
-  const updatedUser = await db.user.findUnique({
-    where: { id: user.id },
-    select: { emailVerified: true },
-  });
+    const now = Date.now();
+    const expiresAtMs = user.emailVerifyTokenExpiresAt?.getTime() ?? 0;
+    if (expiresAtMs < now) {
+      // Expired — clear the stale token so it can't be retried.
+      try {
+        await db.user.update({
+          where: { id: user.id },
+          data: { emailVerifyTokenHash: null, emailVerifyTokenExpiresAt: null },
+        });
+      } catch (e) {
+        logger.warn({ component: 'email-verification', userId: user.id, err: e }, 'Failed to clear expired token (non-fatal)');
+      }
+      return { ok: false, error: 'This verification link has expired. Please request a new one.' };
+    }
 
-  if (!updatedUser || !updatedUser.emailVerified) {
-    // The Prisma/Supabase adapter update didn't persist.
-    // FALLBACK: Try a direct Supabase REST API call to update the User table.
-    // This bypasses the adapter entirely and talks to PostgREST directly.
-    logger.warn(
-      { component: 'email-verification', userId: user.id, email: user.email },
-      'Adapter update did not persist — trying direct Supabase REST fallback',
-    );
-
+    // Success: mark verified + clear token (single-use).
     try {
-      // Dynamically import to avoid circular dependency issues
-      const { getSupabaseAdmin } = await import('@/lib/supabase-db');
-      const adminClient = getSupabaseAdmin();
-
-      const { error: directError } = await adminClient
-        .from('User')
-        .update({
+      await db.user.update({
+        where: { id: user.id },
+        data: {
           emailVerified: true,
-          emailVerifiedAt: new Date().toISOString(),
+          emailVerifiedAt: new Date(),
           emailVerifyTokenHash: null,
           emailVerifyTokenExpiresAt: null,
-          updatedAt: new Date().toISOString(),
-        })
-        .eq('id', user.id);
-
-      if (directError) {
-        logger.error(
-          { component: 'email-verification', userId: user.id, email: user.email, supabaseError: directError.message },
-          'Direct Supabase REST fallback also failed',
-        );
-        return {
-          ok: false,
-          error: 'Failed to verify your email due to a database issue. Please try again or contact support.',
-        };
-      }
-
-      // Re-fetch again to confirm the direct update persisted
-      const recheckedUser = await db.user.findUnique({
-        where: { id: user.id },
-        select: { emailVerified: true },
+        },
       });
+    } catch (updateErr) {
+      logger.error(
+        { component: 'email-verification', userId: user.id, email: user.email, err: updateErr },
+        'db.user.update threw during email verification',
+      );
+      // Fall through to the re-fetch check + Supabase fallback
+    }
 
-      if (!recheckedUser || !recheckedUser.emailVerified) {
-        logger.error(
+    // CRITICAL: Re-fetch the user to verify the update actually persisted.
+    const updatedUser = await db.user.findUnique({
+      where: { id: user.id },
+      select: { emailVerified: true },
+    });
+
+    if (!updatedUser || !updatedUser.emailVerified) {
+      // The Prisma/Supabase adapter update didn't persist.
+      // FALLBACK: Try a direct Supabase REST API call to update the User table.
+      logger.warn(
+        { component: 'email-verification', userId: user.id, email: user.email },
+        'Adapter update did not persist — trying direct Supabase REST fallback',
+      );
+
+      try {
+        const { getSupabaseAdmin } = await import('@/lib/supabase-db');
+        const adminClient = getSupabaseAdmin();
+
+        const { error: directError } = await adminClient
+          .from('User')
+          .update({
+            emailVerified: true,
+            emailVerifiedAt: new Date().toISOString(),
+            emailVerifyTokenHash: null,
+            emailVerifyTokenExpiresAt: null,
+            updatedAt: new Date().toISOString(),
+          })
+          .eq('id', user.id);
+
+        if (directError) {
+          logger.error(
+            { component: 'email-verification', userId: user.id, email: user.email, supabaseError: directError.message },
+            'Direct Supabase REST fallback also failed',
+          );
+          return {
+            ok: false,
+            error: 'Failed to verify your email due to a database issue. Please try again or contact support.',
+          };
+        }
+
+        // Re-fetch again to confirm the direct update persisted
+        const recheckedUser = await db.user.findUnique({
+          where: { id: user.id },
+          select: { emailVerified: true },
+        });
+
+        if (!recheckedUser || !recheckedUser.emailVerified) {
+          logger.error(
+            { component: 'email-verification', userId: user.id, email: user.email },
+            'Direct Supabase REST update also did not persist — emailVerified still false',
+          );
+          return {
+            ok: false,
+            error: 'Failed to verify your email due to a database issue. Please try again or contact support.',
+          };
+        }
+
+        logger.info(
           { component: 'email-verification', userId: user.id, email: user.email },
-          'Direct Supabase REST update also did not persist — emailVerified still false',
+          'Email verified successfully via direct Supabase REST fallback',
+        );
+        return { ok: true, userId: user.id, email: user.email };
+
+      } catch (fallbackErr) {
+        logger.error(
+          { component: 'email-verification', userId: user.id, email: user.email, err: fallbackErr },
+          'Direct Supabase REST fallback threw an exception',
         );
         return {
           ok: false,
           error: 'Failed to verify your email due to a database issue. Please try again or contact support.',
         };
       }
-
-      logger.info(
-        { component: 'email-verification', userId: user.id, email: user.email },
-        'Email verified successfully via direct Supabase REST fallback',
-      );
-      return { ok: true, userId: user.id, email: user.email };
-
-    } catch (fallbackErr) {
-      logger.error(
-        { component: 'email-verification', userId: user.id, email: user.email, err: fallbackErr },
-        'Direct Supabase REST fallback threw an exception',
-      );
-      return {
-        ok: false,
-        error: 'Failed to verify your email due to a database issue. Please try again or contact support.',
-      };
     }
+
+    logger.info(
+      { component: 'email-verification', userId: user.id, email: user.email },
+      'Email verified successfully (confirmed via re-fetch)',
+    );
+
+    return { ok: true, userId: user.id, email: user.email };
+
+  } catch (err) {
+    // CATCH ALL: Any unhandled exception in the function returns a proper
+    // error response instead of crashing the API route (which produces a
+    // 500 with empty body — the exact bug the user reported).
+    logger.error(
+      { component: 'email-verification', err },
+      'verifyEmailToken threw an unhandled exception',
+    );
+    return {
+      ok: false,
+      error: 'An error occurred during email verification. Please try again or contact support.',
+    };
   }
-
-  logger.info(
-    { component: 'email-verification', userId: user.id, email: user.email },
-    'Email verified successfully (confirmed via re-fetch)',
-  );
-
-  return { ok: true, userId: user.id, email: user.email };
 }
 
 /**

@@ -20,6 +20,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
+import { CustomerSelect } from '@/components/shared/customer-select';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
@@ -749,18 +750,13 @@ function CreateJobDialog({
 
           <div>
             <Label>Customer</Label>
-            {customers.length > 0 && (
-              <Select onValueChange={handleCustomerSelect}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select existing customer..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.name} - {c.phone}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <div className="mt-1">
+              <CustomerSelect
+                value={null}
+                onChange={(id) => id && handleCustomerSelect(id)}
+                placeholder="Search existing customer…"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

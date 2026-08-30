@@ -38,9 +38,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -317,6 +315,83 @@ export function PlanCatalogSection() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  const planColumns: Column<Plan>[] = [
+    {
+      key: 'name', header: 'Name', render: (plan) => (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-sm">{plan.name}</span>
+            {plan.isAddon && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0">Add-on</Badge>
+            )}
+          </div>
+          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 w-fit ${getPlanBadgeClasses(plan.code)}`}>
+            {plan.code}
+          </Badge>
+          {plan.discountBadge && (
+            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">{plan.discountBadge}</span>
+          )}
+        </div>
+      ), className: 'min-w-[200px]',
+    },
+    {
+      key: 'monthly', header: 'Monthly', render: (plan) => (
+        <PriceCell price={plan.monthlyPrice} original={plan.originalMonthlyPrice} currency={plan.currency} />
+      ), className: 'min-w-[140px]',
+    },
+    {
+      key: 'yearly', header: 'Yearly', render: (plan) => (
+        <PriceCell price={plan.yearlyPrice} original={plan.originalYearlyPrice} currency={plan.currency} />
+      ), className: 'min-w-[120px]',
+    },
+    { key: 'users', header: 'Users', render: (plan) => <span className="text-sm">{formatInt(plan.maxUsers)}</span>, className: 'text-center' },
+    { key: 'jobs', header: 'Jobs', render: (plan) => <span className="text-sm">{formatInt(plan.maxJobs)}</span>, className: 'text-center' },
+    {
+      key: 'marketplace', header: 'Marketplace', render: (plan) => (
+        <span className="text-xs capitalize">
+          {MARKETPLACE_ACCESS_LABELS[plan.marketplaceAccess as MarketplaceAccess] || plan.marketplaceAccess}
+        </span>
+      ), className: 'min-w-[140px]',
+    },
+    {
+      key: 'popular', header: 'Popular', render: (plan) => (
+        plan.popular ? <Star className="size-4 text-amber-500 fill-amber-500 inline" /> : <span className="text-muted-foreground">—</span>
+      ), className: 'text-center',
+    },
+    {
+      key: 'active', header: 'Active', render: (plan) => (
+        <div className="flex items-center justify-center">
+          <Switch
+            checked={plan.isActive}
+            disabled={toggleActiveMutation.isPending}
+            onCheckedChange={(checked) => toggleActiveMutation.mutate({ id: plan.id, isActive: checked })}
+            aria-label={`Toggle active for ${plan.name}`}
+          />
+        </div>
+      ), className: 'text-center',
+    },
+    {
+      key: 'actions', header: 'Actions', render: (plan) => (
+        <div className="text-right">
+          <div className="inline-flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={() => openEdit(plan)} aria-label={`Edit ${plan.name}`}>
+              <Pencil className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDeleteTarget(plan)}
+              aria-label={`Delete ${plan.name}`}
+              className="text-red-600 hover:text-red-700 hover:bg-red-500/10"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        </div>
+      ), className: 'text-right',
+    },
+  ];
+
   return (
     <div className="space-y-6 p-4 sm:p-6">
       <SectionHeader
@@ -413,111 +488,13 @@ export function PlanCatalogSection() {
             <CardTitle className="text-base">Plans</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="max-w-full overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="min-w-[200px]">Name</TableHead>
-                    <TableHead className="min-w-[140px]">Monthly</TableHead>
-                    <TableHead className="min-w-[120px]">Yearly</TableHead>
-                    <TableHead className="text-center">Users</TableHead>
-                    <TableHead className="text-center">Jobs</TableHead>
-                    <TableHead className="min-w-[140px]">Marketplace</TableHead>
-                    <TableHead className="text-center">Popular</TableHead>
-                    <TableHead className="text-center">Active</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {plans.map((plan) => (
-                    <TableRow key={plan.id}>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm">{plan.name}</span>
-                            {plan.isAddon && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                                Add-on
-                              </Badge>
-                            )}
-                          </div>
-                          <Badge
-                            variant="outline"
-                            className={`text-[10px] px-1.5 py-0 w-fit ${getPlanBadgeClasses(plan.code)}`}
-                          >
-                            {plan.code}
-                          </Badge>
-                          {plan.discountBadge && (
-                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
-                              {plan.discountBadge}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <PriceCell
-                          price={plan.monthlyPrice}
-                          original={plan.originalMonthlyPrice}
-                          currency={plan.currency}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <PriceCell
-                          price={plan.yearlyPrice}
-                          original={plan.originalYearlyPrice}
-                          currency={plan.currency}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center text-sm">{formatInt(plan.maxUsers)}</TableCell>
-                      <TableCell className="text-center text-sm">{formatInt(plan.maxJobs)}</TableCell>
-                      <TableCell>
-                        <span className="text-xs capitalize">
-                          {MARKETPLACE_ACCESS_LABELS[plan.marketplaceAccess as MarketplaceAccess] || plan.marketplaceAccess}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {plan.popular ? (
-                          <Star className="size-4 text-amber-500 fill-amber-500 inline" />
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Switch
-                          checked={plan.isActive}
-                          disabled={toggleActiveMutation.isPending}
-                          onCheckedChange={(checked) =>
-                            toggleActiveMutation.mutate({ id: plan.id, isActive: checked })
-                          }
-                          aria-label={`Toggle active for ${plan.name}`}
-                        />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEdit(plan)}
-                            aria-label={`Edit ${plan.name}`}
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setDeleteTarget(plan)}
-                            aria-label={`Delete ${plan.name}`}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-500/10"
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <DataTable
+              columns={planColumns}
+              data={plans}
+              rowKey={(p) => p.id}
+              emptyMessage="No plans configured"
+              emptyIcon={Tags}
+            />
           </CardContent>
         </Card>
       )}

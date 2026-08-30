@@ -36,7 +36,10 @@ async function resolveScope(
     return { workspaceIds, tenantId: authUser.tenantId ?? null, isSuperAdmin: true }
   }
 
-  const effectiveWorkspaceId = workspaceIdParam || authUser.workspaceId
+  // SECURITY: NEVER trust workspaceIdParam for non-super-admins — a
+  // user could pass ?workspaceId=<other tenant's workspace> to read
+  // cross-tenant teams. Always derive from the session.
+  const effectiveWorkspaceId = authUser.workspaceId
   if (effectiveWorkspaceId) {
     return { workspaceIds: [effectiveWorkspaceId], tenantId: authUser.tenantId ?? null, isSuperAdmin: false }
   }

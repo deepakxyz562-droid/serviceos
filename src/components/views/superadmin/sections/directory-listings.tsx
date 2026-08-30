@@ -45,9 +45,7 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import {
-  Table, TableHeader, TableBody, TableRow, TableCell, TableHead,
-} from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { SectionHeader } from '@/components/views/superadmin/_shared';
 import { INDUSTRY_CATALOG, getIndustry } from '@/lib/industry-catalog';
 import { getAllCountryOptions, getCitiesForCountry } from '@/lib/marketplace-cities';
@@ -891,6 +889,182 @@ function ManageTab() {
     }
   };
 
+  const listingColumns: Column<Listing>[] = [
+    {
+      key: 'select', header: '', render: (it) => (
+        <Checkbox
+          checked={selected.has(it.id)}
+          onCheckedChange={() => toggleOne(it.id)}
+          aria-label={`Select ${it.name}`}
+        />
+      ), className: 'w-10',
+    },
+    {
+      key: 'name', header: 'Name', render: (it) => (
+        <div className="flex items-center gap-2 min-w-0">
+          <Store className="size-3.5 text-muted-foreground shrink-0" />
+          <span className="truncate font-medium">{it.name}</span>
+        </div>
+      ),
+    },
+    { key: 'category', header: 'Category', render: (it) => <span className="text-xs">{industryLabel(it.industry)}</span> },
+    {
+      key: 'city', header: 'City', render: (it) => (
+        <span className="text-xs flex items-center gap-1 text-muted-foreground">
+          <MapPin className="size-3" />
+          {it.city || '—'}
+        </span>
+      ),
+    },
+    { key: 'phone', header: 'Phone', render: (it) => <span className="text-xs text-muted-foreground">{it.phone || '—'}</span> },
+    {
+      key: 'rating', header: 'Rating', render: (it) => (
+        <span className="inline-flex items-center gap-1 text-xs">
+          <Star className="size-3 text-amber-500" />
+          {it.rating.toFixed(1)}
+          <span className="text-muted-foreground">({it.reviewCount})</span>
+        </span>
+      ), className: 'text-right',
+    },
+    {
+      key: 'tier', header: 'Tier', render: (it) => (
+        <Badge variant="outline" className={cn('text-[10px] capitalize', tierBadgeClasses(it.listingTier))}>
+          {it.listingTier}
+        </Badge>
+      ),
+    },
+    {
+      key: 'featured', header: 'Featured', render: (it) => (
+        <button
+          type="button"
+          onClick={() => toggleFeatured(it)}
+          disabled={featuredBusy === it.id}
+          title={
+            it.isFeatured
+              ? 'Remove from featured'
+              : it.isEligibleForFeatured
+                ? 'Add to featured'
+                : 'Not eligible (seed data or expired trial)'
+          }
+          aria-label={
+            it.isFeatured
+              ? `Remove ${it.name} from featured`
+              : `Feature ${it.name}`
+          }
+          className={cn(
+            'inline-flex size-7 items-center justify-center rounded-md transition-all',
+            it.isFeatured
+              ? 'bg-amber-100 text-amber-600 hover:bg-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:hover:bg-amber-900/60'
+              : it.isEligibleForFeatured
+                ? 'text-muted-foreground hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-950/30'
+                : 'cursor-not-allowed text-muted-foreground/30',
+          )}
+        >
+          {featuredBusy === it.id ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <Crown className={cn('size-3.5', it.isFeatured && 'fill-amber-400')} />
+          )}
+        </button>
+      ),
+    },
+    {
+      key: 'trial', header: 'Trial', render: (it) => {
+        if (!it.claimed) {
+          return <span className="text-xs text-muted-foreground">—</span>;
+        }
+        const status = it.planStatus;
+        if (status === 'active') {
+          return (
+            <Badge variant="outline" className="text-[9px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20">
+              Active
+            </Badge>
+          );
+        }
+        if (status === 'trial' && !it.isTrialExpired) {
+          const daysLeft = it.trialEndsAt
+            ? Math.max(
+                0,
+                Math.ceil(
+                  (new Date(it.trialEndsAt).getTime() - Date.now()) /
+                    (24 * 60 * 60 * 1000),
+                ),
+              )
+            : null;
+          return (
+            <button
+              type="button"
+              onClick={() => openTrialDialog(it)}
+              title="Manage trial period"
+              className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-600 transition-colors hover:bg-emerald-500/20 dark:text-emerald-400"
+            >
+              <Clock className="size-2.5" />
+              {daysLeft != null ? `${daysLeft}d left` : 'Trial'}
+            </button>
+          );
+        }
+        if (status === 'trial' && it.isTrialExpired) {
+          return (
+            <button
+              type="button"
+              onClick={() => openTrialDialog(it)}
+              title="Trial expired — click to extend"
+              className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-1.5 py-0.5 text-[9px] font-medium text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400"
+            >
+              <AlertTriangle className="size-2.5" />
+              Expired
+            </button>
+          );
+        }
+        if (status === 'expired') {
+          return (
+            <button
+              type="button"
+              onClick={() => openTrialDialog(it)}
+              title="Click to reactivate"
+              className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-1.5 py-0.5 text-[9px] font-medium text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400"
+            >
+              Expired
+            </button>
+          );
+        }
+        return (
+          <span className="text-[9px] text-muted-foreground capitalize">
+            {status ?? '—'}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'claimed', header: 'Claimed', render: (it) => (
+        it.claimed ? (
+          <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+            Claimed
+          </Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )
+      ),
+    },
+    {
+      key: 'actions', header: 'Actions', render: (it) => (
+        <div className="text-right">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2"
+            onClick={() => {
+              setSelected(new Set([it.id]));
+              openBulkEdit();
+            }}
+          >
+            <Edit3 className="size-3.5" />
+          </Button>
+        </div>
+      ), className: 'text-right',
+    },
+  ];
+
   return (
     <div className="space-y-4">
       {/* Filters bar */}
@@ -987,6 +1161,9 @@ function ManageTab() {
           <span className="text-sm font-medium text-foreground">
             {selected.size} selected
           </span>
+          <Button size="sm" variant="ghost" onClick={toggleAll} className="h-7 text-xs">
+            {allOnPageSelected ? 'Clear page' : 'Select all on page'}
+          </Button>
           <div className="flex-1" />
           <Button size="sm" variant="outline" onClick={openBulkEdit}>
             <Edit3 className="size-3.5 mr-1.5" />
@@ -1002,211 +1179,15 @@ function ManageTab() {
       {/* Table */}
       <Card className="card-shadow">
         <CardContent className="p-0">
-          <div className="max-h-[600px] overflow-y-auto">
-            <Table>
-              <TableHeader className="sticky top-0 bg-card z-10">
-                <TableRow>
-                  <TableHead className="w-10">
-                    <Checkbox
-                      checked={allOnPageSelected}
-                      onCheckedChange={toggleAll}
-                      aria-label="Select all on page"
-                    />
-                  </TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>City</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead className="text-right">Rating</TableHead>
-                  <TableHead>Tier</TableHead>
-                  <TableHead>Featured</TableHead>
-                  <TableHead>Trial</TableHead>
-                  <TableHead>Claimed</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading && (
-                  <TableRow>
-                    <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
-                      <Loader2 className="size-5 animate-spin inline mr-2" />
-                      Loading listings...
-                    </TableCell>
-                  </TableRow>
-                )}
-                {!loading && items.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
-                      No listings match the current filters.
-                    </TableCell>
-                  </TableRow>
-                )}
-                {!loading && items.map((it) => (
-                  <TableRow key={it.id} data-state={selected.has(it.id) ? 'selected' : undefined}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selected.has(it.id)}
-                        onCheckedChange={() => toggleOne(it.id)}
-                        aria-label={`Select ${it.name}`}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Store className="size-3.5 text-muted-foreground shrink-0" />
-                        <span className="truncate">{it.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-xs">{industryLabel(it.industry)}</span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-xs flex items-center gap-1 text-muted-foreground">
-                        <MapPin className="size-3" />
-                        {it.city || '—'}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{it.phone || '—'}</TableCell>
-                    <TableCell className="text-right">
-                      <span className="inline-flex items-center gap-1 text-xs">
-                        <Star className="size-3 text-amber-500" />
-                        {it.rating.toFixed(1)}
-                        <span className="text-muted-foreground">({it.reviewCount})</span>
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cn('text-[10px] capitalize', tierBadgeClasses(it.listingTier))}>
-                        {it.listingTier}
-                      </Badge>
-                    </TableCell>
-                    {/* Featured toggle column */}
-                    <TableCell>
-                      <button
-                        type="button"
-                        onClick={() => toggleFeatured(it)}
-                        disabled={featuredBusy === it.id}
-                        title={
-                          it.isFeatured
-                            ? 'Remove from featured'
-                            : it.isEligibleForFeatured
-                              ? 'Add to featured'
-                              : 'Not eligible (seed data or expired trial)'
-                        }
-                        aria-label={
-                          it.isFeatured
-                            ? `Remove ${it.name} from featured`
-                            : `Feature ${it.name}`
-                        }
-                        className={cn(
-                          'inline-flex size-7 items-center justify-center rounded-md transition-all',
-                          it.isFeatured
-                            ? 'bg-amber-100 text-amber-600 hover:bg-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:hover:bg-amber-900/60'
-                            : it.isEligibleForFeatured
-                              ? 'text-muted-foreground hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-950/30'
-                              : 'cursor-not-allowed text-muted-foreground/30',
-                        )}
-                      >
-                        {featuredBusy === it.id ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <Crown className={cn('size-3.5', it.isFeatured && 'fill-amber-400')} />
-                        )}
-                      </button>
-                    </TableCell>
-                    {/* Trial badge column */}
-                    <TableCell>
-                      {(() => {
-                        if (!it.claimed) {
-                          return <span className="text-xs text-muted-foreground">—</span>;
-                        }
-                        const status = it.planStatus;
-                        if (status === 'active') {
-                          return (
-                            <Badge variant="outline" className="text-[9px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20">
-                              Active
-                            </Badge>
-                          );
-                        }
-                        if (status === 'trial' && !it.isTrialExpired) {
-                          const daysLeft = it.trialEndsAt
-                            ? Math.max(
-                                0,
-                                Math.ceil(
-                                  (new Date(it.trialEndsAt).getTime() - Date.now()) /
-                                    (24 * 60 * 60 * 1000),
-                                ),
-                              )
-                            : null;
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => openTrialDialog(it)}
-                              title="Manage trial period"
-                              className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-600 transition-colors hover:bg-emerald-500/20 dark:text-emerald-400"
-                            >
-                              <Clock className="size-2.5" />
-                              {daysLeft != null ? `${daysLeft}d left` : 'Trial'}
-                            </button>
-                          );
-                        }
-                        if (status === 'trial' && it.isTrialExpired) {
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => openTrialDialog(it)}
-                              title="Trial expired — click to extend"
-                              className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-1.5 py-0.5 text-[9px] font-medium text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400"
-                            >
-                              <AlertTriangle className="size-2.5" />
-                              Expired
-                            </button>
-                          );
-                        }
-                        if (status === 'expired') {
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => openTrialDialog(it)}
-                              title="Click to reactivate"
-                              className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-1.5 py-0.5 text-[9px] font-medium text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400"
-                            >
-                              Expired
-                            </button>
-                          );
-                        }
-                        return (
-                          <span className="text-[9px] text-muted-foreground capitalize">
-                            {status ?? '—'}
-                          </span>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell>
-                      {it.claimed ? (
-                        <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
-                          Claimed
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 px-2"
-                        onClick={() => {
-                          setSelected(new Set([it.id]));
-                          openBulkEdit();
-                        }}
-                      >
-                        <Edit3 className="size-3.5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataTable
+            columns={listingColumns}
+            data={items}
+            rowKey={(it) => it.id}
+            loading={loading}
+            emptyMessage="No listings match the current filters."
+            emptyIcon={Store}
+            className="max-h-[600px]"
+          />
         </CardContent>
       </Card>
 

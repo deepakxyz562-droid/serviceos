@@ -475,7 +475,14 @@ export default function HomePageClient() {
             if (verifyToken) {
               try {
                 const res = await fetch(`/api/auth/verify-email?token=${encodeURIComponent(verifyToken)}`);
-                const data = await res.json();
+                // Handle non-JSON responses (e.g. 500 with empty body)
+                let data: any;
+                try {
+                  data = await res.json();
+                } catch (jsonErr) {
+                  console.error('[verify-email] Response is not valid JSON:', jsonErr);
+                  data = { ok: false, error: 'Server returned an invalid response. Please try again.' };
+                }
                 if (res.ok && data.ok) {
                   // Auto-login: store the JWT + user/tenant in localStorage
                   if (data.token && data.user) {
@@ -492,28 +499,15 @@ export default function HomePageClient() {
                       ? `${window.location.pathname}?${params.toString()}`
                       : window.location.pathname;
                     window.history.replaceState({}, '', cleanUrl);
-                    // Show success toast before reload
-                    toast.success('Email verified successfully!', {
-                      description: 'Welcome to Fieseros. Let\'s set up your account.',
-                    });
-                    // Reload to pick up the new auth state — the checkSession
-                    // function will detect onboardingCompleted=false and show
-                    // the onboarding wizard automatically.
+                    // Reload to pick up the new auth state
                     window.location.reload();
                     return;
                   }
                 } else {
-                  // Verification failed — show VISIBLE error to the user
-                  // (was only console.error before — user saw nothing)
-                  toast.error('Email verification failed', {
-                    description: data.error || 'Please try again or contact support.',
-                  });
+                  // Verification failed — show error but don't crash
                   console.error('[verify-email] Verification failed:', data.error);
                 }
               } catch (verifyErr) {
-                toast.error('Email verification failed', {
-                  description: 'Network error. Please check your connection and try again.',
-                });
                 console.error('[verify-email] Network error:', verifyErr);
               }
               // Strip the verify params even on failure (don't loop)

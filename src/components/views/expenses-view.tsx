@@ -54,14 +54,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -251,6 +244,80 @@ export function ExpensesView() {
     };
   }, [allExpenses, expenses, currency]);
 
+  // ── DataTable columns ─────────────────────────────────────────────────────
+  const expenseColumns: Column<Expense>[] = [
+    { key: 'number', header: 'Number', render: (exp) => <span className="font-mono text-xs font-medium">{exp.number}</span>, className: 'w-28' },
+    { key: 'date', header: 'Date', render: (exp) => <span className="text-sm text-muted-foreground whitespace-nowrap">{formatDate(exp.expenseDate)}</span>, className: 'w-28' },
+    { key: 'category', header: 'Category', render: (exp) => <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${categoryStyle(exp.category)}`}>{exp.category}</span>, className: 'w-32' },
+    {
+      key: 'description', header: 'Description', render: (exp) => (
+        <div className="flex items-center gap-2">
+          <span className="text-sm truncate" title={exp.description}>{exp.description}</span>
+          {exp.receiptUrl && <Paperclip className="size-3.5 text-muted-foreground shrink-0" title="Has receipt" />}
+        </div>
+      ),
+    },
+    { key: 'job', header: 'Job', render: (exp) => <span className="text-sm text-muted-foreground truncate max-w-[8rem]">{exp.jobTitle || (exp.jobId ? 'Linked job' : '—')}</span>, className: 'w-32' },
+    { key: 'submittedBy', header: 'Submitted By', render: (exp) => <span className="text-sm text-muted-foreground truncate max-w-[9rem]">{exp.employeeName || exp.submittedByName || '—'}</span>, className: 'w-36' },
+    { key: 'amount', header: 'Amount', render: (exp) => <span className="text-right font-semibold tabular-nums whitespace-nowrap block">{format(exp.amount, exp.currency)}</span>, className: 'text-right w-28', sortField: 'amount' },
+    {
+      key: 'status', header: 'Status', render: (exp) => <Badge variant="outline" className={`capitalize ${STATUS_STYLES[exp.status]}`}>{exp.status}</Badge>, className: 'w-28', sortField: 'status',
+    },
+    {
+      key: 'actions', header: '', render: (exp) => (
+        <div className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="size-8">
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              {exp.receiptUrl && (
+                <DropdownMenuItem onClick={() => setViewReceipt(exp)}>
+                  <Eye className="size-4 mr-2" /> View Receipt
+                </DropdownMenuItem>
+              )}
+              {(isEmployee ? exp.status === 'pending' && (exp.submittedById === user?.id || exp.employeeId === user?.employeeId) : true) && (
+                <DropdownMenuItem onClick={() => setEditing(exp)}>
+                  <Pencil className="size-4 mr-2" /> Edit
+                </DropdownMenuItem>
+              )}
+              {!isEmployee && exp.status === 'pending' && (
+                <DropdownMenuItem onClick={() => handleApprove(exp.id)} disabled={actionLoading[exp.id]}>
+                  <CheckCircle2 className="size-4 mr-2" /> Approve
+                </DropdownMenuItem>
+              )}
+              {!isEmployee && exp.status === 'pending' && (
+                <DropdownMenuItem onClick={() => { setRejectTarget(exp); setRejectReason(''); }}>
+                  <XCircle className="size-4 mr-2" /> Reject
+                </DropdownMenuItem>
+              )}
+              {!isEmployee && exp.status === 'approved' && (
+                <DropdownMenuItem onClick={() => handleMarkPaid(exp.id)} disabled={actionLoading[exp.id]}>
+                  <DollarSign className="size-4 mr-2" /> Mark Paid
+                </DropdownMenuItem>
+              )}
+              {!isEmployee && (exp.status === 'rejected' || exp.status === 'paid') && (
+                <DropdownMenuItem onClick={() => handleReopen(exp.id)} disabled={actionLoading[exp.id]}>
+                  <RotateCcw className="size-4 mr-2" /> Re-open
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              {(isEmployee ? exp.status === 'pending' && (exp.submittedById === user?.id || exp.employeeId === user?.employeeId) : true) && (
+                <DropdownMenuItem onClick={() => setDeleteTarget(exp)} className="text-red-700 focus:text-red-700">
+                  <Trash2 className="size-4 mr-2" /> Delete
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+      className: 'w-12 text-right',
+    },
+  ];
+
   // ── Actions ──────────────────────────────────────────────────────────────
   const handleStatusChange = async (exp: Expense, newStatus: ExpenseStatus) => {
     try {
@@ -414,158 +481,16 @@ export function ExpensesView() {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          {loading ? (
-            <div className="p-6 space-y-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : error ? (
-            <div className="p-10 text-center">
-              <p className="text-sm text-red-600 mb-3">{error}</p>
-              <Button variant="outline" size="sm" onClick={fetchExpenses}>
-                <RotateCcw className="size-4 mr-1.5" /> Retry
-              </Button>
-            </div>
-          ) : expenses.length === 0 ? (
-            <div className="p-10 sm:p-16 text-center">
-              <div className="mx-auto mb-4 flex items-center justify-center size-14 rounded-full bg-muted">
-                <Wallet className="size-7 text-muted-foreground" />
-              </div>
-              <h3 className="text-base font-semibold">No expenses found</h3>
-              <p className="text-sm text-muted-foreground mt-1 mb-4 max-w-sm mx-auto">
-                {search || statusFilter !== 'all' || categoryFilter !== 'all'
-                  ? 'Try adjusting your filters.'
-                  : 'Submit your first expense to get started.'}
-              </p>
-              <Button onClick={() => setCreateOpen(true)} className="bg-emerald-600 hover:bg-emerald-700">
-                <Plus className="size-4 mr-1.5" /> New Expense
-              </Button>
-            </div>
-          ) : (
-            <div className="max-h-[calc(100vh-22rem)] overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableHead className="w-28">Number</TableHead>
-                    <TableHead className="w-28">Date</TableHead>
-                    <TableHead className="w-32">Category</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="w-32">Job</TableHead>
-                    <TableHead className="w-36">Submitted By</TableHead>
-                    <TableHead className="text-right w-28">Amount</TableHead>
-                    <TableHead className="w-28">Status</TableHead>
-                    <TableHead className="w-12 text-right"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {expenses.map((exp) => (
-                    <TableRow key={exp.id}>
-                      <TableCell className="font-mono text-xs font-medium">{exp.number}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {formatDate(exp.expenseDate)}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${categoryStyle(exp.category)}`}>
-                          {exp.category}
-                        </span>
-                      </TableCell>
-                      <TableCell className="max-w-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm truncate" title={exp.description}>
-                            {exp.description}
-                          </span>
-                          {exp.receiptUrl && (
-                            <Paperclip className="size-3.5 text-muted-foreground shrink-0" title="Has receipt" />
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground truncate max-w-[8rem]">
-                        {exp.jobTitle || (exp.jobId ? 'Linked job' : '—')}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground truncate max-w-[9rem]">
-                        {exp.employeeName || exp.submittedByName || '—'}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums whitespace-nowrap">
-                        {format(exp.amount, exp.currency)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={`capitalize ${STATUS_STYLES[exp.status]}`}>
-                          {exp.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="size-8">
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            {exp.receiptUrl && (
-                              <DropdownMenuItem onClick={() => setViewReceipt(exp)}>
-                                <Eye className="size-4 mr-2" /> View Receipt
-                              </DropdownMenuItem>
-                            )}
-                            {(isEmployee
-                              ? exp.status === 'pending' &&
-                                (exp.submittedById === user?.id || exp.employeeId === user?.employeeId)
-                              : true) && (
-                              <DropdownMenuItem onClick={() => setEditing(exp)}>
-                                <Pencil className="size-4 mr-2" /> Edit
-                              </DropdownMenuItem>
-                            )}
-                            {!isEmployee && exp.status === 'pending' && (
-                              <DropdownMenuItem
-                                onClick={() => handleStatusChange(exp, 'approved')}
-                                className="text-emerald-700 focus:text-emerald-700"
-                              >
-                                <Check className="size-4 mr-2" /> Approve
-                              </DropdownMenuItem>
-                            )}
-                            {!isEmployee && exp.status === 'pending' && (
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setRejectTarget(exp);
-                                  setRejectReason('');
-                                }}
-                                className="text-red-700 focus:text-red-700"
-                              >
-                                <X className="size-4 mr-2" /> Reject
-                              </DropdownMenuItem>
-                            )}
-                            {!isEmployee && exp.status === 'approved' && (
-                              <DropdownMenuItem onClick={() => handleStatusChange(exp, 'reimbursed')}>
-                                <Banknote className="size-4 mr-2" /> Mark Reimbursed
-                              </DropdownMenuItem>
-                            )}
-                            {!isEmployee && (exp.status === 'approved' || exp.status === 'rejected') && (
-                              <DropdownMenuItem onClick={() => handleStatusChange(exp, 'pending')}>
-                                <RotateCcw className="size-4 mr-2" /> Re-open
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            {(isEmployee
-                              ? exp.status === 'pending' &&
-                                (exp.submittedById === user?.id || exp.employeeId === user?.employeeId)
-                              : true) && (
-                              <DropdownMenuItem
-                                onClick={() => setDeleteTarget(exp)}
-                                className="text-red-700 focus:text-red-700"
-                              >
-                                <Trash2 className="size-4 mr-2" /> Delete
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                    <DataTable
+              columns={expenseColumns}
+              data={expenses}
+              rowKey={(exp) => exp.id}
+              loading={loading}
+              error={error}
+              onRetry={fetchExpenses}
+              emptyMessage="No expenses found"
+              emptyIcon={Wallet}
+            />
         </CardContent>
       </Card>
 

@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { Progress } from '@/components/ui/progress';
 
 import {
@@ -200,6 +200,18 @@ export function CommandCenterSection() {
   const handleQuickAction = (action: string) => {
     console.log(`quick-action: ${action}`);
   };
+
+  const signupColumns: Column<SignupItem>[] = [
+    { key: 'company', header: 'Company', render: (s) => <span className="text-xs font-medium text-foreground max-w-[120px] truncate block">{s.company}</span> },
+    {
+      key: 'plan', header: 'Plan', render: (s) => (
+        <Badge variant="outline" className={cn('text-[10px] capitalize px-1.5 py-0', getPlanBadgeClasses(s.plan))}>
+          {s.plan}
+        </Badge>
+      ),
+    },
+    { key: 'created', header: 'Created', render: (s) => <span className="text-xs text-muted-foreground text-right tabular-nums block">{mounted ? formatDate(isoMinutesAgo(s.minsAgo)) : '—'}</span>, className: 'text-right' },
+  ];
 
   return (
     <section className="space-y-6">
@@ -438,35 +450,13 @@ export function CommandCenterSection() {
             <CardDescription>New workspaces in the last 24h</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Company</TableHead>
-                  <TableHead className="text-xs">Plan</TableHead>
-                  <TableHead className="text-xs text-right">Created</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {RECENT_SIGNUPS.map((s) => (
-                  <TableRow key={s.company}>
-                    <TableCell className="text-xs font-medium text-foreground py-2.5 max-w-[120px] truncate">
-                      {s.company}
-                    </TableCell>
-                    <TableCell className="py-2.5">
-                      <Badge
-                        variant="outline"
-                        className={cn('text-[10px] capitalize px-1.5 py-0', getPlanBadgeClasses(s.plan))}
-                      >
-                        {s.plan}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground text-right py-2.5 tabular-nums">
-                      {mounted ? formatDate(isoMinutesAgo(s.minsAgo)) : '—'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <DataTable
+              columns={signupColumns}
+              data={RECENT_SIGNUPS}
+              rowKey={(s) => s.company}
+              emptyMessage="No recent signups"
+              emptyIcon={Building2}
+            />
           </CardContent>
         </Card>
       </div>

@@ -1,0 +1,98 @@
+# CI — runs on every Pull Request and push to main.
+#
+# Pipeline stages:
+#   1. Lint (advisory — continue-on-error until the 42 pre-existing errors are fixed)
+#   2. TypeScript check (advisory — continue-on-error until tsc --noEmit passes cleanly)
+#   3. Build (blocking — ensures the app actually compiles)
+#   4. Unit tests (blocking once vitest is wired up — currently a no-op placeholder)
+#
+# WHY advisory for lint/tsc?
+#   The codebase has 1,499 TS/TSX files and was developed without CI. Flipping
+#   these to blocking on day one would fail every PR. Instead, we surface the
+#   errors as warnings so contributors can see the baseline and fix incrementally.
+#   Once the error count reaches zero, flip `continue-on-error: false` and
+#   remove `typescript.ignoreBuildErrors` from next.config.ts.
+#
+# To run locally:
+#   bun run lint
+#   npx tsc --noEmit
+#   bun run build
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel in-progress runs for the same branch — saves CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: bun run db:generate
+
+      - name: Run ESLint
+        run: bun run lint
+        continue-on-error: true
+
+  typecheck:
+    name: TypeScript check (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: bun run db:generate
+
+      - name: TypeScript check
+        run: npx tsc --noEmit --skipLibCheck
+        continue-on-error: true
+
+  build:
+    name: Build (blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: bun run db:generate
+
+      - name: Build
+        run: bun run build
+        env:
+          # Skip DB connection during build — Next.js only needs the client for types.
+          DATABASE_URL: "file::memory:"
+          JWT_SECRET: "ci-build-secret"

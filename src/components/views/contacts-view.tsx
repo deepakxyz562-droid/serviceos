@@ -19,6 +19,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
@@ -181,6 +182,7 @@ export function ContactsView() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -300,6 +302,7 @@ export function ContactsView() {
   const fetchContacts = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const params = new URLSearchParams();
       params.set('page', String(page));
       params.set('limit', pageSize === 'all' ? 'all' : String(pageSize));
@@ -326,12 +329,14 @@ export function ContactsView() {
           setPagination(null);
         }
       } else {
-        toast.error('Failed to load contacts');
         setContacts([]);
+        setPagination(null);
+        setError('Failed to load contacts. Please try again.');
       }
-    } catch {
-      toast.error('Failed to load contacts');
+    } catch (e) {
       setContacts([]);
+      setPagination(null);
+      setError(e instanceof Error ? e.message : 'Failed to load contacts. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -1102,6 +1107,266 @@ export function ContactsView() {
     }
   };
 
+  // ── DataTable columns ─────────────────────────────────────────────────────
+  // The contacts table uses row selection (checkboxes). DataTable doesn't have
+  // built-in row selection, so we render the per-row checkbox as the first
+  // column and keep `selectedIds` state in this parent. A select-all checkbox
+  // is rendered in a small toolbar above the table (DataTable's `header` field
+  // is a plain string, so the select-all cannot live in the column header).
+  const contactColumns: Column<Contact>[] = [
+    {
+      key: 'select',
+      header: '',
+      render: (c) => (
+        <Checkbox
+          checked={selectedIds.has(c.id)}
+          onCheckedChange={() => toggleSelect(c.id)}
+          aria-label={`Select ${c.name}`}
+        />
+      ),
+      className: 'w-12',
+      headerClassName: 'w-12',
+    },
+    {
+      key: 'name',
+      header: 'Name',
+      render: (c) => (
+        <div className="flex items-center gap-2">
+          <Avatar className="size-8">
+            <AvatarFallback className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 text-xs">
+              {getInitials(c.name)}
+            </AvatarFallback>
+          </Avatar>
+          <span className="font-medium">{c.name}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'email',
+      header: 'Email',
+      render: (c) => <span className="text-sm text-muted-foreground">{c.email || '-'}</span>,
+      hideOnMobile: true,
+    },
+    {
+      key: 'phone',
+      header: 'Phone',
+      render: (c) => <span className="text-sm text-muted-foreground">{c.phone || '-'}</span>,
+      hideOnMobile: true,
+    },
+    {
+      key: 'company',
+      header: 'Company',
+      render: (c) => <span className="text-sm text-muted-foreground">{c.company || '-'}</span>,
+      hideOnMobile: true,
+    },
+    {
+      key: 'location',
+      header: 'Location',
+      render: (c) => <span className="text-sm text-muted-foreground">{formatLocation(c) || '-'}</span>,
+      hideOnMobile: true,
+    },
+    {
+      key: 'tags',
+      header: 'Tags',
+      render: (c) => {
+        const ctTags = c.contactTags || [];
+        const legacyTags = (c.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+        return (
+          <div className="flex flex-wrap gap-1 max-w-[200px]">
+            {ctTags.length > 0
+              ? ctTags.map(ct => (
+                <Badge
+                  key={ct.id}
+                  variant="outline"
+                  className="text-[10px] h-5"
+                  style={tagBadgeStyle(ct.tag.color)}
+                >
+                  {ct.tag.name}
+                </Badge>
+              ))
+              : legacyTags.map(tag => (
+                <Badge
+                  key={tag}
+                  variant="outline"
+                  className="text-[10px] h-5 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800"
+                >
+                  {tag}
+                </Badge>
+              ))}
+          </div>
+        );
+      },
+      hideOnMobile: true,
+    },
+    {
+      key: 'groups',
+      header: 'Groups',
+      render: (c) => {
+        const cgGroups = c.contactGroups || [];
+        return (
+          <div className="flex flex-wrap gap-1 max-w-[160px]">
+            {cgGroups.map(cg => (
+              <Badge
+                key={cg.id}
+                variant="outline"
+                className="text-[10px] h-5 bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800/40 dark:text-slate-300 dark:border-slate-700"
+                style={groupBadgeStyle(cg.group.color)}
+              >
+                <UsersIcon className="size-2.5 mr-0.5" />
+                {cg.group.name}
+              </Badge>
+            ))}
+          </div>
+        );
+      },
+      hideOnMobile: true,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (c) => {
+        const statusOpt = STATUS_OPTIONS.find(s => s.value === (c.status || 'active'));
+        return (
+          <Badge variant="outline" className={cn('text-[10px] h-5', statusOpt?.className || STATUS_OPTIONS[0].className)}>
+            {statusOpt?.label || c.status || 'active'}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (c) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={linkingContactId === c.id}>
+              {linkingContactId === c.id
+                ? <Loader2 className="size-4 animate-spin" />
+                : <MoreVertical className="size-4" />}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem
+              onClick={() => handleConvertToLead(c)}
+              title="Create a new Lead from this contact"
+            >
+              <ArrowUpRight className="size-3 mr-2" /> Convert to Lead
+            </DropdownMenuItem>
+
+            {/* Add to Workflow — sub-menu of available workflows */}
+            <DropdownMenuSub onOpenChange={(open) => { if (open) fetchWorkflows(); }}>
+              <DropdownMenuSubTrigger>
+                <WorkflowIcon className="size-3 mr-2" /> Add to Workflow
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-56">
+                {loadingWorkflows && availableWorkflows.length === 0 ? (
+                  <div className="px-2 py-3 text-xs text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="size-3 animate-spin" /> Loading workflows…
+                  </div>
+                ) : availableWorkflows.length === 0 ? (
+                  <div className="px-2 py-3 text-xs text-muted-foreground">
+                    No workflows available
+                  </div>
+                ) : (
+                  availableWorkflows.map(w => (
+                    <DropdownMenuItem
+                      key={w.id}
+                      onClick={() => handleAddToWorkflow(c, w)}
+                    >
+                      <div className="flex flex-col">
+                        <span className="truncate">{w.name}</span>
+                        {w.description && (
+                          <span className="text-[10px] text-muted-foreground truncate">
+                            {w.description}
+                          </span>
+                        )}
+                      </div>
+                    </DropdownMenuItem>
+                  ))
+                )}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+
+            {/* Add to Campaign — sub-menu of available campaigns */}
+            <DropdownMenuSub onOpenChange={(open) => { if (open) fetchCampaigns(); }}>
+              <DropdownMenuSubTrigger>
+                <Send className="size-3 mr-2" /> Add to Campaign
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-56">
+                {loadingCampaigns && availableCampaigns.length === 0 ? (
+                  <div className="px-2 py-3 text-xs text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="size-3 animate-spin" /> Loading campaigns…
+                  </div>
+                ) : availableCampaigns.length === 0 ? (
+                  <div className="px-2 py-3 text-xs text-muted-foreground">
+                    No campaigns available
+                  </div>
+                ) : (
+                  availableCampaigns.map(camp => (
+                    <DropdownMenuItem
+                      key={camp.id}
+                      onClick={() => handleAddToCampaign(c, camp)}
+                    >
+                      <div className="flex flex-col">
+                        <span className="truncate">{camp.name}</span>
+                        {camp.status && (
+                          <span className="text-[10px] text-muted-foreground truncate">
+                            {camp.status}
+                          </span>
+                        )}
+                      </div>
+                    </DropdownMenuItem>
+                  ))
+                )}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+
+            {/* Add to Segment — sub-menu of available segments */}
+            <DropdownMenuSub onOpenChange={(open) => { if (open) fetchSegments(); }}>
+              <DropdownMenuSubTrigger>
+                <Layers className="size-3 mr-2" /> Add to Segment
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-56">
+                {loadingSegments && availableSegments.length === 0 ? (
+                  <div className="px-2 py-3 text-xs text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="size-3 animate-spin" /> Loading segments…
+                  </div>
+                ) : availableSegments.length === 0 ? (
+                  <div className="px-2 py-3 text-xs text-muted-foreground">
+                    No segments available
+                  </div>
+                ) : (
+                  availableSegments.map(seg => (
+                    <DropdownMenuItem
+                      key={seg.id}
+                      onClick={() => handleAddToSegment(c, seg)}
+                    >
+                      <div className="flex flex-col">
+                        <span className="truncate">{seg.name}</span>
+                        {(seg.type || typeof seg.memberCount === 'number') && (
+                          <span className="text-[10px] text-muted-foreground truncate">
+                            {seg.type || 'segment'}{typeof seg.memberCount === 'number' ? ` · ${seg.memberCount} members` : ''}
+                          </span>
+                        )}
+                      </div>
+                    </DropdownMenuItem>
+                  ))
+                )}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => openEditDialog(c)}><Edit className="size-3 mr-2" /> Edit</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-red-600" onClick={() => { setDeleteTarget(c); setDeleteDialogOpen(true); }}><Trash2 className="size-3 mr-2" /> Delete</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+      className: 'w-12',
+      headerClassName: 'w-12',
+    },
+  ];
+
   // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
@@ -1291,253 +1556,36 @@ export function ContactsView() {
       {/* Contact table */}
       <Card>
         <CardContent className="p-0">
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="size-8 animate-spin text-emerald-500" />
-            </div>
-          ) : displayedContacts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-4">
-              <div className="size-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                <ContactIcon className="size-8 text-emerald-600" />
-              </div>
-              <h3 className="text-lg font-semibold">{hasActiveFilters ? 'No matching contacts' : 'No contacts yet'}</h3>
-              <p className="text-sm text-muted-foreground max-w-md text-center">
-                {hasActiveFilters
-                  ? 'Try adjusting your search or filter criteria.'
-                  : 'Add contacts manually or import from a CSV/XLSX file to get started.'}
-              </p>
-              {!hasActiveFilters && (
-                <div className="flex gap-2">
-                  <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { resetForm(); setAddDialogOpen(true); }}><Plus className="size-4 mr-1.5" /> Add Contact</Button>
-                  <Button variant="outline" onClick={() => setImportDialogOpen(true)}><Upload className="size-4 mr-1.5" /> Import</Button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="max-h-[1200px] overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">
-                      <Checkbox
-                        checked={selectedIds.size === displayedContacts.length && displayedContacts.length > 0}
-                        onCheckedChange={toggleSelectAll}
-                        aria-label="Select all"
-                      />
-                    </TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Company</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Tags</TableHead>
-                    <TableHead>Groups</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-12" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {displayedContacts.map(contact => {
-                    const ctTags = contact.contactTags || [];
-                    const cgGroups = contact.contactGroups || [];
-                    const legacyTags = (contact.tags || '').split(',').map(t => t.trim()).filter(Boolean);
-                    const statusOpt = STATUS_OPTIONS.find(s => s.value === (contact.status || 'active'));
-                    return (
-                      <TableRow key={contact.id} className={cn(selectedIds.has(contact.id) && 'bg-emerald-50 dark:bg-emerald-900/10')}>
-                        <TableCell><Checkbox checked={selectedIds.has(contact.id)} onCheckedChange={() => toggleSelect(contact.id)} aria-label={`Select ${contact.name}`} /></TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Avatar className="size-8">
-                              <AvatarFallback className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 text-xs">
-                                {getInitials(contact.name)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="font-medium">{contact.name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{contact.email || '-'}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{contact.phone || '-'}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{contact.company || '-'}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatLocation(contact) || '-'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1 max-w-[200px]">
-                            {ctTags.length > 0
-                              ? ctTags.map(ct => (
-                                <Badge
-                                  key={ct.id}
-                                  variant="outline"
-                                  className="text-[10px] h-5"
-                                  style={tagBadgeStyle(ct.tag.color)}
-                                >
-                                  {ct.tag.name}
-                                </Badge>
-                              ))
-                              : legacyTags.map(tag => (
-                                <Badge
-                                  key={tag}
-                                  variant="outline"
-                                  className="text-[10px] h-5 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800"
-                                >
-                                  {tag}
-                                </Badge>
-                              ))}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1 max-w-[160px]">
-                            {cgGroups.map(cg => (
-                              <Badge
-                                key={cg.id}
-                                variant="outline"
-                                className="text-[10px] h-5 bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800/40 dark:text-slate-300 dark:border-slate-700"
-                                style={groupBadgeStyle(cg.group.color)}
-                              >
-                                <UsersIcon className="size-2.5 mr-0.5" />
-                                {cg.group.name}
-                              </Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={cn('text-[10px] h-5', statusOpt?.className || STATUS_OPTIONS[0].className)}>
-                            {statusOpt?.label || contact.status || 'active'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={linkingContactId === contact.id}>
-                                {linkingContactId === contact.id
-                                  ? <Loader2 className="size-4 animate-spin" />
-                                  : <MoreVertical className="size-4" />}
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
-                              <DropdownMenuItem
-                                onClick={() => handleConvertToLead(contact)}
-                                title="Create a new Lead from this contact"
-                              >
-                                <ArrowUpRight className="size-3 mr-2" /> Convert to Lead
-                              </DropdownMenuItem>
-
-                              {/* Add to Workflow — sub-menu of available workflows */}
-                              <DropdownMenuSub onOpenChange={(open) => { if (open) fetchWorkflows(); }}>
-                                <DropdownMenuSubTrigger>
-                                  <WorkflowIcon className="size-3 mr-2" /> Add to Workflow
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent className="w-56">
-                                  {loadingWorkflows && availableWorkflows.length === 0 ? (
-                                    <div className="px-2 py-3 text-xs text-muted-foreground flex items-center gap-2">
-                                      <Loader2 className="size-3 animate-spin" /> Loading workflows…
-                                    </div>
-                                  ) : availableWorkflows.length === 0 ? (
-                                    <div className="px-2 py-3 text-xs text-muted-foreground">
-                                      No workflows available
-                                    </div>
-                                  ) : (
-                                    availableWorkflows.map(w => (
-                                      <DropdownMenuItem
-                                        key={w.id}
-                                        onClick={() => handleAddToWorkflow(contact, w)}
-                                      >
-                                        <div className="flex flex-col">
-                                          <span className="truncate">{w.name}</span>
-                                          {w.description && (
-                                            <span className="text-[10px] text-muted-foreground truncate">
-                                              {w.description}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </DropdownMenuItem>
-                                    ))
-                                  )}
-                                </DropdownMenuSubContent>
-                              </DropdownMenuSub>
-
-                              {/* Add to Campaign — sub-menu of available campaigns */}
-                              <DropdownMenuSub onOpenChange={(open) => { if (open) fetchCampaigns(); }}>
-                                <DropdownMenuSubTrigger>
-                                  <Send className="size-3 mr-2" /> Add to Campaign
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent className="w-56">
-                                  {loadingCampaigns && availableCampaigns.length === 0 ? (
-                                    <div className="px-2 py-3 text-xs text-muted-foreground flex items-center gap-2">
-                                      <Loader2 className="size-3 animate-spin" /> Loading campaigns…
-                                    </div>
-                                  ) : availableCampaigns.length === 0 ? (
-                                    <div className="px-2 py-3 text-xs text-muted-foreground">
-                                      No campaigns available
-                                    </div>
-                                  ) : (
-                                    availableCampaigns.map(c => (
-                                      <DropdownMenuItem
-                                        key={c.id}
-                                        onClick={() => handleAddToCampaign(contact, c)}
-                                      >
-                                        <div className="flex flex-col">
-                                          <span className="truncate">{c.name}</span>
-                                          {c.status && (
-                                            <span className="text-[10px] text-muted-foreground truncate">
-                                              {c.status}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </DropdownMenuItem>
-                                    ))
-                                  )}
-                                </DropdownMenuSubContent>
-                              </DropdownMenuSub>
-
-                              {/* Add to Segment — sub-menu of available segments */}
-                              <DropdownMenuSub onOpenChange={(open) => { if (open) fetchSegments(); }}>
-                                <DropdownMenuSubTrigger>
-                                  <Layers className="size-3 mr-2" /> Add to Segment
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent className="w-56">
-                                  {loadingSegments && availableSegments.length === 0 ? (
-                                    <div className="px-2 py-3 text-xs text-muted-foreground flex items-center gap-2">
-                                      <Loader2 className="size-3 animate-spin" /> Loading segments…
-                                    </div>
-                                  ) : availableSegments.length === 0 ? (
-                                    <div className="px-2 py-3 text-xs text-muted-foreground">
-                                      No segments available
-                                    </div>
-                                  ) : (
-                                    availableSegments.map(s => (
-                                      <DropdownMenuItem
-                                        key={s.id}
-                                        onClick={() => handleAddToSegment(contact, s)}
-                                      >
-                                        <div className="flex flex-col">
-                                          <span className="truncate">{s.name}</span>
-                                          {(s.type || typeof s.memberCount === 'number') && (
-                                            <span className="text-[10px] text-muted-foreground truncate">
-                                              {s.type || 'segment'}{typeof s.memberCount === 'number' ? ` · ${s.memberCount} members` : ''}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </DropdownMenuItem>
-                                    ))
-                                  )}
-                                </DropdownMenuSubContent>
-                              </DropdownMenuSub>
-
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => openEditDialog(contact)}><Edit className="size-3 mr-2" /> Edit</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-red-600" onClick={() => { setDeleteTarget(contact); setDeleteDialogOpen(true); }}><Trash2 className="size-3 mr-2" /> Delete</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+          {/* Select-all toolbar — DataTable's `header` field is a plain string,
+              so the select-all checkbox lives in a small toolbar above the
+              table instead of in the column header. Only rendered when there
+              is data to select (DataTable handles loading/error/empty). */}
+          {!loading && !error && displayedContacts.length > 0 && (
+            <div className="flex items-center gap-3 px-4 py-2 border-b">
+              <Checkbox
+                checked={selectedIds.size === displayedContacts.length && displayedContacts.length > 0}
+                onCheckedChange={toggleSelectAll}
+                aria-label="Select all"
+              />
+              <span className="text-xs text-muted-foreground">
+                {selectedIds.size > 0
+                  ? `${selectedIds.size} of ${displayedContacts.length} on this page selected`
+                  : 'Select all on this page'}
+              </span>
             </div>
           )}
+          <div className="max-h-[1200px] overflow-auto">
+            <DataTable
+              columns={contactColumns}
+              data={displayedContacts}
+              rowKey={(c) => c.id}
+              loading={loading}
+              error={error}
+              onRetry={fetchContacts}
+              emptyMessage={hasActiveFilters ? 'No matching contacts' : 'No contacts yet'}
+              emptyIcon={ContactIcon}
+            />
+          </div>
         </CardContent>
       </Card>
 

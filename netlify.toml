@@ -10,16 +10,14 @@
   NEXT_USE_NETLIFY_EDGE = "false"
 
 # ── Netlify Functions directory ───────────────────────────────────────────
-# The daily cron master function lives in netlify/functions/cron-daily.js
-# Its schedule is declared INSIDE the function file via `export const schedule`.
+# The daily cron function was removed (Phase 7 disabled, Vercel is authoritative)
+
 [functions]
   directory = "netlify/functions"
   # Include node_modules needed at runtime (none needed here — uses native fetch)
 
 # ── Daily Cron Schedule ───────────────────────────────────────────────────
-# The cron-daily function triggers all 5 Fieseros cron endpoints at 09:00 UTC.
-# To change the time, edit `export const schedule` in netlify/functions/cron-daily.js.
-# To disable: delete the file or remove the `schedule` export.
+# Cron scheduling is now handled by Vercel (vercel.json) + cron-job.org.
 
 # ── Required environment variables for Netlify deployment ─────────────────
 # Set these in Netlify Dashboard → Site settings → Environment variables:

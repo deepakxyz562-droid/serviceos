@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { toISOString } from '@/lib/utils';
 import { getExchangeRate, convertCurrency } from '@/lib/currency';
 import { getAuthUser } from '@/lib/auth';
+import { resolveTenantId } from '@/lib/api-auth';
 import { EventBus } from '@/lib/event-bus';
 import { requireCrmTenant } from '@/lib/require-crm-tenant';
 import { resolveFallbackTenantCurrency } from '@/lib/tenant-resolver';
@@ -24,7 +25,13 @@ export async function GET(req: NextRequest) {
     const dealIdParam = searchParams.get('dealId');
 
     const where: Record<string, unknown> = {};
-    if (user.tenantId && !user.isSuperAdmin) {
+    // SECURITY: non-super-admins MUST have a tenantId. If they don't (edge
+    // case: stale JWT), return 401 instead of leaving `where` empty (which
+    // would return ALL quotes across ALL tenants).
+    if (!user.isSuperAdmin) {
+      if (!user.tenantId) {
+        return NextResponse.json({ error: 'Tenant context required' }, { status: 401 });
+      }
       where.tenantId = user.tenantId;
     }
 
@@ -93,13 +100,25 @@ export async function POST(req: NextRequest) {
   try {
     const crmGuard = await requireCrmTenant(req);
     if (crmGuard) return crmGuard;
+    // SECURITY: previously this handler had NO auth check — requireCrmTenant
+    // returns null for unauthenticated users (it's a 403-only guard), so
+    // anyone could create quotes in any tenant via body.tenantId.
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required', code: 'UNAUTHENTICATED' }, { status: 401 });
+    }
+    if (!user.isSuperAdmin && !user.tenantId) {
+      return NextResponse.json({ error: 'Tenant context required' }, { status: 401 });
+    }
     const body = await req.json();
     const {
       title, description, customerId,
       services, addOns, discountType, discountValue, taxRate, validUntil,
-      currency: quoteCurrency, tenantId: bodyTenantId,
+      currency: quoteCurrency,
       dealId,
     } = body;
+    // SECURITY: derive tenantId from the session, never from the body
+    const sessionTenantId = resolveTenantId(user, body.tenantId);
 
     // ─── Pre-fill from linked Deal (optional) ────────────────────────────
     // When `dealId` is provided (e.g. the user clicked "Create Quote" on
@@ -111,11 +130,14 @@ export async function POST(req: NextRequest) {
     let resolvedCustomerId = customerId || null;
     let resolvedLeadId: string | null = null;
     let dealCurrency: string | null = null;
-    let dealTenantId: string | null = null;
     if (dealId) {
       try {
-        const deal = await db.deal.findUnique({
-          where: { id: dealId },
+        // SECURITY: tenant-scope the deal lookup so a user can't reference
+        // another tenant's deal by ID.
+        const dealWhere: Record<string, unknown> = { id: dealId };
+        if (sessionTenantId) dealWhere.tenantId = sessionTenantId;
+        const deal = await db.deal.findFirst({
+          where: dealWhere,
           select: {
             id: true,
             currency: true,
@@ -128,7 +150,6 @@ export async function POST(req: NextRequest) {
           resolvedCustomerId = resolvedCustomerId || deal.customerId || null;
           resolvedLeadId = deal.leadId || null;
           dealCurrency = deal.currency || null;
-          dealTenantId = deal.tenantId || null;
         }
       } catch (dealErr) {
         // Non-fatal — continue with whatever fields the caller supplied.
@@ -185,7 +206,7 @@ export async function POST(req: NextRequest) {
         baseAmount,
         status: 'draft',
         validUntil: validUntil ? new Date(validUntil) : null,
-        tenantId: bodyTenantId || dealTenantId || null,
+        tenantId: sessionTenantId,
       },
     });
 

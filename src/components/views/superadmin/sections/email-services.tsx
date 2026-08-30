@@ -14,9 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   Mail, Send, CheckCircle2, AlertTriangle, ChevronRight, Settings2,
 } from 'lucide-react';
@@ -122,48 +120,13 @@ export function EmailServicesSection() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border border-border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>Config</TableHead>
-                  <TableHead className="text-right">Sent (24h)</TableHead>
-                  <TableHead className="w-40">Delivery</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {EMAIL_PROVIDERS.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-medium text-foreground">{p.name}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{p.config}</TableCell>
-                    <TableCell className="text-right tabular-nums">{p.sent24h.toLocaleString('en-US')}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Progress value={p.deliveryRate} className="h-1.5" />
-                        <span className="text-xs tabular-nums text-muted-foreground w-12 text-right">
-                          {p.deliveryRate.toFixed(1)}%
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cn('capitalize', getStatusBadgeClasses(p.status))}>
-                        {p.status === 'active' ? 'Active' : 'Degraded'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="h-8 gap-1.5">
-                        <Settings2 className="size-3.5" />
-                        Configure
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataTable
+            columns={emailProviderColumns}
+            data={EMAIL_PROVIDERS}
+            rowKey={(p) => p.id}
+            emptyMessage="No email providers connected"
+            emptyIcon={Mail}
+          />
         </CardContent>
       </Card>
 
@@ -238,3 +201,36 @@ export function EmailServicesSection() {
     </section>
   );
 }
+
+const emailProviderColumns: Column<EmailProviderRow>[] = [
+  { key: 'name', header: 'Provider', render: (p) => <span className="font-medium text-foreground">{p.name}</span> },
+  { key: 'config', header: 'Config', render: (p) => <span className="font-mono text-xs text-muted-foreground">{p.config}</span> },
+  { key: 'sent24h', header: 'Sent (24h)', render: (p) => <span className="text-right tabular-nums block">{p.sent24h.toLocaleString('en-US')}</span>, className: 'text-right' },
+  {
+    key: 'delivery', header: 'Delivery', render: (p) => (
+      <div className="flex items-center gap-2">
+        <Progress value={p.deliveryRate} className="h-1.5" />
+        <span className="text-xs tabular-nums text-muted-foreground w-12 text-right">
+          {p.deliveryRate.toFixed(1)}%
+        </span>
+      </div>
+    ), className: 'w-40',
+  },
+  {
+    key: 'status', header: 'Status', render: (p) => (
+      <Badge variant="outline" className={cn('capitalize', getStatusBadgeClasses(p.status))}>
+        {p.status === 'active' ? 'Active' : 'Degraded'}
+      </Badge>
+    ),
+  },
+  {
+    key: 'actions', header: 'Actions', render: () => (
+      <div className="text-right">
+        <Button variant="ghost" size="sm" className="h-8 gap-1.5">
+          <Settings2 className="size-3.5" />
+          Configure
+        </Button>
+      </div>
+    ), className: 'text-right',
+  },
+];

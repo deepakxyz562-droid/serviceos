@@ -11,8 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle,
@@ -23,9 +22,6 @@ import {
 import {
   Tabs, TabsList, TabsTrigger,
 } from '@/components/ui/tabs';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip';
@@ -369,6 +365,111 @@ export function EmailTemplatesView() {
     }
   };
 
+  // ── DataTable columns ─────────────────────────────────────────────────────
+  const templateColumns: Column<EmailTemplate>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      render: (t) => (
+        <>
+          <div className="font-medium">{t.name}</div>
+          <div className="font-mono text-[10px] text-muted-foreground">{t.slug}</div>
+        </>
+      ),
+    },
+    {
+      key: 'category',
+      header: 'Category',
+      render: (t) => (
+        <Badge variant="outline" className={cn('text-[10px] capitalize', CATEGORY_COLORS[t.category] || CATEGORY_COLORS.system)}>
+          {t.category}
+        </Badge>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      render: (t) => t.isBuiltIn ? (
+        <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 text-[10px]">
+          Built-in
+        </Badge>
+      ) : (
+        <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]">
+          Custom
+        </Badge>
+      ),
+    },
+    {
+      key: 'subject',
+      header: 'Subject',
+      render: (t) => (
+        <div className="text-xs truncate text-muted-foreground">
+          {t.subject.slice(0, 80)}{t.subject.length > 80 ? '…' : ''}
+        </div>
+      ),
+      className: 'max-w-xs',
+    },
+    {
+      key: 'variables',
+      header: 'Variables',
+      render: (t) => {
+        const vars = parseVariables(t.variablesJson);
+        return vars.length > 0 ? (
+          <Badge variant="outline" className="text-[10px] bg-teal-50 text-teal-700 border-teal-200">
+            {vars.length} var{vars.length === 1 ? '' : 's'}
+          </Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        );
+      },
+    },
+    {
+      key: 'updated',
+      header: 'Updated',
+      render: (t) => <span className="text-xs text-muted-foreground">{formatDate(t.updatedAt)}</span>,
+      className: 'text-xs text-muted-foreground whitespace-nowrap',
+      sortField: 'updatedAt',
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (t) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openEdit(t)} title="Edit">
+            <Pencil className="size-3.5" />
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleDuplicate(t)} title="Duplicate" disabled={isSaving}>
+            <Copy className="size-3.5" />
+          </Button>
+          {t.isBuiltIn ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 opacity-40 cursor-not-allowed" disabled>
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Built-in templates cannot be deleted</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+              onClick={() => setDeleteTarget(t)}
+              title="Delete"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
+        </div>
+      ),
+      headerClassName: 'text-right',
+      className: 'text-right',
+    },
+  ];
+
   return (
     <div className="space-y-6 w-full">
       {/* Header */}
@@ -415,138 +516,19 @@ export function EmailTemplatesView() {
         </div>
       </div>
 
-      {/* Loading */}
-      {isLoading && (
-        <div className="space-y-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-14 w-full" />
-          ))}
-        </div>
-      )}
-
-      {/* Empty */}
-      {!isLoading && filtered.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <div className="inline-flex items-center justify-center size-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 mb-4">
-              <FileText className="size-6 text-emerald-600" />
-            </div>
-            <h3 className="text-lg font-semibold mb-1">
-              {templates.length === 0 ? 'No email templates yet' : 'No templates match your filters'}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
-              {templates.length === 0
-                ? 'Create your first reusable email template. Use {{variables}} for personalization.'
-                : 'Try a different category or clear the search.'}
-            </p>
-            {templates.length === 0 && (
-              <Button onClick={openNew}>
-                <Plus className="size-4 mr-1.5" /> Create Template
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Table */}
-      {!isLoading && filtered.length > 0 && (
-        <Card>
-          <div className="rounded-md border-0 overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead>Variables</TableHead>
-                  <TableHead>Updated</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((template) => {
-                  const vars = parseVariables(template.variablesJson);
-                  const catColor = CATEGORY_COLORS[template.category] || CATEGORY_COLORS.system;
-                  return (
-                    <TableRow key={template.id}>
-                      <TableCell>
-                        <div className="font-medium">{template.name}</div>
-                        <div className="font-mono text-[10px] text-muted-foreground">{template.slug}</div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn('text-[10px] capitalize', catColor)}>
-                          {template.category}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {template.isBuiltIn ? (
-                          <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 text-[10px]">
-                            Built-in
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]">
-                            Custom
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-xs">
-                        <div className="text-xs truncate text-muted-foreground">
-                          {template.subject.slice(0, 80)}{template.subject.length > 80 ? '…' : ''}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {vars.length > 0 ? (
-                          <Badge variant="outline" className="text-[10px] bg-teal-50 text-teal-700 border-teal-200">
-                            {vars.length} var{vars.length === 1 ? '' : 's'}
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatDate(template.updatedAt)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openEdit(template)} title="Edit">
-                            <Pencil className="size-3.5" />
-                          </Button>
-                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleDuplicate(template)} title="Duplicate" disabled={isSaving}>
-                            <Copy className="size-3.5" />
-                          </Button>
-                          {template.isBuiltIn ? (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span>
-                                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 opacity-40 cursor-not-allowed" disabled>
-                                    <Trash2 className="size-3.5" />
-                                  </Button>
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>Built-in templates cannot be deleted</TooltipContent>
-                            </Tooltip>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                              onClick={() => setDeleteTarget(template)}
-                              title="Delete"
-                            >
-                              <Trash2 className="size-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
-      )}
+      <Card>
+        <CardContent className="p-0">
+          <DataTable
+            columns={templateColumns}
+            data={filtered}
+            rowKey={(t) => t.id}
+            loading={isLoading}
+            emptyMessage={templates.length === 0 ? 'No email templates yet' : 'No templates match your filters'}
+            emptyIcon={FileText}
+          />
+        </CardContent>
+      </Card>
 
       {/* New/Edit Dialog */}
       <Dialog open={formOpen} onOpenChange={(open) => { setFormOpen(open); if (!open) setEditing(null); }}>

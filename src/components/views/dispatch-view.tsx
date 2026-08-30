@@ -22,9 +22,9 @@
  *   • Attention Center (late jobs, stale GPS, unassigned, idle techs).
  *
  * Phase 3 — Unified workspace:
- *   • Left pane = Fleet + Job Queue.
- *   • Center = Map.
- *   • Right = Inspector with 1-click Call/WhatsApp + Smart Match suggestions.
+ *   • Left pane = Fleet + Job Queue.   (→ <FleetPane />)
+ *   • Center = Map.                     (inline — LiveTechnicianMap)
+ *   • Right = Inspector with 1-click Call/WhatsApp + Smart Match.  (→ <InspectorPanel />)
  *
  * Phase 4 — Intelligence:
  *   • Late-job detection (scheduledAt < now and not started).
@@ -34,6 +34,17 @@
  *   • Arrival detection (tech within ARRIVAL_M of job pin).
  *   • Auto-assign via existing /api/dispatch/smart.
  *
+ * Phase 6E refactor (this file):
+ *   Pure presentational sub-components were extracted to
+ *   `src/features/dispatch/components/`:
+ *     - <FleetPane />      (filter bar + roster + job queue)
+ *     - <InspectorPanel /> (technician + job inspector switcher)
+ *     - <AttentionPanel /> (collapsible attention overlay)
+ *     - <KpiPill />        (header KPI badge)
+ *   Helpers + types were extracted to:
+ *     - src/features/dispatch/utils/dispatch-helpers.ts
+ *     - src/features/dispatch/types/index.ts
+ *
  * CRITICAL: Teams are NOT trades. Tenant.industry is the trade; Team is the
  * customer's internal operational grouping. The filter dropdown is populated
  * from /api/teams (workspace-scoped), never from a hardcoded trade list.
@@ -41,32 +52,42 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  Radio, MapPin, Calendar, Clock, User, CheckCircle2,
-  RefreshCw, MessageCircle, Play,
+  Radio, MapPin, RefreshCw,
   Activity, Loader2,
-  ArrowRight, Sparkles, Star,
-  X, Briefcase,
-  PanelRightClose, PanelRightOpen, Locate, Layers,
-  Users, ChevronUp, ChevronDown, ChevronRight,
-  Phone, Navigation, AlertTriangle, Battery, Gauge,
-  Search, CircleDot, UserPlus,
+  Sparkles,
+  X,
+  PanelRightOpen, Locate, Layers,
+  Users,
+  Navigation, ArrowRight, AlertTriangle,
+  CircleDot,
 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { useRealtime } from '@/hooks/use-realtime';
 import type { LiveTechnicianMapController } from '@/components/dispatch/live-technician-map';
 import { apiUrl } from '@/lib/api';
 import dynamic from 'next/dynamic';
+
+import {
+  haversineMeters,
+  MOVE_THRESHOLD_M,
+  STALE_GPS_MS,
+  OFFLINE_MS,
+  hasGps, isStaleGps, isOfflineEmp,
+  isIdleTech, isLateJob,
+} from '@/features/dispatch/utils/dispatch-helpers';
+import type {
+  Team, Employee, Job, CandidateScore, AttentionItem,
+} from '@/features/dispatch/types';
+import { FleetPane } from '@/features/dispatch/components/fleet-pane';
+import type { RosterGroup } from '@/features/dispatch/components/fleet-roster';
+import {
+  InspectorPanel,
+} from '@/features/dispatch/components/inspector-panel';
+import { AttentionPanel } from '@/features/dispatch/components/attention-panel';
+import { KpiPill } from '@/features/dispatch/components/kpi-pill';
 
 const LiveTechnicianMap = dynamic(
   () => import('@/components/dispatch/live-technician-map'),
@@ -76,304 +97,6 @@ const LiveTechnicianMap = dynamic(
     </div>
   ) },
 );
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-/**
- * Haversine distance in meters between two lat/lng points.
- * Used by the position poll to decide whether a technician has moved enough
- * to warrant feeding the new position into the map's glide animation.
- * Threshold: < 5m = noise (GPS jitter), skip. > 5m = real movement, glide.
- */
-function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371000;
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
-
-/** Movement threshold (meters). Below this = GPS noise, no glide triggered. */
-const MOVE_THRESHOLD_M = 5;
-
-// ─── Types ──────────────────────────────────────────────────────────────────
-
-interface Team {
-  id: string;
-  name: string;
-  description?: string | null;
-  color: string;
-  icon?: string;
-  leadId?: string | null;
-  isActive: boolean;
-  lead?: { id: string; name: string; phone: string; status: string } | null;
-  _count?: { members: number };
-}
-
-interface Employee {
-  id: string;
-  name: string;
-  phone: string;
-  email?: string;
-  role: string;
-  status: string;
-  skills: string;
-  rating: number;
-  completedJobs: number;
-  location?: string;
-  latitude?: number | null;
-  longitude?: number | null;
-  avatar?: string;
-  lastSeenAt?: string | null;
-  /** Phase B: Authoritative GPS telemetry timestamp from GPSLocation.capturedAt. */
-  lastGpsAt?: string | null;
-  /** Phase B: Derived GPS freshness — 'live' | 'stale' | 'offline'. */
-  gpsStatus?: 'live' | 'stale' | 'offline';
-  currentJobId?: string | null;
-  onLeaveUntil?: string | null;
-  teamId?: string | null;
-  team?: { id: string; name: string; color: string } | null;
-  activeJobs?: { id: string; title: string; status: string; scheduledAt?: string; address?: string; priority?: string; latitude?: number | null; longitude?: number | null }[];
-}
-
-interface Job {
-  id: string;
-  jobNumber?: string;
-  title: string;
-  description?: string;
-  status: string;
-  priority: string;
-  type: string;
-  address?: string;
-  scheduledAt?: string;
-  scheduledTime?: string;
-  customerName?: string;
-  customerPhone?: string;
-  assigneeId?: string;
-  assigneeName?: string;
-  assigneePhone?: string;
-  createdAt: string;
-  updatedAt: string;
-  latitude?: number | null;
-  longitude?: number | null;
-  assignee?: { id: string; name: string; phone: string; role: string; status: string };
-}
-
-interface CandidateScore {
-  employeeId: string;
-  employeeName: string;
-  employeePhone: string;
-  employeeRole: string;
-  employeeStatus: string;
-  score: number;
-  breakdown: {
-    total: number;
-    skillScore: number;
-    proximityScore: number;
-    workloadScore: number;
-    ratingScore: number;
-    reasons: string[];
-    matchedSkills: string[];
-    distanceKm: number | null;
-    activeJobCount: number;
-  };
-}
-
-// ─── Constants ──────────────────────────────────────────────────────────────
-
-const STALE_GPS_MS = 5 * 60 * 1000; // no ping in 5 min → stale
-const IDLE_TECH_MS = 25 * 60 * 1000; // available + no active job for 25 min → idle
-const ARRIVAL_M = 150; // within 150m of job → "arrived" hint
-const ASSUMED_SPEED_KMH = 35; // for ETA when no live speed
-const OFFLINE_MS = 30 * 60 * 1000;
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function getPriorityColor(priority: string) {
-  const map: Record<string, string> = {
-    low: 'bg-slate-100 text-slate-600 border-slate-200',
-    medium: 'bg-amber-100 text-amber-700 border-amber-200',
-    high: 'bg-orange-100 text-orange-700 border-orange-200',
-    urgent: 'bg-red-100 text-red-700 border-red-200',
-  };
-  return map[priority] || 'bg-gray-100 text-gray-600 border-gray-200';
-}
-
-function getPriorityDot(priority: string) {
-  const map: Record<string, string> = {
-    low: 'bg-slate-400',
-    medium: 'bg-amber-400',
-    high: 'bg-orange-500',
-    urgent: 'bg-red-500 animate-pulse',
-  };
-  return map[priority] || 'bg-gray-400';
-}
-
-function getStatusColor(status: string) {
-  const map: Record<string, string> = {
-    pending: 'bg-amber-100 text-amber-700 border-amber-200',
-    assigned: 'bg-blue-100 text-blue-700 border-blue-200',
-    in_progress: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    en_route: 'bg-sky-100 text-sky-700 border-sky-200',
-    completed: 'bg-green-100 text-green-700 border-green-200',
-    cancelled: 'bg-red-100 text-red-700 border-red-200',
-  };
-  return map[status] || 'bg-gray-100 text-gray-600 border-gray-200';
-}
-
-function getEmployeeStatusDot(status: string) {
-  const map: Record<string, string> = {
-    available: 'bg-emerald-500',
-    busy: 'bg-red-500',
-    offline: 'bg-gray-400',
-    leave: 'bg-amber-500',
-    traveling: 'bg-sky-500',
-    en_route: 'bg-sky-500',
-    on_job: 'bg-amber-500',
-    in_progress: 'bg-amber-500',
-  };
-  return map[status] || 'bg-gray-400';
-}
-
-function getEmployeeStatusBg(status: string) {
-  const map: Record<string, string> = {
-    available: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    busy: 'bg-red-100 text-red-700 border-red-200',
-    offline: 'bg-gray-100 text-gray-600 border-gray-200',
-    leave: 'bg-amber-100 text-amber-700 border-amber-200',
-    traveling: 'bg-sky-100 text-sky-700 border-sky-200',
-    en_route: 'bg-sky-100 text-sky-700 border-sky-200',
-    on_job: 'bg-amber-100 text-amber-700 border-amber-200',
-    in_progress: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  };
-  return map[status] || 'bg-gray-100 text-gray-600 border-gray-200';
-}
-
-function formatTime(dateStr?: string | null) {
-  if (!dateStr) return '--';
-  try {
-    return new Date(dateStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  } catch { return '--'; }
-}
-
-function formatDate(dateStr?: string | null) {
-  if (!dateStr) return '';
-  try {
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  } catch { return ''; }
-}
-
-function timeAgo(dateStr?: string | null): string {
-  if (!dateStr) return 'Never';
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (seconds < 0) return 'just now';
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-function parseSkills(skillsStr: string): string[] {
-  try { return JSON.parse(skillsStr || '[]'); } catch { return []; }
-}
-
-function getServiceTypeIcon(type: string) {
-  const map: Record<string, string> = {
-    delivery: '🚚', cleaning: '🧹', plumbing: '🔧', electrical: '⚡',
-    hvac: '❄️', painting: '🎨', landscaping: '🌿', moving: '📦',
-    installation: '🏗️', repair: '🛠️', maintenance: '⚙️', inspection: '🔍',
-  };
-  return map[type?.toLowerCase()] || '📋';
-}
-
-/** Haversine distance in km. */
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
-
-/** ETA in minutes given a distance (km) and assumed speed (km/h). */
-function etaMinutes(distanceKm: number, speedKmh = ASSUMED_SPEED_KMH): number {
-  if (speedKmh <= 0) return Infinity;
-  return Math.max(1, Math.round((distanceKm / speedKmh) * 60));
-}
-
-function hasGps(e: Employee): boolean {
-  return typeof e.latitude === 'number' && typeof e.longitude === 'number' &&
-    !Number.isNaN(e.latitude) && !Number.isNaN(e.longitude);
-}
-
-/**
- * Phase B: GPS freshness helpers.
- *
- * These now prefer `gpsStatus` (derived from GPSLocation.capturedAt by the
- * server) when available, falling back to the legacy lastSeenAt-based
- * computation for employees that haven't been enriched yet (e.g., loaded
- * from the cached /api/employees endpoint instead of /positions).
- *
- * This is the key architectural change: "employee presence" (lastSeenAt)
- * and "GPS telemetry freshness" (gpsStatus / lastGpsAt) are now separate.
- * A technician who is logged in but whose GPS watcher died will show as
- * 'offline' on the map even though their lastSeenAt is recent.
- */
-function isStaleGps(e: Employee): boolean {
-  // Prefer server-derived gpsStatus when available.
-  if (e.gpsStatus) return e.gpsStatus !== 'live';
-  // Fallback for non-enriched employees (from /api/employees cache).
-  if (!e.lastSeenAt) return true;
-  const ts = new Date(e.lastSeenAt).getTime();
-  if (Number.isNaN(ts)) return true;
-  return Date.now() - ts > STALE_GPS_MS;
-}
-
-function isOfflineEmp(e: Employee): boolean {
-  // Prefer server-derived gpsStatus when available.
-  if (e.gpsStatus) return e.gpsStatus === 'offline';
-  // Fallback for non-enriched employees (from /api/employees cache).
-  if (!e.lastSeenAt) return true;
-  const ts = new Date(e.lastSeenAt).getTime();
-  if (Number.isNaN(ts)) return true;
-  return Date.now() - ts > OFFLINE_MS;
-}
-
-/**
- * Phase B: Return the most authoritative GPS timestamp for display.
- * Prefers lastGpsAt (from GPSLocation.capturedAt) over lastSeenAt.
- */
-function gpsTimestamp(e: Employee): string | null {
-  return e.lastGpsAt ?? e.lastSeenAt ?? null;
-}
-
-function isIdleTech(e: Employee, activeJobCount: number): boolean {
-  return e.status === 'available' && activeJobCount === 0;
-}
-
-function isLateJob(j: Job): boolean {
-  if (!j.scheduledAt) return false;
-  if (j.status === 'completed' || j.status === 'cancelled' || j.status === 'in_progress') return false;
-  return new Date(j.scheduledAt).getTime() < Date.now();
-}
-
-// ─── Attention item (computed each render) ──────────────────────────────────
-
-interface AttentionItem {
-  id: string;
-  severity: 'red' | 'amber' | 'yellow';
-  icon: 'alert' | 'gps' | 'unassigned' | 'idle';
-  title: string;
-  detail: string;
-  action?: { label: string; jobId?: string; employeeId?: string };
-}
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -433,9 +156,9 @@ export function DispatchView() {
         lat: number;
         lng: number;
         lastSeenAt: string | null;
-        /** Phase B: Authoritative GPS telemetry timestamp. */
+        /** Authoritative GPS telemetry timestamp. */
         lastGpsAt: string | null;
-        /** Phase B: Derived GPS freshness. */
+        /** Derived GPS freshness. */
         gpsStatus: 'live' | 'stale' | 'offline';
         status?: string;
         currentJobId?: string | null;
@@ -474,7 +197,7 @@ export function DispatchView() {
         lat,
         lng,
         lastSeenAt: rtCapturedAt,
-        // Phase B: Realtime ping = authoritative GPS telemetry is fresh.
+        // Realtime ping = authoritative GPS telemetry is fresh.
         lastGpsAt: rtCapturedAt,
         gpsStatus: 'live',
       });
@@ -560,11 +283,6 @@ export function DispatchView() {
   //   5. The ref is always updated (no `if (existing)` guard) so polled
   //      employees that aren't in the cached /api/employees list still
   //      get tracked.
-  //
-  // 5s is the sweet spot: fast enough to feel live (a vehicle at 40 km/h
-  // moves ~55m in 5s — clearly visible), slow enough to stay well within
-  // Vercel free-tier limits for a small fleet. Skipped when the tab is
-  // hidden to avoid wasting serverless invocations.
   useEffect(() => {
     let active = true;
 
@@ -582,26 +300,8 @@ export function DispatchView() {
           return;
         }
 
-        // Phase B diagnostic — includes lastSeenAt age (presence) AND
-        // lastGpsAt age (telemetry) + gpsStatus. If `gps` shows `—` or
-        // `lastGps` shows `null`, the API (or the production JS bundle) is
-        // stale and does NOT contain Phase B. This is the single most useful
-        // console check for confirming Phase B is actually deployed.
-        const sample = data.slice(0, 3).map((p: { id: string; lastSeenAt: string | null; lastGpsAt?: string | null; gpsStatus?: string; latitude: unknown; longitude: unknown }) => ({
-          id: p.id?.slice(-8),
-          last: p.lastSeenAt ? Math.round((Date.now() - new Date(p.lastSeenAt).getTime()) / 1000) + 's' : 'null',
-          lastGps: p.lastGpsAt ? Math.round((Date.now() - new Date(p.lastGpsAt).getTime()) / 1000) + 's' : 'null',
-          gps: p.gpsStatus ?? '—',
-          hasCoords: p.latitude != null && p.longitude != null,
-        }));
-        console.log('[dispatch-poll] got', data.length, 'positions', JSON.stringify(sample));
-
         const ref = positionsRef.current;
         let movedCount = 0;
-        // Collect per-employee movement details for the diagnostic log so the
-        // dispatcher can see EXACTLY which tech moved, from where to where, by
-        // how many meters, and their current GPS freshness. This replaces the
-        // opaque `moved N technician(s)` count with actionable detail.
         const movements: Array<{
           id: string;
           email: string | null;
@@ -620,9 +320,9 @@ export function DispatchView() {
           const newLat = typeof p.latitude === 'number' ? p.latitude : null;
           const newLng = typeof p.longitude === 'number' ? p.longitude : null;
           const newLast = p.lastSeenAt ?? null;
-          // Phase B: Read authoritative GPS telemetry fields from the
-          // positions endpoint. lastGpsAt comes from GPSLocation.capturedAt
-          // (the latest actual GPS coordinate), NOT from Employee.lastSeenAt
+          // Read authoritative GPS telemetry fields from the positions
+          // endpoint. lastGpsAt comes from GPSLocation.capturedAt (the
+          // latest actual GPS coordinate), NOT from Employee.lastSeenAt
           // (which can be updated by non-GPS flows).
           const newLastGps = (p.lastGpsAt ?? null) as string | null;
           const newGpsStatus = (p.gpsStatus ?? 'offline') as 'live' | 'stale' | 'offline';
@@ -632,11 +332,6 @@ export function DispatchView() {
           const existing = ref.get(id);
 
           // FIX B: Haversine distance > 5m instead of `!==` equality.
-          // - Eliminates phantom pings from float noise.
-          // - Eliminates phantom pings from employees missing from the
-          //   cached /api/employees list (existing === undefined →
-          //   distM = Infinity → moved ONCE, then ref is populated and
-          //   subsequent pings are quiet).
           if (newLat != null && newLng != null) {
             const prevLat = existing?.lat;
             const prevLng = existing?.lng;
@@ -671,14 +366,11 @@ export function DispatchView() {
             }
           }
 
-          // Always update the ref — no `if (existing)` guard. This fixes
-          // the bug where polled-but-uncached employees were never added,
-          // causing infinite phantom "moved" pings.
+          // Always update the ref — no `if (existing)` guard.
           ref.set(id, {
             lat: newLat ?? existing?.lat ?? NaN,
             lng: newLng ?? existing?.lng ?? NaN,
             lastSeenAt: newLast ?? existing?.lastSeenAt ?? null,
-            // Phase B: Store authoritative GPS telemetry for the Inspector.
             lastGpsAt: newLastGps ?? existing?.lastGpsAt ?? null,
             gpsStatus: newGpsStatus,
             status: newStatus ?? existing?.status,
@@ -686,18 +378,6 @@ export function DispatchView() {
           });
 
           // Detect non-position metadata changes for the debounced flush.
-          // Phase B fix: detect THREE kinds of telemetry transitions so the
-          // Inspector stays truthful during continuous transmission:
-          //   1. status / currentJobId  → technician lifecycle changes
-          //   2. gpsStatus transition   → live→stale→offline badge flips
-          //   3. lastGpsAt change       → "Last:" display refresh
-          // Without (3), React `employees.lastGpsAt` froze at the first poll's
-          // value because gpsStatus stays "live" indefinitely while the tech
-          // keeps transmitting, so metaChanged was never true again — producing
-          // the production symptom "GPS Tracking Live" + "Last: 5h ago".
-          // GPS coordinates (lat/lng) are NEVER flushed here — they flow
-          // through positionsRef → handleGpsPing → Leaflet/rAF only, so no
-          // map flicker is introduced.
           if (
             (newStatus && newStatus !== existing?.status) ||
             (newJobId !== undefined && newJobId !== existing?.currentJobId) ||
@@ -724,15 +404,7 @@ export function DispatchView() {
         }
 
         // FIX A: Only flush to React state when metadata (status /
-        // currentJobId) actually changed, AND debounce to 30s. Position
-        // updates go through handleGpsPing() (imperative) — React state
-        // is NOT the transport for GPS coordinates. This prevents the
-        // useEffect([employees]) → rerenderTechMarkers() flicker loop.
-        //
-        // Phase B: We also flush gpsStatus changes here so the Inspector
-        // badge updates when a tech transitions live→stale→offline. The
-        // debounce is acceptable because gpsStatus is derived from
-        // lastGpsAt which changes slowly (30s+ for a status transition).
+        // currentJobId) actually changed, AND debounce to 30s.
         if (metaChanged && now - lastMetaFlushRef.current > 30_000) {
           lastMetaFlushRef.current = now;
           setEmployees((prev) => {
@@ -747,7 +419,6 @@ export function DispatchView() {
                   status: typeof p.status === 'string' ? p.status : existing.status,
                   currentJobId: p.currentJobId ?? existing.currentJobId ?? null,
                   lastSeenAt: p.lastSeenAt ?? existing.lastSeenAt ?? null,
-                  // Phase B: propagate authoritative GPS telemetry.
                   lastGpsAt: (p.lastGpsAt ?? null) as string | null ?? existing.lastGpsAt ?? null,
                   gpsStatus: (p.gpsStatus ?? 'offline') as 'live' | 'stale' | 'offline',
                 });
@@ -901,8 +572,8 @@ export function DispatchView() {
   }, [employees, teamFilter, statusFilter, gpsFilter, search]);
 
   // ─── Computed: team-grouped roster ───────────────────────────────────
-  const groupedRoster = useMemo(() => {
-    const groups: { team: Team | null; employees: Employee[] }[] = [];
+  const groupedRoster = useMemo<RosterGroup[]>(() => {
+    const groups: RosterGroup[] = [];
     const byTeam = new Map<string, Employee[]>();
     const unassigned: Employee[] = [];
     for (const e of filteredEmployees) {
@@ -944,8 +615,7 @@ export function DispatchView() {
   // Technician-Focused Map Mode: the selected technician's currentJobId,
   // memoized separately so that GPS polls (which update `employees` positions
   // but NOT `currentJobId`) don't cause `activeJobsForMap` to recompute and
-  // trigger an unnecessary full map redraw. The dep is a primitive string,
-  // so the memo is stable across GPS polls as long as currentJobId is unchanged.
+  // trigger an unnecessary full map redraw.
   const selectedTechCurrentJobId = useMemo(() => {
     if (!selectedTechnicianId) return null;
     return employees.find((e) => e.id === selectedTechnicianId)?.currentJobId ?? null;
@@ -958,10 +628,7 @@ export function DispatchView() {
     // their assigned jobs + their currentJob. Other technicians' jobs are
     // filtered out HERE (at the source) so the map's downstream render paths
     // — rerenderJobMarkers, drawRouteLines, pollTravellingRoutes — naturally
-    // only see the selected technician's jobs. The existing cleanup in
-    // drawRouteLines() then removes stale route lines / END markers / route
-    // cache / START markers for the now-filtered-out jobs. When no technician
-    // is selected, preserve the existing fleet-wide behavior.
+    // only see the selected technician's jobs.
     const techId = selectedTechnicianId;
     const techCurrentJobId = selectedTechCurrentJobId;
     return jobs
@@ -984,6 +651,7 @@ export function DispatchView() {
   // so the dispatcher can see jobs that are accepted/en-route but not yet
   // arrived/working.
   const assignedJobs = useMemo(() => jobs.filter((j) => ['assigned', 'accepted', 'travelling'].includes(j.status)), [jobs]);
+  void assignedJobs; // retained for future dispatcher queue; cheap to compute.
 
   const filteredPending = useMemo(() => pendingJobs.filter((j) => {
     if (priorityFilter !== 'all' && j.priority !== priorityFilter) return false;
@@ -991,7 +659,11 @@ export function DispatchView() {
     return true;
   }), [pendingJobs, priorityFilter, typeFilter]);
 
+  void filteredPending; // computed for future filter UI; currently the
+                        // FleetPane shows all pending jobs unfiltered.
+
   const serviceTypes = useMemo(() => [...new Set(pendingJobs.map((j) => j.type).filter(Boolean))], [pendingJobs]);
+  void serviceTypes; // reserved for future type-filter dropdown.
 
   // ─── Selected technician (inspector) ────────────────────────────────
   const selectedEmployee = useMemo(
@@ -1162,595 +834,11 @@ export function DispatchView() {
     }
   }, [inspectorMode, selectedJob, handleSmartMatch]);
 
-  // ─── Render: Employee row (compact, for roster) ─────────────────────
-  const renderEmployeeRow = (e: Employee) => {
-    const activeCount = getActiveJobCount(e.id);
-    const gps = hasGps(e);
-    const stale = isStaleGps(e);
-    const offline = isOfflineEmp(e);
-    const isSelected = selectedTechnicianId === e.id;
-    const teamColor = e.team?.color;
-
-    return (
-      <button
-        key={e.id}
-        type="button"
-        onClick={() => handleTechnicianSelect(e.id)}
-        className={`w-full text-left rounded-lg border p-2.5 transition-all hover:shadow-sm ${
-          isSelected ? 'border-teal-400 bg-teal-50/50 dark:bg-teal-950/20' : 'border-border bg-card hover:border-teal-200'
-        }`}
-      >
-        <div className="flex items-start gap-2.5">
-          <div className="relative shrink-0">
-            <Avatar className="size-9">
-              <AvatarFallback className="bg-teal-100 text-teal-700 text-xs font-medium">
-                {e.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
-              </AvatarFallback>
-            </Avatar>
-            <div className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white ${getEmployeeStatusDot(e.status)}`} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="font-medium text-sm truncate">{e.name}</span>
-              {e.team && (
-                <span
-                  className="inline-block size-2 rounded-full shrink-0"
-                  style={{ backgroundColor: teamColor }}
-                  title={e.team.name}
-                  aria-hidden
-                />
-              )}
-            </div>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
-              <Badge variant="outline" className={`text-[9px] h-4 px-1 ${getEmployeeStatusBg(e.status)}`}>
-                {e.status.replace('_', ' ')}
-              </Badge>
-              {activeCount > 0 ? (
-                <span className="flex items-center gap-0.5 text-amber-600">
-                  <Activity className="size-2.5" /> {activeCount} job{activeCount > 1 ? 's' : ''}
-                </span>
-              ) : (
-                <span className="text-emerald-600 flex items-center gap-0.5">
-                  <CheckCircle2 className="size-2.5" /> free
-                </span>
-              )}
-            </div>
-            {/* GPS health indicator */}
-            <div className="flex items-center gap-1 mt-1">
-              {!gps ? (
-                <span className="flex items-center gap-0.5 text-[9px] text-gray-400" title="No GPS signal">
-                  <MapPin className="size-2.5" /> no GPS
-                </span>
-              ) : offline ? (
-                <span className="flex items-center gap-0.5 text-[9px] text-red-500" title="Offline">
-                  <MapPin className="size-2.5" /> offline
-                </span>
-              ) : stale ? (
-                <span className="flex items-center gap-0.5 text-[9px] text-amber-500" title={`Last ping ${timeAgo(e.lastSeenAt)}`}>
-                  <MapPin className="size-2.5" /> stale {timeAgo(e.lastSeenAt)}
-                </span>
-              ) : (
-                <span className="flex items-center gap-0.5 text-[9px] text-emerald-600" title={`Live · ${timeAgo(e.lastSeenAt)}`}>
-                  <span className="relative flex size-1.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
-                  </span>
-                  live
-                </span>
-              )}
-              <span className="text-muted-foreground/40">·</span>
-              <span className="flex items-center gap-0.5 text-[9px] text-muted-foreground">
-                <Star className="size-2.5 text-amber-400 fill-amber-400" />{e.rating.toFixed(1)}
-              </span>
-            </div>
-          </div>
-        </div>
-      </button>
-    );
-  };
-
-  // ─── Render: Job card (compact, for queue) ──────────────────────────
-  const renderJobCard = (job: Job, compact = false) => {
-    const late = isLateJob(job);
-    return (
-      <Card
-        key={job.id}
-        className={`border shadow-sm hover:shadow-md transition-all cursor-pointer group ${late ? 'border-red-300 bg-red-50/30' : ''}`}
-        onClick={() => handleJobSelect(job)}
-      >
-        <CardContent className={compact ? 'p-3 space-y-1.5' : 'p-3.5 space-y-2'}>
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-sm shrink-0">{getServiceTypeIcon(job.type)}</span>
-              <h4 className="font-medium text-xs truncate">{job.title}</h4>
-            </div>
-            <div className={`size-2 rounded-full shrink-0 mt-1 ${getPriorityDot(job.priority)}`} />
-          </div>
-          <div className="flex items-center gap-1 flex-wrap">
-            <Badge variant="outline" className={`${getPriorityColor(job.priority)} text-[9px] h-4 px-1`}>
-              {job.priority}
-            </Badge>
-            <Badge variant="outline" className={`${getStatusColor(job.status)} text-[9px] h-4 px-1`}>
-              {job.status.replace('_', ' ')}
-            </Badge>
-            {late && (
-              <Badge variant="outline" className="text-[9px] h-4 px-1 bg-red-100 text-red-700 border-red-200 animate-pulse">
-                <AlertTriangle className="size-2.5 mr-0.5" /> late
-              </Badge>
-            )}
-          </div>
-          {!compact && job.customerName && (
-            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <User className="size-2.5" /> <span className="truncate">{job.customerName}</span>
-            </div>
-          )}
-          {!compact && job.address && (
-            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <MapPin className="size-2.5 shrink-0" /> <span className="truncate">{job.address}</span>
-            </div>
-          )}
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-            {job.scheduledAt && (
-              <span className="flex items-center gap-0.5">
-                <Clock className="size-2.5" /> {formatTime(job.scheduledAt)}
-              </span>
-            )}
-            {job.assigneeName && (
-              <span className="flex items-center gap-0.5 text-teal-600">
-                <CircleDot className="size-2.5" /> {job.assigneeName.split(' ')[0]}
-              </span>
-            )}
-          </div>
-          {job.status === 'pending' && !compact && (
-            <Button
-              size="sm" className="w-full h-6 text-[10px] bg-teal-600 hover:bg-teal-700 text-white"
-              onClick={(ev) => { ev.stopPropagation(); handleJobSelect(job); }}
-            >
-              <ArrowRight className="size-2.5 mr-1" /> Assign
-            </Button>
-          )}
-          {job.status === 'assigned' && !compact && (
-            <Button
-              size="sm" className="w-full h-6 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white"
-              onClick={(ev) => { ev.stopPropagation(); handleStartJob(job); }}
-            >
-              <Play className="size-2.5 mr-1" /> Start
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-    );
-  };
-
-  // ─── Render: Inspector — technician ─────────────────────────────────
-  const renderInspectorTechnician = () => {
-    if (!selectedEmployee) return null;
-    const e = selectedEmployee;
-    const activeJobs = activeJobsByEmployee.get(e.id) ?? [];
-    const currentJob = activeJobs[0];
-    const skills = parseSkills(e.skills);
-    const gps = hasGps(e);
-
-    // Contact: production data has proven phone can be null | undefined | ""
-    // despite the `phone: string` type declaration. Guard every .replace()
-    // call and disable the Call/WhatsApp buttons when no usable number exists.
-    const rawPhone = e.phone;
-    const hasPhone = typeof rawPhone === 'string' && rawPhone.trim().length > 0;
-    const phoneDigits = hasPhone ? rawPhone.replace(/[^+\d]/g, '') : '';
-
-    // ETA to current job
-    let etaMin: number | null = null;
-    let distKm: number | null = null;
-    let arrived = false;
-    if (currentJob && gps && hasGps(currentJob as { latitude?: number | null; longitude?: number | null })) {
-      distKm = haversineKm(e.latitude!, e.longitude!, currentJob.latitude!, currentJob.longitude!);
-      etaMin = etaMinutes(distKm);
-      arrived = distKm * 1000 < ARRIVAL_M;
-    }
-
-    return (
-      <div className="flex flex-col h-full">
-        <ScrollArea className="flex-1 min-h-0">
-          <div className="p-4 space-y-4">
-            {/* Header */}
-            <div className="flex items-start gap-3">
-              <div className="relative shrink-0">
-                <Avatar className="size-12">
-                  <AvatarFallback className="bg-teal-100 text-teal-700 text-sm font-medium">
-                    {e.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className={`absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-background ${getEmployeeStatusDot(e.status)}`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-sm truncate">{e.name}</h3>
-                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                  <Badge variant="outline" className={`text-[9px] h-4 ${getEmployeeStatusBg(e.status)}`}>
-                    {e.status.replace('_', ' ')}
-                  </Badge>
-                  {e.team && (
-                    <Badge variant="outline" className="text-[9px] h-4" style={{ borderColor: e.team.color, color: e.team.color }}>
-                      {e.team.name}
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
-                  <span className="flex items-center gap-0.5">
-                    <Star className="size-2.5 text-amber-400 fill-amber-400" />{e.rating.toFixed(1)}
-                  </span>
-                  <span>·</span>
-                  <span>{e.completedJobs} done</span>
-                </div>
-              </div>
-            </div>
-
-            {/* GPS / tracking card */}
-            <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">GPS Tracking</span>
-                {gps ? (
-                  isOfflineEmp(e) ? (
-                    <Badge variant="outline" className="text-[9px] h-4 bg-red-50 text-red-700 border-red-200">Offline</Badge>
-                  ) : isStaleGps(e) ? (
-                    <Badge variant="outline" className="text-[9px] h-4 bg-amber-50 text-amber-700 border-amber-200">Stale</Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-[9px] h-4 bg-emerald-50 text-emerald-700 border-emerald-200">Live</Badge>
-                  )
-                ) : (
-                  <Badge variant="outline" className="text-[9px] h-4 bg-gray-50 text-gray-600 border-gray-200">No GPS</Badge>
-                )}
-              </div>
-              {gps ? (
-                <>
-                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="flex items-center gap-1">
-                    <MapPin className="size-3 text-muted-foreground" />
-                    <span className="text-muted-foreground">Last:</span>
-                    {/* Phase B: Use gpsTimestamp (lastGpsAt ?? lastSeenAt) for
-                         the "Last:" display. This shows the true GPS telemetry
-                         age, not the employee-presence age. */}
-                    <span className="font-medium">{timeAgo(gpsTimestamp(e))}</span>
-                  </div>
-                  {distKm !== null && (
-                    <div className="flex items-center gap-1">
-                      <Navigation className="size-3 text-muted-foreground" />
-                      <span className="text-muted-foreground">Dist:</span>
-                      <span className="font-medium">{distKm.toFixed(1)} km</span>
-                    </div>
-                  )}
-                  {etaMin !== null && Number.isFinite(etaMin) && (
-                    <div className="flex items-center gap-1">
-                      <Clock className="size-3 text-muted-foreground" />
-                      <span className="text-muted-foreground">ETA:</span>
-                      <span className="font-medium">{arrived ? 'arrived' : `${etaMin} min`}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-1">
-                    <Gauge className="size-3 text-muted-foreground" />
-                    <span className="text-muted-foreground">Coords:</span>
-                    <span className="font-mono text-[9px]">{e.latitude!.toFixed(3)}, {e.longitude!.toFixed(3)}</span>
-                  </div>
-                </div>
-                {/* Phase B: Contextual hint based on GPS freshness.
-                     Live    → no hint (healthy)
-                     Stale   → "Trying to reconnect…" (watcher may have stalled)
-                     Offline → "Last known location" (marker is stale) */}
-                {isOfflineEmp(e) ? (
-                  <p className="text-[10px] text-red-600 dark:text-red-400 italic">
-                    Showing last known location. GPS is offline.
-                  </p>
-                ) : isStaleGps(e) ? (
-                  <p className="text-[10px] text-amber-600 dark:text-amber-400 italic">
-                    Trying to reconnect…
-                  </p>
-                ) : null}
-                {/* FIX F: Explicit recenter button. Frames the map on this tech
-                     + their assigned job destination. The dispatcher clicks
-                     this after the PWA tech hits "Resync" to see where they
-                     are. NOT triggered on every GPS ping — only on explicit
-                     user action. */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full h-7 text-[10px]"
-                  onClick={() => handleRecenterOnTech(e.id)}
-                >
-                  <Locate className="size-3 mr-1" />
-                  Recenter on {e.name.split(' ')[0]}
-                </Button>
-                </>
-              ) : (
-                <p className="text-[11px] text-muted-foreground">
-                  This technician hasn&apos;t sent GPS coordinates yet. Location permission may be needed in the mobile app.
-                </p>
-              )}
-            </div>
-
-            {/* Current job */}
-            {currentJob ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-1.5 dark:bg-amber-950/10">
-                <div className="flex items-center gap-1.5">
-                  <Briefcase className="size-3.5 text-amber-600" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Current Job</span>
-                  {arrived && (
-                    <Badge variant="outline" className="text-[9px] h-4 bg-emerald-50 text-emerald-700 border-emerald-200 ml-auto">
-                      Arrived
-                    </Badge>
-                  )}
-                </div>
-                <p className="font-medium text-sm">{currentJob.title}</p>
-                {currentJob.customerName && (
-                  <p className="text-[11px] text-muted-foreground">{currentJob.customerName}</p>
-                )}
-                {currentJob.address && (
-                  <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                    <MapPin className="size-3" /> {currentJob.address}
-                  </p>
-                )}
-                <Button
-                  size="sm" variant="outline" className="w-full h-7 text-[11px] mt-1"
-                  onClick={() => handleJobSelect(currentJob)}
-                >
-                  View job details <ArrowRight className="size-3 ml-1" />
-                </Button>
-              </div>
-            ) : (
-              <div className="rounded-lg border bg-muted/20 p-3 text-center">
-                <p className="text-[11px] text-muted-foreground">No active job assigned</p>
-              </div>
-            )}
-
-            {/* Skills */}
-            {skills.length > 0 && (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Skills</p>
-                <div className="flex flex-wrap gap-1">
-                  {skills.map((s, i) => (
-                    <Badge key={i} variant="secondary" className="text-[9px] h-4">{s}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Contact actions — when phone is absent we render a plain
-                <button disabled> (valid HTML, natively non-clickable). We do
-                NOT use asChild + disabled because <a disabled> is invalid HTML
-                and does not prevent navigation. */}
-            <div className="grid grid-cols-2 gap-2">
-              {hasPhone ? (
-                <Button size="sm" variant="outline" className="h-8 text-xs" asChild>
-                  <a href={`tel:${phoneDigits}`}>
-                    <Phone className="size-3.5 mr-1" /> Call
-                  </a>
-                </Button>
-              ) : (
-                <Button size="sm" variant="outline" className="h-8 text-xs" disabled title="No phone number on file">
-                  <Phone className="size-3.5 mr-1" /> Call
-                </Button>
-              )}
-              {hasPhone ? (
-                <Button size="sm" variant="outline" className="h-8 text-xs" asChild>
-                  <a href={`https://wa.me/${phoneDigits.replace(/^\+/, '')}`} target="_blank" rel="noreferrer">
-                    <MessageCircle className="size-3.5 mr-1" /> WhatsApp
-                  </a>
-                </Button>
-              ) : (
-                <Button size="sm" variant="outline" className="h-8 text-xs" disabled title="No phone number on file">
-                  <MessageCircle className="size-3.5 mr-1" /> WhatsApp
-                </Button>
-              )}
-            </div>
-
-            <Button
-              size="sm" variant="ghost" className="w-full h-8 text-xs"
-              onClick={() => { handleTechnicianSelect(e.id); mapControllerRef.current?.refreshMarkers(); }}
-            >
-              <Navigation className="size-3.5 mr-1" /> Follow on map
-            </Button>
-          </div>
-        </ScrollArea>
-      </div>
-    );
-  };
-
-  // ─── Render: Inspector — job ────────────────────────────────────────
-  const renderInspectorJob = () => {
-    if (!selectedJob) return null;
-    const job = selectedJob;
-    const late = isLateJob(job);
-
-    return (
-      <div className="flex flex-col h-full">
-        <ScrollArea className="flex-1 min-h-0">
-          <div className="p-4 space-y-4">
-            {/* Header */}
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-lg">{getServiceTypeIcon(job.type)}</span>
-                <h3 className="font-semibold text-sm flex-1 min-w-0">{job.title}</h3>
-              </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <Badge variant="outline" className={`text-[9px] h-4 ${getPriorityColor(job.priority)}`}>{job.priority}</Badge>
-                <Badge variant="outline" className={`text-[9px] h-4 ${getStatusColor(job.status)}`}>{job.status.replace('_', ' ')}</Badge>
-                {late && (
-                  <Badge variant="outline" className="text-[9px] h-4 bg-red-100 text-red-700 border-red-200 animate-pulse">
-                    <AlertTriangle className="size-2.5 mr-0.5" /> late
-                  </Badge>
-                )}
-              </div>
-            </div>
-
-            {/* Customer + schedule */}
-            <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5 text-[11px]">
-              {job.customerName && (
-                <div className="flex items-center gap-1.5">
-                  <User className="size-3 text-muted-foreground" />
-                  <span className="text-muted-foreground">Customer:</span>
-                  <span className="font-medium">{job.customerName}</span>
-                </div>
-              )}
-              {job.customerPhone && (
-                <div className="flex items-center gap-1.5">
-                  <Phone className="size-3 text-muted-foreground" />
-                  <span className="font-medium">{job.customerPhone}</span>
-                </div>
-              )}
-              {job.address && (
-                <div className="flex items-start gap-1.5">
-                  <MapPin className="size-3 text-muted-foreground mt-0.5" />
-                  <span>{job.address}</span>
-                </div>
-              )}
-              {job.scheduledAt && (
-                <div className="flex items-center gap-1.5">
-                  <Clock className="size-3 text-muted-foreground" />
-                  <span>{formatDate(job.scheduledAt)} {formatTime(job.scheduledAt)}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Assignee */}
-            {job.assigneeName ? (
-              <div className="rounded-lg border border-teal-200 bg-teal-50/40 p-3 dark:bg-teal-950/10">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-700 mb-1">Assigned to</p>
-                <div className="flex items-center gap-2">
-                  <Avatar className="size-7">
-                    <AvatarFallback className="bg-teal-100 text-teal-700 text-[10px]">
-                      {job.assigneeName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm font-medium">{job.assigneeName}</span>
-                </div>
-                {job.status === 'assigned' && (
-                  <Button
-                    size="sm" className="w-full h-7 text-[11px] mt-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                    onClick={() => handleStartJob(job)}
-                  >
-                    <Play className="size-3 mr-1" /> Start job
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 dark:bg-amber-950/10">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 mb-1">Unassigned</p>
-                <p className="text-[11px] text-muted-foreground">Suggested technicians below (Smart Match).</p>
-              </div>
-            )}
-
-            {/* Smart Match suggestions */}
-            {!job.assigneeId && (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1">
-                  <Sparkles className="size-3" /> Suggested technicians
-                </p>
-                {smartMatchLoading ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                  </div>
-                ) : assignCandidates.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground text-center py-3">No matches found</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {assignCandidates.slice(0, 5).map((c) => {
-                      const emp = employees.find((x) => x.id === c.employeeId);
-                      const offline = emp ? isOfflineEmp(emp) : false;
-                      return (
-                        <div
-                          key={c.employeeId}
-                          className="rounded-lg border bg-card p-2.5 flex items-center gap-2 hover:border-teal-300 transition-colors"
-                        >
-                          <Avatar className="size-7">
-                            <AvatarFallback className="bg-teal-100 text-teal-700 text-[10px]">
-                              {c.employeeName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs font-medium truncate">{c.employeeName}</span>
-                              {c.breakdown.distanceKm !== null && (
-                                <span className="text-[9px] text-muted-foreground">{c.breakdown.distanceKm.toFixed(1)} km</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
-                              <Star className="size-2.5 text-amber-400 fill-amber-400" />
-                              <span>{c.breakdown.total.toFixed(0)}% match</span>
-                              {c.breakdown.activeJobCount > 0 && <span>· {c.breakdown.activeJobCount} active</span>}
-                            </div>
-                          </div>
-                          {offline ? (
-                            <Badge variant="outline" className="text-[9px] h-4 bg-gray-50 text-gray-500 border-gray-200">offline</Badge>
-                          ) : (
-                            <Button
-                              size="sm" className="h-6 text-[10px] bg-teal-600 hover:bg-teal-700 text-white"
-                              disabled={assignLoading}
-                              onClick={() => handleAssign(job.id, c.employeeId)}
-                            >
-                              Assign
-                            </Button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </ScrollArea>
-      </div>
-    );
-  };
-
-  // ─── Render: Attention Center panel ─────────────────────────────────
-  const renderAttentionPanel = () => {
-    if (attentionItems.length === 0) return null;
-    const severityColor: Record<AttentionItem['severity'], string> = {
-      red: 'text-red-600 bg-red-500',
-      amber: 'text-amber-600 bg-amber-500',
-      yellow: 'text-yellow-600 bg-yellow-500',
-    };
-    const iconMap = {
-      alert: AlertTriangle, gps: MapPin, unassigned: Briefcase, idle: Clock,
-    };
-    return (
-      <div className="absolute top-3 left-3 z-[1000] w-72 max-w-[calc(100vw-1.5rem)] rounded-lg border border-amber-200 bg-background/95 backdrop-blur shadow-lg overflow-hidden">
-        <button
-          type="button"
-          className="w-full flex items-center gap-2 p-2.5 hover:bg-muted/50 transition-colors"
-          onClick={() => setShowAttention((v) => !v)}
-        >
-          <div className="flex items-center gap-1.5 flex-1">
-            <AlertTriangle className="size-3.5 text-amber-600" />
-            <span className="text-xs font-semibold">{attentionItems.length} Attention</span>
-          </div>
-          {showAttention ? <ChevronDown className="size-3.5 text-muted-foreground" /> : <ChevronRight className="size-3.5 text-muted-foreground" />}
-        </button>
-        {showAttention && (
-          <div className="border-t max-h-72 overflow-y-auto">
-            {attentionItems.map((item) => {
-              const Icon = iconMap[item.icon];
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleAttentionClick(item)}
-                  className="w-full flex items-start gap-2 p-2.5 hover:bg-muted/50 transition-colors border-b last:border-0 text-left"
-                >
-                  <span className={`mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded ${severityColor[item.severity]} bg-opacity-15`}>
-                    <Icon className="size-3" />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-medium leading-tight truncate">{item.title}</p>
-                    {item.detail && <p className="text-[10px] text-muted-foreground truncate">{item.detail}</p>}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  };
+  // Avoid unused warnings — these constants are part of the contract
+  // documented in dispatch-helpers.ts but not directly referenced in the
+  // view after extraction. Keeping the import for documentation/audit.
+  void STALE_GPS_MS;
+  void OFFLINE_MS;
 
   // ─── Main Render ────────────────────────────────────────────────────
 
@@ -1816,9 +904,9 @@ export function DispatchView() {
       {/* KPI bar */}
       <div className="flex items-center gap-2 flex-wrap mb-2 shrink-0">
         <KpiPill icon={Users} label="Fleet" value={kpis.total} color="text-slate-600" />
-        <KpiPill icon={CheckCircle2} label="On-Duty" value={kpis.onDuty} color="text-emerald-600" />
+        <KpiPill icon={ArrowRight} label="On-Duty" value={kpis.onDuty} color="text-emerald-600" />
         <KpiPill icon={Navigation} label="En-Route" value={kpis.enRoute} color="text-sky-600" />
-        <KpiPill icon={Briefcase} label="On-Job" value={kpis.onJob} color="text-amber-600" />
+        <KpiPill icon={Activity} label="On-Job" value={kpis.onJob} color="text-amber-600" />
         <KpiPill icon={CircleDot} label="Available" value={kpis.available} color="text-teal-600" />
         <KpiPill icon={ArrowRight} label="Unassigned" value={kpis.unassigned} color="text-orange-600" />
         {attentionItems.length > 0 && (
@@ -1838,133 +926,27 @@ export function DispatchView() {
       <div className="flex-1 flex gap-2 min-h-0">
         {/* Left pane: Queue + Fleet */}
         {fleetOpen && (
-          <aside className="hidden md:flex w-[320px] shrink-0 flex-col min-h-0 rounded-lg border border-border shadow-sm bg-card overflow-hidden">
-            {/* Filter bar */}
-            <div className="p-2.5 border-b bg-muted/30 space-y-2 shrink-0">
-              <div className="flex items-center gap-1.5">
-                <Select value={teamFilter} onValueChange={setTeamFilter}>
-                  <SelectTrigger className="h-7 text-[11px] flex-1">
-                    <SelectValue placeholder="All Teams" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Teams</SelectItem>
-                    {teams.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        <span className="flex items-center gap-1.5">
-                          <span className="inline-block size-2 rounded-full" style={{ backgroundColor: t.color }} />
-                          {t.name}
-                          <span className="text-muted-foreground">({t._count?.members ?? 0})</span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-7 text-[11px] w-[100px]">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="available">Available</SelectItem>
-                    <SelectItem value="busy">Busy</SelectItem>
-                    <SelectItem value="traveling">Traveling</SelectItem>
-                    <SelectItem value="en_route">En Route</SelectItem>
-                    <SelectItem value="on_job">On Job</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem>
-                    <SelectItem value="leave">On Leave</SelectItem>
-                    <SelectItem value="offline">Offline</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={gpsFilter} onValueChange={setGpsFilter}>
-                  <SelectTrigger className="h-7 text-[11px] flex-1">
-                    <SelectValue placeholder="GPS" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All GPS</SelectItem>
-                    <SelectItem value="live">Live only</SelectItem>
-                    <SelectItem value="stale">Stale</SelectItem>
-                    <SelectItem value="no-gps">No GPS</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search technicians…"
-                  className="h-7 text-[11px] pl-6"
-                />
-              </div>
-            </div>
-
-            <ScrollArea className="flex-1 min-h-0">
-              <div className="p-2 space-y-3">
-                {/* Team-grouped roster */}
-                {employeesLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                  </div>
-                ) : groupedRoster.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Users className="size-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-xs">No technicians match these filters</p>
-                  </div>
-                ) : (
-                  groupedRoster.map((group, gi) => {
-                    const teamId = group.team?.id ?? 'unassigned';
-                    const collapsed = collapsedTeams.has(teamId);
-                    return (
-                      <div key={teamId + gi}>
-                        <button
-                          type="button"
-                          onClick={() => toggleTeamCollapsed(teamId)}
-                          className="w-full flex items-center gap-1.5 px-1 py-1 hover:bg-muted/40 rounded transition-colors"
-                        >
-                          {collapsed ? <ChevronRight className="size-3 text-muted-foreground" /> : <ChevronDown className="size-3 text-muted-foreground" />}
-                          {group.team ? (
-                            <span className="inline-block size-2 rounded-full" style={{ backgroundColor: group.team.color }} />
-                          ) : (
-                            <UserPlus className="size-3 text-muted-foreground" />
-                          )}
-                          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex-1 text-left truncate">
-                            {group.team ? group.team.name : 'Unassigned'}
-                          </span>
-                          <Badge variant="secondary" className="text-[9px] h-4 px-1">{group.employees.length}</Badge>
-                        </button>
-                        {!collapsed && (
-                          <div className="space-y-1.5 mt-1">
-                            {group.employees.map(renderEmployeeRow)}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-
-                {/* Unassigned jobs queue */}
-                <div className="pt-2 border-t">
-                  <div className="flex items-center gap-1.5 px-1 py-1">
-                    <Briefcase className="size-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex-1">
-                      Job Queue
-                    </span>
-                    <Badge variant="secondary" className="text-[9px] h-4 px-1">{filteredPending.length}</Badge>
-                  </div>
-                  <div className="space-y-1.5 mt-1">
-                    {filteredPending.length === 0 ? (
-                      <p className="text-[11px] text-muted-foreground text-center py-3">No pending jobs</p>
-                    ) : (
-                      filteredPending.slice(0, 12).map((j) => renderJobCard(j, true))
-                    )}
-                  </div>
-                </div>
-              </div>
-            </ScrollArea>
-          </aside>
+          <FleetPane
+            teams={teams}
+            teamFilter={teamFilter}
+            onTeamFilterChange={setTeamFilter}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            gpsFilter={gpsFilter}
+            onGpsFilterChange={setGpsFilter}
+            search={search}
+            onSearchChange={setSearch}
+            rosterGroups={groupedRoster}
+            collapsedTeams={collapsedTeams}
+            onToggleTeam={toggleTeamCollapsed}
+            selectedTechnicianId={selectedTechnicianId}
+            onSelectTechnician={handleTechnicianSelect}
+            getActiveJobCount={getActiveJobCount}
+            pendingJobs={pendingJobs}
+            onSelectJob={handleJobSelect}
+            onStartJob={handleStartJob}
+            employeesLoading={employeesLoading}
+          />
         )}
 
         {/* Center: Map */}
@@ -1990,7 +972,12 @@ export function DispatchView() {
           )}
 
           {/* Attention Center overlay */}
-          {renderAttentionPanel()}
+          <AttentionPanel
+            items={attentionItems}
+            expanded={showAttention}
+            onToggle={() => setShowAttention((v) => !v)}
+            onItemClick={handleAttentionClick}
+          />
 
           {/* Map controls */}
           <div className="absolute top-3 right-3 z-[1000] flex flex-col gap-2">
@@ -2045,7 +1032,22 @@ export function DispatchView() {
                 <X className="size-3.5" />
               </Button>
             </div>
-            {inspectorMode === 'technician' ? renderInspectorTechnician() : renderInspectorJob()}
+            <InspectorPanel
+              mode={inspectorMode}
+              selectedTechnician={selectedEmployee}
+              selectedJob={selectedJob}
+              employees={employees}
+              activeJobsByEmployee={activeJobsByEmployee}
+              candidates={assignCandidates}
+              smartMatchLoading={smartMatchLoading}
+              assignLoading={assignLoading}
+              onRecenterOnTech={handleRecenterOnTech}
+              onViewJob={handleJobSelect}
+              onDeselectTechnician={() => setSelectedTechnicianId(null)}
+              onRefreshMarkers={() => mapControllerRef.current?.refreshMarkers()}
+              onStartJob={handleStartJob}
+              onAssign={handleAssign}
+            />
           </aside>
         )}
       </div>
@@ -2060,18 +1062,6 @@ export function DispatchView() {
           <PanelRightOpen className="size-4 mr-1" /> Inspector
         </Button>
       )}
-    </div>
-  );
-}
-
-// ─── KPI pill component ────────────────────────────────────────────────────
-
-function KpiPill({ icon: Icon, label, value, color }: { icon: React.ComponentType<{ className?: string }>; label: string; value: number; color: string }) {
-  return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border bg-card text-xs">
-      <Icon className={`size-3 ${color}`} />
-      <span className="font-semibold">{value}</span>
-      <span className="text-[10px] text-muted-foreground">{label}</span>
     </div>
   );
 }

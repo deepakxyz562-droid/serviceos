@@ -31,10 +31,12 @@ async function _GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {}
 
-    // If not super admin, filter by workspace scope
+    // If not super admin, filter by workspace scope.
+    // SECURITY: NEVER trust workspaceIdParam for non-super-admins — a
+    // determined user could pass ?workspaceId=<other tenant's workspace> to
+    // read cross-tenant employee data. Always derive from the session.
     if (!isSuperAdmin) {
-      // Use the explicitly provided workspaceId, or fall back to the auth user's workspaceId
-      const effectiveWorkspaceId = workspaceIdParam || authUser.workspaceId
+      const effectiveWorkspaceId = authUser.workspaceId
       if (effectiveWorkspaceId) {
         where.workspaceId = effectiveWorkspaceId
       } else if (authUser.tenantId) {

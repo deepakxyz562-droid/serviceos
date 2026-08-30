@@ -3,21 +3,16 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Target, Plus, Search, RefreshCw, Phone, Mail, MapPin,
-  MoreHorizontal, Pencil, Trash2, Eye, MessageCircle,
-  ArrowRight, Filter, Clock, TrendingUp,
-  DollarSign, Users, BarChart3,
+  MoreHorizontal, Pencil, Trash2, Eye,
+  ArrowRight, Clock,
+  BarChart3,
   List, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft,
-  ChevronRight, CheckCircle2, X, Send, StickyNote,
-  CalendarDays, Briefcase, AlertCircle, User, UserPlus,
-  Loader2, ArrowLeft, ImagePlus, Link2, Paperclip, Camera,
-  FileText, ImageIcon, ClipboardList, Truck, Info,
-  // ── Icons added by the Grid View + Filter Chips update (commit 39807a50).
-  // These were referenced in the new JSX but missing from the import —
-  // causing a ReferenceError at render time that the ViewErrorBoundary
-  // caught as "Something went wrong. This section failed to load."
+  ChevronRight, CheckCircle2, X,
+  Briefcase,
+  Loader2, ImagePlus,
   LayoutGrid, MessageSquare, UserCheck, XCircle,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,15 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Separator } from '@/components/ui/separator';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
@@ -42,429 +29,77 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
-import { format, parseISO } from 'date-fns';
+import { ErrorState } from '@/components/shared/error-state';
 import { cn } from '@/lib/utils';
 import { authFetch } from '@/lib/api';
-
-// Recharts — used by the Analytics tab (also used by dashboard-view / reports-view).
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts';
-
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
-import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
-// NOTE: SalesPipelineView import removed — the Leads page now hosts its own
-// drag-and-drop Kanban board inline (List tab → "Board" toggle). The separate
-// "Pipeline" tab is gone so there's a single source of truth for the pipeline.
+
+// Phase 4: lead types + helpers + sub-components extracted to src/features/leads/
+import type { Lead, LeadFormData, CustomerOption } from '@/features/leads/types';
+import {
+  KANBAN_STATUSES,
+  STATUS_CONFIG,
+  SOURCE_CONFIG,
+  PRIORITY_CONFIG,
+  EMPTY_FORM,
+  formatDateShort,
+  formatDateMedium,
+  mapToKanbanStatus,
+  parseImages,
+  parseNotes,
+} from '@/features/leads/utils/lead-helpers';
+import {
+  renderStatusBadge,
+  renderSourceBadge,
+} from '@/features/leads/components/lead-shared';
+import { LeadFormPage } from '@/features/leads/components/lead-form-page';
+import { LeadDetailPage } from '@/features/leads/components/lead-detail-page';
+import { LeadDetailDialog } from '@/features/leads/components/lead-detail-dialog';
+import { LeadAnalyticsView } from '@/features/leads/components/lead-analytics-view';
+import { LeadGridView } from '@/features/leads/components/lead-grid-view';
+import { LeadConvertDialog, LeadDeleteDialog } from '@/features/leads/components/lead-dialogs';
+
+// Line-items feature (Phase 1 bridge): types + utils + constants extracted,
+// component implementations still live in this file (will be moved in a
+// future phase).
+import type { LineItem, CatalogService } from '@/features/line-items/types';
+import { SERVICE_TYPES, getServiceTypeLabel } from '@/features/line-items/constants';
+import {
+  emptyLineItem,
+  lineItemTotal,
+  lineItemsSubtotal,
+  parseLineItems,
+} from '@/features/line-items/utils';
 
 // ============================================================
-// Types
+// Re-exports (Phase 1 + Phase 4 backward compatibility)
 // ============================================================
 
-export interface LineItem {
-  id: string;
-  serviceId: string | null;
-  name: string;
-  quantity: string;
-  unitPrice: string;
-  /** Cost of goods/services per unit (used for profit-margin calc). Defaults to '0'. */
-  unitCost?: string;
-  /** Optional long-form description shown under the name. */
-  description?: string;
-}
+// LineItem type — extracted to src/features/line-items/types (Phase 1)
+// Re-exported here for backward compatibility with existing imports.
+export type { LineItem } from '@/features/line-items/types';
 
-interface Lead {
-  id: string;
-  title?: string | null;
-  name: string;
-  phone: string;
-  email?: string | null;
-  source: string;
-  status: string;
-  priority: string;
-  value: number;
-  description?: string | null;
-  address?: string | null;
-  serviceType?: string | null;
-  serviceId?: string | null;
-  assignedToId?: string | null;
-  customerId?: string | null;
-  jobId?: string | null;
-  notesJson: string;
-  tagsJson: string;
-  lineItemsJson?: string;
-  imagesJson?: string;
-  assessmentImagesJson?: string;
-  followUpAt?: string | null;
-  convertedAt?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  assignedTo?: {
-    id: string;
-    name: string;
-    phone: string;
-    avatar?: string | null;
-  } | null;
-  customer?: {
-    id: string;
-    name: string;
-    phone: string;
-    email?: string | null;
-  } | null;
-  job?: {
-    id: string;
-    title: string;
-    status: string;
-  } | null;
-}
-
-interface LeadFormData {
-  title: string;
-  name: string;
-  phone: string;
-  email: string;
-  source: string;
-  serviceType: string;
-  serviceId: string;
-  address: string;
-  priority: string;
-  value: string;
-  serviceDetails: string;
-  notes: string;
-  images: string[];
-  assessmentImages: string[];
-  customerId: string;
-  lineItems: LineItem[];
-}
-
-// ============================================================
-// Constants
-// ============================================================
-
-// 7 pipeline stages — mirrors the Deal stages used by the Sales Pipeline
-// (SalesPipelineView's STAGES array). These are the canonical status values
-// stored on new Lead rows. Legacy Lead rows may still hold the older values
-// `new` / `quoted` / `proposal`; those are mapped via the aliases below and
-// `mapToKanbanStatus` so existing data renders correctly without a migration.
-const KANBAN_STATUSES = ['new_lead', 'contacted', 'qualified', 'quote_sent', 'negotiation', 'won', 'lost'] as const;
-
-const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string; headerBg: string; headerText: string; dotColor: string }> = {
-  new_lead: {
-    label: 'New Lead',
-    color: 'text-blue-700',
-    bgColor: 'bg-blue-50',
-    borderColor: 'border-blue-200',
-    headerBg: 'bg-blue-600',
-    headerText: 'text-white',
-    dotColor: 'bg-blue-500',
-  },
-  contacted: {
-    label: 'Contacted',
-    color: 'text-amber-700',
-    bgColor: 'bg-amber-50',
-    borderColor: 'border-amber-200',
-    headerBg: 'bg-amber-500',
-    headerText: 'text-white',
-    dotColor: 'bg-amber-500',
-  },
-  qualified: {
-    label: 'Qualified',
-    color: 'text-purple-700',
-    bgColor: 'bg-purple-50',
-    borderColor: 'border-purple-200',
-    headerBg: 'bg-purple-600',
-    headerText: 'text-white',
-    dotColor: 'bg-purple-500',
-  },
-  quote_sent: {
-    label: 'Quote Sent',
-    color: 'text-orange-700',
-    bgColor: 'bg-orange-50',
-    borderColor: 'border-orange-200',
-    headerBg: 'bg-orange-500',
-    headerText: 'text-white',
-    dotColor: 'bg-orange-500',
-  },
-  negotiation: {
-    label: 'Negotiation',
-    color: 'text-pink-700',
-    bgColor: 'bg-pink-50',
-    borderColor: 'border-pink-200',
-    headerBg: 'bg-pink-500',
-    headerText: 'text-white',
-    dotColor: 'bg-pink-500',
-  },
-  won: {
-    label: 'Won',
-    color: 'text-emerald-700',
-    bgColor: 'bg-emerald-50',
-    borderColor: 'border-emerald-200',
-    headerBg: 'bg-emerald-600',
-    headerText: 'text-white',
-    dotColor: 'bg-emerald-500',
-  },
-  lost: {
-    label: 'Lost',
-    color: 'text-red-700',
-    bgColor: 'bg-red-50',
-    borderColor: 'border-red-200',
-    headerBg: 'bg-red-600',
-    headerText: 'text-white',
-    dotColor: 'bg-red-500',
-  },
-};
-
-// Backwards-compatibility aliases for legacy Lead.status values. Older rows
-// may still carry `new` / `quoted` / `proposal`; map them onto the canonical
-// Deal-stage configs so badges, dropdowns and chart colours line up.
-STATUS_CONFIG.new = STATUS_CONFIG.new_lead;
-STATUS_CONFIG.quoted = STATUS_CONFIG.quote_sent;
-STATUS_CONFIG.proposal = STATUS_CONFIG.quote_sent;
-
-/**
- * Resolve a Lead.status (which may be a legacy value like `new` / `quoted` /
- * `proposal` or a canonical Deal stage like `new_lead` / `quote_sent`) to its
- * STATUS_CONFIG entry. Falls back to `new_lead` for unknown values so the UI
- * always renders a sensible badge.
- */
-function getStatusConfig(status: string) {
-  return STATUS_CONFIG[status] || STATUS_CONFIG.new_lead;
-}
-
-// All statuses available for filtering (canonical Deal stages).
-const ALL_STATUSES = ['new_lead', 'contacted', 'qualified', 'quote_sent', 'negotiation', 'won', 'lost'] as const;
-
-// Bar chart colors used by the Analytics tab. Match the status dot palette
-// so chart bars line up with the kanban / table badges. Legacy aliases are
-// included so historical rows still get the right colour.
-const STATUS_BAR_COLORS: Record<string, string> = {
-  new_lead: '#3b82f6',
-  contacted: '#f59e0b',
-  qualified: '#a855f7',
-  quote_sent: '#f97316',
-  negotiation: '#ec4899',
-  won: '#10b981',
-  lost: '#ef4444',
-  // Legacy aliases
-  new: '#3b82f6',
-  quoted: '#f97316',
-  proposal: '#f97316',
-};
-
-// Source labels + color palette. Covers every value the codebase writes
-// (webform / jotform / typeform / google-forms / ai_receptionist /
-// google_ads / meta_ads / lead_discovery / public_booking / public_quote /
-// public_request / hosted_link / form / embed / api / webhook / email /
-// sms / phone / justdial / marketplace) plus the original 8
-// (website / whatsapp / wordpress / google / facebook / instagram /
-// referral / manual). Unknown values fall through to a neutral badge in
-// `renderSourceBadge` so the UI never breaks.
-const SOURCE_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string }> = {
-  // ─── Original 8 ────────────────────────────────────────────────────
-  website: { label: 'Website', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-  whatsapp: { label: 'WhatsApp', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
-  wordpress: { label: 'WordPress', color: 'text-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200' },
-  google: { label: 'Google', color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-200' },
-  facebook: { label: 'Facebook', color: 'text-sky-700', bgColor: 'bg-sky-50', borderColor: 'border-sky-200' },
-  instagram: { label: 'Instagram', color: 'text-pink-700', bgColor: 'bg-pink-50', borderColor: 'border-pink-200' },
-  referral: { label: 'Referral', color: 'text-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200' },
-  manual: { label: 'Manual', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' },
-
-  // ─── Web forms (blue) ──────────────────────────────────────────────
-  webform: { label: 'Web Form', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-  jotform: { label: 'JotForm', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-  typeform: { label: 'Typeform', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-  'google-forms': { label: 'Google Forms', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-  form: { label: 'Form', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-  embed: { label: 'Embed', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-  hosted_link: { label: 'Hosted Link', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-
-  // ─── AI / automation (purple / emerald) ────────────────────────────
-  ai_receptionist: { label: 'AI Receptionist', color: 'text-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200' },
-  lead_discovery: { label: 'Lead Discovery', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
-
-  // ─── Public inbound pages (emerald) ────────────────────────────────
-  public_booking: { label: 'Public Booking', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
-  public_quote: { label: 'Public Quote', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
-  public_request: { label: 'Public Request', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
-
-  // ─── Paid acquisition (red / blue) ─────────────────────────────────
-  google_ads: { label: 'Google Ads', color: 'text-red-700', bgColor: 'bg-red-50', borderColor: 'border-red-200' },
-  meta_ads: { label: 'Meta Ads', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-
-  // ─── Marketplaces & directories (amber) ────────────────────────────
-  justdial: { label: 'JustDial', color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-200' },
-  marketplace: { label: 'Marketplace', color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-200' },
-
-  // ─── System / programmatic (gray) ──────────────────────────────────
-  api: { label: 'API', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' },
-  webhook: { label: 'Webhook', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' },
-  email: { label: 'Email', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' },
-  sms: { label: 'SMS', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' },
-  phone: { label: 'Phone', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' },
-};
-
-const PRIORITY_CONFIG: Record<string, { label: string; dotColor: string }> = {
-  low: { label: 'Low', dotColor: 'bg-gray-400' },
-  medium: { label: 'Medium', dotColor: 'bg-blue-500' },
-  high: { label: 'High', dotColor: 'bg-orange-500' },
-  urgent: { label: 'Urgent', dotColor: 'bg-red-500' },
-};
-
-const SERVICE_TYPES = [
-  { value: 'plumbing', label: 'Plumbing' },
-  { value: 'cleaning', label: 'Cleaning' },
-  { value: 'moving', label: 'Packers & Movers' },
-  { value: 'salon', label: 'Salon' },
-  { value: 'pest_control', label: 'Pest Control' },
-  { value: 'electrical', label: 'Electricians' },
-  { value: 'hvac', label: 'HVAC' },
-  { value: 'courier', label: 'Courier' },
-  { value: 'laundry', label: 'Laundry' },
-  { value: 'car_wash', label: 'Car Wash' },
-  { value: 'repair', label: 'Home Repair' },
-];
-
-const EMPTY_FORM: LeadFormData = {
-  title: '',
-  name: '',
-  phone: '',
-  email: '',
-  source: 'manual',
-  serviceType: '',
-  serviceId: '',
-  address: '',
-  priority: 'medium',
-  value: '',
-  serviceDetails: '',
-  notes: '',
-  images: [],
-  assessmentImages: [],
-  customerId: '',
-  lineItems: [],
-};
-
-// ============================================================
-// Helper functions
-// ============================================================
-
-function formatDateShort(dateStr: string): string {
-  try {
-    return format(parseISO(dateStr), 'dd MMM yyyy');
-  } catch {
-    return '—';
-  }
-}
-
-function formatDateMedium(dateStr: string): string {
-  try {
-    return format(parseISO(dateStr), 'dd MMM yyyy, hh:mm a');
-  } catch {
-    return '—';
-  }
-}
-
-function getServiceTypeLabel(value: string | null | undefined): string {
-  if (!value) return '—';
-  const found = SERVICE_TYPES.find((s) => s.value === value);
-  return found ? found.label : value;
-}
-
-/**
- * Map an API Lead.status to one of our 7 canonical Kanban stages. Legacy
- * values (`new`, `quoted`, `proposal`) are folded onto their canonical
- * counterparts so older rows still group correctly under the new columns.
- */
-function mapToKanbanStatus(status: string): string {
-  if (status === 'new') return 'new_lead';
-  if (status === 'quoted' || status === 'proposal') return 'quote_sent';
-  return status;
-}
-
-// ============================================================
-// Line item helpers (Product / Service section)
-// ============================================================
-
-export function newLineItemId(): string {
-  return `li_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-export function emptyLineItem(): LineItem {
-  return { id: newLineItemId(), serviceId: null, name: '', quantity: '1', unitPrice: '0', unitCost: '0', description: '' };
-}
-
-export function lineItemTotal(item: LineItem): number {
-  return (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
-}
-
-/** Total cost = Σ (unitCost × quantity). Used for profit margin. */
-export function lineItemCost(item: LineItem): number {
-  return (parseFloat(item.quantity) || 0) * (parseFloat(item.unitCost || '0') || 0);
-}
-
-export function lineItemsSubtotal(items: LineItem[]): number {
-  return items.reduce((sum, it) => sum + lineItemTotal(it), 0);
-}
-
-/** Σ of all line-item costs. Used for the profit-margin sidebar. */
-export function lineItemsTotalCost(items: LineItem[]): number {
-  return items.reduce((sum, it) => sum + lineItemCost(it), 0);
-}
-
-export function parseLineItems(json: string | null | undefined): LineItem[] {
-  try {
-    const raw = JSON.parse(json || '[]');
-    if (!Array.isArray(raw)) return [];
-    return raw.map((it: Record<string, unknown>) => ({
-      id: (it.id as string) || newLineItemId(),
-      serviceId: (it.serviceId as string) || null,
-      name: (it.name as string) || '',
-      quantity: String((it.quantity as number | string) ?? 1),
-      unitPrice: String((it.unitPrice as number | string) ?? 0),
-      unitCost: String((it.unitCost as number | string) ?? 0),
-      description: (it.description as string) || '',
-    }));
-  } catch {
-    return [];
-  }
-}
-
-function parseImages(json: string | null | undefined): string[] {
-  try {
-    const raw = JSON.parse(json || '[]');
-    if (!Array.isArray(raw)) return [];
-    return raw.filter((u: unknown): u is string => typeof u === 'string');
-  } catch {
-    return [];
-  }
-}
-
-function parseNotes(json: string | null | undefined): { text: string; createdAt: string }[] {
-  try {
-    const raw = JSON.parse(json || '[]');
-    if (!Array.isArray(raw)) return [];
-    return raw;
-  } catch {
-    return [];
-  }
-}
+// Line item helpers — extracted to src/features/line-items/utils (Phase 1)
+// Re-exported here for backward compatibility.
+export {
+  newLineItemId,
+  emptyLineItem,
+  lineItemTotal,
+  lineItemCost,
+  lineItemsSubtotal,
+  lineItemsTotalCost,
+  parseLineItems,
+} from '@/features/line-items/utils';
 
 // ============================================================
 // Component
 // ============================================================
 
-export type CatalogService = { id: string; name: string; category: string; basePrice: number };
+// CatalogService type — extracted to src/features/line-items/types (Phase 1)
+export type { CatalogService } from '@/features/line-items/types';
 
 // ─── Image uploader (used for Overview + On-site assessment photos) ────────
 export function ImageUploader({
@@ -1068,16 +703,37 @@ export function CustomerPicker({
   const inputRef = useRef<HTMLInputElement>(null);
   const selected = customers.find((c) => c.id === selectedCustomerId) || null;
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return customers.slice(0, 8);
-    return customers
-      .filter((c) =>
-        [c.name, c.phone, c.email || '', c.address || '']
-          .some((f) => f.toLowerCase().includes(q))
-      )
-      .slice(0, 8);
-  }, [customers, query]);
+  // Server-side search — replaces the old client-side filter of 200 upfront-
+  // fetched customers. Debounced 300ms, requires 2+ chars, max 10 results.
+  const [searchResults, setSearchResults] = useState<typeof customers>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    const q = query.trim();
+    if (q.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearchLoading(true);
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const res = await authFetch(`/api/customers?search=${encodeURIComponent(q)}&limit=10`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.customers ?? (Array.isArray(data) ? data : []));
+        }
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [query]);
+
+  const filtered = searchResults;
 
   const handlePick = (c: typeof customers[number]) => {
     onPick(c);
@@ -1442,6 +1098,7 @@ export function LeadsView() {
   // Data state
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [totalLeads, setTotalLeads] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -1501,19 +1158,10 @@ export function LeadsView() {
       .catch(() => setServices([]));
   }, []);
 
-  // Customers — fetched for the “Select a client” picker on the lead form.
-  // Includes email + address so the picker can display them in the dropdown
-  // and auto-fill the contact info section when a customer is picked.
+  // Customers — kept for the CustomerPicker's initialCustomer lookup when
+  // editing an existing lead. NO LONGER fetched upfront (was limit=200) —
+  // the CustomerPicker now does debounced server-side search on demand.
   const [customers, setCustomers] = useState<{ id: string; name: string; phone: string; email?: string | null; address?: string | null }[]>([]);
-  useEffect(() => {
-    authFetch('/api/customers?limit=200')
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => {
-        const list = data.customers ?? (Array.isArray(data) ? data : []);
-        setCustomers(list);
-      })
-      .catch(() => setCustomers([]));
-  }, []);
 
   // Customer picker (Select a client) UI state.
   const [customerQuery, setCustomerQuery] = useState('');
@@ -1608,6 +1256,7 @@ export function LeadsView() {
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
@@ -1628,9 +1277,11 @@ export function LeadsView() {
         setTotalPages(data.pagination?.totalPages || 1);
       } else {
         setLeads([]);
+        setError('Failed to load leads. Please try again.');
       }
-    } catch {
+    } catch (e) {
       setLeads([]);
+      setError(e instanceof Error ? e.message : 'Failed to load leads. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -2063,26 +1714,148 @@ export function LeadsView() {
       <ChevronDown className="size-3 ml-1" />;
   };
 
-  const renderSourceBadge = (source: string) => {
-    const config = SOURCE_CONFIG[source];
-    if (!config) return <Badge variant="outline" className="text-xs">{source}</Badge>;
-    return (
-      <Badge variant="outline" className={`text-[10px] h-5 ${config.bgColor} ${config.color} ${config.borderColor}`}>
-        {config.label}
-      </Badge>
-    );
-  };
+  // renderSourceBadge + renderStatusBadge — extracted to
+  // src/features/leads/components/lead-shared.tsx (Phase 4).
 
-  const renderStatusBadge = (status: string) => {
-    // Use the resolver so legacy statuses (`new`, `quoted`, `proposal`)
-    // render with their canonical Deal-stage label and palette.
-    const config = getStatusConfig(status);
-    return (
-      <Badge variant="outline" className={`text-[10px] h-5 ${config.bgColor} ${config.color} ${config.borderColor}`}>
-        {config.label}
-      </Badge>
-    );
-  };
+  // ============================================================
+  // DataTable columns — List/Table view (P2-13)
+  // ============================================================
+  // The table tab is rendered via the shared <DataTable> component.
+  // Each column mirrors the cell markup that previously lived inline in
+  // `renderTableView`. Responsive hiding is preserved by setting the
+  // `hidden <breakpoint>:table-cell` utility on BOTH `className` (cell)
+  // and `headerClassName` (header) — DataTable's `hideOnMobile` only
+  // toggles at the `sm` breakpoint, so we use explicit classes for the
+  // `md`/`lg`-hidden columns.
+  const leadColumns: Column<Lead>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      sortField: 'name',
+      className: 'font-medium',
+      render: (lead) => (
+        <div className="flex items-center gap-1.5">
+          <span className={`size-2 rounded-full shrink-0 ${PRIORITY_CONFIG[lead.priority]?.dotColor || 'bg-gray-400'}`} />
+          <div className="min-w-0">
+            <div className="truncate font-semibold text-slate-900 dark:text-slate-100">{lead.name}</div>
+            {lead.title && (
+              <div className="text-xs text-emerald-700 dark:text-emerald-400 truncate">{lead.title}</div>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'phone',
+      header: 'Phone',
+      sortField: 'phone',
+      className: 'hidden md:table-cell text-muted-foreground text-sm',
+      headerClassName: 'hidden md:table-cell',
+      render: (lead) => (
+        <div className="flex items-center gap-1">
+          <span>{lead.phone}</span>
+          {lead.phone && (
+            <a
+              href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
+              target="_blank"
+              rel="noreferrer"
+              className="p-1 text-slate-400 hover:text-emerald-600 transition-colors"
+              title="WhatsApp"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MessageSquare className="size-3" />
+            </a>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'email',
+      header: 'Email',
+      sortField: 'email',
+      className: 'hidden lg:table-cell text-muted-foreground text-sm',
+      headerClassName: 'hidden lg:table-cell',
+      render: (lead) => lead.email || '—',
+    },
+    {
+      key: 'source',
+      header: 'Source',
+      sortField: 'source',
+      render: (lead) => renderSourceBadge(lead.source),
+    },
+    {
+      key: 'serviceType',
+      header: 'Service',
+      sortField: 'serviceType',
+      hideOnMobile: true,
+      className: 'text-sm text-muted-foreground',
+      render: (lead) => (lead.serviceType ? getServiceTypeLabel(lead.serviceType) : '—'),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortField: 'status',
+      render: (lead) => renderStatusBadge(lead.status),
+    },
+    {
+      key: 'value',
+      header: 'Value',
+      sortField: 'value',
+      className: 'hidden md:table-cell font-bold text-sm text-emerald-700 dark:text-emerald-400',
+      headerClassName: 'hidden md:table-cell',
+      render: (lead) => (lead.value > 0 ? formatCompact(lead.value) : '—'),
+    },
+    {
+      key: 'createdAt',
+      header: 'Date',
+      sortField: 'createdAt',
+      className: 'hidden lg:table-cell text-sm text-muted-foreground',
+      headerClassName: 'hidden lg:table-cell',
+      render: (lead) => formatDateShort(lead.createdAt),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      headerClassName: 'w-[120px] text-right',
+      render: (lead) => (
+        // stopPropagation so the row's onRowClick (openLeadDetail) doesn't
+        // fire when the user clicks Convert / the row-actions dropdown.
+        <div
+          className="flex items-center justify-end gap-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {!['won', 'lost'].includes(lead.status) && (
+            <Button
+              size="sm"
+              className="h-7 text-[11px] px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+              onClick={() => openConvertDialog(lead)}
+            >
+              Convert
+            </Button>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7">
+                <MoreHorizontal className="size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => openLeadDetail(lead)}>
+                <Eye className="size-3.5 mr-2" /> View
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openEditLead(lead)}>
+                <Pencil className="size-3.5 mr-2" /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={() => openDeleteDialog(lead)}>
+                <Trash2 className="size-3.5 mr-2" /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
+  ];
 
   // ============================================================
   // Render: Kanban board — REMOVED
@@ -2093,28 +1866,28 @@ export function LeadsView() {
   // is now the single source of truth for the sales pipeline. The Leads
   // page renders the table view only — see renderTableView() below.
 
-  const renderGridView = () => {
-    if (loading) {
-      return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Card key={i} className="p-4 space-y-3">
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-              <Skeleton className="h-6 w-full" />
-            </Card>
-          ))}
-        </div>
-      );
-    }
+  // ============================================================
+  // Render: Grid view — EXTRACTED (Phase 4)
+  // ============================================================
+  // renderGridView() lived here. Moved to
+  // src/features/leads/components/lead-grid-view.tsx as <LeadGridView />.
 
-    if (sortedLeads.length === 0) {
+  // ============================================================
+  // Render: Table view
+  // ============================================================
+
+  const renderTableView = () => {
+    // Custom empty state — DataTable's built-in empty state has no
+    // "Add Lead" button, so we keep the original empty UI (with the CTA)
+    // for the no-data case. Loading and error states are delegated to
+    // <DataTable> (skeleton rows + ErrorState with retry).
+    if (!loading && !error && sortedLeads.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
           <Target className="size-12 mb-3 opacity-20" />
           <p className="font-medium">No leads found</p>
           <p className="text-sm mt-1">Try adjusting your filters or add a new lead</p>
-          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700 font-semibold" onClick={openAddLead}>
+          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700" onClick={openAddLead}>
             <Plus className="size-4 mr-1" /> Add Lead
           </Button>
         </div>
@@ -2122,297 +1895,46 @@ export function LeadsView() {
     }
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {sortedLeads.map((lead) => {
-          const isWonOrLost = ['won', 'lost'].includes(lead.status);
-          return (
-            <Card
-              key={lead.id}
-              className="group relative p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-card hover:border-emerald-500/40 hover:shadow-md transition-all cursor-pointer space-y-3 flex flex-col justify-between"
-              onClick={() => openLeadDetail(lead)}
-            >
-              <div className="space-y-3">
-                {/* Header: Priority Dot + Source + Status Badge */}
-                <div className="flex items-center justify-between gap-2 pb-1 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className={cn('size-2 rounded-full shrink-0', PRIORITY_CONFIG[lead.priority]?.dotColor || 'bg-gray-400')} />
-                    {renderSourceBadge(lead.source)}
-                  </div>
-                  <div className="shrink-0">
-                    {renderStatusBadge(lead.status)}
-                  </div>
-                </div>
-
-                {/* Title & Customer Name */}
-                <div className="space-y-1">
-                  <h4 className="font-bold text-base text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 group-hover:text-emerald-600 transition-colors">
-                    {lead.title || lead.name}
-                  </h4>
-                  <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 pt-0.5">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <User className="size-3.5 shrink-0 text-slate-400" />
-                      <span className="truncate font-semibold text-slate-800 dark:text-slate-200">{lead.name}</span>
-                    </div>
-                    {/* Quick WhatsApp / Call icons */}
-                    <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                      {lead.phone && (
-                        <>
-                          <a
-                            href={`tel:${lead.phone}`}
-                            className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
-                            title="Call customer"
-                          >
-                            <Phone className="size-3.5" />
-                          </a>
-                          <a
-                            href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
-                            title="WhatsApp customer"
-                          >
-                            <MessageSquare className="size-3.5" />
-                          </a>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Service Type & Deal Value Badges */}
-                <div className="flex items-center justify-between gap-2 text-xs pt-1">
-                  {lead.serviceType ? (
-                    <Badge variant="secondary" className="text-[10px] h-5 font-medium px-2 bg-slate-100 dark:bg-slate-800">
-                      <Briefcase className="size-2.5 mr-1" />
-                      {getServiceTypeLabel(lead.serviceType)}
-                    </Badge>
-                  ) : <span />}
-
-                  {lead.value > 0 && (
-                    <span className="font-bold text-sm text-emerald-700 dark:text-emerald-400">
-                      {formatCompact(lead.value)}
-                    </span>
-                  )}
-                </div>
-
-                {lead.address && (
-                  <div className="flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
-                    <MapPin className="size-3.5 shrink-0 text-slate-400 mt-0.5" />
-                    <span className="truncate">{lead.address}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Bottom Action Bar */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
-                <span className="text-[11px] text-slate-400">{formatDateShort(lead.createdAt)}</span>
-
-                {!isWonOrLost ? (
-                  <Button
-                    size="sm"
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-8 text-xs shadow-xs"
-                    onClick={() => openConvertDialog(lead)}
-                  >
-                    <ArrowRight className="size-3.5 mr-1" /> Convert to Job
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs"
-                    onClick={() => openLeadDetail(lead)}
-                  >
-                    <Eye className="size-3.5 mr-1" /> View Details
-                  </Button>
-                )}
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-    );
-  };
-
-  // ============================================================
-  // Render: Table view
-  // ============================================================
-
-  const renderTableView = () => {
-    if (loading) {
-      return (
-        <div className="space-y-3">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="flex items-center gap-4 p-3">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-4 w-36" />
-              <Skeleton className="h-5 w-16" />
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-4 w-16" />
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    return (
       <div className="space-y-4">
-        {sortedLeads.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <Target className="size-12 mb-3 opacity-20" />
-            <p className="font-medium">No leads found</p>
-            <p className="text-sm mt-1">Try adjusting your filters or add a new lead</p>
-            <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700" onClick={openAddLead}>
-              <Plus className="size-4 mr-1" /> Add Lead
+        <DataTable
+          columns={leadColumns}
+          data={sortedLeads}
+          rowKey={(lead) => lead.id}
+          loading={loading}
+          error={error}
+          onRetry={fetchLeads}
+          emptyMessage="No leads found"
+          emptyIcon={Target}
+          onRowClick={(lead) => openLeadDetail(lead)}
+        />
+
+        {/* Pagination */}
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Showing {leads.length} of {totalLeads} leads
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
+            >
+              <ChevronLeft className="size-4" /> Previous
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Page {page} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages}
+              onClick={() => setPage(page + 1)}
+            >
+              Next <ChevronRight className="size-4" />
             </Button>
           </div>
-        ) : (
-          <>
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('name')}>
-                      <span className="flex items-center">Name <SortIcon field="name" /></span>
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none hidden md:table-cell" onClick={() => handleSort('phone')}>
-                      <span className="flex items-center">Phone <SortIcon field="phone" /></span>
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none hidden lg:table-cell" onClick={() => handleSort('email')}>
-                      <span className="flex items-center">Email <SortIcon field="email" /></span>
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('source')}>
-                      <span className="flex items-center">Source <SortIcon field="source" /></span>
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none hidden sm:table-cell" onClick={() => handleSort('serviceType')}>
-                      <span className="flex items-center">Service <SortIcon field="serviceType" /></span>
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('status')}>
-                      <span className="flex items-center">Status <SortIcon field="status" /></span>
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none hidden md:table-cell" onClick={() => handleSort('value')}>
-                      <span className="flex items-center">Value <SortIcon field="value" /></span>
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none hidden lg:table-cell" onClick={() => handleSort('createdAt')}>
-                      <span className="flex items-center">Date <SortIcon field="createdAt" /></span>
-                    </TableHead>
-                    <TableHead className="w-[120px] text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedLeads.map((lead) => (
-                    <TableRow
-                      key={lead.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => openLeadDetail(lead)}
-                    >
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`size-2 rounded-full shrink-0 ${PRIORITY_CONFIG[lead.priority]?.dotColor || 'bg-gray-400'}`} />
-                          <div className="min-w-0">
-                            <div className="truncate font-semibold text-slate-900 dark:text-slate-100">{lead.name}</div>
-                            {lead.title && (
-                              <div className="text-xs text-emerald-700 dark:text-emerald-400 truncate">{lead.title}</div>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
-                        <div className="flex items-center gap-1">
-                          <span>{lead.phone}</span>
-                          {lead.phone && (
-                            <a
-                              href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="p-1 text-slate-400 hover:text-emerald-600 transition-colors"
-                              title="WhatsApp"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <MessageSquare className="size-3" />
-                            </a>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">{lead.email || '—'}</TableCell>
-                      <TableCell>{renderSourceBadge(lead.source)}</TableCell>
-                      <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                        {lead.serviceType ? getServiceTypeLabel(lead.serviceType) : '—'}
-                      </TableCell>
-                      <TableCell>{renderStatusBadge(lead.status)}</TableCell>
-                      <TableCell className="hidden md:table-cell font-bold text-sm text-emerald-700 dark:text-emerald-400">
-                        {lead.value > 0 ? formatCompact(lead.value) : '—'}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                        {formatDateShort(lead.createdAt)}
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1">
-                          {!['won', 'lost'].includes(lead.status) && (
-                            <Button
-                              size="sm"
-                              className="h-7 text-[11px] px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
-                              onClick={() => openConvertDialog(lead)}
-                            >
-                              Convert
-                            </Button>
-                          )}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-7 w-7">
-                                <MoreHorizontal className="size-3.5" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openLeadDetail(lead)}>
-                                <Eye className="size-3.5 mr-2" /> View
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openEditLead(lead)}>
-                                <Pencil className="size-3.5 mr-2" /> Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem variant="destructive" onClick={() => openDeleteDialog(lead)}>
-                                <Trash2 className="size-3.5 mr-2" /> Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Pagination */}
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Showing {leads.length} of {totalLeads} leads
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage(page - 1)}
-                >
-                  <ChevronLeft className="size-4" /> Previous
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  Page {page} of {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage(page + 1)}
-                >
-                  Next <ChevronRight className="size-4" />
-                </Button>
-              </div>
-            </div>
-          </>
-        )}
+        </div>
       </div>
     );
   };
@@ -2421,1546 +1943,36 @@ export function LeadsView() {
   // Render: Lead Form Page (full page, not a modal)
   // ============================================================
 
-  const renderLeadFormPage = () => (
-    <div className="w-full space-y-6">
-      {/* ─── Page header with Back button ─────────────────────── */}
-      <FormPageHeader
-        icon={UserPlus}
-        title={editingLead ? 'Edit Lead' : 'New Request'}
-        subtitle={editingLead ? 'Update lead information' : 'Add a new lead to your pipeline'}
-        onBack={closeLeadForm}
-        onSubmit={handleSaveLead}
-        submitting={saving}
-        submitLabel={editingLead ? 'Update Lead' : 'Add Lead'}
-      />
-
-      {/* ─── Title & Client ───────────────────────────────────── */}
-      <FormSectionCard>
-        <div className="space-y-4">
-          <div className="grid gap-2">
-            <Label htmlFor="lead-title">Title</Label>
-            <Input
-              id="lead-title"
-              className="form-input h-10"
-              placeholder="Add a title (e.g. Kitchen sink repair)"
-              value={leadForm.title}
-              onChange={(e) => setLeadForm({ ...leadForm, title: e.target.value })}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label>Select a client</Label>
-            <CustomerPicker
-              customers={customers}
-              selectedCustomerId={leadForm.customerId}
-              onPick={handlePickCustomer}
-              onClear={() => setLeadForm({ ...leadForm, customerId: '' })}
-              onCreate={openCreateCustomerDialog}
-              query={customerQuery}
-              setQuery={setCustomerQuery}
-              open={customerPickerOpen}
-              setOpen={setCustomerPickerOpen}
-            />
-            <p className="text-xs text-muted-foreground">
-              Pick an existing client or click <span className="text-emerald-700 font-medium">+ Create new client</span> to add one on the fly.
-            </p>
-          </div>
-        </div>
-      </FormSectionCard>
-
-      {/* ─── Contact info ─────────────────────────────────────── */}
-      {/* When a customer is already linked via the picker above, the
-          Name/Phone/Email fields are redundant (they come from the
-          customer record and are auto-filled). In that case we hide the
-          contact inputs and only show Source + a small note. The hidden
-          values are still sent to the API so the lead's name/phone/email
-          stay in sync with the customer. */}
-      <FormSectionCard>
-        {leadForm.customerId ? (
-          <div className="grid gap-4 sm:grid-cols-2 items-start">
-            <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-start gap-2 sm:col-span-1">
-              <User className="size-3.5 mt-0.5 shrink-0" />
-              <span>Contact details are pulled from the selected client above. Clear the client to edit them manually.</span>
-            </div>
-            <div className="grid gap-2">
-              <Label>Source</Label>
-              <Select value={leadForm.source} onValueChange={(v) => setLeadForm({ ...leadForm, source: v })}>
-                <SelectTrigger className="form-input h-10"><SelectValue placeholder="Select source" /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(SOURCE_CONFIG).map(([key, val]) => (
-                    <SelectItem key={key} value={key}>{val.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="lead-name">Name <span className="text-red-500 font-medium">*</span></Label>
-              <Input
-                id="lead-name"
-                className="form-input h-10"
-                placeholder="Full name"
-                value={leadForm.name}
-                onChange={(e) => setLeadForm({ ...leadForm, name: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="lead-phone">Phone <span className="text-red-500 font-medium">*</span></Label>
-              <Input
-                id="lead-phone"
-                className="form-input h-10"
-                placeholder="+1 234 567 8900"
-                value={leadForm.phone}
-                onChange={(e) => setLeadForm({ ...leadForm, phone: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="lead-email">Email</Label>
-              <Input
-                id="lead-email"
-                type="email"
-                className="form-input h-10"
-                placeholder="email@example.com"
-                value={leadForm.email}
-                onChange={(e) => setLeadForm({ ...leadForm, email: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Source</Label>
-              <Select value={leadForm.source} onValueChange={(v) => setLeadForm({ ...leadForm, source: v })}>
-                <SelectTrigger className="form-input h-10"><SelectValue placeholder="Select source" /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(SOURCE_CONFIG).map(([key, val]) => (
-                    <SelectItem key={key} value={key}>{val.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        )}
-      </FormSectionCard>
-
-      {/* ─── Overview (Service details + images) ──────────────── */}
-      <FormSectionCard icon={FileText} title="Overview">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label className="font-medium">Service details</Label>
-            <p className="text-xs text-muted-foreground">Please provide as much information as you can</p>
-            <Textarea
-              rows={4}
-              className="form-input"
-              placeholder="Describe the work requested, symptoms, urgency, etc."
-              value={leadForm.serviceDetails}
-              onChange={(e) => setLeadForm({ ...leadForm, serviceDetails: e.target.value })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="font-medium">Share images of the work to be done</Label>
-            <ImageUploader
-              images={leadForm.images}
-              onChange={(imgs) => setLeadForm({ ...leadForm, images: imgs })}
-            />
-          </div>
-        </div>
-      </FormSectionCard>
-
-      {/* ─── On-site assessment ───────────────────────────────── */}
-      <FormSectionCard icon={Camera} title="On-site assessment">
-        <div className="space-y-4">
-          <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-3 text-sm text-muted-foreground flex items-start gap-2">
-            <ClipboardList className="size-4 mt-0.5 shrink-0" />
-            <span>Visit the property to assess the job before you do the work.</span>
-          </div>
-          <div className="space-y-2">
-            <Label className="font-medium">Assessment photos</Label>
-            <ImageUploader
-              images={leadForm.assessmentImages}
-              onChange={(imgs) => setLeadForm({ ...leadForm, assessmentImages: imgs })}
-              bucket="lead-assessment"
-            />
-          </div>
-        </div>
-      </FormSectionCard>
-
-      {/* ─── Product / Service (line items) ───────────────────── */}
-      <FormSectionCard icon={Briefcase} title="Product / Service" description="Search the catalog or add a custom item">
-        <LineItemsSection
-          items={leadForm.lineItems}
-          services={services}
-          symbol={symbol}
-          onServicesUpdate={addServiceToCatalog}
-          onChange={(items) =>
-            setLeadForm((prev) => ({
-              ...prev,
-              lineItems: items,
-              serviceId: items.find((it) => it.serviceId)?.serviceId || '',
-              serviceType: prev.serviceType,
-              value: items.length > 0 ? lineItemsSubtotal(items).toFixed(2) : prev.value,
-            }))
-          }
-        />
-      </FormSectionCard>
-
-      {/* ─── Details (Address / Priority / Value) ─────────────── */}
-      <FormSectionCard icon={MapPin} title="Details">
-        <div className="space-y-4">
-          <div className="grid gap-2">
-            <Label htmlFor="lead-address">Address</Label>
-            <Input
-              id="lead-address"
-              className="form-input h-10"
-              placeholder="Street address, city, state"
-              value={leadForm.address}
-              onChange={(e) => setLeadForm({ ...leadForm, address: e.target.value })}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label>Priority</Label>
-              <Select value={leadForm.priority} onValueChange={(v) => setLeadForm({ ...leadForm, priority: v })}>
-                <SelectTrigger className="form-input h-10"><SelectValue placeholder="Select priority" /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(PRIORITY_CONFIG).map(([key, val]) => (
-                    <SelectItem key={key} value={key}>{val.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="lead-value" className="flex items-center gap-1">
-                Value ({symbol})
-                {leadForm.lineItems.length > 0 && (
-                  <span className="text-[10px] font-normal text-muted-foreground">(auto)</span>
-                )}
-              </Label>
-              <Input
-                id="lead-value"
-                type="number"
-                className="form-input h-10"
-                placeholder="0"
-                value={leadForm.value}
-                onChange={(e) => setLeadForm({ ...leadForm, value: e.target.value })}
-                disabled={leadForm.lineItems.length > 0}
-              />
-            </div>
-          </div>
-        </div>
-      </FormSectionCard>
-
-      {/* ─── Notes ────────────────────────────────────────────── */}
-      <FormSectionCard icon={StickyNote} title="Notes">
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">Use @ in notes to mention your team</p>
-          <Textarea
-            rows={3}
-            className="form-input"
-            placeholder="Add a note for your team..."
-            value={leadForm.notes}
-            onChange={(e) => setLeadForm({ ...leadForm, notes: e.target.value })}
-          />
-        </div>
-      </FormSectionCard>
-
-      {/* ─── Bottom action bar ────────────────────────────────── */}
-      <div className="flex items-center justify-end gap-2 pb-4">
-        <Button variant="outline" onClick={closeLeadForm}>Cancel</Button>
-        <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveLead} disabled={saving}>
-          {saving && <RefreshCw className="size-4 mr-1 animate-spin" />}
-          {editingLead ? 'Update Lead' : 'Add Lead'}
-        </Button>
-      </div>
-
-      {/* ─── Create-customer dialog (opened from the picker) ──── */}
-      <CreateCustomerDialog
-        open={showCreateCustomerDialog}
-        onOpenChange={setShowCreateCustomerDialog}
-        prefillName={createCustomerPrefill.name}
-        prefillPhone={createCustomerPrefill.phone}
-        prefillEmail={createCustomerPrefill.email}
-        onCreated={addCustomerToList}
-      />
-    </div>
-  );
+  // renderLeadFormPage() — extracted to @/features/leads/components/ (Phase 4)
 
   // ============================================================
   // Render: Lead Detail Dialog
   // ============================================================
 
-  const renderDetailDialog = () => {
-    if (!selectedLead) return null;
-
-    const leadNotes = (() => {
-      try { return JSON.parse(selectedLead.notesJson || '[]'); } catch { return []; }
-    })();
-
-    const kanbanStatus = mapToKanbanStatus(selectedLead.status);
-    const currentStageIdx = KANBAN_STATUSES.indexOf(kanbanStatus as typeof KANBAN_STATUSES[number]);
-
-    return (
-      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Target className="size-5 text-emerald-600" />
-              Lead Details
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-5">
-            {/* Top action row — jump to the dedicated Sales Pipeline view
-                (sidebar → CRM → Pipeline) to move the linked Deal's stage.
-                Placed near the top so it's reachable without scrolling past
-                the rest of the detail body. */}
-            <div className="flex justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setShowDetailDialog(false);
-                  setGlobalView('salesPipeline');
-                }}
-                className="gap-2"
-              >
-                <TrendingUp className="size-4" />
-                View in Pipeline
-              </Button>
-            </div>
-
-            {/* Title + Name + status */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                {selectedLead.title && (
-                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 mb-1">{selectedLead.title}</p>
-                )}
-                <h3 className="font-bold text-lg">{selectedLead.name}</h3>
-                <div className="flex items-center gap-3 mt-1 flex-wrap">
-                  <p className="text-sm text-muted-foreground flex items-center gap-1">
-                    <Phone className="size-3.5" /> {selectedLead.phone}
-                  </p>
-                  {selectedLead.email && (
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Mail className="size-3.5" /> {selectedLead.email}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {renderStatusBadge(selectedLead.status)}
-                <span className="flex items-center gap-1">
-                  <span className={`size-2 rounded-full ${PRIORITY_CONFIG[selectedLead.priority]?.dotColor || 'bg-gray-400'}`} />
-                  <span className="text-xs text-muted-foreground">{PRIORITY_CONFIG[selectedLead.priority]?.label || selectedLead.priority}</span>
-                </span>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Pipeline Progress */}
-            <div>
-              <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                <TrendingUp className="size-4 text-muted-foreground" /> Pipeline Progress
-              </h4>
-              <div className="flex items-center gap-1 overflow-x-auto pb-2">
-                {KANBAN_STATUSES.filter((s) => s !== 'lost').map((status, idx) => {
-                  const config = STATUS_CONFIG[status];
-                  const isCompleted = idx < currentStageIdx;
-                  const isCurrent = idx === currentStageIdx;
-
-                  return (
-                    <div key={status} className="flex items-center gap-1">
-                      <div
-                        className={cn(
-                          'rounded-lg px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide transition-all whitespace-nowrap',
-                          isCompleted && `${config.bgColor} ${config.color} ${config.borderColor} border`,
-                          isCurrent && `${config.bgColor} ${config.color} ${config.borderColor} border ring-2 ring-offset-1`,
-                          !isCompleted && !isCurrent && 'bg-muted text-muted-foreground'
-                        )}
-                      >
-                        {isCompleted && <CheckCircle2 className="size-3 inline mr-0.5" />}
-                        {config.label}
-                      </div>
-                      {idx < KANBAN_STATUSES.filter((s) => s !== 'lost').length - 1 && (
-                        <ArrowRight className="size-3 text-muted-foreground/40 flex-shrink-0" />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Lead Info Grid */}
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              {selectedLead.value > 0 && (
-                <div className="flex items-center gap-2">
-                  <DollarSign className="size-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Value</p>
-                    <p className="font-semibold text-emerald-700">{formatCompact(selectedLead.value)}</p>
-                  </div>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <BarChart3 className="size-4 text-muted-foreground" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Source</p>
-                  <p>{SOURCE_CONFIG[selectedLead.source]?.label || selectedLead.source}</p>
-                </div>
-              </div>
-              {selectedLead.serviceType && (
-                <div className="flex items-center gap-2">
-                  <Briefcase className="size-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Service</p>
-                    <p>{getServiceTypeLabel(selectedLead.serviceType)}</p>
-                  </div>
-                </div>
-              )}
-              {selectedLead.address && (
-                <div className="flex items-center gap-2">
-                  <MapPin className="size-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Address</p>
-                    <p className="truncate">{selectedLead.address}</p>
-                  </div>
-                </div>
-              )}
-              {selectedLead.assignedTo && (
-                <div className="flex items-center gap-2">
-                  <User className="size-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Assigned To</p>
-                    <p>{selectedLead.assignedTo.name}</p>
-                  </div>
-                </div>
-              )}
-              {selectedLead.job && (
-                <div className="flex items-center gap-2">
-                  <Briefcase className="size-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Linked Job</p>
-                    <p className="text-emerald-700 font-medium">{selectedLead.job.title}</p>
-                  </div>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <CalendarDays className="size-4 text-muted-foreground" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Created</p>
-                  <p>{formatDateMedium(selectedLead.createdAt)}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Service details (Overview) */}
-            {selectedLead.description && (
-              <>
-                <Separator />
-                <div>
-                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
-                    <FileText className="size-4 text-muted-foreground" /> Service details
-                  </h4>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap rounded-lg bg-muted/40 p-3">
-                    {selectedLead.description}
-                  </p>
-                </div>
-              </>
-            )}
-
-            {/* Overview images */}
-            {(() => {
-              const imgs = parseImages(selectedLead.imagesJson);
-              if (imgs.length === 0) return null;
-              return (
-                <div>
-                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
-                    <ImageIcon className="size-4 text-muted-foreground" /> Work images ({imgs.length})
-                  </h4>
-                  <div className="grid grid-cols-5 gap-2">
-                    {imgs.map((url, i) => (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-md overflow-hidden border bg-muted">
-                                                <img src={url} alt={`Work ${i + 1}`} className="size-full object-cover" />
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Assessment images */}
-            {(() => {
-              const imgs = parseImages(selectedLead.assessmentImagesJson);
-              if (imgs.length === 0) return null;
-              return (
-                <div>
-                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
-                    <Camera className="size-4 text-muted-foreground" /> Assessment photos ({imgs.length})
-                  </h4>
-                  <div className="grid grid-cols-5 gap-2">
-                    {imgs.map((url, i) => (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-md overflow-hidden border bg-muted">
-                                                <img src={url} alt={`Assessment ${i + 1}`} className="size-full object-cover" />
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Linked customer */}
-            {selectedLead.customerId && (
-              <>
-                <Separator />
-                <div className="flex items-center gap-2 text-sm">
-                  <Link2 className="size-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Linked customer</p>
-                    <p className="font-medium">
-                      {selectedLead.customer?.name || customers.find((c) => c.id === selectedLead.customerId)?.name || 'Linked customer'}
-                    </p>
-                  </div>
-                </div>
-              </>
-            )}
-
-            <Separator />
-
-            {/* Product / Service line items */}
-            {(() => {
-              const items = parseLineItems(selectedLead.lineItemsJson);
-              if (items.length === 0) return null;
-              const sub = lineItemsSubtotal(items);
-              return (
-                <div>
-                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                    <Briefcase className="size-4 text-muted-foreground" /> Product / Service
-                  </h4>
-                  <div className="space-y-2">
-                    {items.map((it) => (
-                      <div key={it.id} className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
-                        <div className="min-w-0">
-                          <p className="font-medium truncate">{it.name || 'Untitled item'}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {it.quantity} × {symbol}{(parseFloat(it.unitPrice) || 0).toFixed(2)}
-                          </p>
-                        </div>
-                        <span className="font-semibold text-emerald-700 whitespace-nowrap">
-                          {symbol}{lineItemTotal(it).toFixed(2)}
-                        </span>
-                      </div>
-                    ))}
-                    <div className="flex items-center justify-between rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2">
-                      <span className="text-sm font-medium text-emerald-800">Subtotal</span>
-                      <span className="text-sm font-bold text-emerald-700">{symbol}{sub.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            <Separator />
-
-            {/* Status Actions */}
-            {!['won', 'lost'].includes(kanbanStatus) && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2">Update Status</h4>
-                <div className="flex flex-wrap gap-2">
-                  {KANBAN_STATUSES.filter((s) => s !== kanbanStatus).map((status) => {
-                    const config = STATUS_CONFIG[status];
-                    const isStatusLoading = statusLoadingId === selectedLead.id;
-                    return (
-                      <Button
-                        key={status}
-                        variant="outline"
-                        size="sm"
-                        className={cn('text-xs', config.color, config.borderColor)}
-                        onClick={() => handleStatusChange(selectedLead.id, status)}
-                        disabled={isStatusLoading}
-                      >
-                        {isStatusLoading && <Loader2 className="size-3 mr-1 animate-spin" />}
-                        {config.label}
-                      </Button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <Separator />
-
-            {/* Activity Timeline / Notes */}
-            <div>
-              <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                <StickyNote className="size-4 text-muted-foreground" /> Notes &amp; Activity
-              </h4>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {leadNotes.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-2">No notes yet</p>
-                ) : (
-                  leadNotes.map((note: { text: string; createdAt: string }, idx: number) => (
-                    <div key={idx} className="flex gap-2 p-2 rounded-lg bg-muted/50">
-                      <div className="size-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm">{note.text}</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">{formatDateMedium(note.createdAt)}</p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Add Note */}
-              <div className="flex gap-2 mt-3">
-                <Input
-                  placeholder="Add a note..."
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  className="flex-1 text-sm"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newNote.trim()) handleAddNote();
-                  }}
-                />
-                <Button
-                  size="sm"
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                  onClick={handleAddNote}
-                  disabled={!newNote.trim()}
-                >
-                  <Send className="size-3.5" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex gap-2 pt-2">
-              {!['won', 'lost'].includes(selectedLead.status) && (
-                <Button
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-                  onClick={() => {
-                    setShowDetailDialog(false);
-                    openConvertDialog(selectedLead);
-                  }}
-                >
-                  <ArrowRight className="size-4 mr-1.5" /> Convert to Job
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => {
-                  setShowDetailDialog(false);
-                  openEditLead(selectedLead);
-                }}
-              >
-                <Pencil className="size-4 mr-1.5" /> Edit
-              </Button>
-              <Button
-                variant="outline"
-                className="border-red-200 text-red-700 hover:bg-red-50"
-                onClick={() => {
-                  setShowDetailDialog(false);
-                  openDeleteDialog(selectedLead);
-                }}
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  };
+  // renderDetailDialog() — extracted to @/features/leads/components/ (Phase 4)
 
   // ============================================================
   // Render: Convert to Job Dialog
   // ============================================================
 
-  const renderConvertDialog = () => (
-    <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Briefcase className="size-5 text-emerald-600" />
-            Convert to Job
-          </DialogTitle>
-          <DialogDescription>
-            Convert &quot;{convertingLead?.name}&quot; into an active job assignment?
-          </DialogDescription>
-        </DialogHeader>
-        <div className="py-4">
-          {convertingLead && (
-            <Card className="bg-muted/50">
-              <CardContent className="p-3 space-y-1">
-                <p className="font-medium text-sm">{convertingLead.name}</p>
-                <p className="text-xs text-muted-foreground">{convertingLead.phone}</p>
-                {convertingLead.value > 0 && (
-                  <p className="text-sm font-semibold text-emerald-700">{formatCompact(convertingLead.value)}</p>
-                )}
-                {convertingLead.serviceType && (
-                  <p className="text-xs text-muted-foreground">{getServiceTypeLabel(convertingLead.serviceType)}</p>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => { setShowConvertDialog(false); setConvertingLead(null); }}>
-            Cancel
-          </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleConvertToJob} disabled={converting}>
-            {converting && <RefreshCw className="size-4 mr-1 animate-spin" />}
-            Convert
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+  // renderConvertDialog() — extracted to @/features/leads/components/ (Phase 4)
 
   // ============================================================
   // Render: Delete Confirmation Dialog
   // ============================================================
 
-  const renderDeleteDialog = () => (
-    <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-red-600">
-            <AlertCircle className="size-5" />
-            Delete Lead
-          </DialogTitle>
-          <DialogDescription>
-            Are you sure you want to delete &quot;{deletingLead?.name}&quot;? This action cannot be undone.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => { setShowDeleteDialog(false); setDeletingLead(null); }}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={handleDeleteLead} disabled={deletingLeadLoading}>
-            {deletingLeadLoading && <Loader2 className="size-4 mr-1.5 animate-spin" />}
-            {deletingLeadLoading ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+  // renderDeleteDialog() — extracted to @/features/leads/components/ (Phase 4)
 
   // ============================================================
   // Render: Analytics tab (stat cards + bar chart)
   // ============================================================
 
-  const renderAnalyticsView = () => {
-    // ─── Stat card config ────────────────────────────────────────────
-    const cards: Array<{
-      label: string;
-      value: string;
-      subtitle?: string;
-      icon: typeof Target;
-      iconBg: string;
-      iconColor: string;
-    }> = [
-      {
-        label: 'Total Leads',
-        value: String(analyticsStats.total),
-        subtitle: analyticsStats.closedCount > 0 ? `${analyticsStats.closedCount} closed` : 'No closed leads yet',
-        icon: Target,
-        iconBg: 'bg-emerald-50',
-        iconColor: 'text-emerald-600',
-      },
-      {
-        label: 'Pipeline Value',
-        value: formatCompact(analyticsStats.pipelineValue),
-        subtitle: 'Active deals only',
-        icon: DollarSign,
-        iconBg: 'bg-blue-50',
-        iconColor: 'text-blue-600',
-      },
-      {
-        label: 'Won Revenue',
-        value: formatCompact(analyticsStats.wonValue),
-        subtitle: `${analyticsStats.wonCount} won`,
-        icon: CheckCircle2,
-        iconBg: 'bg-emerald-50',
-        iconColor: 'text-emerald-600',
-      },
-      {
-        label: 'Conversion Rate',
-        value: `${analyticsStats.conversionRate.toFixed(1)}%`,
-        subtitle: analyticsStats.closedCount > 0 ? `${analyticsStats.wonCount} won / ${analyticsStats.lostCount} lost` : 'No closed leads yet',
-        icon: TrendingUp,
-        iconBg: 'bg-purple-50',
-        iconColor: 'text-purple-600',
-      },
-    ];
-
-    return (
-      <div className="space-y-6">
-        {/* ─── Top stat cards (2x2 on mobile, 4 on lg) ─────────────── */}
-        {analyticsLoading ? (
-          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Card key={i} className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-2 flex-1">
-                    <Skeleton className="h-3 w-20" />
-                    <Skeleton className="h-7 w-16" />
-                    <Skeleton className="h-3 w-24" />
-                  </div>
-                  <Skeleton className="size-12 rounded-xl" />
-                </div>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-            {cards.map((card) => {
-              const Icon = card.icon;
-              return (
-                <Card key={card.label} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm text-muted-foreground font-medium truncate">{card.label}</p>
-                        <p className="text-2xl font-bold mt-1 truncate">{card.value}</p>
-                        {card.subtitle && (
-                          <p className="text-xs text-muted-foreground mt-1 truncate">{card.subtitle}</p>
-                        )}
-                      </div>
-                      <div className={`${card.iconBg} p-2.5 rounded-xl shrink-0`}>
-                        <Icon className={`size-5 ${card.iconColor}`} />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-
-        {/* ─── Charts row (stack on mobile, 2-col on lg) ───────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Leads by Status — bar chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-1.5">
-                <BarChart3 className="size-4 text-emerald-600" /> Leads by Status
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">Distribution across pipeline stages</p>
-            </CardHeader>
-            <CardContent>
-              {analyticsLoading ? (
-                <Skeleton className="h-[260px] w-full" />
-              ) : analyticsStats.byStatus.every((s) => s.count === 0) ? (
-                <div className="flex items-center justify-center h-[260px] text-sm text-muted-foreground">
-                  No lead data yet
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart
-                    data={analyticsStats.byStatus}
-                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fontSize: 11, fill: '#94a3b8' }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: '#94a3b8' }}
-                      axisLine={false}
-                      tickLine={false}
-                      allowDecimals={false}
-                    />
-                    <RechartsTooltip
-                      cursor={{ fill: 'rgba(16,185,129,0.06)' }}
-                      contentStyle={{
-                        borderRadius: '8px',
-                        border: '1px solid #e2e8f0',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                        fontSize: '12px',
-                      }}
-                      formatter={(value: number, name: string) => {
-                        if (name === 'value') return [formatCompact(value), 'Value'];
-                        return [value, 'Leads'];
-                      }}
-                    />
-                    <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={56}>
-                      {analyticsStats.byStatus.map((entry) => (
-                        <Cell
-                          key={entry.status}
-                          fill={STATUS_BAR_COLORS[entry.status] || '#10b981'}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Pipeline Value by Status — bar chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-1.5">
-                <DollarSign className="size-4 text-emerald-600" /> Pipeline Value by Status
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">{symbol}-denominated value at each stage</p>
-            </CardHeader>
-            <CardContent>
-              {analyticsLoading ? (
-                <Skeleton className="h-[260px] w-full" />
-              ) : analyticsStats.byStatus.every((s) => s.value === 0) ? (
-                <div className="flex items-center justify-center h-[260px] text-sm text-muted-foreground">
-                  No value data yet
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart
-                    data={analyticsStats.byStatus}
-                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fontSize: 11, fill: '#94a3b8' }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: '#94a3b8' }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(v: number) => formatCompact(v).replace(/\.0$/, '')}
-                    />
-                    <RechartsTooltip
-                      cursor={{ fill: 'rgba(16,185,129,0.06)' }}
-                      contentStyle={{
-                        borderRadius: '8px',
-                        border: '1px solid #e2e8f0',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                        fontSize: '12px',
-                      }}
-                      formatter={(value: number) => [formatCurrency(value), 'Value']}
-                    />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={56} fill="#10b981" />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* ─── Breakdown tables row ─────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Leads by Source */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-1.5">
-                <Users className="size-4 text-emerald-600" /> Leads by Source
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">Where your leads come from</p>
-            </CardHeader>
-            <CardContent>
-              {analyticsLoading ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-8 w-full" />
-                  ))}
-                </div>
-              ) : analyticsStats.bySource.length === 0 ? (
-                <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-                  No source data yet
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-72 overflow-y-auto">
-                  {analyticsStats.bySource.map((s) => {
-                    const pct = analyticsStats.total > 0 ? (s.count / analyticsStats.total) * 100 : 0;
-                    const cfg = SOURCE_CONFIG[s.source];
-                    return (
-                      <div key={s.source} className="space-y-1">
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Badge
-                              variant="outline"
-                              className={cn('text-[10px] h-5 shrink-0', cfg?.bgColor, cfg?.color, cfg?.borderColor)}
-                            >
-                              {s.label}
-                            </Badge>
-                            <span className="text-muted-foreground text-xs">{s.count} leads</span>
-                          </div>
-                          <span className="font-semibold text-xs">{pct.toFixed(0)}%</span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                          <div
-                            className="h-full bg-emerald-500 rounded-full transition-all"
-                            style={{ width: `${Math.max(pct, 2)}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Status breakdown table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-1.5">
-                <Target className="size-4 text-emerald-600" /> Status Breakdown
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">Count and value at each pipeline stage</p>
-            </CardHeader>
-            <CardContent>
-              {analyticsLoading ? (
-                <div className="space-y-2">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <Skeleton key={i} className="h-8 w-full" />
-                  ))}
-                </div>
-              ) : (
-                <div className="overflow-hidden rounded-lg border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Stage</TableHead>
-                        <TableHead className="text-xs text-right">Leads</TableHead>
-                        <TableHead className="text-xs text-right">Value</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {analyticsStats.byStatus.map((row) => (
-                        <TableRow key={row.status}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <span className={cn('size-2 rounded-full', row.color)} />
-                              <span className="text-sm font-medium">{row.label}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm text-right tabular-nums">{row.count}</TableCell>
-                          <TableCell className="text-sm text-right tabular-nums font-medium text-emerald-700">
-                            {row.value > 0 ? formatCompact(row.value) : '—'}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow className="bg-muted/40 font-semibold">
-                        <TableCell className="text-sm">Avg. lead value</TableCell>
-                        <TableCell className="text-sm text-right text-muted-foreground">—</TableCell>
-                        <TableCell className="text-sm text-right tabular-nums text-emerald-700">
-                          {analyticsStats.avgValue > 0 ? formatCompact(analyticsStats.avgValue) : '—'}
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  };
+  // renderAnalyticsView() — extracted to @/features/leads/components/ (Phase 4)
 
   // ============================================================
   // Render: Lead Detail Page (Jobber-style full page)
   // ============================================================
-  const renderLeadDetailPage = () => {
-    if (!selectedLead) return null;
-    const lead = selectedLead;
-    const lineItems = parseLineItems(lead.lineItemsJson);
-    const overviewImages = parseImages(lead.imagesJson);
-    const assessmentImages = parseImages(lead.assessmentImagesJson);
-    const leadNotes = (() => {
-      try { return JSON.parse(lead.notesJson || '[]') as { text: string; createdAt: string; author?: string }[]; } catch { return []; }
-    })();
-    const kanbanStatus = mapToKanbanStatus(lead.status);
-    const currentStageIdx = KANBAN_STATUSES.indexOf(kanbanStatus as typeof KANBAN_STATUSES[number]);
-    const subtotal = lineItemsSubtotal(lineItems);
-    const isClosed = lead.status === 'won' || lead.status === 'lost';
-
-    const detailRows: { label: string; value: React.ReactNode }[] = [
-      ...(lead.value > 0 ? [{ label: 'Value', value: <span className="font-semibold text-emerald-700">{formatCompact(lead.value)}</span> }] : []),
-      { label: 'Source', value: <span>{SOURCE_CONFIG[lead.source]?.label || lead.source}</span> },
-      { label: 'Service', value: <span>{getServiceTypeLabel(lead.serviceType)}</span> },
-      {
-        label: 'Priority',
-        value: (
-          <span className="inline-flex items-center gap-1.5">
-            <span className={cn('size-2 rounded-full', PRIORITY_CONFIG[lead.priority]?.dotColor || 'bg-gray-400')} />
-            <span className="capitalize">{PRIORITY_CONFIG[lead.priority]?.label || lead.priority}</span>
-          </span>
-        ),
-      },
-      ...(lead.assignedTo ? [{ label: 'Assigned to', value: <span>{lead.assignedTo.name}</span> }] : []),
-      ...(lead.job ? [{ label: 'Linked Job', value: <span className="text-emerald-700 font-medium">{lead.job.title}</span> }] : []),
-      { label: 'Created', value: <span>{formatDateMedium(lead.createdAt)}</span> },
-    ];
-
-    return (
-      <div className="w-full space-y-6">
-        {/* ─── Sticky page header (Back + title + actions) ────────── */}
-        <div className="form-page-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-2">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                type="button"
-                onClick={closeLeadDetail}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              >
-                <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-                <span className="hidden sm:inline">Back</span>
-              </button>
-              <Separator orientation="vertical" className="h-8 bg-border/60 hidden sm:block" />
-              <div className="flex items-center justify-center size-9 rounded-lg shrink-0 shadow-sm bg-emerald-600">
-                <Target className="size-5 text-white" strokeWidth={2.2} />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Lead</span>
-                  {renderStatusBadge(lead.status)}
-                  {isClosed && (
-                    <span className="text-[10px] font-medium text-muted-foreground">{lead.status === 'won' ? '· Won' : '· Lost'}</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 min-w-0">
-                  <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground leading-tight truncate">
-                    {lead.title || lead.name}
-                  </h2>
-                  <button
-                    type="button"
-                    title="Edit lead"
-                    onClick={() => openEditLead(lead)}
-                    className="text-muted-foreground hover:text-emerald-600 transition-colors shrink-0"
-                  >
-                    <Pencil className="size-4" />
-                  </button>
-                </div>
-                <p className="text-xs text-muted-foreground line-clamp-1">
-                  {lead.name}
-                  {lead.phone && <span> · {lead.phone}</span>}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {!isClosed && (
-                <button
-                  type="button"
-                  onClick={() => openConvertDialog(lead)}
-                  className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm"
-                >
-                  <ArrowRight className="size-4 mr-1.5" /> Convert to Job
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => openEditLead(lead)}
-                className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors"
-              >
-                <Pencil className="size-4 mr-1.5" /> Edit
-              </button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    title="More actions"
-                    className="inline-flex items-center justify-center size-9 rounded-lg text-foreground border border-border bg-background hover:bg-muted transition-colors"
-                  >
-                    <MoreHorizontal className="size-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {!isClosed && (
-                    <DropdownMenuItem onClick={() => openConvertDialog(lead)}>
-                      <ArrowRight className="size-3.5 mr-2" /> Convert to Job
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onClick={() => openEditLead(lead)}>
-                    <Pencil className="size-3.5 mr-2" /> Edit lead
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { if (lead.phone) window.location.href = `tel:${lead.phone}`; }} disabled={!lead.phone}>
-                    <Phone className="size-3.5 mr-2" /> Call
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { if (lead.email) window.location.href = `mailto:${lead.email}`; }} disabled={!lead.email}>
-                    <Mail className="size-3.5 mr-2" /> Email
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" onClick={() => openDeleteDialog(lead)}>
-                    <Trash2 className="size-3.5 mr-2" /> Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </div>
-
-        {/* ─── Two-column layout ─────────────────────────────────── */}
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start">
-          {/* ── Left column: main lead details ── */}
-          <div className="space-y-6 min-w-0">
-            {/* Contact card */}
-            <FormSectionCard icon={User} title="Contact">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Left: contact info */}
-                <div className="space-y-2 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="size-2 rounded-full bg-blue-500 shrink-0" />
-                    <p className="text-base font-semibold text-foreground truncate">{lead.name}</p>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button type="button" className="text-muted-foreground hover:text-foreground transition-colors ml-auto shrink-0" title="More">
-                          <MoreHorizontal className="size-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openEditLead(lead)}>
-                          <Pencil className="size-3.5 mr-2" /> Edit contact
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => { if (lead.phone) window.location.href = `tel:${lead.phone}`; }} disabled={!lead.phone}>
-                          <Phone className="size-3.5 mr-2" /> Call
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => { if (lead.email) window.location.href = `mailto:${lead.email}`; }} disabled={!lead.email}>
-                          <Mail className="size-3.5 mr-2" /> Email
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  {lead.address && (
-                    <div className="space-y-0.5">
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Billing / Property Address</p>
-                      <div className="flex items-start gap-2 text-sm text-foreground">
-                        <MapPin className="size-4 mt-0.5 shrink-0 text-muted-foreground" />
-                        <span className="whitespace-pre-wrap">{lead.address}</span>
-                      </div>
-                    </div>
-                  )}
-                  {lead.phone && (
-                    <a href={`tel:${lead.phone}`} className="flex items-center gap-2 text-sm text-emerald-700 hover:underline">
-                      <Phone className="size-4" /> {lead.phone}
-                    </a>
-                  )}
-                  {lead.email && (
-                    <a href={`mailto:${lead.email}`} className="flex items-center gap-2 text-sm text-emerald-700 hover:underline">
-                      <Mail className="size-4" /> {lead.email}
-                    </a>
-                  )}
-                  {!lead.address && !lead.phone && !lead.email && (
-                    <p className="text-sm text-muted-foreground italic">No contact details on file.</p>
-                  )}
-                </div>
-                {/* Right: meta info (Request Source / Requested / Used for) */}
-                <div className="space-y-3 sm:border-l sm:border-border/40 sm:pl-4">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Request Source</p>
-                    <p className="text-sm font-medium text-foreground">{renderSourceBadge(lead.source)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Requested</p>
-                    <p className="text-sm font-medium text-foreground">{formatDateMedium(lead.createdAt)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Used for</p>
-                    {lead.job ? (
-                      <p className="text-sm text-emerald-700 font-medium hover:underline cursor-pointer">
-                        Job #{lead.job.id.slice(-6)}
-                      </p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">—</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </FormSectionCard>
-
-            {/* Overview card */}
-            <FormSectionCard
-              icon={FileText}
-              title="Overview"
-              description="Service details"
-              action={
-                <button
-                  type="button"
-                  onClick={() => openEditLead(lead)}
-                  className="text-muted-foreground hover:text-emerald-600 transition-colors"
-                  title="Edit"
-                >
-                  <Pencil className="size-4" />
-                </button>
-              }
-            >
-              <div className="space-y-4">
-                {lead.description ? (
-                  <p className="text-sm text-foreground whitespace-pre-wrap">{lead.description}</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">No service details provided.</p>
-                )}
-                <ul className="space-y-1.5 text-xs text-muted-foreground">
-                  <li className="flex items-start gap-1.5">
-                    <span className="size-1 rounded-full bg-muted-foreground/50 mt-1.5 shrink-0" />
-                    <span>Please provide as much information as you can.</span>
-                  </li>
-                  <li className="flex items-start gap-1.5">
-                    <span className="size-1 rounded-full bg-muted-foreground/50 mt-1.5 shrink-0" />
-                    <span>Share images of the work to be done.</span>
-                  </li>
-                  <li className="flex items-start gap-1.5">
-                    <span className="size-1 rounded-full bg-muted-foreground/50 mt-1.5 shrink-0" />
-                    <span>How did you hear about us?</span>
-                  </li>
-                </ul>
-                {overviewImages.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                      <ImageIcon className="size-3.5" /> Work images ({overviewImages.length})
-                    </p>
-                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                      {overviewImages.map((url, i) => (
-                        <a
-                          key={i}
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="aspect-square rounded-md overflow-hidden border bg-muted"
-                        >
-                          <img src={url} alt={`Work ${i + 1}`} className="size-full object-cover" />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </FormSectionCard>
-
-            {/* On-site assessment card */}
-            <FormSectionCard icon={Truck} title="On-site assessment">
-              <div className="space-y-4">
-                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-                  <Truck className="size-8 text-muted-foreground/50 mx-auto mb-2" strokeWidth={1.5} />
-                  <p className="text-sm text-muted-foreground">
-                    Visit the property to assess the job before you do the work.
-                  </p>
-                </div>
-                {assessmentImages.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                      <Camera className="size-3.5" /> Assessment photos ({assessmentImages.length})
-                    </p>
-                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                      {assessmentImages.map((url, i) => (
-                        <a
-                          key={i}
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="aspect-square rounded-md overflow-hidden border bg-muted"
-                        >
-                          <img src={url} alt={`Assessment ${i + 1}`} className="size-full object-cover" />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </FormSectionCard>
-
-            {/* Product / Service card */}
-            <FormSectionCard
-              icon={Briefcase}
-              title="Product / Service"
-              action={
-                <button
-                  type="button"
-                  onClick={() => openEditLead(lead)}
-                  className="text-muted-foreground hover:text-emerald-600 transition-colors"
-                  title="Edit"
-                >
-                  <Pencil className="size-4" />
-                </button>
-              }
-            >
-              {lineItems.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No line items added to this lead.</p>
-              ) : (
-                <div className="overflow-x-auto -mx-2">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-muted-foreground border-b border-border/60">
-                        <th className="px-2 py-2 font-medium">Description</th>
-                        <th className="px-2 py-2 font-medium text-center">Quantity</th>
-                        <th className="px-2 py-2 font-medium text-right">Unit price</th>
-                        <th className="px-2 py-2 font-medium text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lineItems.map((it, i) => (
-                        <tr key={i} className="border-b border-border/40 last:border-0">
-                          <td className="px-2 py-2.5 font-medium text-foreground">{it.name || 'Custom item'}</td>
-                          <td className="px-2 py-2.5 text-center text-muted-foreground">{it.quantity || 1}</td>
-                          <td className="px-2 py-2.5 text-right text-muted-foreground">{formatCurrency(parseFloat(it.unitPrice) || 0)}</td>
-                          <td className="px-2 py-2.5 text-right font-semibold text-foreground">{formatCurrency(lineItemTotal(it))}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="border-t border-border/60">
-                        <td colSpan={3} className="px-2 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
-                        <td className="px-2 py-2 text-right text-sm text-muted-foreground">{formatCurrency(subtotal)}</td>
-                      </tr>
-                      <tr>
-                        <td colSpan={3} className="px-2 py-1 text-right text-sm font-semibold text-foreground">Total</td>
-                        <td className="px-2 py-1 text-right text-base font-bold text-foreground">{formatCurrency(subtotal)}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
-            </FormSectionCard>
-
-            {/* Pipeline Progress card */}
-            <FormSectionCard
-              icon={TrendingUp}
-              title="Pipeline progress"
-              description="Track the lead through the pipeline stages."
-            >
-              <div className="space-y-4">
-                <div className="flex items-center gap-1 overflow-x-auto pb-2">
-                  {KANBAN_STATUSES.filter((s) => s !== 'lost').map((status, idx) => {
-                    const config = STATUS_CONFIG[status];
-                    const isCompleted = idx < currentStageIdx;
-                    const isCurrent = idx === currentStageIdx;
-                    return (
-                      <div key={status} className="flex items-center gap-1">
-                        <div
-                          className={cn(
-                            'rounded-lg px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide transition-all whitespace-nowrap',
-                            isCompleted && `${config.bgColor} ${config.color} ${config.borderColor} border`,
-                            isCurrent && `${config.bgColor} ${config.color} ${config.borderColor} border ring-2 ring-offset-1`,
-                            !isCompleted && !isCurrent && 'bg-muted text-muted-foreground',
-                          )}
-                        >
-                          {isCompleted && <CheckCircle2 className="size-3 inline mr-0.5" />}
-                          {config.label}
-                        </div>
-                        {idx < KANBAN_STATUSES.filter((s) => s !== 'lost').length - 1 && (
-                          <ArrowRight className="size-3 text-muted-foreground/40 flex-shrink-0" />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                {!isClosed && (
-                  <div className="pt-3 border-t border-border/40">
-                    <p className="text-xs font-semibold text-muted-foreground mb-2">Update Status</p>
-                    <div className="flex flex-wrap gap-2">
-                      {KANBAN_STATUSES.filter((s) => s !== kanbanStatus).map((status) => {
-                        const config = STATUS_CONFIG[status];
-                        const isStatusLoading = statusLoadingId === lead.id;
-                        return (
-                          <Button
-                            key={status}
-                            variant="outline"
-                            size="sm"
-                            className={cn('text-xs', config.color, config.borderColor)}
-                            onClick={() => handleStatusChange(lead.id, status)}
-                            disabled={isStatusLoading}
-                          >
-                            {isStatusLoading && <Loader2 className="size-3 mr-1 animate-spin" />}
-                            {config.label}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </FormSectionCard>
-          </div>
-
-          {/* ── Right column: sidebar ── */}
-          <div className="space-y-6 xl:sticky xl:top-4">
-            {/* Lead info card */}
-            <FormSectionCard icon={Info} title="Lead info">
-              <dl className="space-y-0">
-                {detailRows.map((row, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-0 last:pb-0 pt-2 first:pt-0"
-                  >
-                    <dt className="text-sm text-muted-foreground shrink-0">{row.label}</dt>
-                    <dd className="text-sm font-medium text-foreground text-right min-w-0 break-words">{row.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </FormSectionCard>
-
-            {/* Notes card */}
-            <FormSectionCard
-              icon={StickyNote}
-              title="Notes"
-              action={
-                <button
-                  type="button"
-                  title="Add note"
-                  onClick={() => {
-                    const el = document.getElementById('lead-detail-new-note-input');
-                    if (el) (el as HTMLInputElement).focus();
-                  }}
-                  className="inline-flex items-center justify-center size-7 rounded-md border border-border bg-background hover:bg-muted text-foreground transition-colors"
-                >
-                  <span className="text-lg leading-none">+</span>
-                </button>
-              }
-            >
-              <div className="space-y-3">
-                {leadNotes.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic py-1">No notes yet.</p>
-                ) : (
-                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                    {leadNotes.map((note, idx) => (
-                      <div key={idx} className="rounded-lg bg-muted/40 px-3 py-2.5 space-y-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs font-semibold text-foreground">Fieseros</p>
-                          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                            <Link2 className="size-3" /> Linked note
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground">{formatDateMedium(note.createdAt)}</p>
-                        <p className="text-sm text-foreground whitespace-pre-wrap">{note.text}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="flex gap-2 pt-1">
-                  <Input
-                    id="lead-detail-new-note-input"
-                    placeholder="Add a note..."
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                    className="flex-1 text-sm h-9"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newNote.trim()) handleAddNote();
-                    }}
-                  />
-                  <Button
-                    size="sm"
-                    className="bg-emerald-600 hover:bg-emerald-700 h-9 px-3"
-                    onClick={handleAddNote}
-                    disabled={!newNote.trim()}
-                  >
-                    <Send className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-            </FormSectionCard>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // renderLeadDetailPage() — extracted to @/features/leads/components/ (Phase 4)
 
   // ============================================================
   // Main Render
@@ -3970,9 +1982,44 @@ export function LeadsView() {
     <div className="space-y-6 w-full">
       {/* ─── Form page takes over when adding/editing a lead ───────── */}
       {formMode === 'form' ? (
-        renderLeadFormPage()
+        <LeadFormPage
+          editingLead={editingLead}
+          leadForm={leadForm}
+          setLeadForm={setLeadForm}
+          onSave={handleSaveLead}
+          onCancel={closeLeadForm}
+          saving={saving}
+          customers={customers}
+          customerQuery={customerQuery}
+          setCustomerQuery={setCustomerQuery}
+          customerPickerOpen={customerPickerOpen}
+          setCustomerPickerOpen={setCustomerPickerOpen}
+          onPickCustomer={handlePickCustomer}
+          onOpenCreateCustomer={openCreateCustomerDialog}
+          showCreateCustomerDialog={showCreateCustomerDialog}
+          setShowCreateCustomerDialog={setShowCreateCustomerDialog}
+          createCustomerPrefill={createCustomerPrefill}
+          onCustomerCreated={addCustomerToList}
+          services={services}
+          onServiceCreated={addServiceToCatalog}
+          symbol={symbol}
+        />
       ) : formMode === 'detail' ? (
-        renderLeadDetailPage()
+        <LeadDetailPage
+          lead={selectedLead}
+          onBack={closeLeadDetail}
+          onConvert={openConvertDialog}
+          onEdit={openEditLead}
+          onDelete={openDeleteDialog}
+          onStatusChange={handleStatusChange}
+          onAddNote={handleAddNote}
+          newNote={newNote}
+          setNewNote={setNewNote}
+          statusLoadingId={statusLoadingId}
+          formatCompact={formatCompact}
+          formatCurrency={formatCurrency}
+          symbol={symbol}
+        />
       ) : (
         <>
       {/* ─── Header (title row + search/New Lead row) ─────────────── */}
@@ -4127,19 +2174,65 @@ export function LeadsView() {
           </div>
 
           {/* View Content — Grid Cards or Table View */}
-          {viewLayout === 'grid' ? renderGridView() : renderTableView()}
+          {viewLayout === 'grid' ? (
+            <LeadGridView
+              leads={sortedLeads}
+              loading={loading}
+              error={error}
+              onRetry={fetchLeads}
+              onAddLead={openAddLead}
+              onLeadClick={openLeadDetail}
+              onConvert={openConvertDialog}
+              formatCompact={formatCompact}
+            />
+          ) : renderTableView()}
         </TabsContent>
 
         {/* ─── Analytics Tab (stat cards + charts) ──────────────── */}
         <TabsContent value="analytics" className="mt-6 outline-none">
-          {renderAnalyticsView()}
+          <LeadAnalyticsView
+            stats={analyticsStats}
+            loading={analyticsLoading}
+            formatCompact={formatCompact}
+            formatCurrency={formatCurrency}
+            symbol={symbol}
+          />
         </TabsContent>
       </Tabs>
 
       {/* ─── Dialogs ────────────────────────────────────────────── */}
-      {renderDetailDialog()}
-      {renderConvertDialog()}
-      {renderDeleteDialog()}
+      <LeadDetailDialog
+        open={showDetailDialog}
+        onOpenChange={setShowDetailDialog}
+        lead={selectedLead}
+        customers={customers}
+        statusLoadingId={statusLoadingId}
+        onStatusChange={handleStatusChange}
+        onAddNote={handleAddNote}
+        newNote={newNote}
+        setNewNote={setNewNote}
+        onNavigate={setGlobalView}
+        onConvert={openConvertDialog}
+        onEdit={openEditLead}
+        onDelete={openDeleteDialog}
+        formatCompact={formatCompact}
+        symbol={symbol}
+      />
+      <LeadConvertDialog
+        open={showConvertDialog}
+        onOpenChange={setShowConvertDialog}
+        lead={convertingLead}
+        converting={converting}
+        onConfirm={handleConvertToJob}
+        formatCompact={formatCompact}
+      />
+      <LeadDeleteDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        lead={deletingLead}
+        deleting={deletingLeadLoading}
+        onConfirm={handleDeleteLead}
+      />
         </>
       )}
     </div>

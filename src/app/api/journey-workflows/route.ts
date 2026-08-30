@@ -1,17 +1,25 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth, resolveTenantId, apiError } from '@/lib/api-auth'
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth()
+    if (!auth.ok) return auth.response
+    const { user } = auth
+
     const { searchParams } = new URL(request.url)
-    const tenantId = searchParams.get('tenantId')
     const status = searchParams.get('status')
     const triggerType = searchParams.get('triggerType')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
 
-    const where: Record<string, unknown> = {}
-    if (tenantId) where.tenantId = tenantId
+    const tenantId = resolveTenantId(user, searchParams.get('tenantId'))
+    if (!tenantId) {
+      return apiError(403, 'No tenant associated with this account', 'NO_TENANT')
+    }
+
+    const where: Record<string, unknown> = { tenantId }
     if (status) where.status = status
     if (triggerType) where.triggerType = triggerType
 
@@ -44,7 +52,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth()
+    if (!auth.ok) return auth.response
+    const { user } = auth
+
     const body = await request.json()
+
+    const tenantId = resolveTenantId(user, body.tenantId)
+    if (!tenantId) {
+      return apiError(403, 'No tenant associated with this account', 'NO_TENANT')
+    }
 
     const workflow = await db.journeyWorkflow.create({
       data: {
@@ -55,9 +72,9 @@ export async function POST(request: NextRequest) {
         triggerConfigJson: body.triggerConfigJson || '{}',
         nodesJson: body.nodesJson || '[]',
         edgesJson: body.edgesJson || '[]',
-        tenantId: body.tenantId,
-        workspaceId: body.workspaceId,
-        createdById: body.createdById,
+        tenantId,
+        workspaceId: body.workspaceId || user.workspaceId || null,
+        createdById: user.id,
       },
     })
 

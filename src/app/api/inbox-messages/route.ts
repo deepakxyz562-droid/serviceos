@@ -1,24 +1,32 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth, resolveTenantId, apiError } from '@/lib/api-auth'
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth()
+    if (!auth.ok) return auth.response
+    const { user } = auth
+
     const { searchParams } = new URL(request.url)
     const conversationId = searchParams.get('conversationId')
     const senderType = searchParams.get('senderType')
     const direction = searchParams.get('direction')
     const status = searchParams.get('status')
-    const tenantId = searchParams.get('tenantId')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
 
-    const where: Record<string, unknown> = {}
+    const tenantId = resolveTenantId(user, searchParams.get('tenantId'))
+    if (!tenantId) {
+      return apiError(403, 'No tenant associated with this account', 'NO_TENANT')
+    }
+
+    const where: Record<string, unknown> = { tenantId }
 
     if (conversationId) where.conversationId = conversationId
     if (senderType) where.senderType = senderType
     if (direction) where.direction = direction
     if (status) where.status = status
-    if (tenantId) where.tenantId = tenantId
 
     const skip = (page - 1) * limit
 
@@ -49,7 +57,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth()
+    if (!auth.ok) return auth.response
+    const { user } = auth
+
     const body = await request.json()
+
+    const tenantId = resolveTenantId(user, body.tenantId)
+    if (!tenantId) {
+      return apiError(403, 'No tenant associated with this account', 'NO_TENANT')
+    }
 
     const message = await db.inboxMessage.create({
       data: {
@@ -69,15 +86,15 @@ export async function POST(request: NextRequest) {
         mentionsJson: body.mentionsJson || '[]',
         reactionsJson: body.reactionsJson || '[]',
         metadataJson: body.metadataJson || '{}',
-        tenantId: body.tenantId,
-        workspaceId: body.workspaceId,
+        tenantId,
+        workspaceId: body.workspaceId || user.workspaceId || null,
       },
     })
 
     // Update conversation's lastMessageAt
     try {
       await db.conversation.updateMany({
-        where: { conversationId: body.conversationId },
+        where: { conversationId: body.conversationId, tenantId },
         data: {
           lastMessageAt: new Date(),
           lastMessageBody: body.content,

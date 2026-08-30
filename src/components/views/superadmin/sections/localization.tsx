@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { toast } from 'sonner';
 
 import { SectionHeader, DemoDataPill, KpiCard } from '@/components/views/superadmin/_shared';
@@ -94,37 +94,13 @@ export function LocalizationSection() {
           <CardDescription>Languages enabled across the platform UI.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Language</TableHead><TableHead>Code</TableHead><TableHead>Native Name</TableHead>
-                  <TableHead className="w-[200px]">Coverage</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {LANGUAGES.map((l) => (
-                  <TableRow key={l.code}>
-                    <TableCell className="font-medium">{l.name}</TableCell>
-                    <TableCell><Badge variant="secondary" className="font-mono">{l.code}</Badge></TableCell>
-                    <TableCell className="text-muted-foreground">{l.native}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Progress value={l.coverage} className="h-1.5 w-24" />
-                        <span className="text-xs font-mono text-muted-foreground w-9">{l.coverage}%</span>
-                      </div>
-                    </TableCell>
-                    <TableCell><Badge variant="outline" className={STATUS_BADGE[l.status]}>{l.status}</Badge></TableCell>
-                    <TableCell className="text-right">
-                      <Button size="sm" variant="ghost" onClick={() => toast.info(`Editing ${l.name} translations`)}>
-                        <Type className="size-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataTable
+            columns={languageColumns}
+            data={LANGUAGES}
+            rowKey={(l) => l.code}
+            emptyMessage="No languages configured"
+            emptyIcon={Globe}
+          />
         </CardContent>
       </Card>
 
@@ -150,3 +126,27 @@ export function LocalizationSection() {
     </section>
   );
 }
+
+const languageColumns: Column<LangRow>[] = [
+  { key: 'name', header: 'Language', render: (l) => <span className="font-medium">{l.name}</span> },
+  { key: 'code', header: 'Code', render: (l) => <Badge variant="secondary" className="font-mono">{l.code}</Badge> },
+  { key: 'native', header: 'Native Name', render: (l) => <span className="text-muted-foreground">{l.native}</span> },
+  {
+    key: 'coverage', header: 'Coverage', render: (l) => (
+      <div className="flex items-center gap-2">
+        <Progress value={l.coverage} className="h-1.5 w-24" />
+        <span className="text-xs font-mono text-muted-foreground w-9">{l.coverage}%</span>
+      </div>
+    ), className: 'w-[200px]',
+  },
+  { key: 'status', header: 'Status', render: (l) => <Badge variant="outline" className={STATUS_BADGE[l.status]}>{l.status}</Badge> },
+  {
+    key: 'actions', header: 'Actions', render: (l) => (
+      <div className="text-right">
+        <Button size="sm" variant="ghost" onClick={() => toast.info(`Editing ${l.name} translations`)}>
+          <Type className="size-4" />
+        </Button>
+      </div>
+    ), className: 'text-right',
+  },
+];

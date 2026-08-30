@@ -12,17 +12,13 @@
 import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -36,7 +32,7 @@ import {
 } from 'lucide-react';
 
 import {
-  TableSkeleton, EmptyState, formatDate, formatDateTime,
+  formatDate, formatDateTime,
   getStatusBadgeClasses, getPlanBadgeClasses,
 } from '@/components/views/superadmin/_shared';
 import type { Tenant, CreditInfo } from '@/components/views/superadmin/types';
@@ -216,6 +212,76 @@ export function TenantsTab({
     }
   };
 
+  const tenantColumns: Column<Tenant>[] = [
+    {
+      key: 'name', header: 'Name', render: (tenant) => (
+        <div className="flex items-center gap-2">
+          <div className="size-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+            <Building2 className="size-3.5 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate font-medium text-foreground">{tenant.name}</p>
+            <p className="text-[11px] text-muted-foreground truncate">{tenant.email}</p>
+          </div>
+        </div>
+      ),
+    },
+    { key: 'plan', header: 'Plan', render: (tenant) => <Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadgeClasses(tenant.plan))}>{tenant.plan}</Badge> },
+    { key: 'status', header: 'Status', render: (tenant) => <Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadgeClasses(tenant.planStatus))}>{tenant.planStatus}</Badge> },
+    {
+      key: 'waCredits', header: 'WA Credits', render: (tenant) => {
+        const tenantCredit = creditsData.find((c) => c.tenantId === tenant.id);
+        const isPaidWithOwnWhatsApp = tenantCredit && tenantCredit.plan !== 'trial' && tenantCredit.ownWhatsappConnected;
+        if (isPaidWithOwnWhatsApp) {
+          return <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Unlimited</Badge>;
+        }
+        if (tenantCredit) {
+          return <span className="text-xs text-muted-foreground">{tenantCredit.trialWhatsappUsed}/{tenantCredit.trialWhatsappCredits}</span>;
+        }
+        return <span className="text-xs text-muted-foreground">—</span>;
+      }, className: 'text-center',
+    },
+    {
+      key: 'email', header: 'Email', render: (tenant) => {
+        const tenantCredit = creditsData.find((c) => c.tenantId === tenant.id);
+        return tenantCredit?.ownEmailProviderConnected ? (
+          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Own</Badge>
+        ) : (
+          <Badge variant="outline" className="text-[10px] text-muted-foreground">Platform</Badge>
+        );
+      }, className: 'text-center',
+    },
+    { key: 'mrr', header: 'MRR', render: (tenant) => <span className="text-right text-foreground block">{format(tenant.mrr)}</span>, className: 'text-right' },
+    { key: 'users', header: 'Users', render: (tenant) => <span className="text-muted-foreground block">{tenant.userCount}</span>, className: 'text-center' },
+    {
+      key: 'actions', header: 'Actions', render: (tenant) => (
+        <div className="flex items-center justify-end gap-0.5">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setViewTenant(tenant)} title="View">
+            <Eye className="size-3.5" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setEditPlanDialog(tenant); setNewPlan(tenant.plan); }} title="Edit Plan">
+            <Edit3 className="size-3.5" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleCreditEdit(tenant)} title="Credits">
+            <Wallet className="size-3.5" />
+          </Button>
+          {tenant.planStatus === 'suspended' ? (
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => setSuspendDialog({ tenant, action: 'reactivate' })} title="Reactivate">
+              <PlayCircle className="size-3.5" />
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700" onClick={() => { setSuspendReason(''); setSuspendDialog({ tenant, action: 'suspend' }); }} title="Suspend">
+              <Pause className="size-3.5" />
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => setSuspendDialog({ tenant, action: 'delete' })} title="Delete">
+            <Trash2 className="size-3.5" />
+          </Button>
+        </div>
+      ), className: 'text-right',
+    },
+  ];
+
   return (
     <div className="space-y-4">
       {/* Search, Filters, Create */}
@@ -255,107 +321,15 @@ export function TenantsTab({
       </div>
 
       {/* Table */}
-      {tenantsLoading ? <TableSkeleton /> : filteredTenants.length === 0 ? (
-        <EmptyState
-          icon={Building2}
-          title="No tenants found"
-          subtitle="Try adjusting your filters, or create a new tenant to get started."
-          action={<Button onClick={() => setCreateDialog(true)}><Plus className="size-4 mr-1.5" /> New Tenant</Button>}
-        />
-      ) : (
-        <Card className="card-shadow">
-          <ScrollArea className="max-h-[calc(100vh-320px)]">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-center">WA Credits</TableHead>
-                  <TableHead className="text-center">Email</TableHead>
-                  <TableHead className="text-right">MRR</TableHead>
-                  <TableHead className="text-center">Users</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTenants.map((tenant) => {
-                  const tenantCredit = creditsData.find((c) => c.tenantId === tenant.id);
-                  const isPaidWithOwnWhatsApp = tenantCredit && tenantCredit.plan !== 'trial' && tenantCredit.ownWhatsappConnected;
-                  return (
-                    <TableRow key={tenant.id}>
-                      <TableCell className="font-medium text-foreground">
-                        <div className="flex items-center gap-2">
-                          <div className="size-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                            <Building2 className="size-3.5 text-primary" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate">{tenant.name}</p>
-                            <p className="text-[11px] text-muted-foreground truncate">{tenant.email}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadgeClasses(tenant.plan))}>
-                          {tenant.plan}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadgeClasses(tenant.planStatus))}>
-                          {tenant.planStatus}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {isPaidWithOwnWhatsApp ? (
-                          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Unlimited</Badge>
-                        ) : tenantCredit ? (
-                          <span className="text-xs text-muted-foreground">{tenantCredit.trialWhatsappUsed}/{tenantCredit.trialWhatsappCredits}</span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {tenantCredit?.ownEmailProviderConnected ? (
-                          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Own</Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground">Platform</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right text-foreground">{format(tenant.mrr)}</TableCell>
-                      <TableCell className="text-center text-muted-foreground">{tenant.userCount}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-0.5">
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setViewTenant(tenant)} title="View">
-                            <Eye className="size-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setEditPlanDialog(tenant); setNewPlan(tenant.plan); }} title="Edit Plan">
-                            <Edit3 className="size-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleCreditEdit(tenant)} title="Credits">
-                            <Wallet className="size-3.5" />
-                          </Button>
-                          {tenant.planStatus === 'suspended' ? (
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => setSuspendDialog({ tenant, action: 'reactivate' })} title="Reactivate">
-                              <PlayCircle className="size-3.5" />
-                            </Button>
-                          ) : (
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700" onClick={() => { setSuspendReason(''); setSuspendDialog({ tenant, action: 'suspend' }); }} title="Suspend">
-                              <Pause className="size-3.5" />
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => setSuspendDialog({ tenant, action: 'delete' })} title="Delete">
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </ScrollArea>
-        </Card>
-      )}
+      <DataTable
+        columns={tenantColumns}
+        data={filteredTenants}
+        rowKey={(t) => t.id}
+        loading={tenantsLoading}
+        emptyMessage="No tenants found"
+        emptyIcon={Building2}
+        className="max-h-[calc(100vh-320px)]"
+      />
 
       {/* View Tenant Dialog */}
       <Dialog open={!!viewTenant} onOpenChange={(open) => { if (!open) setViewTenant(null); }}>

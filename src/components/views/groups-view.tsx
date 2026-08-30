@@ -20,10 +20,8 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -364,6 +362,60 @@ export function GroupsView() {
       toast.error('Network error removing contact');
     }
   };
+
+  // ── DataTable columns (Group Contacts dialog) ─────────────────────────────
+  const contactColumns: Column<GroupContact>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      render: (c) => {
+        const initials = (c.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+        return (
+          <div className="flex items-center gap-2">
+            <Avatar className="size-7">
+              <AvatarFallback className="bg-emerald-100 text-emerald-700 text-[10px]">{initials}</AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="text-sm font-medium">{c.name || '—'}</p>
+              {c.company && <p className="text-[10px] text-muted-foreground">{c.company}</p>}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'email',
+      header: 'Email',
+      render: (c) => c.email ? (
+        <span className="inline-flex items-center gap-1"><Mail className="size-3" />{c.email}</span>
+      ) : <span className="text-muted-foreground">—</span>,
+      className: 'text-xs',
+    },
+    {
+      key: 'phone',
+      header: 'Phone',
+      render: (c) => c.phone ? (
+        <span className="inline-flex items-center gap-1"><Phone className="size-3" />{c.phone}</span>
+      ) : <span className="text-muted-foreground">—</span>,
+      className: 'text-xs',
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (c) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 text-rose-600 hover:text-rose-700"
+          onClick={() => handleRemoveFromGroup(c.id)}
+          aria-label="Remove from group"
+        >
+          <UserMinus className="size-3.5" />
+        </Button>
+      ),
+      className: 'w-12',
+    },
+  ];
 
   // ── Render ──
   if (isLoading) {
@@ -740,13 +792,7 @@ export function GroupsView() {
           </div>
           <Separator />
           <ScrollArea className="flex-1 min-h-0 max-h-[55vh]">
-            {contactsLoading ? (
-              <div className="space-y-2 p-1">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} className="h-12 w-full" />
-                ))}
-              </div>
-            ) : groupContacts.length === 0 ? (
+            {groupContacts.length === 0 && !contactsLoading ? (
               <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
                 <Users className="size-8 mb-2 opacity-30" />
                 <p className="text-sm font-medium">No contacts in this group</p>
@@ -755,57 +801,14 @@ export function GroupsView() {
                 </Button>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead className="w-12" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {groupContacts.map(c => {
-                    const initials = (c.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-                    return (
-                      <TableRow key={c.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Avatar className="size-7">
-                              <AvatarFallback className="bg-emerald-100 text-emerald-700 text-[10px]">{initials}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="text-sm font-medium">{c.name || '—'}</p>
-                              {c.company && <p className="text-[10px] text-muted-foreground">{c.company}</p>}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {c.email ? (
-                            <span className="inline-flex items-center gap-1"><Mail className="size-3" />{c.email}</span>
-                          ) : <span className="text-muted-foreground">—</span>}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {c.phone ? (
-                            <span className="inline-flex items-center gap-1"><Phone className="size-3" />{c.phone}</span>
-                          ) : <span className="text-muted-foreground">—</span>}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-rose-600 hover:text-rose-700"
-                            onClick={() => handleRemoveFromGroup(c.id)}
-                            aria-label="Remove from group"
-                          >
-                            <UserMinus className="size-3.5" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <DataTable
+                columns={contactColumns}
+                data={groupContacts}
+                rowKey={(c) => c.id}
+                loading={contactsLoading}
+                emptyMessage="No contacts in this group"
+                emptyIcon={Users}
+              />
             )}
           </ScrollArea>
         </DialogContent>

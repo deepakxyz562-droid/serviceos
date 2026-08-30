@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { toast } from 'sonner';
 
 import { SectionHeader, DemoDataPill, formatDate, formatNumber } from '@/components/views/superadmin/_shared';
@@ -118,33 +118,13 @@ export function KnowledgeBaseSection() {
             <CardDescription>All published and draft help articles.</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Title</TableHead><TableHead>Category</TableHead><TableHead>Author</TableHead>
-                    <TableHead>Views</TableHead><TableHead>Status</TableHead><TableHead>Updated</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ARTICLES.map((a) => (
-                    <TableRow key={a.title}>
-                      <TableCell className="font-medium max-w-[260px] truncate">{a.title}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{a.category}</TableCell>
-                      <TableCell className="text-sm">{a.author}</TableCell>
-                      <TableCell className="font-mono text-xs">{formatNumber(a.views)}</TableCell>
-                      <TableCell><Badge variant="outline" className={STATUS_BADGE[a.status]}>{a.status}</Badge></TableCell>
-                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(a.updated)}</TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
-                        <Button size="sm" variant="ghost" onClick={() => toast.info(`Editing "${a.title.slice(0, 30)}..."`)}><Pencil className="size-4" /></Button>
-                        <Button size="sm" variant="ghost" onClick={() => toast.info(`Previewing "${a.title.slice(0, 30)}..."`)}><Eye className="size-4" /></Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <DataTable
+              columns={articleColumns}
+              data={ARTICLES}
+              rowKey={(a) => a.title}
+              emptyMessage="No articles yet"
+              emptyIcon={BookOpen}
+            />
           </CardContent>
         </Card>
 
@@ -174,3 +154,20 @@ export function KnowledgeBaseSection() {
     </section>
   );
 }
+
+const articleColumns: Column<ArticleRow>[] = [
+  { key: 'title', header: 'Title', render: (a) => <span className="font-medium max-w-[260px] truncate block">{a.title}</span> },
+  { key: 'category', header: 'Category', render: (a) => <span className="text-muted-foreground text-sm">{a.category}</span> },
+  { key: 'author', header: 'Author', render: (a) => <span className="text-sm">{a.author}</span> },
+  { key: 'views', header: 'Views', render: (a) => <span className="font-mono text-xs">{formatNumber(a.views)}</span> },
+  { key: 'status', header: 'Status', render: (a) => <Badge variant="outline" className={STATUS_BADGE[a.status]}>{a.status}</Badge> },
+  { key: 'updated', header: 'Updated', render: (a) => <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(a.updated)}</span> },
+  {
+    key: 'actions', header: 'Actions', render: (a) => (
+      <div className="text-right whitespace-nowrap">
+        <Button size="sm" variant="ghost" onClick={() => toast.info(`Editing "${a.title.slice(0, 30)}..."`)}><Pencil className="size-4" /></Button>
+        <Button size="sm" variant="ghost" onClick={() => toast.info(`Previewing "${a.title.slice(0, 30)}..."`)}><Eye className="size-4" /></Button>
+      </div>
+    ), className: 'text-right',
+  },
+];

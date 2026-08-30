@@ -59,16 +59,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
-import { Skeleton } from '@/components/ui/skeleton';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -570,6 +562,148 @@ export function DocumentCenterView() {
     </div>
   );
 
+  // ─── DataTable columns ─────────────────────────────────────────────────────
+  const documentColumns: Column<DocumentRecord>[] = [
+    {
+      key: 'icon',
+      header: '',
+      render: (doc) => getFileTypeIcon(doc.fileType),
+      className: 'w-[40px]',
+      headerClassName: 'w-[40px]',
+    },
+    {
+      key: 'name',
+      header: 'Name',
+      render: (doc) => {
+        const tags = parseTags(doc.tagsJson);
+        return (
+          <div>
+            <p className="font-medium text-sm">{doc.name}</p>
+            {doc.description && (
+              <p className="text-xs text-muted-foreground line-clamp-1 max-w-[200px]">
+                {doc.description}
+              </p>
+            )}
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {tags.slice(0, 3).map((tag) => (
+                  <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
+                    {tag}
+                  </Badge>
+                ))}
+                {tags.length > 3 && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                    +{tags.length - 3}
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      render: (doc) => (
+        <Badge variant="outline" className="capitalize text-xs">
+          {doc.type}
+        </Badge>
+      ),
+      hideOnMobile: true,
+    },
+    {
+      key: 'category',
+      header: 'Category',
+      render: (doc) => <span className="text-sm capitalize">{doc.category}</span>,
+      hideOnMobile: true,
+    },
+    {
+      key: 'access',
+      header: 'Access',
+      render: (doc) => getAccessBadge(doc.accessLevel),
+      hideOnMobile: true,
+    },
+    {
+      key: 'fileType',
+      header: 'File',
+      render: (doc) =>
+        doc.fileType ? (
+          <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${getFileTypeBadgeColor(doc.fileType)}`}>
+            {doc.fileType.toUpperCase()}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        ),
+      hideOnMobile: true,
+    },
+    {
+      key: 'size',
+      header: 'Size',
+      render: (doc) => (
+        <span className="text-sm text-muted-foreground">{formatFileSize(doc.fileSize)}</span>
+      ),
+      hideOnMobile: true,
+    },
+    {
+      key: 'date',
+      header: 'Date',
+      render: (doc) => (
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
+          {formatDate(doc.createdAt)}
+        </span>
+      ),
+      sortField: 'createdAt',
+    },
+    {
+      key: 'shared',
+      header: 'Shared',
+      render: (doc) =>
+        doc.isShared ? (
+          <Badge variant="secondary" className="text-xs gap-1">
+            <Eye className="size-3" /> Shared
+          </Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">Private</span>
+        ),
+      hideOnMobile: true,
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (doc) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="size-8">
+              <MoreHorizontal className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => window.open(doc.fileUrl, '_blank')}>
+              <Download className="size-4 mr-2" /> Download
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openEditDialog(doc)}>
+              <Pencil className="size-4 mr-2" /> Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-red-600 focus:text-red-600"
+              onClick={() => openDeleteDialog(doc)}
+            >
+              <Trash2 className="size-4 mr-2" /> Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+      className: 'w-[40px]',
+      headerClassName: 'w-[40px]',
+    },
+  ];
+
+  const hasActiveFilters = !!searchQuery || typeFilter !== 'all' || categoryFilter !== 'all';
+  const emptyMessage = hasActiveFilters
+    ? 'No documents found. Try adjusting your search or filters.'
+    : 'No documents yet. Add your first document to get started.';
+
   // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
@@ -751,251 +885,21 @@ export function DocumentCenterView() {
         </CardContent>
       </Card>
 
-      {/* Loading State */}
-      {isLoading && (
-        <Card>
-          <CardContent className="p-6">
-            <div className="space-y-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-4">
-                  <Skeleton className="size-8 rounded" />
-                  <Skeleton className="h-4 flex-1 max-w-[200px]" />
-                  <Skeleton className="h-4 w-16" />
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-4 w-24" />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Empty State */}
-      {!isLoading && documents.length === 0 && (
-        <Card>
-          <CardContent className="p-12">
-            <div className="flex flex-col items-center justify-center text-center gap-4">
-              <div className="size-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                <FolderOpen className="size-8 text-emerald-600" />
-              </div>
-              <h3 className="text-lg font-semibold">No documents found</h3>
-              <p className="text-sm text-muted-foreground max-w-md">
-                {searchQuery || typeFilter !== 'all' || categoryFilter !== 'all'
-                  ? 'Try adjusting your search or filters to find what you\'re looking for.'
-                  : 'Upload and organize your business documents. Create your first document to get started.'}
-              </p>
-              {!searchQuery && typeFilter === 'all' && categoryFilter === 'all' && (
-                <Button
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                  onClick={() => setAddDialogOpen(true)}
-                >
-                  <Plus className="size-4 mr-1.5" /> Add Document
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Desktop Table */}
-      {!isLoading && documents.length > 0 && (
-        <>
-          <Card className="hidden md:block">
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[40px]"></TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Access</TableHead>
-                    <TableHead>File</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Shared</TableHead>
-                    <TableHead className="w-[40px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {documents.map((doc) => {
-                    const tags = parseTags(doc.tagsJson);
-                    return (
-                      <TableRow key={doc.id}>
-                        <TableCell>{getFileTypeIcon(doc.fileType)}</TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium text-sm">{doc.name}</p>
-                            {doc.description && (
-                              <p className="text-xs text-muted-foreground line-clamp-1 max-w-[200px]">
-                                {doc.description}
-                              </p>
-                            )}
-                            {tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {tags.slice(0, 3).map((tag) => (
-                                  <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
-                                    {tag}
-                                  </Badge>
-                                ))}
-                                {tags.length > 3 && (
-                                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                    +{tags.length - 3}
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="capitalize text-xs">
-                            {doc.type}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm capitalize">{doc.category}</span>
-                        </TableCell>
-                        <TableCell>{getAccessBadge(doc.accessLevel)}</TableCell>
-                        <TableCell>
-                          {doc.fileType ? (
-                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${getFileTypeBadgeColor(doc.fileType)}`}>
-                              {doc.fileType.toUpperCase()}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatFileSize(doc.fileSize)}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatDate(doc.createdAt)}
-                        </TableCell>
-                        <TableCell>
-                          {doc.isShared ? (
-                            <Badge variant="secondary" className="text-xs gap-1">
-                              <Eye className="size-3" /> Shared
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">Private</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="size-8">
-                                <MoreHorizontal className="size-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => window.open(doc.fileUrl, '_blank')}>
-                                <Download className="size-4 mr-2" /> Download
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openEditDialog(doc)}>
-                                <Pencil className="size-4 mr-2" /> Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-red-600 focus:text-red-600"
-                                onClick={() => openDeleteDialog(doc)}
-                              >
-                                <Trash2 className="size-4 mr-2" /> Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          {/* Mobile Cards */}
-          <div className="md:hidden space-y-3">
-            {documents.map((doc) => {
-              const tags = parseTags(doc.tagsJson);
-              return (
-                <Card key={doc.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <div className="mt-0.5 shrink-0">{getFileTypeIcon(doc.fileType)}</div>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-sm truncate">{doc.name}</p>
-                          {doc.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                              {doc.description}
-                            </p>
-                          )}
-                          <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                            <Badge variant="outline" className="capitalize text-[10px]">
-                              {doc.type}
-                            </Badge>
-                            {getAccessBadge(doc.accessLevel)}
-                            {doc.isShared && (
-                              <Badge variant="secondary" className="text-[10px] gap-0.5">
-                                <Eye className="size-2.5" /> Shared
-                              </Badge>
-                            )}
-                          </div>
-                          {tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1.5">
-                              {tags.slice(0, 3).map((tag) => (
-                                <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
-                                  {tag}
-                                </Badge>
-                              ))}
-                              {tags.length > 3 && (
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                  +{tags.length - 3}
-                                </Badge>
-                              )}
-                            </div>
-                          )}
-                          <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                            <span className="capitalize">{doc.category}</span>
-                            {doc.fileType && (
-                              <span className={`font-medium px-1.5 py-0.5 rounded ${getFileTypeBadgeColor(doc.fileType)}`}>
-                                {doc.fileType.toUpperCase()}
-                              </span>
-                            )}
-                            <span>{formatFileSize(doc.fileSize)}</span>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground mt-1.5">
-                            {formatDate(doc.createdAt)}
-                          </p>
-                        </div>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="size-8 shrink-0">
-                            <MoreHorizontal className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => window.open(doc.fileUrl, '_blank')}>
-                            <Download className="size-4 mr-2" /> Download
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openEditDialog(doc)}>
-                            <Pencil className="size-4 mr-2" /> Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-red-600 focus:text-red-600"
-                            onClick={() => openDeleteDialog(doc)}
-                          >
-                            <Trash2 className="size-4 mr-2" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </>
-      )}
+      {/* Main Document List */}
+      <Card>
+        <CardContent className="p-0">
+          <DataTable
+            columns={documentColumns}
+            data={documents}
+            rowKey={(doc) => doc.id}
+            loading={isLoading}
+            error={null}
+            onRetry={fetchDocuments}
+            emptyMessage={emptyMessage}
+            emptyIcon={FolderOpen}
+          />
+        </CardContent>
+      </Card>
 
       {/* Edit Dialog */}
       <Dialog

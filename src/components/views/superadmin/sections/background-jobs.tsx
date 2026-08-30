@@ -15,6 +15,7 @@ import {
   RotateCcw,
   FileText,
   Download,
+  CheckCircle2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -22,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -122,6 +123,74 @@ export function BackgroundJobsSection() {
   const handleRetry = (id: string) => toast.info(`Retrying ${id}`, { description: 'Re-queued at the end of the line.' });
   const handleViewLogs = (id: string) => toast.info(`Opening logs for ${id}`);
 
+  const activeJobColumns: Column<ActiveJob>[] = [
+    { key: 'id', header: 'Job ID', render: (j) => <span className="text-xs font-mono text-foreground">{j.id}</span> },
+    { key: 'type', header: 'Type', render: (j) => <span className="text-xs text-foreground">{j.type}</span> },
+    { key: 'workspace', header: 'Workspace', render: (j) => <span className="text-xs text-muted-foreground">{j.workspace}</span> },
+    { key: 'started', header: 'Started', render: (j) => <span className="text-xs text-muted-foreground tabular-nums">{minsAgoLabel(j.startedMinsAgo)}</span> },
+    {
+      key: 'progress', header: 'Progress', render: (j) => (
+        <div className="flex items-center gap-2">
+          <Progress value={j.progress} className="h-1.5 flex-1" />
+          <span className="text-[11px] text-muted-foreground tabular-nums w-8 text-right">{j.progress}%</span>
+        </div>
+      ), className: 'w-[180px]',
+    },
+    {
+      key: 'actions', header: 'Actions', render: (j) => (
+        <div className="text-right">
+          <Button variant="ghost" size="sm" className="h-7 text-xs text-red-600 dark:text-red-400 hover:bg-red-500/10" onClick={() => handleCancel(j.id)}>
+            <XCircle className="size-3.5 mr-1" />Cancel
+          </Button>
+        </div>
+      ), className: 'text-right',
+    },
+  ];
+
+  const failedJobColumns: Column<FailedJob>[] = [
+    { key: 'id', header: 'Job ID', render: (j) => <span className="text-xs font-mono text-foreground">{j.id}</span> },
+    { key: 'type', header: 'Type', render: (j) => <span className="text-xs text-foreground">{j.type}</span> },
+    { key: 'workspace', header: 'Workspace', render: (j) => <span className="text-xs text-muted-foreground">{j.workspace}</span> },
+    { key: 'failedAt', header: 'Failed At', render: (j) => <span className="text-xs text-muted-foreground tabular-nums">{minsAgoLabel(j.failedMinsAgo)}</span> },
+    { key: 'error', header: 'Error', render: (j) => <span className="text-xs text-red-600 dark:text-red-400 max-w-[280px] truncate block" title={j.error}>{j.error}</span> },
+    {
+      key: 'actions', header: 'Actions', render: (j) => (
+        <div className="text-right">
+          <div className="inline-flex items-center gap-1">
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleRetry(j.id)}>
+              <RotateCcw className="size-3.5 mr-1" />Retry
+            </Button>
+            <Button variant="ghost" size="icon" className="size-7" onClick={() => handleViewLogs(j.id)} aria-label={`View logs ${j.id}`}>
+              <FileText className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+      ), className: 'text-right',
+    },
+  ];
+
+  const completedJobColumns: Column<CompletedJob>[] = [
+    { key: 'id', header: 'Job ID', render: (j) => <span className="text-xs font-mono text-foreground">{j.id}</span> },
+    { key: 'type', header: 'Type', render: (j) => <span className="text-xs text-foreground">{j.type}</span> },
+    { key: 'workspace', header: 'Workspace', render: (j) => <span className="text-xs text-muted-foreground">{j.workspace}</span> },
+    { key: 'completed', header: 'Completed', render: (j) => <span className="text-xs text-muted-foreground tabular-nums">{minsAgoLabel(j.completedMinsAgo)}</span> },
+    { key: 'duration', header: 'Duration', render: (j) => <span className="text-xs text-muted-foreground tabular-nums">{formatDuration(j.durationMs)}</span> },
+    {
+      key: 'actions', header: 'Actions', render: (j) => (
+        <div className="text-right">
+          <div className="inline-flex items-center gap-1">
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleViewLogs(j.id)}>
+              <FileText className="size-3.5 mr-1" />Logs
+            </Button>
+            <Button variant="ghost" size="icon" className="size-7" aria-label={`Download ${j.id}`} onClick={() => toast.success(`Downloading results for ${j.id}`)}>
+              <Download className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+      ), className: 'text-right',
+    },
+  ];
+
   return (
     <section className="space-y-6">
       <SectionHeader
@@ -196,41 +265,13 @@ export function BackgroundJobsSection() {
           <Card className="card-shadow">
             <CardHeader className="pb-3"><CardTitle className="text-sm">In-Progress Jobs</CardTitle></CardHeader>
             <CardContent className="p-0 sm:p-2">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">Job ID</TableHead>
-                      <TableHead className="text-xs">Type</TableHead>
-                      <TableHead className="text-xs">Workspace</TableHead>
-                      <TableHead className="text-xs">Started</TableHead>
-                      <TableHead className="text-xs w-[180px]">Progress</TableHead>
-                      <TableHead className="text-xs text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ACTIVE_JOBS.map((j) => (
-                      <TableRow key={j.id}>
-                        <TableCell className="text-xs font-mono text-foreground py-2.5">{j.id}</TableCell>
-                        <TableCell className="text-xs text-foreground py-2.5">{j.type}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground py-2.5">{j.workspace}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground py-2.5 tabular-nums">{minsAgoLabel(j.startedMinsAgo)}</TableCell>
-                        <TableCell className="py-2.5">
-                          <div className="flex items-center gap-2">
-                            <Progress value={j.progress} className="h-1.5 flex-1" />
-                            <span className="text-[11px] text-muted-foreground tabular-nums w-8 text-right">{j.progress}%</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-2.5 text-right">
-                          <Button variant="ghost" size="sm" className="h-7 text-xs text-red-600 dark:text-red-400 hover:bg-red-500/10" onClick={() => handleCancel(j.id)}>
-                            <XCircle className="size-3.5 mr-1" />Cancel
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <DataTable
+                columns={activeJobColumns}
+                data={ACTIVE_JOBS}
+                rowKey={(j) => j.id}
+                emptyMessage="No active jobs"
+                emptyIcon={ListTodo}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -240,41 +281,13 @@ export function BackgroundJobsSection() {
           <Card className="card-shadow">
             <CardHeader className="pb-3"><CardTitle className="text-sm">Failed Jobs</CardTitle></CardHeader>
             <CardContent className="p-0 sm:p-2">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">Job ID</TableHead>
-                      <TableHead className="text-xs">Type</TableHead>
-                      <TableHead className="text-xs">Workspace</TableHead>
-                      <TableHead className="text-xs">Failed At</TableHead>
-                      <TableHead className="text-xs">Error</TableHead>
-                      <TableHead className="text-xs text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {FAILED_JOBS.map((j) => (
-                      <TableRow key={j.id}>
-                        <TableCell className="text-xs font-mono text-foreground py-2.5">{j.id}</TableCell>
-                        <TableCell className="text-xs text-foreground py-2.5">{j.type}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground py-2.5">{j.workspace}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground py-2.5 tabular-nums">{minsAgoLabel(j.failedMinsAgo)}</TableCell>
-                        <TableCell className="text-xs text-red-600 dark:text-red-400 py-2.5 max-w-[280px] truncate" title={j.error}>{j.error}</TableCell>
-                        <TableCell className="py-2.5 text-right">
-                          <div className="inline-flex items-center gap-1">
-                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleRetry(j.id)}>
-                              <RotateCcw className="size-3.5 mr-1" />Retry
-                            </Button>
-                            <Button variant="ghost" size="icon" className="size-7" onClick={() => handleViewLogs(j.id)} aria-label={`View logs ${j.id}`}>
-                              <FileText className="size-3.5" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <DataTable
+                columns={failedJobColumns}
+                data={FAILED_JOBS}
+                rowKey={(j) => j.id}
+                emptyMessage="No failed jobs"
+                emptyIcon={XCircle}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -284,41 +297,13 @@ export function BackgroundJobsSection() {
           <Card className="card-shadow">
             <CardHeader className="pb-3"><CardTitle className="text-sm">Completed Jobs</CardTitle></CardHeader>
             <CardContent className="p-0 sm:p-2">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">Job ID</TableHead>
-                      <TableHead className="text-xs">Type</TableHead>
-                      <TableHead className="text-xs">Workspace</TableHead>
-                      <TableHead className="text-xs">Completed</TableHead>
-                      <TableHead className="text-xs">Duration</TableHead>
-                      <TableHead className="text-xs text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {COMPLETED_JOBS.map((j) => (
-                      <TableRow key={j.id}>
-                        <TableCell className="text-xs font-mono text-foreground py-2.5">{j.id}</TableCell>
-                        <TableCell className="text-xs text-foreground py-2.5">{j.type}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground py-2.5">{j.workspace}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground py-2.5 tabular-nums">{minsAgoLabel(j.completedMinsAgo)}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground py-2.5 tabular-nums">{formatDuration(j.durationMs)}</TableCell>
-                        <TableCell className="py-2.5 text-right">
-                          <div className="inline-flex items-center gap-1">
-                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleViewLogs(j.id)}>
-                              <FileText className="size-3.5 mr-1" />Logs
-                            </Button>
-                            <Button variant="ghost" size="icon" className="size-7" aria-label={`Download ${j.id}`} onClick={() => toast.success(`Downloading results for ${j.id}`)}>
-                              <Download className="size-3.5" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <DataTable
+                columns={completedJobColumns}
+                data={COMPLETED_JOBS}
+                rowKey={(j) => j.id}
+                emptyMessage="No completed jobs"
+                emptyIcon={CheckCircle2}
+              />
             </CardContent>
           </Card>
         </TabsContent>
