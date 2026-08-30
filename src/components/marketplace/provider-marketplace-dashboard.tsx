@@ -1658,6 +1658,8 @@ function QuoteDetailDialog({
   const [timeline, setTimeline] = useState('');
   const [terms, setTerms] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [accepting, setAccepting] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1721,6 +1723,40 @@ function QuoteDetailDialog({
       toast.error(e?.message || 'Failed to submit quote');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // ── Accept: create Customer + Lead in provider's CRM ──────────────
+  const handleAccept = async () => {
+    setAccepting(true);
+    try {
+      const res = await apiJson(mpUrl(`/api/marketplace/quote-request/${item.id}/provider-accept`), {
+        method: 'POST',
+      });
+      toast.success('Accepted! A lead has been created in your CRM.', {
+        description: `Customer: ${res.customerName || 'Marketplace Customer'}. View it in CRM → Leads.`,
+      });
+      onSubmitted(); // remove from list + close dialog
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to accept quote request');
+    } finally {
+      setAccepting(false);
+    }
+  };
+
+  // ── Reject: dismiss the quote request ─────────────────────────────
+  const handleReject = async () => {
+    setRejecting(true);
+    try {
+      await apiJson(mpUrl(`/api/marketplace/quote-request/${item.id}/provider-reject`), {
+        method: 'POST',
+      });
+      toast.success('Quote request rejected.');
+      onSubmitted(); // remove from list + close dialog
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to reject quote request');
+    } finally {
+      setRejecting(false);
     }
   };
 
@@ -1880,7 +1916,27 @@ function QuoteDetailDialog({
           </div>
         ) : null}
 
-        <DialogFooter>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <div className="flex gap-2 mr-auto">
+            <Button
+              variant="default"
+              onClick={handleAccept}
+              disabled={accepting || rejecting || submitting || loading || !!error}
+              className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
+            >
+              {accepting ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+              Accept (Create Lead)
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleReject}
+              disabled={accepting || rejecting || submitting || loading || !!error}
+              className="gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              {rejecting ? <Loader2 className="size-4 animate-spin" /> : <XCircle className="size-4" />}
+              Reject
+            </Button>
+          </div>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button
             onClick={handleSubmit}

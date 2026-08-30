@@ -769,6 +769,11 @@ model Service {
   icon            String?
   isActive        Boolean  @default(true)
   isPublic        Boolean  @default(true)  // show on public business hub
+  // ── Online booking + marketplace visibility ──
+  costPrice       Float    @default(0)     // cost of delivering the service (for profit margin)
+  markup          Float    @default(0)     // markup percentage (unit price = cost + cost × markup/100)
+  isBookable      Boolean  @default(false) // can be booked online via marketplace
+  isOnlineBookable Boolean @default(false) // shown on marketplace detail page for online booking
   checklistId     String?  // -> Checklist.id (auto-attached when a job is created for this service)
   tenantId        String?
   createdAt       DateTime @default(now())
@@ -5822,6 +5827,7 @@ model InventoryItem {
   barcode         String?
   imageUrl        String?
   isActive        Boolean  @default(true)
+  isSellableOnline Boolean @default(false) // shown on marketplace detail page for online purchase
   metadataJson    String   @default("{}")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

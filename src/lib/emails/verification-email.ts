@@ -144,16 +144,74 @@ export async function verifyEmailToken(
   });
 
   if (!updatedUser || !updatedUser.emailVerified) {
-    // The update didn't persist — this is a critical failure.
-    // Return an error so the verify-email route doesn't issue a JWT.
-    logger.error(
+    // The Prisma/Supabase adapter update didn't persist.
+    // FALLBACK: Try a direct Supabase REST API call to update the User table.
+    // This bypasses the adapter entirely and talks to PostgREST directly.
+    logger.warn(
       { component: 'email-verification', userId: user.id, email: user.email },
-      'Email verification update did not persist — emailVerified is still false after update',
+      'Adapter update did not persist — trying direct Supabase REST fallback',
     );
-    return {
-      ok: false,
-      error: 'Failed to verify your email due to a database issue. Please try again or contact support.',
-    };
+
+    try {
+      // Dynamically import to avoid circular dependency issues
+      const { getSupabaseAdmin } = await import('@/lib/supabase-db');
+      const adminClient = getSupabaseAdmin();
+
+      const { error: directError } = await adminClient
+        .from('User')
+        .update({
+          emailVerified: true,
+          emailVerifiedAt: new Date().toISOString(),
+          emailVerifyTokenHash: null,
+          emailVerifyTokenExpiresAt: null,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq('id', user.id);
+
+      if (directError) {
+        logger.error(
+          { component: 'email-verification', userId: user.id, email: user.email, supabaseError: directError.message },
+          'Direct Supabase REST fallback also failed',
+        );
+        return {
+          ok: false,
+          error: 'Failed to verify your email due to a database issue. Please try again or contact support.',
+        };
+      }
+
+      // Re-fetch again to confirm the direct update persisted
+      const recheckedUser = await db.user.findUnique({
+        where: { id: user.id },
+        select: { emailVerified: true },
+      });
+
+      if (!recheckedUser || !recheckedUser.emailVerified) {
+        logger.error(
+          { component: 'email-verification', userId: user.id, email: user.email },
+          'Direct Supabase REST update also did not persist — emailVerified still false',
+        );
+        return {
+          ok: false,
+          error: 'Failed to verify your email due to a database issue. Please try again or contact support.',
+        };
+      }
+
+      logger.info(
+        { component: 'email-verification', userId: user.id, email: user.email },
+        'Email verified successfully via direct Supabase REST fallback',
+      );
+      return { ok: true, userId: user.id, email: user.email };
+
+    } catch (fallbackErr) {
+      logger.error(
+        { component: 'email-verification', userId: user.id, email: user.email, err: fallbackErr },
+        'Direct Supabase REST fallback threw an exception',
+      );
+      return {
+        ok: false,
+        error: 'Failed to verify your email due to a database issue. Please try again or contact support.',
+      };
+    }
   }
 
   logger.info(
