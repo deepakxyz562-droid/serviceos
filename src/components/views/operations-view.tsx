@@ -2,7 +2,14 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useJobs } from '@/hooks/use-crm-data';
+import {
+  useJobs,
+  useJobLifecycleAction,
+  useCreateResource,
+  useUpdateResource,
+  useDeleteResource,
+} from '@/hooks/use-crm-data';
+import { qk } from '@/lib/query-keys';
 import { authFetch } from '@/lib/api';
 import {
   Truck, Clock, CheckCircle2, AlertCircle, BarChart3, Search,
@@ -207,7 +214,7 @@ export function OperationsView() {
   // Fetch resources (React Query — inline because the resource endpoint is
   // operations-specific and doesn't warrant a shared hook)
   const { data: resourcesData, isLoading: resourcesLoading, error: rqResourcesError, refetch: fetchResources } = useQuery({
-    queryKey: ['operations-resources', { type: resourceTypeFilter, status: resourceStatusFilter, search: resourceSearch }],
+    queryKey: qk.operations.resources({ type: resourceTypeFilter, status: resourceStatusFilter, search: resourceSearch }),
     queryFn: async () => {
       const sp = new URLSearchParams();
       if (resourceTypeFilter !== 'all') sp.set('type', resourceTypeFilter);
@@ -254,6 +261,15 @@ export function OperationsView() {
     }
   }, []);
 
+  // ── Mutations (dependency-aware) ───────────────────────────────────────────
+  // Job lifecycle → getJobInvalidations('update') — jobs + dashboard + calendar + dispatch + customer/employee detail
+  // Resource CRUD → qk.operations.resourcesAll() — self-contained, no cross-domain
+  // Webhook source mutations → left manual (webhook sources use useState, not RQ)
+  const jobLifecycleAction = useJobLifecycleAction();
+  const createResource = useCreateResource();
+  const updateResource = useUpdateResource();
+  const deleteResource = useDeleteResource();
+
   useEffect(() => {
     fetchWebhookSources();
   }, [fetchWebhookSources]);
@@ -264,28 +280,21 @@ export function OperationsView() {
     setLoadingJobId(jobId);
     setLoadingAction(action);
     try {
-      const res = await fetch('/api/jobs/lifecycle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, jobId, resourceId }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        toast.success(`Job ${action} successfully`);
-        fetchJobs();
-        if (action === 'assign') {
-          setShowAssignDialog(false);
-          setAssigningJob(null);
-        }
-        if (showJobDetail && selectedJob?.id === jobId) {
-          setSelectedJob(data);
-        }
-      } else {
-        const err = await res.json();
-        toast.error(err.error || `Failed to ${action} job`);
+      // useJobLifecycleAction auto-invalidates via getJobInvalidations('update'):
+      // jobs.all + dashboard.all + jobs.calendar.all() + dispatch.all +
+      // jobs.detail(id) + customers.detail(customerId) + employees.detail(assigneeId)
+      const data: any = await jobLifecycleAction.mutateAsync({ action, jobId, resourceId });
+      toast.success(`Job ${action} successfully`);
+      // No fetchJobs() needed — useJobLifecycleAction auto-invalidates qk.jobs.all
+      if (action === 'assign') {
+        setShowAssignDialog(false);
+        setAssigningJob(null);
       }
-    } catch {
-      toast.error(`Network error: Failed to ${action} job`);
+      if (showJobDetail && selectedJob?.id === jobId) {
+        setSelectedJob(data);
+      }
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : `Network error: Failed to ${action} job`);
     } finally {
       setLifecycleLoading(false);
       setLoadingJobId(null);
@@ -320,42 +329,37 @@ export function OperationsView() {
   const handleSaveResource = async () => {
     const isEditing = !!editingResource;
     try {
-      const url = '/api/resources';
-      const method = isEditing ? 'PUT' : 'POST';
-      const body = isEditing
-        ? { id: editingResource!.id, ...resourceForm, skills: resourceForm.skills ? resourceForm.skills.split(',').map((s) => s.trim()) : [] }
-        : { ...resourceForm, skills: resourceForm.skills ? resourceForm.skills.split(',').map((s) => s.trim()) : [] };
+      const body = {
+        name: resourceForm.name,
+        phone: resourceForm.phone,
+        type: resourceForm.type,
+        location: resourceForm.location,
+        skills: resourceForm.skills ? resourceForm.skills.split(',').map((s) => s.trim()) : [],
+      };
 
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        toast.success(`Resource ${isEditing ? 'updated' : 'created'} successfully`);
-        setShowAddResource(false);
-        setEditingResource(null);
-        setResourceForm({ name: '', phone: '', type: 'driver', location: '', skills: '' });
-        fetchResources();
+      // useCreateResource/useUpdateResource auto-invalidate qk.operations.resourcesAll()
+      // (catches all filtered resource queries via prefix match). No fetchResources() needed.
+      if (isEditing) {
+        await updateResource.mutateAsync({ id: editingResource!.id, ...body });
       } else {
-        toast.error(`Failed to ${isEditing ? 'update' : 'create'} resource`);
+        await createResource.mutateAsync(body);
       }
-    } catch {
-      toast.error('Network error');
+      toast.success(`Resource ${isEditing ? 'updated' : 'created'} successfully`);
+      setShowAddResource(false);
+      setEditingResource(null);
+      setResourceForm({ name: '', phone: '', type: 'driver', location: '', skills: '' });
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : `Failed to ${isEditing ? 'update' : 'create'} resource`);
     }
   };
 
   const handleDeleteResource = async (id: string) => {
     try {
-      const res = await fetch(`/api/resources?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Resource deleted');
-        fetchResources();
-      } else {
-        toast.error('Failed to delete resource');
-      }
-    } catch {
-      toast.error('Network error');
+      // useDeleteResource auto-invalidates qk.operations.resourcesAll().
+      await deleteResource.mutateAsync({ id });
+      toast.success('Resource deleted');
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete resource');
     }
   };
 

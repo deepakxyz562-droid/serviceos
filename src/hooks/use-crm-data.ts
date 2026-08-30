@@ -219,7 +219,7 @@ export function useExpenses() {
 //
 // Migration: Phase 1.8a — expenses-view.tsx is the first consumer.
 
-import { getExpenseInvalidations, getCustomerInvalidations, getContactInvalidations, getLeadInvalidations, getInvoiceInvalidations } from '@/lib/invalidation-helpers';
+import { getExpenseInvalidations, getCustomerInvalidations, getContactInvalidations, getLeadInvalidations, getInvoiceInvalidations, getJobInvalidations } from '@/lib/invalidation-helpers';
 
 export interface ExpenseCreateInput {
   category: string;
@@ -1020,5 +1020,68 @@ export function useReopenInvoice() {
     method: 'PUT',
     invalidate: ({ data, variables }) =>
       getInvoiceInvalidations({ mutation: 'reopen', data, variables }),
+  });
+}
+
+// ── Operations mutations (dependency-aware) ─────────────────────────────────
+//
+// Job lifecycle action → uses getJobInvalidations('update') — this IS a job
+//   mutation (updates db.job). Invalidates jobs + dashboard + calendar +
+//   dispatch + customer detail + employee detail.
+//
+// Resource CRUD → uses qk.operations.resourcesAll() — self-contained, no
+//   cross-domain dependencies. Dashboard does NOT consume resources.
+//
+// Webhook source mutations → NOT included here. Webhook sources use manual
+// useState (not React Query), so there's no RQ cache to invalidate. The
+// caller keeps its existing fetchWebhookSources() call.
+//
+// Migration: Phase 1.9e — operations-view.tsx
+
+export interface JobLifecycleInput {
+  action: string; // 'assign' | 'start' | 'complete' | 'cancel' | etc.
+  jobId: string;
+  resourceId?: string;
+}
+
+export interface ResourceSaveInput {
+  id?: string; // present for update, absent for create
+  name: string;
+  phone: string;
+  type: string;
+  location?: string;
+  skills?: string[];
+}
+
+export function useJobLifecycleAction() {
+  return useCrmMutation<unknown, JobLifecycleInput>({
+    url: '/api/jobs/lifecycle',
+    method: 'POST',
+    invalidate: ({ data, variables }) =>
+      getJobInvalidations({ mutation: 'update', data, variables }),
+  });
+}
+
+export function useCreateResource() {
+  return useCrmMutation<unknown, Omit<ResourceSaveInput, 'id'>>({
+    url: '/api/resources',
+    method: 'POST',
+    invalidate: () => [qk.operations.resourcesAll()],
+  });
+}
+
+export function useUpdateResource() {
+  return useCrmMutation<unknown, ResourceSaveInput>({
+    url: '/api/resources',
+    method: 'PUT',
+    invalidate: () => [qk.operations.resourcesAll()],
+  });
+}
+
+export function useDeleteResource() {
+  return useCrmMutation<unknown, { id: string }>({
+    url: ({ id }) => `/api/resources?id=${id}`,
+    method: 'DELETE',
+    invalidate: () => [qk.operations.resourcesAll()],
   });
 }

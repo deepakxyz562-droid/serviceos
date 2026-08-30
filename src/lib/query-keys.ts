@@ -263,7 +263,14 @@ export const qk = {
   // ── Operations Resources (webhook sources, dispatch resources) ────────────
   operations: {
     all: ['operations'] as const,
-    resources: (filters?: Filters) => [...qk.operations.all, 'resources', filters ?? {}] as const,
+    /**
+     * Prefix key for ALL resource queries. Use for invalidation:
+     *   qc.invalidateQueries({ queryKey: qk.operations.resourcesAll() })
+     * catches every filtered resource query.
+     */
+    resourcesAll: () => [...qk.operations.all, 'resources'] as const,
+    /** Specific resource query (with filters). Use as the queryKey. */
+    resources: (filters?: Filters) => [...qk.operations.resourcesAll(), filters ?? {}] as const,
     webhookSources: (filters?: Filters) => [...qk.operations.all, 'webhook-sources', filters ?? {}] as const,
   },
 
