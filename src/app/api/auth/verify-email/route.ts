@@ -33,22 +33,29 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const token = searchParams.get('token');
 
-    if (!token) {
+    if (!token || token.trim().length === 0) {
       return NextResponse.json(
-        { ok: false, error: 'Missing verification token.' },
+        { ok: false, error: 'Missing verification token. Please provide a valid token in the link.', code: 'MISSING_TOKEN' },
         { status: 400 },
       );
     }
 
-    const result = await verifyEmailToken(token);
+    const result = await verifyEmailToken(token.trim());
 
     if (!result.ok) {
-      const status = /expired/i.test(result.error)
-        ? 410
-        : /already verified/i.test(result.error)
-          ? 400
-          : 404;
-      return NextResponse.json({ ok: false, error: result.error }, { status });
+      let status = 400; // Default to Bad Request for invalid tokens instead of 404
+      if (result.code === 'TOKEN_EXPIRED' || /expired/i.test(result.error)) {
+        status = 410; // 410 Gone for expired token
+      } else if (
+        result.code === 'DB_ERROR' ||
+        result.code === 'DB_UPDATE_ERROR' ||
+        result.code === 'DB_FALLBACK_EXCEPTION' ||
+        result.code === 'UNHANDLED_ERROR' ||
+        /database|server|exception/i.test(result.error)
+      ) {
+        status = 500; // 500 Internal Server Error for DB/system failures
+      }
+      return NextResponse.json({ ok: false, error: result.error, code: result.code || 'VERIFICATION_FAILED' }, { status });
     }
 
     // Fetch full user and tenant for auto-login
@@ -92,11 +99,10 @@ export async function GET(request: NextRequest) {
     return response;
 
   } catch (err) {
-    // Safety net: if ANYTHING throws (DB connection, JWT generation, etc.),
-    // return a proper JSON error instead of a 500 with empty body.
+    const errorMsg = err instanceof Error ? err.message : String(err);
     console.error('[verify-email] Unhandled error:', err);
     return NextResponse.json(
-      { ok: false, error: 'An error occurred during email verification. Please try again or contact support.' },
+      { ok: false, error: `Email verification failed: ${errorMsg}`, code: 'UNHANDLED_ROUTE_ERROR' },
       { status: 500 },
     );
   }

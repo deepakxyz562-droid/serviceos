@@ -56,13 +56,45 @@ export async function issueVerificationToken(userId: string): Promise<string> {
   const tokenHash = hashToken(rawToken);
   const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
 
-  await db.user.update({
-    where: { id: userId },
-    data: {
-      emailVerifyTokenHash: tokenHash,
-      emailVerifyTokenExpiresAt: expiresAt,
-    },
-  });
+  try {
+    await db.user.update({
+      where: { id: userId },
+      data: {
+        emailVerifyTokenHash: tokenHash,
+        emailVerifyTokenExpiresAt: expiresAt,
+      },
+    });
+  } catch (updateErr) {
+    logger.warn(
+      { component: 'email-verification', userId, err: updateErr },
+      'db.user.update threw in issueVerificationToken — trying direct Supabase REST fallback',
+    );
+    try {
+      const { getSupabaseAdmin } = await import('@/lib/supabase-db');
+      const adminClient = getSupabaseAdmin();
+      const { error: directError } = await adminClient
+        .from('User')
+        .update({
+          emailVerifyTokenHash: tokenHash,
+          emailVerifyTokenExpiresAt: expiresAt.toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        .eq('id', userId);
+      if (directError) {
+        logger.error(
+          { component: 'email-verification', userId, error: directError.message },
+          'Direct Supabase update failed in issueVerificationToken',
+        );
+        throw new Error(`Failed to store verification token: ${directError.message}`);
+      }
+    } catch (fallbackErr) {
+      logger.error(
+        { component: 'email-verification', userId, err: fallbackErr },
+        'Failed to issue verification token via fallback',
+      );
+      throw fallbackErr;
+    }
+  }
 
   return rawToken;
 }
@@ -76,13 +108,14 @@ export async function issueVerificationToken(userId: string): Promise<string> {
  */
 export async function verifyEmailToken(
   rawToken: string,
-): Promise<{ ok: true; userId: string; email: string } | { ok: false; error: string }> {
-  if (!rawToken || typeof rawToken !== 'string') {
-    return { ok: false, error: 'Missing verification token.' };
+): Promise<{ ok: true; userId: string; email: string; alreadyVerified?: boolean } | { ok: false; error: string; code?: string }> {
+  if (!rawToken || typeof rawToken !== 'string' || rawToken.trim().length === 0) {
+    return { ok: false, error: 'Missing or invalid verification token.', code: 'INVALID_TOKEN' };
   }
 
   try {
-    const tokenHash = hashToken(rawToken);
+    const tokenHash = hashToken(rawToken.trim());
+    let lastDbError: string | null = null;
 
     // Find user by token hash. Try the Prisma adapter first, then fall back
     // to a direct Supabase REST query if the adapter throws (the Supabase
@@ -100,6 +133,7 @@ export async function verifyEmailToken(
         },
       });
     } catch (findFirstErr) {
+      lastDbError = findFirstErr instanceof Error ? findFirstErr.message : String(findFirstErr);
       // The Supabase adapter threw on findFirst. Try a direct Supabase REST query.
       logger.warn(
         { component: 'email-verification', tokenHashPrefix: tokenHash.substring(0, 8), err: findFirstErr },
@@ -118,6 +152,7 @@ export async function verifyEmailToken(
           .single();
 
         if (directError) {
+          lastDbError = directError.message || JSON.stringify(directError);
           logger.error(
             { component: 'email-verification', supabaseError: directError.message },
             'Direct Supabase REST lookup also failed',
@@ -125,6 +160,7 @@ export async function verifyEmailToken(
         }
 
         if (directUser) {
+          lastDbError = null;
           user = {
             id: directUser.id,
             email: directUser.email,
@@ -139,6 +175,7 @@ export async function verifyEmailToken(
           );
         }
       } catch (fallbackErr) {
+        lastDbError = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
         logger.error(
           { component: 'email-verification', err: fallbackErr },
           'Direct Supabase REST lookup threw an exception',
@@ -147,7 +184,18 @@ export async function verifyEmailToken(
     }
 
     if (!user) {
-      return { ok: false, error: 'Invalid or already-used verification token.' };
+      if (lastDbError) {
+        return {
+          ok: false,
+          error: `Database lookup error: ${lastDbError}. Please verify the database schema or try again.`,
+          code: 'DB_ERROR',
+        };
+      }
+      return {
+        ok: false,
+        error: 'Verification link is invalid or has already been used. Please log in or request a new verification link.',
+        code: 'TOKEN_NOT_FOUND',
+      };
     }
 
     if (user.emailVerified) {
@@ -160,12 +208,12 @@ export async function verifyEmailToken(
       } catch (e) {
         logger.warn({ component: 'email-verification', userId: user.id, err: e }, 'Failed to clear already-verified token (non-fatal)');
       }
-      return { ok: true, userId: user.id, email: user.email };
+      return { ok: true, userId: user.id, email: user.email, alreadyVerified: true };
     }
 
     const now = Date.now();
     const expiresAtMs = user.emailVerifyTokenExpiresAt?.getTime() ?? 0;
-    if (expiresAtMs < now) {
+    if (expiresAtMs > 0 && expiresAtMs < now) {
       // Expired — clear the stale token so it can't be retried.
       try {
         await db.user.update({
@@ -175,7 +223,11 @@ export async function verifyEmailToken(
       } catch (e) {
         logger.warn({ component: 'email-verification', userId: user.id, err: e }, 'Failed to clear expired token (non-fatal)');
       }
-      return { ok: false, error: 'This verification link has expired. Please request a new one.' };
+      return {
+        ok: false,
+        error: 'This verification link has expired (valid for 24 hours). Please request a new verification email from the login page.',
+        code: 'TOKEN_EXPIRED',
+      };
     }
 
     // Success: mark verified + clear token (single-use).
@@ -254,7 +306,8 @@ export async function verifyEmailToken(
           );
           return {
             ok: false,
-            error: 'Failed to verify your email due to a database issue. Please try again or contact support.',
+            error: `Database update failed: ${directError.message || 'Could not update User record'}. Please try again or contact support.`,
+            code: 'DB_UPDATE_ERROR',
           };
         }
 
@@ -271,7 +324,8 @@ export async function verifyEmailToken(
           );
           return {
             ok: false,
-            error: 'Failed to verify your email due to a database issue. Please try again or contact support.',
+            error: 'Failed to verify your email because database update could not be confirmed. Please try again.',
+            code: 'DB_CONFIRMATION_ERROR',
           };
         }
 
@@ -282,13 +336,15 @@ export async function verifyEmailToken(
         return { ok: true, userId: user.id, email: user.email };
 
       } catch (fallbackErr) {
+        const errMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
         logger.error(
           { component: 'email-verification', userId: user.id, email: user.email, err: fallbackErr },
           'Direct Supabase REST fallback threw an exception',
         );
         return {
           ok: false,
-          error: 'Failed to verify your email due to a database issue. Please try again or contact support.',
+          error: `Database update exception: ${errMsg}. Please try again or contact support.`,
+          code: 'DB_FALLBACK_EXCEPTION',
         };
       }
     }
@@ -301,16 +357,15 @@ export async function verifyEmailToken(
     return { ok: true, userId: user.id, email: user.email };
 
   } catch (err) {
-    // CATCH ALL: Any unhandled exception in the function returns a proper
-    // error response instead of crashing the API route (which produces a
-    // 500 with empty body — the exact bug the user reported).
+    const errorDetail = err instanceof Error ? err.message : String(err);
     logger.error(
       { component: 'email-verification', err },
       'verifyEmailToken threw an unhandled exception',
     );
     return {
       ok: false,
-      error: 'An error occurred during email verification. Please try again or contact support.',
+      error: `Email verification failed: ${errorDetail}`,
+      code: 'UNHANDLED_ERROR',
     };
   }
 }

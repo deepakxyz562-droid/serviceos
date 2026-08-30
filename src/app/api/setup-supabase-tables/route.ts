@@ -19,6 +19,11 @@ const SQL_MIGRATION = `-- ============================================
 -- Generated: ${new Date().toISOString()}
 -- ============================================
 
+-- 0. User Table Email Verification Columns
+ALTER TABLE IF EXISTS "User" ADD COLUMN IF NOT EXISTS "emailVerifyTokenHash" TEXT;
+ALTER TABLE IF EXISTS "User" ADD COLUMN IF NOT EXISTS "emailVerifyTokenExpiresAt" TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS "User_emailVerifyTokenHash_idx" ON "User"("emailVerifyTokenHash");
+
 -- 1. CommunicationProvider
 CREATE TABLE IF NOT EXISTS "CommunicationProvider" (
   "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
