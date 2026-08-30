@@ -219,7 +219,7 @@ export function useExpenses() {
 //
 // Migration: Phase 1.8a — expenses-view.tsx is the first consumer.
 
-import { getExpenseInvalidations, getCustomerInvalidations } from '@/lib/invalidation-helpers';
+import { getExpenseInvalidations, getCustomerInvalidations, getContactInvalidations } from '@/lib/invalidation-helpers';
 
 export interface ExpenseCreateInput {
   category: string;
@@ -658,5 +658,145 @@ export function useAddCustomerNote() {
     method: 'POST',
     invalidate: ({ variables }) =>
       getCustomerInvalidations({ mutation: 'note', variables }),
+  });
+}
+
+// ── Contact mutations (dependency-aware) ────────────────────────────────────
+//
+// These hooks use `useCrmMutation` + `getContactInvalidations` so every
+// mutation invalidates exactly the right cache keys:
+//   - create/update/delete → contacts.all (+ detail for update/delete)
+//   - bulk (tag/group/status) → contacts.all only (no individual details)
+//   - bulk-delete → contacts.all only
+//   - import (CSV/FormData) → contacts.all only
+//
+// NOTE: The dashboard is NOT invalidated — the dashboard API does not consume
+// the Contact model (verified during Phase 1.9b audit).
+//
+// NOTE: `useCustomers` (the read hook) is a historically-named hook that
+// fetches /api/contacts → db.contact (the Contact model). The naming is
+// confusing but correct — it returns Contact data normalized to a
+// `{customers, pagination}` shape for backward compat. NOT renamed per
+// Phase 1.9b scoping rules.
+//
+// Migration: Phase 1.9b — contacts-view.tsx
+
+export interface ContactSaveInput {
+  id?: string; // present for update, absent for create
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  company?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  zip?: string | null;
+  source?: string;
+  status?: string;
+  tagIds?: string[];
+  groupIds?: string[];
+}
+
+export interface ContactDeleteInput {
+  id: string;
+}
+
+export interface ContactBulkActionInput {
+  contactIds: string[];
+  action: string;
+  groupId?: string;
+  tagId?: string;
+  status?: string;
+}
+
+export interface ContactImportInput {
+  // For CSV JSON import: { contacts: [...] }
+  // For FormData import: FormData object (use mutationFn override)
+  contacts?: Record<string, string | null>[];
+}
+
+export function useCreateContact() {
+  return useCrmMutation<unknown, Omit<ContactSaveInput, 'id'>>({
+    url: '/api/contacts',
+    method: 'POST',
+    invalidate: ({ data }) =>
+      getContactInvalidations({ mutation: 'create', data }),
+  });
+}
+
+export function useUpdateContact() {
+  return useCrmMutation<unknown, ContactSaveInput>({
+    url: ({ id }) => `/api/contacts/${id}`,
+    method: 'PUT',
+    invalidate: ({ data, variables }) =>
+      getContactInvalidations({ mutation: 'update', data, variables }),
+  });
+}
+
+export function useDeleteContact() {
+  return useCrmMutation<unknown, ContactDeleteInput>({
+    url: ({ id }) => `/api/contacts/${id}`,
+    method: 'DELETE',
+    invalidate: ({ variables }) =>
+      getContactInvalidations({ mutation: 'delete', variables }),
+  });
+}
+
+export function useBulkContactAction() {
+  return useCrmMutation<unknown, ContactBulkActionInput>({
+    url: '/api/contacts/bulk',
+    method: 'POST',
+    invalidate: () =>
+      getContactInvalidations({ mutation: 'bulk' }),
+  });
+}
+
+export function useBulkDeleteContacts() {
+  return useCrmMutation<unknown, ContactBulkActionInput>({
+    url: '/api/contacts/bulk',
+    method: 'POST',
+    invalidate: () =>
+      getContactInvalidations({ mutation: 'bulk-delete' }),
+  });
+}
+
+/**
+ * Import contacts via CSV JSON payload.
+ * For FormData import, use a custom mutationFn via useCrmMutation directly.
+ */
+export function useImportContactsCsv() {
+  return useCrmMutation<unknown, ContactImportInput>({
+    url: '/api/contacts/import',
+    method: 'POST',
+    invalidate: () =>
+      getContactInvalidations({ mutation: 'import' }),
+  });
+}
+
+/**
+ * Import contacts via FormData (file upload).
+ * Uses a custom mutationFn because FormData can't be JSON.stringified.
+ */
+export function useImportContactsFormData() {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, FormData>({
+    mutationFn: async (formData: FormData) => {
+      const res = await authFetch('/api/contacts/import', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Import failed: ${res.status}`);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      // Same as import: contacts.all only (no dashboard, no individual details)
+      const keys = getContactInvalidations({ mutation: 'import' });
+      for (const queryKey of keys) {
+        queryClient.invalidateQueries({ queryKey });
+      }
+    },
   });
 }

@@ -199,12 +199,18 @@ export function getLeadInvalidations(opts: InvalidationContext): QueryKey[] {
  * Dependency-aware invalidation for Customer mutations.
  *
  * ─── Mutation types ─────────────────────────────────────────────────────────
- * 'create'  → customers.all + dashboard.all (new customer affects list + KPI)
- * 'update'  → customers.all + customers.detail(id) + dashboard.all
- * 'delete'  → customers.all + customers.detail(id) + dashboard.all
- * 'portal'  → customers.all + customers.detail(id) (NO dashboard — portal
- *             status doesn't affect KPIs; enable/disable/resend invitation)
- * 'note'    → customers.detail(id) ONLY (notes don't affect list or dashboard)
+ * 'create'  → customers.all (new customer appears in list)
+ * 'update'  → customers.all + customers.detail(id)
+ * 'delete'  → customers.all + customers.detail(id)
+ * 'portal'  → customers.all + customers.detail(id) (enable/disable/resend)
+ * 'note'    → customers.detail(id) ONLY (notes don't affect list)
+ *
+ * ─── Dashboard: NOT invalidated ─────────────────────────────────────────────
+ * The dashboard API (/api/dashboard/bootstrap) does NOT consume the Customer
+ * model — it only consumes lead, invoice, job, employee, workspace,
+ * appNotification. So customer mutations must NOT invalidate qk.dashboard.all.
+ * This was incorrectly included in Phase 1.9a and corrected in Phase 1.9b
+ * after the contacts-view audit verified the dashboard's actual data consumption.
  *
  * ─── Note on timeline refresh ────────────────────────────────────────────────
  * The 'note' mutation invalidates qk.customers.detail(id), which prefix-matches
@@ -229,18 +235,9 @@ export function getCustomerInvalidations(opts: InvalidationContext): QueryKey[] 
     return keys;
   }
 
-  if (mutation === 'portal') {
-    // Portal enable/disable/resend — affects customer record but NOT dashboard
-    keys.push(qk.customers.all);
-    if (customerId) keys.push(qk.customers.detail(customerId));
-    return keys;
-  }
-
-  // create / update / delete — affects list + dashboard (customer count KPI)
-  keys.push(qk.customers.all, qk.dashboard.all);
-  if ((mutation === 'update' || mutation === 'delete') && customerId) {
-    keys.push(qk.customers.detail(customerId));
-  }
+  // create / update / delete / portal — affects list + detail (NO dashboard)
+  keys.push(qk.customers.all);
+  if (customerId) keys.push(qk.customers.detail(customerId));
 
   return keys;
 }
@@ -250,20 +247,37 @@ export function getCustomerInvalidations(opts: InvalidationContext): QueryKey[] 
 /**
  * Dependency-aware invalidation for Contact mutations.
  *
- * Affected queries:
- *   - contacts list (always)
- *   - dashboard (always — contact count KPI changes)
- *   - contact detail (only for update/delete)
+ * ─── Mutation types ─────────────────────────────────────────────────────────
+ * 'create'      → contacts.all
+ * 'update'      → contacts.all + contacts.detail(id)
+ * 'delete'      → contacts.all + contacts.detail(id)
+ * 'bulk'        → contacts.all (bulk tag/group/status changes)
+ * 'bulk-delete' → contacts.all (bulk delete — individual IDs not reliably available)
+ * 'import'      → contacts.all (CSV/FormData import)
+ *
+ * ─── Dashboard: NOT invalidated ─────────────────────────────────────────────
+ * The dashboard API (/api/dashboard/bootstrap) does NOT consume the Contact
+ * model — it only consumes lead, invoice, job, employee, workspace,
+ * appNotification. So contact mutations must NOT invalidate qk.dashboard.all.
+ * Verified during Phase 1.9b audit via grep of db.* calls in dashboard route.
+ *
+ * ─── Bulk operations ────────────────────────────────────────────────────────
+ * Bulk mutations return only a success count, not individual IDs. So we
+ * invalidate qk.contacts.all (catches all list variants) but do NOT attempt
+ * to invalidate individual detail caches. If a detail cache exists for a
+ * bulk-affected contact, it will be refreshed on next access via staleTime.
  */
 export function getContactInvalidations(opts: InvalidationContext): QueryKey[] {
   const { mutation, data, variables } = opts;
-  const keys: QueryKey[] = [qk.contacts.all, qk.dashboard.all];
+  const keys: QueryKey[] = [qk.contacts.all];
 
   const contactId = data?.id ?? variables?.id;
   if ((mutation === 'update' || mutation === 'delete') && contactId) {
     keys.push(qk.contacts.detail(contactId));
   }
 
+  // 'bulk', 'bulk-delete', 'import' → only contacts.all (no individual details)
+  // 'create' → only contacts.all (no detail cache yet)
   return keys;
 }
 

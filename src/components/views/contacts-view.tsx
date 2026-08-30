@@ -33,7 +33,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { useCustomers } from '@/hooks/use-crm-data';
+import {
+  useCustomers,
+  useCreateContact,
+  useUpdateContact,
+  useDeleteContact,
+  useBulkContactAction,
+  useBulkDeleteContacts,
+  useImportContactsCsv,
+  useImportContactsFormData,
+} from '@/hooks/use-crm-data';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -328,6 +337,18 @@ export function ContactsView() {
     () => contactsData?.customers ?? [],
     [contactsData],
   );
+
+  // ── Mutations (dependency-aware, auto-invalidate via getContactInvalidations) ──
+  // create/update/delete → contacts.all (+ detail for update/delete)
+  // bulk/bulk-delete/import → contacts.all only
+  // NO dashboard invalidation — dashboard doesn't consume contacts (Phase 1.9b audit)
+  const createContact = useCreateContact();
+  const updateContact = useUpdateContact();
+  const deleteContact = useDeleteContact();
+  const bulkContactAction = useBulkContactAction();
+  const bulkDeleteContacts = useBulkDeleteContacts();
+  const importContactsCsv = useImportContactsCsv();
+  const importContactsFormData = useImportContactsFormData();
   const pagination = contactsData?.pagination ?? null;
 
   // Debounce search query
@@ -402,27 +423,22 @@ export function ContactsView() {
         groupIds: formGroupIds,
       };
 
-      const url = editingContact ? `/api/contacts/${editingContact.id}` : '/api/contacts';
-      const method = editingContact ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (res.ok) {
-        toast.success(editingContact ? 'Contact updated' : 'Contact created');
-        resetForm();
-        fetchContacts();
-        fetchTags();
-        fetchGroups();
+      // useCreateContact/useUpdateContact auto-invalidate qk.contacts.all
+      // (+ detail for update). NO fetchContacts() needed.
+      if (editingContact) {
+        await updateContact.mutateAsync({ id: editingContact.id, ...body });
       } else {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.error || 'Failed to save contact');
+        await createContact.mutateAsync(body);
       }
-    } catch {
-      toast.error('Failed to save contact');
+
+      toast.success(editingContact ? 'Contact updated' : 'Contact created');
+      resetForm();
+      // Tags/groups are local state (manual fetch), so still need refetch
+      fetchTags();
+      fetchGroups();
+    } catch (e: any) {
+      const msg = e instanceof Error ? e.message : 'Failed to save contact';
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -470,17 +486,13 @@ export function ContactsView() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      const res = await fetch(`/api/contacts/${deleteTarget.id}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Contact deleted');
-        setDeleteDialogOpen(false);
-        setDeleteTarget(null);
-        fetchContacts();
-      } else {
-        toast.error('Failed to delete contact');
-      }
-    } catch {
-      toast.error('Failed to delete contact');
+      await deleteContact.mutateAsync({ id: deleteTarget.id });
+      toast.success('Contact deleted');
+      setDeleteDialogOpen(false);
+      setDeleteTarget(null);
+      // No fetchContacts() needed — useDeleteContact auto-invalidates qk.contacts.all
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete contact');
     }
   };
 
@@ -713,38 +725,28 @@ export function ContactsView() {
     }
     setBulkActionRunning(true);
     try {
-      const res = await fetch('/api/contacts/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contactIds: Array.from(selectedIds),
-          action,
-          ...extra,
-        }),
+      // useBulkContactAction auto-includes JSON.stringify + Content-Type.
+      // Returns the parsed JSON response (success/succeeded/failed counts).
+      const json: any = await bulkContactAction.mutateAsync({
+        contactIds: Array.from(selectedIds),
+        action,
+        ...extra,
       });
-      if (res.ok) {
-        const json = await res.json();
-        const succeeded: number = json.success ?? (json.succeeded ?? 0);
-        const failed: number = json.failed ?? 0;
-        if (failed > 0) {
-          toast.warning(`Action applied to ${succeeded} contacts, ${failed} failed`);
-        } else {
-          toast.success(`Action applied to ${succeeded} contacts`);
-        }
-        setBulkActionDialog(null);
-        setBulkActionTargetId('');
-        setBulkActionStatusValue('active');
-        setSelectedIds(new Set());
-        fetchContacts();
+      const succeeded: number = json.success ?? (json.succeeded ?? 0);
+      const failed: number = json.failed ?? 0;
+      if (failed > 0) {
+        toast.warning(`Action applied to ${succeeded} contacts, ${failed} failed`);
       } else {
-        const err = await res.json().catch(() => ({}));
-        const msg = err?.error || 'Bulk action failed';
-        const detail = err?.detail ? ` (${err.detail})` : '';
-        const hint = err?.hint ? ` — ${err.hint}` : '';
-        toast.error(`${msg}${detail}${hint}`, { duration: 8000 });
+        toast.success(`Action applied to ${succeeded} contacts`);
       }
-    } catch {
-      toast.error('Bulk action failed');
+      setBulkActionDialog(null);
+      setBulkActionTargetId('');
+      setBulkActionStatusValue('active');
+      setSelectedIds(new Set());
+      // No fetchContacts() needed — useBulkContactAction auto-invalidates qk.contacts.all
+    } catch (e: any) {
+      const msg = e instanceof Error ? e.message : 'Bulk action failed';
+      toast.error(msg, { duration: 8000 });
     } finally {
       setBulkActionRunning(false);
     }
@@ -786,33 +788,30 @@ export function ContactsView() {
   const handleBulkDelete = async () => {
     setBulkActionRunning(true);
     try {
-      const res = await fetch('/api/contacts/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contactIds: Array.from(selectedIds),
-          action: 'delete',
-        }),
+      // Try bulk delete first. useBulkDeleteContacts auto-invalidates qk.contacts.all.
+      const json: any = await bulkDeleteContacts.mutateAsync({
+        contactIds: Array.from(selectedIds),
+        action: 'delete',
       });
-      if (res.ok) {
-        const json = await res.json();
-        const succeeded: number = json.success ?? (json.succeeded ?? selectedIds.size);
-        toast.success(`${succeeded} contacts deleted`);
-        setBulkDeleteDialogOpen(false);
-        setSelectedIds(new Set());
-        fetchContacts();
-      } else {
-        // Fallback: call DELETE per-contact
+      const succeeded: number = json.success ?? (json.succeeded ?? selectedIds.size);
+      toast.success(`${succeeded} contacts deleted`);
+      setBulkDeleteDialogOpen(false);
+      setSelectedIds(new Set());
+      // No fetchContacts() needed — useBulkDeleteContacts auto-invalidates qk.contacts.all
+    } catch (bulkErr: any) {
+      // Fallback: bulk endpoint failed, try per-contact DELETE.
+      // useDeleteContact auto-invalidates per contact, but we also invalidate
+      // qk.contacts.all as a safety net (already done by each per-contact mutation).
+      try {
         await Promise.all(
-          Array.from(selectedIds).map(id => fetch(`/api/contacts/${id}`, { method: 'DELETE' }))
+          Array.from(selectedIds).map(id => deleteContact.mutateAsync({ id }))
         );
         toast.success(`${selectedIds.size} contacts deleted`);
         setBulkDeleteDialogOpen(false);
         setSelectedIds(new Set());
-        fetchContacts();
+      } catch (perContactErr: any) {
+        toast.error(perContactErr instanceof Error ? perContactErr.message : 'Failed to delete contacts');
       }
-    } catch {
-      toast.error('Failed to delete contacts');
     } finally {
       setBulkActionRunning(false);
     }
@@ -1010,38 +1009,20 @@ export function ContactsView() {
           return;
         }
 
-        const res = await fetch('/api/contacts/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contacts: mappedContacts }),
-        });
-        if (res.ok) {
-          const stats = await res.json();
-          setImportStats(stats);
-          toast.success(`Imported ${stats.imported} contacts`);
-          fetchContacts();
-        } else {
-          const err = await res.json().catch(() => ({}));
-          const msg = err?.error || 'Import failed';
-          const hint = err?.hint ? ` — ${err.hint}` : '';
-          toast.error(`${msg}${hint}`);
-        }
+        // useImportContactsCsv auto-includes JSON.stringify + Content-Type.
+        // Auto-invalidates qk.contacts.all. NO fetchContacts() needed.
+        const stats: any = await importContactsCsv.mutateAsync({ contacts: mappedContacts });
+        setImportStats(stats);
+        toast.success(`Imported ${stats.imported} contacts`);
       } else {
         const formData = new FormData();
         if (importFile) formData.append('file', importFile);
         formData.append('mapping', JSON.stringify(fieldMapping));
-        const res = await fetch('/api/contacts/import', { method: 'POST', body: formData });
-        if (res.ok) {
-          const stats = await res.json();
-          setImportStats(stats);
-          toast.success(`Imported ${stats.imported} contacts`);
-          fetchContacts();
-        } else {
-          const err = await res.json().catch(() => ({}));
-          const msg = err?.error || 'Import failed';
-          const hint = err?.hint ? ` — ${err.hint}` : '';
-          toast.error(`${msg}${hint}`);
-        }
+        // useImportContactsFormData uses custom mutationFn (FormData can't be JSON.stringified).
+        // Auto-invalidates qk.contacts.all. NO fetchContacts() needed.
+        const stats: any = await importContactsFormData.mutateAsync(formData);
+        setImportStats(stats);
+        toast.success(`Imported ${stats.imported} contacts`);
       }
     } catch (e) {
       console.error('Import failed', e);
