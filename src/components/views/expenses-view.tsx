@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Wallet,
   Plus,
@@ -68,6 +68,7 @@ import { toast } from 'sonner';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { authFetch } from '@/lib/client-auth';
 import { useAppStore } from '@/store/app-store';
+import { useExpensesFiltered } from '@/hooks/use-crm-data';
 
 // ============================================================
 // Types & constants
@@ -171,13 +172,28 @@ export function ExpensesView() {
   const user = auth?.user;
   const isEmployee = user?.role === 'employee';
 
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [statusFilter, setStatusFilter] = useState<ExpenseStatus | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
+
+  // Main list data — React Query replaces the manual fetchExpenses
+  // useCallback + useEffect. RQ keys the query by
+  // `{ status, category, search }`, so rapid filter changes (typing in the
+  // search box while a status filter change is still in-flight) no longer
+  // race — the latest filter wins and stale responses are discarded.
+  const {
+    data: expenses = [],
+    isLoading: loading,
+    error: rqError,
+    refetch: fetchExpenses,
+  } = useExpensesFiltered({
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    category: categoryFilter !== 'all' ? categoryFilter : undefined,
+    search: search || undefined,
+  });
+  // `error` mirrors the original string-error state used by the DataTable's
+  // `error` prop; derived from RQ's Error object.
+  const error = rqError?.message ?? null;
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
@@ -185,29 +201,6 @@ export function ExpensesView() {
   const [rejectTarget, setRejectTarget] = useState<Expense | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [viewReceipt, setViewReceipt] = useState<Expense | null>(null);
-
-  const fetchExpenses = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.set('status', statusFilter);
-      if (categoryFilter !== 'all') params.set('category', categoryFilter);
-      if (search.trim()) params.set('search', search.trim());
-      const res = await authFetch(`/api/expenses?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to load expenses');
-      const data = await res.json();
-      setExpenses(data.expenses || []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load expenses');
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter, categoryFilter, search]);
-
-  useEffect(() => {
-    fetchExpenses();
-  }, [fetchExpenses]);
 
   // ── Derived summary stats (computed across ALL expenses, ignoring filters) ──
   // We re-fetch unfiltered totals by computing from current list when filter=all,
@@ -218,7 +211,7 @@ export function ExpensesView() {
   useEffect(() => {
     // Keep a shadow copy of the unfiltered list for summary cards.
     if (statusFilter === 'all' && categoryFilter === 'all' && !search.trim()) {
-      setAllExpenses(expenses);
+      setAllExpenses(expenses as Expense[]);
     }
   }, [expenses, statusFilter, categoryFilter, search]);
 

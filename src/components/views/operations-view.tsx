@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useJobs } from '@/hooks/use-crm-data';
+import { authFetch } from '@/lib/api';
 import {
   Truck, Clock, CheckCircle2, AlertCircle, BarChart3, Search,
   Plus, RefreshCw, XCircle, ChevronRight, MapPin, Phone, Star,
@@ -159,8 +162,6 @@ export function OperationsView() {
   const [activeTab, setActiveTab] = useState('jobs');
 
   // Jobs state
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [jobsLoading, setJobsLoading] = useState(true);
   const [jobStatusFilter, setJobStatusFilter] = useState('all');
   const [jobTypeFilter, setJobTypeFilter] = useState('all');
   const [jobSearch, setJobSearch] = useState('');
@@ -175,8 +176,6 @@ export function OperationsView() {
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
   // Resources state
-  const [resources, setResources] = useState<Resource[]>([]);
-  const [resourcesLoading, setResourcesLoading] = useState(true);
   const [resourceTypeFilter, setResourceTypeFilter] = useState('all');
   const [resourceStatusFilter, setResourceStatusFilter] = useState('all');
   const [resourceSearch, setResourceSearch] = useState('');
@@ -190,45 +189,39 @@ export function OperationsView() {
   const [showAddWebhook, setShowAddWebhook] = useState(false);
   const [webhookForm, setWebhookForm] = useState({ name: '', type: 'supabase' });
 
-  // Fetch jobs
-  const fetchJobs = useCallback(async () => {
-    setJobsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (jobStatusFilter !== 'all') params.set('status', jobStatusFilter);
-      if (jobTypeFilter !== 'all') params.set('type', jobTypeFilter);
-      if (jobSearch) params.set('search', jobSearch);
-      const res = await fetch(`/api/jobs?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setJobs(data.jobs ?? (Array.isArray(data) ? data : []));
-      }
-    } catch {
-      setJobs([]);
-    } finally {
-      setJobsLoading(false);
-    }
-  }, [jobStatusFilter, jobTypeFilter, jobSearch]);
+  // Fetch jobs (React Query — eliminates race conditions on filter changes)
+  const { data: jobsData, isLoading: jobsLoading, error: rqJobsError, refetch: fetchJobs } = useJobs({
+    status: jobStatusFilter !== 'all' ? jobStatusFilter : undefined,
+    search: jobSearch || undefined,
+  });
+  void rqJobsError;
+  // Preserve jobTypeFilter — the useJobs hook doesn't expose `type`, so apply
+  // it client-side after fetching. (The /api/jobs endpoint does support type,
+  // but extending the shared hook is out of scope for this migration.)
+  const jobs: Job[] = useMemo(() => {
+    const list = jobsData?.jobs ?? [];
+    if (jobTypeFilter === 'all') return list;
+    return list.filter((j) => j.type === jobTypeFilter);
+  }, [jobsData, jobTypeFilter]);
 
-  // Fetch resources
-  const fetchResources = useCallback(async () => {
-    setResourcesLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (resourceTypeFilter !== 'all') params.set('type', resourceTypeFilter);
-      if (resourceStatusFilter !== 'all') params.set('status', resourceStatusFilter);
-      if (resourceSearch) params.set('search', resourceSearch);
-      const res = await fetch(`/api/resources?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setResources(Array.isArray(data) ? data : []);
-      }
-    } catch {
-      setResources([]);
-    } finally {
-      setResourcesLoading(false);
-    }
-  }, [resourceTypeFilter, resourceStatusFilter, resourceSearch]);
+  // Fetch resources (React Query — inline because the resource endpoint is
+  // operations-specific and doesn't warrant a shared hook)
+  const { data: resourcesData, isLoading: resourcesLoading, error: rqResourcesError, refetch: fetchResources } = useQuery({
+    queryKey: ['operations-resources', { type: resourceTypeFilter, status: resourceStatusFilter, search: resourceSearch }],
+    queryFn: async () => {
+      const sp = new URLSearchParams();
+      if (resourceTypeFilter !== 'all') sp.set('type', resourceTypeFilter);
+      if (resourceStatusFilter !== 'all') sp.set('status', resourceStatusFilter);
+      if (resourceSearch) sp.set('search', resourceSearch);
+      const res = await authFetch(`/api/resources?${sp.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch resources');
+      const data = await res.json();
+      return data.resources ?? (Array.isArray(data) ? data : []);
+    },
+    staleTime: 30_000,
+  });
+  void rqResourcesError;
+  const resources: Resource[] = resourcesData ?? [];
 
   // Fetch webhook sources
   const fetchWebhookSources = useCallback(async () => {
@@ -260,14 +253,6 @@ export function OperationsView() {
       setAvailableResources([]);
     }
   }, []);
-
-  useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs]);
-
-  useEffect(() => {
-    fetchResources();
-  }, [fetchResources]);
 
   useEffect(() => {
     fetchWebhookSources();

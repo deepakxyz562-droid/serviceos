@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { authFetch } from '@/lib/client-auth';
+import { useBroadcasts } from '@/hooks/use-crm-data';
 import { MultiCustomerSelect } from '@/components/shared/multi-customer-select';
 import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 import { CAMPAIGN_TIMEZONES_GROUPED, detectBrowserTimezone } from '@/lib/timezones';
@@ -265,6 +266,51 @@ function getChannelColor(channel: string) {
   return map[channel] || 'bg-slate-100 text-slate-600';
 }
 
+// Map backend Campaign.status values to the BroadcastStatus vocab used by this
+// view. Lives at module scope so it can be referenced from a useEffect without
+// becoming a stale-closure dep.
+function mapCampaignStatus(status: string): BroadcastStatus {
+  const map: Record<string, BroadcastStatus> = {
+    draft: 'draft',
+    scheduled: 'scheduled',
+    running: 'sending',
+    completed: 'sent',
+    cancelled: 'failed',
+    paused: 'draft',
+  };
+  return map[status] || 'draft';
+}
+
+// Map a raw Campaign record (from /api/broadcasts, which returns Campaign rows
+// with type='broadcast') into the Broadcast shape this view renders. Field
+// names mirror the Prisma Campaign model.
+function mapCampaignToBroadcast(c: Record<string, unknown>): Broadcast {
+  return {
+    id: c.id as string,
+    name: (c.name as string) || '',
+    type: ((c.type as string) || 'promotional') as BroadcastType,
+    status: mapCampaignStatus((c.status as string) || 'draft'),
+    channel: ((c.channel as string) || 'whatsapp') as BroadcastChannel,
+    message: (c.messageContent as string) || '',
+    ctaText: (c.ctaText as string) || undefined,
+    ctaUrl: (c.ctaUrl as string) || undefined,
+    audienceType: (c.audienceType as string) || 'all',
+    audienceId: (c.audienceId as string) || undefined,
+    audienceFiltersJson: (c.audienceFiltersJson as string) || undefined,
+    audienceCount: (c.totalRecipients as number) || 0,
+    scheduledAt: c.scheduledAt as string || undefined,
+    sentCount: (c.sentCount as number) || 0,
+    deliveredCount: (c.deliveredCount as number) || 0,
+    readCount: (c.readCount as number) || 0,
+    repliedCount: (c.repliedCount as number) || 0,
+    clickedCount: (c.clickedCount as number) || 0,
+    failedCount: (c.failedCount as number) || 0,
+    createdAt: (c.createdAt as string) || new Date().toISOString(),
+    timezone: (c.timezone as string) || 'UTC',
+    isRecurring: false,
+  };
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function BroadcastView() {
@@ -272,8 +318,6 @@ export function BroadcastView() {
   const demoPageSize = useDemoPageSize(50);
 
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -318,59 +362,35 @@ export function BroadcastView() {
     message: '',
   });
 
-  // ── Load broadcasts from API ──
-  const loadBroadcasts = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      params.set('limit', String(demoPageSize));
-      params.set('type', 'broadcast');
+  // ── Main list data — React Query replaces the manual loadBroadcasts ──
+  // RQ keys the query by `{ limit }`, so demoPageSize changes (e.g. when the
+  // demo tenant flag flips) produce a fresh query rather than racing the
+  // in-flight request. The hook fetches `/api/broadcasts` (Campaign rows with
+  // type='broadcast'); we keep a local `broadcasts` state synced from RQ data
+  // so optimistic mutations (handleCreate / handleSend / handleEdit) can
+  // update the list immediately without waiting for a refetch.
+  const {
+    data: broadcastsData,
+    isLoading,
+    error: rqError,
+    refetch: refetchBroadcasts,
+  } = useBroadcasts({ limit: demoPageSize });
+  const error = rqError?.message ?? null;
 
-      const res = await authFetch(`/api/campaigns?${params.toString()}`);
-      if (res.ok) {
-        const result = await res.json();
-        // Map campaigns to broadcast format
-        const mapped: Broadcast[] = (result.data || []).map((c: Record<string, unknown>) => ({
-          id: c.id as string,
-          name: (c.name as string) || '',
-          type: ((c.type as string) || 'promotional') as BroadcastType,
-          status: mapCampaignStatus((c.status as string) || 'draft'),
-          channel: ((c.channel as string) || 'whatsapp') as BroadcastChannel,
-          message: (c.messageContent as string) || '',
-          ctaText: (c.ctaText as string) || undefined,
-          ctaUrl: (c.ctaUrl as string) || undefined,
-          audienceType: (c.audienceType as string) || 'all',
-          audienceId: (c.audienceId as string) || undefined,
-          audienceFiltersJson: (c.audienceFiltersJson as string) || undefined,
-          audienceCount: (c.totalRecipients as number) || 0,
-          scheduledAt: c.scheduledAt as string || undefined,
-          sentCount: (c.sentCount as number) || 0,
-          deliveredCount: (c.deliveredCount as number) || 0,
-          readCount: (c.readCount as number) || 0,
-          repliedCount: (c.repliedCount as number) || 0,
-          clickedCount: (c.clickedCount as number) || 0,
-          failedCount: (c.failedCount as number) || 0,
-          createdAt: (c.createdAt as string) || new Date().toISOString(),
-          timezone: (c.timezone as string) || 'UTC',
-          isRecurring: false,
-        }));
-        setBroadcasts(mapped);
-      } else {
-        setError('Failed to load broadcasts');
-        toast.error('Failed to load broadcasts');
-      }
-    } catch {
-      setError('Network error. Please check your connection.');
-      toast.error('Network error loading broadcasts');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [demoPageSize]);
-
+  // Sync local `broadcasts` from RQ data. Re-runs whenever the cache updates
+  // (initial fetch, background refetch, explicit refetchBroadcasts()).
+  // Optimistic setBroadcasts() calls in handlers stay visible until the next
+  // RQ fetch lands, at which point this effect re-syncs from the server.
   useEffect(() => {
-    loadBroadcasts();
-  }, [loadBroadcasts]);
+    const raw = broadcastsData?.broadcasts ?? [];
+    setBroadcasts(raw.map((c) => mapCampaignToBroadcast(c as Record<string, unknown>)));
+  }, [broadcastsData]);
+
+  // Surface RQ fetch errors as toasts (parity with the old loadBroadcasts
+  // try/catch, which toasted on non-OK responses and network errors).
+  useEffect(() => {
+    if (rqError) toast.error('Failed to load broadcasts');
+  }, [rqError]);
 
   // ── Load groups for the audience selector ──
   const loadGroups = useCallback(async () => {
@@ -493,18 +513,6 @@ export function BroadcastView() {
     editForm.audienceMode, editForm.audienceId, editForm.manualEmails,
     editForm.customerIds, editForm.channel, fetchLiveAudienceCount,
   ]);
-
-  function mapCampaignStatus(status: string): BroadcastStatus {
-    const map: Record<string, BroadcastStatus> = {
-      draft: 'draft',
-      scheduled: 'scheduled',
-      running: 'sending',
-      completed: 'sent',
-      cancelled: 'failed',
-      paused: 'draft',
-    };
-    return map[status] || 'draft';
-  }
 
   const filteredBroadcasts = broadcasts.filter(b => {
     if (statusFilter !== 'all' && b.status !== statusFilter) return false;
@@ -679,7 +687,7 @@ export function BroadcastView() {
           );
         }
         setShowSendDialog(false);
-        await loadBroadcasts();
+        await refetchBroadcasts();
       } else {
         const errMsg = (data as { message?: string; error?: string }).message || (data as { error?: string }).error || 'Failed to send broadcast';
         toast.error(errMsg);
@@ -910,7 +918,7 @@ export function BroadcastView() {
         <Radio className="size-12 mb-4 opacity-20" />
         <p className="text-lg font-medium">Failed to load broadcasts</p>
         <p className="text-sm mt-1">{error}</p>
-        <Button className="mt-4" variant="outline" onClick={loadBroadcasts}>
+        <Button className="mt-4" variant="outline" onClick={() => refetchBroadcasts()}>
           <Loader2 className="size-4 mr-1.5" /> Retry
         </Button>
       </div>

@@ -56,6 +56,7 @@ import {
 import { toast } from 'sonner';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { authFetch } from '@/lib/client-auth';
+import { useInventoryItems, useInventoryTransactions } from '@/hooks/use-crm-data';
 import { StatCard } from '@/components/shared/stat-card';
 
 import { ItemsTab } from '@/features/inventory/components/tabs/items-tab';
@@ -85,9 +86,8 @@ export function InventoryView() {
   const [activeTab, setActiveTab] = useState<InventoryTab>('items');
 
   // ── Items state ────────────────────────────────────────────────────────
-  const [items, setItems] = useState<InventoryItem[]>([]);
-  const [itemsLoading, setItemsLoading] = useState(true);
-  const [itemsError, setItemsError] = useState<string | null>(null);
+  // `items` is derived from RQ data (useInventoryItems); only the filter
+  // state (itemSearch, itemCategory) and dialog/form state live here.
   const [itemSearch, setItemSearch] = useState('');
   const [itemCategory, setItemCategory] = useState<string>('all');
 
@@ -115,8 +115,8 @@ export function InventoryView() {
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
 
   // ── Transactions state ─────────────────────────────────────────────────
-  const [transactions, setTransactions] = useState<StockTransaction[]>([]);
-  const [transactionsLoading, setTransactionsLoading] = useState(true);
+  // `transactions` is derived from RQ data (useInventoryTransactions); only
+  // the filter state (txTypeFilter, txStartDate, txEndDate) lives here.
   const [txTypeFilter, setTxTypeFilter] = useState<string>('all');
   const [txStartDate, setTxStartDate] = useState('');
   const [txEndDate, setTxEndDate] = useState('');
@@ -127,27 +127,24 @@ export function InventoryView() {
   const [alertStatusFilter, setAlertStatusFilter] = useState<string>('active');
 
   // ── Fetchers ───────────────────────────────────────────────────────────
-  const fetchItems = useCallback(async () => {
-    setItemsLoading(true);
-    setItemsError(null);
-    try {
-      const params = new URLSearchParams();
-      if (itemSearch.trim()) params.set('search', itemSearch.trim());
-      if (itemCategory !== 'all') params.set('category', itemCategory);
-      params.set('limit', '200');
-      const res = await authFetch(`/api/inventory/items?${params.toString()}`);
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to load items');
-      }
-      const data = await res.json();
-      setItems(data.items || []);
-    } catch (e) {
-      setItemsError(e instanceof Error ? e.message : 'Failed to load items');
-    } finally {
-      setItemsLoading(false);
-    }
-  }, [itemSearch, itemCategory]);
+  // Main list data — React Query replaces the manual fetchItems and
+  // fetchTransactions useCallbacks. RQ keys the queries by their filter
+  // params, so rapid filter changes (typing in the search box while a
+  // category change is still in-flight) no longer race — the latest filter
+  // wins and stale responses are discarded. `refetch` is aliased back to the
+  // original names so existing call sites (onRetry, handleItemSaved, the
+  // AdjustStockDialog onAdjusted, etc.) keep working unchanged.
+  const {
+    data: itemsData,
+    isLoading: itemsLoading,
+    error: rqItemsError,
+    refetch: fetchItems,
+  } = useInventoryItems({
+    search: itemSearch || undefined,
+    category: itemCategory !== 'all' ? itemCategory : undefined,
+  });
+  const items = (itemsData ?? []) as InventoryItem[];
+  const itemsError = rqItemsError?.message ?? null;
 
   const fetchSuppliers = useCallback(async () => {
     setSuppliersLoading(true);
@@ -177,24 +174,21 @@ export function InventoryView() {
     }
   }, []);
 
-  const fetchTransactions = useCallback(async () => {
-    setTransactionsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set('limit', '200');
-      if (txTypeFilter !== 'all') params.set('type', txTypeFilter);
-      if (txStartDate) params.set('startDate', txStartDate);
-      if (txEndDate) params.set('endDate', `${txEndDate}T23:59:59.999Z`);
-      const res = await authFetch(`/api/inventory/transactions?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to load transactions');
-      const data = await res.json();
-      setTransactions(data.transactions || []);
-    } catch {
-      // silent
-    } finally {
-      setTransactionsLoading(false);
-    }
-  }, [txTypeFilter, txStartDate, txEndDate]);
+  // Main list data (transactions) — RQ replaces fetchTransactions.
+  // `endDate` gets the `T23:59:59.999Z` suffix so picking "Jan 15" includes
+  // all transactions ON Jan 15 (not just midnight-UTC); preserves the
+  // original fetchTransactions behavior.
+  const {
+    data: txData,
+    isLoading: txLoading,
+    error: rqTxError,
+    refetch: fetchTransactions,
+  } = useInventoryTransactions({
+    type: txTypeFilter !== 'all' ? txTypeFilter : undefined,
+    startDate: txStartDate || undefined,
+    endDate: txEndDate ? `${txEndDate}T23:59:59.999Z` : undefined,
+  });
+  const transactions = (txData ?? []) as StockTransaction[];
 
   const fetchAlerts = useCallback(async () => {
     setAlertsLoading(true);
@@ -254,10 +248,12 @@ export function InventoryView() {
     }
   }, [activeTab, fetchAssets, fetchEmployees]);
 
-  useEffect(() => { fetchItems(); }, [fetchItems]);
+  // Items + transactions are now sourced from RQ (useInventoryItems /
+  // useInventoryTransactions above) — no manual useEffect needed. The
+  // remaining useEffects fire the secondary fetches that haven't been
+  // migrated yet (suppliers, transfers, alerts).
   useEffect(() => { fetchSuppliers(); }, [fetchSuppliers]);
   useEffect(() => { fetchTransfers(); }, [fetchTransfers]);
-  useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
   useEffect(() => { fetchAlerts(); }, [fetchAlerts]);
 
   // ── Derived KPIs ───────────────────────────────────────────────────────
@@ -493,7 +489,7 @@ export function InventoryView() {
         <TabsContent value="transactions" className="space-y-4">
           <TransactionsTab
             transactions={transactions}
-            transactionsLoading={transactionsLoading}
+            transactionsLoading={txLoading}
             txTypeFilter={txTypeFilter}
             setTxTypeFilter={setTxTypeFilter}
             txStartDate={txStartDate}

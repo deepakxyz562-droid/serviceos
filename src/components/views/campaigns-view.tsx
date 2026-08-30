@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { authFetch } from '@/lib/client-auth';
 import { useAppStore } from '@/store/app-store';
 import { useDemoPageSize } from '@/hooks/use-demo-page-size';
+import { useCampaigns } from '@/hooks/use-crm-data';
 import { CampaignProviderGate } from '@/components/marketing/campaign-provider-gate';
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status';
 import { CAMPAIGN_TIMEZONES_GROUPED, detectBrowserTimezone } from '@/lib/timezones';
@@ -439,8 +440,6 @@ export function CampaignsView() {
   }, [channelStatus, whatsappEnabled]);
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showCreateDialog, setShowCreateDialog] = useState(pendingCreate === 'campaign');
@@ -514,36 +513,37 @@ export function CampaignsView() {
   const [createSelectedTemplateId, setCreateSelectedTemplateId] = useState<string>('');
   const [editSelectedTemplateId, setEditSelectedTemplateId] = useState<string>('');
 
-  // ── Load campaigns from API ──
-  const loadCampaigns = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.set('status', statusFilter);
-      params.set('limit', String(demoPageSize));
-      // Exclude broadcasts from campaigns view
-      params.set('type', 'promotional,reminder,seasonal,re_engagement,follow_up');
+  // ── Main list data — React Query replaces the manual loadCampaigns ──
+  // RQ keys the query by `{ status, type, limit }`, so rapid filter changes
+  // (flipping the status tab while a previous fetch is still in-flight) no
+  // longer race — the latest filter wins and stale responses are discarded.
+  // The `type` param excludes broadcasts (which live in broadcast-view) by
+  // asking the backend only for the campaign-only types.
+  const {
+    data: campaignsData,
+    isLoading,
+    error: rqError,
+    refetch: refetchCampaigns,
+  } = useCampaigns({
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    type: 'promotional,reminder,seasonal,re_engagement,follow_up',
+    limit: demoPageSize,
+  });
+  const error = rqError?.message ?? null;
 
-      const res = await authFetch(`/api/campaigns?${params.toString()}`);
-      if (res.ok) {
-        const result = await res.json();
-        setCampaigns(result.data || []);
-      } else {
-        setError('Failed to load campaigns');
-        toast.error('Failed to load campaigns');
-      }
-    } catch {
-      setError('Network error. Please check your connection.');
-      toast.error('Network error loading campaigns');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [statusFilter, demoPageSize]);
-
+  // Sync local `campaigns` from RQ data. Re-runs whenever the cache updates
+  // (initial fetch, background refetch, explicit refetchCampaigns()).
+  // Optimistic setCampaigns() calls in handlers stay visible until the next
+  // RQ fetch lands, at which point this effect re-syncs from the server.
   useEffect(() => {
-    loadCampaigns();
-  }, [loadCampaigns]);
+    setCampaigns((campaignsData ?? []) as Campaign[]);
+  }, [campaignsData]);
+
+  // Surface RQ fetch errors as toasts (parity with the old loadCampaigns
+  // try/catch, which toasted on non-OK responses and network errors).
+  useEffect(() => {
+    if (rqError) toast.error('Failed to load campaigns');
+  }, [rqError]);
 
   // ── Load groups for the audience selector ──
   const loadGroups = useCallback(async () => {
@@ -858,7 +858,7 @@ export function CampaignsView() {
       setShowSendNowDialog(false);
       setSendNowCampaign(null);
       // Refresh so the user sees updated sentCount/status (backend flips to 'completed').
-      loadCampaigns();
+      refetchCampaigns();
     } catch {
       toast.error('Network error sending campaign');
     } finally {
@@ -1182,7 +1182,7 @@ export function CampaignsView() {
         <Megaphone className="size-12 mb-4 opacity-20" />
         <p className="text-lg font-medium">Failed to load campaigns</p>
         <p className="text-sm mt-1">{error}</p>
-        <Button className="mt-4" variant="outline" onClick={loadCampaigns}>
+        <Button className="mt-4" variant="outline" onClick={() => refetchCampaigns()}>
           <Loader2 className="size-4 mr-1.5" /> Retry
         </Button>
       </div>

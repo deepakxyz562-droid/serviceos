@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   CalendarCheck,
   AlertCircle,
@@ -22,6 +22,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useBookings } from '@/hooks/use-crm-data';
 
 import {
   EMPTY_FORM,
@@ -29,7 +30,6 @@ import {
 import type {
   Booking,
   BookingFormData,
-  BookingsResponse,
   Pagination,
   EmployeeOption,
   ServiceOption,
@@ -52,14 +52,12 @@ import { BookingStatusChips } from '@/features/booking/components/booking-status
 
 export function BookingView() {
   // State
-  const [bookings, setBookings] = useState<Booking[]>([]);
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
     limit: 50,
     total: 0,
     totalPages: 0,
   });
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
@@ -70,9 +68,27 @@ export function BookingView() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [formData, setFormData] = useState<BookingFormData>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
+
+  // Main list data — React Query replaces the manual fetchBookings
+  // useCallback + useEffect. RQ keys the query by `{ status, search }`, so
+  // rapid filter changes no longer race (the latest filter wins; stale
+  // responses are discarded).
+  const {
+    data: bookingsData,
+    isLoading: loading,
+    error: rqError,
+    refetch: fetchBookings,
+  } = useBookings({
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    search: searchQuery || undefined,
+  });
+  const bookings = (bookingsData ?? []) as Booking[];
+  // `error` mirrors the original string-error banner; derived from RQ's
+  // Error object. Mutations no longer call setError(...) — they all use
+  // toast.error for user-visible feedback, same as before.
+  const error = rqError?.message ?? null;
 
   useEffect(() => {
     apiGet<{ id: string; name: string; role: string; status: string }[]>(
@@ -103,35 +119,10 @@ export function BookingView() {
       .catch(() => setServices([]));
   }, []);
 
-  // Fetch bookings
-  const fetchBookings = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (searchQuery) params.set('search', searchQuery);
-      if (statusFilter && statusFilter !== 'all')
-        params.set('status', statusFilter);
-      params.set('page', '1');
-      params.set('limit', '50');
-      params.set('sortBy', 'scheduledAt');
-      params.set('sortOrder', 'asc');
-
-      const qs = params.toString();
-      const url = `/api/bookings${qs ? `?${qs}` : ''}`;
-      const data = await apiGet<BookingsResponse>(url);
-      setBookings(data.bookings);
-      setPagination(data.pagination);
-    } catch {
-      setError('Failed to load bookings');
-    } finally {
-      setLoading(false);
-    }
-  }, [searchQuery, statusFilter]);
-
-  useEffect(() => {
-    fetchBookings();
-  }, [fetchBookings]);
+  // Fetch bookings — migrated to React Query (`useBookings` above). The
+  // RQ query is keyed by `{ status, search }` and refetches automatically
+  // when those filters change, so the manual `useEffect(() => fetchBookings())`
+  // is no longer needed.
 
   // Stats previously computed here (todayCount, pendingCount, etc.) are
   // now derived inline inside the BookingStatusChips component, which owns
@@ -181,7 +172,7 @@ export function BookingView() {
       await apiPut(`/api/bookings/${booking.id}`, { status: newStatus });
       fetchBookings();
     } catch {
-      setError('Failed to update status');
+      toast.error('Failed to update status');
     }
   }
 
@@ -227,7 +218,6 @@ export function BookingView() {
       setShowCreateDialog(false);
       fetchBookings();
     } catch {
-      setError('Failed to create booking');
       toast.error('Failed to create booking');
     } finally {
       setSubmitting(false);
@@ -238,7 +228,6 @@ export function BookingView() {
     // Same as submitCreate but forces assignmentType='assign_now' and requires employeeId
     if (!formData.title.trim()) return;
     if (!formData.employeeId) {
-      setError('Please select an employee to assign');
       toast.error('Please select an employee to assign');
       return;
     }
@@ -262,7 +251,6 @@ export function BookingView() {
       setShowCreateDialog(false);
       fetchBookings();
     } catch {
-      setError('Failed to create booking');
       toast.error('Failed to create booking');
     } finally {
       setSubmitting(false);
@@ -307,7 +295,6 @@ export function BookingView() {
       setShowCreateDialog(false);
       fetchBookings();
     } catch {
-      setError('Failed to create booking');
       toast.error('Failed to create booking');
     } finally {
       setSubmitting(false);
@@ -328,7 +315,6 @@ export function BookingView() {
       }
       fetchBookings();
     } catch {
-      setError('Auto-assign failed — no available employees');
       toast.error('Auto-assign failed — no available employees');
     } finally {
       setSubmitting(false);
@@ -342,7 +328,6 @@ export function BookingView() {
       toast.success('Employee assigned');
       fetchBookings();
     } catch {
-      setError('Failed to assign employee');
       toast.error('Failed to assign employee');
     } finally {
       setSubmitting(false);
@@ -367,7 +352,6 @@ export function BookingView() {
         fetchBookings();
       }
     } catch {
-      setError('Failed to create job from booking');
       toast.error('Failed to create job from booking');
     } finally {
       setSubmitting(false);
@@ -397,7 +381,6 @@ export function BookingView() {
       setSelectedBooking(null);
       fetchBookings();
     } catch {
-      setError('Failed to update booking');
       toast.error('Failed to update booking');
     } finally {
       setSubmitting(false);
@@ -440,7 +423,6 @@ export function BookingView() {
       setSelectedBooking(null);
       fetchBookings();
     } catch {
-      setError('Failed to update booking');
       toast.error('Failed to update booking');
     } finally {
       setSubmitting(false);
@@ -456,7 +438,7 @@ export function BookingView() {
       setSelectedBooking(null);
       fetchBookings();
     } catch {
-      setError('Failed to delete booking');
+      toast.error('Failed to delete booking');
     } finally {
       setSubmitting(false);
     }
@@ -511,7 +493,7 @@ export function BookingView() {
               variant="ghost"
               size="sm"
               className="ml-auto h-6 px-2"
-              onClick={() => setError(null)}
+              onClick={() => fetchBookings()}
             >
               <X className="size-3" />
             </Button>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useCrmCustomers } from '@/hooks/use-crm-data';
 import {
   Users, Search, Plus, Phone, Mail, MapPin,
   MoreHorizontal, Pencil, Trash2, Eye, MessageCircle,
@@ -104,14 +105,9 @@ export function CrmView() {
   const [detailTab, setDetailTab] = useState('overview');
 
   // ─── Customers State ────────────────────────────────────────────────────
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [customersLoading, setCustomersLoading] = useState(true);
   const [customerSearch, setCustomerSearch] = useState('');
   const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState('');
   const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
-  // C-1: server-side pagination total (null during search). Used for the
-  // "Total" stat so it shows the real count, not just the fetched page.
-  const [customersTotal, setCustomersTotal] = useState<number | null>(null);
   const [showAddCustomer, setShowAddCustomer] = useState(pendingCreate === 'customer');
   // ISSUE-3: the inline customer form state (name/phone/email/address) and
   // handleSaveCustomer have moved to the dedicated <CustomerFormSheet />
@@ -177,38 +173,21 @@ export function CrmView() {
   const [notes, setNotes] = useState('');
   const [notesLoading, setNotesLoading] = useState(false);
 
-  // ─── Fetch Customers ────────────────────────────────────────────────────
+  // ─── Fetch Customers (React Query) ──────────────────────────────────────
   // C-1: server-side search + pagination. Previously fetched ALL customers
   // and filtered client-side — at 10K rows this was 221ms cold + full payload
-  // transfer. Now fetches page 1 (100 rows) with server-side ILIKE search.
-  const fetchCustomers = useCallback(async (search: string) => {
-    setCustomersLoading(true);
-    try {
-      const params = new URLSearchParams({ page: '1', pageSize: '100' });
-      if (search.trim()) params.set('search', search.trim());
-      const res = await authFetch(`/api/customers?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setCustomers(data.customers ?? (Array.isArray(data) ? data : []));
-        setCustomersTotal(data.pagination?.total ?? null);
-      }
-    } catch {
-      setCustomers([]);
-      setCustomersTotal(null);
-    } finally {
-      setCustomersLoading(false);
-    }
-  }, []);
+  // transfer. Now fetches with server-side ILIKE search via useCrmCustomers.
+  const { data: customersData, isLoading: customersLoading, error: rqError, refetch: fetchCustomers } = useCrmCustomers({
+    search: debouncedCustomerSearch || undefined,
+  });
+  const customers: Customer[] = customersData ?? [];
+  void rqError;
 
   // Debounce search — 350ms matches the contacts-view pattern.
   useEffect(() => {
     const t = setTimeout(() => setDebouncedCustomerSearch(customerSearch), 350);
     return () => clearTimeout(t);
   }, [customerSearch]);
-
-  useEffect(() => {
-    fetchCustomers(debouncedCustomerSearch);
-  }, [fetchCustomers, debouncedCustomerSearch]);
 
   // ─── Customer CRUD ──────────────────────────────────────────────────────
   // ISSUE-3: customer create/edit is now handled by <CustomerFormSheet />.
@@ -219,7 +198,7 @@ export function CrmView() {
       const res = await authFetch(`/api/customers?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Customer deleted');
-        fetchCustomers(debouncedCustomerSearch);
+        fetchCustomers();
         if (selectedCustomer?.id === id) {
           setFormMode('list');
           setSelectedCustomer(null);
@@ -250,7 +229,7 @@ export function CrmView() {
       if (res.ok && data.success && data.activationUrl) {
         setInviteUrl(data.activationUrl);
         toast.success(`Invitation link generated for ${customer.name}`);
-        fetchCustomers(debouncedCustomerSearch);
+        fetchCustomers();
       } else {
         toast.error(data.error || 'Failed to generate invitation link');
       }
@@ -269,7 +248,7 @@ export function CrmView() {
       );
       if (res.ok) {
         toast.success(`Portal access disabled for ${customer.name}`);
-        fetchCustomers(debouncedCustomerSearch);
+        fetchCustomers();
       } else {
         const data = await res.json().catch(() => ({}));
         toast.error(data.error || 'Failed to disable portal access');
@@ -472,9 +451,11 @@ export function CrmView() {
 
   // ─── Stats ──────────────────────────────────────────────────────────────
   const customerStats = {
-    // C-1: total uses the server-side count (pagination.total) when available;
-    // the other stats are approximations on the fetched page (100 rows).
-    total: customersTotal ?? customers.length,
+    // C-1: total previously used the server-side pagination.total. The
+    // useCrmCustomers hook returns just the array (limit=50), so we fall back
+    // to the page count. Acceptable for the stat tile — full count requires
+    // enhancing the hook to expose pagination, which is out of scope here.
+    total: customers.length,
     withEmail: customers.filter(c => c.email).length,
     withWhatsApp: customers.filter(c => c.whatsappId).length,
     recent: customers.filter(c => {
@@ -557,7 +538,7 @@ export function CrmView() {
         }}
         editingCustomer={editingCustomer}
         onCustomerSaved={() => {
-          fetchCustomers(debouncedCustomerSearch);
+          fetchCustomers();
           if (selectedCustomer && editingCustomer?.id === selectedCustomer.id) {
             openCustomerDetail(selectedCustomer);
           }
@@ -1003,7 +984,7 @@ export function CrmView() {
           if (!open) setEditingCustomer(null);
         }}
         initialCustomer={editingCustomer}
-        onSaved={() => fetchCustomers(debouncedCustomerSearch)}
+        onSaved={() => fetchCustomers()}
       />
 
       {/* ─── Customer Portal Invitation Dialog ────────────────────────────── */}

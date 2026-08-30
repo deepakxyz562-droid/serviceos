@@ -36,6 +36,7 @@ import { cn } from '@/lib/utils';
 import { authFetch } from '@/lib/api';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useLeads } from '@/hooks/use-crm-data';
 
 // Phase 4: lead types + helpers + sub-components extracted to src/features/leads/
 import type { Lead, LeadFormData, CustomerOption } from '@/features/leads/types';
@@ -1095,12 +1096,12 @@ export function LeadsView() {
   const pendingCreate = useAppStore((s) => s.pendingCreate);
   const setPendingCreate = useAppStore((s) => s.setPendingCreate);
 
-  // Data state
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [totalLeads, setTotalLeads] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
+  // Data state — main list fetch is backed by React Query (useLeads).
+  // The manual `useState + useEffect + fetch` pattern was replaced to
+  // eliminate race conditions when filters change rapidly (RQ discards
+  // stale responses automatically). The hook returns `{ leads, pagination }`,
+  // and we derive `leads` / `totalLeads` / `totalPages` from the cached data.
+  // `fetchLeads` is RQ's `refetch`, used at all post-mutation call sites.
 
   // View state — Leads page is list (table) view only. The inline drag-and-drop
   // Kanban was removed in favour of the dedicated Deal-based SalesPipelineView
@@ -1251,45 +1252,33 @@ export function LeadsView() {
   }, [activeTab]);
 
   // ============================================================
-  // Fetch leads
+  // Fetch leads (React Query)
   // ============================================================
-
-  const fetchLeads = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.set('status', statusFilter);
-      if (sourceFilter !== 'all') params.set('source', sourceFilter);
-      if (debouncedSearchQuery) params.set('search', debouncedSearchQuery);
-      params.set('page', String(page));
-      params.set('limit', String(pageSize));
-      // Exclude soft-deleted leads (shown in Lead History instead)
-      params.set('deleted', 'false');
-
-      const res = await authFetch(`/api/leads?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        // Client-side filter: hide soft-deleted leads
-        const allLeads = data.leads || [];
-        setLeads(allLeads.filter((l: { deletedAt?: string | null }) => !l.deletedAt));
-        setTotalLeads(data.pagination?.total || 0);
-        setTotalPages(data.pagination?.totalPages || 1);
-      } else {
-        setLeads([]);
-        setError('Failed to load leads. Please try again.');
-      }
-    } catch (e) {
-      setLeads([]);
-      setError(e instanceof Error ? e.message : 'Failed to load leads. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter, sourceFilter, debouncedSearchQuery, page]);
-
-  useEffect(() => {
-    fetchLeads();
-  }, [fetchLeads]);
+  //
+  // The main list fetch is now backed by the `useLeads` React Query hook.
+  // RQ keys the query by `{ status, source, search, page, limit }`, so when
+  // the user rapidly changes filters the in-flight request for the old
+  // params is discarded and only the latest result is committed — fixing
+  // the race where stale data could overwrite fresh data.
+  //
+  // `fetchLeads` is RQ's `refetch`, used at every post-mutation call site
+  // (after create / update / delete / convert / status-change / note-add).
+  // Soft-deleted leads (deletedAt != null) are still filtered client-side
+  // for parity with the previous implementation.
+  const { data: leadsData, isLoading: loading, error: rqError, refetch: fetchLeads } = useLeads({
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    source: sourceFilter !== 'all' ? sourceFilter : undefined,
+    search: debouncedSearchQuery || undefined,
+    page,
+    limit: pageSize,
+  });
+  const error = rqError?.message ?? null;
+  const leads = useMemo<Lead[]>(
+    () => (leadsData?.leads ?? []).filter((l: Lead) => !l.deletedAt),
+    [leadsData],
+  );
+  const totalLeads = leadsData?.pagination?.total ?? 0;
+  const totalPages = leadsData?.pagination?.totalPages ?? 1;
 
   // Reset page when filters change (uses debounced search so a single
   // "stop typing" event resets page once, not once per keystroke)

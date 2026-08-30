@@ -197,10 +197,9 @@ export function ServiceCatalogView() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
   const [activeCount, setActiveCount] = useState(0);
   const [inactiveCount, setInactiveCount] = useState(0);
-  const [categoriesCount, setCategoriesCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Dialog state
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -217,7 +216,6 @@ export function ServiceCatalogView() {
       setLoading(true);
       const params = new URLSearchParams();
       if (searchQuery) params.set('search', searchQuery);
-      if (categoryFilter && categoryFilter !== 'all') params.set('category', categoryFilter);
       params.set('limit', String(demoPageSize));
 
       const qs = params.toString();
@@ -226,7 +224,7 @@ export function ServiceCatalogView() {
 
       setServices(data.services);
 
-      // Compute stats from the full list (no category/search filter for stats)
+      // Compute stats from the full list
       const statsParams = new URLSearchParams();
       statsParams.set('limit', '100');
       const statsData = await apiGet<{ services: Service[] }>(`/api/services?${statsParams.toString()}`);
@@ -234,14 +232,13 @@ export function ServiceCatalogView() {
 
       setActiveCount(allServices.filter((s) => s.isActive).length);
       setInactiveCount(allServices.filter((s) => !s.isActive).length);
-      const uniqueCategories = new Set(allServices.map((s) => s.category));
-      setCategoriesCount(uniqueCategories.size);
+      setTotalCount(allServices.length);
     } catch (err) {
       console.error('Failed to fetch services:', err);
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, categoryFilter, demoPageSize]);
+  }, [searchQuery, demoPageSize]);
 
   useEffect(() => {
     fetchServices();
@@ -382,21 +379,6 @@ export function ServiceCatalogView() {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="grid gap-2">
-          <Label htmlFor="category">Category</Label>
-          <Select value={form.category} onValueChange={(val) => setForm({ ...form, category: val })}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              {CATEGORIES.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {formatCategoryLabel(cat)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid gap-2">
           <Label htmlFor="basePrice">Unit Price ({currencySymbol})</Label>
           <Input
             id="basePrice"
@@ -407,6 +389,21 @@ export function ServiceCatalogView() {
             value={form.basePrice}
             onChange={(e) => setForm({ ...form, basePrice: e.target.value })}
           />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="duration">Service Duration</Label>
+          <Select value={form.duration} onValueChange={(val) => setForm({ ...form, duration: val })}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select duration" />
+            </SelectTrigger>
+            <SelectContent>
+              {DURATION_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -455,34 +452,14 @@ export function ServiceCatalogView() {
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="duration">Service Duration</Label>
-          <Select value={form.duration} onValueChange={(val) => setForm({ ...form, duration: val })}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select duration" />
-            </SelectTrigger>
-            <SelectContent>
-              {DURATION_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-[10px] text-muted-foreground">
-            Duration and unit price will scale based on quantity.
-          </p>
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="icon">Icon</Label>
-          <Input
-            id="icon"
-            placeholder="e.g. wrench, brush"
-            value={form.icon}
-            onChange={(e) => setForm({ ...form, icon: e.target.value })}
-          />
-        </div>
+      <div className="grid gap-2">
+        <Label htmlFor="icon">Icon (Optional)</Label>
+        <Input
+          id="icon"
+          placeholder="e.g. wrench, brush, hammer"
+          value={form.icon}
+          onChange={(e) => setForm({ ...form, icon: e.target.value })}
+        />
       </div>
 
       {/* Online Booking section */}
@@ -566,16 +543,16 @@ export function ServiceCatalogView() {
             <BookOpen className="size-8 text-emerald-600" />
           </div>
           <h3 className="text-lg font-semibold">
-            {searchQuery || categoryFilter !== 'all'
+            {searchQuery
               ? 'No services found'
               : 'No services yet'}
           </h3>
           <p className="text-sm text-muted-foreground max-w-md">
-            {searchQuery || categoryFilter !== 'all'
+            {searchQuery
               ? 'Try adjusting your search or filter criteria to find what you\'re looking for.'
               : 'Define and organize your service offerings with pricing, duration, and descriptions. Categorize services for easy discovery by customers and employees.'}
           </p>
-          {!searchQuery && categoryFilter === 'all' && (
+          {!searchQuery && (
             <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={openAddDialog}>
               <Plus className="size-4 mr-1.5" /> Add Service
             </Button>
@@ -588,7 +565,7 @@ export function ServiceCatalogView() {
   // ─── Render: Service Card ────────────────────────────────────────────────
 
   const renderServiceCard = (service: Service) => {
-    const badgeClass = CATEGORY_COLORS[service.category] || CATEGORY_COLORS.other;
+    const badgeClass = '';
 
     return (
       <Card key={service.id} className={`relative transition-shadow hover:shadow-md ${!service.isActive ? 'opacity-60' : ''}`}>
@@ -628,11 +605,6 @@ export function ServiceCatalogView() {
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-3">
-          <Badge variant="secondary" className={`text-xs ${badgeClass}`}>
-            <Tag className="size-3 mr-1" />
-            {formatCategoryLabel(service.category)}
-          </Badge>
-
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-1.5">
               <DollarSign className="size-3.5 text-emerald-600" />
@@ -704,12 +676,12 @@ export function ServiceCatalogView() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="size-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                <Tag className="size-4 text-amber-600" />
+              <div className="size-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                <Tag className="size-4 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{categoriesCount}</p>
-                <p className="text-xs text-muted-foreground">Categories</p>
+                <p className="text-2xl font-bold">{totalCount}</p>
+                <p className="text-xs text-muted-foreground">Total Services</p>
               </div>
             </div>
           </CardContent>
@@ -752,19 +724,6 @@ export function ServiceCatalogView() {
                 </Button>
               )}
             </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="All Categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {formatCategoryLabel(cat)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>

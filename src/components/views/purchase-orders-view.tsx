@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { usePurchaseOrders } from '@/hooks/use-crm-data';
 import {
   ClipboardList,
   Plus,
@@ -184,9 +185,6 @@ function safeParseItems(json: string | null): POLineItem[] {
 export function PurchaseOrdersView() {
   const { format, currency } = useCompanyCurrency();
 
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<POStatus | 'all'>('all');
   const [search, setSearch] = useState('');
 
@@ -201,35 +199,25 @@ export function PurchaseOrdersView() {
   const [cancelTarget, setCancelTarget] = useState<PurchaseOrder | null>(null);
 
   // ── Fetchers ───────────────────────────────────────────────────────────
-  const fetchPOs = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.set('status', statusFilter);
-      params.set('limit', '200');
-      const res = await authFetch(`/api/inventory/purchase-orders?${params.toString()}`);
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to load purchase orders');
-      }
-      const data = await res.json();
-      let pos: PurchaseOrder[] = data.purchaseOrders || [];
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
-        pos = pos.filter((p) =>
-          (p.poNumber || '').toLowerCase().includes(q) ||
-          (p.notes || '').toLowerCase().includes(q) ||
-          (p.supplierId || '').toLowerCase().includes(q),
-        );
-      }
-      setPurchaseOrders(pos);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load purchase orders');
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter, search]);
+  // Fetch POs via React Query. The shared `usePurchaseOrders` hook sends
+  // `status` and `search` to the API — but the PO endpoint doesn't yet
+  // support `search` server-side, so we additionally filter client-side
+  // (below) to preserve the original behaviour.
+  const { data: poData, isLoading: loading, error: rqError, refetch: fetchPOs } = usePurchaseOrders({
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    search: search || undefined,
+  });
+  const error = rqError ? rqError.message : null;
+  const purchaseOrders: PurchaseOrder[] = useMemo(() => {
+    const pos = poData ?? [];
+    if (!search.trim()) return pos;
+    const q = search.trim().toLowerCase();
+    return pos.filter((p) =>
+      (p.poNumber || '').toLowerCase().includes(q) ||
+      (p.notes || '').toLowerCase().includes(q) ||
+      (p.supplierId || '').toLowerCase().includes(q),
+    );
+  }, [poData, search]);
 
   const fetchSuppliers = useCallback(async () => {
     try {
@@ -253,7 +241,6 @@ export function PurchaseOrdersView() {
     }
   }, []);
 
-  useEffect(() => { fetchPOs(); }, [fetchPOs]);
   useEffect(() => { fetchSuppliers(); fetchItems(); }, [fetchSuppliers, fetchItems]);
 
   // ── Derived KPIs (computed from full PO list, ignoring search filter) ──

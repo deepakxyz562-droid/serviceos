@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Calendar, Clock, MapPin, Star, MessageCircle, Phone,
   CheckCircle2, ArrowRight, ExternalLink, FileText,
@@ -996,8 +997,6 @@ function PortalManagementView() {
   useCompanyCurrency();
 
   // Customers
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [customersLoading, setCustomersLoading] = useState(true);
   const [customerSearch, setCustomerSearch] = useState('');
 
   // Portal sessions
@@ -1017,21 +1016,26 @@ function PortalManagementView() {
   // Active tab
   const [activeTab, setActiveTab] = useState('links');
 
-  // ─── Fetch customers ──────────────────────────────────────────────────
-  const fetchCustomers = useCallback(async () => {
-    setCustomersLoading(true);
-    try {
-      const res = await authFetch(`/api/customers${customerSearch ? `?search=${encodeURIComponent(customerSearch)}&XTransformPort=3000` : '?XTransformPort=3000'}`);
-      if (res.ok) {
-        const data = await res.json();
-        setCustomers(Array.isArray(data) ? data : []);
-      }
-    } catch {
-      toast.error('Failed to load customers');
-    } finally {
-      setCustomersLoading(false);
-    }
-  }, [customerSearch]);
+  // ─── Fetch customers (React Query) ────────────────────────────────────
+  // Replaces the old `useState + useCallback + useEffect` pattern. The query
+  // is keyed on `customerSearch` so debounced-free typing triggers a fresh
+  // fetch (the API handles search server-side and the 60s staleTime keeps
+  // repeat mounts cheap).
+  const { data: customersData, isLoading: customersLoading, error: rqError, refetch: fetchCustomers } = useQuery({
+    queryKey: ['portal-customers', { search: customerSearch }],
+    queryFn: async () => {
+      const sp = new URLSearchParams();
+      if (customerSearch) sp.set('search', customerSearch);
+      sp.set('XTransformPort', '3000');
+      const res = await authFetch(`/api/customers?${sp.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch customers');
+      const data = await res.json();
+      return data.customers ?? (Array.isArray(data) ? data : []);
+    },
+    staleTime: 60_000,
+  });
+  void rqError;
+  const customers: Customer[] = customersData ?? [];
 
   // ─── Fetch portal sessions ────────────────────────────────────────────
   const fetchSessions = useCallback(async () => {
@@ -1053,9 +1057,8 @@ function PortalManagementView() {
   }, [tenantId]);
 
   useEffect(() => {
-    fetchCustomers();
     fetchSessions();
-  }, [fetchCustomers, fetchSessions]);
+  }, [fetchSessions]);
 
   // ─── Generate portal link ─────────────────────────────────────────────
   const handleGenerateLink = async (customerId: string) => {

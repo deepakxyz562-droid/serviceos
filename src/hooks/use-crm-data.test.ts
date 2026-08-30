@@ -74,7 +74,19 @@ describe('useCustomers', () => {
     vi.clearAllMocks()
   })
 
-  it('fetches customers from /api/customers', async () => {
+  it('fetches contacts from /api/contacts', async () => {
+    vi.mocked(authFetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: [{ id: '1', name: 'Alice' }] }),
+    } as Response)
+
+    const { result } = renderHook(() => useCustomers(), { wrapper: createWrapper() })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data?.customers).toHaveLength(1)
+  })
+
+  it('handles { customers: [...] } response (legacy)', async () => {
     vi.mocked(authFetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ customers: [{ id: '1', name: 'Alice' }] }),

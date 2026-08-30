@@ -186,29 +186,16 @@ export function ItemFormDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="item-category">Category</Label>
-              <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                <SelectTrigger id="item-category"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ITEM_CATEGORIES.map((c) => (
-                    <SelectItem key={c} value={c}>{formatCategoryLabel(c)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="item-unit">Unit</Label>
-              <Select value={form.unit} onValueChange={(v) => setForm({ ...form, unit: v })}>
-                <SelectTrigger id="item-unit"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {UNITS.map((u) => (
-                    <SelectItem key={u} value={u} className="capitalize">{u}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="grid gap-2">
+            <Label htmlFor="item-unit">Unit</Label>
+            <Select value={form.unit} onValueChange={(v) => setForm({ ...form, unit: v })}>
+              <SelectTrigger id="item-unit"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {UNITS.map((u) => (
+                  <SelectItem key={u} value={u} className="capitalize">{u}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

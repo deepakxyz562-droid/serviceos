@@ -82,18 +82,6 @@ export function ItemsTab({
                 className="pl-9"
               />
             </div>
-            <Select value={itemCategory} onValueChange={setItemCategory}>
-              <SelectTrigger className="w-full sm:w-48">
-                <Filter className="size-4 mr-1.5 text-muted-foreground" />
-                <SelectValue placeholder="All categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
-                {ITEM_CATEGORIES.map((c) => (
-                  <SelectItem key={c} value={c}>{formatCategoryLabel(c)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>
@@ -120,7 +108,7 @@ export function ItemsTab({
               </div>
               <h3 className="text-base font-semibold">No inventory items yet</h3>
               <p className="text-sm text-muted-foreground mt-1 mb-4 max-w-sm mx-auto">
-                {itemSearch || itemCategory !== 'all'
+                {itemSearch
                   ? 'Try adjusting your filters.'
                   : 'Add your first item to start tracking stock.'}
               </p>
@@ -137,7 +125,6 @@ export function ItemsTab({
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableHead>Name</TableHead>
-                    <TableHead className="w-32">Category</TableHead>
                     <TableHead className="text-right w-24">Total</TableHead>
                     <TableHead className="text-right w-24">Available</TableHead>
                     <TableHead className="text-right w-24">Reorder At</TableHead>
@@ -177,9 +164,6 @@ export function ItemsTab({
                               )}
                             </div>
                           </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatCategoryLabel(item.category)}
                         </TableCell>
                         <TableCell className="text-right text-sm tabular-nums">
                           {item.totalStock} <span className="text-xs text-muted-foreground">{item.unit}</span>

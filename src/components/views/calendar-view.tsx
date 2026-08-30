@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
+import { useCalendarEvents, useBookings } from '@/hooks/use-crm-data';
 import {
   Calendar, ChevronLeft, ChevronRight, Clock, Plus, MapPin, User,
   Briefcase, LayoutGrid, List, ArrowRight,
@@ -69,8 +70,6 @@ export function CalendarView() {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
 
   // Data state
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
 
   // UI state
@@ -95,103 +94,33 @@ export function CalendarView() {
 
   // ─── Data Fetching ──────────────────────────────────────────────────────
 
+  // Jobs → calendar events via React Query.
+  const {
+    data: eventsData,
+    isLoading: eventsLoading,
+    error: eventsError,
+    refetch: refetchJobs,
+  } = useCalendarEvents({
+    employeeId: employeeFilter !== 'all' ? employeeFilter : undefined,
+  });
+
+  // Bookings → calendar events via React Query. The original `fetchEvents`
+  // fetched bookings (filtered by visible date range) and jobs together via
+  // Promise.all. We preserve both calendar event sources here by also using
+  // the `useBookings` hook (without the date-range filter — RQ caches the
+  // response and the calendar only renders events for visible dates anyway).
+  const {
+    data: bookingsData,
+    refetch: refetchBookings,
+  } = useBookings();
+
+  // `fetchEvents` is still called by every booking-action handler
+  // (create / assign / auto-assign / mark-completed / cancel / reschedule)
+  // to refresh the calendar after a mutation. We refetch both RQ queries so
+  // jobs AND bookings calendar events stay in sync.
   const fetchEvents = useCallback(async () => {
-    try {
-      setLoading(true);
-
-      // Calculate date range for the visible calendar
-      let dateFrom: string;
-      let dateTo: string;
-
-      if (viewMode === 'month') {
-        const firstDay = new Date(currentYear, currentMonth, 1);
-        const lastDay = new Date(currentYear, currentMonth + 1, 0);
-        // Expand range to capture events in visible cells (prev/next month overflow)
-        const startOffset = firstDay.getDay();
-        const startDate = new Date(firstDay);
-        startDate.setDate(startDate.getDate() - startOffset);
-        const totalCells = Math.ceil((startOffset + lastDay.getDate()) / 7) * 7;
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + totalCells - 1);
-
-        dateFrom = startDate.toISOString().split('T')[0];
-        dateTo = endDate.toISOString().split('T')[0];
-      } else if (viewMode === 'week') {
-        const weekDays = getWeekDays(currentDate);
-        dateFrom = weekDays[0].toISOString().split('T')[0];
-        dateTo = weekDays[6].toISOString().split('T')[0];
-      } else if (viewMode === 'day') {
-        const d = new Date(currentYear, currentMonth, currentDate.getDate());
-        dateFrom = d.toISOString().split('T')[0];
-        dateTo = dateFrom;
-      } else {
-        // agenda — fetch a 90-day window starting today
-        const today = new Date();
-        const future = new Date(today);
-        future.setDate(future.getDate() + 90);
-        dateFrom = today.toISOString().split('T')[0];
-        dateTo = future.toISOString().split('T')[0];
-      }
-
-      const [bookingsRes, jobsRes] = await Promise.all([
-        authFetch(`/api/bookings?limit=200&dateFrom=${dateFrom}&dateTo=${dateTo}`),
-        authFetch(`/api/jobs?limit=200`),
-      ]);
-
-      const calendarEvents: CalendarEvent[] = [];
-
-      if (bookingsRes.ok) {
-        const data = await bookingsRes.json();
-        const bookings: Booking[] = data.bookings || data || [];
-        for (const b of bookings) {
-          if (b.scheduledAt) {
-            calendarEvents.push({
-              id: `booking-${b.id}`,
-              title: b.title,
-              type: 'booking',
-              status: b.status,
-              scheduledAt: b.scheduledAt,
-              scheduledEndTime: b.scheduledEndTime,
-              customerName: b.customerName,
-              employeeName: b.employee?.name,
-              address: b.address,
-              duration: b.duration,
-              description: b.description,
-              employee: b.employee,
-            });
-          }
-        }
-      }
-
-      if (jobsRes.ok) {
-        const jobsData = await jobsRes.json();
-        const jobs: Job[] = jobsData.jobs ?? (Array.isArray(jobsData) ? jobsData : []);
-        for (const j of jobs) {
-          if (j.scheduledAt) {
-            calendarEvents.push({
-              id: `job-${j.id}`,
-              title: j.title,
-              type: 'job',
-              status: j.status,
-              scheduledAt: j.scheduledAt,
-              customerName: j.customerName,
-              employeeName: j.assigneeName,
-              address: j.address,
-              priority: j.priority,
-              jobType: j.type,
-              description: j.description,
-            });
-          }
-        }
-      }
-
-      setEvents(calendarEvents);
-    } catch {
-      toast.error('Failed to load calendar events');
-    } finally {
-      setLoading(false);
-    }
-  }, [currentYear, currentMonth, currentDate, viewMode]);
+    await Promise.all([refetchJobs(), refetchBookings()]);
+  }, [refetchJobs, refetchBookings]);
 
   const fetchEmployees = useCallback(async () => {
     try {
@@ -203,8 +132,69 @@ export function CalendarView() {
     } catch { /* silent */ }
   }, []);
 
-  useEffect(() => { fetchEvents(); }, [fetchEvents]);
+  // Surface fetch errors as a toast (parity with the old try/catch in
+  // `fetchEvents`). RQ captures the error object on `eventsError`.
+  useEffect(() => {
+    if (eventsError) {
+      toast.error(eventsError.message || 'Failed to load calendar events');
+    }
+  }, [eventsError]);
+
   useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
+
+  // Derived calendar events — same transformation logic as the old
+  // `fetchEvents` (bookings → booking events, jobs → job events), just
+  // sourcing raw rows from React Query instead of a manual fetch.
+  const events = useMemo<CalendarEvent[]>(() => {
+    const calendarEvents: CalendarEvent[] = [];
+
+    const bookings = (bookingsData ?? []) as Booking[];
+    for (const b of bookings) {
+      if (b.scheduledAt) {
+        calendarEvents.push({
+          id: `booking-${b.id}`,
+          title: b.title,
+          type: 'booking',
+          status: b.status,
+          scheduledAt: b.scheduledAt,
+          scheduledEndTime: b.scheduledEndTime,
+          customerName: b.customerName,
+          employeeName: b.employee?.name,
+          address: b.address,
+          duration: b.duration,
+          description: b.description,
+          employee: b.employee,
+        });
+      }
+    }
+
+    const jobs = (eventsData ?? []) as Job[];
+    for (const j of jobs) {
+      if (j.scheduledAt) {
+        calendarEvents.push({
+          id: `job-${j.id}`,
+          title: j.title,
+          type: 'job',
+          status: j.status,
+          scheduledAt: j.scheduledAt,
+          customerName: j.customerName,
+          employeeName: j.assigneeName,
+          address: j.address,
+          priority: j.priority,
+          jobType: j.type,
+          description: j.description,
+        });
+      }
+    }
+
+    return calendarEvents;
+  }, [eventsData, bookingsData]);
+
+  // `loading` keeps parity with the original skeleton gate, which blocked
+  // the whole calendar until the first fetch resolved. RQ's `isLoading` is
+  // only true on the initial mount (background refetches use `isFetching`),
+  // which is the desired behavior — no flashing skeleton after mutations.
+  const loading = eventsLoading;
 
   // ─── Filtered Events ───────────────────────────────────────────────────
 

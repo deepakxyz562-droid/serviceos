@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Clock,
   Play,
@@ -727,16 +728,12 @@ function EmployeeTimesheet() {
 // ============================================================
 
 function OwnerTimesheet() {
-  const [team, setTeam] = useState<TeamRow[]>([]);
-  const [loading, setLoading] = useState(true);
   // Jobber-style: Day | Week toggle (replaces the old today/week/month dropdown)
   const [view, setView] = useState<'day' | 'week'>('day');
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [search, setSearch] = useState('');
   // Team-member filter: 'all' or an employeeId (Jobber "Team" filter)
   const [teamFilter, setTeamFilter] = useState('all');
-  const [totals, setTotals] = useState({ employeesCount: 0, clockedInCount: 0, todayWorkingMinutes: 0, periodWorkingMinutes: 0 });
-  const [periodLabel, setPeriodLabel] = useState('Today');
   const [expandedEmp, setExpandedEmp] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [entryDialog, setEntryDialog] = useState<{ mode: 'add' | 'edit'; entry?: TimeEntry; employeeId?: string } | null>(null);
@@ -745,7 +742,7 @@ function OwnerTimesheet() {
 
   // Auth-ready flag: wait for the auth store to be hydrated before the first
   // fetch. Without this, the OwnerTimesheet mounts inside the Radix TabsContent
-  // and immediately fires `loadTeam()` — but on the very first mount after
+  // and immediately fires the team query — but on the very first mount after
   // login/navigation, the JWT token may not yet be in localStorage, causing
   // `getAuthUser()` to return null → 401 → "Failed to load team timesheet".
   const isAuthed = useAppStore((s) => s.auth?.isAuthenticated === true);
@@ -771,30 +768,19 @@ function OwnerTimesheet() {
     return () => { cancelled = true; };
   }, [isAuthed]);
 
-  const loadTeam = useCallback(async () => {
-    setLoading(true);
-    try {
-      const dateStr = toISODate(selectedDate);
-      let res = await authFetch(`/api/time-tracking/team?view=${view}&date=${dateStr}`);
-      // Retry once on 401 — the token may not have been written to
-      // localStorage yet when the first request fired (auth hydration race).
-      if (res.status === 401) {
-        await new Promise((r) => setTimeout(r, 400));
-        res = await authFetch(`/api/time-tracking/team?view=${view}&date=${dateStr}`);
-      }
+  // ─── Fetch team timesheet (React Query) ─────────────────────────────────
+  // The queryKey depends on `view` and `selectedDate` so changing the day/week
+  // navigation automatically refetches. `enabled: isAuthed` skips the fetch
+  // until the auth store has hydrated — replaces the old "retry once on 401"
+  // race-condition band-aid.
+  const { data: teamData, isLoading: teamLoading, error: rqTeamError, refetch: loadTeam } = useQuery({
+    queryKey: ['timesheet-team', { view, date: toISODate(selectedDate) }],
+    queryFn: async () => {
+      const sp = new URLSearchParams();
+      sp.set('view', view);
+      sp.set('date', toISODate(selectedDate));
+      const res = await authFetch(`/api/time-tracking/team?${sp.toString()}`);
       if (!res.ok) {
-        // Persistent 401 after retry → the JWT is genuinely expired. Clear
-        // stale auth and let the user re-login instead of silently toasting
-        // "Failed to load team timesheet" on every refresh.
-        if (res.status === 401) {
-          try {
-            localStorage.removeItem('fieseros_auth');
-            localStorage.removeItem('fieseros_token');
-          } catch { /* ignore */ }
-          clearAuth();
-          toast.error('Session expired', { description: 'Please log in again to view timesheets.' });
-          return;
-        }
         // Surface the real server error (e.g. Prisma schema mismatch on
         // Supabase: "column \"category\" of relation \"EmployeeShift\" does
         // not exist") so the user/developer can diagnose the root cause
@@ -806,22 +792,37 @@ function OwnerTimesheet() {
         } catch { /* non-JSON body */ }
         throw new Error(serverMsg || `Failed to load team timesheet (HTTP ${res.status})`);
       }
-      const data = await res.json();
-      setTeam(data.team || []);
-      setTotals(data.totals || { employeesCount: 0, clockedInCount: 0, todayWorkingMinutes: 0, periodWorkingMinutes: 0 });
-      setPeriodLabel(data.periodLabel || fmtPeriodLabel(view, selectedDate));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to load team timesheet');
-    } finally {
-      setLoading(false);
-    }
-  }, [view, selectedDate, clearAuth]);
+      return res.json();
+    },
+    enabled: isAuthed,
+    staleTime: 30_000,
+  });
 
+  // Derive team / totals / periodLabel from the query result.
+  const team: TeamRow[] = teamData?.team ?? [];
+  const totals = teamData?.totals ?? { employeesCount: 0, clockedInCount: 0, todayWorkingMinutes: 0, periodWorkingMinutes: 0 };
+  const periodLabel = teamData?.periodLabel || fmtPeriodLabel(view, selectedDate);
+  const loading = teamLoading;
+
+  // Error handling: a persistent 401 (after `enabled: isAuthed` already
+  // skipped the pre-hydration fetch) means the JWT is genuinely expired.
+  // Clear stale auth so the user is forced to re-login instead of seeing
+  // "Failed to load team timesheet" on every refresh. Other errors are
+  // surfaced as toasts with the real server message.
   useEffect(() => {
-    // Don't fetch until the auth store is hydrated — avoids the 401 race.
-    if (!isAuthed) return;
-    loadTeam();
-  }, [loadTeam, isAuthed]);
+    if (!rqTeamError) return;
+    const msg = rqTeamError.message || 'Failed to load team timesheet';
+    if (msg.includes('HTTP 401')) {
+      try {
+        localStorage.removeItem('fieseros_auth');
+        localStorage.removeItem('fieseros_token');
+      } catch { /* ignore */ }
+      clearAuth();
+      toast.error('Session expired', { description: 'Please log in again to view timesheets.' });
+    } else {
+      toast.error(msg);
+    }
+  }, [rqTeamError, clearAuth]);
 
   // Live refresh for active timers (updates the "working" column every second)
   useEffect(() => {
@@ -962,7 +963,7 @@ function OwnerTimesheet() {
                 <Plus className="size-4 mr-1.5" />
                 Add entry
               </Button>
-              <Button variant="ghost" size="sm" onClick={loadTeam} disabled={loading}>
+              <Button variant="ghost" size="sm" onClick={() => { loadTeam(); }} disabled={loading}>
                 <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
             </div>

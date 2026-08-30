@@ -68,6 +68,7 @@ import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useCurrentUser, isOwnerOrAdmin } from '@/hooks/use-current-user';
+import { useJobs } from '@/hooks/use-crm-data';
 import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
 import { ErrorState } from '@/components/shared/error-state';
 import { JobFilters, type JobStats, type JobStatusFilter } from '@/features/jobs/components/job-filters';
@@ -430,13 +431,10 @@ export function JobsView() {
   const canManageJob = isOwnerOrAdmin(currentUser?.role);
 
   // State
-  const [jobs, setJobs] = useState<Job[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [customers, setCustomers] = useState<
     { id: string; name: string; phone: string; email?: string | null; address?: string | null }[]
   >([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   // Debounce search input so we don't fire an HTTP request on every keystroke.
@@ -740,72 +738,64 @@ export function JobsView() {
     };
   }, [selectedJob]);
 
-  // ─── Fetch ──────────────────────────────────────────────────────────────
+  // ─── Fetch (React Query) ─────────────────────────────────────────────────
+  //
+  // The main jobs list is now backed by the `useJobs` React Query hook. RQ
+  // handles request deduplication, caching, and — critically — automatically
+  // discards stale responses when the user rapidly changes filters. Under the
+  // old `useState + useEffect + fetch` pattern, two concurrent fetches (e.g.
+  // typing in the search box while a status filter change was still in flight)
+  // could resolve out of order and overwrite the newer result with the older
+  // one. RQ keys queries by their params and only commits the latest result.
+  //
+  // Note: 'overdue' is a client-side pseudo-filter (jobs past their scheduled
+  // end time AND not terminal). We don't send it to the API — instead we
+  // fetch ALL non-terminal jobs and filter client-side via the `jobs` useMemo
+  // below. This avoids needing a server-side overdue query (which would
+  // require comparing scheduledAt + estimatedDuration to NOW — not supported
+  // by the Supabase REST adapter).
+  const { data: jobsData, isLoading: loading, error: rqError, refetch: fetchJobs } = useJobs({
+    status: statusFilter !== 'all' && statusFilter !== 'overdue' ? statusFilter : undefined,
+    search: debouncedSearch || undefined,
+  });
+  const error = rqError?.message ?? null;
 
-  const fetchJobs = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      // Phase 2: 'overdue' is a client-side pseudo-filter (jobs past their
-      // scheduled end time AND not terminal). We don't send it to the API —
-      // instead we fetch ALL non-terminal jobs and filter client-side. This
-      // avoids needing a server-side overdue query (which would require
-      // comparing scheduledAt + estimatedDuration to NOW — not supported by
-      // the Supabase REST adapter).
-      if (statusFilter !== 'all' && statusFilter !== 'overdue') {
-        params.set('status', statusFilter);
+  // SAME-DAY GRACE (client-side, UTC-safe):
+  // A job completed TODAY stays in the Active list for the rest of the
+  // calendar day (so the tenant can still review/edit it immediately) and
+  // only moves to the History tab the next day.
+  //
+  // This is enforced client-side (not server-side) because the Supabase REST
+  // adapter cannot handle the nested OR / { not: ... } structure that a
+  // server-side filter would require. UTC is used for the day comparison so
+  // the grace window is consistent regardless of the user's local timezone
+  // (matching how the server stores timestamps).
+  const jobs = useMemo<Job[]>(() => {
+    const allJobs = jobsData?.jobs ?? [];
+    const now = new Date();
+    const nowMs = now.getTime();
+    return allJobs.filter((j: Job) => {
+      if (j.deletedAt) return false;
+      // Phase 2: 'overdue' filter — keep only jobs past their scheduled
+      // end time that aren't in a terminal state.
+      if (statusFilter === 'overdue') {
+        if (!j.scheduledAt || j.status === 'completed' || j.status === 'cancelled') return false;
+        const endMs = new Date(j.scheduledAt).getTime() + ((j.estimatedDuration || 60) * 60_000);
+        if (endMs >= nowMs) return false;
+        // fall through to the same-day-grace check below
       }
-      if (debouncedSearch) params.set('search', debouncedSearch);
-      // Exclude soft-deleted jobs (shown in Job History instead)
-      params.set('includeDeleted', 'false');
-      const res = await fetch(`/api/jobs?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        // SAME-DAY GRACE (client-side, UTC-safe):
-        // A job completed TODAY stays in the Active list for the rest of the
-        // calendar day (so the tenant can still review/edit it immediately)
-        // and only moves to the History tab the next day.
-        //
-        // This is enforced client-side (not server-side) because the Supabase
-        // REST adapter cannot handle the nested OR / { not: ... } structure
-        // that a server-side filter would require. UTC is used for the day
-        // comparison so the grace window is consistent regardless of the
-        // user's local timezone (matching how the server stores timestamps).
-        const now = new Date();
-        const nowMs = now.getTime();
-        const allJobs = data.jobs ?? (Array.isArray(data) ? data : []);
-        setJobs(
-          allJobs.filter((j: Job) => {
-            if (j.deletedAt) return false;
-            // Phase 2: 'overdue' filter — keep only jobs past their
-            // scheduled end time that aren't in a terminal state.
-            if (statusFilter === 'overdue') {
-              if (!j.scheduledAt || j.status === 'completed' || j.status === 'cancelled') return false;
-              const endMs = new Date(j.scheduledAt).getTime() + ((j.estimatedDuration || 60) * 60_000);
-              if (endMs >= nowMs) return false;
-              // fall through to the same-day-grace check below
-            }
-            if (j.status !== 'completed') return true;
-            // Completed job — keep only if completed today (UTC same-day).
-            const completedAt = j.completedAt || j.actualEndTime;
-            if (!completedAt) return false; // legacy row, no timestamp
-            const cd = new Date(completedAt);
-            return (
-              cd.getUTCFullYear() === now.getUTCFullYear() &&
-              cd.getUTCMonth() === now.getUTCMonth() &&
-              cd.getUTCDate() === now.getUTCDate()
-            );
-          })
-        );
-      }
-    } catch (e) {
-      setJobs([]);
-      setError(e instanceof Error ? e.message : 'Failed to load jobs. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter, debouncedSearch]);
+      if (j.status !== 'completed') return true;
+      // Completed job — keep only if completed today (UTC same-day).
+      const completedAt = j.completedAt || j.actualEndTime;
+      if (!completedAt) return false; // legacy row, no timestamp
+      const cd = new Date(completedAt);
+      return (
+        cd.getUTCFullYear() === now.getUTCFullYear() &&
+        cd.getUTCMonth() === now.getUTCMonth() &&
+        cd.getUTCDate() === now.getUTCDate()
+      );
+    });
+  }, [jobsData, statusFilter]);
 
   const fetchEmployees = useCallback(async () => {
     try {
@@ -853,10 +843,6 @@ export function JobsView() {
       }
     }, 300);
   }, []);
-
-  useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs]);
 
   // ── Bulk select helpers ──────────────────────────────────────────────────
   const toggleJobSelect = (id: string) => {
@@ -1996,7 +1982,10 @@ export function JobsView() {
         if (detailRes.ok) {
           const detailData = await detailRes.json();
           if (detailData.job) {
-            setJobs((prev) => prev.map((j) => (j.id === job.id ? detailData.job : j)));
+            // `jobs` is now a derived useMemo from the React Query cache, so
+            // we can't `setJobs` directly. Instead, refetch the list so RQ's
+            // cache (and the derived `jobs`) reflects the new invoice state.
+            fetchJobs();
             setSelectedJob(detailData.job);
           }
         }

@@ -33,6 +33,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useCustomers } from '@/hooks/use-crm-data';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -179,11 +180,6 @@ const formatDate = (d: string) => new Date(d).toLocaleDateString('en-US', { mont
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function ContactsView() {
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [pagination, setPagination] = useState<Pagination | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -297,50 +293,42 @@ export function ContactsView() {
     }
   }, []);
 
-  // ─── Fetch contacts (with filters + pagination) ─────────────────────────
-
-  const fetchContacts = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-      params.set('limit', pageSize === 'all' ? 'all' : String(pageSize));
-      if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
-      if (groupFilter !== 'all') params.set('groupId', groupFilter);
-      if (tagFilter !== 'all') params.set('tagId', tagFilter);
-      if (statusFilter !== 'all') params.set('status', statusFilter);
-      if (sourceFilter !== 'all') params.set('source', sourceFilter);
-      if (countryFilter.trim()) params.set('country', countryFilter.trim());
-
-      const res = await fetch(`/api/contacts?${params.toString()}`);
-      if (res.ok) {
-        const json = await res.json();
-        // New contract: { data, pagination }
-        if (json && Array.isArray(json.data)) {
-          setContacts(json.data as Contact[]);
-          setPagination(json.pagination || null);
-        } else if (Array.isArray(json)) {
-          // Legacy contract: plain array
-          setContacts(json as Contact[]);
-          setPagination(null);
-        } else {
-          setContacts([]);
-          setPagination(null);
-        }
-      } else {
-        setContacts([]);
-        setPagination(null);
-        setError('Failed to load contacts. Please try again.');
-      }
-    } catch (e) {
-      setContacts([]);
-      setPagination(null);
-      setError(e instanceof Error ? e.message : 'Failed to load contacts. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize, debouncedSearch, groupFilter, tagFilter, statusFilter, sourceFilter, countryFilter]);
+  // ─── Fetch contacts (React Query, with filters + pagination) ───────────
+  //
+  // The main list fetch is now backed by the `useCustomers` React Query hook
+  // (which, despite its name, calls `/api/contacts` — see the comment in
+  // use-crm-data.ts). RQ keys the query by the full params object, so rapid
+  // filter changes automatically discard stale responses: the previous
+  // `useState + useEffect + fetch` pattern could resolve out of order and
+  // overwrite fresh data with older results.
+  //
+  // We pass ALL existing filters (search, page, pageSize, groupId, tagId,
+  // status, source, country) to preserve functionality — the task snippet
+  // listed only a subset, but the rules require "Keep ALL functionality
+  // intact (CRUD, filters, pagination, dialogs)". The hook normalizes the
+  // `/api/contacts` response (`{ data, pagination }`) into
+  // `{ customers, pagination }`, so we derive `contacts` from
+  // `contactsData?.customers` and `pagination` from
+  // `contactsData?.pagination`.
+  //
+  // `fetchContacts` is RQ's `refetch` — wired to all post-mutation call sites
+  // (after create / update / delete / bulk actions) so the cache stays fresh.
+  const { data: contactsData, isLoading: loading, error: rqError, refetch: fetchContacts } = useCustomers({
+    search: debouncedSearch.trim() || undefined,
+    page,
+    pageSize: pageSize === 'all' ? undefined : pageSize,
+    groupId: groupFilter !== 'all' ? groupFilter : undefined,
+    tagId: tagFilter !== 'all' ? tagFilter : undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    source: sourceFilter !== 'all' ? sourceFilter : undefined,
+    country: countryFilter.trim() || undefined,
+  });
+  const error = rqError?.message ?? null;
+  const contacts = useMemo<Contact[]>(
+    () => contactsData?.customers ?? [],
+    [contactsData],
+  );
+  const pagination = contactsData?.pagination ?? null;
 
   // Debounce search query
   useEffect(() => {
@@ -360,10 +348,6 @@ export function ContactsView() {
   useEffect(() => {
     setPage(1);
   }, [pageSize]);
-
-  useEffect(() => {
-    fetchContacts();
-  }, [fetchContacts]);
 
   useEffect(() => {
     fetchTags();
