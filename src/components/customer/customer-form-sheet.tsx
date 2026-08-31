@@ -61,6 +61,9 @@ import { Plus, Trash2, Loader2, Bell, TriangleAlert, User, Phone, Mail } from 'l
 import { toast } from 'sonner';
 import { LEAD_SOURCE_OPTIONS } from '@/lib/lead-sources';
 import { CUSTOMER_COUNTRIES, CUSTOMER_COUNTRY_NAMES } from '@/lib/customer-countries';
+import { authFetch } from '@/lib/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { getCustomerInvalidations } from '@/lib/invalidation-helpers';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -142,6 +145,7 @@ export function CustomerFormSheet({
   initialCustomer,
 }: CustomerFormSheetProps) {
   const isEdit = !!(initialCustomer as any)?.id;
+  const queryClient = useQueryClient();
 
   // ── Section 1: Primary contact details ──
   const [title, setTitle] = useState('');
@@ -411,7 +415,7 @@ export function CustomerFormSheet({
       const endpoint = isEdit ? `/api/customers/${targetId}` : '/api/customers';
       const method = isEdit ? 'PUT' : 'POST';
 
-      const res = await fetch(endpoint, {
+      const res = await authFetch(endpoint, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -437,6 +441,18 @@ export function CustomerFormSheet({
           return;
         }
         throw new Error(data?.error || `Request failed (${res.status})`);
+      }
+
+      // Centralized invalidation — same contract as useDeleteCustomer etc.
+      // getCustomerInvalidations: create → [qk.customers.all], update → [+ qk.customers.detail(id)]
+      // NO dashboard (dashboard doesn't consume customers — verified Phase 1.9b).
+      const invalidationMutation = isEdit ? 'update' : 'create';
+      const invalidationVars = isEdit ? { id: targetId } : undefined;
+      for (const key of getCustomerInvalidations({
+        mutation: invalidationMutation,
+        variables: invalidationVars,
+      })) {
+        queryClient.invalidateQueries({ queryKey: key });
       }
 
       toast.success(isEdit ? 'Customer updated successfully' : 'Customer created successfully');

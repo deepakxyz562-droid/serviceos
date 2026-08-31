@@ -542,7 +542,9 @@ export function CrmView() {
         }}
         editingCustomer={editingCustomer}
         onCustomerSaved={() => {
-          fetchCustomers();
+          // No fetchCustomers() needed — CustomerFormSheet now auto-invalidates
+          // qk.customers.all via getCustomerInvalidations (Phase 2 migration).
+          // Keep openCustomerDetail for the manual detail panel refresh.
           if (selectedCustomer && editingCustomer?.id === selectedCustomer.id) {
             openCustomerDetail(selectedCustomer);
           }
@@ -988,7 +990,10 @@ export function CrmView() {
           if (!open) setEditingCustomer(null);
         }}
         initialCustomer={editingCustomer}
-        onSaved={() => fetchCustomers()}
+        onSaved={() => {
+          // No fetchCustomers() needed — CustomerFormSheet now auto-invalidates
+          // qk.customers.all via getCustomerInvalidations (Phase 2 migration).
+        }}
       />
 
       {/* ─── Customer Portal Invitation Dialog ────────────────────────────── */}
