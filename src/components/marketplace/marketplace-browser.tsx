@@ -53,6 +53,7 @@ import { mapIndustryToPluralSlug } from '@/lib/seo/plural-industry-slugs';
 import { rankProviders, haversineKm } from '@/lib/marketplace-ranking';
 import { cn } from '@/lib/utils';
 import { useSearchParams } from 'next/navigation';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 interface MarketplaceBrowserProps {
   /** SSR-fetched first page (24 items) for SEO + instant paint. The client
@@ -947,6 +948,25 @@ export function MarketplaceBrowser({
   const visible = filtered;
   const hasMore = hasNextPage;
 
+  // ── Virtualization ─────────────────────────────────────────────────────
+  // When loaded providers exceed the SSR page size (24), switch from
+  // rendering ALL items to virtualizing only the visible + overscan.
+  // Below the threshold, render normally to preserve SSR HTML (no
+  // hydration mismatch).
+  const VIRTUALIZATION_THRESHOLD = 24;
+  const shouldVirtualize = visible.length > VIRTUALIZATION_THRESHOLD;
+
+  // The virtualizer uses the #main-content scroll container (same as the
+  // IntersectionObserver). Dynamic measurement handles variable card heights.
+  const parentRef = React.useRef<HTMLDivElement | null>(null);
+  const virtualizer = useVirtualizer({
+    count: shouldVirtualize ? visible.length : 0,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => 200, // Initial estimate — measureElement overrides
+    overscan: 6, // Render 6 extra cards above/below the visible area
+    gap: 16, // Matches the grid's gap-4 (16px)
+  });
+
   // ── Publish the filtered list + total to the shared store ─────────────
   // The sidebar (rendered as a sibling, not a child) reads `filteredProviders`
   // from the Zustand store to compute per-vertical counts + avg rating that
@@ -1499,6 +1519,44 @@ export function MarketplaceBrowser({
               </div>
             </div>
           ))}
+        </div>
+      ) : shouldVirtualize ? (
+        <div
+          ref={parentRef}
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualItem) => {
+            const p = visible[virtualItem.index];
+            if (!p) return null;
+            const slug = p.slug || p.publicSlug;
+            const canonicalHref = slug
+              ? `/${mapIndustryToPluralSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
+              : undefined;
+            return (
+              <div
+                key={p.id}
+                data-index={virtualItem.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
+                <ProviderCard
+                  provider={p}
+                  featured={!!p.featured}
+                  href={canonicalHref}
+                />
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div
