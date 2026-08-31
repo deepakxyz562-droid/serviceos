@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { getIndustry } from '@/lib/industry-catalog';
 import type { ProviderListItem, ProviderProfile } from './types';
 import { ClaimBusinessButton } from './claim-business-button';
+import { trackEvent } from '@/lib/analytics/consent';
 
 /**
  * ProviderCard — redesigned to match the slick-service-hub reference design.
@@ -469,6 +470,7 @@ function ProviderCardImpl({
               {phone ? (
                 <a
                   href={`tel:${phone.replace(/[^+\d]/g, '')}`}
+                  onClick={() => trackEvent('provider_phone_click', { provider_id: provider.id, provider_name: provider.name })}
                   className="inline-flex items-center gap-1.5 text-foreground hover:text-emerald-700 font-semibold transition-colors"
                 >
                   <Phone className="h-3.5 w-3.5 text-emerald-600" />
@@ -679,6 +681,7 @@ function MinimalCard({
               {phone ? (
                 <a
                   href={`tel:${phone.replace(/[^+\d]/g, '')}`}
+                  onClick={() => trackEvent('provider_phone_click', { provider_id: provider.id, provider_name: provider.name })}
                   className="inline-flex items-center gap-1.5 text-foreground hover:text-emerald-700 font-semibold transition-colors"
                 >
                   <Phone className="h-3.5 w-3.5 text-emerald-600" />

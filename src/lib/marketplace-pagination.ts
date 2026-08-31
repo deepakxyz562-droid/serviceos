@@ -80,8 +80,8 @@ import {
   boundingBox,
   haversineKm,
 } from '@/lib/marketplace-ranking';
-import type { ProviderListItem } from '@/components/marketplace/types';
 import { VERTICAL_MAP } from '@/lib/industry-catalog';
+import type { ProviderListItem } from '@/components/marketplace/types';
 
 /** Default page size for the browse grid (3 rows of 8 on xl, 4 rows of 6 on 2xl). */
 export const MARKETPLACE_PAGE_SIZE = 24;

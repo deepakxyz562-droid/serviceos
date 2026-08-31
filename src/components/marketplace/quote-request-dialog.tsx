@@ -39,6 +39,7 @@ import { INDUSTRY_CATALOG } from '@/lib/industry-catalog';
 import { toast } from 'sonner';
 import { mpUrl, type QuoteRequestResponse, type Urgency } from './types';
 import { SafeImage } from './safe-image';
+import { trackEvent } from '@/lib/analytics/consent';
 
 interface QuoteRequestDialogProps {
   open: boolean;
@@ -117,6 +118,12 @@ export function QuoteRequestDialog({
 
   React.useEffect(() => {
     if (open) {
+      // Phase 4A: GA4 quote_request_started event
+      trackEvent('quote_request_started', {
+        provider_id: targetTenantId || undefined,
+        provider_name: targetProviderName || undefined,
+        is_direct: isDirectMode,
+      });
       setStep('form');
       setTitle(defaultTitle ?? '');
       setDescription(defaultDescription ?? '');
@@ -210,6 +217,15 @@ export function QuoteRequestDialog({
       setRequestId(response.jobRequest.id);
       setBroadcastCount(response.broadcastCount);
       setStep('success');
+      // Phase 4A: GA4 quote_request_submitted event
+      trackEvent('quote_request_submitted', {
+        provider_id: targetTenantId || undefined,
+        provider_name: targetProviderName || undefined,
+        is_direct: isDirectMode,
+        industry: industry || undefined,
+        city: city.trim() || undefined,
+        broadcast_count: response.broadcastCount,
+      });
       if (response.directMode) {
         toast.success('Request sent!', {
           description: `${targetProviderName || 'The provider'} has been notified by email.`,

@@ -54,6 +54,7 @@ import { rankProviders, haversineKm } from '@/lib/marketplace-ranking';
 import { cn } from '@/lib/utils';
 import { useSearchParams } from 'next/navigation';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { trackEvent } from '@/lib/analytics/consent';
 
 interface MarketplaceBrowserProps {
   /** SSR-fetched first page (24 items) for SEO + instant paint. The client
@@ -367,6 +368,26 @@ export function MarketplaceBrowser({
     }, 250);
     return () => clearTimeout(handle);
   }, [cityInput]);
+
+  // ── Phase 4A: GA4 marketplace_search event ─────────────────────────────
+  // Fires when the user's search context changes (query, city, or sort).
+  // Debounced 500ms to avoid firing on every keystroke.
+  const searchContextRef = React.useRef({ query: '', city: '', sort: '' });
+  React.useEffect(() => {
+    const handle = setTimeout(() => {
+      const ctx = { query: searchQuery, city: cityFilter, sort };
+      const prev = searchContextRef.current;
+      if (ctx.query !== prev.query || ctx.city !== prev.city || ctx.sort !== prev.sort) {
+        searchContextRef.current = ctx;
+        trackEvent('marketplace_search', {
+          search_query: ctx.query || undefined,
+          search_city: ctx.city || undefined,
+          search_sort: ctx.sort,
+        });
+      }
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [searchQuery, cityFilter, sort]);
 
   // ── Sync store with server-passed initialFilters & detected country ──
   // Next.js Server Components re-run and pass new props on history back/forward
@@ -1574,6 +1595,14 @@ export function MarketplaceBrowser({
                   provider={p}
                   featured={!!p.featured}
                   href={canonicalHref}
+                  onViewProfile={(prov) => {
+                    trackEvent('provider_card_click', {
+                      provider_id: prov.id,
+                      provider_name: prov.name,
+                      card_position: virtualItem.index,
+                      search_sort: sort,
+                    });
+                  }}
                 />
               </div>
             );
@@ -1607,6 +1636,14 @@ export function MarketplaceBrowser({
                 provider={p}
                 featured={!!p.featured}
                 href={canonicalHref}
+                onViewProfile={(prov) => {
+                  trackEvent('provider_card_click', {
+                    provider_id: prov.id,
+                    provider_name: prov.name,
+                    card_position: visible.indexOf(p),
+                    search_sort: sort,
+                  });
+                }}
               />
             );
           })}
