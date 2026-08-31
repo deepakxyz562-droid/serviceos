@@ -147,14 +147,19 @@ export function useCustomers(params: CustomerListParams = {}) {
 
 // ── Invoices ─────────────────────────────────────────────────────────────────
 
+import { parseApiInvoice, type Invoice } from '@/features/invoices/utils/invoice-helpers';
+
 export function useInvoices() {
-  return useQuery({
+  return useQuery<Invoice[]>({
     queryKey: qk.invoices.lists(),
     queryFn: async () => {
       const res = await authFetch('/api/invoices');
       if (!res.ok) throw new Error('Failed to fetch invoices');
       const data = await res.json();
-      return data.invoices ?? (Array.isArray(data) ? data : []);
+      const rawList: Record<string, unknown>[] = Array.isArray(data.invoices) ? data.invoices : [];
+      // Apply the same parseApiInvoice transformation that invoices-view used
+      // when it fetched manually — ensures consistent Invoice shape across the app.
+      return rawList.map(parseApiInvoice);
     },
     staleTime: 10_000, // 10s — Freshness Contract: CRM invoices
   });

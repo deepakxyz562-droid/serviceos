@@ -30,6 +30,8 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { PhotoCapture, type JobPhoto } from './photo-capture';
 import { SignaturePad, type SavedSignature } from './signature-pad';
+import { useQueryClient } from '@tanstack/react-query';
+import { getJobInvalidations } from '@/lib/invalidation-helpers';
 
 interface JobCompletionScreenProps {
   open: boolean;
@@ -90,6 +92,7 @@ export function JobCompletionScreen({
   const [employeeSigs, setEmployeeSigs] = useState<SavedSignature[]>([]);
   const [completionNotes, setCompletionNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const queryClient = useQueryClient();
 
   // Reset transient state whenever the dialog is (re)opened.
   useEffect(() => {
@@ -224,6 +227,11 @@ export function JobCompletionScreen({
         throw new Error(err.error || 'Failed to complete job');
       }
       toast.success('Job completed successfully');
+      // Invalidate via centralized helper — same contract as useJobLifecycleTransition.
+      // This closes the dialog mutation gap (Phase 1.9f performance review finding).
+      for (const key of getJobInvalidations({ mutation: 'update', variables: { id: jobId } })) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
       onOpenChange(false);
       onCompleted?.();
     } catch (err) {

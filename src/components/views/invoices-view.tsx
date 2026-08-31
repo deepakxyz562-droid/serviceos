@@ -43,6 +43,7 @@ import { toast } from 'sonner';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { authFetch } from '@/lib/client-auth';
 import {
+  useInvoices,
   useCreateInvoice,
   useUpdateInvoice,
   useDeleteInvoice,
@@ -110,13 +111,22 @@ export function InvoicesView() {
   const setPendingOpenEntity = useAppStore((s) => s.setPendingOpenEntity);
 
   // Data state
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
 
+  // Invoice list is now backed by React Query (useInvoices). The RQ cache
+  // is invalidated by all invoice mutations via getInvoiceInvalidations, so
+  // the list auto-refreshes without manual setInvoices() calls.
+  const { data: invoicesData, isLoading: loadingInvoices, error: invoicesRqError, refetch: refetchInvoices } = useInvoices();
+  const invoices: Invoice[] = invoicesData ?? [];
+  const invoicesError = invoicesRqError?.message ?? null;
+
+  // Local invoice state for optimistic UI in handleStatusChange ONLY.
+  // All other mutations rely on RQ invalidation for list refresh.
+  const [optimisticInvoices, setOptimisticInvoices] = useState<Invoice[] | null>(null);
+  const displayInvoices = optimisticInvoices ?? invoices;
+
   // Loading state
-  const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
-  const [invoicesError, setInvoicesError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
 
@@ -163,10 +173,9 @@ export function InvoicesView() {
   // update/delete/status/mark_paid/reopen → invoices.all + dashboard.all + detail + customer detail
   // send/reminder/approve → invoices.all + detail (NO dashboard)
   //
-  // NOTE: invoices-view uses local state for reads (NOT React Query). So the
-  // qk.invoices.* invalidations are currently no-ops — the caller MUST keep
-  // its existing setInvoices(prev => ...) local state updates. The dashboard
-  // + customer detail invalidations DO work (those ARE in RQ).
+  // Invoice reads are now backed by useInvoices() RQ hook. Mutations auto-invalidate
+  // qk.invoices.all → the active invoice list refetches. Optimistic UI is preserved
+  // in handleStatusChange via the optimisticInvoices local state.
   const createInvoice = useCreateInvoice();
   const updateInvoice = useUpdateInvoice();
   const deleteInvoice = useDeleteInvoice();
@@ -187,24 +196,8 @@ export function InvoicesView() {
   // Fetch data on mount
   // ============================================================
 
-  const fetchInvoices = useCallback(async () => {
-    setLoadingInvoices(true);
-    setInvoicesError(null);
-    try {
-      const res = await authFetch('/api/invoices');
-      if (!res.ok) {
-        throw new Error('Failed to fetch invoices');
-      }
-      const data = await res.json();
-      const rawList: Record<string, unknown>[] = Array.isArray(data.invoices) ? data.invoices : [];
-      setInvoices(rawList.map(parseApiInvoice));
-    } catch (e) {
-      setInvoices([]);
-      setInvoicesError(e instanceof Error ? e.message : 'Failed to load invoices. Please try again.');
-    } finally {
-      setLoadingInvoices(false);
-    }
-  }, []);
+  // Invoice list is now fetched via useInvoices() React Query hook (above).
+  // No manual fetchInvoices() needed — RQ handles fetching + caching + refetching.
 
   const fetchCustomers = useCallback(async () => {
     setLoadingCustomers(true);
@@ -225,16 +218,15 @@ export function InvoicesView() {
   }, []);
 
   useEffect(() => {
-    fetchInvoices();
     fetchCustomers();
-  }, [fetchInvoices, fetchCustomers]);
+  }, [fetchCustomers]);
 
   // ============================================================
   // Filtered & sorted invoices
   // ============================================================
 
   const filteredInvoices = useMemo(() => {
-    let result = [...invoices];
+    let result = [...displayInvoices];
 
     if (statusFilter !== 'all') {
       result = result.filter((inv) => inv.status === statusFilter);
@@ -265,7 +257,7 @@ export function InvoicesView() {
     // ordered by createdAt desc, which serves as the default order.
 
     return result;
-  }, [invoices, statusFilter, autoFilter, searchQuery]);
+  }, [displayInvoices, statusFilter, autoFilter, searchQuery]);
 
   // ============================================================
   // Stats
@@ -437,7 +429,7 @@ export function InvoicesView() {
         // invoices.detail(id) + customers.detail(customerId). NO manual fetchInvoices() needed.
         const data: any = await updateInvoice.mutateAsync({ id: editingInvoice!.id, ...body });
         const updated = parseApiInvoice(data as Record<string, unknown>);
-        setInvoices((prev) => prev.map((inv) => (inv.id === updated.id ? updated : inv)));
+        // No setInvoices needed — useUpdateInvoice auto-invalidates qk.invoices.all
         if (selectedInvoice?.id === updated.id) {
           setSelectedInvoice(updated);
         }
@@ -461,8 +453,7 @@ export function InvoicesView() {
         };
         // useCreateInvoice auto-invalidates: invoices.all ONLY (draft, NO dashboard).
         const data: any = await createInvoice.mutateAsync(body);
-        const newInvoice = parseApiInvoice((data as { invoice: Record<string, unknown> }).invoice);
-        setInvoices((prev) => [newInvoice, ...prev]);
+        // No setInvoices needed — useCreateInvoice auto-invalidates qk.invoices.all
         setFormMode('list');
         toast.success('Invoice created successfully');
       }
@@ -474,10 +465,12 @@ export function InvoicesView() {
   };
 
   const handleStatusChange = async (invoiceId: string, newStatus: InvoiceStatus) => {
-    // Optimistic update — PRESERVED (per Phase 1.9d requirements)
-    const prevInvoices = invoices;
-    setInvoices((curr) =>
-      curr.map((inv) => (inv.id === invoiceId ? { ...inv, status: newStatus } : inv))
+    // Optimistic update — PRESERVED using local optimisticInvoices state.
+    // RQ invalidation will eventually override with server data, but the
+    // optimistic update gives immediate UI feedback + rollback on error.
+    const prevInvoices = displayInvoices;
+    setOptimisticInvoices(
+      prevInvoices.map((inv) => (inv.id === invoiceId ? { ...inv, status: newStatus } : inv))
     );
     if (selectedInvoice?.id === invoiceId) {
       setSelectedInvoice((prev) => (prev ? { ...prev, status: newStatus } : prev));
@@ -485,16 +478,13 @@ export function InvoicesView() {
     try {
       // useChangeInvoiceStatus auto-invalidates: invoices.all + dashboard.all +
       // invoices.detail(id) + customers.detail(customerId).
-      const data: any = await changeInvoiceStatus.mutateAsync({ id: invoiceId, status: newStatus });
-      const parsed = parseApiInvoice(data as Record<string, unknown>);
-      setInvoices((curr) => curr.map((inv) => (inv.id === invoiceId ? parsed : inv)));
-      if (selectedInvoice?.id === invoiceId) {
-        setSelectedInvoice(parsed);
-      }
+      await changeInvoiceStatus.mutateAsync({ id: invoiceId, status: newStatus });
+      // Clear optimistic state — RQ refetch will provide the server-confirmed data
+      setOptimisticInvoices(null);
       toast.success(`Invoice marked as ${getStatusConfig(newStatus).label}`);
     } catch (e: any) {
       // Rollback — PRESERVED
-      setInvoices(prevInvoices);
+      setOptimisticInvoices(null);
       if (selectedInvoice?.id === invoiceId) {
         const original = prevInvoices.find((i) => i.id === invoiceId) || null;
         setSelectedInvoice(original);
@@ -508,7 +498,7 @@ export function InvoicesView() {
       // useDeleteInvoice auto-invalidates: invoices.all + dashboard.all +
       // invoices.detail(id) + customers.detail(customerId).
       await deleteInvoice.mutateAsync({ id: invoiceId });
-      setInvoices((prev) => prev.filter((inv) => inv.id !== invoiceId));
+      // No setInvoices needed — useDeleteInvoice auto-invalidates qk.invoices.all
       if (selectedInvoice?.id === invoiceId) {
         setShowDetailDialog(false);
         setSelectedInvoice(null);
@@ -543,8 +533,7 @@ export function InvoicesView() {
       };
       // useDuplicateInvoice auto-invalidates: invoices.all ONLY (draft, NO dashboard).
       const data: any = await duplicateInvoice.mutateAsync(body);
-      const newInvoice = parseApiInvoice((data as { invoice: Record<string, unknown> }).invoice);
-      setInvoices((prev) => [newInvoice, ...prev]);
+      // No setInvoices needed — useDuplicateInvoice auto-invalidates qk.invoices.all
       toast.success('Invoice duplicated');
     } catch (e: any) {
       toast.error(e instanceof Error ? e.message : 'Failed to duplicate invoice');
@@ -679,39 +668,19 @@ export function InvoicesView() {
         queryClient.invalidateQueries({ queryKey: key });
       }
 
-      // Reflect likely status changes locally
+      // Reflect likely status changes in selectedInvoice (for the detail panel).
+      // The invoice LIST is refreshed by RQ invalidation above — no setInvoices needed.
       if (action === 'mark_paid') {
         const nowIso = new Date().toISOString();
-        setInvoices((curr) =>
-          curr.map((inv) =>
-            inv.id === invoiceId ? { ...inv, status: 'paid' as InvoiceStatus, paidAt: nowIso } : inv
-          )
-        );
         if (selectedInvoice?.id === invoiceId) {
           setSelectedInvoice((s) => (s ? { ...s, status: 'paid' as InvoiceStatus, paidAt: nowIso } : s));
         }
       } else if (action === 'send' || action === 'send_email' || action === 'send_whatsapp') {
-        // Backend sendInvoice flips draft → sent on success
-        setInvoices((curr) =>
-          curr.map((inv) =>
-            inv.id === invoiceId && inv.status === 'draft'
-              ? { ...inv, status: 'sent' as InvoiceStatus }
-              : inv
-          )
-        );
         if (selectedInvoice?.id === invoiceId && selectedInvoice.status === 'draft') {
           setSelectedInvoice((s) => (s ? { ...s, status: 'sent' as InvoiceStatus } : s));
         }
       } else if (action === 'approve') {
-        // Backend approve flips pending_approval → sent and emails+WhatsApps customer
         const nowIso = new Date().toISOString();
-        setInvoices((curr) =>
-          curr.map((inv) =>
-            inv.id === invoiceId
-              ? { ...inv, status: 'sent' as InvoiceStatus, sentAt: nowIso }
-              : inv
-          )
-        );
         if (selectedInvoice?.id === invoiceId) {
           setSelectedInvoice((s) =>
             s ? { ...s, status: 'sent' as InvoiceStatus, sentAt: nowIso } : s
@@ -1068,7 +1037,7 @@ export function InvoicesView() {
       // invoices.detail(id) + customers.detail(customerId).
       const data: any = await reopenInvoice.mutateAsync({ id: inv.id });
       const parsed = parseApiInvoice(data as Record<string, unknown>);
-      setInvoices((curr) => curr.map((i) => (i.id === parsed.id ? parsed : i)));
+      // No setInvoices needed — useReopenInvoice auto-invalidates qk.invoices.all
       setSelectedInvoice(parsed);
       toast.success(`Invoice ${parsed.number} re-opened`);
       // No void fetchInvoices() needed — useReopenInvoice auto-invalidates.
@@ -1430,7 +1399,7 @@ export function InvoicesView() {
             rowKey={(inv) => inv.id}
             loading={loadingInvoices}
             error={invoicesError}
-            onRetry={fetchInvoices}
+            onRetry={() => refetchInvoices()}
             emptyMessage="No invoices found"
             emptyIcon={FileText}
             onRowClick={openInvoiceDetail}

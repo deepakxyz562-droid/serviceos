@@ -45,6 +45,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
+import { getJobInvalidations } from '@/lib/invalidation-helpers';
 
 // Minimal Job shape — only the fields this dialog reads. Keeps the
 // component decoupled from the larger `Job` interface in jobs-view.tsx so
@@ -72,6 +74,7 @@ export function CloseJobDialog({
   onOpenChange,
   onClosed,
 }: CloseJobDialogProps) {
+  const queryClient = useQueryClient();
   const [saving, setSaving] = React.useState(false);
 
   // Reset saving state whenever the dialog closes.
@@ -116,6 +119,11 @@ export function CloseJobDialog({
         return;
       }
       toast.success(isRecurring ? 'Visit closed' : 'Job closed');
+      // Invalidate via centralized helper — same contract as useCancelJob/useUpdateJob.
+      // This closes the dialog mutation gap (Phase 1.9f performance review finding).
+      for (const key of getJobInvalidations({ mutation: 'update', variables: { id: job.id } })) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
       onOpenChange(false);
       onClosed?.();
     } catch {

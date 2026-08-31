@@ -44,6 +44,8 @@ import { Label } from '@/components/ui/label';
 import { Loader2, StopCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/lib/query-keys';
 
 export interface StopScheduleDialogProps {
   scheduleId: string | null;
@@ -73,6 +75,7 @@ export function StopScheduleDialog({
 }: StopScheduleDialogProps) {
   const [choice, setChoice] = React.useState<Choice>('keep');
   const [saving, setSaving] = React.useState(false);
+  const queryClient = useQueryClient();
   const [futureCount, setFutureCount] = React.useState<number | null>(null);
   const [loadingCount, setLoadingCount] = React.useState(false);
 
@@ -153,6 +156,11 @@ export function StopScheduleDialog({
             : ` (${affected} future visit${affected === 1 ? '' : 's'} cancelled)`
           : '';
       toast.success(`Recurring schedule stopped${detail}`);
+      // Invalidate jobs list only — schedule stop changes which jobs appear
+      // (future visits may be cancelled), but does NOT change dashboard data
+      // (dashboard doesn't consume RecurringJobSchedule). Same pattern as
+      // pause/resume schedule mutations.
+      queryClient.invalidateQueries({ queryKey: qk.jobs.all });
       onOpenChange(false);
       onStopped?.();
     } catch {
