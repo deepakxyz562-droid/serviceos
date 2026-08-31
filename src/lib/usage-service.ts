@@ -81,9 +81,12 @@ export interface FinalizeUsageParams {
  *   2. Checks remaining >= requestedSeconds
  *   3. Creates a UsageReservation if capacity is available
  *
- * CRITICAL: This is the DB-as-source-of-truth pattern from Architecture
- * Contract §5.4. No application-memory counters — the DB transaction
- * guarantees atomicity.
+ * NOTE: This is the FALLBACK path (local dev / SQLite only). In production
+ * (USE_SUPABASE_DB=true), the RPC function `reserve_ai_usage_seconds()` is
+ * the authoritative path — it runs inside PostgreSQL where FOR UPDATE locks
+ * and transactions are real. PostgREST does NOT support real ACID
+ * transactions, so this Prisma $transaction is only atomic in local dev
+ * (SQLite). See supabase-rpc-ai-usage.sql for the production path.
  *
  * Returns:
  *   - { ok: true, reservationId } if capacity is available

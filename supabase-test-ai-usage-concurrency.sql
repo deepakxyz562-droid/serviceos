@@ -31,26 +31,30 @@ DELETE FROM "UsageReservation" WHERE "tenantId" = '__test_rpc_tenant__';
 DELETE FROM "UsageLedger"      WHERE "tenantId" = '__test_rpc_tenant__';
 DELETE FROM "AddonEntitlement" WHERE "tenantId" = '__test_rpc_tenant__';
 DELETE FROM "TenantAddonSubscription" WHERE "tenantId" = '__test_rpc_tenant__';
+DELETE FROM "AddonPlan" WHERE "id" = '__test_rpc_plan__';
+DELETE FROM "AddonProduct" WHERE "id" = '__test_rpc_product__';
 DELETE FROM "Tenant" WHERE "id" = '__test_rpc_tenant__';
 
 -- ─── Create disposable test data ────────────────────────────────────────────
 -- A test tenant with a subscription + entitlement.
 -- maxConcurrentCalls = 2, includedSeconds = 3600 (60 min), maxCallDuration = 600 (10 min)
 
-INSERT INTO "Tenant" ("id", "name", "createdAt", "updatedAt")
-VALUES ('__test_rpc_tenant__', '__TEST RPC TENANT (DISPOSABLE)', NOW(), NOW())
+-- Tenant: slug is NOT NULL + unique, so we provide a distinctive test slug
+INSERT INTO "Tenant" ("id", "name", "slug", "country", "currency", "createdAt", "updatedAt")
+VALUES ('__test_rpc_tenant__', '__TEST RPC TENANT (DISPOSABLE)', '__test_rpc_tenant_slug__', 'US', 'USD', NOW(), NOW())
 ON CONFLICT ("id") DO NOTHING;
 
--- We need an AddonProduct + AddonPlan for the subscription FK.
--- Use existing ones if they exist; create test ones if not.
+-- AddonProduct: code is the unique identifier (NOT productId)
 INSERT INTO "AddonProduct" ("id", "code", "name", "createdAt", "updatedAt")
 VALUES ('__test_rpc_product__', 'AI_RECEPTIONIST_TEST', '__TEST RPC PRODUCT__', NOW(), NOW())
 ON CONFLICT ("id") DO NOTHING;
 
-INSERT INTO "AddonPlan" ("id", "productId", "name", "includedSeconds", "maxCallDurationSeconds", "maxConcurrentCalls", "includedNumbers", "createdAt", "updatedAt")
-VALUES ('__test_rpc_plan__', '__test_rpc_product__', '__TEST RPC PLAN__', 3600, 600, 2, 1, NOW(), NOW())
+-- AddonPlan: uses addonProductId (not productId), code is unique NOT NULL
+INSERT INTO "AddonPlan" ("id", "addonProductId", "code", "name", "includedSeconds", "maxCallDurationSeconds", "maxConcurrentCalls", "includedNumbers", "createdAt", "updatedAt")
+VALUES ('__test_rpc_plan__', '__test_rpc_product__', '__TEST_RPC_PLAN_CODE__', '__TEST RPC PLAN__', 3600, 600, 2, 1, NOW(), NOW())
 ON CONFLICT ("id") DO NOTHING;
 
+-- TenantAddonSubscription: needs both addonPlanId + addonProductId
 INSERT INTO "TenantAddonSubscription" ("id", "tenantId", "addonProductId", "addonPlanId", "status", "currentPeriodStart", "currentPeriodEnd", "createdAt", "updatedAt")
 VALUES ('__test_rpc_sub__', '__test_rpc_tenant__', '__test_rpc_product__', '__test_rpc_plan__', 'ACTIVE', NOW(), NOW() + INTERVAL '30 days', NOW(), NOW())
 ON CONFLICT ("id") DO NOTHING;

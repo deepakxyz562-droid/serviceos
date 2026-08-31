@@ -539,6 +539,7 @@ export interface ReconciliationResult {
   finalized: number;
   stillFailing: number;
   givenUp: number; // calls that exceeded max attempts and need manual intervention
+  markedNotApplicable: number; // calls marked NOT_APPLICABLE (NO_RESERVATION — permanently unbillable)
 }
 
 /**
@@ -602,6 +603,7 @@ export async function reconcileBilling(
       vapiCallId: true,
       billingStatus: true,
       billingAttempts: true,
+      billingError: true,
       billingLastAttemptAt: true,
       durationSec: true,
       billableSeconds: true,
@@ -613,7 +615,18 @@ export async function reconcileBilling(
   });
 
   // Filter to calls that are eligible for retry (backoff has elapsed)
+  // AND that are not permanently unbillable (NO_RESERVATION is permanent —
+  // retrying won't create a reservation that doesn't exist)
+  let skippedPermanent = 0;
   const callsToReconcile = candidates.filter((call) => {
+    // Skip calls with NO_RESERVATION — this is a permanent error (the
+    // reservation will never exist). Mark them as NOT_APPLICABLE instead
+    // of retrying forever. This handles legacy calls from before Phase 8
+    // that never had a reservation.
+    if (call.billingError === 'NO_RESERVATION') {
+      skippedPermanent++;
+      return false;
+    }
     if (!call.billingLastAttemptAt) {
       // Never attempted (shouldn't happen for ended calls, but defensive)
       return true;
@@ -632,8 +645,30 @@ export async function reconcileBilling(
     },
   });
 
-  if (callsToReconcile.length === 0 && givenUpCalls === 0) {
-    return { scanned: 0, retried: 0, finalized: 0, stillFailing: 0, givenUp: 0 };
+  // Mark NO_RESERVATION calls as NOT_APPLICABLE — they're permanently unbillable
+  // (the reservation will never exist). This prevents the cron from scanning
+  // them on every run. These are typically legacy calls from before Phase 8.
+  let markedNotApplicable = 0;
+  if (skippedPermanent > 0) {
+    const updateResult = await db.aiCall.updateMany({
+      where: {
+        status: 'ended',
+        billingStatus: { in: ['PENDING', 'FAILED'] },
+        billingError: 'NO_RESERVATION',
+      },
+      data: {
+        billingStatus: 'NOT_APPLICABLE',
+        billingFinalizedAt: new Date(),
+      },
+    });
+    markedNotApplicable = updateResult.count;
+    console.log(
+      `[Reconciliation] marked ${markedNotApplicable} NO_RESERVATION calls as NOT_APPLICABLE (permanently unbillable — legacy calls with no reservation)`,
+    );
+  }
+
+  if (callsToReconcile.length === 0 && givenUpCalls === 0 && markedNotApplicable === 0) {
+    return { scanned: 0, retried: 0, finalized: 0, stillFailing: 0, givenUp: 0, markedNotApplicable: 0 };
   }
 
   console.log(
@@ -666,7 +701,14 @@ export async function reconcileBilling(
         {
           vapiCallId: call.vapiCallId || '',
           durationSec: call.durationSec,
-          billableSeconds: call.billableSeconds || undefined,
+          // Use ?? (not ||) so that billableSeconds=0 is preserved.
+          // With ||, 0 becomes undefined → retryBilling falls back to
+          // Math.ceil(durationSec) → tries to bill a non-zero amount →
+          // fails with NO_RESERVATION on legacy calls. With ??, 0 is
+          // preserved → retryBilling's zero-duration check triggers →
+          // marks as NOT_APPLICABLE (correct for legacy calls with no
+          // reservation and no recorded billable seconds).
+          billableSeconds: call.billableSeconds ?? undefined,
           costUsd: call.costUsd || undefined,
           revenueUsd: call.revenueUsd || undefined,
           costBreakdown: call.costBreakdownJson && call.costBreakdownJson !== '{}'
@@ -711,6 +753,7 @@ export async function reconcileBilling(
     finalized,
     stillFailing,
     givenUp: givenUpCalls,
+    markedNotApplicable,
   };
 }
 
