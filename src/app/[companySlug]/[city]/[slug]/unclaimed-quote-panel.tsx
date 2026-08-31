@@ -80,6 +80,14 @@ export function UnclaimedQuotePanel({
         defaultCity={providerCity}
         targetTenantId={providerTenantId}
         targetProviderName={providerName}
+        // Phase 4B v2: structured marketplace attribution
+        provider={{
+          id: providerTenantId,
+          name: providerName,
+          industry: providerIndustry,
+          city: providerCity,
+        }}
+        cardPath="unclaimed_panel"
       />
     </>
   );
