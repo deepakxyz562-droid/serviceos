@@ -721,10 +721,33 @@ export function CustomerPicker({
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     const q = query.trim();
+
+    // Empty query → fetch recent customers so the dropdown isn't empty on open
+    if (q.length === 0) {
+      setSearchLoading(true);
+      searchTimer.current = setTimeout(async () => {
+        try {
+          const res = await authFetch('/api/customers?limit=10');
+          if (res.ok) {
+            const data = await res.json();
+            setSearchResults(data.customers ?? (Array.isArray(data) ? data : []));
+          }
+        } catch {
+          setSearchResults([]);
+        } finally {
+          setSearchLoading(false);
+        }
+      }, 150);
+      return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+    }
+
+    // 1 character → too short for search, clear results
     if (q.length < 2) {
       setSearchResults([]);
       return;
     }
+
+    // 2+ characters → server-side search
     setSearchLoading(true);
     searchTimer.current = setTimeout(async () => {
       try {
