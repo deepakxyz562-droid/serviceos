@@ -5167,6 +5167,24 @@ model AiCall {
   agentVersionId      String?  // FK → AiAgentVersion (new domain model)
   deploymentId        String?  // FK → AiProviderDeployment (new domain model)
   connectionId       String?  // FK → PhoneConnection (Phase 3 routing config)
+  // ── Phase 8 Hardening: Billing lifecycle (separate from telephony status) ──
+  // `status` = telephony lifecycle (queued → ringing → in_progress → ended/failed)
+  // `billingStatus` = financial lifecycle (PENDING → FINALIZED | FAILED | NOT_APPLICABLE)
+  //
+  // CRITICAL INVARIANT: `status='ended'` does NOT imply billing succeeded.
+  // A call can be `ended` + `billingStatus='PENDING'` (retryable) or
+  // `ended` + `billingStatus='FAILED'` (needs reconciliation).
+  // Only `billingStatus='FINALIZED'` means a UsageLedger entry exists.
+  //
+  // States:
+  //   PENDING        — call ended, billing not yet finalized (retryable)
+  //   FINALIZED      — UsageLedger entry written successfully
+  //   FAILED         — billing attempt failed (reconciliation will retry)
+  //   NOT_APPLICABLE — zero-duration call, no ledger needed (reservation released)
+  billingStatus       String   @default("PENDING")
+  billingFinalizedAt  DateTime?
+  billingError        String?  // last failure reason (for debugging + reconciliation)
+  billingAttempts     Int      @default(0)  // incremented on each finalize attempt
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -5184,6 +5202,8 @@ model AiCall {
   @@index([customerPhone])
   @@index([outcomeType])
   @@index([receptionistId])
+  // Phase 8 Hardening: reconciliation cron scans for ended calls with non-finalized billing
+  @@index([status, billingStatus, endedAt])
 }
 
 // ==========================================

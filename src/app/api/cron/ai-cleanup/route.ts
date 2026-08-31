@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getTelephonyProvider } from '@/lib/telephony-provider';
 import { releaseStaleReservations } from '@/lib/usage-service';
 import { verifyCronAuth } from '@/lib/cron-auth';
+import { reconcileBilling } from '@/lib/call-lifecycle-service';
 
 /**
  * GET /api/cron/ai-cleanup
@@ -43,6 +44,17 @@ export async function GET(request: NextRequest) {
 
     // ── 1. Release stale AI call reservations ──
     const releasedReservations = await releaseStaleReservations(30);
+
+    // ── 1b. Reconcile billing for ended calls with non-finalized billing ──
+    // Phase 8 Hardening: retry billing for calls where status='ended' but
+    // billingStatus is PENDING or FAILED. This catches calls where the
+    // end-of-call webhook's finalizeUsage() failed (transient DB error, etc.)
+    // and the webhook was not redelivered. Uses the reservation's
+    // entitlementId (not getActiveEntitlement) to charge the correct period.
+    const billingReconciliation = await reconcileBilling(5, 10).catch((err) => {
+      console.error('[cron/ai-cleanup] billing reconciliation failed:', err);
+      return { scanned: 0, retried: 0, finalized: 0, stillFailing: 0, givenUp: 0 };
+    });
 
     // ── 2. Phone number release saga ──
     let vapiDetachCount = 0;
@@ -154,6 +166,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       releasedReservations,
+      billingReconciliation,
       phoneRelease: {
         vapiDetachCount,
         vapiDeleteCount,

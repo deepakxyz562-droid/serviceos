@@ -42,6 +42,8 @@ export interface ReservationResult {
   reservationId?: string;
   reason?: string;
   remainingAfterReserve?: number;
+  /** Number of active concurrent calls at the time of reservation (for logging) */
+  activeCallCount?: number;
 }
 
 export interface FinalizationResult {
@@ -92,15 +94,24 @@ export async function reserveSeconds(params: {
   entitlementId: string;
   externalCallId: string;
   requestedSeconds: number;
+  /**
+   * Phase 8 Hardening: max concurrent calls allowed for this entitlement.
+   * When provided, the concurrency check runs INSIDE the same transaction
+   * as the capacity check (under the same FOR UPDATE lock), making the
+   * admission decision fully atomic.
+   *
+   * Without this, two concurrent calls could both pass the standalone
+   * countActiveCalls() check and then both reserve — violating maxConcurrentCalls.
+   */
+  maxConcurrentCalls?: number;
 }): Promise<ReservationResult> {
-  const { tenantId, entitlementId, externalCallId, requestedSeconds } = params;
+  const { tenantId, entitlementId, externalCallId, requestedSeconds, maxConcurrentCalls } = params;
 
   // ── Atomic reserve inside a transaction ──
   // The transaction isolates the read + create so concurrent calls can't
-  // both see stale capacity. Prisma's $transaction uses READ COMMITTED by
-  // default; for true SERIALIZABLE isolation we'd need raw SQL, but READ
-  // COMMITTED is sufficient for the reservation pattern (the aggregate
-  // reads committed rows, and the insert is atomic).
+  // both see stale capacity. The FOR UPDATE lock on AddonEntitlement
+  // serializes all concurrent reservations against the same entitlement,
+  // making both the capacity check AND the concurrency check atomic.
   try {
     const result = await db.$transaction(async (tx) => {
       // 1. Acquire exclusive PostgreSQL row lock on AddonEntitlement to guarantee 100% race safety
@@ -140,14 +151,38 @@ export async function reserveSeconds(params: {
       const usedSeconds = ledgerAgg._sum.quantitySeconds || 0;
 
       // 3. Sum active reservations (holds for in-progress calls)
+      //    NOTE: this count is also used for the concurrency check below —
+      //    we use the SAME aggregate query for both purposes to avoid a
+      //    second scan and to ensure the concurrency count is consistent
+      //    with the capacity count under the same lock.
       const reservationAgg = await tx.usageReservation.aggregate({
         where: {
           entitlementId,
           status: 'ACTIVE',
         },
         _sum: { reservedSeconds: true },
+        _count: { id: true },
       });
       const reservedSeconds = reservationAgg._sum.reservedSeconds || 0;
+      const activeCallCount = reservationAgg._count.id;
+
+      // ── Phase 8 Hardening: Concurrency check (INSIDE the transaction) ──
+      // This check MUST run inside the same FOR UPDATE transaction as the
+      // capacity check, otherwise two concurrent calls can both pass the
+      // concurrency check and then both reserve — violating maxConcurrentCalls.
+      //
+      // By counting ACTIVE reservations for THIS entitlement under the lock,
+      // we guarantee that only one call at a time can see a given count and
+      // reserve. The second call will see the incremented count (because the
+      // first call's reservation is committed before the lock is released)
+      // and be rejected.
+      if (maxConcurrentCalls !== undefined && activeCallCount >= maxConcurrentCalls) {
+        return {
+          ok: false as const,
+          reason: 'CONCURRENCY_EXCEEDED',
+          activeCallCount,
+        };
+      }
 
       // 4. Compute remaining
       const remaining = Math.max(
@@ -161,6 +196,7 @@ export async function reserveSeconds(params: {
           ok: false as const,
           reason: 'INSUFFICIENT_CAPACITY',
           remainingAfterReserve: remaining,
+          activeCallCount,
         };
       }
 
@@ -179,6 +215,7 @@ export async function reserveSeconds(params: {
         ok: true as const,
         reservationId: reservation.id,
         remainingAfterReserve: remaining - requestedSeconds,
+        activeCallCount: activeCallCount + 1, // +1 for the reservation we just created
       };
     });
 

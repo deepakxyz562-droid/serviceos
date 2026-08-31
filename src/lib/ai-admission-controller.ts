@@ -76,10 +76,18 @@ async function isPlatformEnabled(): Promise<boolean> {
     // AI if the superadmin hasn't configured the toggle yet)
     return toggle?.enabled ?? true;
   } catch {
-    // If the DB query fails, fail OPEN (allow calls) — a transient DB error
-    // shouldn't block all AI calls. The Vapi guardrails (Layer 3) still apply.
-    console.warn('[AdmissionController] isPlatformEnabled query failed — failing open');
-    return true;
+    // Phase 8 Hardening: FAIL CLOSED.
+    //
+    // This is the PLATFORM KILL SWITCH — an emergency control. If we can't
+    // read the kill switch state from the DB, we MUST reject new AI calls
+    // rather than allow them. Failing open would mean a DB outage silently
+    // defeats the emergency stop, which is unacceptable for a safety control.
+    //
+    // The previous behavior (fail open = return true) is preserved for
+    // non-emergency feature toggles elsewhere, but for the kill switch
+    // specifically, fail-closed is the correct security posture.
+    console.error('[AdmissionController] isPlatformEnabled query FAILED — failing CLOSED (rejecting all AI calls) — this is the emergency kill switch, fail-closed is the correct security posture');
+    return false;
   }
 }
 
@@ -148,28 +156,50 @@ export async function admitCall(
     };
   }
 
-  // ── Layer 2, Check 5: Concurrency ──
+  // ── Layer 2, Check 5: Concurrency (BEST-EFFORT read for early rejection) ──
+  // Phase 8 Hardening: The authoritative concurrency check now runs INSIDE
+  // reserveSeconds() under the same FOR UPDATE lock, making it atomic with
+  // the capacity check. This standalone read is a BEST-EFFORT early rejection
+  // to avoid the reservation transaction when we're clearly over limit — but
+  // it is NOT the authoritative check (a race could let two calls pass this
+  // read, but reserveSeconds will reject the second one atomically).
+  //
+  // We keep this early check for UX (faster rejection, no transaction overhead)
+  // but the real protection is inside reserveSeconds.
   const activeCalls = await countActiveCalls(tenantId);
 
   if (activeCalls >= entitlement.maxConcurrentCalls) {
     return { allowed: false, reason: 'CONCURRENCY_EXCEEDED' };
   }
 
-  // ── All checks passed → reserve capacity (atomic) ──
+  // ── All checks passed → reserve capacity (atomic, includes concurrency check) ──
+  // Phase 8 Hardening: maxConcurrentCalls is passed INTO reserveSeconds so the
+  // concurrency check runs under the same FOR UPDATE lock as the capacity check.
+  // This makes the full admission decision atomic: no race can violate either
+  // maxConcurrentCalls or capacity limits.
   const reservation = await reserveSeconds({
     tenantId,
     entitlementId: entitlement.id,
     externalCallId,
     requestedSeconds,
+    maxConcurrentCalls: entitlement.maxConcurrentCalls,
   });
 
   if (!reservation.ok) {
-    // Race condition: capacity was consumed between the check and the reservation.
-    // This is rare (requires concurrent calls within the same transaction window),
-    // but possible. Reject the call.
+    // The reservation failed. This could be:
+    //   - INSUFFICIENT_CAPACITY: capacity was consumed between the check and the reservation
+    //   - CONCURRENCY_EXCEEDED: a concurrent call reserved between the early check and the transaction
+    //   - ENTITLEMENT_NOT_FOUND / NOT_ACTIVE: entitlement changed state
+    // All are safe to reject — the caller routes to voicemail.
+    const reason =
+      reservation.reason === 'CONCURRENCY_EXCEEDED'
+        ? 'CONCURRENCY_EXCEEDED'
+        : reservation.reason === 'INSUFFICIENT_CAPACITY'
+          ? 'USAGE_EXHAUSTED'
+          : 'INTERNAL_ERROR';
     return {
       allowed: false,
-      reason: 'USAGE_EXHAUSTED',
+      reason: reason as AdmissionRejectionReason,
       remainingAfterReserve: reservation.remainingAfterReserve,
     };
   }

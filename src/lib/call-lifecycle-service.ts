@@ -214,14 +214,24 @@ export async function onCallFailed(vapiCallId: string, reason?: string): Promise
 /**
  * Finalize a call (end-of-call-report from Vapi).
  *
- * This is the most important lifecycle operation:
- *   1. Updates the AiCall with duration, cost, transcript, summary
- *   2. Finalizes the UsageLedger entry (idempotent via idempotencyKey)
- *   3. Marks the UsageReservation as CONSUMED
+ * Phase 8 Hardening — CRITICAL INVARIANT:
+ *   `status='ended'` does NOT imply billing succeeded.
+ *   Only `billingStatus='FINALIZED'` means a UsageLedger entry exists.
  *
- * IDEMPOTENCY: If the end-of-call webhook is redelivered, the UsageLedger
- * finalization returns the existing entry (no duplicate charge). The AiCall
- * update is also idempotent (just refreshes the same fields).
+ * State machine:
+ *   1. Mark AiCall: status='ended', billingStatus='PENDING' (telephony done, billing not yet)
+ *   2. Find UsageReservation by externalCallId → use ITS entitlementId
+ *      (NEVER fall back to getActiveEntitlement — that can charge the wrong period)
+ *   3. If no reservation → billingStatus='FAILED', billingError='NO_RESERVATION'
+ *      (data integrity problem — reconciliation will investigate)
+ *   4. Attempt finalizeUsage with reservation's entitlementId
+ *   5. On success → billingStatus='FINALIZED', billingFinalizedAt=now
+ *   6. On failure → billingStatus='FAILED', billingError=reason (retryable)
+ *
+ * RETRY PATH (webhook redelivery):
+ *   If the call is already 'ended' but billingStatus is 'PENDING' or 'FAILED',
+ *   we RETRY billing (not return false success). Only if billingStatus is
+ *   'FINALIZED' or 'NOT_APPLICABLE' do we return idempotent success.
  *
  * @returns the finalized call + usage result
  */
@@ -233,39 +243,41 @@ export async function onCallEnd(params: CallEndParams): Promise<{
   // 1. Find the call
   const call = await db.aiCall.findUnique({
     where: { vapiCallId: params.vapiCallId },
-    select: { id: true, tenantId: true, status: true },
+    select: {
+      id: true,
+      tenantId: true,
+      status: true,
+      billingStatus: true,
+      billingAttempts: true,
+    },
   });
 
   if (!call) {
-    console.warn(`[CallLifecycle] onCallEnd: no AiCall found for ${params.vapiCallId} — finalizing via UsageReservation fallback`);
-    const reservation = await db.usageReservation.findFirst({
-      where: { externalCallId: params.vapiCallId },
-      select: { tenantId: true, entitlementId: true, id: true },
-    });
-    if (reservation) {
-      const finalRes = await finalizeUsage({
-        tenantId: reservation.tenantId,
-        entitlementId: reservation.entitlementId,
-        reservationId: reservation.id,
-        externalCallId: params.vapiCallId,
-        billableSeconds: params.billableSeconds ?? Math.ceil(params.durationSec),
-        providerCostUsd: params.costUsd,
-        revenueUsd: params.revenueUsd,
-      });
-      return { callId: null, usageFinalized: finalRes.ok, usageIdempotent: finalRes.idempotent };
-    }
-    return { callId: null, usageFinalized: false, usageIdempotent: false };
+    // No AiCall found — this is the "fallback" path for calls that started
+    // before the AiCall model existed, or for direct Twilio calls without
+    // an AiCall record. We still try to finalize via the reservation.
+    console.warn(
+      `[CallLifecycle] onCallEnd: no AiCall found for ${params.vapiCallId} — finalizing via UsageReservation`,
+    );
+    return finalizeViaReservation(null, params);
   }
 
-  // Phase 8 hardening: if the call is already ENDED, this is a duplicate webhook
-  // (or out-of-order delivery). Return the existing result — don't re-finalize.
+  // ── Retry path: call is already ended ──────────────────────────────
+  // Phase 8 Hardening: `ended` does NOT mean billing succeeded.
+  // Only return idempotent success if billingStatus is FINALIZED or NOT_APPLICABLE.
   if (call.status === 'ended') {
-    console.log(
-      `[CallLifecycle] onCallEnd: call ${params.vapiCallId} already ended — idempotent no-op`,
+    if (call.billingStatus === 'FINALIZED' || call.billingStatus === 'NOT_APPLICABLE') {
+      console.log(
+        `[CallLifecycle] onCallEnd: call ${params.vapiCallId} already ended + ${call.billingStatus} — idempotent no-op`,
+      );
+      return { callId: call.id, usageFinalized: true, usageIdempotent: true };
+    }
+
+    // billingStatus is PENDING or FAILED → RETRY billing
+    console.warn(
+      `[CallLifecycle] onCallEnd: call ${params.vapiCallId} ended but billingStatus=${call.billingStatus} — RETRYING billing (attempt ${call.billingAttempts + 1})`,
     );
-    // The UsageLedger finalization is also idempotent (idempotencyKey @unique),
-    // but we skip the Vapi API call + AiCall update since they're unnecessary.
-    return { callId: call.id, usageFinalized: true, usageIdempotent: true };
+    return retryBilling(call, params);
   }
 
   // Phase 8 hardening: check legal transition
@@ -276,14 +288,20 @@ export async function onCallEnd(params: CallEndParams): Promise<{
     return { callId: call.id, usageFinalized: false, usageIdempotent: false };
   }
 
-  // 2. Update the AiCall record (immutable after this — snapshot from Vapi)
+  // ── 2. Mark call ended + billing PENDING (telephony done, billing not yet) ──
+  // This is the critical separation: the call is telephony-ended, but we have
+  // NOT yet written the UsageLedger entry. If the process crashes between this
+  // update and the finalizeUsage call, the reconciliation cron will find
+  // `status='ended' AND billingStatus='PENDING'` and retry.
+  const billable = params.billableSeconds ?? Math.ceil(params.durationSec);
+
   await db.aiCall.update({
     where: { id: call.id },
     data: {
       status: 'ended',
       endedAt: new Date(),
       durationSec: params.durationSec,
-      billableSeconds: params.billableSeconds ?? Math.ceil(params.durationSec),
+      billableSeconds: billable,
       costUsd: params.costUsd || 0,
       revenueUsd: params.revenueUsd || 0,
       costBreakdownJson: params.costBreakdown ? JSON.stringify(params.costBreakdown) : '{}',
@@ -295,39 +313,79 @@ export async function onCallEnd(params: CallEndParams): Promise<{
       analysisJson: params.analysis ? JSON.stringify(params.analysis) : '{}',
       outcomeType: params.outcomeType || null,
       timeSavedSec: params.timeSavedSec || 0,
+      billingStatus: 'PENDING',
+      billingAttempts: { increment: 1 },
     },
   });
 
   console.log(
     `[CallLifecycle] call ${params.vapiCallId} → ended ` +
-      `(duration=${params.durationSec}s, billable=${params.billableSeconds ?? params.durationSec}s, ` +
-      `cost=$${params.costUsd || 0})`,
+      `(duration=${params.durationSec}s, billable=${billable}s, cost=$${params.costUsd || 0}) — billing PENDING`,
   );
 
-  // 3. Finalize usage (write the immutable UsageLedger entry)
-  // The entitlement is resolved from the tenant's active subscription
-  const { getActiveEntitlement } = await import('@/lib/entitlement-service');
-  const entitlement = await getActiveEntitlement(call.tenantId, 'AI_RECEPTIONIST');
-
-  if (!entitlement) {
-    console.warn(
-      `[CallLifecycle] onCallEnd: no active entitlement for tenant ${call.tenantId} — usage not finalized`,
-    );
-    return { callId: call.id, usageFinalized: false, usageIdempotent: false };
-  }
-
-  const billable = params.billableSeconds ?? Math.ceil(params.durationSec);
-
-  // Skip finalization for zero-duration calls (failed calls that never connected)
+  // ── 3. Zero-duration calls: no ledger needed, release reservation ──
   if (billable === 0) {
-    console.log(`[CallLifecycle] call ${params.vapiCallId} has 0 billable seconds — releasing reservation`);
+    console.log(`[CallLifecycle] call ${params.vapiCallId} has 0 billable seconds — releasing reservation, billing=NOT_APPLICABLE`);
     await releaseReservationByCallId(params.vapiCallId).catch(() => {});
+    await db.aiCall.update({
+      where: { id: call.id },
+      data: {
+        billingStatus: 'NOT_APPLICABLE',
+        billingFinalizedAt: new Date(),
+      },
+    });
+    return { callId: call.id, usageFinalized: true, usageIdempotent: false };
+  }
+
+  // ── 4. Finalize billing using the RESERVATION's entitlement (not getActiveEntitlement) ──
+  return finalizeBilling(call, params, billable);
+}
+
+/**
+ * Finalize billing for a call that was just marked ended.
+ *
+ * Looks up the UsageReservation by externalCallId and uses ITS entitlementId.
+ * NEVER falls back to getActiveEntitlement — if there's no reservation, that's
+ * a data integrity problem, not permission to charge the current billing period.
+ */
+async function finalizeBilling(
+  call: { id: string; tenantId: string },
+  params: CallEndParams,
+  billable: number,
+): Promise<{ callId: string | null; usageFinalized: boolean; usageIdempotent: boolean }> {
+  // Find the reservation by externalCallId — this is the source of truth for
+  // which entitlement the call was reserved against.
+  const reservation = await db.usageReservation.findFirst({
+    where: { externalCallId: params.vapiCallId },
+    select: { id: true, tenantId: true, entitlementId: true, status: true },
+  });
+
+  if (!reservation) {
+    // DATA INTEGRITY PROBLEM: no reservation found.
+    // Do NOT fall back to getActiveEntitlement — that could charge the wrong
+    // billing period if the period rolled over during the call.
+    // Mark as FAILED so reconciliation can investigate.
+    console.error(
+      `[CallLifecycle] CRITICAL: no UsageReservation found for call ${params.vapiCallId} (tenant ${call.tenantId}) — billing FAILED, no fallback to active entitlement`,
+    );
+    await db.aiCall.update({
+      where: { id: call.id },
+      data: {
+        billingStatus: 'FAILED',
+        billingError: 'NO_RESERVATION',
+        billingFinalizedAt: new Date(),
+      },
+    });
     return { callId: call.id, usageFinalized: false, usageIdempotent: false };
   }
 
+  // Use the RESERVATION's entitlementId — not the "currently active" one.
+  // This ensures the ledger entry hits the same entitlement that was reserved,
+  // even if the billing period rolled over during the call.
   const usageResult = await finalizeUsage({
-    tenantId: call.tenantId,
-    entitlementId: entitlement.id,
+    tenantId: reservation.tenantId,
+    entitlementId: reservation.entitlementId,
+    reservationId: reservation.id,
     externalCallId: params.vapiCallId,
     billableSeconds: billable,
     providerCostUsd: params.costUsd,
@@ -335,15 +393,273 @@ export async function onCallEnd(params: CallEndParams): Promise<{
     costBreakdown: params.costBreakdown,
   });
 
-  console.log(
-    `[CallLifecycle] usage finalized: ${billable}s → ledger ${usageResult.ledgerId} ` +
-      `(idempotent=${usageResult.idempotent})`,
-  );
+  if (usageResult.ok) {
+    // Billing succeeded — mark as FINALIZED
+    await db.aiCall.update({
+      where: { id: call.id },
+      data: {
+        billingStatus: 'FINALIZED',
+        billingFinalizedAt: new Date(),
+        billingError: null,
+      },
+    });
+    console.log(
+      `[CallLifecycle] usage finalized: ${billable}s → ledger ${usageResult.ledgerId} (entitlement=${reservation.entitlementId}, idempotent=${usageResult.idempotent})`,
+    );
+    return {
+      callId: call.id,
+      usageFinalized: true,
+      usageIdempotent: usageResult.idempotent || false,
+    };
+  }
 
+  // Billing failed — mark as FAILED (retryable by reconciliation cron)
+  console.error(
+    `[CallLifecycle] usage finalization FAILED for call ${params.vapiCallId}: ${usageResult.reason}`,
+  );
+  await db.aiCall.update({
+    where: { id: call.id },
+    data: {
+      billingStatus: 'FAILED',
+      billingError: usageResult.reason || 'UNKNOWN',
+    },
+  });
   return {
     callId: call.id,
-    usageFinalized: usageResult.ok,
-    usageIdempotent: usageResult.idempotent || false,
+    usageFinalized: false,
+    usageIdempotent: false,
+  };
+}
+
+/**
+ * Retry billing for a call that is already `ended` but has
+ * `billingStatus` = `PENDING` or `FAILED`.
+ *
+ * Called when a webhook is redelivered and the call was already marked ended
+ * but billing was not finalized. This is the critical fix for the "webhook
+ * retry lies about billing success" bug.
+ */
+async function retryBilling(
+  call: { id: string; tenantId: string; billingStatus: string; billingAttempts: number },
+  params: CallEndParams,
+): Promise<{ callId: string | null; usageFinalized: boolean; usageIdempotent: boolean }> {
+  const billable = params.billableSeconds ?? Math.ceil(params.durationSec);
+
+  // Zero-duration: mark NOT_APPLICABLE
+  if (billable === 0) {
+    console.log(`[CallLifecycle] retry: call ${params.vapiCallId} 0 billable seconds — NOT_APPLICABLE`);
+    await releaseReservationByCallId(params.vapiCallId).catch(() => {});
+    await db.aiCall.update({
+      where: { id: call.id },
+      data: {
+        billingStatus: 'NOT_APPLICABLE',
+        billingFinalizedAt: new Date(),
+      },
+    });
+    return { callId: call.id, usageFinalized: true, usageIdempotent: false };
+  }
+
+  // Increment attempt counter
+  await db.aiCall.update({
+    where: { id: call.id },
+    data: {
+      billingAttempts: { increment: 1 },
+    },
+  });
+
+  // Attempt finalization (uses reservation's entitlement — same as primary path)
+  return finalizeBilling(call, params, billable);
+}
+
+/**
+ * Finalize usage via the reservation (fallback when no AiCall exists).
+ * This path is for legacy/direct-Twilio calls that don't have an AiCall record.
+ * It still uses the reservation's entitlementId (correct behavior).
+ */
+async function finalizeViaReservation(
+  callId: string | null,
+  params: CallEndParams,
+): Promise<{ callId: string | null; usageFinalized: boolean; usageIdempotent: boolean }> {
+  const reservation = await db.usageReservation.findFirst({
+    where: { externalCallId: params.vapiCallId },
+    select: { tenantId: true, entitlementId: true, id: true },
+  });
+
+  if (!reservation) {
+    console.error(
+      `[CallLifecycle] CRITICAL: no AiCall AND no UsageReservation for ${params.vapiCallId} — cannot finalize`,
+    );
+    return { callId: null, usageFinalized: false, usageIdempotent: false };
+  }
+
+  const billable = params.billableSeconds ?? Math.ceil(params.durationSec);
+
+  if (billable === 0) {
+    await releaseReservationByCallId(params.vapiCallId).catch(() => {});
+    return { callId: null, usageFinalized: true, usageIdempotent: false };
+  }
+
+  const finalRes = await finalizeUsage({
+    tenantId: reservation.tenantId,
+    entitlementId: reservation.entitlementId,
+    reservationId: reservation.id,
+    externalCallId: params.vapiCallId,
+    billableSeconds: billable,
+    providerCostUsd: params.costUsd,
+    revenueUsd: params.revenueUsd,
+    costBreakdown: params.costBreakdown,
+  });
+  return { callId, usageFinalized: finalRes.ok, usageIdempotent: finalRes.idempotent || false };
+}
+
+// ─── Phase 8 Hardening: Billing Reconciliation ─────────────────────────────
+// This function is called by the /api/cron/ai-cleanup cron to retry billing
+// for calls that ended but were never finalized (billingStatus = PENDING or FAILED).
+//
+// Without this, a transient DB error during finalizeUsage() would permanently
+// lose billing — the webhook retry would see status='ended' and (before the fix)
+// return false success. Now the retry path in onCallEnd handles webhook
+// redeliveries, but if the webhook is never redelivered, this cron is the
+// safety net.
+//
+// The cron runs every 5 minutes. It finds calls that:
+//   - status = 'ended'
+//   - billingStatus IN ('PENDING', 'FAILED')
+//   - endedAt < now - 5 minutes (grace period to avoid racing with the webhook)
+//   - billingAttempts < 10 (give up after 10 attempts → alert)
+//
+// For each, it calls retryBilling() which uses the reservation's entitlementId
+// (not getActiveEntitlement) to ensure the ledger hits the correct period.
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface ReconciliationResult {
+  scanned: number;
+  retried: number;
+  finalized: number;
+  stillFailing: number;
+  givenUp: number; // calls that exceeded max attempts and need manual intervention
+}
+
+/**
+ * Reconcile billing for ended calls with non-finalized billing status.
+ *
+ * Called by the cron. Finds calls where status='ended' but billingStatus is
+ * PENDING or FAILED, and retries billing using the reservation's entitlementId.
+ *
+ * @param maxAgeMinutes  Only reconcile calls that ended at least this many minutes ago
+ *                       (default: 5 — gives the webhook time to retry naturally)
+ * @param maxAttempts    Give up after this many billing attempts (default: 10)
+ *                       Calls that exceed this are flagged for manual intervention
+ */
+export async function reconcileBilling(
+  maxAgeMinutes: number = 5,
+  maxAttempts: number = 10,
+): Promise<ReconciliationResult> {
+  const cutoff = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
+
+  // Find calls that need reconciliation
+  const callsToReconcile = await db.aiCall.findMany({
+    where: {
+      status: 'ended',
+      billingStatus: { in: ['PENDING', 'FAILED'] },
+      endedAt: { lt: cutoff },
+      billingAttempts: { lt: maxAttempts },
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      vapiCallId: true,
+      billingStatus: true,
+      billingAttempts: true,
+      durationSec: true,
+      billableSeconds: true,
+      costUsd: true,
+      revenueUsd: true,
+      costBreakdownJson: true,
+    },
+    take: 50, // process in batches to avoid long-running cron
+  });
+
+  // Also find calls that have exceeded maxAttempts (for the "givenUp" count)
+  const givenUpCalls = await db.aiCall.count({
+    where: {
+      status: 'ended',
+      billingStatus: { in: ['PENDING', 'FAILED'] },
+      endedAt: { lt: cutoff },
+      billingAttempts: { gte: maxAttempts },
+    },
+  });
+
+  if (callsToReconcile.length === 0 && givenUpCalls === 0) {
+    return { scanned: 0, retried: 0, finalized: 0, stillFailing: 0, givenUp: 0 };
+  }
+
+  console.log(
+    `[Reconciliation] scanning ${callsToReconcile.length} calls with non-finalized billing (${givenUpCalls} given up)`,
+  );
+
+  let finalized = 0;
+  let stillFailing = 0;
+
+  for (const call of callsToReconcile) {
+    try {
+      // Retry billing — this uses the reservation's entitlementId (not getActiveEntitlement)
+      const result = await retryBilling(
+        {
+          id: call.id,
+          tenantId: call.tenantId,
+          billingStatus: call.billingStatus,
+          billingAttempts: call.billingAttempts,
+        },
+        {
+          vapiCallId: call.vapiCallId || '',
+          durationSec: call.durationSec,
+          billableSeconds: call.billableSeconds || undefined,
+          costUsd: call.costUsd || undefined,
+          revenueUsd: call.revenueUsd || undefined,
+          costBreakdown: call.costBreakdownJson && call.costBreakdownJson !== '{}'
+            ? JSON.parse(call.costBreakdownJson)
+            : undefined,
+        },
+      );
+
+      if (result.usageFinalized) {
+        finalized++;
+      } else {
+        stillFailing++;
+      }
+    } catch (err) {
+      console.error(
+        `[Reconciliation] failed to retry billing for call ${call.id} (${call.vapiCallId}):`,
+        err instanceof Error ? err.message : err,
+      );
+      stillFailing++;
+    }
+  }
+
+  // Alert on calls that have given up (need manual intervention)
+  if (givenUpCalls > 0) {
+    console.error(
+      `[Reconciliation] CRITICAL: ${givenUpCalls} calls have exceeded ${maxAttempts} billing attempts and need manual investigation`,
+    );
+    // Create a Superadmin notification (best-effort, non-blocking)
+    db.notification
+      .create({
+        data: {
+          title: 'AI Billing Reconciliation Alert',
+          message: `${givenUpCalls} call(s) have failed billing after ${maxAttempts} attempts and need manual investigation. Check the AI call history for billingStatus=FAILED.`,
+          type: 'billing_reconciliation_alert',
+        },
+      })
+      .catch(() => {});
+  }
+
+  return {
+    scanned: callsToReconcile.length,
+    retried: callsToReconcile.length,
+    finalized,
+    stillFailing,
+    givenUp: givenUpCalls,
   };
 }
 
