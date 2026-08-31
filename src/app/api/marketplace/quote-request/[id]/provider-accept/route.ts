@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { logger, withRequestId } from '@/lib/logger';
+import { parseAttribution, serializeAttribution } from '@/lib/marketplace-attribution';
 
 /**
  * POST /api/marketplace/quote-request/[id]/provider-accept
@@ -113,6 +114,22 @@ export async function POST(
     }
 
     // Create Lead in provider's CRM
+    // Phase 4B: copy marketplace attribution from JobRequest → Lead.
+    // The spread preserves ALL nested objects (firstTouch, lastTouch, session)
+    // from the original submit-time snapshot. Only the top-level `providerId`
+    // is overridden to the accepting provider — this is the authoritative
+    // "who owns this lead now" field. The original `isDirect` flag and the
+    // `lastTouch` snapshot are preserved as-is so reports can distinguish
+    // "broadcast request accepted by provider X" from "direct request to
+    // provider X that they then accepted".
+    const attribution = parseAttribution(jobRequest.marketplaceAttributionJson);
+    const leadAttribution = attribution
+      ? serializeAttribution({
+          ...attribution,
+          providerId: authUser.tenantId, // update to the accepting provider
+        })
+      : '{}';
+
     const lead = await db.lead.create({
       data: {
         title: jobRequest.title || 'Marketplace Quote Request',
@@ -128,6 +145,8 @@ export async function POST(
         serviceType: jobRequest.industry || null,
         customerId: customer.id,
         tenantId: authUser.tenantId,
+        // Phase 4B: marketplace attribution survives the JobRequest → Lead conversion
+        marketplaceAttributionJson: leadAttribution,
         notesJson: JSON.stringify([{
           text: `Marketplace quote request accepted. Budget: ${jobRequest.currency} ${jobRequest.budgetLow || 0}-${jobRequest.budgetHigh || 0}. Urgency: ${jobRequest.urgency}`,
           createdAt: new Date().toISOString(),

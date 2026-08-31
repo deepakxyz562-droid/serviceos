@@ -36,6 +36,7 @@ import { mpUrl, type ProviderProfileResponse } from './types';
 import { InstantBookingDialog } from './instant-booking-dialog';
 import { QuoteRequestDialog } from './quote-request-dialog';
 import { SafeImage } from './safe-image';
+import { useMarketplaceFirstTouch } from '@/lib/marketplace/attribution-client';
 
 interface ProviderProfileProps {
   /** Either tenant id or slug */
@@ -119,6 +120,13 @@ export function ProviderProfile({ slug, onBack, backHref, initialData }: Provide
   const [instantOpen, setInstantOpen] = React.useState(false);
   const [quoteOpen, setQuoteOpen] = React.useState(false);
   const [selectedServiceId, setSelectedServiceId] = React.useState<string | null>(null);
+
+  // Phase 4B: capture marketplace first-touch context on mount. Uses the
+  // provider's country (from the loaded profile) once available; before
+  // load completes, geoCountry is undefined and captureFirstTouch falls back
+  // to no geo (the sessionStorage snapshot is written on first mount, and
+  // subsequent calls are no-ops — so the first paint wins).
+  useMarketplaceFirstTouch(data?.tenant?.country ?? null);
 
   React.useEffect(() => {
     // If server-rendered with initialData, no need to refetch on mount.
@@ -719,6 +727,17 @@ export function ProviderProfile({ slug, onBack, backHref, initialData }: Provide
         defaultTitle={`Quote request for ${tenant.name}`}
         defaultIndustry={tenant.industry}
         defaultCity={tenant.city}
+        // Phase 4B v2: structured marketplace attribution
+        provider={{
+          id: tenant.id,
+          slug: tenant.publicSlug || tenant.slug,
+          name: tenant.name,
+          industry: tenant.industry,
+          city: tenant.city,
+          state: tenant.state,
+          country: tenant.country,
+        }}
+        cardPath="provider_profile"
       />
     </div>
   );

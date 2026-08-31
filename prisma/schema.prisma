@@ -844,6 +844,12 @@ model Lead {
   assessmentImagesJson String @default("[]")
   followUpAt      DateTime?
   convertedAt     DateTime?
+  // ── Phase 4B: Marketplace attribution ────────────────────────────────
+  // When a lead originates from the marketplace (source='marketplace'), this
+  // field stores the search/filter context that led to the conversion:
+  // { source, providerId, searchQuery, city, country, industry, sort, position }
+  // Non-marketplace leads have this set to "{}" (default).
+  marketplaceAttributionJson String @default("{}")
   // ── Soft delete: when set, the lead is hidden from the main list but kept
   // in "Lead History" for audit. Permanent delete = hard DELETE from DB. ──
   deletedAt       DateTime?
@@ -6270,6 +6276,8 @@ model JobRequest {
   viewCount       Int      @default(0)  // how many providers viewed
   quoteCount      Int      @default(0)  // how many quotes received
   metadataJson    String   @default("{}")
+  // ── Phase 4B: Marketplace attribution ────────────────────────────────
+  marketplaceAttributionJson String @default("{}")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

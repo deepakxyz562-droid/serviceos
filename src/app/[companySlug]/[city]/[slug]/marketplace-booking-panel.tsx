@@ -125,6 +125,14 @@ export function MarketplaceBookingPanel({
         defaultTitle={`Quote request for ${providerName}`}
         defaultIndustry={industry}
         defaultCity={city}
+        // Phase 4B v2: structured marketplace attribution
+        provider={{
+          id: providerTenantId,
+          name: providerName,
+          industry,
+          city,
+        }}
+        cardPath="booking_panel"
       />
     </>
   );

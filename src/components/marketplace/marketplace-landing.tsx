@@ -46,6 +46,7 @@ import { ProviderProfile as ProviderProfileView } from './provider-profile';
 import { InstantBookingDialog } from './instant-booking-dialog';
 import { QuoteRequestDialog } from './quote-request-dialog';
 import { EmergencyDialog } from './emergency-dialog';
+import { useMarketplaceFirstTouch } from '@/lib/marketplace/attribution-client';
 
 interface MarketplaceLandingProps {
   onGetStarted?: () => void;
@@ -107,6 +108,9 @@ export function MarketplaceLanding({
   const [quoteOpen, setQuoteOpen] = React.useState(false);
   const [emergencyOpen, setEmergencyOpen] = React.useState(false);
   const [aiInstantProvider, setAiInstantProvider] = React.useState<ProviderListItem | null>(null);
+
+  // Phase 4B: capture marketplace first-touch context on mount (idempotent).
+  useMarketplaceFirstTouch();
 
   // Featured providers
   React.useEffect(() => {
@@ -829,6 +833,9 @@ export function MarketplaceLanding({
         defaultBudgetLow={aiResult?.extraction.budgetLow ?? null}
         defaultBudgetHigh={aiResult?.extraction.budgetHigh ?? null}
         defaultUrgency={aiResult?.extraction.urgency ?? 'medium'}
+        // Phase 4B v2: structured marketplace attribution
+        // This is the landing-hero broadcast flow — no specific provider.
+        cardPath="marketplace_landing_hero"
       />
       <EmergencyDialog
         open={emergencyOpen}

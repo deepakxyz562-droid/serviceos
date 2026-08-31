@@ -6,6 +6,7 @@ import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit'
 import { getIndustry } from '@/lib/industry-catalog';
 import { sendEmail } from '@/lib/email-send';
 import { renderProviderQuoteEmail, renderProviderQuoteEmailText } from '@/lib/email-templates/provider-quote-request';
+import { serializeAttribution, sanitizeAttribution, type MarketplaceAttribution } from '@/lib/marketplace-attribution';
 
 /**
  * Flow 2: Quote Request — create (Fieseros V1.5 — P10-flows)
@@ -318,6 +319,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the JobRequest tied directly to this provider
+    // Phase 4B v2: sanitize the structured attribution object from the client.
+    // Falls back to flat fields for backward compat (mobile / old clients).
+    // Server overrides providerId + isDirect with authoritative values.
+    const directAttribution: MarketplaceAttribution | null = sanitizeAttribution(
+      body.attribution ?? {
+        source: 'marketplace',
+        searchQuery: body.searchQuery,
+        city: city || undefined,
+        country: body.country,
+        industry: industry || target.industry || undefined,
+        sort: body.sort,
+        position: body.position,
+        firstTouchAt: new Date().toISOString(),
+      },
+      { providerId: target.id, isDirect: true },
+    );
     let jobRequest;
     try {
       jobRequest = await db.jobRequest.create({
@@ -348,6 +365,7 @@ export async function POST(request: NextRequest) {
             source: 'marketplace_profile',
             createdAt: new Date().toISOString(),
           }),
+          marketplaceAttributionJson: serializeAttribution(directAttribution),
         },
       });
     } catch (err) {
@@ -422,6 +440,22 @@ export async function POST(request: NextRequest) {
   const broadcastToIds = await findBroadcastCandidates(industry, city, postalCode);
 
   // ── 5. Create the JobRequest ───────────────────────────────────────
+  // Phase 4B v2: sanitize the structured attribution object from the client.
+  // Falls back to flat fields for backward compat (mobile / old clients).
+  // Server overrides providerId=null + isDirect=false (broadcast mode).
+  const broadcastAttribution: MarketplaceAttribution | null = sanitizeAttribution(
+    body.attribution ?? {
+      source: 'marketplace',
+      searchQuery: body.searchQuery,
+      city: city || undefined,
+      country: body.country,
+      industry: industry || undefined,
+      sort: body.sort,
+      position: body.position,
+      firstTouchAt: new Date().toISOString(),
+    },
+    { providerId: null, isDirect: false },
+  );
   let jobRequest;
   try {
     jobRequest = await db.jobRequest.create({
@@ -452,6 +486,7 @@ export async function POST(request: NextRequest) {
           source: 'marketplace',
           createdAt: new Date().toISOString(),
         }),
+        marketplaceAttributionJson: serializeAttribution(broadcastAttribution),
       },
     });
   } catch (err) {

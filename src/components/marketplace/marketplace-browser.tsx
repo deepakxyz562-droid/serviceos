@@ -55,6 +55,7 @@ import { cn } from '@/lib/utils';
 import { useSearchParams } from 'next/navigation';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { trackEvent } from '@/lib/analytics/consent';
+import { useMarketplaceFirstTouch } from '@/lib/marketplace/attribution-client';
 
 interface MarketplaceBrowserProps {
   /** SSR-fetched first page (24 items) for SEO + instant paint. The client
@@ -100,6 +101,12 @@ export function MarketplaceBrowser({
   detectedCountry,
 }: MarketplaceBrowserProps) {
   const searchParams = useSearchParams();
+
+  // Phase 4B: capture marketplace first-touch context on mount (idempotent —
+  // only writes to sessionStorage on the very first marketplace paint per
+  // browser tab). This ensures firstTouchAt is accurate even if the user
+  // browses for a long time before opening the quote dialog.
+  useMarketplaceFirstTouch(detectedCountry);
 
   // Concern #4: Cache the provider list to IndexedDB for offline browsing.
   // We use a dynamic import inside useEffect so Dexie (IndexedDB) is only
@@ -370,24 +377,46 @@ export function MarketplaceBrowser({
   }, [cityInput]);
 
   // ── Phase 4A: GA4 marketplace_search event ─────────────────────────────
-  // Fires when the user's search context changes (query, city, or sort).
+  // Fires when the user's search/filter context changes.
   // Debounced 500ms to avoid firing on every keystroke.
-  const searchContextRef = React.useRef({ query: '', city: '', sort: '' });
+  // Tracks the COMPLETE search state so GA4 can answer:
+  //   "Which search + filter combinations convert?"
+  const searchContextRef = React.useRef('');
   React.useEffect(() => {
     const handle = setTimeout(() => {
-      const ctx = { query: searchQuery, city: cityFilter, sort };
-      const prev = searchContextRef.current;
-      if (ctx.query !== prev.query || ctx.city !== prev.city || ctx.sort !== prev.sort) {
-        searchContextRef.current = ctx;
+      // Build a stable string key for change detection
+      const contextKey = JSON.stringify({
+        q: searchQuery, c: cityFilter, s: sort,
+        co: countryFilter ?? detectedCountry ?? null,
+        i: industryFilter, v: verticalFilter,
+        mr: minRating, tf: trustFullyVerified,
+        tr: trustRatingHigh, te: trustEmergency,
+        cf: claimedFilter, r: effectiveRadiusKm,
+      });
+      if (contextKey !== searchContextRef.current) {
+        searchContextRef.current = contextKey;
+        // Explicitly construct the analytics payload — don't send the
+        // raw Zustand store object. Only include non-default values.
         trackEvent('marketplace_search', {
-          search_query: ctx.query || undefined,
-          search_city: ctx.city || undefined,
-          search_sort: ctx.sort,
+          search_query: searchQuery || undefined,
+          search_city: cityFilter || undefined,
+          search_country: countryFilter ?? detectedCountry ?? undefined,
+          search_industry: industryFilter || undefined,
+          search_vertical: verticalFilter || undefined,
+          search_sort: sort,
+          min_rating: minRating > 0 ? minRating : undefined,
+          trust_fully_verified: trustFullyVerified || undefined,
+          trust_rating_high: trustRatingHigh || undefined,
+          trust_emergency: trustEmergency || undefined,
+          claimed_filter: claimedFilter !== 'all' ? claimedFilter : undefined,
+          radius_km: effectiveRadiusKm ?? undefined,
         });
       }
     }, 500);
     return () => clearTimeout(handle);
-  }, [searchQuery, cityFilter, sort]);
+  }, [searchQuery, cityFilter, sort, countryFilter, detectedCountry,
+      industryFilter, verticalFilter, minRating, trustFullyVerified,
+      trustRatingHigh, trustEmergency, claimedFilter, effectiveRadiusKm]);
 
   // ── Sync store with server-passed initialFilters & detected country ──
   // Next.js Server Components re-run and pass new props on history back/forward

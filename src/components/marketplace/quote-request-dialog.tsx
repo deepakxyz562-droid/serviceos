@@ -40,6 +40,12 @@ import { toast } from 'sonner';
 import { mpUrl, type QuoteRequestResponse, type Urgency } from './types';
 import { SafeImage } from './safe-image';
 import { trackEvent } from '@/lib/analytics/consent';
+import {
+  buildAttributionPayload,
+  readMarketplaceSearchContext,
+  type AttributionProviderContext,
+  type MarketplaceLastTouch,
+} from '@/lib/marketplace/attribution-client';
 
 interface QuoteRequestDialogProps {
   open: boolean;
@@ -67,6 +73,51 @@ interface QuoteRequestDialogProps {
   targetTenantId?: string;
   /** Provider name for display in direct mode (title + success message) */
   targetProviderName?: string;
+
+  // ── Phase 4B v2: structured marketplace attribution ──────────────────
+  /**
+   * The provider this quote request is associated with (if any). Used to
+   * populate `lastTouch.provider*` fields in the attribution payload. For
+   * broadcast / landing-hero flows, omit this.
+   *
+   * For DIRECT mode (targetTenantId set), this should be the unclaimed
+   * provider's context. The dialog will still set `providerId` to the
+   * targetTenantId for the API call, but the attribution `lastTouch`
+   * snapshot uses this richer object.
+   */
+  provider?: AttributionProviderContext | null;
+  /**
+   * Which UI surface the quote was initiated from. Drives
+   * `lastTouch.cardPath` in the attribution payload. One of:
+   *   'browse_grid' | 'provider_profile' | 'unclaimed_panel' |
+   *   'booking_panel' | 'marketplace_landing_hero'
+   */
+  cardPath?: MarketplaceLastTouch['cardPath'];
+  /**
+   * 0-indexed card slot in the visible browse grid (only meaningful when
+   * cardPath === 'browse_grid'). Drives `lastTouch.cardPosition`.
+   */
+  cardPosition?: number;
+  /**
+   * Optional GeoIP country (ISO code) from the SSR `detectedCountry` prop.
+   * Used to seed first-touch capture when the user deep-links directly to a
+   * provider profile (skipping the browse page's mount hook).
+   */
+  geoCountry?: string | null;
+
+  // ── DEPRECATED Phase 4B v1 flat attribution props ────────────────────
+  // Kept for backward compatibility with any external caller. The structured
+  // `attribution` object built from `provider` + `cardPath` + the Zustand
+  // store is the canonical source going forward. If both are supplied, the
+  // structured object wins.
+  /** @deprecated use provider + cardPath */
+  marketplaceSearchQuery?: string;
+  /** @deprecated use provider + cardPath */
+  marketplaceSort?: string;
+  /** @deprecated use provider + cardPath */
+  marketplaceCountry?: string;
+  /** @deprecated use provider + cardPath */
+  marketplacePosition?: number;
 }
 
 type Step = 'form' | 'submitting' | 'success';
@@ -91,6 +142,16 @@ export function QuoteRequestDialog({
   defaultUrgency,
   targetTenantId,
   targetProviderName,
+  // Phase 4B v2: structured attribution
+  provider,
+  cardPath,
+  cardPosition,
+  geoCountry,
+  // Deprecated v1 flat attribution props (kept for backward compat)
+  marketplaceSearchQuery,
+  marketplaceSort,
+  marketplaceCountry,
+  marketplacePosition,
 }: QuoteRequestDialogProps) {
   const isDirectMode = !!targetTenantId;
   const [step, setStep] = React.useState<Step>('form');
@@ -187,6 +248,22 @@ export function QuoteRequestDialog({
     }
 
     try {
+      // ── Phase 4B v2: build structured marketplace attribution payload ──
+      // The payload captures first-touch (UTM/referrer/landing page, frozen
+      // in sessionStorage), last-touch (search filters + provider context at
+      // submit time), and an anonymous session ID. The server stores it
+      // verbatim on JobRequest.marketplaceAttributionJson and copies it to
+      // Lead.marketplaceAttributionJson on provider-accept.
+      const searchContext = readMarketplaceSearchContext();
+      const attribution = buildAttributionPayload({
+        search: searchContext,
+        provider: provider ?? null,
+        cardPath: cardPath ?? (isDirectMode ? 'unclaimed_panel' : 'marketplace_landing_hero'),
+        cardPosition,
+        isDirect: isDirectMode,
+        geoCountry: geoCountry ?? marketplaceCountry ?? null,
+      });
+
       const res = await fetch(mpUrl('/api/marketplace/quote-request'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -205,6 +282,15 @@ export function QuoteRequestDialog({
           customerEmail: customerEmail.trim() || undefined,
           photos: photoUrls,
           ...(targetTenantId ? { targetTenantId } : {}),
+          // Phase 4B v2: structured attribution payload (canonical)
+          attribution,
+          // Phase 4B v1: flat attribution fields (kept for backward compat —
+          // the API route merges these into the stored JSON if `attribution`
+          // is somehow absent. With v2 wired, these are redundant but harmless.)
+          searchQuery: marketplaceSearchQuery || undefined,
+          sort: marketplaceSort || undefined,
+          country: marketplaceCountry || undefined,
+          position: marketplacePosition,
         }),
       });
 
