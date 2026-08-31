@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { invalidateSuperAdminCache } from '@/lib/admin-auth';
 
 /**
  * Promote the admin@fieseros.ai user to super admin.
@@ -25,6 +26,10 @@ export async function POST(request: Request) {
         role: 'super_admin',
       },
     });
+
+    // Invalidate the super-admin cache for this user so the promotion
+    // takes effect immediately (rather than waiting up to 60 seconds).
+    invalidateSuperAdminCache(admin.id);
 
     return NextResponse.json({
       message: 'User promoted to super admin',

@@ -25,7 +25,7 @@ import { verifyCronAuth } from '@/lib/cron-auth'
  * prevents duplicate sends if the cron is triggered twice in one day
  * (manual retry, double-trigger, master-cron re-run, etc.).
  *
- * Auth: shared secret in x-cron-secret header or ?secret= query (CRON_SECRET env).
+ * Auth: shared secret in x-cron-secret header or `x-cron-secret` header or `Authorization: Bearer` header query (CRON_SECRET env).
  *
  * Schedule: daily at 09:00 UTC (via /api/cron/master on Vercel).
  */

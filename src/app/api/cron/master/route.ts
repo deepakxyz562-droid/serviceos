@@ -35,7 +35,7 @@ import { verifyCronAuth } from '@/lib/cron-auth'
  *   See README-cron-setup.md for the cron-job.org import guide.
  *
  * AUTH: shared secret via `x-cron-secret` header, `Authorization: Bearer`,
- * or `?secret=`/`?key=` query param. Must match CRON_SECRET env var.
+ * or ``x-cron-secret` header or `Authorization: Bearer` header`/``x-cron-secret` header or `Authorization: Bearer` header` query param. Must match CRON_SECRET env var.
  *
  * SCHEDULE (in vercel.json):
  *   "0 2 * * *"  → daily at 02:00 UTC (07:30 IST)

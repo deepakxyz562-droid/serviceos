@@ -220,17 +220,16 @@ export function ExpensesView() {
   const [viewReceipt, setViewReceipt] = useState<Expense | null>(null);
 
   // ── Derived summary stats (computed across ALL expenses, ignoring filters) ──
-  // We re-fetch unfiltered totals by computing from current list when filter=all,
-  // otherwise we keep a separate "all" cache. For simplicity, compute from current
-  // visible set when statusFilter === 'all'; when filtered, stats reflect the
-  // full set via a dedicated effect.
-  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
-  useEffect(() => {
-    // Keep a shadow copy of the unfiltered list for summary cards.
-    if (statusFilter === 'all' && categoryFilter === 'all' && !search.trim()) {
-      setAllExpenses(expenses as Expense[]);
-    }
-  }, [expenses, statusFilter, categoryFilter, search]);
+  // Refactored: use useMemo instead of useState + useEffect to avoid
+  // set-state-in-effect. The "all expenses" snapshot is derived directly
+  // from the current list when no filters are active.
+  const allExpenses = useMemo(
+    () =>
+      statusFilter === 'all' && categoryFilter === 'all' && !search.trim()
+        ? (expenses as Expense[])
+        : [],
+    [expenses, statusFilter, categoryFilter, search],
+  );
 
   const stats = useMemo(() => {
     const source = allExpenses.length ? allExpenses : expenses;

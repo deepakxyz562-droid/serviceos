@@ -124,36 +124,42 @@ export function AcceptInvitation({ token, onAuthSuccess, onBackToLanding }: Acce
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // ─── Verify invitation token on mount ─────────────────────────────────────
+  // Refactored: async logic moved into the effect body with a cancellation
+  // guard to prevent setting state after unmount or after a token change.
+  React.useEffect(() => {
+    let cancelled = false;
 
-  const verifyToken = useCallback(async () => {
-    try {
-      const res = await authFetch(`/api/invitations/verify?token=${encodeURIComponent(token)}&XTransformPort=3000`);
-      const data = await res.json();
+    async function verify() {
+      try {
+        const res = await authFetch(`/api/invitations/verify?token=${encodeURIComponent(token)}&XTransformPort=3000`);
+        const data = await res.json();
+        if (cancelled) return;
 
-      if (!res.ok) {
-        if (res.status === 410 || data.expired) {
-          setPageState('expired');
-          setErrorMessage(data.error || 'This invitation has expired');
-        } else {
-          setPageState('invalid');
-          setErrorMessage(data.error || 'Invalid invitation link');
+        if (!res.ok) {
+          if (res.status === 410 || data.expired) {
+            setPageState('expired');
+            setErrorMessage(data.error || 'This invitation has expired');
+          } else {
+            setPageState('invalid');
+            setErrorMessage(data.error || 'Invalid invitation link');
+          }
+          return;
         }
-        return;
+
+        setInvitation(data);
+        setFullName(data.employeeName || '');
+        setPhone(data.employeePhone || '');
+        setPageState('valid');
+      } catch {
+        if (cancelled) return;
+        setPageState('invalid');
+        setErrorMessage('Unable to verify invitation. Please check your link.');
       }
-
-      setInvitation(data);
-      setFullName(data.employeeName || '');
-      setPhone(data.employeePhone || '');
-      setPageState('valid');
-    } catch {
-      setPageState('invalid');
-      setErrorMessage('Unable to verify invitation. Please check your link.');
     }
-  }, [token]);
 
-  useEffect(() => {
-    verifyToken();
-  }, [verifyToken]);
+    verify();
+    return () => { cancelled = true; };
+  }, [token]);
 
   // ─── Handle form submission ───────────────────────────────────────────────
 

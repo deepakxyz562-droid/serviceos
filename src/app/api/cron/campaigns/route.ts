@@ -15,7 +15,7 @@ import { verifyCronAuth } from '@/lib/cron-auth'
  * scheduled email campaigns, sends them, and marks them completed.
  *
  * Auth: shared secret via x-cron-secret header OR Authorization: Bearer
- * OR ?secret= query (CRON_SECRET env). Same scheme as the other /api/cron/*
+ * OR `x-cron-secret` header or `Authorization: Bearer` header query (CRON_SECRET env). Same scheme as the other /api/cron/*
  * routes so netlify cron-daily.js (which sends x-cron-secret) works
  * without modification.
  *

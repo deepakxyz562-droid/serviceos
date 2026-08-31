@@ -27,7 +27,7 @@ import { pickRandomEuropeanLocation } from '@/lib/featured-location';
  * `src/lib/cron-auth.ts`. Accepted sources (in priority order):
  *   1. `x-cron-secret` header                 (preferred — used by cron-job.org)
  *   2. `Authorization: Bearer <secret>` header (used by Vercel Cron, GitHub Actions)
- *   3. `?key=<secret>` OR `?secret=<secret>`   (fallback for services that can't set headers)
+ *   3. ``x-cron-secret` header OR `Authorization: Bearer <secret>` header
  * The secret must match the `CRON_SECRET` env var. In dev (NODE_ENV !==
  * 'production') the route falls back to allow-if-unset. Do NOT add custom
  * auth here — the helper already covers every supported source.

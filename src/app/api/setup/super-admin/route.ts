@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
+import { invalidateSuperAdminCache } from '@/lib/admin-auth';
 
 /**
  * One-time setup endpoint to create/update the super admin.
@@ -49,6 +50,8 @@ export async function POST(request: Request) {
           role: 'super_admin',
         },
       });
+      // Invalidate cache so promotion takes effect immediately
+      invalidateSuperAdminCache(updated.id);
       return NextResponse.json({
         message: 'Existing user promoted to super admin',
         admin: { email: updated.email, name: updated.name, role: updated.role, isSuperAdmin: updated.isSuperAdmin },

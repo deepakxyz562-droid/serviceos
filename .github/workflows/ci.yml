@@ -1,22 +1,20 @@
 # CI — runs on every Pull Request and push to main.
 #
-# Pipeline stages:
-#   1. Lint (advisory — continue-on-error until the 42 pre-existing errors are fixed)
-#   2. TypeScript check (advisory — continue-on-error until tsc --noEmit passes cleanly)
+# Pipeline stages (ALL BLOCKING as of Phase Security-1):
+#   1. Lint (blocking — 0 errors required)
+#   2. TypeScript check (blocking — must pass cleanly)
 #   3. Build (blocking — ensures the app actually compiles)
-#   4. Unit tests (blocking once vitest is wired up — currently a no-op placeholder)
+#   4. Unit tests (blocking — vitest)
 #
-# WHY advisory for lint/tsc?
-#   The codebase has 1,499 TS/TSX files and was developed without CI. Flipping
-#   these to blocking on day one would fail every PR. Instead, we surface the
-#   errors as warnings so contributors can see the baseline and fix incrementally.
-#   Once the error count reaches zero, flip `continue-on-error: false` and
-#   remove `typescript.ignoreBuildErrors` from next.config.ts.
+# The pre-existing 11 lint errors were fixed in Phase Security-1
+# (super-admin authorization + cron auth + set-state-in-effect refactors).
+# CI is now a trustworthy quality gate — new errors cannot enter.
 #
 # To run locally:
 #   bun run lint
 #   npx tsc --noEmit
 #   bun run build
+#   bun run test:run
 
 name: CI
 
@@ -33,9 +31,8 @@ concurrency:
 
 jobs:
   lint:
-    name: Lint (advisory)
+    name: Lint (blocking)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -51,12 +48,10 @@ jobs:
 
       - name: Run ESLint
         run: bun run lint
-        continue-on-error: true
 
   typecheck:
-    name: TypeScript check (advisory)
+    name: TypeScript check (blocking)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -72,7 +67,6 @@ jobs:
 
       - name: TypeScript check
         run: npx tsc --noEmit --skipLibCheck
-        continue-on-error: true
 
   build:
     name: Build (blocking)

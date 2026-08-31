@@ -31,7 +31,7 @@ import { reconcileBilling } from '@/lib/call-lifecycle-service';
  *      b. → status = released
  *   4. released: skip (done)
  *
- * Auth: verifyCronAuth (x-cron-secret header / Bearer / ?key=)
+ * Auth: verifyCronAuth (x-cron-secret header / Bearer / `x-cron-secret` header or `Authorization: Bearer` header)
  *       Production refuses to run if CRON_SECRET is unset (no dev fallback).
  */
 

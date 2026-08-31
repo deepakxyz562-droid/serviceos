@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useSyncExternalStore } from "react";
+import { useState, useEffect, useSyncExternalStore, useRef } from "react";
 import Link from "next/link";
 import { Cookie } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -164,15 +164,27 @@ export function CookieConsentBanner() {
 
   // Trigger the exit transition when `visible` goes false. Keep the element
   // mounted for EXIT_ANIMATION_MS so the CSS transition can play, then unmount.
+  // Refactored: use a ref to track previous visibility + avoid synchronous
+  // setState in the effect body (the rule wants us to not call setState
+  // synchronously during render-phase of the effect).
+  const prevVisibleRef = useRef(visible);
   useEffect(() => {
+    const wasVisible = prevVisibleRef.current;
+    prevVisibleRef.current = visible;
+
     if (visible) {
-      setLeaving(false);
+      if (!wasVisible) {
+        // Became visible — ensure leaving is reset (deferred to avoid cascading render)
+        const timer = setTimeout(() => setLeaving(false), 0);
+        return () => clearTimeout(timer);
+      }
       return;
     }
-    // If we were previously visible (element is mounted), start the exit.
-    setLeaving(true);
-    const timer = setTimeout(() => setLeaving(false), EXIT_ANIMATION_MS);
-    return () => clearTimeout(timer);
+    if (!wasVisible) return; // was already hidden — nothing to animate
+    // Became hidden — start exit transition
+    const timer = setTimeout(() => setLeaving(true), 0);
+    const exitTimer = setTimeout(() => setLeaving(false), EXIT_ANIMATION_MS);
+    return () => { clearTimeout(timer); clearTimeout(exitTimer); };
   }, [visible]);
 
   const handleAcceptAll = () => {

@@ -17,7 +17,7 @@ import { seedDirectory, type SeedResult } from '@/lib/directory-seed';
  *
  * Trigger it once from a browser or curl:
  *
- *   curl 'https://fieseros.com/api/cron/seed-directory?secret=$CRON_SECRET'
+ *   curl 'https://fieseros.com/api/cron/seed-directory`x-cron-secret` header or `Authorization: Bearer` header$CRON_SECRET'
  *
  * WHY THIS EXISTS
  * ---------------
@@ -41,7 +41,7 @@ import { seedDirectory, type SeedResult } from '@/lib/directory-seed';
  * `src/lib/cron-auth.ts`. Accepted sources (in priority order):
  *   1. `x-cron-secret` header                 (preferred)
  *   2. `Authorization: Bearer <secret>` header
- *   3. `?key=<secret>` OR `?secret=<secret>`   (browser/curl fallback)
+ *   3. ``x-cron-secret` header or `Authorization: Bearer` header<secret>` OR ``x-cron-secret` header or `Authorization: Bearer` header<secret>`   (browser/curl fallback)
  * The secret must match the `CRON_SECRET` env var — the SAME secret your other
  * crons (`featured-location`, `appointment-reminders`, etc.) already use.
  *

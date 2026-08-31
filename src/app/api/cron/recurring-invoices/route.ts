@@ -11,7 +11,7 @@ import { verifyCronAuth } from '@/lib/cron-auth';
  *
  * This endpoint is meant to be called by an external scheduler (Vercel Cron,
  * GitHub Actions, system cron, etc.). It's protected by a shared secret passed
- * in the `x-cron-secret` header or `?secret=` query param, which must match
+ * in the `x-cron-secret` header or ``x-cron-secret` header or `Authorization: Bearer` header` query param, which must match
  * the CRON_SECRET env var (falls back to a dev default if unset).
  *
  * Example cron (every day at 9 AM):

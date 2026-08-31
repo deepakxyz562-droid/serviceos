@@ -12,7 +12,11 @@ import { logger } from '@/lib/logger';
  * Auth sources accepted (in priority order):
  *   1. `x-cron-secret` header                 (preferred — used by cron-job.org, Netlify, QStash)
  *   2. `Authorization: Bearer <secret>` header (used by Vercel Cron, GitHub Actions)
- *   3. `?key=<secret>` OR `?secret=<secret>`   (fallback for services that can't set headers)
+ *
+ * SECURITY: Query-string secrets (`?key=` / `?secret=`) were REMOVED in
+ * Phase Security-1. URLs (including query strings) can appear in reverse-proxy
+ * logs, application logs, monitoring systems, browser history, screenshots,
+ * error tracking, and analytics. Headers are the only accepted auth method now.
  *
  * Security policy:
  *   - Production: if CRON_SECRET is unset → 401 (refuse to run, log error)
@@ -37,15 +41,14 @@ export function verifyCronAuth(request: NextRequest): CronAuthResult {
   const expectedSecret = process.env.CRON_SECRET;
   const isDev = process.env.NODE_ENV !== 'production';
 
-  // Collect the provided secret from any supported source
+  // Collect the provided secret from HEADER sources only.
+  // Query-string secrets (?key= / ?secret=) were removed for security:
+  // they can leak via logs, browser history, monitoring, etc.
   const headerSecret = request.headers.get('x-cron-secret');
   const bearerHeader = request.headers.get('authorization') || '';
   const bearerMatch = bearerHeader.match(/^Bearer\s+(.+)$/i);
-  const querySecret =
-    new URL(request.url).searchParams.get('key') ||
-    new URL(request.url).searchParams.get('secret');
 
-  const providedSecret = headerSecret || bearerMatch?.[1] || querySecret || '';
+  const providedSecret = headerSecret || bearerMatch?.[1] || '';
 
   // CRON_SECRET not configured
   if (!expectedSecret) {
@@ -76,7 +79,6 @@ export function verifyCronAuth(request: NextRequest): CronAuthResult {
         component,
         hasHeader: !!headerSecret,
         hasBearer: !!bearerMatch,
-        hasQuery: !!querySecret,
       },
       'Unauthorized cron attempt',
     );

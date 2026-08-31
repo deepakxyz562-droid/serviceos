@@ -22,7 +22,7 @@ import { verifyCronAuth } from '@/lib/cron-auth';
  *
  * Auth:
  *   - `Authorization: Bearer ${CRON_SECRET}` header (preferred)
- *   - OR `?key=${CRON_SECRET}` query param (fallback for cron services that
+ *   - OR ``x-cron-secret` header or `Authorization: Bearer` header${CRON_SECRET}` query param (fallback for cron services that
  *     can't set headers, e.g. GitHub Actions scheduled workflows)
  *   - If `CRON_SECRET` is not set in env:
  *       * In NODE_ENV=development → allow with a warning (local testing)

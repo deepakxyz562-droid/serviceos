@@ -48,13 +48,7 @@ import { cn } from '@/lib/utils';
 
 const LazyBarChart = dynamic(
   () => import('recharts').then((m) => {
-    const R = m.ResponsiveContainer;
-    const BC = m.BarChart;
-    const Bar = m.Bar;
-    const XAxis = m.XAxis;
-    const YAxis = m.YAxis;
-    const Tooltip = m.Tooltip;
-    const CartesianGrid = m.CartesianGrid;
+    const { ResponsiveContainer, BarChart: BC, Bar, XAxis, YAxis, Tooltip, CartesianGrid } = m;
     return {
       default: function PlatformBarChart({
         data,

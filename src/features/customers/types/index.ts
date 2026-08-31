@@ -38,9 +38,9 @@ export interface StatusConfig {
   bg: string;
 }
 
-export interface BookingStatusConfig extends StatusConfig {}
+export type BookingStatusConfig = StatusConfig;
 
-export interface QuoteStatusConfig extends StatusConfig {}
+export type QuoteStatusConfig = StatusConfig;
 
 export interface InvoiceStatusConfig extends StatusConfig {
   icon: ElementType;

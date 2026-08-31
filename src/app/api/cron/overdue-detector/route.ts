@@ -16,7 +16,7 @@ import { verifyCronAuth } from '@/lib/cron-auth';
  * tick (every 15 min) — this endpoint just enqueues.
  *
  * Protected by a shared secret passed in the `x-cron-secret` header (or
- * `?secret=` query param) — same pattern as the other Fieseros cron routes.
+ * ``x-cron-secret` header or `Authorization: Bearer` header` query param) — same pattern as the other Fieseros cron routes.
  *
  * Recommended schedule: daily at 8 AM.
  *   Vercel cron:   "0 8 * * *"

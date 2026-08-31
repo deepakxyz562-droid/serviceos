@@ -1,8 +1,9 @@
 import type { Config } from 'tailwindcss';
+import nativewindPreset from 'nativewind/preset';
 
 const config: Config = {
   content: ['./app/**/*.{ts,tsx}', './src/**/*.{ts,tsx}'],
-  presets: [require('nativewind/preset')],
+  presets: [nativewindPreset],
   theme: {
     extend: {
       colors: {

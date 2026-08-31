@@ -46,11 +46,23 @@ export function RecurringJobsView() {
   const pendingOpenEntity = useAppStore((s) => s.pendingOpenEntity);
   const setPendingOpenEntity = useAppStore((s) => s.setPendingOpenEntity);
 
-  useEffect(() => {
+  // Refactored: use a ref to track the last-processed pendingOpenEntity id
+  // so we don't call setState synchronously in the effect body. Instead we
+  // clear the store + navigate in a microtask (deferred to avoid the
+  // cascading-render warning).
+  const lastProcessedPendingRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
     if (!pendingOpenEntity || pendingOpenEntity.kind !== 'recurringSchedule') return;
     const id = pendingOpenEntity.id;
-    setPendingOpenEntity(null);
-    setScreen({ name: 'detail', scheduleId: id });
+    // Skip if we already processed this exact pending entity
+    if (lastProcessedPendingRef.current === id) return;
+    lastProcessedPendingRef.current = id;
+    // Defer the state updates to break the synchronous render chain
+    const timer = setTimeout(() => {
+      setPendingOpenEntity(null);
+      setScreen({ name: 'detail', scheduleId: id });
+    }, 0);
+    return () => clearTimeout(timer);
   }, [pendingOpenEntity, setPendingOpenEntity]);
 
   // ── List screen navigation ───────────────────────────────────────────────
