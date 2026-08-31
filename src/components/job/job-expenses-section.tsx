@@ -31,6 +31,8 @@ import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { CANONICAL_EXPENSE_CATEGORIES } from '@/lib/job-taxonomy';
+import { useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/lib/query-keys';
 
 interface JobLite {
   id: string;
@@ -255,6 +257,7 @@ function AddExpenseDialog({
 }) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const queryClient = useQueryClient();
   const [category, setCategory] = useState('General');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -323,6 +326,10 @@ function AddExpenseDialog({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create expense');
+      // Invalidate expenses-view RQ cache — the expense created here (linked to
+      // a job) also appears in the expenses-view list. Without this, expenses-view
+      // would show stale data if it's open in another tab or visited later.
+      queryClient.invalidateQueries({ queryKey: qk.expenses.all });
       toast.success(`Expense ${data.expense?.number || ''} created`);
       onOpenChange(false);
       onSaved();

@@ -47,6 +47,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
+import { useQueryClient } from '@tanstack/react-query';
+import { getJobInvalidations } from '@/lib/invalidation-helpers';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -640,6 +642,7 @@ export function EditAllVisitsDialog({
   onSaved: () => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
   const [title, setTitle] = useState('');
   const [instructions, setInstructions] = useState('');
   const [emailTeam, setEmailTeam] = useState(false);
@@ -677,6 +680,13 @@ export function EditAllVisitsDialog({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update visits');
+      // The PATCH applyToAll endpoint mirrors scheduledAt/scheduledTime/visitInstructions
+      // onto the Job record. Use getJobInvalidations('update') to invalidate all queries
+      // that consume Job fields: jobs list, dashboard (recent jobs select), calendar,
+      // dispatch, and job detail. No customer/employee detail (not in variables).
+      for (const key of getJobInvalidations({ mutation: 'update', variables: { id: jobId } })) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
       toast.success(`Applied to ${visits.length} visit${visits.length === 1 ? '' : 's'}`);
       onOpenChange(false);
       onSaved();
