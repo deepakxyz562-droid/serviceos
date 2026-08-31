@@ -516,20 +516,21 @@ async function finalizeViaReservation(
 // This function is called by the /api/cron/ai-cleanup cron to retry billing
 // for calls that ended but were never finalized (billingStatus = PENDING or FAILED).
 //
-// Without this, a transient DB error during finalizeUsage() would permanently
-// lose billing — the webhook retry would see status='ended' and (before the fix)
-// return false success. Now the retry path in onCallEnd handles webhook
-// redeliveries, but if the webhook is never redelivered, this cron is the
-// safety net.
+// RETRY POLICY (exponential backoff):
+//   Attempt 1: immediate (at call end)
+//   Attempt 2: 5 min after attempt 1 (cron)
+//   Attempt 3: 15 min after attempt 2 (cron)
+//   Attempt 4: 30 min after attempt 3 (cron)
+//   Attempt 5: 60 min after attempt 4 (cron)
+//   Attempts 6-10: hourly
+//   After attempt 10: give up → billingStatus stays FAILED + Superadmin alert
 //
-// The cron runs every 5 minutes. It finds calls that:
-//   - status = 'ended'
-//   - billingStatus IN ('PENDING', 'FAILED')
-//   - endedAt < now - 5 minutes (grace period to avoid racing with the webhook)
-//   - billingAttempts < 10 (give up after 10 attempts → alert)
+// FAILED does NOT mean "permanently forgotten" — it means "needs manual
+// investigation". The Superadmin alert includes the call ID + error reason.
+// A human can re-trigger billing manually or mark it as written off.
 //
-// For each, it calls retryBilling() which uses the reservation's entitlementId
-// (not getActiveEntitlement) to ensure the ledger hits the correct period.
+// The cron runs every 5 minutes and picks up calls that are eligible for
+// retry based on their billingLastAttemptAt timestamp + the backoff schedule.
 // ────────────────────────────────────────────────────────────────────────────
 
 export interface ReconciliationResult {
@@ -541,28 +542,58 @@ export interface ReconciliationResult {
 }
 
 /**
+ * Compute the backoff delay (in minutes) for a given billing attempt number.
+ * Returns the number of minutes to wait after the previous attempt before
+ * retrying.
+ *
+ * Schedule: 0, 5, 15, 30, 60, 60, 60, 60, 60, 60 (minutes)
+ *   Attempt 1: immediate (no wait — handled at call end, not by cron)
+ *   Attempt 2: 5 min after attempt 1
+ *   Attempt 3: 15 min after attempt 2
+ *   Attempt 4: 30 min after attempt 3
+ *   Attempt 5: 60 min after attempt 4
+ *   Attempts 6-10: 60 min (hourly)
+ */
+function getBackoffMinutes(attemptNumber: number): number {
+  if (attemptNumber <= 1) return 0;
+  if (attemptNumber === 2) return 5;
+  if (attemptNumber === 3) return 15;
+  if (attemptNumber === 4) return 30;
+  return 60; // attempts 5+
+}
+
+/**
  * Reconcile billing for ended calls with non-finalized billing status.
  *
- * Called by the cron. Finds calls where status='ended' but billingStatus is
- * PENDING or FAILED, and retries billing using the reservation's entitlementId.
+ * Called by the cron every 5 minutes. Finds calls where:
+ *   - status = 'ended'
+ *   - billingStatus IN ('PENDING', 'FAILED')
+ *   - billingAttempts < maxAttempts (10)
+ *   - The backoff period has elapsed since billingLastAttemptAt
  *
- * @param maxAgeMinutes  Only reconcile calls that ended at least this many minutes ago
- *                       (default: 5 — gives the webhook time to retry naturally)
- * @param maxAttempts    Give up after this many billing attempts (default: 10)
- *                       Calls that exceed this are flagged for manual intervention
+ * For each eligible call, retries billing using the reservation's entitlementId
+ * (not getActiveEntitlement) to ensure the ledger hits the correct period.
+ *
+ * @param maxAttempts  Give up after this many billing attempts (default: 10)
+ *                     Calls that exceed this are flagged for manual intervention
  */
 export async function reconcileBilling(
-  maxAgeMinutes: number = 5,
+  _maxAgeMinutes: number = 5,  // kept for backward compat (unused — backoff is per-attempt now)
   maxAttempts: number = 10,
 ): Promise<ReconciliationResult> {
-  const cutoff = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
+  const now = new Date();
 
-  // Find calls that need reconciliation
-  const callsToReconcile = await db.aiCall.findMany({
+  // Build the eligibility condition: for each call, check if the backoff
+  // period has elapsed since billingLastAttemptAt. We compute this per-call
+  // in JS because the backoff depends on billingAttempts (which varies per call).
+  //
+  // We fetch all candidates (ended + PENDING/FAILED + under maxAttempts) and
+  // filter in JS based on the backoff schedule. This is simpler than encoding
+  // the backoff in SQL and the candidate set is small (typically < 50).
+  const candidates = await db.aiCall.findMany({
     where: {
       status: 'ended',
       billingStatus: { in: ['PENDING', 'FAILED'] },
-      endedAt: { lt: cutoff },
       billingAttempts: { lt: maxAttempts },
     },
     select: {
@@ -571,21 +602,32 @@ export async function reconcileBilling(
       vapiCallId: true,
       billingStatus: true,
       billingAttempts: true,
+      billingLastAttemptAt: true,
       durationSec: true,
       billableSeconds: true,
       costUsd: true,
       revenueUsd: true,
       costBreakdownJson: true,
     },
-    take: 50, // process in batches to avoid long-running cron
+    take: 100, // safety cap
   });
 
-  // Also find calls that have exceeded maxAttempts (for the "givenUp" count)
+  // Filter to calls that are eligible for retry (backoff has elapsed)
+  const callsToReconcile = candidates.filter((call) => {
+    if (!call.billingLastAttemptAt) {
+      // Never attempted (shouldn't happen for ended calls, but defensive)
+      return true;
+    }
+    const backoffMinutes = getBackoffMinutes(call.billingAttempts + 1);
+    const eligibleAt = new Date(call.billingLastAttemptAt.getTime() + backoffMinutes * 60 * 1000);
+    return now >= eligibleAt;
+  });
+
+  // Count calls that have exceeded maxAttempts (for the "givenUp" count + alert)
   const givenUpCalls = await db.aiCall.count({
     where: {
       status: 'ended',
       billingStatus: { in: ['PENDING', 'FAILED'] },
-      endedAt: { lt: cutoff },
       billingAttempts: { gte: maxAttempts },
     },
   });
@@ -595,7 +637,7 @@ export async function reconcileBilling(
   }
 
   console.log(
-    `[Reconciliation] scanning ${callsToReconcile.length} calls with non-finalized billing (${givenUpCalls} given up)`,
+    `[Reconciliation] ${callsToReconcile.length} calls eligible for retry (${candidates.length - callsToReconcile.length} waiting for backoff, ${givenUpCalls} given up)`,
   );
 
   let finalized = 0;
@@ -603,13 +645,23 @@ export async function reconcileBilling(
 
   for (const call of callsToReconcile) {
     try {
-      // Retry billing — this uses the reservation's entitlementId (not getActiveEntitlement)
+      // Set billingLastAttemptAt BEFORE the retry attempt (so if the process
+      // crashes during the retry, the next cron run respects the backoff)
+      await db.aiCall.update({
+        where: { id: call.id },
+        data: {
+          billingAttempts: { increment: 1 },
+          billingLastAttemptAt: now,
+        },
+      });
+
+      // Retry billing — uses the reservation's entitlementId
       const result = await retryBilling(
         {
           id: call.id,
           tenantId: call.tenantId,
           billingStatus: call.billingStatus,
-          billingAttempts: call.billingAttempts,
+          billingAttempts: call.billingAttempts + 1, // already incremented above
         },
         {
           vapiCallId: call.vapiCallId || '',
@@ -642,12 +694,11 @@ export async function reconcileBilling(
     console.error(
       `[Reconciliation] CRITICAL: ${givenUpCalls} calls have exceeded ${maxAttempts} billing attempts and need manual investigation`,
     );
-    // Create a Superadmin notification (best-effort, non-blocking)
     db.notification
       .create({
         data: {
           title: 'AI Billing Reconciliation Alert',
-          message: `${givenUpCalls} call(s) have failed billing after ${maxAttempts} attempts and need manual investigation. Check the AI call history for billingStatus=FAILED.`,
+          message: `${givenUpCalls} call(s) have failed billing after ${maxAttempts} attempts and need manual investigation. Check the AI call history for billingStatus=FAILED. These are NOT permanently forgotten — a human must review and either re-trigger billing or mark as written off.`,
           type: 'billing_reconciliation_alert',
         },
       })

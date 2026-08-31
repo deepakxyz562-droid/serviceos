@@ -17,7 +17,8 @@ ALTER TABLE "AiCall"
   ADD COLUMN IF NOT EXISTS "billingStatus" TEXT NOT NULL DEFAULT 'PENDING',
   ADD COLUMN IF NOT EXISTS "billingFinalizedAt" TIMESTAMP(3),
   ADD COLUMN IF NOT EXISTS "billingError" TEXT,
-  ADD COLUMN IF NOT EXISTS "billingAttempts" INTEGER NOT NULL DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS "billingAttempts" INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "billingLastAttemptAt" TIMESTAMP(3);
 
 -- 2. Backfill: existing ended calls without a billing status get PENDING
 --    (they'll be picked up by the reconciliation cron if billing was missed)

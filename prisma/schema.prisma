@@ -5185,6 +5185,7 @@ model AiCall {
   billingFinalizedAt  DateTime?
   billingError        String?  // last failure reason (for debugging + reconciliation)
   billingAttempts     Int      @default(0)  // incremented on each finalize attempt
+  billingLastAttemptAt DateTime?  // timestamp of the most recent billing attempt (for backoff)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

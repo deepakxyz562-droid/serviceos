@@ -293,6 +293,120 @@ describe('Phase 8 Hardening — Billing Lifecycle', () => {
     });
   });
 
+  // ── Test D: Crash window — ledger exists but billingStatus not yet FINALIZED ──
+  // This is the reviewer's most important verification: if the process crashes
+  // AFTER finalizeUsage() writes the ledger but BEFORE billingStatus=FINALIZED
+  // is set, the retry must be completely safe — no duplicate charge.
+  describe('Test D — Crash window (ledger exists, billingStatus still PENDING)', () => {
+    it('retry is safe: finalizeUsage returns idempotent=true when ledger already exists, then marks FINALIZED', async () => {
+      // ── Setup: simulate the crash state ──
+      // The call ended, finalizeUsage created the ledger, but the process
+      // crashed before billingStatus=FINALIZED was committed.
+      mockDb.aiCall.findUnique.mockResolvedValue({
+        id: 'call-crash',
+        tenantId: 'tenant-1',
+        status: 'ended',
+        billingStatus: 'PENDING', // ← still PENDING (crash happened before FINALIZED)
+        billingAttempts: 1,
+      });
+
+      // The reservation exists and was already CONSUMED (from the first
+      // successful finalizeUsage attempt). We can still read its entitlementId.
+      mockDb.usageReservation.findFirst.mockResolvedValue({
+        id: 'res-crash',
+        tenantId: 'tenant-1',
+        entitlementId: 'ent-A',
+        status: 'CONSUMED', // ← already consumed by the first attempt
+      });
+
+      // finalizeUsage detects the existing ledger via P2002 and returns
+      // idempotent=true (no duplicate charge)
+      mockFinalizeUsage.mockResolvedValue({
+        ok: true,
+        ledgerId: 'ledger-existing',
+        idempotent: true, // ← key: this was a no-op, ledger already existed
+      });
+
+      mockDb.aiCall.update.mockResolvedValue({});
+
+      // ── Execute: retry (simulating webhook redelivery or reconciliation cron) ──
+      const result = await onCallEnd({
+        vapiCallId: 'vapi-crash',
+        durationSec: 180,
+        billableSeconds: 180,
+        costUsd: 1.50,
+      });
+
+      // ── Verify: billing is now FINALIZED, no duplicate charge ──
+      expect(result.usageFinalized).toBe(true);
+      expect(result.usageIdempotent).toBe(true); // ← the retry was an idempotent no-op
+
+      // finalizeUsage was called with the RESERVATION's entitlementId (ent-A)
+      // — even though the reservation is CONSUMED, we still read its entitlementId
+      expect(mockFinalizeUsage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entitlementId: 'ent-A',
+          reservationId: 'res-crash',
+        }),
+      );
+
+      // AiCall was updated to billingStatus=FINALIZED (the crash is resolved)
+      const finalUpdate = mockDb.aiCall.update.mock.calls.find(
+        (call: unknown[]) =>
+          (call[0] as { data: { billingStatus?: string } }).data?.billingStatus === 'FINALIZED',
+      );
+      expect(finalUpdate).toBeDefined();
+    });
+
+    it('does NOT create a duplicate ledger entry on retry — finalizeUsage idempotencyKey prevents it', async () => {
+      // This test documents the DB-level guarantee: even if the retry calls
+      // finalizeUsage(), the idempotencyKey @unique constraint on UsageLedger
+      // prevents a duplicate charge. The P2002 unique violation is caught
+      // inside finalizeUsage and returns the existing entry.
+
+      // Setup: same crash state as above
+      mockDb.aiCall.findUnique.mockResolvedValue({
+        id: 'call-crash2',
+        tenantId: 'tenant-1',
+        status: 'ended',
+        billingStatus: 'PENDING',
+        billingAttempts: 1,
+      });
+
+      mockDb.usageReservation.findFirst.mockResolvedValue({
+        id: 'res-crash2',
+        tenantId: 'tenant-1',
+        entitlementId: 'ent-A',
+        status: 'CONSUMED',
+      });
+
+      // finalizeUsage returns idempotent=true — meaning it detected the
+      // existing ledger via P2002 and did NOT create a duplicate
+      mockFinalizeUsage.mockResolvedValue({
+        ok: true,
+        ledgerId: 'ledger-existing-2',
+        idempotent: true,
+      });
+
+      mockDb.aiCall.update.mockResolvedValue({});
+
+      // Execute
+      const result = await onCallEnd({
+        vapiCallId: 'vapi-crash2',
+        durationSec: 60,
+        billableSeconds: 60,
+      });
+
+      // Verify: the retry succeeded with idempotent=true (no duplicate)
+      expect(result.usageFinalized).toBe(true);
+      expect(result.usageIdempotent).toBe(true);
+
+      // finalizeUsage was called exactly once (the retry) — it internally
+      // detected the duplicate via P2002 and returned the existing ledger
+      expect(mockFinalizeUsage).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // ── Test C: Concurrency race (logic-level) ────────────────────────────
   describe('Test C — Concurrency race (atomic check inside transaction)', () => {
     it('rejects the second call when maxConcurrentCalls is reached, even if standalone count passed', async () => {

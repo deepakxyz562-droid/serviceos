@@ -34,6 +34,7 @@
 
 import { db } from '@/lib/db';
 import { computeRemainingSeconds } from '@/lib/entitlement-service';
+import { rpcReserveSeconds, rpcFinalizeUsage, isAiUsageRpcAvailable } from '@/lib/supabase-rpc-ai-usage';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -107,11 +108,44 @@ export async function reserveSeconds(params: {
 }): Promise<ReservationResult> {
   const { tenantId, entitlementId, externalCallId, requestedSeconds, maxConcurrentCalls } = params;
 
-  // ── Atomic reserve inside a transaction ──
-  // The transaction isolates the read + create so concurrent calls can't
-  // both see stale capacity. The FOR UPDATE lock on AddonEntitlement
-  // serializes all concurrent reservations against the same entitlement,
-  // making both the capacity check AND the concurrency check atomic.
+  // ── PRODUCTION PATH: PostgreSQL RPC (authoritative) ──
+  // In production (USE_SUPABASE_DB=true), the atomicity boundary is inside
+  // PostgreSQL. The RPC function does FOR UPDATE + concurrency check +
+  // capacity check + INSERT in a single transaction. PostgREST just forwards
+  // the HTTP request — the locking is real.
+  if (isAiUsageRpcAvailable() && maxConcurrentCalls !== undefined) {
+    const rpcResult = await rpcReserveSeconds({
+      tenantId,
+      entitlementId,
+      externalCallId,
+      requestedSeconds,
+      maxConcurrentCalls,
+    });
+
+    if (rpcResult === null) {
+      // Should not happen (isAiUsageRpcAvailable was true), but fall through
+      // to Prisma path defensively.
+    } else {
+      return {
+        ok: rpcResult.ok,
+        reason: rpcResult.reason ?? undefined,
+        reservationId: rpcResult.reservationId ?? undefined,
+        remainingAfterReserve:
+          typeof rpcResult.remainingAfterReserve === 'number'
+            ? rpcResult.remainingAfterReserve
+            : undefined,
+        activeCallCount: rpcResult.activeCallCount ?? undefined,
+      };
+    }
+  }
+
+  // ── FALLBACK PATH: Prisma $transaction (local dev / SQLite) ──
+  // This path uses Prisma's $transaction with a FOR UPDATE lock. In
+  // production (PostgREST), $transaction is NOT atomic and FOR UPDATE is
+  // silently swallowed — which is why the RPC path above is the authority.
+  // In local dev (SQLite), $transaction IS atomic (SQLite supports it),
+  // and FOR UPDATE is ignored (SQLite doesn't have row locks) but the
+  // transaction serializes anyway.
   try {
     const result = await db.$transaction(async (tx) => {
       // 1. Acquire exclusive PostgreSQL row lock on AddonEntitlement to guarantee 100% race safety
@@ -166,16 +200,7 @@ export async function reserveSeconds(params: {
       const reservedSeconds = reservationAgg._sum.reservedSeconds || 0;
       const activeCallCount = reservationAgg._count.id;
 
-      // ── Phase 8 Hardening: Concurrency check (INSIDE the transaction) ──
-      // This check MUST run inside the same FOR UPDATE transaction as the
-      // capacity check, otherwise two concurrent calls can both pass the
-      // concurrency check and then both reserve — violating maxConcurrentCalls.
-      //
-      // By counting ACTIVE reservations for THIS entitlement under the lock,
-      // we guarantee that only one call at a time can see a given count and
-      // reserve. The second call will see the incremented count (because the
-      // first call's reservation is committed before the lock is released)
-      // and be rejected.
+      // ── Concurrency check (INSIDE the transaction) ──
       if (maxConcurrentCalls !== undefined && activeCallCount >= maxConcurrentCalls) {
         return {
           ok: false as const,
@@ -265,6 +290,38 @@ export async function finalizeUsage(
   // Idempotency key: unique per (externalCallId, usageType)
   const idempotencyKey = `${externalCallId}:VOICE_MINUTE`;
 
+  // ── PRODUCTION PATH: PostgreSQL RPC (authoritative) ──
+  // In production (USE_SUPABASE_DB=true), the atomicity boundary is inside
+  // PostgreSQL. The RPC function does the ledger INSERT + reservation UPDATE
+  // in a single transaction, with the idempotencyKey @unique constraint as
+  // the ultimate guarantee against double-charges.
+  if (isAiUsageRpcAvailable()) {
+    const rpcResult = await rpcFinalizeUsage({
+      tenantId,
+      entitlementId,
+      reservationId: params.reservationId ?? null,
+      externalCallId,
+      billableSeconds,
+      providerCostUsd: providerCostUsd ?? null,
+      revenueUsd: revenueUsd ?? null,
+      costBreakdown: costBreakdown ?? null,
+      idempotencyKey,
+    });
+
+    if (rpcResult === null) {
+      // Should not happen (isAiUsageRpcAvailable was true), but fall through
+      // to Prisma path defensively.
+    } else {
+      return {
+        ok: rpcResult.ok,
+        ledgerId: rpcResult.ledgerId ?? undefined,
+        idempotent: rpcResult.idempotent,
+        reason: rpcResult.reason ?? undefined,
+      };
+    }
+  }
+
+  // ── FALLBACK PATH: Prisma $transaction (local dev / SQLite) ──
   // Fetch the entitlement to get periodStart/periodEnd for the ledger entry
   const entitlement = await db.addonEntitlement.findUnique({
     where: { id: entitlementId },
@@ -297,9 +354,6 @@ export async function finalizeUsage(
       });
 
       // 2. Mark the reservation as CONSUMED (if it exists)
-      //    Uses updateMany (not update) because externalCallId is not unique —
-      //    there could be 0 or 1 reservation matching. If 0 (defensive: call
-      //    started before Phase 2), this is a no-op.
       const reservationWhere = params.reservationId
         ? { id: params.reservationId }
         : { entitlementId, externalCallId, status: 'ACTIVE' };
@@ -323,15 +377,11 @@ export async function finalizeUsage(
     return result;
   } catch (err: unknown) {
     // ── Idempotency: catch P2002 (unique constraint violation) ──
-    // Prisma throws P2002 when the idempotencyKey already exists.
-    // This is the expected behavior on webhook redelivery — return the
-    // existing entry as a no-op.
     if (isPrismaUniqueViolation(err)) {
       console.log(
         `[UsageService] idempotent no-op: ledger entry already exists for idempotencyKey=${idempotencyKey}`,
       );
 
-      // Fetch the existing entry to return its ID
       const existing = await db.usageLedger.findUnique({
         where: { idempotencyKey },
         select: { id: true },
