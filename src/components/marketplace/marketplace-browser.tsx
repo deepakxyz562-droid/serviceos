@@ -73,6 +73,11 @@ interface MarketplaceBrowserProps {
     city: string | null;
     search: string | null;
     country: string | null;
+    /** Phase 3A: server-side sort from URL (?sort=reviews). Synced to the
+     *  Zustand store on mount so the SSR-fetched items match the store's
+     *  sort state. null = no sort in URL → store's default ('recommended')
+     *  is preserved (no override). */
+    sort?: string | null;
   };
   /** ISO country code detected from GeoIP (or ?country= override).
    *  Null = no country filter (show all). Used to show a "Showing
@@ -172,6 +177,7 @@ export function MarketplaceBrowser({
   // Sort now lives in the shared Zustand store so the breadcrumb Sort
   // dropdown (rendered by the server page) and this grid stay in sync.
   const sort = useMarketplaceSearch((s) => s.sort);
+  const setSort = useMarketplaceSearch((s) => s.setSort);
   // User location (GPS / IP / manual) drives the 'recommended' composite
   // ranking (40/30/20/10 distance/rating/verified/featured) and the 'distance'
   // pure-Haversine sort. null = no location → 'recommended' falls back to the
@@ -321,6 +327,11 @@ export function MarketplaceBrowser({
       userLat,
       userLng,
       radiusKm: effectiveRadiusKm,
+      // Phase 3A: pass the user's selected sort. The hook normalizes the 4
+      // deterministic sorts (rating/reviews/name/response) into the API
+      // request, and collapses the 3 client-side sorts (recommended/distance/
+      // verified) to 'rating' so they share a queryKey (no refetch on toggle).
+      sort,
     },
     matchesInitial ? providers : undefined,
     matchesInitial ? initialNextCursor : undefined,
@@ -388,6 +399,16 @@ export function MarketplaceBrowser({
     if (initialFilters.country !== prev.country) {
       setCountryFilter(initialFilters.country);
     }
+    // Phase 3A: sync the URL sort to the store. Only the 4 deterministic
+    // sorts (rating|reviews|name|response) are valid URL sorts — anything
+    // else (or null) leaves the store's sort untouched (preserves the
+    // user's previous choice from the Zustand persist middleware).
+    if (initialFilters.sort && initialFilters.sort !== prev.sort) {
+      const validSorts: MarketplaceSortKey[] = ['rating', 'reviews', 'name', 'response'];
+      if (validSorts.includes(initialFilters.sort as MarketplaceSortKey)) {
+        setSort(initialFilters.sort as MarketplaceSortKey);
+      }
+    }
 
     prevFiltersRef.current = initialFilters;
   }, [
@@ -398,6 +419,7 @@ export function MarketplaceBrowser({
     selectVertical,
     selectIndustry,
     setCountryFilter,
+    setSort,
   ]);
 
   // ── Seed countryFilter from GeoIP on the very first mount ───────────
@@ -839,17 +861,21 @@ export function MarketplaceBrowser({
   // With server-side cursor pagination, the API already applies ALL filters
   // (search / city / vertical / industry / trust / minRating / claimedFilter
   // / radiusKm) before returning items. The hook's `loadedProviders` is the
-  // flattened list of all loaded pages — already filtered. We only need to
-  // SORT it here (the server fetches in a stable (rating DESC, reviewCount
-  // DESC, id DESC) order, but the user can pick a different client-side
-  // sort).
+  // flattened list of all loaded pages — already filtered.
   //
-  // Sort changes do NOT trigger a refetch — we just re-sort the already-
-  // loaded items. This is instant and avoids resetting the user's scroll.
-  // The trade-off: for 'distance' sort, the global order isn't perfectly by
-  // distance across pages (the server fetches by rating). This is acceptable
-  // for the browse grid — a future enhancement could send lat/lng to the
-  // server for true distance-sorted pagination.
+  // PHASE 3A — Server-side deterministic sorts:
+  // For rating / reviews / name / response, the server returns items in the
+  // correct global order (sort-specific cursor + orderBy). We DO NOT re-sort
+  // here — trusting the server order is the whole point of Phase 3A. The
+  // featured-first pinning is also handled by the server (featured items
+  // come first on page 1, sorted by rating DESC within the featured group).
+  //
+  // For recommended / distance / verified, the server fetches by 'rating'
+  // (the default sort) and the client re-ranks the loaded items. These 3
+  // sorts don't have a single deterministic server-side equivalent yet —
+  // Phase 3B/3C/3D will add them. The trade-off: for these 3 sorts, the
+  // global order isn't perfectly correct across pages (only within each
+  // loaded page). This is acceptable for the browse grid.
   //
   // PHASE 2 NOTE: The three client-side filters that used to live here
   // (minRating, claimedFilter, radiusKm Haversine) have been REMOVED — they
@@ -859,6 +885,17 @@ export function MarketplaceBrowser({
   // client-side filtering removed items the server had already counted).
   const filtered = React.useMemo(() => {
     let list = loadedProviders;
+
+    // Phase 3A: server-side deterministic sorts — trust the server's order.
+    // No re-sorting needed (featured-first is also handled by the server).
+    if (
+      sort === 'rating' ||
+      sort === 'reviews' ||
+      sort === 'name' ||
+      sort === 'response'
+    ) {
+      return list;
+    }
 
     if ((sort === 'recommended' || sort === 'distance') && userLocation) {
       if (sort === 'distance') {
@@ -902,41 +939,25 @@ export function MarketplaceBrowser({
         { userLat: null, userLng: null },
       ) as unknown as ProviderListItem[];
     } else {
+      // 'verified' sort — client-side composite verification score.
+      // (Phase 3B will move this server-side with a materialized
+      // verificationScore column.)
       list = list.slice().sort((a, b) => {
         // Featured cards ALWAYS sort first (OLX-style premium-at-top).
         if (!!a.featured !== !!b.featured) return a.featured ? -1 : 1;
 
-        switch (sort) {
-          case 'reviews':
-            return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
-          case 'response': {
-            const aResp = a.responseTimeMins ?? 9999;
-            const bResp = b.responseTimeMins ?? 9999;
-            if (aResp !== bResp) return aResp - bResp;
-            return (b.rating ?? 0) - (a.rating ?? 0);
-          }
-          case 'name':
-            return (a.name ?? '').localeCompare(b.name ?? '');
-          case 'verified': {
-            const aScore =
-              (a.identityVerified ? 1 : 0) +
-              (a.businessVerified ? 1 : 0) +
-              (a.insuranceVerified ? 1 : 0) +
-              (a.stripeConnected ? 1 : 0);
-            const bScore =
-              (b.identityVerified ? 1 : 0) +
-              (b.businessVerified ? 1 : 0) +
-              (b.insuranceVerified ? 1 : 0) +
-              (b.stripeConnected ? 1 : 0);
-            if (bScore !== aScore) return bScore - aScore;
-            return (b.rating ?? 0) - (a.rating ?? 0);
-          }
-          case 'rating':
-          default:
-            if ((b.rating ?? 0) !== (a.rating ?? 0))
-              return (b.rating ?? 0) - (a.rating ?? 0);
-            return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
-        }
+        const aScore =
+          (a.identityVerified ? 1 : 0) +
+          (a.businessVerified ? 1 : 0) +
+          (a.insuranceVerified ? 1 : 0) +
+          (a.stripeConnected ? 1 : 0);
+        const bScore =
+          (b.identityVerified ? 1 : 0) +
+          (b.businessVerified ? 1 : 0) +
+          (b.insuranceVerified ? 1 : 0) +
+          (b.stripeConnected ? 1 : 0);
+        if (bScore !== aScore) return bScore - aScore;
+        return (b.rating ?? 0) - (a.rating ?? 0);
       });
     }
 

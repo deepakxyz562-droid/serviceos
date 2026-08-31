@@ -11,7 +11,7 @@
  * Cursor pagination (a.k.a. keyset pagination) fetches one page at a time
  * from the DB using a WHERE clause on the sort key:
  *
- *   WHERE (rating, reviewCount, id) < (cursor.r, cursor.rc, cursor.id)
+ *   WHERE (rating, reviewCount, id) < (cursor.v[0], cursor.v[1], cursor.id)
  *   ORDER BY rating DESC, reviewCount DESC, id DESC
  *   LIMIT 24
  *
@@ -23,37 +23,50 @@
  *   • No COUNT(*) needed for pagination (we only need to know if there's a
  *     next page, which is `items.length === pageSize`).
  *
- * CURSOR FORMAT
- * -------------
- *   base64( JSON({ r: rating, rc: reviewCount, id }) )
+ * CURSOR FORMAT (Phase 3A — sort-aware)
+ * -------------------------------------
+ *   base64( JSON({ s: sortKey, v: [sortValue, ...], id: tenantId }) )
  *
- * `r` and `rc` are numbers (Float / Int), `id` is the tenant ID string (cuid).
+ * `s` is the sort key (rating | reviews | name | response). It validates
+ * that the cursor matches the requested sort — if a `reviews` cursor is
+ * sent with `sort=rating`, the cursor is rejected and we treat it as
+ * page 1 (defensive against stale browser URL state).
+ *
+ * `v` is the array of sort-field values from the LAST item in the previous
+ * page, in the same order as the orderBy tuple (excluding the final `id`
+ * tiebreaker, which lives in `id`). For `rating` sort, v=[rating, reviewCount].
+ * For `name` sort, v=[name]. For `response` sort, v=[responseTimeMins, rating].
+ *
  * The cursor encodes the sort tuple of the LAST item in the previous page.
- * The next page fetches items whose sort tuple is strictly less than the
- * cursor's tuple (lexicographic row comparison).
+ * The next page fetches items whose sort tuple is strictly less than (DESC)
+ * or strictly greater than (ASC) the cursor's tuple, lexicographic row
+ * comparison.
  *
  * FEATURED-FIRST
  * --------------
- * Featured providers (active FeaturedListing rows) always appear at the top.
- * We fetch ALL featured tenants (capped at 8) on page 1 — they're a small,
- * bounded set. The cursor only tracks progress through the NON-featured
- * tenants. If there are 3 featured + 21 non-featured on page 1, the
- * nextCursor encodes the 21st non-featured item's tuple.
+ * Featured providers (active FeaturedListing rows) always appear at the top
+ * of page 1. They are ALWAYS sorted by rating DESC within the featured group
+ * (business rule — featured are premium, always shown by rating), regardless
+ * of the user's selected sort. The user's selected sort only applies to the
+ * NON-FEATURED items. We fetch ALL featured tenants (capped at 8) on page 1 —
+ * they're a small, bounded set. The cursor only tracks progress through the
+ * NON-featured tenants.
  *
- * SORT STABILITY
- * --------------
- * The server always fetches in (rating DESC, reviewCount DESC, id DESC)
- * order — this is the stable, indexed default. The client can re-sort the
- * loaded pages however it wants (recommended/distance/name/etc.) within the
- * loaded set. When the user changes sort, the client re-sorts the already-
- * loaded items — NO refetch needed (instant UX). The cursor remains valid
- * because the underlying fetch order is unchanged.
+ * SORT OPTIONS (Phase 3A)
+ * -----------------------
+ * Four sorts are now SERVER-SIDE deterministic (cursor + orderBy + keyset
+ * WHERE all match the user's selected sort):
+ *   • rating    → rating DESC, reviewCount DESC, id DESC  (default)
+ *   • reviews   → reviewCount DESC, rating DESC, id DESC
+ *   • name      → name ASC, id ASC
+ *   • response  → responseTimeMins ASC, rating DESC, id DESC
  *
- * TRADE-OFF: for the `distance` sort, the global order isn't perfectly by
- * distance across pages (server fetches by rating, client re-sorts by
- * distance within each page). This is an acceptable trade-off for not
- * shipping 1000 rows to the client. A future enhancement could pass the
- * user's lat/lng to the server and sort by computed distance there.
+ * The other 3 sorts (recommended, distance, verified) remain client-side —
+ * the server still returns items in the user's selected deterministic order
+ * (defaulting to `rating` when sort=recommended/distance/verified), and the
+ * client re-ranks within the loaded set. This is a documented trade-off:
+ * these 3 sorts don't have a single deterministic server-side equivalent
+ * yet (Phase 3B/3C/3D will add them).
  */
 
 import type { Prisma } from '@prisma/client';
@@ -79,17 +92,172 @@ export const MARKETPLACE_MAX_PAGE_SIZE = 48;
 const FEATURED_CAP = 8;
 
 /**
- * The sort tuple encoded in a cursor. All three fields come from the LAST
- * item in the previous page. The next page fetches items whose tuple is
- * strictly less than this (lexicographic row comparison).
+ * Sort options that are SERVER-SIDE deterministic (cursor + orderBy + keyset
+ * WHERE all match the user's selected sort). The other 3 sorts (recommended,
+ * distance, verified) remain client-side for now (Phase 3B/3C/3D).
+ */
+export type MarketplaceSort = 'rating' | 'reviews' | 'name' | 'response';
+
+/**
+ * Validate that a string is a valid MarketplaceSort. Used by the API route
+ * to coerce the `?sort=` query param into a known value (defaults to 'rating').
+ */
+export function isValidMarketplaceSort(s: string | null | undefined): s is MarketplaceSort {
+  return s === 'rating' || s === 'reviews' || s === 'name' || s === 'response';
+}
+
+/**
+ * The sort tuple encoded in a cursor. Comes from the LAST item in the
+ * previous page. The next page fetches items whose tuple is strictly
+ * less than (DESC sort) or strictly greater than (ASC sort) this,
+ * lexicographic row comparison.
+ *
+ * Phase 3A: generalized to support multiple sorts. The `s` field validates
+ * that the cursor matches the requested sort — if it doesn't, the cursor is
+ * rejected (treated as page 1).
  */
 export interface ProviderCursor {
-  /** rating of the last item (Float, may be 0). */
-  r: number;
-  /** reviewCount of the last item (Int, may be 0). */
-  rc: number;
+  /** Sort key — validates cursor matches the requested sort. */
+  s: MarketplaceSort;
+  /** Sort-field values from the last item (in orderBy order, excluding id).
+   *  e.g. [rating, reviewCount] for 'rating' sort; [name] for 'name' sort. */
+  v: (number | string)[];
   /** tenant ID of the last item (cuid string — final tiebreaker for uniqueness). */
   id: string;
+}
+
+/**
+ * Compute responseTimeMins from reviewCount (the denormalization formula).
+ * Used by mapTenantToProviderListItem as a fallback for tenants that haven't
+ * been backfilled yet (responseTimeMins=0 → compute on the fly), and by any
+ * future backfill/migration script.
+ *
+ *   reviewCount >= 500 → 5 mins (premium tier — capped)
+ *   reviewCount <  500 → max(8, 60 - floor(reviewCount / 10))
+ *
+ * Monotonically non-increasing in reviewCount (more reviews = faster response).
+ * Lower = faster response time.
+ */
+export function computeResponseTimeMins(reviewCount: number): number {
+  if (reviewCount >= 500) return 5;
+  return Math.max(8, 60 - Math.floor(reviewCount / 10));
+}
+
+/**
+ * Sort-specific Prisma orderBy tuple. Each sort has its own (field, direction)
+ * chain ending with the tenant ID as the final tiebreaker ( guarantees a
+ * total order — no two rows have the same sort position, so cursor keyset
+ * pagination never gets stuck or skips rows).
+ *
+ * NOTE: featured providers are ALWAYS sorted by rating DESC within the
+ * featured group, regardless of the user's selected sort. This function is
+ * only used for the NON-FEATURED items (page 1 fill + page N keyset fetch).
+ */
+function getSortOrderBy(sort: MarketplaceSort): Prisma.TenantOrderByWithRelationInput[] {
+  switch (sort) {
+    case 'reviews':
+      return [{ reviewCount: 'desc' }, { rating: 'desc' }, { id: 'desc' }];
+    case 'name':
+      return [{ name: 'asc' }, { id: 'asc' }];
+    case 'response':
+      return [{ responseTimeMins: 'asc' }, { rating: 'desc' }, { id: 'desc' }];
+    case 'rating':
+    default:
+      return [{ rating: 'desc' }, { reviewCount: 'desc' }, { id: 'desc' }];
+  }
+}
+
+/**
+ * Build the sort-specific keyset OR clauses for page N (cursor present).
+ *
+ * The keyset simulates SQL's ROW() comparison:
+ *   (sortField1, sortField2, id)  <op>  (cursor.v[0], cursor.v[1], cursor.id)
+ *
+ * where <op> is `<` for DESC sorts (rating, reviews, response's rating tiebreaker)
+ * and `>` for ASC sorts (name, response's responseTimeMins primary).
+ *
+ * The clauses are returned as a Prisma `OR` array — the caller wraps them in
+ * the existing where clause (preserving any user filters).
+ */
+function getKeysetOrClauses(
+  sort: MarketplaceSort,
+  cursor: ProviderCursor,
+): Prisma.TenantWhereInput[] {
+  const id = cursor.id;
+  switch (sort) {
+    case 'reviews': {
+      // orderBy: reviewCount DESC, rating DESC, id DESC
+      // keyset: (reviewCount, rating, id) < (v[0], v[1], id)
+      const rc = cursor.v[0] as number;
+      const r = cursor.v[1] as number;
+      return [
+        { reviewCount: { lt: rc } },
+        { reviewCount: rc, rating: { lt: r } },
+        { reviewCount: rc, rating: r, id: { lt: id } },
+      ];
+    }
+    case 'name': {
+      // orderBy: name ASC, id ASC
+      // keyset: (name, id) > (v[0], id) — ASC sort uses > (greater than)
+      // The id tiebreaker is also ASC, so the next id within the same name
+      // must be GREATER than the cursor's id (not less than).
+      const name = cursor.v[0] as string;
+      return [
+        { name: { gt: name } },
+        { name: name, id: { gt: id } },
+      ];
+    }
+    case 'response': {
+      // orderBy: responseTimeMins ASC, rating DESC, id DESC
+      // Mixed direction: responseTimeMins is ASC (use >), rating is DESC
+      // (use <), id is DESC (use <).
+      const rt = cursor.v[0] as number;
+      const r = cursor.v[1] as number;
+      return [
+        { responseTimeMins: { gt: rt } },
+        { responseTimeMins: rt, rating: { lt: r } },
+        { responseTimeMins: rt, rating: r, id: { lt: id } },
+      ];
+    }
+    case 'rating':
+    default: {
+      // orderBy: rating DESC, reviewCount DESC, id DESC
+      // keyset: (rating, reviewCount, id) < (v[0], v[1], id)
+      const r = cursor.v[0] as number;
+      const rc = cursor.v[1] as number;
+      return [
+        { rating: { lt: r } },
+        { rating: r, reviewCount: { lt: rc } },
+        { rating: r, reviewCount: rc, id: { lt: id } },
+      ];
+    }
+  }
+}
+
+/**
+ * Build a ProviderCursor from a tenant row + the active sort. Extracts the
+ * sort-field values in orderBy order (excluding the final id tiebreaker).
+ */
+function buildCursorFromTenant(sort: MarketplaceSort, t: { id: string; rating: number | null; reviewCount: number | null; name: string; responseTimeMins: number | null }): ProviderCursor {
+  const rating = (t.rating ?? 0) as number;
+  const reviewCount = (t.reviewCount ?? 0) as number;
+  // Fall back to the formula if the column hasn't been backfilled (== 0 means
+  // default value, since responseTimeMins is non-negative and 0 isn't a
+  // valid computed value — computeResponseTimeMins never returns 0).
+  const rt = t.responseTimeMins && t.responseTimeMins > 0
+    ? t.responseTimeMins
+    : computeResponseTimeMins(reviewCount);
+  switch (sort) {
+    case 'reviews':
+      return { s: sort, v: [reviewCount, rating], id: t.id };
+    case 'name':
+      return { s: sort, v: [t.name ?? ''], id: t.id };
+    case 'response':
+      return { s: sort, v: [rt, rating], id: t.id };
+    case 'rating':
+    default:
+      return { s: sort, v: [rating, reviewCount], id: t.id };
+  }
 }
 
 /**
@@ -101,8 +269,8 @@ export function encodeCursor(c: ProviderCursor | null | undefined): string | nul
   try {
     const json = JSON.stringify(c);
     // Prefer Buffer (Node/Bun) — it handles UTF-8 correctly, including
-    // characters outside the Latin1 range (like '\uffff' used in the
-    // edge-case cursor for "start of non-featured").
+    // characters outside the Latin1 range (provider names with emoji,
+ // accented letters, etc. — used by the 'name' sort cursor).
     if (typeof Buffer !== 'undefined') {
       return Buffer.from(json, 'utf8').toString('base64');
     }
@@ -125,8 +293,20 @@ export function encodeCursor(c: ProviderCursor | null | undefined): string | nul
  * Decode a cursor string back to its sort tuple.
  * Returns null if the input is null/empty/malformed (treated as "first page").
  * Never throws — a bad cursor degrades gracefully to a fresh page-1 fetch.
+ *
+ * Phase 3A: validates that the cursor's sort key (`s`) matches the expected
+ * sort. If a `reviews` cursor is sent with `sort=rating`, the cursor is
+ * rejected (returns null) so the caller treats it as page 1. This prevents
+ * stale browser URL state from corrupting a different sort's pagination.
+ *
+ * Backward compat: old cursors had shape { r, rc, id } (no `s` or `v`).
+ * These are treated as 'rating' sort cursors — but only if the expected sort
+ * is also 'rating'. If the expected sort differs, the old cursor is rejected.
  */
-export function decodeCursor(s: string | null | undefined): ProviderCursor | null {
+export function decodeCursor(
+  s: string | null | undefined,
+  expectedSort: MarketplaceSort = 'rating',
+): ProviderCursor | null {
   if (!s) return null;
   try {
     let json: string;
@@ -145,18 +325,55 @@ export function decodeCursor(s: string | null | undefined): ProviderCursor | nul
       return null;
     }
     const parsed = JSON.parse(json);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+
+    // New format: { s, v, id }
     if (
-      typeof parsed !== 'object' ||
-      parsed === null ||
-      typeof parsed.r !== 'number' ||
-      typeof parsed.rc !== 'number' ||
-      typeof parsed.id !== 'string'
+      typeof parsed.s === 'string' &&
+      Array.isArray(parsed.v) &&
+      typeof parsed.id === 'string'
     ) {
-      return null;
+      // Validate sort key matches expected sort — reject otherwise (treat as page 1).
+      if (parsed.s !== expectedSort) return null;
+      // Validate v array element types match the sort's expected shape.
+      // (Defensive — a tampered cursor could otherwise cause a Prisma error.)
+      const v = parsed.v as (number | string)[];
+      if (!isValidCursorVForSort(expectedSort, v)) return null;
+      return { s: parsed.s as MarketplaceSort, v, id: parsed.id };
     }
-    return { r: parsed.r, rc: parsed.rc, id: parsed.id };
+
+    // Legacy format: { r, rc, id } — only valid for 'rating' sort.
+    if (
+      typeof parsed.r === 'number' &&
+      typeof parsed.rc === 'number' &&
+      typeof parsed.id === 'string'
+    ) {
+      if (expectedSort !== 'rating') return null;
+      return { s: 'rating', v: [parsed.r, parsed.rc], id: parsed.id };
+    }
+
+    return null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Validate that the cursor's `v` array has the right shape for the sort.
+ * Defensive — prevents a tampered/malformed cursor from causing Prisma errors
+ * downstream. (We trust the encoded data only as far as its shape.)
+ */
+function isValidCursorVForSort(sort: MarketplaceSort, v: (number | string)[]): boolean {
+  switch (sort) {
+    case 'rating':
+    case 'reviews':
+      return v.length === 2 && typeof v[0] === 'number' && typeof v[1] === 'number';
+    case 'response':
+      return v.length === 2 && typeof v[0] === 'number' && typeof v[1] === 'number';
+    case 'name':
+      return v.length === 1 && typeof v[0] === 'string';
+    default:
+      return false;
   }
 }
 
@@ -244,7 +461,7 @@ export function buildProviderWhereClause(opts: ProviderFilterOptions): Record<st
 
   // Vertical filter — convert to an `industry IN [list]` clause at SQL level.
   if (opts.vertical) {
-    const { VERTICAL_MAP } = require('@/lib/industry-catalog') as typeof import('@/lib/industry-catalog');
+    const { VERTICAL_MAP } = await import('@/lib/industry-catalog');
     const industriesInVertical = Object.entries(VERTICAL_MAP)
       .filter(([, v]) => v === opts.vertical)
       .map(([k]) => k);
@@ -351,6 +568,10 @@ export const PROVIDER_SELECT = {
   currency: true,
   rating: true,
   reviewCount: true,
+  // Phase 3A: responseTimeMins is now a real DB column (denormalized from
+  // reviewCount via computeResponseTimeMins). Selected here so the mapper
+  // can return it directly (instead of recomputing on every fetch).
+  responseTimeMins: true,
   // description: trimmed to 300 chars in mapTenantToProviderListItem to cut
   // ~40-60% of the SSR JSON payload (full description is 0.5-5KB HTML, only
   // needed on the detail page — the card shows at most ~200 chars).
@@ -486,11 +707,15 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
   pageSize?: number;
   featuredTenantIds: Set<string>;
   mapItem: (tenant: ProviderTenantRow) => T;
+  /** Phase 3A: server-side sort. Defaults to 'rating' (backward compat). */
+  sort?: MarketplaceSort;
 }): Promise<ProviderPageResult<T>> {
   const pageSize = Math.min(
     Math.max(opts.pageSize ?? MARKETPLACE_PAGE_SIZE, 1),
     MARKETPLACE_MAX_PAGE_SIZE,
   );
+  const sort: MarketplaceSort = opts.sort ?? 'rating';
+  const sortOrderBy = getSortOrderBy(sort);
   const where = buildProviderWhereClause(opts.filters);
   const featuredIds = opts.featuredTenantIds;
 
@@ -502,14 +727,19 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
     // The count only depends on `where` (not on featured results), so it
     // can run concurrently with the featured query.
 
-    // Featured tenants: fetch up to FEATURED_CAP, sorted by rating DESC.
-    // We use a separate query because featured is a small bounded set and
-    // we want them ALWAYS at the top of page 1.
+    // Featured tenants: fetch up to FEATURED_CAP, ALWAYS sorted by rating DESC
+    // (business rule — featured are premium, always shown by rating within
+    // the featured group, regardless of the user's selected sort).
+    const featuredOrderBy: Prisma.TenantOrderByWithRelationInput[] = [
+      { rating: 'desc' },
+      { reviewCount: 'desc' },
+      { id: 'desc' },
+    ];
     const featuredPromise: Promise<ProviderTenantRow[]> = featuredIds.size > 0
       ? db.tenant.findMany({
           where: { ...where, id: { in: Array.from(featuredIds).slice(0, FEATURED_CAP) } },
           select: PROVIDER_SELECT,
-          orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }, { id: 'desc' }],
+          orderBy: featuredOrderBy,
           take: FEATURED_CAP,
         })
       : Promise.resolve([]);
@@ -520,7 +750,7 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
     const [featuredTenants, total] = await Promise.all([featuredPromise, countPromise]);
 
     // Non-featured: fill the remaining page size. Exclude featured IDs so
-    // we don't duplicate them.
+    // we don't duplicate them. Uses the user's selected sort (Phase 3A).
     // EDGE CASE: when featuredTenants.length >= pageSize, nonFeaturedTake = 0
     // and we don't fetch any non-featured items. But there may still be more
     // non-featured items to paginate through. To detect this, we do a lightweight
@@ -533,7 +763,7 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
       ? await db.tenant.findMany({
           where, // Clean indexable WHERE clause — enables O(log n) index scan!
           select: PROVIDER_SELECT,
-          orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }, { id: 'desc' }],
+          orderBy: sortOrderBy,
           take: nonFeaturedTake + FEATURED_CAP + 1,
         })
       : [];
@@ -554,24 +784,36 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
     // normal cursor (no non-featured item to encode), so we fetch the FIRST
     // non-featured item just to get its sort tuple. This is one extra query
     // but only fires when featured >= pageSize (rare).
+    //
+    // Phase 3A: uses the user's selected sort (sortOrderBy) so the cursor
+    // matches the page-2 fetch order.
     if (nonFeaturedTake === 0 && total > allTenants.length) {
       const firstNonFeatured = await db.tenant.findFirst({
-        where: nonFeaturedWhere,
-        select: { id: true, rating: true, reviewCount: true },
-        orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }, { id: 'desc' }],
+        where, // base eligibility+filters where (excluding featured IDs)
+        select: { id: true, rating: true, reviewCount: true, name: true, responseTimeMins: true },
+        orderBy: sortOrderBy,
       });
       if (firstNonFeatured) {
         // Encode a cursor that sorts JUST AFTER the first non-featured item,
-        // so the keyset condition `(rating, reviewCount, id) < (r, rc, id)`
-        // INCLUDES the first item. We append '\uffff' to the id (sorts after
-        // any real cuid), keeping rating + reviewCount the same. This makes
-        // the keyset `< cursor` match the first item AND everything after it
-        // in DESC order — which is exactly "all non-featured from the top".
+        // so the keyset condition `< cursor` (DESC) or `> cursor` (ASC)
+        // INCLUDES the first item. We append '\uffff' to the id (DESC sorts)
+        // or '\u0000' to the id (ASC sorts) so the keyset matches the first
+        // item AND everything after it.
+        //
+        // For DESC id (rating/reviews/response sorts): id + '\uffff' sorts
+        //   after any real cuid, keeping the rest of the tuple the same →
+        //   the keyset `< cursor` matches the first item + everything after.
+        // For ASC id (name sort): id + '\u0000' sorts before any real cuid →
+        //   the keyset `> cursor` matches the first item + everything after.
         hasMore = true;
+        const baseCursor = buildCursorFromTenant(sort, firstNonFeatured);
+        const isAscIdSort = sort === 'name';
+        const sentinelId = isAscIdSort
+          ? firstNonFeatured.id + '\u0000'
+          : firstNonFeatured.id + '\uffff';
         nextCursor = encodeCursor({
-          r: (firstNonFeatured.rating ?? 0) as number,
-          rc: (firstNonFeatured.reviewCount ?? 0) as number,
-          id: firstNonFeatured.id + '\uffff',
+          ...baseCursor,
+          id: sentinelId,
         });
       }
     }
@@ -580,11 +822,7 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
     // Only runs if the edge case above didn't already set a cursor.
     if (nextCursor === null && pageNonFeatured.length > 0 && hasMore) {
       const last = pageNonFeatured[pageNonFeatured.length - 1];
-      nextCursor = encodeCursor({
-        r: (last.rating ?? 0) as number,
-        rc: (last.reviewCount ?? 0) as number,
-        id: last.id,
-      });
+      nextCursor = encodeCursor(buildCursorFromTenant(sort, last));
     }
 
     // ── Haversine post-filter (radius filter) ────────────────────────────
@@ -604,10 +842,9 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
   }
 
   // ── Page N (cursor present): fetch non-featured only, keyset on cursor ─
-  // The keyset condition simulates SQL's ROW() comparison:
-  //   (rating, reviewCount, id) < (cursor.r, cursor.rc, cursor.id)
-  // via three OR clauses (rating < r) OR (rating = r AND reviewCount < rc) OR
-  // (rating = r AND reviewCount = rc AND id < id).
+  // The keyset condition simulates SQL's ROW() comparison, with the
+  // direction (< vs >) determined by the sort's orderBy direction.
+  // See getKeysetOrClauses for the per-sort clause shape.
   //
   // Issue #1 Fix C: preserve any existing OR/AND groups from the base `where`
   // (set by buildProviderWhereClause when the user has a city OR search filter
@@ -616,6 +853,7 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
   // city/search filter on page 2+. Now we wrap BOTH the existing OR (if any)
   // AND the keyset clauses inside an AND array so neither overwrites the other.
   const cursor = opts.cursor;
+  const keysetOrClauses = getKeysetOrClauses(sort, cursor);
   const keysetWhere: Record<string, unknown> = {
     ...where,
     id: { notIn: Array.from(featuredIds) },
@@ -626,13 +864,7 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
       // overwritten by the keyset OR below.
       ...(where.OR ? [{ OR: where.OR }] : []),
       // The keyset pagination clauses — always wrapped in their own OR group.
-      {
-        OR: [
-          { rating: { lt: cursor.r } },
-          { rating: cursor.r, reviewCount: { lt: cursor.rc } },
-          { rating: cursor.r, reviewCount: cursor.rc, id: { lt: cursor.id } },
-        ],
-      },
+      { OR: keysetOrClauses },
     ],
   };
   // Remove the now-wrapped top-level OR to avoid PostgREST seeing both the
@@ -642,7 +874,7 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
   const tenants = await db.tenant.findMany({
     where: keysetWhere,
     select: PROVIDER_SELECT,
-    orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }, { id: 'desc' }],
+    orderBy: sortOrderBy,
     take: pageSize + 1, // +1 to detect if there's a next page
   });
 
@@ -652,11 +884,7 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
   let nextCursor: string | null = null;
   if (page.length > 0 && hasMore) {
     const last = page[page.length - 1];
-    nextCursor = encodeCursor({
-      r: (last.rating ?? 0) as number,
-      rc: (last.reviewCount ?? 0) as number,
-      id: last.id,
-    });
+    nextCursor = encodeCursor(buildCursorFromTenant(sort, last));
   }
 
   // ── Haversine post-filter (radius filter) ────────────────────────────
@@ -785,9 +1013,14 @@ export function mapTenantToProviderListItem(
     longitude: t.longitude,
     serviceRadiusKm: t.serviceRadiusKm,
     jobsCount: Math.round((t.reviewCount ?? 0) * 3),
+    // Phase 3A: responseTimeMins is now a real DB column. Use it directly
+    // when present (> 0); fall back to the formula for tenants that haven't
+    // been backfilled yet. This keeps the value consistent with what the
+    // server sorts by (orderBy: responseTimeMins ASC) — critical for the
+    // 'response' sort's global correctness.
     responseTimeMins:
-      (t.reviewCount ?? 0) >= 500
-        ? 5
-        : Math.max(8, 60 - Math.floor((t.reviewCount ?? 0) / 10)),
+      t.responseTimeMins && t.responseTimeMins > 0
+        ? t.responseTimeMins
+        : computeResponseTimeMins(t.reviewCount ?? 0),
   };
 }

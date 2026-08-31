@@ -26,14 +26,24 @@
  *      `queryKey` changes → React Query automatically resets to page 1 and
  *      refetches. No manual reset logic needed.
  *
- * SORT HANDLING
+ * SORT HANDLING (Phase 3A — server-side deterministic sorts)
  * -------------
- * The server always fetches in (rating DESC, reviewCount DESC, id DESC)
- * order — this is the stable, indexed keyset. The client can re-sort the
- * loaded pages however it wants (recommended/distance/name/etc.) within
- * the loaded set. When the sort changes, the hook does NOT refetch — it
- * just re-sorts the already-loaded items (instant UX). The cursor remains
- * valid because the underlying fetch order is unchanged.
+ * Four sorts are now SERVER-SIDE deterministic:
+ *   • rating    → rating DESC, reviewCount DESC, id DESC  (default)
+ *   • reviews   → reviewCount DESC, rating DESC, id DESC
+ *   • name      → name ASC, id ASC
+ *   • response  → responseTimeMins ASC, rating DESC, id DESC
+ *
+ * When the user picks one of these 4 sorts, `sort` is part of the queryKey
+ * → React Query refetches from page 1 with the new server-side ordering.
+ * The trade-off is a brief loading flash (~250-300ms — acceptable). The
+ * cursor is sort-specific (a `reviews` cursor is rejected if `sort=rating`
+ * is sent), so changing sort always starts from page 1.
+ *
+ * The other 3 sorts (recommended, distance, verified) remain client-side:
+ * the server fetches by 'rating' (the default), and the client re-ranks the
+ * loaded items. These 3 sorts share the 'rating' queryKey — switching
+ * between them does NOT trigger a refetch (instant UX).
  *
  * DEBOUNCING
  * ----------
@@ -68,6 +78,8 @@
 import { useInfiniteQuery, keepPreviousData, type InfiniteData } from '@tanstack/react-query';
 import * as React from 'react';
 import type { ProviderListItem } from './types';
+import type { MarketplaceSortKey } from './use-marketplace-search';
+import { isValidMarketplaceSort, type MarketplaceSort } from '@/lib/marketplace-pagination';
 
 /** A single page of providers from the API. */
 interface ProviderPage {
@@ -115,6 +127,18 @@ export interface UseMarketplaceProvidersParams {
   radiusKm: number | null;
   /** Page size (default 24). */
   pageSize?: number;
+  /**
+   * Sort key from the shared Zustand store. The 4 deterministic sorts
+   * (rating, reviews, name, response) are sent to the API for server-side
+   * sorting. The other 3 sorts (recommended, distance, verified) default to
+   * 'rating' on the server — the client re-ranks the loaded items.
+   *
+   * Phase 3A: this is now part of the query key (changing sort triggers a
+   * refetch with the new server-side ordering). Previously it was excluded
+   * to keep sort changes instant (no refetch) — but that meant the loaded
+   * pages weren't globally sorted for reviews/name/response.
+   */
+  sort: MarketplaceSortKey;
 }
 
 export interface UseMarketplaceProvidersResult {
@@ -148,13 +172,29 @@ export interface UseMarketplaceProvidersResult {
  * cache + dedupe requests. When ANY of these values change, the query is
  * considered "new" and page 1 is refetched.
  *
- * We deliberately EXCLUDE the sort key from the query key — sort changes
- * are handled client-side (re-sort the loaded items) and should NOT
- * trigger a refetch. The server always fetches in the same stable order
- * (rating DESC, reviewCount DESC, id DESC), so the cached pages remain
- * valid regardless of which client-side sort is active.
+ * Phase 3A: `sort` is now part of the query key. The 4 deterministic sorts
+ * (rating, reviews, name, response) have different server-side orderings, so
+ * they must NOT share a cache entry. When the user picks one of these 4
+ * sorts, the queryKey changes → React Query refetches from page 1 with the
+ * new sort. The trade-off is a brief loading flash (250-300ms — acceptable).
+ *
+ * For the 3 client-side sorts (recommended, distance, verified), the server
+ * fetches by 'rating' (the default). They share the same queryKey as a
+ * 'rating' sort request — so switching between them does NOT trigger a
+ * refetch (instant UX, same as before Phase 3A). The client re-ranks the
+ * loaded items.
+ *
+ * To make this work, we NORMALIZE the sort in the queryKey: if it's one of
+ * the 4 deterministic sorts, use it as-is; otherwise use 'rating'. This way
+ * 'recommended'/'distance'/'verified' all map to the 'rating' queryKey.
  */
 function buildQueryKey(params: UseMarketplaceProvidersParams) {
+  // Normalize sort: deterministic sorts keep their value; client-side sorts
+  // (recommended/distance/verified) collapse to 'rating' so they share the
+  // same cache entry as a plain rating-sort fetch.
+  const normalizedSort: MarketplaceSort = isValidMarketplaceSort(params.sort)
+    ? params.sort
+    : 'rating';
   return [
     'marketplace',
     'providers',
@@ -176,6 +216,7 @@ function buildQueryKey(params: UseMarketplaceProvidersParams) {
       userLng: params.userLng ?? 'none',
       radiusKm: params.radiusKm ?? 'none',
       pageSize: params.pageSize ?? 24,
+      sort: normalizedSort,
     },
   ] as const;
 }
@@ -210,6 +251,13 @@ async function fetchPage(
   if (params.userLat != null) url.searchParams.set('lat', String(params.userLat));
   if (params.userLng != null) url.searchParams.set('lng', String(params.userLng));
   if (params.radiusKm != null && params.radiusKm > 0) url.searchParams.set('radiusKm', String(params.radiusKm));
+  // ── Phase 3A: sort param ─────────────────────────────────────────────
+  // Only send the 4 deterministic sorts to the API. The 3 client-side sorts
+  // (recommended, distance, verified) are omitted so the server defaults to
+  // 'rating' — the client re-ranks the loaded items.
+  if (isValidMarketplaceSort(params.sort)) {
+    url.searchParams.set('sort', params.sort);
+  }
 
   const res = await fetch(url.toString(), {
     headers: { Accept: 'application/json' },

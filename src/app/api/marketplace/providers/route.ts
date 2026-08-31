@@ -18,8 +18,10 @@ import {
   decodeCursor,
   fetchFeaturedTenantIds,
   fetchProviderPage,
+  isValidMarketplaceSort,
   mapTenantToProviderListItem,
   PROVIDER_SELECT,
+  type MarketplaceSort,
 } from '@/lib/marketplace-pagination';
 import { sharedCacheWrap } from '@/lib/shared-cache';
 import { buildCacheKey } from '@/lib/ttl-cache';
@@ -105,6 +107,18 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
   const trustRatingHigh = searchParams.get('trustRatingHigh') === 'true';
   const trustEmergency = searchParams.get('trustEmergency') === 'true';
 
+  // ── Phase 3A: sort param ──────────────────────────────────────────────
+  // 4 deterministic sorts are now SERVER-SIDE: rating (default), reviews,
+  // name, response. The other 3 sorts (recommended, distance, verified) are
+  // NOT accepted here — the client should send sort=rating (or omit it) when
+  // the user picks one of those, and the client re-ranks the loaded items.
+  // If an unknown/unsupported sort is sent, we default to 'rating' (current
+  // behavior — backward compat).
+  const sortParam = searchParams.get('sort');
+  const sort: MarketplaceSort = isValidMarketplaceSort(sortParam)
+    ? sortParam
+    : 'rating';
+
   // ── New server-side filters (Phase 2) ──────────────────────────────────
   // minRating: 0 = no filter. > 0 excludes unrated (rating=0) providers.
   const minRating = Math.max(0, Math.min(5, parseFloat(searchParams.get('minRating') || '0') || 0));
@@ -134,16 +148,22 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
   // When `cursor` is present (even if empty string), use the new keyset
   // pagination path. This is the preferred path for the browse page.
   if (cursorParam !== null) {
-    const cursor = decodeCursor(cursorParam);
+    // Phase 3A: pass the active sort to decodeCursor so a cursor from a
+    // different sort is rejected (treated as page 1). This prevents stale
+    // browser URL state from corrupting a different sort's pagination.
+    const cursor = decodeCursor(cursorParam, sort);
     const pageSize = Math.min(
       parseInt(searchParams.get('pageSize') || String(MARKETPLACE_PAGE_SIZE), 10) || MARKETPLACE_PAGE_SIZE,
       MARKETPLACE_MAX_PAGE_SIZE,
     );
 
-    // Build a stable cache key from all filter params + cursor + pageSize.
+    // Build a stable cache key from all filter params + cursor + pageSize + sort.
+    // Phase 3A: sort is now part of the cache key — different sorts have
+    // different orderings, so they must NOT share a cache entry.
     const cacheKey = buildCacheKey('mp:cursor', {
       cursor: cursorParam || 'first',
       pageSize,
+      sort,
       country,
       search,
       city,
@@ -202,6 +222,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
               filters: { country, search, city, industry, vertical, trustFullyVerified, trustRatingHigh, trustEmergency, minRating, claimedFilter, userLat, userLng, radiusKm },
               cursor,
               pageSize,
+              sort,
               featuredTenantIds: filteredIds,
               mapItem: (t) => mapTenantToProviderListItem(t, new Map()),
             });
@@ -225,6 +246,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
             filters: { country, search, city, industry, vertical, trustFullyVerified, trustRatingHigh, trustEmergency, minRating, claimedFilter, userLat, userLng, radiusKm },
             cursor,
             pageSize,
+            sort,
             featuredTenantIds: featuredIds,
             mapItem: (t) => mapTenantToProviderListItem(t, featuredMap),
           });
@@ -258,7 +280,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
       }
 
       log.info(
-        { returned: items.length, total: result.value.total, cursor: !!cursor, country, search, city, industry, vertical, pageSize, source: result.source },
+        { returned: items.length, total: result.value.total, cursor: !!cursor, sort, country, search, city, industry, vertical, pageSize, source: result.source },
         'marketplace/providers: cursor list',
       );
 

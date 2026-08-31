@@ -15,7 +15,9 @@ import {
   MARKETPLACE_PAGE_SIZE,
   fetchFeaturedTenantIds,
   fetchProviderPage,
+  isValidMarketplaceSort,
   mapTenantToProviderListItem,
+  type MarketplaceSort,
   type ProviderFilterOptions,
 } from '@/lib/marketplace-pagination';
 import { fetchFeaturedListingsMap } from '@/lib/marketplace-featured';
@@ -92,10 +94,17 @@ interface SsrProviderPage {
  * The `shouldCache` predicate skips caching empty page-1 results (could be
  * a transient PostgREST error — same pattern as the ttlCacheWrap usage in
  * the providers API route).
+ *
+ * Phase 3A: `sort` is part of the cache key — different sorts produce
+ * different orderings, so they must NOT share a cache entry.
  */
-async function fetchProvidersCached(filters: ProviderFilterOptions): Promise<SsrProviderPage> {
+async function fetchProvidersCached(
+  filters: ProviderFilterOptions,
+  sort: MarketplaceSort,
+): Promise<SsrProviderPage> {
   const cacheKey = [
     'fieseros:marketplace:page1',
+    `sort:${sort}`,
     filters.country || 'all',
     filters.search || '',
     filters.city || '',
@@ -112,7 +121,7 @@ async function fetchProvidersCached(filters: ProviderFilterOptions): Promise<Ssr
     5 * 60_000, // stale: 5min
     async () => {
       try {
-        return await fetchProvidersUncached(filters);
+        return await fetchProvidersUncached(filters, sort);
       } catch (err) {
         // Let CircuitOpenError propagate so sharedCacheWrap serves stale.
         // Other errors (bad filter, etc.) propagate normally.
@@ -126,7 +135,10 @@ async function fetchProvidersCached(filters: ProviderFilterOptions): Promise<Ssr
   return result.value;
 }
 
-async function fetchProvidersUncached(filters: ProviderFilterOptions): Promise<SsrProviderPage> {
+async function fetchProvidersUncached(
+  filters: ProviderFilterOptions,
+  sort: MarketplaceSort,
+): Promise<SsrProviderPage> {
 
   // Fetch the set of featured tenant IDs (for featured-first sorting on page 1).
   const featuredIds = await fetchFeaturedTenantIds();
@@ -139,6 +151,7 @@ async function fetchProvidersUncached(filters: ProviderFilterOptions): Promise<S
     filters,
     cursor: null, // page 1
     pageSize: MARKETPLACE_PAGE_SIZE,
+    sort, // Phase 3A: pass the user's selected sort to the page fetch
     featuredTenantIds: featuredIds,
     mapItem: (t) => mapTenantToProviderListItem(t, featuredMap),
   });
@@ -256,6 +269,8 @@ export default async function MarketplaceBrowsePage({
     city?: string;
     search?: string;
     country?: string;
+    /** Phase 3A: server-side deterministic sort (rating|reviews|name|response). */
+    sort?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -285,6 +300,16 @@ export default async function MarketplaceBrowsePage({
     ? geoCountry.trim().toUpperCase().substring(0, 2)
     : null;
 
+  // ── Phase 3A: parse sort from URL ──────────────────────────────────────
+  // The 4 deterministic sorts (rating|reviews|name|response) are SSR-fetched
+  // in the correct global order. The 3 client-side sorts (recommended|
+  // distance|verified) are NOT accepted here — they default to 'rating' on
+  // the server (the client re-ranks the SSR items). This keeps the SSR HTML
+  // stable across the 3 client-side sorts (no separate cache entry per sort).
+  const sort: MarketplaceSort = isValidMarketplaceSort(params.sort)
+    ? params.sort
+    : 'rating';
+
   const filters: ProviderFilterOptions = {
     country: detectedCountry,
     search: params.search?.trim() || null,
@@ -300,15 +325,15 @@ export default async function MarketplaceBrowsePage({
   try {
     // A5: use the unstable_cache-wrapped version (30s TTL).
     // On a cache hit, this returns instantly without hitting the DB.
-    // The cache key includes the filters so each search gets its
-    // own 30s cache entry.
+    // The cache key includes the filters + sort so each (filters, sort)
+    // combination gets its own 30s cache entry.
     //
     // PAGINATION: fetchProvidersCached returns only the FIRST PAGE (24 items)
     // + nextCursor (for the client to fetch page 2) + totalProviders (for the
     // sidebar's "Active providers" stat). The client's useMarketplaceProviders
     // hook seeds its React Query cache with this data — NO duplicate fetch
     // of page 1.
-    const ssrPage = await fetchProvidersCached(filters);
+    const ssrPage = await fetchProvidersCached(filters, sort);
     providers = ssrPage.items;
     nextCursor = ssrPage.nextCursor;
     totalProviders = ssrPage.total;

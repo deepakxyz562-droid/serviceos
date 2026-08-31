@@ -160,6 +160,17 @@ model Tenant {
   faqsJson              String   @default("[]")  // array of {question, answer}
   rating                Float    @default(0)     // aggregate rating (0-5)
   reviewCount           Int      @default(0)
+  // ── Phase 3A: Server-Side Sorting ──────────────────────────────────────
+  // Denormalized response time in minutes for the "Fastest response" sort.
+  // Computed from reviewCount via the formula:
+  //   reviewCount >= 500 ? 5 : max(8, 60 - floor(reviewCount / 10))
+  // Lower = faster response. Stored as a column so the marketplace API can
+  // ORDER BY responseTimeMins ASC at the DB level (cursor keyset pagination
+  // requires a real, indexed column — derived values can't be sorted in SQL
+  // without a CASE expression). The value is recomputed whenever reviewCount
+  // changes (see computeResponseTimeMins in marketplace-pagination.ts).
+  // Default 60 = "unrated / slow" so seed data sorts last under response ASC.
+  responseTimeMins      Int      @default(60)
   seoTitle              String?
   seoDescription        String?
   createdAt         DateTime @default(now())
@@ -293,6 +304,16 @@ model Tenant {
   @@index([country, city])
   @@index([country, industry])
   @@index([country, rating, reviewCount, id])
+  // ── Phase 3A: Server-side sort indexes ─────────────────────────────────
+  // Each deterministic sort gets its own composite index so the cursor
+  // keyset WHERE clause can use an index scan instead of a Seq Scan + Sort.
+  //   • reviews    → (reviewCount DESC, rating DESC, id DESC)
+  //   • name       → (name ASC, id ASC)
+  //   • response   → (responseTimeMins ASC, rating DESC, id DESC)
+  // (rating sort is already covered by [rating, reviewCount, id] above.)
+  @@index([reviewCount, rating, id])
+  @@index([name, id])
+  @@index([responseTimeMins, rating, id])
   // ── C-2C: createdAt index for tenant fallback lookups ──────────────────
   // 15+ API routes do db.tenant.findFirst({ orderBy: { createdAt: 'asc' },
   // select: { id: true } }) as a fallback for super-admin / demo sessions
