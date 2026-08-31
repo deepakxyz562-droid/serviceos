@@ -72,26 +72,33 @@ export interface InvalidationContext<TData = any, TVariables = any> {
 /**
  * Dependency-aware invalidation for Job mutations.
  *
- * Affected queries:
- *   - jobs list (always — any job mutation affects the list)
- *   - dashboard (always — job count/KPI changes)
- *   - calendar (always — jobs appear on calendar)
- *   - dispatch (always — dispatch board shows live job status)
- *   - job detail (only for update/delete — the specific job's detail cache)
- *   - customer detail (only if the job has a customerId)
- *   - employee detail (only if the job has an assigneeId/employeeId)
+ * ─── Mutation types ─────────────────────────────────────────────────────────
+ * 'create'  → jobs.all + dashboard.all + calendar.all() + dispatch.all + customer detail (if) + employee detail (if)
+ * 'update'  → + jobs.detail(id) (also used for lifecycle transitions, status changes, cancel — same consumers)
+ * 'delete'  → + jobs.detail(id)
+ * 'assign'  → + jobs.detail(id) + old employee detail (if reassignment)
+ * 'note'    → jobs.detail(id) ONLY (completionNotes not consumed by dashboard/calendar/dispatch/list/customer/employee)
  *
- * @param opts.mutation 'create' | 'update' | 'delete' | 'assign' | 'status'
- * @param opts.data     The API response (job object with customerId, assigneeId, etc.)
- * @param opts.variables The request body (may contain customerId, assigneeId, id)
+ * ─── Dashboard consumption (verified Phase 1.9f audit) ──────────────────────
+ * Dashboard reads: job.count, job.groupBy(status), job.findMany(recent 5, select: id/title/assigneeName/status/scheduledAt)
+ * 'note' mutations only change completionNotes → NOT in dashboard select → NO dashboard invalidation.
+ *
+ * @param opts.mutation 'create' | 'update' | 'delete' | 'assign' | 'status' | 'note'
  */
 export function getJobInvalidations(opts: InvalidationContext): QueryKey[] {
   const { mutation, data, variables } = opts;
+
+  const jobId = data?.id ?? variables?.id;
+
+  // 'note' — narrowest scope: only detail (completionNotes not consumed by dashboard/list/calendar/dispatch)
+  if (mutation === 'note') {
+    if (jobId) return [qk.jobs.detail(jobId)];
+    return [];
+  }
+
   const keys: QueryKey[] = [qk.jobs.all, qk.dashboard.all, qk.jobs.calendar.all(), qk.dispatch.all];
 
-  // Job detail — only for update/delete (create doesn't have a cached detail yet,
-  // and 'assign'/'status' are sub-types of update)
-  const jobId = data?.id ?? variables?.id;
+  // Job detail — for update/delete/assign/status (create doesn't have a cached detail yet)
   if ((mutation === 'update' || mutation === 'delete' || mutation === 'assign' || mutation === 'status') && jobId) {
     keys.push(qk.jobs.detail(jobId));
   }

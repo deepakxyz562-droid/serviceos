@@ -1037,12 +1037,12 @@ export function useReopenInvoice() {
 // caller keeps its existing fetchWebhookSources() call.
 //
 // Migration: Phase 1.9e — operations-view.tsx
-
-export interface JobLifecycleInput {
-  action: string; // 'assign' | 'start' | 'complete' | 'cancel' | etc.
-  jobId: string;
-  resourceId?: string;
-}
+//
+// NOTE: useJobLifecycleAction + JobLifecycleInput live in the Phase 1.9f
+// block below (lines ~1127+). They were relocated there in 1.9f so the
+// assign-aware invalidation (mutation='assign' for assign, 'update' otherwise)
+// could be applied. The earlier declaration that lived here was removed to
+// avoid a duplicate-export parse error (rolldown).
 
 export interface ResourceSaveInput {
   id?: string; // present for update, absent for create
@@ -1051,15 +1051,6 @@ export interface ResourceSaveInput {
   type: string;
   location?: string;
   skills?: string[];
-}
-
-export function useJobLifecycleAction() {
-  return useCrmMutation<unknown, JobLifecycleInput>({
-    url: '/api/jobs/lifecycle',
-    method: 'POST',
-    invalidate: ({ data, variables }) =>
-      getJobInvalidations({ mutation: 'update', data, variables }),
-  });
 }
 
 export function useCreateResource() {
@@ -1083,5 +1074,200 @@ export function useDeleteResource() {
     url: ({ id }) => `/api/resources?id=${id}`,
     method: 'DELETE',
     invalidate: () => [qk.operations.resourcesAll()],
+  });
+}
+
+// ── Job mutations (dependency-aware) ────────────────────────────────────────
+//
+// Uses getJobInvalidations for create/update/delete/assign/status/note.
+// 'note' → jobs.detail(id) ONLY (completionNotes not consumed by dashboard/list/etc.)
+//
+// Recurring schedule pause/resume → NOT getJobInvalidations (changes schedule, not job).
+// Generate invoice → special (creates invoice + updates job detail, no dashboard).
+// Lead/invoice/quote link operations → cross-domain targeted invalidation.
+//
+// Migration: Phase 1.9f — jobs-view.tsx (largest view, 14 mutations)
+
+export interface JobCreateInput {
+  title?: string | null;
+  customerId?: string | null;
+  assigneeId?: string | null;
+  status?: string;
+  priority?: string;
+  type?: string;
+  description?: string | null;
+  address?: string | null;
+  scheduledAt?: string | null;
+  lineItemsJson?: string;
+  imagesJson?: string;
+  linkedChecklistsJson?: string;
+  // ... other fields as needed
+  [key: string]: unknown;
+}
+
+export interface JobUpdateInput extends Partial<JobCreateInput> {
+  id: string;
+}
+
+export interface JobBulkActionInput {
+  jobIds: string[];
+  action: 'delete' | 'softDelete' | 'updateStatus';
+  status?: string;
+}
+
+export interface JobLifecycleInput {
+  action: string;
+  jobId: string;
+  resourceId?: string;
+  reason?: string;
+  reassignmentNote?: string;
+}
+
+export interface JobLifecycleTransitionInput {
+  action: string;
+  jobId: string;
+  latitude?: number;
+  longitude?: number;
+  notes?: string;
+  completionNotes?: string;
+  extraPayload?: Record<string, unknown>;
+}
+
+export function useCreateJob() {
+  return useCrmMutation<unknown, JobCreateInput>({
+    url: '/api/jobs',
+    method: 'POST',
+    invalidate: ({ data }) =>
+      getJobInvalidations({ mutation: 'create', data }),
+  });
+}
+
+export function useUpdateJob() {
+  return useCrmMutation<unknown, JobUpdateInput>({
+    url: ({ id }) => `/api/jobs/${id}`,
+    method: 'PUT',
+    invalidate: ({ data, variables }) =>
+      getJobInvalidations({ mutation: 'update', data, variables }),
+  });
+}
+
+export function useDeleteJob() {
+  return useCrmMutation<unknown, { id: string }>({
+    url: ({ id }) => `/api/jobs/${id}`,
+    method: 'DELETE',
+    invalidate: ({ variables }) =>
+      getJobInvalidations({ mutation: 'delete', variables }),
+  });
+}
+
+export function useBulkJobAction() {
+  return useCrmMutation<unknown, JobBulkActionInput>({
+    url: '/api/jobs/bulk',
+    method: 'POST',
+    // Bulk operations don't have individual IDs → invalidate jobs.all + dashboard + calendar + dispatch
+    invalidate: () => [qk.jobs.all, qk.dashboard.all, qk.jobs.calendar.all(), qk.dispatch.all],
+  });
+}
+
+export function useJobLifecycleAction() {
+  return useCrmMutation<unknown, JobLifecycleInput>({
+    url: '/api/jobs/lifecycle',
+    method: 'POST',
+    invalidate: ({ data, variables }) =>
+      // 'assign' handles old+new employee detail; all other actions use 'update'
+      getJobInvalidations({
+        mutation: variables.action === 'assign' ? 'assign' : 'update',
+        data,
+        variables,
+      }),
+  });
+}
+
+export function useJobLifecycleTransition() {
+  return useCrmMutation<unknown, JobLifecycleTransitionInput>({
+    url: ({ jobId }) => `/api/jobs/${jobId}/lifecycle`,
+    method: 'POST',
+    invalidate: ({ data, variables }) =>
+      getJobInvalidations({ mutation: 'update', data, variables }),
+  });
+}
+
+export function useCancelJob() {
+  return useCrmMutation<unknown, { id: string }>({
+    url: ({ id }) => `/api/jobs/${id}`,
+    method: 'PUT',
+    invalidate: ({ variables }) =>
+      getJobInvalidations({ mutation: 'update', variables }),
+  });
+}
+
+export function useSaveJobNotes() {
+  return useCrmMutation<unknown, { id: string; completionNotes: string }>({
+    url: ({ id }) => `/api/jobs/${id}`,
+    method: 'PUT',
+    invalidate: ({ variables }) =>
+      getJobInvalidations({ mutation: 'note', variables }),
+  });
+}
+
+// Recurring schedule pause/resume — NOT getJobInvalidations (changes schedule, not job)
+export function usePauseRecurringSchedule() {
+  return useCrmMutation<unknown, { scheduleId: string }>({
+    url: ({ scheduleId }) => `/api/recurring-jobs/${scheduleId}/pause`,
+    method: 'POST',
+    invalidate: () => [qk.jobs.all], // list shows schedule state
+  });
+}
+
+export function useResumeRecurringSchedule() {
+  return useCrmMutation<unknown, { scheduleId: string }>({
+    url: ({ scheduleId }) => `/api/recurring-jobs/${scheduleId}/resume`,
+    method: 'POST',
+    invalidate: () => [qk.jobs.all], // list shows schedule state
+  });
+}
+
+// Generate invoice — special: creates invoice + updates job detail (no dashboard — job status doesn't change)
+export function useGenerateJobInvoice() {
+  return useCrmMutation<unknown, { jobId: string }>({
+    url: '/api/jobs/generate-invoice',
+    method: 'POST',
+    invalidate: ({ data, variables }) => {
+      const keys: QueryKey[] = [qk.invoices.all, qk.jobs.detail(variables.jobId)];
+      const customerId = (data as any)?.invoice?.customerId;
+      if (customerId) keys.push(qk.customers.detail(customerId));
+      return keys;
+    },
+  });
+}
+
+// Cross-domain link operations (called after job create in handleSaveJob)
+export function useLinkLeadToJob() {
+  return useCrmMutation<unknown, { leadId: string; status: string; jobId: string; customerId?: string; convertedAt: string }>({
+    url: ({ leadId }) => `/api/leads/${leadId}`,
+    method: 'PUT',
+    invalidate: ({ variables }) => [
+      qk.leads.all,
+      qk.leads.detail(variables.leadId),
+    ],
+  });
+}
+
+export function useLinkInvoiceToJob() {
+  return useCrmMutation<unknown, { customerId: string; jobId: string; items: Array<{ description: string; quantity: number; rate: number }> }>({
+    url: '/api/invoices',
+    method: 'POST',
+    invalidate: () => [qk.invoices.all],
+  });
+}
+
+export function useLinkQuoteToJob() {
+  return useCrmMutation<unknown, { quoteId: string; jobId: string; status: string }>({
+    url: ({ quoteId }) => `/api/quotes/${quoteId}`,
+    method: 'PUT',
+    invalidate: ({ variables }) => [
+      qk.quotes.all,
+      qk.quotes.detail(variables.quoteId),
+    ],
   });
 }
