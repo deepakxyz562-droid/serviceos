@@ -66,6 +66,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS "UsageReservation_entitlementId_externalCallId
   ON "UsageReservation" ("entitlementId", "externalCallId")
   WHERE "status" = 'ACTIVE';
 
+-- ─── Lifecycle idempotency: one reservation per (entitlement, externalCallId) ──
+-- Phase 8 Hardening: the reviewer correctly identified that the ACTIVE-only
+-- partial index allows a duplicate reservation after the original is CONSUMED.
+-- This broader unique index enforces that a given (entitlementId, externalCallId)
+-- pair can only EVER have one reservation — regardless of status.
+--
+-- This prevents a duplicate admission for the same call from creating a new
+-- reservation after the original was consumed. The reserve_ai_usage_seconds()
+-- function's idempotency check (step 4) returns the existing reservation
+-- regardless of its status, so this index is the DB-level backstop.
+--
+-- Note: if a call was rejected (reservation RELEASED) and the same
+-- externalCallId is re-admitted, the RPC returns the existing RELEASED
+-- reservation rather than creating a new one. The admission controller
+-- should treat this as an error (the call identity is being reused).
+CREATE UNIQUE INDEX IF NOT EXISTS "UsageReservation_entitlementId_externalCallId_lifecycle_idx"
+  ON "UsageReservation" ("entitlementId", "externalCallId");
+
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- FUNCTION 1: reserve_ai_usage_seconds
@@ -128,24 +146,29 @@ BEGIN
     RETURN json_build_object('ok', false, 'reason', 'ENTITLEMENT_NOT_ACTIVE');
   END IF;
 
-  -- ── 4. IDEMPOTENCY: check for an existing ACTIVE reservation ──
-  -- If the same externalCallId already has an ACTIVE reservation on this
-  -- entitlement, return it (duplicate admission request — no new reservation).
-  SELECT "id", "reservedSeconds" INTO v_existing_reservation
+  -- ── 4. IDEMPOTENCY: check for an existing reservation (ANY status) ──
+  -- Phase 8 Hardening: per the reviewer's feedback, the idempotency check
+  -- should cover the ENTIRE call lifecycle, not just ACTIVE reservations.
+  -- If the same externalCallId already has a reservation on this entitlement
+  -- (ACTIVE, CONSUMED, or RELEASED), return it (duplicate admission request).
+  --
+  -- The lifecycle unique index (UsageReservation_entitlementId_externalCallId_lifecycle_idx)
+  -- is the DB-level backstop that prevents duplicate INSERTs.
+  SELECT "id", "reservedSeconds", "status" INTO v_existing_reservation
     FROM "UsageReservation"
     WHERE "entitlementId" = p_entitlement_id
       AND "externalCallId" = p_external_call_id
-      AND "status" = 'ACTIVE'
     LIMIT 1;
 
   IF FOUND THEN
-    -- Idempotent: return the existing reservation
+    -- Idempotent: return the existing reservation (regardless of status)
     RETURN json_build_object(
       'ok', true,
       'reason', NULL,
       'reservationId', v_existing_reservation."id",
       'idempotent', true,
       'reservedSeconds', v_existing_reservation."reservedSeconds",
+      'reservationStatus', v_existing_reservation."status",
       'activeCallCount', NULL  -- not recomputed for idempotent path
     );
   END IF;
@@ -209,7 +232,7 @@ BEGIN
     'activeCallCount', v_active_count + 1
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 -- Restrict access: only authenticated + service_role can call this.
 -- anon role is explicitly denied.
@@ -258,7 +281,8 @@ DECLARE
   v_period_end TIMESTAMPTZ;
 BEGIN
   -- ── 1. Fetch the entitlement (for periodStart/periodEnd + security) ──
-  -- We don't need FOR UPDATE here because we're not modifying the entitlement.
+  -- We don't need FOR UPDATE on the entitlement because we're not modifying it.
+  -- The reservation is the row we modify, so that's the one we lock below.
   SELECT "tenantId", "periodStart", "periodEnd", "status" INTO v_entitlement
     FROM "AddonEntitlement"
     WHERE "id" = p_entitlement_id;
@@ -269,14 +293,56 @@ BEGIN
 
   -- ── 2. SECURITY: validate entitlement belongs to caller's tenant ──
   IF v_entitlement."tenantId" != p_tenant_id THEN
-    RAISE WARNING 'finalize_ai_usage: tenant mismatch — p_tenant_id=%, entitlement.tenantId=%', p_tenant_id, v_entitlement."tenantId";
+    RAISE WARNING 'finalize_ai_usage: entitlement tenant mismatch — p_tenant_id=%, entitlement.tenantId=%', p_tenant_id, v_entitlement."tenantId";
     RETURN json_build_object('ok', false, 'reason', 'ENTITLEMENT_NOT_FOUND');
   END IF;
 
   v_period_start := v_entitlement."periodStart";
   v_period_end := v_entitlement."periodEnd";
 
-  -- ── 3. IDEMPOTENCY: check if the ledger entry already exists ──
+  -- ── 3. LOCK + VALIDATE the reservation (if p_reservation_id is provided) ──
+  -- Phase 8 Hardening: we MUST lock the reservation row FOR UPDATE before
+  -- modifying it. This serializes concurrent finalization requests for the
+  -- same reservation.
+  --
+  -- SECURITY: we also validate that the reservation belongs to the caller's
+  -- tenant + entitlement + externalCallId. A SECURITY DEFINER function must
+  -- not trust caller-supplied IDs without verification.
+  IF p_reservation_id IS NOT NULL THEN
+    SELECT "id", "tenantId", "entitlementId", "externalCallId", "status"
+      INTO v_reservation
+      FROM "UsageReservation"
+      WHERE "id" = p_reservation_id
+      FOR UPDATE;
+
+    IF NOT FOUND THEN
+      -- Reservation not found — this is a data integrity problem.
+      -- Don't proceed with finalization (no fallback).
+      RAISE WARNING 'finalize_ai_usage: reservation not found — p_reservation_id=%', p_reservation_id;
+      RETURN json_build_object('ok', false, 'reason', 'RESERVATION_NOT_FOUND');
+    END IF;
+
+    -- Validate the reservation belongs to the caller's tenant
+    IF v_reservation."tenantId" != p_tenant_id THEN
+      RAISE WARNING 'finalize_ai_usage: reservation tenant mismatch — p_tenant_id=%, reservation.tenantId=%', p_tenant_id, v_reservation."tenantId";
+      RETURN json_build_object('ok', false, 'reason', 'RESERVATION_NOT_FOUND');
+    END IF;
+
+    -- Validate the reservation belongs to the specified entitlement
+    IF v_reservation."entitlementId" != p_entitlement_id THEN
+      RAISE WARNING 'finalize_ai_usage: reservation entitlement mismatch — p_entitlement_id=%, reservation.entitlementId=%', p_entitlement_id, v_reservation."entitlementId";
+      RETURN json_build_object('ok', false, 'reason', 'RESERVATION_ENTITLEMENT_MISMATCH');
+    END IF;
+
+    -- Validate the reservation's externalCallId matches (prevents caller from
+    -- supplying a mismatched reservationId + externalCallId pair)
+    IF p_external_call_id IS NOT NULL AND v_reservation."externalCallId" != p_external_call_id THEN
+      RAISE WARNING 'finalize_ai_usage: reservation externalCallId mismatch — p_external_call_id=%, reservation.externalCallId=%', p_external_call_id, v_reservation."externalCallId";
+      RETURN json_build_object('ok', false, 'reason', 'RESERVATION_CALL_MISMATCH');
+    END IF;
+  END IF;
+
+  -- ── 4. IDEMPOTENCY: check if the ledger entry already exists ──
   -- This is the fast path for webhook redelivery: the ledger was already
   -- written, so we return it without doing anything else.
   SELECT "id" INTO v_existing_ledger
@@ -285,18 +351,17 @@ BEGIN
 
   IF FOUND THEN
     -- Ledger already exists — idempotent no-op.
-    -- We still try to mark the reservation CONSUMED (defensive — in case
-    -- the previous call crashed after the ledger insert but before the
-    -- reservation update). This is safe because updateMany only affects
-    -- ACTIVE reservations.
-    IF p_reservation_id IS NOT NULL THEN
+    -- We still mark the reservation CONSUMED (defensive — in case the
+    -- previous call crashed after the ledger insert but before the
+    -- reservation update). This is safe because we only update ACTIVE
+    -- reservations, and we hold the FOR UPDATE lock from step 3.
+    IF p_reservation_id IS NOT NULL AND v_reservation."status" = 'ACTIVE' THEN
       UPDATE "UsageReservation"
         SET "status" = CASE WHEN p_billable_seconds = 0 THEN 'RELEASED' ELSE 'CONSUMED' END,
             "consumedSeconds" = p_billable_seconds,
             "releasedAt" = NOW(),
             "updatedAt" = NOW()
-        WHERE "id" = p_reservation_id
-          AND "status" = 'ACTIVE';
+        WHERE "id" = p_reservation_id;
     END IF;
 
     RETURN json_build_object(
@@ -307,7 +372,7 @@ BEGIN
     );
   END IF;
 
-  -- ── 4. INSERT the UsageLedger entry (immutable financial record) ──
+  -- ── 5. INSERT the UsageLedger entry (immutable financial record) ──
   -- The idempotencyKey @unique constraint is the ultimate guarantee.
   -- If two concurrent calls race past the existence check above, only one
   -- INSERT succeeds — the other gets a unique violation (caught below).
@@ -333,15 +398,15 @@ BEGIN
       FROM "UsageLedger"
       WHERE "idempotencyKey" = p_idempotency_key;
 
-    -- Mark the reservation CONSUMED (defensive)
-    IF p_reservation_id IS NOT NULL THEN
+    -- Mark the reservation CONSUMED (defensive — we hold the FOR UPDATE lock
+    -- from step 3, so this is safe)
+    IF p_reservation_id IS NOT NULL AND v_reservation."status" = 'ACTIVE' THEN
       UPDATE "UsageReservation"
         SET "status" = CASE WHEN p_billable_seconds = 0 THEN 'RELEASED' ELSE 'CONSUMED' END,
             "consumedSeconds" = p_billable_seconds,
             "releasedAt" = NOW(),
             "updatedAt" = NOW()
-        WHERE "id" = p_reservation_id
-          AND "status" = 'ACTIVE';
+        WHERE "id" = p_reservation_id;
     END IF;
 
     RETURN json_build_object(
@@ -352,17 +417,17 @@ BEGIN
     );
   END;
 
-  -- ── 5. UPDATE the UsageReservation to CONSUMED ──
-  -- Uses the reservationId if provided, otherwise falls back to
-  -- (entitlementId, externalCallId, status='ACTIVE').
+  -- ── 6. UPDATE the UsageReservation to CONSUMED ──
+  -- We hold the FOR UPDATE lock from step 3, so this is safe.
+  -- If p_reservation_id was provided, we use it (already locked + validated).
+  -- Otherwise, fall back to (entitlementId, externalCallId, status='ACTIVE').
   IF p_reservation_id IS NOT NULL THEN
     UPDATE "UsageReservation"
       SET "status" = CASE WHEN p_billable_seconds = 0 THEN 'RELEASED' ELSE 'CONSUMED' END,
           "consumedSeconds" = p_billable_seconds,
           "releasedAt" = NOW(),
           "updatedAt" = NOW()
-      WHERE "id" = p_reservation_id
-        AND "status" = 'ACTIVE';
+      WHERE "id" = p_reservation_id;
   ELSE
     UPDATE "UsageReservation"
       SET "status" = CASE WHEN p_billable_seconds = 0 THEN 'RELEASED' ELSE 'CONSUMED' END,
@@ -382,7 +447,7 @@ BEGIN
     'idempotent', false
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 REVOKE EXECUTE ON FUNCTION finalize_ai_usage FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION finalize_ai_usage TO authenticated, service_role;

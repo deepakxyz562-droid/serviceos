@@ -113,6 +113,12 @@ export async function reserveSeconds(params: {
   // PostgreSQL. The RPC function does FOR UPDATE + concurrency check +
   // capacity check + INSERT in a single transaction. PostgREST just forwards
   // the HTTP request — the locking is real.
+  //
+  // CRITICAL: if the RPC is available but returns an error, we do NOT fall
+  // back to the Prisma path. The Prisma $transaction is NOT atomic in
+  // PostgREST — falling back would silently use a non-atomic path for
+  // financial operations. An RPC error is a real failure; the caller must
+  // handle it (reject the call).
   if (isAiUsageRpcAvailable() && maxConcurrentCalls !== undefined) {
     const rpcResult = await rpcReserveSeconds({
       tenantId,
@@ -124,7 +130,8 @@ export async function reserveSeconds(params: {
 
     if (rpcResult === null) {
       // Should not happen (isAiUsageRpcAvailable was true), but fall through
-      // to Prisma path defensively.
+      // to Prisma path defensively ONLY for this edge case (not for RPC errors).
+      console.error('[UsageService] reserveSeconds: isAiUsageRpcAvailable=true but rpcReserveSeconds returned null — falling back to Prisma (defensive)');
     } else {
       return {
         ok: rpcResult.ok,
@@ -295,6 +302,12 @@ export async function finalizeUsage(
   // PostgreSQL. The RPC function does the ledger INSERT + reservation UPDATE
   // in a single transaction, with the idempotencyKey @unique constraint as
   // the ultimate guarantee against double-charges.
+  //
+  // CRITICAL: if the RPC is available but returns an error, we do NOT fall
+  // back to the Prisma path. The Prisma $transaction is NOT atomic in
+  // PostgREST — falling back would silently use a non-atomic path for
+  // financial operations. An RPC error is a real failure; the caller must
+  // handle it (mark billingStatus=FAILED for reconciliation).
   if (isAiUsageRpcAvailable()) {
     const rpcResult = await rpcFinalizeUsage({
       tenantId,
@@ -310,7 +323,8 @@ export async function finalizeUsage(
 
     if (rpcResult === null) {
       // Should not happen (isAiUsageRpcAvailable was true), but fall through
-      // to Prisma path defensively.
+      // to Prisma path defensively ONLY for this edge case (not for RPC errors).
+      console.error('[UsageService] finalizeUsage: isAiUsageRpcAvailable=true but rpcFinalizeUsage returned null — falling back to Prisma (defensive)');
     } else {
       return {
         ok: rpcResult.ok,
