@@ -68,7 +68,23 @@ import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useCurrentUser, isOwnerOrAdmin } from '@/hooks/use-current-user';
-import { useJobs } from '@/hooks/use-crm-data';
+import {
+  useJobs,
+  useCreateJob,
+  useUpdateJob,
+  useDeleteJob,
+  useBulkJobAction,
+  useJobLifecycleAction,
+  useJobLifecycleTransition,
+  useCancelJob,
+  useSaveJobNotes,
+  usePauseRecurringSchedule,
+  useResumeRecurringSchedule,
+  useGenerateJobInvoice,
+  useLinkLeadToJob,
+  useLinkInvoiceToJob,
+  useLinkQuoteToJob,
+} from '@/hooks/use-crm-data';
 import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
 import { ErrorState } from '@/components/shared/error-state';
 import { JobFilters, type JobStats, type JobStatusFilter } from '@/features/jobs/components/job-filters';
@@ -760,6 +776,27 @@ export function JobsView() {
   });
   const error = rqError?.message ?? null;
 
+  // ── Mutations (dependency-aware, auto-invalidate via getJobInvalidations) ──
+  // create/update/delete/assign/status → jobs.all + dashboard.all + calendar + dispatch + detail + customer/employee detail
+  // note → jobs.detail(id) ONLY (completionNotes not consumed by dashboard/list/etc.)
+  // pause/resume schedule → jobs.all ONLY (changes schedule, not job)
+  // generate invoice → invoices.all + jobs.detail(id) + customer detail (no dashboard)
+  // link operations → cross-domain targeted (leads/invoices/quotes)
+  const createJob = useCreateJob();
+  const updateJob = useUpdateJob();
+  const deleteJob = useDeleteJob();
+  const bulkJobAction = useBulkJobAction();
+  const jobLifecycleAction = useJobLifecycleAction();
+  const jobLifecycleTransition = useJobLifecycleTransition();
+  const cancelJob = useCancelJob();
+  const saveJobNotes = useSaveJobNotes();
+  const pauseRecurringSchedule = usePauseRecurringSchedule();
+  const resumeRecurringSchedule = useResumeRecurringSchedule();
+  const generateJobInvoice = useGenerateJobInvoice();
+  const linkLeadToJob = useLinkLeadToJob();
+  const linkInvoiceToJob = useLinkInvoiceToJob();
+  const linkQuoteToJob = useLinkQuoteToJob();
+
   // SAME-DAY GRACE (client-side, UTC-safe):
   // A job completed TODAY stays in the Active list for the rest of the
   // calendar day (so the tenant can still review/edit it immediately) and
@@ -866,24 +903,14 @@ export function JobsView() {
     if (selectedJobIds.size === 0) return;
     setBulkRunning(true);
     try {
-      const res = await fetch('/api/jobs/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobIds: Array.from(selectedJobIds), action, ...extra }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const verb = action === 'delete' ? 'deleted' : action === 'softDelete' ? 'archived' : 'updated';
-        toast.success(`${data.success} job${data.success !== 1 ? 's' : ''} ${verb}`);
-        setSelectedJobIds(new Set());
-        setBulkDeleteOpen(false);
-        fetchJobs();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.error || 'Bulk action failed');
-      }
-    } catch {
-      toast.error('Network error');
+      const data: any = await bulkJobAction.mutateAsync({ jobIds: Array.from(selectedJobIds), action, ...extra } as any);
+      const verb = action === 'delete' ? 'deleted' : action === 'softDelete' ? 'archived' : 'updated';
+      toast.success(`${data.success} job${data.success !== 1 ? 's' : ''} ${verb}`);
+      setSelectedJobIds(new Set());
+      setBulkDeleteOpen(false);
+      // No fetchJobs() needed — useBulkJobAction auto-invalidates qk.jobs.all + dashboard + calendar + dispatch
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Bulk action failed');
     } finally {
       setBulkRunning(false);
     }
@@ -1374,28 +1401,11 @@ export function JobsView() {
       let createdJobId: string | null = null;
       if (editingJob) {
         // ── Update existing job ──
-        const res = await fetch(`/api/jobs/${editingJob.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || 'Failed to update job');
-        }
+        await updateJob.mutateAsync({ id: editingJob.id, ...payload } as any);
         toast.success('Job updated successfully');
       } else {
         // ── Create new job ──
-        const res = await fetch('/api/jobs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || 'Failed to create job');
-        }
-        const created = await res.json();
+        const created: any = await createJob.mutateAsync(payload as any);
         createdJobId = created?.id || null;
         toast.success(prefillLeadId ? 'Job created from lead' : 'Job created successfully');
       }
@@ -1407,16 +1417,13 @@ export function JobsView() {
       // duplicate what we just created).
       if (prefillLeadId && createdJobId) {
         try {
-          await fetch(`/api/leads/${prefillLeadId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              status: 'won',
-              jobId: createdJobId,
-              customerId: jobForm.customerId || undefined,
-              convertedAt: new Date().toISOString(),
-            }),
-          });
+          await linkLeadToJob.mutateAsync({
+            leadId: prefillLeadId,
+            status: 'won',
+            jobId: createdJobId,
+            customerId: jobForm.customerId || undefined,
+            convertedAt: new Date().toISOString(),
+          } as any);
         } catch {
           // Non-fatal — the job was created; the lead just won't auto-link.
           console.warn('[JobsView] Failed to mark lead as won after job creation');
@@ -1440,25 +1447,15 @@ export function JobsView() {
             }));
           if (invoiceItems.length > 0) {
             try {
-              const invRes = await fetch('/api/invoices', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  customerId: jobForm.customerId,
-                  jobId: finalJobId,
-                  items: invoiceItems,
-                }),
-              });
-              if (invRes.ok) {
-                toast.success('Draft invoice created from job line items');
-              } else {
-                const e = await invRes.json().catch(() => ({}));
-                console.warn('[JobsView] Invoice creation failed:', e?.error);
-                toast.error('Job saved, but invoice creation failed: ' + (e?.error || 'unknown error'));
-              }
-            } catch (e) {
-              console.warn('[JobsView] Invoice creation error:', e);
-              toast.error('Job saved, but invoice creation failed (network error)');
+              await linkInvoiceToJob.mutateAsync({
+                customerId: jobForm.customerId,
+                jobId: finalJobId,
+                items: invoiceItems,
+              } as any);
+              toast.success('Draft invoice created from job line items');
+            } catch (e: any) {
+              console.warn('[JobsView] Invoice creation failed:', e?.message);
+              toast.error('Job saved, but invoice creation failed: ' + (e?.message || 'unknown error'));
             }
           } else {
             toast.warning('Job saved, but no invoice created (no line items with content)');
@@ -1468,31 +1465,23 @@ export function JobsView() {
         // (b) Quotes — link an existing quote to this job + mark it accepted.
         if (jobForm.linkToRelated.includes('quotes') && jobForm.linkedQuoteId) {
           try {
-            const quoteRes = await fetch(`/api/quotes/${jobForm.linkedQuoteId}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                jobId: finalJobId,
-                status: 'accepted',
-              }),
-            });
-            if (quoteRes.ok) {
-              toast.success('Quote linked to job and marked as accepted');
-            } else {
-              const e = await quoteRes.json().catch(() => ({}));
-              console.warn('[JobsView] Quote linking failed:', e?.error);
-              toast.error('Job saved, but quote linking failed: ' + (e?.error || 'unknown error'));
-            }
-          } catch (e) {
-            console.warn('[JobsView] Quote linking error:', e);
-            toast.error('Job saved, but quote linking failed (network error)');
+            await linkQuoteToJob.mutateAsync({
+              quoteId: jobForm.linkedQuoteId,
+              jobId: finalJobId,
+              status: 'accepted',
+            } as any);
+            toast.success('Quote linked to job and marked as accepted');
+          } catch (e: any) {
+            console.warn('[JobsView] Quote linking failed:', e?.message);
+            toast.error('Job saved, but quote linking failed: ' + (e?.message || 'unknown error'));
           }
         }
       }
 
       closeJobForm();
-      fetchJobs();
-      if (createdJobId && assignee) fetchEmployees();
+      // No fetchJobs()/fetchEmployees() needed — createJob/updateJob + the
+      // link hooks auto-invalidate qk.jobs.all + dashboard + customer/employee
+      // detail via getJobInvalidations and the link hooks' targeted invalidations.
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Network error');
     } finally {
@@ -1519,34 +1508,27 @@ export function JobsView() {
       if (phase1Extras?.reason) body.reason = phase1Extras.reason;
       if (phase1Extras?.reassignmentNote) body.reassignmentNote = phase1Extras.reassignmentNote;
 
-      const res = await fetch('/api/jobs/lifecycle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        toast.success(`Job ${action} successfully`);
-        fetchJobs();
-        if (['assign', 'start', 'complete', 'reject', 'accept'].includes(action)) {
-          fetchEmployees();
-        }
-        if (action === 'assign') {
-          setShowAssignDialog(false);
-          setAssigningJob(null);
-        }
-        if (formMode === 'detail' && selectedJob?.id === jobId) {
-          const detailRes = await fetch(`/api/jobs/lifecycle?jobId=${jobId}`);
-          if (detailRes.ok) {
-            const data = await detailRes.json();
-            setSelectedJob(data);
-          }
-        }
-      } else {
-        const err = await res.json();
-        toast.error(err.error || `Failed to ${action} job`);
+      await jobLifecycleAction.mutateAsync(body as any);
+      toast.success(`Job ${action} successfully`);
+      // No fetchJobs()/fetchEmployees() needed — useJobLifecycleAction
+      // auto-invalidates qk.jobs.all + dashboard + calendar + dispatch +
+      // detail + customer/employee detail via getJobInvalidations
+      // (mutation='assign' for assign, 'update' otherwise).
+      if (action === 'assign') {
+        setShowAssignDialog(false);
+        setAssigningJob(null);
       }
-    } catch {
-      toast.error('Network error');
+      if (formMode === 'detail' && selectedJob?.id === jobId) {
+        // Manual detail read — keep (lifecycle endpoint returns enriched data
+        // with assignee/timer/route info the list query doesn't include).
+        const detailRes = await fetch(`/api/jobs/lifecycle?jobId=${jobId}`);
+        if (detailRes.ok) {
+          const data = await detailRes.json();
+          setSelectedJob(data);
+        }
+      }
+    } catch (e: any) {
+      toast.error(e?.message || `Failed to ${action} job`);
     } finally {
       setLifecycleLoading(false);
       setLoadingJobId(null);
@@ -1639,34 +1621,27 @@ export function JobsView() {
     ) => {
       setLifecycleLoadingAction(action);
       try {
-        const res = await fetch(`/api/jobs/${jobId}/lifecycle`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, ...extra }),
-        });
-        const data = await res.json();
-        if (res.ok) {
-          toast.success(`Job ${action.replace('_', ' ')} successful`);
-          // Refresh both the lifecycle data + the job itself
-          await fetchLifecycleData(jobId);
-          fetchJobs();
-          // Re-fetch the job detail row so the header status badge updates.
-          try {
-            const detailRes = await fetch(`/api/jobs/lifecycle?jobId=${jobId}`);
-            if (detailRes.ok) setSelectedJob(await detailRes.json());
-          } catch {
-            // ignore
-          }
-        } else {
-          toast.error(data?.error || `Failed to ${action} job`);
+        await jobLifecycleTransition.mutateAsync({ action, jobId, ...extra } as any);
+        toast.success(`Job ${action.replace('_', ' ')} successful`);
+        // Refresh lifecycle data (manual read — keep)
+        await fetchLifecycleData(jobId);
+        // No fetchJobs() needed — useJobLifecycleTransition auto-invalidates
+        // qk.jobs.all + dashboard + calendar + dispatch + detail via
+        // getJobInvalidations (mutation='update').
+        // Re-fetch the job detail row so the header status badge updates.
+        try {
+          const detailRes = await fetch(`/api/jobs/lifecycle?jobId=${jobId}`);
+          if (detailRes.ok) setSelectedJob(await detailRes.json());
+        } catch {
+          // ignore
         }
-      } catch {
-        toast.error('Network error');
+      } catch (e: any) {
+        toast.error(e?.message || `Failed to ${action} job`);
       } finally {
         setLifecycleLoadingAction(null);
       }
     },
-    [fetchLifecycleData, fetchJobs],
+    [fetchLifecycleData, jobLifecycleTransition],
   );
 
   // ── V1.5: fetch a route for a specific employee+job ──
@@ -1774,20 +1749,13 @@ export function JobsView() {
     // If you call this directly, it still does the old behaviour.
     setCancellingJobId(jobId);
     try {
-      const res = await fetch(`/api/jobs/${jobId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: jobId, status: 'cancelled' }),
-      });
-      if (res.ok) {
-        toast.success('Job cancelled');
-        fetchJobs();
-        setFormMode('list');
-      } else {
-        toast.error('Failed to cancel job');
-      }
-    } catch {
-      toast.error('Network error');
+      await cancelJob.mutateAsync({ id: jobId });
+      toast.success('Job cancelled');
+      setFormMode('list');
+      // No fetchJobs() needed — useCancelJob auto-invalidates qk.jobs.all +
+      // dashboard + calendar + dispatch + detail via getJobInvalidations.
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to cancel job');
     } finally {
       setCancellingJobId(null);
     }
@@ -1866,55 +1834,41 @@ export function JobsView() {
 
   const handlePauseSchedule = async (scheduleId: string, title?: string) => {
     try {
-      const res = await fetch(`/api/recurring-jobs/${scheduleId}/pause`, {
-        method: 'POST',
-      });
-      if (res.ok) {
-        toast.success(
-          `Recurring schedule paused${title ? ` — ${title}` : ''}. New visits will not be generated until resumed.`,
-        );
-        setScheduleStateCache((prev) => ({ ...prev, [scheduleId]: 'paused' }));
-        fetchJobs();
-      } else {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        toast.error(err.error || 'Failed to pause recurring schedule');
-      }
-    } catch {
-      toast.error('Network error — please try again');
+      await pauseRecurringSchedule.mutateAsync({ scheduleId });
+      toast.success(
+        `Recurring schedule paused${title ? ` — ${title}` : ''}. New visits will not be generated until resumed.`,
+      );
+      setScheduleStateCache((prev) => ({ ...prev, [scheduleId]: 'paused' }));
+      // No fetchJobs() needed — usePauseRecurringSchedule auto-invalidates
+      // qk.jobs.all (list shows schedule state).
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to pause recurring schedule');
     }
   };
 
   const handleResumeSchedule = async (scheduleId: string, title?: string) => {
     try {
-      const res = await fetch(`/api/recurring-jobs/${scheduleId}/resume`, {
-        method: 'POST',
-      });
-      if (res.ok) {
-        const data = (await res.json().catch(() => null)) as {
-          schedule?: { nextRunAt?: string };
-        } | null;
-        const nextRun = data?.schedule?.nextRunAt;
-        const nextLabel = nextRun
-          ? ` — next visit ${new Date(nextRun).toLocaleDateString()}`
-          : '';
-        toast.success(`Recurring schedule resumed${title ? ` — ${title}` : ''}${nextLabel}`);
-        setScheduleStateCache((prev) => ({ ...prev, [scheduleId]: 'active' }));
-        fetchJobs();
-      } else if (res.status === 400) {
-        // Resume returns 400 when the schedule end date has passed
-        // (i.e. the schedule was STOPPED, not just paused). Surface that
-        // distinction so the user understands why the resume failed.
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        toast.error(
-          err.error || 'Cannot resume — the schedule end date has passed. The schedule was permanently stopped.',
-        );
+      const data: any = await resumeRecurringSchedule.mutateAsync({ scheduleId });
+      const nextRun = data?.schedule?.nextRunAt;
+      const nextLabel = nextRun
+        ? ` — next visit ${new Date(nextRun).toLocaleDateString()}`
+        : '';
+      toast.success(`Recurring schedule resumed${title ? ` — ${title}` : ''}${nextLabel}`);
+      setScheduleStateCache((prev) => ({ ...prev, [scheduleId]: 'active' }));
+      // No fetchJobs() needed — useResumeRecurringSchedule auto-invalidates
+      // qk.jobs.all (list shows schedule state).
+    } catch (e: any) {
+      // useCrmMutation throws on !res.ok with Error(errorData.error).
+      // For the 400 case (schedule end date passed → permanently stopped),
+      // we detect it via the error message substring and update the cache to
+      // 'stopped' so the More menu stops offering "Resume".
+      const msg = e?.message || 'Failed to resume recurring schedule';
+      if (msg.includes('end date has passed')) {
+        toast.error(msg);
         setScheduleStateCache((prev) => ({ ...prev, [scheduleId]: 'stopped' }));
       } else {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        toast.error(err.error || 'Failed to resume recurring schedule');
+        toast.error(msg);
       }
-    } catch {
-      toast.error('Network error — please try again');
     }
   };
 
@@ -1929,19 +1883,15 @@ export function JobsView() {
     if (!deletingJob) return;
     setDeleteSaving(true);
     try {
-      const res = await fetch(`/api/jobs/${deletingJob.id}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Job deleted successfully');
-        setDeletingJob(null);
-        setFormMode('list');
-        fetchJobs();
-        fetchEmployees();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.error || 'Failed to delete job');
-      }
-    } catch {
-      toast.error('Network error');
+      await deleteJob.mutateAsync({ id: deletingJob.id });
+      toast.success('Job deleted successfully');
+      setDeletingJob(null);
+      setFormMode('list');
+      // No fetchJobs()/fetchEmployees() needed — useDeleteJob auto-invalidates
+      // qk.jobs.all + dashboard + calendar + dispatch + detail +
+      // customer/employee detail via getJobInvalidations.
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to delete job');
     } finally {
       setDeleteSaving(false);
     }
@@ -1953,15 +1903,7 @@ export function JobsView() {
   const handleCreateInvoice = async (job: Job) => {
     try {
       toast.loading('Generating invoice…', { id: 'gen-invoice' });
-      const res = await fetch('/api/jobs/generate-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: job.id }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to generate invoice');
-      }
+      const data: any = await generateJobInvoice.mutateAsync({ jobId: job.id });
       // Billing lifecycle split: endpoint now returns `{ invoice, created }`.
       // `created` is true when a new invoice was generated, false when an
       // existing one was returned (idempotent skip). Surface this to the user
@@ -1976,16 +1918,14 @@ export function JobsView() {
         toast.success(`Invoice ${invoiceNumber} created (${invoiceTotal})`, { id: 'gen-invoice' });
       }
       // Refresh the job detail so the Billing badge immediately reflects the
-      // new invoice status (no manual reload needed).
+      // new invoice status (no manual reload needed). useGenerateJobInvoice
+      // already invalidated qk.jobs.detail(job.id), but the inline selectedJob
+      // state is a manual read — refetch it.
       try {
         const detailRes = await fetch(`/api/jobs/${job.id}`);
         if (detailRes.ok) {
           const detailData = await detailRes.json();
           if (detailData.job) {
-            // `jobs` is now a derived useMemo from the React Query cache, so
-            // we can't `setJobs` directly. Instead, refetch the list so RQ's
-            // cache (and the derived `jobs`) reflects the new invoice state.
-            fetchJobs();
             setSelectedJob(detailData.job);
           }
         }
@@ -1994,7 +1934,7 @@ export function JobsView() {
       }
       // Navigate to the Invoices view so the user can see the result.
       setActiveView('invoices');
-    } catch (err) {
+    } catch (err: any) {
       toast.error(err instanceof Error ? err.message : 'Failed to generate invoice', { id: 'gen-invoice' });
     }
   };
@@ -2934,16 +2874,12 @@ export function JobsView() {
           jobTitle={selectedJob.title}
           onUseCompletionNotes={async (notes) => {
             try {
-              await fetch(`/api/jobs/${selectedJob.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: selectedJob.id, completionNotes: notes }),
-              });
+              await saveJobNotes.mutateAsync({ id: selectedJob.id, completionNotes: notes });
               // Reflect locally so the detail page shows the new notes
               setSelectedJob({ ...selectedJob, completionNotes: notes } as Job);
               toast.success('AI-generated notes saved to this job');
-            } catch {
-              toast.error('Could not save AI notes — try copying instead.');
+            } catch (e: any) {
+              toast.error(e?.message || 'Could not save AI notes — try copying instead.');
             }
           }}
           onUseDraftMessage={(text) => {
