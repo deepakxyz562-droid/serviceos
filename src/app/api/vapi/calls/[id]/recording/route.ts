@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { getDecryptedApiKey } from '@/lib/ai-provider-config-service';
@@ -6,19 +6,18 @@ import { getDecryptedApiKey } from '@/lib/ai-provider-config-service';
 /**
  * GET /api/vapi/calls/[id]/recording
  *
- * Streams the call recording audio to the browser.
+ * Streams the call recording audio to the browser with full Range support.
+ *
+ * CRITICAL: The browser's <audio> element sends `Range: bytes=0-` on the
+ * initial request. The proxy MUST forward this to the upstream and return
+ * the upstream's status code (206 Partial Content) + Content-Range header.
+ * If the proxy returns 200 OK for a Range request, the audio element
+ * disables the play button (the "play disabled in milliseconds" bug).
  *
  * This proxy is needed because:
  * 1. Vapi's recording URLs require API key authentication
  * 2. The signed URLs stored in the DB may expire
  * 3. Cross-origin (CORS) issues prevent direct <audio src={url}> playback
- *
- * Flow:
- *   1. Authenticate user + verify call belongs to their tenant
- *   2. Check DB for stored recordingUrl (may be a signed URL)
- *   3. If DB URL exists + is HTTPS → fetch it and stream it back
- *   4. If DB URL missing/failed → call Vapi API for a fresh signed URL
- *   5. Stream the audio with proper Content-Type headers
  */
 
 export async function GET(
@@ -48,10 +47,9 @@ export async function GET(
       return new Response('Call not found', { status: 404 });
     }
 
-    // 3. Try the DB-stored recording URL first (may still be valid)
+    // 3. Resolve the recording URL (DB-stored or Vapi API)
     let recordingUrl: string | null = call.recordingUrl || call.stereoRecordingUrl || null;
 
-    // 4. If no DB URL, try Vapi API for a fresh signed URL
     if (!recordingUrl) {
       if (!call.vapiCallId) {
         return new Response('No recording available for this call', { status: 404 });
@@ -79,14 +77,12 @@ export async function GET(
             redirect: 'manual',
           });
 
-          // Check for redirect (302/307) with Location header
           const location = vapiRes.headers.get('location');
           if (location) {
             recordingUrl = location;
             break;
           }
 
-          // Check for 200 with a JSON body containing URL
           if (vapiRes.status === 200) {
             const contentType = vapiRes.headers.get('content-type') || '';
             if (contentType.includes('application/json')) {
@@ -111,64 +107,66 @@ export async function GET(
       return new Response('Recording not available', { status: 404 });
     }
 
-    // 5. Fetch the recording and stream it back to the browser
-    //    This fixes CORS issues — the browser never touches the cross-origin URL
-    const audioRes = await fetch(recordingUrl, {
+    // 4. Forward the request to the upstream URL, INCLUDING the Range header.
+    //    The browser's <audio> element ALWAYS sends Range requests. We must
+    //    forward them on the FIRST fetch — NOT do a second fetch afterward
+    //    (the old dual-fetch approach caused the "play button disabled" bug).
+    const upstreamHeaders: Record<string, string> = {};
+
+    // Forward the Range header from the browser to the upstream
+    const rangeHeader = request.headers.get('range');
+    if (rangeHeader) {
+      upstreamHeaders['Range'] = rangeHeader;
+    }
+
+    const upstreamRes = await fetch(recordingUrl, {
       method: 'GET',
+      headers: upstreamHeaders,
       redirect: 'follow',
     });
 
-    if (!audioRes.ok) {
-      console.error(`[Recording Proxy] Failed to fetch audio: ${audioRes.status} ${audioRes.statusText}`);
+    if (!upstreamRes.ok && upstreamRes.status !== 206) {
+      console.error(
+        `[Recording Proxy] Upstream fetch failed: ${upstreamRes.status} ${upstreamRes.statusText}`
+      );
       return new Response('Recording unavailable', { status: 502 });
     }
 
-    // 6. Stream the audio back with proper headers
-    const contentType = audioRes.headers.get('content-type') || 'audio/mpeg';
-    const contentLength = audioRes.headers.get('content-length');
+    // 5. Build the response headers, forwarding all audio-relevant headers
+    //    from the upstream response
+    const responseHeaders = new Headers();
 
-    const headers = new Headers({
-      'Content-Type': contentType,
-      'Cache-Control': 'private, max-age=3600', // cache for 1 hour
-      'Accept-Ranges': 'bytes',
-    });
+    // Content-Type — preserve from upstream, default to audio/mpeg
+    const contentType = upstreamRes.headers.get('content-type') || 'audio/mpeg';
+    responseHeaders.set('Content-Type', contentType);
 
+    // Accept-Ranges — tell the browser we support Range requests
+    responseHeaders.set('Accept-Ranges', 'bytes');
+
+    // Content-Length — forward from upstream if present
+    const contentLength = upstreamRes.headers.get('content-length');
     if (contentLength) {
-      headers.set('Content-Length', contentLength);
+      responseHeaders.set('Content-Length', contentLength);
     }
 
-    // Copy range-related headers for seeking support
-    const range = request.headers.get('range');
-    if (range) {
-      // Forward the range request to the upstream
-      const rangedRes = await fetch(recordingUrl, {
-        method: 'GET',
-        headers: { Range: range },
-        redirect: 'follow',
-      });
-
-      if (rangedRes.ok || rangedRes.status === 206) {
-        const rangedHeaders = new Headers({
-          'Content-Type': contentType,
-          'Cache-Control': 'private, max-age=3600',
-          'Accept-Ranges': 'bytes',
-        });
-
-        const contentRange = rangedRes.headers.get('content-range');
-        if (contentRange) rangedHeaders.set('Content-Range', contentRange);
-        const rangedLength = rangedRes.headers.get('content-length');
-        if (rangedLength) rangedHeaders.set('Content-Length', rangedLength);
-
-        return new Response(rangedRes.body, {
-          status: rangedRes.status,
-          headers: rangedHeaders,
-        });
-      }
+    // Content-Range — CRITICAL for 206 Partial Content responses.
+    //    Without this, the audio element can't determine the total file
+    //    size and disables playback.
+    const contentRange = upstreamRes.headers.get('content-range');
+    if (contentRange) {
+      responseHeaders.set('Content-Range', contentRange);
     }
 
-    return new Response(audioRes.body, {
-      status: 200,
-      headers,
+    // Cache control — allow browser to cache the recording for 1 hour
+    responseHeaders.set('Cache-Control', 'private, max-age=3600');
+
+    // 6. Stream the response back to the browser.
+    //    Use the SAME status code as the upstream (200 for full, 206 for partial).
+    //    This is critical — if the browser sent Range and the upstream returned 206,
+    //    we must return 206 too (not 200).
+    return new Response(upstreamRes.body, {
+      status: upstreamRes.status,
+      headers: responseHeaders,
     });
   } catch (error) {
     console.error('[Recording Proxy Error]', error);
