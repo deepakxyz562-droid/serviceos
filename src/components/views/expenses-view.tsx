@@ -294,7 +294,7 @@ export function ExpensesView() {
                 </DropdownMenuItem>
               )}
               {!isEmployee && exp.status === 'pending' && (
-                <DropdownMenuItem onClick={() => handleApprove(exp.id)} disabled={actionLoading[exp.id]}>
+                <DropdownMenuItem onClick={() => handleStatusChange(exp, 'approved')} disabled={changeExpenseStatus.isPending}>
                   <CheckCircle2 className="size-4 mr-2" /> Approve
                 </DropdownMenuItem>
               )}
@@ -304,12 +304,12 @@ export function ExpensesView() {
                 </DropdownMenuItem>
               )}
               {!isEmployee && exp.status === 'approved' && (
-                <DropdownMenuItem onClick={() => handleMarkPaid(exp.id)} disabled={actionLoading[exp.id]}>
+                <DropdownMenuItem onClick={() => handleStatusChange(exp, 'reimbursed')} disabled={changeExpenseStatus.isPending}>
                   <DollarSign className="size-4 mr-2" /> Mark Paid
                 </DropdownMenuItem>
               )}
-              {!isEmployee && (exp.status === 'rejected' || exp.status === 'paid') && (
-                <DropdownMenuItem onClick={() => handleReopen(exp.id)} disabled={actionLoading[exp.id]}>
+              {!isEmployee && (exp.status === 'rejected' || exp.status === 'reimbursed') && (
+                <DropdownMenuItem onClick={() => handleStatusChange(exp, 'pending')} disabled={changeExpenseStatus.isPending}>
                   <RotateCcw className="size-4 mr-2" /> Re-open
                 </DropdownMenuItem>
               )}
