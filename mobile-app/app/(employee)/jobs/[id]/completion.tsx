@@ -201,7 +201,7 @@ function InlinePhotoCapture({
       // Best-effort GPS — non-blocking.
       const gps = await captureGps();
       const fd = await buildPhotoFormData(asset, gps);
-      fd.append('type', photoType);
+      fd.append('photoType', photoType);
 
       await uploadPhoto.mutateAsync({ id: jobId, formData: fd });
       show(`${photoType === 'before' ? 'Before' : 'After'} photo saved.`, 'success');
@@ -233,7 +233,7 @@ function InlinePhotoCapture({
 
       const gps = await captureGps();
       const fd = await buildPhotoFormData(asset, gps);
-      fd.append('type', photoType);
+      fd.append('photoType', photoType);
 
       await uploadPhoto.mutateAsync({ id: jobId, formData: fd });
       show(`${photoType === 'before' ? 'Before' : 'After'} photo saved.`, 'success');

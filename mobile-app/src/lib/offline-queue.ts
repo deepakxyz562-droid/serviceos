@@ -439,14 +439,14 @@ export async function processPhotoQueue(): Promise<number> {
     if (stopped) break;
     try {
       // Rebuild the FormData matching the live-upload shape: file (with
-      // name/type), type, caption?, latitude?/longitude?/accuracy?.
+      // name/type), photoType, caption?, latitude?/longitude?/accuracy?.
       const fakeAsset = {
         uri: item.photoUri,
         fileName: item.photoName,
         mimeType: item.mimeType || 'image/jpeg',
       } as ImagePicker.ImagePickerAsset;
       const fd = await buildPhotoFormData(fakeAsset, item.gps ?? null);
-      fd.append('type', item.photoType);
+      fd.append('photoType', item.photoType);
       if (item.caption) fd.append('caption', item.caption);
 
       await api.post(`/api/jobs/${item.jobId}/photos`, fd, { formData: true });
