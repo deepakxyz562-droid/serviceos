@@ -218,15 +218,16 @@ let _photoDir: string | null = null;
 
 /**
  * Get the photo directory path on native. Uses the legacy FileSystem API
- * (not the v19 Paths/Directory API) for web compatibility.
- * The v19 API crashes Metro on web ("this.validatePath is not a function").
+ * via `expo-file-system/legacy` (the main export's deprecated wrappers
+ * throw at runtime in v19). The legacy module is web-safe (returns null
+ * for documentDirectory on web).
  */
 async function getPhotoDir(): Promise<string | null> {
   if (Platform.OS === 'web') return null;
   if (_photoDir) return _photoDir;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const FileSystem = require('expo-file-system');
+    const FileSystem = require('expo-file-system/legacy');
     const dir = `${FileSystem.documentDirectory}fieseros-photos/`;
     // Ensure the directory exists
     const dirInfo = await FileSystem.getInfoAsync(dir);
@@ -330,7 +331,7 @@ async function persistPhotoUri(
     if (!dir) return tempUri;
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const FileSystem = require('expo-file-system');
+    const FileSystem = require('expo-file-system/legacy');
 
     const safeName = (photoName || `photo_${Date.now()}.jpg`).replace(
       /[^a-zA-Z0-9._-]/g,
@@ -457,7 +458,7 @@ export async function processPhotoQueue(): Promise<number> {
           // Delete the persisted photo file using the legacy FileSystem API
           // (the v19 File API crashes Metro on web).
           // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const FileSystem = require('expo-file-system');
+          const FileSystem = require('expo-file-system/legacy');
           await FileSystem.deleteAsync(item.photoUri, { idempotent: true });
         }
       } catch {

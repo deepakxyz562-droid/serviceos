@@ -349,8 +349,8 @@ export function MenuManagementSection() {
   // overrides state container (useReducer pattern would also work, but the
   // simplest fix is to clear via a ref-guarded deferred update).
   const resetKey = `${scope}:${effectiveTenantId ?? 'null'}`;
-  const lastResetKeyRef = React.useRef(resetKey);
-  React.useEffect(() => {
+  const lastResetKeyRef = useRef(resetKey);
+  useEffect(() => {
     if (lastResetKeyRef.current !== resetKey) {
       lastResetKeyRef.current = resetKey;
       // Defer the clear to break the synchronous render chain
