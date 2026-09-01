@@ -1085,13 +1085,17 @@ export async function sendJobNotification(
   let reached = false
   for (const ch of filteredChannels) {
     if (reached && priority === 'urgent') {
-      // Skip remaining channels — recipient already reached for an urgent alert.
-      results.push({
-        channel: ch.name,
-        success: false,
-        error: 'skipped (recipient already reached)',
-      })
-      continue
+      // For customer notifications where an email is provided, always deliver the email receipt even if SMS was sent
+      const isCustomerEmailReceipt = payload.recipientRole === 'customer' && ch.name === 'email' && !!payload.emailTo
+      if (!isCustomerEmailReceipt) {
+        // Skip remaining channels — recipient already reached for an urgent alert.
+        results.push({
+          channel: ch.name,
+          success: false,
+          error: 'skipped (recipient already reached)',
+        })
+        continue
+      }
     }
     const result = await ch.send()
     results.push(result)
@@ -1582,8 +1586,27 @@ export async function notifyCustomerBookingConfirmed(
   job: Record<string, unknown>,
   options?: { emailOnly?: boolean }
 ): Promise<void> {
-  const customerPhone = (job.customerPhone as string) || ''
-  const customerEmail = (job.customerEmail as string) || ''
+  let customerPhone = (job.customerPhone as string) || ''
+  let customerEmail = (job.customerEmail as string) || ''
+  let customerName = (job.customerName as string) || ''
+
+  // Fallback: resolve from Customer record if missing on Job
+  if ((!customerPhone || !customerEmail || !customerName) && job.customerId) {
+    try {
+      const cust = await db.customer.findUnique({
+        where: { id: job.customerId as string },
+        select: { phone: true, email: true, name: true },
+      })
+      if (cust) {
+        if (!customerPhone && cust.phone) customerPhone = cust.phone
+        if (!customerEmail && cust.email) customerEmail = cust.email
+        if (!customerName && cust.name) customerName = cust.name
+      }
+    } catch {
+      // Non-fatal fallback
+    }
+  }
+
   if (!customerPhone && !customerEmail) return
 
   const jobNumber = getJobNumber(job)
@@ -1602,7 +1625,7 @@ export async function notifyCustomerBookingConfirmed(
   ].join('\n')
 
   const emailHtml = renderBookingConfirmationEmail({
-    customerName: (job.customerName as string) || undefined,
+    customerName: customerName || undefined,
     jobNumber,
     jobTitle: (job.title as string) || undefined,
     scheduledDate,
@@ -1617,7 +1640,7 @@ export async function notifyCustomerBookingConfirmed(
     to: customerPhone,
     message,
     emailHtml,
-    recipientName: (job.customerName as string) || undefined,
+    recipientName: customerName || undefined,
     recipientRole: 'customer',
     subject: `Booking Confirmed: #${jobNumber}`,
     jobId: job.id as string,
@@ -1669,9 +1692,27 @@ export async function notifyCustomerVerificationPin(
   job: Record<string, unknown>,
   opts?: NotifyCustomerPinOpts,
 ): Promise<void> {
-  const customerPhone = (job.customerPhone as string) || ''
-  const customerEmail = (job.customerEmail as string) || ''
+  let customerPhone = (job.customerPhone as string) || ''
+  let customerEmail = (job.customerEmail as string) || ''
+  let customerName = (job.customerName as string) || ''
   const pin = (job.verificationPin as string) || ''
+
+  // Fallback: resolve from Customer record if missing on Job
+  if ((!customerPhone || !customerEmail || !customerName) && job.customerId) {
+    try {
+      const cust = await db.customer.findUnique({
+        where: { id: job.customerId as string },
+        select: { phone: true, email: true, name: true },
+      })
+      if (cust) {
+        if (!customerPhone && cust.phone) customerPhone = cust.phone
+        if (!customerEmail && cust.email) customerEmail = cust.email
+        if (!customerName && cust.name) customerName = cust.name
+      }
+    } catch {
+      // Non-fatal fallback
+    }
+  }
 
   // Need at least one reachable channel. If neither phone nor email is
   // present, there is nothing we can deliver to — log and bail.
@@ -1757,7 +1798,7 @@ export async function notifyCustomerVerificationPin(
   // rendering (the `message` field wrapped in <pre>).
   const emailHtml = branding
     ? renderPinEmailHtml(branding, {
-        customerName: (job.customerName as string) || '',
+        customerName: customerName || (job.customerName as string) || '',
         assigneeName,
         jobTitle: (job.title as string) || 'your service',
         jobNumber,
@@ -1774,7 +1815,7 @@ export async function notifyCustomerVerificationPin(
       to: customerPhone,
       message,
       type: 'text',
-      recipientName: (job.customerName as string) || undefined,
+      recipientName: customerName || (job.customerName as string) || undefined,
       recipientRole: 'customer',
       // SECURITY: the PIN value is intentionally NOT included in the subject
       // line — email subjects are often visible in lock-screen previews

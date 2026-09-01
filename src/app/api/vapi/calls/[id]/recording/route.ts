@@ -23,6 +23,70 @@ import { getDecryptedApiKey } from '@/lib/ai-provider-config-service';
  * gets the correct 206 Partial Content response.
  */
 
+async function getVapiApiKey(): Promise<string | null> {
+  try {
+    const platformKey = await getDecryptedApiKey('VAPI');
+    if (platformKey) return platformKey;
+  } catch (err) {
+    console.warn('[Recording Proxy] getDecryptedApiKey failed, checking env:', err);
+  }
+  return process.env.VAPI_PRIVATE_API_KEY || null;
+}
+
+async function resolveFreshVapiRecordingUrl(vapiCallId: string, apiKey: string): Promise<string | null> {
+  const endpoints = [
+    `https://api.vapi.ai/call/${vapiCallId}/mono-recording`,
+    `https://api.vapi.ai/call/${vapiCallId}/recording`,
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const vapiRes = await fetch(endpoint, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${apiKey}` },
+        redirect: 'manual',
+      });
+
+      // 302 redirect contains the active presigned R2/S3 URL
+      const location = vapiRes.headers.get('location');
+      if (location) {
+        return location;
+      }
+
+      if (vapiRes.status === 200) {
+        const contentType = vapiRes.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await vapiRes.json();
+          if (data?.url) return data.url;
+          if (data?.recordingUrl) return data.recordingUrl;
+        }
+      }
+    } catch (err) {
+      console.warn(`[Recording Proxy] Vapi endpoint ${endpoint} failed:`, err);
+    }
+  }
+
+  // Fallback: fetch call object directly
+  try {
+    const callRes = await fetch(`https://api.vapi.ai/call/${vapiCallId}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (callRes.ok) {
+      const callData = await callRes.json();
+      const possibleUrl = callData?.artifact?.recordingUrl || callData?.recordingUrl || callData?.stereoRecordingUrl;
+      // If it contains presigned params, return it
+      if (possibleUrl && (possibleUrl.includes('X-Amz-Signature') || possibleUrl.includes('Signature='))) {
+        return possibleUrl;
+      }
+    }
+  } catch (err) {
+    console.warn('[Recording Proxy] Vapi call lookup failed:', err);
+  }
+
+  return null;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -35,9 +99,17 @@ export async function GET(
 
     const { id } = await params;
 
+    // Resilient lookup: match by id OR vapiCallId
     const call = await db.aiCall.findFirst({
-      where: { id, tenantId: auth.tenantId },
+      where: {
+        tenantId: auth.tenantId,
+        OR: [
+          { id },
+          { vapiCallId: id },
+        ],
+      },
       select: {
+        id: true,
         vapiCallId: true,
         recordingUrl: true,
         stereoRecordingUrl: true,
@@ -48,111 +120,53 @@ export async function GET(
       return new Response('Call not found', { status: 404 });
     }
 
-    // ── Resolve the actual audio stream URL ──────────────────────────────
-    // The DB-stored recordingUrl may be:
-    //   a) A Vapi API URL (needs auth → redirect → signed URL)
-    //   b) A direct signed cloud URL (fetchable directly)
-    //   c) Null (resolve from Vapi API using vapiCallId)
+    const apiKey = await getVapiApiKey();
 
-    let recordingUrl: string | null = call.recordingUrl || call.stereoRecordingUrl || null;
+    let targetUrl: string | null = null;
 
-    // If the stored URL is a Vapi API URL, we need to resolve it to a
-    // signed cloud URL first (it requires Bearer auth and returns a redirect).
-    const isVapiApiUrl = recordingUrl?.includes('api.vapi.ai');
+    // If we have a vapiCallId and API key, prefer resolving a fresh presigned URL directly
+    if (call.vapiCallId && apiKey) {
+      targetUrl = await resolveFreshVapiRecordingUrl(call.vapiCallId, apiKey);
+    }
 
-    // If no stored URL, or if it's a Vapi API URL that needs resolution,
-    // resolve via the Vapi API
-    if (!recordingUrl || isVapiApiUrl) {
-      if (!call.vapiCallId) {
-        return new Response('No recording available for this call', { status: 404 });
-      }
-
-      const platformKey = await getDecryptedApiKey('VAPI');
-      const apiKey = platformKey || process.env.VAPI_PRIVATE_API_KEY;
-
-      if (!apiKey) {
-        console.error('[Recording Proxy] Vapi API key not configured');
-        return new Response('Recording service not configured', { status: 503 });
-      }
-
-      // Try Vapi API endpoints for the recording
-      const endpoints = [
-        `https://api.vapi.ai/call/${call.vapiCallId}/mono-recording`,
-        `https://api.vapi.ai/call/${call.vapiCallId}/recording`,
-      ];
-
-      for (const endpoint of endpoints) {
-        try {
-          const vapiRes = await fetch(endpoint, {
-            method: 'GET',
-            headers: { Authorization: `Bearer ${apiKey}` },
-            redirect: 'manual',
-          });
-
-          // Vapi returns a 302 redirect to a signed cloud storage URL
-          const location = vapiRes.headers.get('location');
-          if (location) {
-            recordingUrl = location;
-            break;
-          }
-
-          // Some Vapi responses return 200 with JSON body containing URL
-          if (vapiRes.status === 200) {
-            const contentType = vapiRes.headers.get('content-type') || '';
-            if (contentType.includes('application/json')) {
-              const data = await vapiRes.json();
-              if (data?.url) {
-                recordingUrl = data.url;
-                break;
-              }
-              if (data?.recordingUrl) {
-                recordingUrl = data.recordingUrl;
-                break;
-              }
-            } else if (contentType.startsWith('audio/')) {
-              // The API returned the audio directly — stream it through
-              const responseHeaders = new Headers({
-                'Content-Type': contentType,
-                'Accept-Ranges': 'bytes',
-                'Cache-Control': 'private, max-age=3600',
-              });
-
-              const contentRange = vapiRes.headers.get('content-range');
-              if (contentRange) responseHeaders.set('Content-Range', contentRange);
-              const contentLength = vapiRes.headers.get('content-length');
-              if (contentLength) responseHeaders.set('Content-Length', contentLength);
-
-              return new Response(vapiRes.body, {
-                status: vapiRes.status,
-                headers: responseHeaders,
-              });
-            }
-          }
-        } catch (err) {
-          console.warn(`[Recording Proxy] Vapi endpoint ${endpoint} failed:`, err);
-        }
+    // If not resolved from Vapi API, check stored DB URL
+    if (!targetUrl) {
+      const storedUrl = call.recordingUrl || call.stereoRecordingUrl;
+      if (storedUrl && !storedUrl.includes('api.vapi.ai')) {
+        targetUrl = storedUrl;
       }
     }
 
-    if (!recordingUrl) {
-      return new Response('Recording not available', { status: 404 });
+    if (!targetUrl) {
+      return new Response('No recording available for this call', { status: 404 });
     }
 
-    // ── Fetch the recording with Range header forwarded ─────────────────
-    // The browser's <audio> element ALWAYS sends Range requests. We must
-    // forward them on the FIRST fetch to get the correct 206 response.
+    // Forward Range header from browser
     const upstreamHeaders: Record<string, string> = {};
-
     const rangeHeader = request.headers.get('range');
     if (rangeHeader) {
       upstreamHeaders['Range'] = rangeHeader;
     }
 
-    const upstreamRes = await fetch(recordingUrl, {
+    let upstreamRes = await fetch(targetUrl, {
       method: 'GET',
       headers: upstreamHeaders,
       redirect: 'follow',
     });
+
+    // If upstream fetch failed (e.g. 400 Bad Request on expired URL) and we haven't tried Vapi API yet, retry with Vapi API
+    if (!upstreamRes.ok && upstreamRes.status !== 206 && call.vapiCallId && apiKey) {
+      console.warn(`[Recording Proxy] Direct fetch returned ${upstreamRes.status}, retrying via Vapi API`);
+      const freshUrl = await resolveFreshVapiRecordingUrl(call.vapiCallId, apiKey);
+      if (freshUrl && freshUrl !== targetUrl) {
+        targetUrl = freshUrl;
+        upstreamRes = await fetch(targetUrl, {
+          method: 'GET',
+          headers: upstreamHeaders,
+          redirect: 'follow',
+        });
+      }
+    }
 
     if (!upstreamRes.ok && upstreamRes.status !== 206) {
       console.error(
@@ -161,10 +175,9 @@ export async function GET(
       return new Response('Recording unavailable', { status: 502 });
     }
 
-    // ── Build response headers ──────────────────────────────────────────
+    // Build response headers with audio range streaming support
     const responseHeaders = new Headers();
-
-    const contentType = upstreamRes.headers.get('content-type') || 'audio/mpeg';
+    const contentType = upstreamRes.headers.get('content-type') || 'audio/wav';
     responseHeaders.set('Content-Type', contentType);
     responseHeaders.set('Accept-Ranges', 'bytes');
 
@@ -180,8 +193,6 @@ export async function GET(
 
     responseHeaders.set('Cache-Control', 'private, max-age=3600');
 
-    // ── Stream the response ─────────────────────────────────────────────
-    // Use the SAME status code as the upstream (200 for full, 206 for partial).
     return new Response(upstreamRes.body, {
       status: upstreamRes.status,
       headers: responseHeaders,
