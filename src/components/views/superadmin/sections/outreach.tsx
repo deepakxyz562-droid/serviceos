@@ -45,6 +45,7 @@ import {
   Mail, Send, Loader2, CheckCircle2, ShieldAlert, Ban,
   RefreshCw, History, Settings as SettingsIcon, Plus,
   AlertTriangle, Clock, Search, ChevronLeft, ChevronRight,
+  RotateCcw,
 } from 'lucide-react';
 import { authFetch } from '@/lib/client-auth';
 import {
@@ -1277,6 +1278,82 @@ function StatTile({ label, value, ok }: { label: string; value: string; ok: bool
 
 // ─── Tab 4: Suppressions ─────────────────────────────────────────────────────
 
+// Column definitions for the suppressions DataTable.
+// Defined as a module-level constant so it doesn't get recreated on every render.
+const suppressionColumns: Column<SuppressionRow>[] = [
+  {
+    key: 'email',
+    header: 'Email',
+    render: (r) => (
+      <span className="font-mono text-sm">{r.email}</span>
+    ),
+  },
+  {
+    key: 'tenantName',
+    header: 'Tenant',
+    render: (r) => r.tenantName || <span className="text-muted-foreground">—</span>,
+    hideOnMobile: true,
+  },
+  {
+    key: 'reason',
+    header: 'Reason',
+    render: (r) => {
+      const badge = getSuppressionReasonBadge(r.reason);
+      return <Badge variant="outline" className={cn('font-normal', badge.className)}>{badge.label}</Badge>;
+    },
+  },
+  {
+    key: 'source',
+    header: 'Source',
+    render: (r) => <span className="text-sm text-muted-foreground">{r.source}</span>,
+    hideOnMobile: true,
+  },
+  {
+    key: 'createdAt',
+    header: 'Created',
+    render: (r) => (
+      <span className="text-sm text-muted-foreground">{formatDateTime(r.createdAt)}</span>
+    ),
+    hideOnMobile: true,
+  },
+  {
+    key: 'resolvedAt',
+    header: 'Status',
+    render: (r) => r.resolvedAt ? (
+      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-normal">
+        <CheckCircle2 className="size-3 mr-1" /> Resolved
+      </Badge>
+    ) : (
+      <Badge variant="outline" className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 font-normal">
+        <ShieldAlert className="size-3 mr-1" /> Active
+      </Badge>
+    ),
+  },
+  {
+    key: 'actions',
+    header: '',
+    render: (r) => (
+      <div className="flex justify-end">
+        {!r.resolvedAt && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => handleUnsuppressRow(r)}
+          >
+            <RotateCcw className="size-3 mr-1" /> Unsuppress
+          </Button>
+        )}
+      </div>
+    ),
+    className: 'w-32 text-right',
+  },
+];
+
+// Placeholder — will be replaced by the actual handler in the component
+// (module-level const can't access component state, so we use a ref pattern)
+let handleUnsuppressRow: (row: SuppressionRow) => void = () => {};
+
 function SuppressionsTab() {
   const [showResolved, setShowResolved] = useState(false);
   const [rows, setRows] = useState<SuppressionRow[]>([]);
@@ -1319,6 +1396,10 @@ function SuppressionsTab() {
       setUnsuppressingId(null);
     }
   };
+
+  // Wire the module-level placeholder to the actual handler so the
+  // column definition can call it from the DataTable's action button.
+  handleUnsuppressRow = handleUnsuppress;
 
   return (
     <div className="space-y-4">
