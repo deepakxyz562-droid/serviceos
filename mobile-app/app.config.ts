@@ -44,12 +44,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'android.permission.ACCESS_FINE_LOCATION',
       'android.permission.ACCESS_COARSE_LOCATION',
       'android.permission.ACCESS_BACKGROUND_LOCATION',
-      'android.permission.READ_EXTERNAL_STORAGE',
-      'android.permission.WRITE_EXTERNAL_STORAGE',
       'android.permission.POST_NOTIFICATIONS',
       'android.permission.FOREGROUND_SERVICE',
       'android.permission.FOREGROUND_SERVICE_LOCATION',
-      'android.permission.RECORD_AUDIO',
     ],
   },
   web: {
@@ -64,8 +61,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         android: {
           minSdkVersion: 24,
-          compileSdkVersion: 35,
-          targetSdkVersion: 35,
+          // Let Expo SDK 54 handle compileSdkVersion + targetSdkVersion
+          // (defaults to API 36, which is required by Google Play as of Aug 31, 2026)
         },
         ios: {
           deploymentTarget: '15.1',

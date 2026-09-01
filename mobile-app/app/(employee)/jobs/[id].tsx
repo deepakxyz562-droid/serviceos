@@ -281,6 +281,17 @@ export default function JobDetailScreen() {
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
 
+  // V1.6: Prominent in-app disclosure shown BEFORE the OS location
+  // permission prompt when the user taps "Start Travel". Required by
+  // Google Play's background location policy (and Apple's similar rules)
+  // — the OS prompt must be preceded by an in-app explanation of WHY
+  // we collect background location. See Mobile-Fix-Tracking-Offline.
+  const [showLocationDisclosure, setShowLocationDisclosure] = useState(false);
+  // Stash the "Continue" handler so the same dialog can be reused if
+  // the user opens it multiple times. Set whenever the disclosure is
+  // shown; cleared on dismiss.
+  const [disclosureContinue, setDisclosureContinue] = useState<() => void>(() => () => {});
+
   useFocusEffect(
     useCallback(() => {
       if (id) {
@@ -390,6 +401,33 @@ export default function JobDetailScreen() {
         });
         return;
       }
+      // V1.6: 'start_travel' must show a prominent in-app disclosure
+      // BEFORE the OS location permission prompt. The disclosure explains
+      // that we collect background location for live travel tracking. The
+      // user must tap "Continue" before we call `requestLocationPermissions`
+      // (which fires the OS prompt). If they tap "Cancel", travel is not
+      // started. See Mobile-Fix-Tracking-Offline.
+      if (action === 'start_travel') {
+        const proceedWithStartTravel = async () => {
+          // Request location permissions AFTER the disclosure is accepted.
+          // Best-effort: if the user denies, we still start travel so they
+          // can complete the job — they'll just see the red "Location
+          // permission denied" banner instead of live tracking.
+          try {
+            await liveTracking.requestLocationPermissions();
+          } catch (err) {
+            console.warn('[job-detail] location permission request failed:', err);
+          }
+          // V1.5 GPS capture: attach best-effort lat/long to the lifecycle
+          // POST for start_travel. GPS is best-effort — failure doesn't
+          // block the action.
+          const coords = await captureGps();
+          runLifecycle(action, label, undefined, coords);
+        };
+        setDisclosureContinue(() => proceedWithStartTravel);
+        setShowLocationDisclosure(true);
+        return;
+      }
       // start_work requires a PIN when the job has a verificationPin
       // (preferred) / customerPin (legacy) or requiresPin is not explicitly
       // false.
@@ -405,19 +443,16 @@ export default function JobDetailScreen() {
         return;
       }
       // V1.5 GPS capture: attach best-effort lat/long to the lifecycle
-      // POST for `start_travel` / `arrive` (and `complete`, though that's
-      // intercepted above and routed to the completion screen which does
-      // its own capture). Matches the PWA's captureOnce-on-transition
-      // pattern. GPS is best-effort — failure doesn't block the action.
-      const wantsGps =
-        action === 'start_travel' ||
-        action === 'arrive' ||
-        action === 'complete';
+      // POST for `arrive` (and `complete`, though that's intercepted above
+      // and routed to the completion screen which does its own capture).
+      // Matches the PWA's captureOnce-on-transition pattern. GPS is
+      // best-effort — failure doesn't block the action.
+      const wantsGps = action === 'arrive' || action === 'complete';
       const coords = wantsGps ? await captureGps() : null;
       // Otherwise execute directly.
       runLifecycle(action, label, undefined, coords);
     },
-    [job, runLifecycle]
+    [job, runLifecycle, liveTracking]
   );
 
   const submitPin = useCallback(() => {
@@ -1145,6 +1180,73 @@ export default function JobDetailScreen() {
       </Modal>
 
       <LoadingOverlay visible={lifecycle.isPending && !pendingAction} message="Updating job…" />
+
+      {/* V1.6 — Prominent in-app location disclosure.
+          Google Play + Apple App Store require that BEFORE the OS shows its
+          background-location permission prompt, the app shows its own in-app
+          disclosure explaining what data is collected and why. This Modal
+          fires from `handleActionPress` when the user taps "Start Travel"
+          (and ONLY then) — the OS prompt is triggered by `Continue` via
+          `liveTracking.requestLocationPermissions()`. */}
+      <Modal
+        visible={showLocationDisclosure}
+        onClose={() => setShowLocationDisclosure(false)}
+        position="center"
+        showHandle={false}
+      >
+        <View className="p-6">
+          <View className="mb-3 flex-row items-center justify-center">
+            <View className="mr-2 h-10 w-10 items-center justify-center rounded-full bg-primary-100">
+              <MapPin size={20} color={COLORS.primary} />
+            </View>
+            <Text className="text-lg font-bold text-foreground">
+              Live Location During Job Travel
+            </Text>
+          </View>
+          <Text className="mb-4 text-center text-sm text-muted-foreground">
+            Fieseros collects your location to provide live travel tracking and
+            ETA updates to your dispatcher and customer while you travel to an
+            assigned job, even when the app is in the background or your screen
+            is locked.{"\n\n"}Location tracking starts when you choose Start
+            Travel and stops when travel tracking for the job ends.
+          </Text>
+          <View className="flex-row gap-2">
+            <View className="flex-1">
+              <Button
+                variant="outline"
+                onPress={() => {
+                  setShowLocationDisclosure(false);
+                }}
+              >
+                Cancel
+              </Button>
+            </View>
+            <View className="flex-1">
+              <Button
+                onPress={async () => {
+                  setShowLocationDisclosure(false);
+                  // Fire the stashed continue handler (which calls
+                  // requestLocationPermissions + runLifecycle). Wrap in a
+                  // try/catch so any error here surfaces as a toast instead
+                  // of crashing the screen.
+                  try {
+                    await disclosureContinue();
+                  } catch (err) {
+                    show(
+                      err instanceof Error
+                        ? err.message
+                        : 'Could not start travel. Please try again.',
+                      'error'
+                    );
+                  }
+                }}
+              >
+                Continue
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

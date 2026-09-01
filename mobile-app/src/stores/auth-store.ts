@@ -51,6 +51,7 @@ import {
 import { api } from '@/lib/api';
 import { API_PATHS } from '@/lib/constants';
 import { emitter } from '@/lib/event-emitter';
+import { clearPushToken } from '@/lib/notifications';
 
 interface AuthState {
   user: User | null;
@@ -568,6 +569,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } finally {
       await clearTokens();
       await clearLastCompany();
+      clearPushToken(); // Clear cached push token so next user gets fresh registration
       emitter.emit('auth:logout');
       set({
         user: null,
@@ -632,6 +634,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
     } catch {
       await clearTokens();
+      clearPushToken();
       set({ isAuthenticated: false, isLoading: false, isBooted: true });
     }
 

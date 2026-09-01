@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/stores/auth-store';
 import { API_BASE_URL, COLORS } from '@/lib/constants';
 import { getToken } from '@/lib/auth';
+import { processPhotoQueue } from '@/lib/offline-queue';
 
 export default function EmployeeLayout() {
   const insets = useSafeAreaInsets();
@@ -73,6 +74,29 @@ export default function EmployeeLayout() {
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       subscription.remove();
     };
+  }, [employeeId]);
+
+  // ── Auto-drain the offline photo queue on startup ────────────────
+  // V1.6 (Mobile-Fix-Tracking-Offline): If the employee closed the app
+  // while a photo upload was pending (network error mid-upload, app
+  // killed by the OS for memory pressure, etc.), the photo is sitting in
+  // AsyncStorage under `fieseros_photo_queue`. Drain it once on mount +
+  // every time the app returns to the foreground, so the photo gets
+  // uploaded as soon as connectivity is restored — without requiring the
+  // user to navigate back to the photos screen.
+  useEffect(() => {
+    if (!employeeId) return;
+    const drain = () => {
+      // Best-effort — failures stay queued and will retry on next drain.
+      processPhotoQueue().catch(() => {});
+    };
+    drain();
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        drain();
+      }
+    });
+    return () => subscription.remove();
   }, [employeeId]);
 
   return (

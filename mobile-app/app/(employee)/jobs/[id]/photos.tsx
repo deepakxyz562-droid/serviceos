@@ -48,6 +48,7 @@ import {
   ImageOff,
   Eye,
   CloudOff,
+  RefreshCw,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -68,11 +69,9 @@ import { assetUrl } from '@/lib/api';
 import { COLORS } from '@/lib/constants';
 import { captureGps, type GpsCoords } from '@/lib/gps';
 import {
-  enqueue as enqueueOffline,
-  getForJob as getOfflineForJob,
-  remove as removeOffline,
-  bumpAttempts as bumpOfflineAttempts,
-  type OfflineQueueItem,
+  enqueuePhotoUpload,
+  getPendingPhotosForJob,
+  processPhotoQueue,
 } from '@/lib/offline-queue';
 import { ApiRequestError } from '@/lib/api';
 import { buildPhotoFormData } from '@/lib/job-proof-helpers';
@@ -127,32 +126,6 @@ const formatDate = (iso: string): string => {
   }
 };
 
-/**
- * Rebuild a FormData from a queued offline photo item.
- * The queue stores the raw asset (uri/name/type) + type + caption because
- * FormData isn't serializable. On replay we reconstruct it and re-append the
- * metadata so the server sees the same shape as a fresh upload.
- */
-async function rebuildPhotoFormDataFromOffline(
-  item: OfflineQueueItem
-): Promise<FormData> {
-  const p = item.payload as {
-    photoType: string;
-    caption?: string;
-    asset: { uri: string; name?: string; type?: string; fileName?: string; mimeType?: string };
-    gps?: GpsCoords | null;
-  };
-  const fakeAsset: ImagePicker.ImagePickerAsset = {
-    uri: p.asset.uri,
-    fileName: p.asset.fileName || p.asset.name,
-    mimeType: p.asset.mimeType || p.asset.type,
-  } as ImagePicker.ImagePickerAsset;
-  const fd = await buildPhotoFormData(fakeAsset, p.gps ?? null);
-  fd.append('type', p.photoType);
-  if (p.caption) fd.append('caption', p.caption);
-  return fd;
-}
-
 export default function JobPhotosScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id =
@@ -175,51 +148,62 @@ export default function JobPhotosScreen() {
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [viewerPhoto, setViewerPhoto] = useState<JobPhoto | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
+  // True while the user-initiated "Retry Upload" drain is in flight. Used
+  // to disable the button + show a spinner. The auto-drain on focus doesn't
+  // toggle this (it's best-effort and silent).
+  const [retrying, setRetrying] = useState(false);
 
-  // Keep a ref to the latest upload hook + toast so the focus-effect drain
-  // closure always calls the freshest mutation. We update the refs in a
-  // useEffect (NOT during render — React 19+ forbids that and the lint rule
-  // `react-hooks/refs` enforces it).
-  const uploadPhotoRef = useRef(uploadPhoto);
+  // Keep a ref to the latest toast so the focus-effect drain closure always
+  // calls the freshest show(). We update the ref in a useEffect (NOT during
+  // render — React 19+ forbids that and the lint rule `react-hooks/refs`
+  // enforces it).
   const toastRef = useRef(show);
   useEffect(() => {
-    uploadPhotoRef.current = uploadPhoto;
     toastRef.current = show;
-  }, [uploadPhoto, show]);
+  }, [show]);
+
+  // Refresh the per-job pending badge count from AsyncStorage. Called on
+  // focus, after each retry, and after a new photo is enqueued.
+  const refreshPendingCount = useCallback(async () => {
+    try {
+      const pending = await getPendingPhotosForJob(id);
+      setPendingCount(pending.length);
+    } catch {
+      /* non-fatal */
+    }
+  }, [id]);
 
   useFocusEffect(
     useCallback(() => {
       refetchPhotos();
-      // Drain the offline queue: re-attempt any photos that failed to upload
-      // while the device was offline. Best-effort — failures stay queued and
-      // get bumped attempts so we don't loop forever.
+      // Auto-drain the photo queue on focus: re-attempt any photos that
+      // failed to upload while the device was offline. Best-effort —
+      // failures stay queued and get bumped attempts so we don't loop.
+      //
+      // V1.6: Switched to the dedicated `processPhotoQueue()` which uses
+      // a separate AsyncStorage key (`fieseros_photo_queue`) and persists
+      // photo URIs in documentDirectory so the OS can't clean them up.
+      // The drain is GLOBAL (across all jobs) — that's intentional: the
+      // user might have queued photos for job A, navigated to job B, and
+      // regained connectivity. Draining all pending uploads avoids
+      // orphaned photos stuck in the queue for a job they're no longer
+      // viewing.
       (async () => {
         try {
-          const pending = await getOfflineForJob(id, 'photo');
-          if (pending.length === 0) return;
-          setPendingCount(pending.length);
-          for (const item of pending) {
-            try {
-              const fd = await rebuildPhotoFormDataFromOffline(item);
-              await uploadPhotoRef.current.mutateAsync({ id, formData: fd });
-              await removeOffline(item.id);
-              setPendingCount((n) => Math.max(0, n - 1));
-            } catch (err) {
-              await bumpOfflineAttempts(item.id);
-              // Stop on first failure — the device is likely still offline.
-              if (err instanceof ApiRequestError && err.statusCode >= 500) {
-                break;
-              }
-              if (err instanceof ApiRequestError && err.statusCode === 0) {
-                // Network error — stop trying, will retry on next focus.
-                break;
-              }
-            }
+          const before = await getPendingPhotosForJob(id);
+          if (before.length === 0) {
+            // Still set the badge — there might be pending for OTHER jobs
+            // (we don't show those in the per-job badge, but the user can
+            // trigger Retry which drains globally).
+            return;
           }
-          const remaining = await getOfflineForJob(id, 'photo');
-          setPendingCount(remaining.length);
-          if (remaining.length === 0) {
-            toastRef.current('Offline photos synced.', 'success');
+          setPendingCount(before.length);
+          const synced = await processPhotoQueue();
+          await refreshPendingCount();
+          if (synced > 0) {
+            toastRef.current(`${synced} photo${synced === 1 ? '' : 's'} synced.`, 'success');
+            // Refresh the photos list so newly-uploaded photos appear.
+            refetchPhotos();
           }
         } catch {
           /* swallow — draining is best-effort */
@@ -227,9 +211,9 @@ export default function JobPhotosScreen() {
       })();
       // Refresh the pending count badge when leaving the screen.
       return () => {
-        getOfflineForJob(id, 'photo').then((p) => setPendingCount(p.length));
+        refreshPendingCount();
       };
-    }, [id, refetchPhotos])
+    }, [id, refetchPhotos, refreshPendingCount])
   );
 
   const photos: JobPhoto[] = photosQuery.data ?? job?.photos ?? [];
@@ -290,11 +274,15 @@ export default function JobPhotosScreen() {
 
   const handleUpload = useCallback(async () => {
     if (!previewAsset || !id) return;
+    // Best-effort GPS capture BEFORE building the FormData. Declared
+    // outside the try block so the catch block can reuse it when queuing
+    // the photo offline (otherwise the GPS coords would be lost on retry).
+    let gps: GpsCoords | null = null;
     try {
-      // Best-effort GPS capture BEFORE building the FormData. Don't block
-      // the upload if the user denied location permission or the fix times
-      // out — captureGps() returns null in those cases and we proceed.
-      const gps = await captureGps();
+      // Don't block the upload if the user denied location permission or
+      // the fix times out — captureGps() returns null in those cases and
+      // we proceed.
+      gps = await captureGps();
       const fd = await buildPhotoFormData(previewAsset, gps);
       fd.append('type', photoType);
       if (caption.trim()) fd.append('caption', caption.trim());
@@ -310,26 +298,34 @@ export default function JobPhotosScreen() {
       setPreviewUri(null);
       setCaption('');
     } catch (err) {
-      // Network error or 5xx → enqueue to the offline queue so the photo
+      // Network error or 5xx → enqueue to the photo queue so the photo
       // isn't lost. The user gets a clear "saved offline" toast and the
-      // queue auto-drains next time the screen is focused.
+      // queue auto-drains next time the screen is focused (or when they
+      // tap "Retry Upload").
+      //
+      // V1.6: Switched to `enqueuePhotoUpload` which:
+      //   1. Copies the photo to documentDirectory (so Android's cleanup
+      //      of the camera cache can't lose it).
+      //   2. Stores metadata under a dedicated `fieseros_photo_queue`
+      //      AsyncStorage key (separate from checklist items).
+      //   3. Captures GPS at queue time so it isn't lost on replay.
       const isNetwork =
         err instanceof ApiRequestError &&
         (err.statusCode === 0 || err.statusCode >= 500);
       if (isNetwork) {
         try {
-          await enqueueOffline('photo', id, {
+          await enqueuePhotoUpload({
+            jobId: id,
+            photoUri: previewAsset.uri,
+            photoName: previewAsset.fileName || `photo_${Date.now()}.jpg`,
             photoType,
+            mimeType: previewAsset.mimeType || 'image/jpeg',
             caption: caption.trim() || undefined,
-            asset: {
-              uri: previewAsset.uri,
-              name: previewAsset.fileName,
-              type: previewAsset.mimeType,
-              fileName: previewAsset.fileName,
-              mimeType: previewAsset.mimeType,
-            },
+            // Reuse the GPS captured above so the queued photo retains
+            // the same location provenance as the live upload would have.
+            gps,
           });
-          setPendingCount((n) => n + 1);
+          await refreshPendingCount();
           show('Saved offline — will sync when online.', 'info');
           setPreviewAsset(null);
           setPreviewUri(null);
@@ -344,7 +340,41 @@ export default function JobPhotosScreen() {
         'error'
       );
     }
-  }, [previewAsset, id, photoType, caption, uploadPhoto, show]);
+  }, [previewAsset, id, photoType, caption, uploadPhoto, show, refreshPendingCount]);
+
+  // V1.6 — Manual "Retry Upload" button. Drains the GLOBAL photo queue
+  // (across all jobs). Useful when the user knows connectivity is back
+  // but the auto-drain hasn't fired yet (e.g. they're already on the
+  // screen and don't want to leave-and-return to trigger the focus
+  // effect). Shows a spinner on the button + a toast with the result.
+  const handleRetryUpload = useCallback(async () => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      const synced = await processPhotoQueue();
+      await refreshPendingCount();
+      if (synced > 0) {
+        show(`${synced} photo${synced === 1 ? '' : 's'} synced.`, 'success');
+        // Refresh the photos list so newly-uploaded photos appear.
+        refetchPhotos();
+      } else {
+        // Either the queue was empty, or every upload failed (still
+        // offline). Distinguish via the updated pending count.
+        if (pendingCount === 0) {
+          show('No photos pending upload.', 'info');
+        } else {
+          show('Upload still failing — check your connection.', 'error');
+        }
+      }
+    } catch (err) {
+      show(
+        err instanceof Error ? err.message : 'Retry failed.',
+        'error'
+      );
+    } finally {
+      setRetrying(false);
+    }
+  }, [retrying, refreshPendingCount, show, refetchPhotos, pendingCount]);
 
   const handleClearPreview = useCallback(() => {
     setPreviewAsset(null);
@@ -426,14 +456,43 @@ export default function JobPhotosScreen() {
               <View className="ml-2 flex-row items-center rounded-full bg-amber-100 px-2 py-0.5">
                 <CloudOff size={11} color={COLORS.warning} />
                 <Text className="ml-1 text-[10px] font-semibold text-amber-700">
-                  {pendingCount} pending
+                  {pendingCount} {pendingCount === 1 ? 'photo' : 'photos'} pending upload
                 </Text>
               </View>
             ) : null}
           </View>
-          <Pressable onPress={() => photosQuery.refetch()} hitSlop={8}>
-            <Text className="text-xs font-semibold text-primary-700">Refresh</Text>
-          </Pressable>
+          <View className="flex-row items-center gap-3">
+            {/* V1.6 — Retry Upload button. Only shown when there are
+                pending uploads. Drains the GLOBAL photo queue (across
+                all jobs) so it also catches photos queued on other
+                screens. */}
+            {pendingCount > 0 ? (
+              <Pressable
+                onPress={handleRetryUpload}
+                disabled={retrying}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Retry pending photo uploads"
+              >
+                <View className="flex-row items-center">
+                  <RefreshCw
+                    size={12}
+                    color={retrying ? COLORS.mutedForeground : COLORS.primary}
+                  />
+                  <Text
+                    className={`ml-1 text-xs font-semibold ${
+                      retrying ? 'text-muted-foreground' : 'text-primary-700'
+                    }`}
+                  >
+                    {retrying ? 'Syncing…' : 'Retry Upload'}
+                  </Text>
+                </View>
+              </Pressable>
+            ) : null}
+            <Pressable onPress={() => photosQuery.refetch()} hitSlop={8}>
+              <Text className="text-xs font-semibold text-primary-700">Refresh</Text>
+            </Pressable>
+          </View>
         </View>
 
         {photosQuery.isLoading && !photos.length ? (

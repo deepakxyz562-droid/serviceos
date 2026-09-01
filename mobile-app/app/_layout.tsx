@@ -59,10 +59,11 @@ function AuthGate() {
   // later from the Profile screen.
   useEffect(() => {
     if (!isAuthenticated) return;
+    const userId = useAuthStore.getState().user?.id;
     // Small delay to let the auth token settle (the api client reads it
     // from SecureStore on the first request).
     const timer = setTimeout(() => {
-      registerForPushNotifications().catch((err) => {
+      registerForPushNotifications(userId).catch((err) => {
         console.warn('[root] push notification registration failed:', err);
       });
     }, 1500);
