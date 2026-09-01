@@ -561,14 +561,26 @@ registerToolHandler('send_sms', async (ctx, params) => {
 registerToolHandler('transfer_to_human', async (ctx, params) => {
   const requestedTarget = (params.target as string) || '';
 
-  // 1. Fetch receptionist settings to resolve handoff target
+  // 1. Fetch receptionist settings to resolve handoff target + enabled flag
   let handoffTarget = '';
+  let handoffEnabled = true;
   if (ctx.receptionistId) {
     const receptionist = await db.aiReceptionist.findFirst({
       where: { id: ctx.receptionistId, tenantId: ctx.tenantId },
-      select: { handoffTransferTarget: true },
+      select: { handoffTransferTarget: true, handoffEnabled: true },
     });
     handoffTarget = receptionist?.handoffTransferTarget || '';
+    handoffEnabled = receptionist?.handoffEnabled ?? true;
+  }
+
+  // Defense-in-depth: even if the tool is registered (old deployment),
+  // refuse the transfer if handoff is disabled in the DB.
+  if (!handoffEnabled) {
+    return {
+      transferred: false,
+      message: 'Human transfer is not enabled for this receptionist.',
+      resolution: 'disabled',
+    };
   }
 
   // 2. Validate/Normalize phone inputs for target comparison

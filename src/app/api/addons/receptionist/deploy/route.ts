@@ -244,6 +244,13 @@ SERVICE INFORMATION:
 HUMAN TRANSFER:
 - If the caller explicitly asks to speak to a human, or if their request is too complex for you to handle, use the transfer_to_human tool.
 - If no transfer number is configured, let them know and offer to take a message instead.
+- After transferring, let the caller know they are being connected.
+
+VOICEMAIL FALLBACK:
+- If the transfer fails or the human does not answer, the system will automatically handle the fallback based on the configured mode.
+- If voicemail mode is enabled, the caller will hear a voicemail greeting and can leave a message.
+- If hangup mode is enabled, the call will end with a goodbye message.
+- You do not need to handle voicemail yourself — the system handles it automatically.
 
 CRITICAL RULES:
 - Never invent information. If you don't know something, say so and offer to find out.
@@ -292,6 +299,10 @@ CRITICAL RULES:
       serverUrl,
       webhookUrl,
       serverUrlSecret: vapiSecret || undefined,
+      // AI-Receptionist fix: push handoff settings to Vapi as native config
+      handoffEnabled: receptionist.handoffEnabled,
+      handoffTransferTarget: receptionist.handoffTransferTarget,
+      handoffFallbackMode: receptionist.handoffFallbackMode,
     };
 
     // ── Step A: Create/update the Vapi assistant (with 13 tools) ──

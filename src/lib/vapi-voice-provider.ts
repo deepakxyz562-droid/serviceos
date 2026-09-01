@@ -37,6 +37,10 @@ export interface VapiAssistantConfig {
   webhookUrl?: string;
   // Secret token sent in the Authorization/X-Vapi-Secret header
   serverUrlSecret?: string;
+  // AI-Receptionist: human transfer settings (pushed to Vapi as native config)
+  handoffEnabled?: boolean;
+  handoffTransferTarget?: string | null;
+  handoffFallbackMode?: string; // 'VOICEMAIL' | 'HANGUP'
 }
 
 export interface CreateAssistantResult {
@@ -78,9 +82,12 @@ class VapiVoiceProviderImpl implements VoiceProvider {
    *
    * The tools array includes all 13 non-restricted tools (cancel_job is
    * excluded because it's in RESTRICTED_CAPABILITIES).
+   *
+   * @param includeTransferTool — when false, omits the `transfer_to_human` tool.
+   *   This is controlled by the `handoffEnabled` setting on the AiReceptionist.
    */
-  private getToolSchemas() {
-    return [
+  private getToolSchemas(includeTransferTool: boolean = true) {
+    const tools: any[] = [
       // ── Read tools ──
       {
         type: 'function',
@@ -254,7 +261,13 @@ class VapiVoiceProviderImpl implements VoiceProvider {
           },
         },
       },
-      {
+    ];
+
+    // Conditionally include the transfer_to_human tool based on the
+    // handoffEnabled setting. When disabled, the AI has no way to
+    // transfer calls — the tool doesn't exist in its toolset.
+    if (includeTransferTool) {
+      tools.push({
         type: 'function',
         function: {
           name: 'transfer_to_human',
@@ -266,8 +279,10 @@ class VapiVoiceProviderImpl implements VoiceProvider {
             },
           },
         },
-      },
-    ];
+      });
+    }
+
+    return tools;
   }
 
   /**
@@ -286,7 +301,9 @@ class VapiVoiceProviderImpl implements VoiceProvider {
         systemPrompt: config.systemPrompt,
         // Phase 9.8: tools go INSIDE model (Vapi API puts function-call
         // tools on the model, not at the assistant top level)
-        tools: this.getToolSchemas(),
+        // Security/AI-Receptionist fix: conditionally include transfer_to_human
+        // based on the handoffEnabled setting
+        tools: this.getToolSchemas(config.handoffEnabled ?? true),
         messages: [
           {
             role: 'system',
@@ -317,6 +334,19 @@ class VapiVoiceProviderImpl implements VoiceProvider {
       },
       maxDurationSeconds: config.maxDurationSeconds,
       silenceTimeoutSeconds: config.silenceTimeoutSeconds,
+      // AI-Receptionist fix: push handoffTransferTarget as Vapi native
+      // forwardingPhoneNumber so transfer works even if the LLM never
+      // invokes the transfer_to_human tool (defense-in-depth).
+      ...(config.handoffTransferTarget ? { forwardingPhoneNumber: config.handoffTransferTarget } : {}),
+      // AI-Receptionist: voicemail fallback when human doesn't answer
+      // If handoffFallbackMode='VOICEMAIL', play a voicemail greeting so
+      // the caller can leave a message. If 'HANGUP', just end the call.
+      ...(config.handoffEnabled && config.handoffFallbackMode === 'VOICEMAIL'
+        ? { voicemailMessage: 'Sorry we missed your call. Please leave a message after the tone and we will get back to you as soon as possible.' }
+        : {}),
+      ...(config.handoffEnabled && config.handoffFallbackMode === 'HANGUP'
+        ? { endCallMessage: 'Thank you for calling. We were unable to connect you to an agent. Please try again later. Goodbye.' }
+        : {}),
       ...(config.serverUrl ? { serverUrl: config.serverUrl } : {}),
       ...(config.serverUrlSecret ? { serverUrlSecret: config.serverUrlSecret } : {}),
     };
