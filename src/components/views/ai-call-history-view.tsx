@@ -591,11 +591,15 @@ export function AiCallHistoryView() {
                     <Play className="size-4" />
                     <span className="text-sm font-medium">Call Recording</span>
                   </div>
-                  {/* Key forces remount when call changes so playback resets. */}
+                  {/* Key forces remount when call changes so playback resets.
+                      Uses the proxy endpoint instead of the raw recordingUrl —
+                      Vapi's raw URLs require API key auth and may be expired.
+                      The proxy at /api/vapi/calls/[id]/recording authenticates,
+                      resolves the signed URL, and redirects. */}
                   <audio
                     key={selectedCall.id}
                     controls
-                    src={selectedCall.recordingUrl}
+                    src={`/api/vapi/calls/${selectedCall.id}/recording`}
                     className="w-full"
                     preload="none"
                   />

@@ -516,11 +516,11 @@ function CallDetailDialog({
                 </div>
               )}
 
-              {/* Recording */}
+              {/* Recording — uses proxy endpoint (Vapi raw URLs need API key auth) */}
               {call.recordingUrl && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground mb-1.5">Recording</p>
-                  <audio controls src={call.recordingUrl} className="w-full" />
+                  <audio controls src={`/api/vapi/calls/${call.id}/recording`} className="w-full" />
                 </div>
               )}
             </div>
