@@ -511,7 +511,7 @@ export default function JobDetailScreen() {
   const photoCount =
     job._counts?.photos ?? job.photos?.length ?? 0;
   const checklistItems = job.checklist ?? [];
-  const checklistDone = checklistItems.filter((c) => c.completed).length;
+  const checklistDone = checklistItems.filter((c) => c.checked).length;
   const signatureCount = job.signatures?.length ?? 0;
   const timeEntryCount = job.timeEntries?.length ?? 0;
   const expenseCount = job.expenses?.length ?? 0;

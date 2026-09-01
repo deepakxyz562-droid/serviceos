@@ -410,7 +410,7 @@ export default function JobSignatureScreen() {
         ) : (
           <View className="flex-row flex-wrap justify-between">
             {existingSignatures.map((s) => {
-              const url = assetUrl(s.url) || s.url;
+              const url = assetUrl(s.signatureUrl) || s.signatureUrl;
               return (
                 <View
                   key={s.id}
@@ -421,21 +421,21 @@ export default function JobSignatureScreen() {
                     source={{ uri: url }}
                     className="h-24 w-full bg-white"
                     resizeMode="contain"
-                    accessibilityLabel={`Signature by ${s.signerName || 'unknown'}`}
-                    alt={`Signature by ${s.signerName || 'unknown'}`}
+                    accessibilityLabel={`Signature by ${s.signatoryName || 'unknown'}`}
+                    alt={`Signature by ${s.signatoryName || 'unknown'}`}
                   />
                   <View className="p-2">
                     <View className="flex-row items-center justify-between">
-                      <Badge variant={s.type === 'customer' ? 'primary' : 'info'}>
-                        {s.type}
+                      <Badge variant={s.signatoryType === 'customer' ? 'primary' : 'info'}>
+                        {s.signatoryType}
                       </Badge>
                       <Text className="text-[10px] text-muted-foreground">
-                        {formatDate(s.createdAt)}
+                        {formatDate(s.signedAt)}
                       </Text>
                     </View>
-                    {s.signerName ? (
+                    {s.signatoryName ? (
                       <Text className="mt-1 text-xs font-semibold text-foreground">
-                        {s.signerName}
+                        {s.signatoryName}
                       </Text>
                     ) : null}
                   </View>

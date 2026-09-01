@@ -256,6 +256,7 @@ export interface Job {
 export interface JobPhoto {
   id: string;
   url: string;
+  thumbnailUrl?: string | null;
   /**
    * Canonical photo taxonomy: 'before' | 'progress' | 'after' | 'issue' | 'other'.
    *
@@ -276,9 +277,21 @@ export interface JobPhoto {
 export interface ChecklistItem {
   id: string;
   label: string;
-  completed: boolean;
-  completedAt?: string | null;
+  type?: string;
+  required?: boolean;
+  // Execution state — named `checked` to match the backend's JobChecklist
+  // itemsJson shape: [{ id, label, checked, checkedAt, checkedBy,
+  // checkedByName, notes, photoUrl, sectionTitle }]. The mobile app
+  // previously declared this as `completed`, which mismatched the API and
+  // caused (a) every item to render as unchecked and (b) the toggle PATCH
+  // body `{ completed }` to be ignored server-side (backend reads `checked`).
+  checked: boolean;
+  checkedAt?: string | null;
+  checkedBy?: string | null;
+  checkedByName?: string | null;
   notes?: string | null;
+  photoUrl?: string | null;
+  sectionTitle?: string;
 }
 
 export interface TimeEntry {
@@ -315,12 +328,14 @@ export interface ScheduledVisit {
 
 export interface JobSignature {
   id: string;
-  url: string;
-  signerName?: string | null;
-  type: string;
+  signatureUrl: string;
+  signatoryName: string;
+  signatoryType: string; // 'customer' | 'employee'
+  signatoryRole?: string | null;
   latitude?: number | null;
   longitude?: number | null;
-  createdAt: string;
+  signedAt: string;
+  createdAt?: string;
 }
 
 export interface JobLineItem {

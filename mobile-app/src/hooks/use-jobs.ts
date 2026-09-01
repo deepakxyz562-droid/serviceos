@@ -283,16 +283,20 @@ export function useToggleChecklistItem() {
     mutationFn: ({
       jobId,
       itemId,
-      completed,
+      checked,
       notes,
     }: {
       jobId: string;
       itemId: string;
-      completed: boolean;
+      checked: boolean;
       notes?: string | null;
     }) =>
+      // Backend PATCH /api/jobs/[id]/checklist/item/[itemId] reads `body.checked`
+      // (NOT `completed`) — see src/app/api/jobs/[id]/checklist/item/[itemId]/route.ts.
+      // Previously this sent `{ completed }`, which the backend ignored → toggle
+      // was a silent no-op server-side.
       api.patch<ChecklistItem>(`/api/jobs/${jobId}/checklist/item/${itemId}`, {
-        completed,
+        checked,
         ...(notes !== undefined ? { notes } : {}),
       }),
     onSuccess: (_data, vars) => {

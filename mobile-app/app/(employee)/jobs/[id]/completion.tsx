@@ -448,7 +448,7 @@ function InlineSignaturePad({
 
   const signatures = useMemo(
     () =>
-      (signaturesQuery.data ?? []).filter((s) => s.type === signerType),
+      (signaturesQuery.data ?? []).filter((s) => s.signatoryType === signerType),
     [signaturesQuery.data, signerType]
   );
 
@@ -574,7 +574,7 @@ function InlineSignaturePad({
           }}
         >
           {signatures.map((s) => {
-            const url = assetUrl(s.url) || s.url;
+            const url = assetUrl(s.signatureUrl) || s.signatureUrl;
             return (
               <View
                 key={s.id}
@@ -591,8 +591,8 @@ function InlineSignaturePad({
                   source={{ uri: url }}
                   style={{ width: '100%', height: 56, backgroundColor: '#FFFFFF' }}
                   resizeMode="contain"
-                  accessibilityLabel={`${defaultRole} signature by ${s.signerName || 'unknown'}`}
-                  alt={`${defaultRole} signature by ${s.signerName || 'unknown'}`}
+                  accessibilityLabel={`${defaultRole} signature by ${s.signatoryName || 'unknown'}`}
+                  alt={`${defaultRole} signature by ${s.signatoryName || 'unknown'}`}
                 />
                 <Text
                   style={{
@@ -602,7 +602,7 @@ function InlineSignaturePad({
                   }}
                   numberOfLines={1}
                 >
-                  {s.signerName || defaultRole}
+                  {s.signatoryName || defaultRole}
                 </Text>
               </View>
             );
@@ -779,7 +779,7 @@ function InlineChecklist({
   const items: ChecklistItem[] = checklistQuery.data ?? [];
 
   const total = items.length;
-  const done = useMemo(() => items.filter((i) => i.completed).length, [items]);
+  const done = useMemo(() => items.filter((i) => i.checked).length, [items]);
   const percent = total > 0 ? (done / total) * 100 : 0;
 
   // Notify parent of completion changes.
@@ -795,7 +795,7 @@ function InlineChecklist({
         await toggleItem.mutateAsync({
           jobId,
           itemId: item.id,
-          completed: !item.completed,
+          checked: !item.checked,
         });
       } catch (err) {
         // Surface error but keep the local cache authoritative — the next
@@ -888,7 +888,7 @@ function InlineChecklist({
               disabled={!!togglingId}
               accessibilityRole="button"
               accessibilityLabel={
-                item.completed
+                item.checked
                   ? `Mark "${item.label}" as incomplete`
                   : `Mark "${item.label}" as complete`
               }
@@ -907,7 +907,7 @@ function InlineChecklist({
               <View style={{ marginRight: 10, marginTop: 1 }}>
                 {isToggling ? (
                   <ActivityIndicator size={18} color={COLORS.primary} />
-                ) : item.completed ? (
+                ) : item.checked ? (
                   <CircleCheck size={20} color={COLORS.success} />
                 ) : (
                   <Circle size={20} color={COLORS.mutedForeground} />
@@ -917,8 +917,8 @@ function InlineChecklist({
                 style={{
                   flex: 1,
                   fontSize: 14,
-                  color: item.completed ? COLORS.mutedForeground : COLORS.foreground,
-                  textDecorationLine: item.completed ? 'line-through' : 'none',
+                  color: item.checked ? COLORS.mutedForeground : COLORS.foreground,
+                  textDecorationLine: item.checked ? 'line-through' : 'none',
                 }}
               >
                 {item.label}
@@ -1080,16 +1080,16 @@ export default function JobCompletionScreen() {
     [allPhotos]
   );
   const customerSigs = useMemo(
-    () => allSignatures.filter((s) => s.type === 'customer'),
+    () => allSignatures.filter((s) => s.signatoryType === 'customer'),
     [allSignatures]
   );
   const employeeSigs = useMemo(
-    () => allSignatures.filter((s) => s.type === 'employee'),
+    () => allSignatures.filter((s) => s.signatoryType === 'employee'),
     [allSignatures]
   );
 
   const checklistTotal = checklistItems.length;
-  const checklistDone = checklistItems.filter((c) => c.completed).length;
+  const checklistDone = checklistItems.filter((c) => c.checked).length;
   const checklistPercent =
     checklistTotal > 0 ? (checklistDone / checklistTotal) * 100 : 0;
 

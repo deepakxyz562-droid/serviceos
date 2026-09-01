@@ -71,7 +71,7 @@ export interface OfflineQueueItem {
   /**
    * Payload shape depends on `type`:
    *   - photo: { photoType, caption?, asset: { uri, name, type } }
-   *   - checklist: { itemId, completed, notes? }
+   *   - checklist: { itemId, checked, notes? }
    *
    * Note: we can't serialize a FormData directly — the photo payload stores
    * the raw asset (uri/name/type) and the replay path rebuilds the FormData.

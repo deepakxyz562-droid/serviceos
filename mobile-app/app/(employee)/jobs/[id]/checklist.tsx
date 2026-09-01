@@ -119,13 +119,13 @@ export default function JobChecklistScreen() {
             try {
               const p = item.payload as {
                 itemId: string;
-                completed: boolean;
+                checked: boolean;
                 notes?: string | null;
               };
               await toggleItemRef.current.mutateAsync({
                 jobId: id,
                 itemId: p.itemId,
-                completed: p.completed,
+                checked: p.checked,
                 ...(p.notes !== undefined ? { notes: p.notes } : {}),
               });
               await removeOffline(item.id);
@@ -157,7 +157,7 @@ export default function JobChecklistScreen() {
     checklistQuery.data ?? jobQuery.data?.checklist ?? [];
 
   const completedCount = useMemo(
-    () => items.filter((i) => i.completed).length,
+    () => items.filter((i) => i.checked).length,
     [items]
   );
   const totalCount = items.length;
@@ -172,9 +172,9 @@ export default function JobChecklistScreen() {
         await toggleItem.mutateAsync({
           jobId: id,
           itemId: item.id,
-          completed: !item.completed,
+          checked: !item.checked,
         });
-        show(!item.completed ? 'Marked complete.' : 'Marked incomplete.', 'success');
+        show(!item.checked ? 'Marked complete.' : 'Marked incomplete.', 'success');
       } catch (err) {
         // Network / 5xx → enqueue the toggle for offline replay instead of
         // surfacing a hard error. The UI keeps the user's intended state;
@@ -186,7 +186,7 @@ export default function JobChecklistScreen() {
           try {
             await enqueueOffline('checklist', id, {
               itemId: item.id,
-              completed: !item.completed,
+              checked: !item.checked,
             });
             setPendingCount((n) => n + 1);
             show('Saved offline — will sync when online.', 'info');
@@ -214,7 +214,7 @@ export default function JobChecklistScreen() {
         await toggleItem.mutateAsync({
           jobId: id,
           itemId: item.id,
-          completed: item.completed,
+          checked: item.checked,
           notes: note,
         });
         show('Note saved.', 'success');
@@ -227,7 +227,7 @@ export default function JobChecklistScreen() {
           try {
             await enqueueOffline('checklist', id, {
               itemId: item.id,
-              completed: item.completed,
+              checked: item.checked,
               notes: note,
             });
             setPendingCount((n) => n + 1);
@@ -362,7 +362,7 @@ export default function JobChecklistScreen() {
                       disabled={!!togglingId}
                       accessibilityRole="button"
                       accessibilityLabel={
-                        item.completed
+                        item.checked
                           ? `Mark "${item.label}" as incomplete`
                           : `Mark "${item.label}" as complete`
                       }
@@ -371,7 +371,7 @@ export default function JobChecklistScreen() {
                         <View className="mr-3 mt-0.5">
                           {isToggling ? (
                             <ActivityIndicator size={20} color={COLORS.primary} />
-                          ) : item.completed ? (
+                          ) : item.checked ? (
                             <CircleCheck size={22} color={COLORS.primary} />
                           ) : (
                             <Circle size={22} color={COLORS.mutedForeground} />
@@ -380,16 +380,16 @@ export default function JobChecklistScreen() {
                         <View className="flex-1">
                           <Text
                             className={`text-sm font-medium ${
-                              item.completed
+                              item.checked
                                 ? 'text-muted-foreground line-through'
                                 : 'text-foreground'
                             }`}
                           >
                             {item.label}
                           </Text>
-                          {item.completed && item.completedAt ? (
+                          {item.checked && item.checkedAt ? (
                             <Text className="mt-0.5 text-xs text-muted-foreground">
-                              Completed {formatCompletedAt(item.completedAt)}
+                              Completed {formatCompletedAt(item.checkedAt)}
                             </Text>
                           ) : null}
                           {item.notes ? (
@@ -401,7 +401,7 @@ export default function JobChecklistScreen() {
                             </View>
                           ) : null}
                         </View>
-                        {item.completed ? (
+                        {item.checked ? (
                           <View className="ml-2 rounded-full bg-primary-100 px-2 py-0.5">
                             <View className="flex-row items-center">
                               <Check size={10} color={COLORS.primary} />
