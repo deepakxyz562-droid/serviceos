@@ -1,17 +1,44 @@
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
+import { getAuthUser } from '@/lib/auth'
+
+// ─── GET /api/conversations/[id]/messages ─────────────────────────────────
+// List paginated messages for a conversation.
+//
+// Security-3 IDOR fix:
+//   1. Require authentication + tenant isolation.
+//   2. Conversation lookup uses findFirst with the tenant filter so a
+//      cross-tenant caller can't read another tenant's messages.
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ── Security-3 IDOR fix: require authentication + tenant isolation ──
+    const user = await getAuthUser()
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
     const { id } = await params
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') ?? '50', 10)
     const offset = parseInt(searchParams.get('offset') ?? '0', 10)
 
-    const conversation = await db.conversation.findUnique({ where: { id } })
+    // Tenant-scoped lookup: super-admins can access any tenant; everyone
+    // else is constrained to their own tenant. The Conversation model has
+    // a `tenantId` field for ownership.
+    const isSuperAdmin =
+      user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin'
+    const tenantFilter = isSuperAdmin ? {} : { tenantId: user.tenantId }
+
+    const conversation = await db.conversation.findFirst({
+      where: { id, ...tenantFilter },
+    })
     if (!conversation) {
       return NextResponse.json(
         { error: 'Conversation not found' },
@@ -41,11 +68,29 @@ export async function GET(
   }
 }
 
+// ─── POST /api/conversations/[id]/messages ────────────────────────────────
+// Append a message to an existing conversation.
+//
+// Security-3 IDOR fix:
+//   1. Require authentication + tenant isolation.
+//   2. Verify the conversation belongs to the user's tenant BEFORE creating
+//      any message (prevents a caller from injecting messages into another
+//      tenant's conversation).
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ── Security-3 IDOR fix: require authentication + tenant isolation ──
+    const user = await getAuthUser()
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
     const { id } = await params
     const body = await request.json()
     const {
@@ -65,7 +110,15 @@ export async function POST(
       )
     }
 
-    const conversation = await db.conversation.findUnique({ where: { id } })
+    // Tenant-scoped lookup: verify the conversation exists AND belongs to
+    // the caller's tenant BEFORE creating any message record.
+    const isSuperAdmin =
+      user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin'
+    const tenantFilter = isSuperAdmin ? {} : { tenantId: user.tenantId }
+
+    const conversation = await db.conversation.findFirst({
+      where: { id, ...tenantFilter },
+    })
     if (!conversation) {
       return NextResponse.json(
         { error: 'Conversation not found' },

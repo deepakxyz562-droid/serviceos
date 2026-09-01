@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 import { executeWorkflow, type NodeOutput } from '@/lib/workflow-executor';
 
 function safeJsonParse(str: string | null, fallback: unknown = null) {
@@ -16,14 +17,44 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ── Security-3 IDOR fix: auth + tenant + permission BEFORE any side effect ──
+    // This endpoint triggers workflow execution (emails, SMS, API calls, etc.)
+    // so authorization MUST be verified BEFORE creating any execution record
+    // or running the workflow. A 403 response must guarantee NO side effects.
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const isSuperAdmin = user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin';
+
+    // Permission check: only owners, admins, and managers can execute workflows.
+    // Employees, viewers, and customers cannot trigger workflow execution.
+    const allowedRoles = ['owner', 'admin', 'manager', 'superadmin', 'super_admin'];
+    if (!isSuperAdmin && !allowedRoles.includes(user.role)) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions to execute workflows' },
+        { status: 403 }
+      );
+    }
+
     const { id } = await params;
-    const workflow = await db.workflow.findUnique({ where: { id } });
+
+    // Tenant-scoped lookup: super-admins can execute any workflow; everyone
+    // else is constrained to their own tenant's workflows.
+    const tenantFilter = isSuperAdmin ? {} : { tenantId: user.tenantId };
+    const workflow = await db.workflow.findFirst({ where: { id, ...tenantFilter } });
     if (!workflow) {
       return NextResponse.json(
         { error: 'Workflow not found' },
         { status: 404 }
       );
     }
+
+    // ── Authorization complete — safe to execute from here ──
 
     const nodes: any[] = safeJsonParse(workflow.nodesJson, []);
     const edges: any[] = safeJsonParse(workflow.edgesJson, []);

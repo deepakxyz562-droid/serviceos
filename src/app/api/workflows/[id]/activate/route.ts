@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 
 function safeJsonParse(str: string | null, fallback: unknown = []) {
   if (!str) return fallback;
@@ -15,14 +16,37 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ── Security-3 IDOR fix: auth + tenant + permission BEFORE any side effect ──
+    // Activating a workflow creates webhook registrations (side effect), so
+    // authorization MUST complete BEFORE any DB writes.
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const isSuperAdmin = user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin';
+    const allowedRoles = ['owner', 'admin', 'manager', 'superadmin', 'super_admin'];
+    if (!isSuperAdmin && !allowedRoles.includes(user.role)) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions to activate workflows' },
+        { status: 403 }
+      );
+    }
+
     const { id } = await params;
-    const workflow = await db.workflow.findUnique({ where: { id } });
+    const tenantFilter = isSuperAdmin ? {} : { tenantId: user.tenantId };
+    const workflow = await db.workflow.findFirst({ where: { id, ...tenantFilter } });
     if (!workflow) {
       return NextResponse.json(
         { error: 'Workflow not found' },
         { status: 404 }
       );
     }
+
+    // ── Authorization complete — safe to mutate from here ──
 
     const body = await request.json().catch(() => ({}));
     const newActiveStatus = body.active !== undefined ? body.active : !workflow.active;
@@ -81,8 +105,27 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ── Security-3 IDOR fix: same auth + tenant + permission as POST ──
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const isSuperAdmin = user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin';
+    const allowedRoles = ['owner', 'admin', 'manager', 'superadmin', 'super_admin'];
+    if (!isSuperAdmin && !allowedRoles.includes(user.role)) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions' },
+        { status: 403 }
+      );
+    }
+
     const { id } = await params;
-    const workflow = await db.workflow.findUnique({ where: { id } });
+    const tenantFilter = isSuperAdmin ? {} : { tenantId: user.tenantId };
+    const workflow = await db.workflow.findFirst({ where: { id, ...tenantFilter } });
     if (!workflow) {
       return NextResponse.json(
         { error: 'Workflow not found' },

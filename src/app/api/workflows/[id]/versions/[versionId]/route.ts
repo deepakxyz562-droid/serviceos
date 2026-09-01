@@ -1,12 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; versionId: string }> }
 ) {
   try {
+    // ── Security-3 IDOR fix: auth + tenant ownership ──
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const { id, versionId } = await params;
+
+    // Verify the workflow belongs to the user's tenant FIRST
+    const isSuperAdmin = user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin';
+    const tenantFilter = isSuperAdmin ? {} : { tenantId: user.tenantId };
+    const workflow = await db.workflow.findFirst({ where: { id, ...tenantFilter } });
+    if (!workflow) {
+      return NextResponse.json({ error: 'Workflow not found' }, { status: 404 });
+    }
+
+    // Only then look up the version (scoped to this workflow)
     const version = await db.workflowVersion.findFirst({
       where: { id: versionId, workflowId: id },
     });
@@ -24,12 +41,38 @@ export async function POST(
   { params }: { params: Promise<{ id: string; versionId: string }> }
 ) {
   try {
+    // ── Security-3 IDOR fix: auth + tenant + permission BEFORE any mutation ──
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const isSuperAdmin = user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin';
+    const allowedRoles = ['owner', 'admin', 'manager', 'superadmin', 'super_admin'];
+    if (!isSuperAdmin && !allowedRoles.includes(user.role)) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions to restore workflow versions' },
+        { status: 403 }
+      );
+    }
+
     const { id, versionId } = await params;
+
+    // Verify the workflow belongs to the user's tenant
+    const tenantFilter = isSuperAdmin ? {} : { tenantId: user.tenantId };
+    const workflow = await db.workflow.findFirst({ where: { id, ...tenantFilter } });
+    if (!workflow) {
+      return NextResponse.json({ error: 'Workflow not found' }, { status: 404 });
+    }
+
+    // Look up the version (scoped to this workflow)
     const version = await db.workflowVersion.findFirst({
       where: { id: versionId, workflowId: id },
     });
     if (!version)
       return NextResponse.json({ error: 'Version not found' }, { status: 404 });
+
+    // ── Authorization complete — safe to restore from here ──
 
     const snapshot = JSON.parse(version.snapshotJson);
 

@@ -3,15 +3,35 @@ import { db } from '@/lib/db';
 import { toISOString } from '@/lib/utils';
 import { EventBus } from '@/lib/event-bus';
 import { autoCloseDealAsWonByQuote } from '@/lib/deal-auto-close';
+import { getAuthUser } from '@/lib/auth';
+
+// ─── GET /api/quotes/[id] ────────────────────────────────────────────────
+//
+// Security-3 IDOR fix: require authentication + tenant isolation (super-
+// admins bypass). Previously this endpoint had no auth — any caller could
+// read any quote by ID, including customer contact info.
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ── Security-3 IDOR fix: require authentication + tenant isolation ──
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const { id } = await params;
-    const quote = await db.quote.findUnique({
-      where: { id },
+
+    // Tenant-scoped lookup: super-admins can access any tenant; everyone
+    // else is constrained to their own tenant.
+    const isSuperAdmin =
+      user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin';
+    const tenantFilter = isSuperAdmin ? {} : { tenantId: user.tenantId };
+
+    const quote = await db.quote.findFirst({
+      where: { id, ...tenantFilter },
       include: { customer: true },
     });
 
@@ -57,11 +77,25 @@ export async function GET(
   }
 }
 
+// ─── PUT /api/quotes/[id] ───────────────────────────────────────────────
+//
+// Security-3 IDOR fix: require authentication + tenant isolation (super-
+// admins bypass). Use updateMany with the tenant filter and check
+// `count === 0` → 404 so a cross-tenant caller can't mutate another
+// tenant's quote. The lifecycle event emission and Deal auto-close hooks
+// are preserved but operate on the tenant-scoped record.
+
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ── Security-3 IDOR fix: require authentication + tenant isolation ──
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const { id } = await params;
     const body = await req.json();
     const {
@@ -69,7 +103,13 @@ export async function PUT(
       services, addOns, discountType, discountValue, taxRate, validUntil,
     } = body;
 
-    const existing = await db.quote.findUnique({ where: { id } });
+    // Tenant-scoped lookup: super-admins can access any tenant; everyone
+    // else is constrained to their own tenant.
+    const isSuperAdmin =
+      user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin';
+    const tenantFilter = isSuperAdmin ? {} : { tenantId: user.tenantId };
+
+    const existing = await db.quote.findFirst({ where: { id, ...tenantFilter } });
     if (!existing) {
       return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
     }
@@ -116,10 +156,31 @@ export async function PUT(
     updateData.tax = tax;
     updateData.total = total;
 
-    const quote = await db.quote.update({
-      where: { id },
+    // Use updateMany with the tenant scope so a race-condition ID swap can't
+    // mutate a quote that was just moved to another tenant.
+    const updateResult = await db.quote.updateMany({
+      where: { id, ...tenantFilter },
       data: updateData,
     });
+
+    if (updateResult.count === 0) {
+      return NextResponse.json(
+        { error: 'Quote not found or access denied' },
+        { status: 404 }
+      );
+    }
+
+    // Fetch the updated quote (tenant-scoped for safety) so we can emit
+    // lifecycle events and run the Deal auto-close hook on the new state.
+    const quote = await db.quote.findFirst({
+      where: { id, ...tenantFilter },
+    });
+    if (!quote) {
+      return NextResponse.json(
+        { error: 'Quote not found or access denied' },
+        { status: 404 }
+      );
+    }
 
     // ─── Emit quote lifecycle events on status change ────────────────
     // Best-effort — never fails the update. Only emits when the caller
