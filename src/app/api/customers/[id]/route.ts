@@ -3,19 +3,33 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withCrmTrace } from '@/lib/crm-perf-trace'
 import { CUSTOMER_PUBLIC_SELECT } from '@/lib/customer-select'
 import { normalizePhone, normalizeEmail } from '@/lib/customer-normalize'
+import { getAuthUser } from '@/lib/auth'
 
 async function _GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ── Security-3 IDOR fix: require authentication + tenant isolation ──
+    const user = await getAuthUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
     const { id } = await params
+
+    // Tenant-scoped lookup: super-admins can access any tenant; everyone else
+    // is constrained to their own tenant. This prevents cross-tenant IDOR.
+    const tenantFilter = user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin'
+      ? {}
+      : { tenantId: user.tenantId }
+
     // C-2C + Phase 5: use `select` (not `include`) so the top-level Customer row
     // never returns passwordHash / activationToken / marketingConsentIp to the
     // browser. Nested relations use explicit `select` to exclude large blobs
     // (Conversation.messagesJson / metadataJson) that caused 5x payload bloat.
-    const customer = await db.customer.findUnique({
-      where: { id },
+    const customer = await db.customer.findFirst({
+      where: { id, ...tenantFilter },
       select: {
         ...CUSTOMER_PUBLIC_SELECT,
         jobs: {
@@ -92,9 +106,6 @@ async function _GET(
           take: 20,
         },
         conversations: {
-          // Phase 5: explicitly select columns — EXCLUDE messagesJson and
-          // metadataJson (large blobs that caused 5x payload bloat when
-          // using `include: true` on the nested relation).
           select: {
             id: true,
             conversationId: true,
@@ -116,9 +127,6 @@ async function _GET(
           take: 20,
         },
         quotes: {
-          // Phase 2: quotes for the Customer 360 Quotes tab + Convert to Job.
-          // Select only the fields needed by the UI (exclude large description
-          // blobs unless needed).
           select: {
             id: true,
             title: true,
@@ -199,6 +207,12 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ── Security-3 IDOR fix: require authentication + tenant isolation ──
+    const user = await getAuthUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
     const { id } = await params
     const body = await request.json()
     const {
@@ -226,8 +240,15 @@ export async function PUT(
     const normalizedPhone = phone ? normalizePhone(phone) : undefined
     const normalizedEmail = email !== undefined ? normalizeEmail(email) : undefined
 
-    const customer = await db.customer.update({
-      where: { id },
+    // Tenant-scoped update: use updateMany with tenantId in WHERE so a
+    // cross-tenant ID is a no-op (0 rows affected) rather than a mutation.
+    // Super-admins can update any tenant; everyone else is constrained.
+    const tenantFilter = user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin'
+      ? {}
+      : { tenantId: user.tenantId }
+
+    const updateResult = await db.customer.updateMany({
+      where: { id, ...tenantFilter },
       data: {
         ...(derivedName && { name: derivedName }),
         ...(phone && { phone }),
@@ -245,6 +266,16 @@ export async function PUT(
       },
     })
 
+    if (updateResult.count === 0) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
+    }
+
+    // Fetch the updated customer to return (tenant-scoped for safety)
+    const customer = await db.customer.findFirst({
+      where: { id, ...tenantFilter },
+      select: CUSTOMER_PUBLIC_SELECT,
+    })
+
     return NextResponse.json(customer)
   } catch (error) {
     console.error('Error updating customer:', error)
@@ -257,8 +288,28 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ── Security-3 IDOR fix: require authentication + tenant isolation ──
+    const user = await getAuthUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
     const { id } = await params
-    await db.customer.delete({ where: { id } })
+
+    // Tenant-scoped delete: use deleteMany with tenantId in WHERE so a
+    // cross-tenant ID is a no-op (0 rows affected) rather than a deletion.
+    const tenantFilter = user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin'
+      ? {}
+      : { tenantId: user.tenantId }
+
+    const deleteResult = await db.customer.deleteMany({
+      where: { id, ...tenantFilter },
+    })
+
+    if (deleteResult.count === 0) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
+    }
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting customer:', error)

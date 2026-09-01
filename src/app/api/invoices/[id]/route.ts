@@ -5,15 +5,13 @@ import { EventBus } from '@/lib/event-bus'
 
 // GET /api/invoices/[id] — Get single invoice by ID
 //
-// Access control:
+// Access control (Security-3 IDOR fix):
 //   - Customer sessions: may view ONLY their own invoices (invoice.customerId
-//     must equal authUser.id). This is enforced server-side regardless of
-//     whether the request comes from the portal, a magic-link deep-link, or
-//     a direct API call. If the invoice doesn't belong to the customer, we
-//     return 404 (not 403) to avoid leaking the existence of other invoices.
-//   - Admin/employee sessions: may view any invoice in their tenant.
-//   - Unauthenticated requests: denied (401). The previous implementation
-//     allowed public access to any invoice by ID, which was a privacy leak.
+//     must equal authUser.id). Return 404 (not 403) to avoid leaking existence.
+//   - Admin/employee sessions: may view invoices in their OWN tenant only.
+//     Previously staff could read any tenant's invoice — now tenant-scoped.
+//   - Super-admin: may access any tenant (platform-wide administration).
+//   - Unauthenticated: denied (401).
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -31,8 +29,21 @@ export async function GET(
       )
     }
 
-    const invoice = await db.invoice.findUnique({
-      where: { id },
+    // Build the tenant-scoped filter
+    // - Super-admin: no tenant filter (can access any tenant)
+    // - Customer: filtered by customerId (ownership)
+    // - Staff (admin/employee): filtered by tenantId
+    let tenantFilter: Record<string, unknown>
+    if (authUser.isSuperAdmin || authUser.role === 'superadmin' || authUser.role === 'super_admin') {
+      tenantFilter = {} // super-admin can access any invoice
+    } else if (authUser.role === 'customer') {
+      tenantFilter = { customerId: authUser.id }
+    } else {
+      tenantFilter = { tenantId: authUser.tenantId }
+    }
+
+    const invoice = await db.invoice.findFirst({
+      where: { id, ...tenantFilter },
       include: {
         customer: {
           select: { id: true, name: true, phone: true, email: true, address: true },
@@ -48,17 +59,6 @@ export async function GET(
         { error: 'Invoice not found' },
         { status: 404 }
       )
-    }
-
-    // Customer session: enforce ownership. Return 404 (not 403) to avoid
-    // leaking the existence of invoices that don't belong to the customer.
-    if (authUser.role === 'customer') {
-      if (invoice.customerId !== authUser.id) {
-        return NextResponse.json(
-          { error: 'Invoice not found' },
-          { status: 404 }
-        )
-      }
     }
 
     return NextResponse.json(invoice)
@@ -82,9 +82,28 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ── Security-3 IDOR fix: require authentication + tenant isolation ──
+    const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
     const { id } = await params
 
-    const existing = await db.invoice.findUnique({ where: { id } })
+    // Build the tenant-scoped filter (same logic as GET)
+    let tenantFilter: Record<string, unknown>
+    if (authUser.isSuperAdmin || authUser.role === 'superadmin' || authUser.role === 'super_admin') {
+      tenantFilter = {}
+    } else if (authUser.role === 'customer') {
+      tenantFilter = { customerId: authUser.id }
+    } else {
+      tenantFilter = { tenantId: authUser.tenantId }
+    }
+
+    const existing = await db.invoice.findFirst({ where: { id, ...tenantFilter } })
     if (!existing) {
       return NextResponse.json(
         { error: 'Invoice not found' },
@@ -133,8 +152,10 @@ export async function PUT(
       total = amount + tax - discountVal
     }
 
-    const invoice = await db.invoice.update({
-      where: { id },
+    // Use updateMany with tenant scope so a race-condition ID swap can't
+    // mutate an invoice that was just moved to another tenant.
+    const updateResult = await db.invoice.updateMany({
+      where: { id, ...tenantFilter },
       data: {
         ...(status !== undefined && { status }),
         ...(customerId !== undefined && { customerId: customerId || null }),
@@ -154,12 +175,23 @@ export async function PUT(
         // Set sentAt when status changes to sent
         ...(status === 'sent' && !existing.sentAt && { sentAt: new Date() }),
       },
+    })
+
+    if (updateResult.count === 0) {
+      return NextResponse.json(
+        { error: 'Invoice not found or access denied' },
+        { status: 404 }
+      )
+    }
+
+    // Fetch the updated invoice with relations (updateMany doesn't support include)
+    const invoice = await db.invoice.findFirst({
+      where: { id, ...tenantFilter },
       include: {
         customer: {
           select: { id: true, name: true, phone: true, email: true, address: true },
         },
         job: {
-          // NOTE: `service` is not a field on Job (see GET handler comment).
           select: { id: true, title: true, jobNumber: true, status: true },
         },
       },
@@ -203,22 +235,45 @@ export async function PUT(
 }
 
 // DELETE /api/invoices/[id] — Delete an invoice
+// Security-3 IDOR fix: require authentication + tenant isolation
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
     const { id } = await params
 
-    const existing = await db.invoice.findUnique({ where: { id } })
-    if (!existing) {
+    // Build the tenant-scoped filter (same logic as GET/PUT)
+    let tenantFilter: Record<string, unknown>
+    if (authUser.isSuperAdmin || authUser.role === 'superadmin' || authUser.role === 'super_admin') {
+      tenantFilter = {}
+    } else if (authUser.role === 'customer') {
+      // Customers typically can't delete invoices, but if they somehow
+      // reach this endpoint, constrain to their own invoices.
+      tenantFilter = { customerId: authUser.id }
+    } else {
+      tenantFilter = { tenantId: authUser.tenantId }
+    }
+
+    // Tenant-scoped delete: use deleteMany so cross-tenant ID is a no-op
+    const deleteResult = await db.invoice.deleteMany({
+      where: { id, ...tenantFilter },
+    })
+
+    if (deleteResult.count === 0) {
       return NextResponse.json(
         { error: 'Invoice not found' },
         { status: 404 }
       )
     }
-
-    await db.invoice.delete({ where: { id } })
 
     return NextResponse.json({ success: true, id })
   } catch (error) {
@@ -231,14 +286,33 @@ export async function DELETE(
 }
 
 // PATCH /api/invoices/[id] — Partial update (mark as sent, mark as paid, etc.)
+// Security-3 IDOR fix: require authentication + tenant isolation
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
     const { id } = await params
 
-    const existing = await db.invoice.findUnique({ where: { id } })
+    // Build the tenant-scoped filter (same logic as GET/PUT/DELETE)
+    let tenantFilter: Record<string, unknown>
+    if (authUser.isSuperAdmin || authUser.role === 'superadmin' || authUser.role === 'super_admin') {
+      tenantFilter = {}
+    } else if (authUser.role === 'customer') {
+      tenantFilter = { customerId: authUser.id }
+    } else {
+      tenantFilter = { tenantId: authUser.tenantId }
+    }
+
+    const existing = await db.invoice.findFirst({ where: { id, ...tenantFilter } })
     if (!existing) {
       return NextResponse.json(
         { error: 'Invoice not found' },
@@ -275,9 +349,22 @@ export async function PATCH(
       if (body.discount !== undefined) updateData.discount = body.discount
     }
 
-    const invoice = await db.invoice.update({
-      where: { id },
+    // Tenant-scoped update (Security-3 IDOR fix)
+    const patchResult = await db.invoice.updateMany({
+      where: { id, ...tenantFilter },
       data: updateData,
+    })
+
+    if (patchResult.count === 0) {
+      return NextResponse.json(
+        { error: 'Invoice not found or access denied' },
+        { status: 404 }
+      )
+    }
+
+    // Fetch the updated invoice with relations
+    const invoice = await db.invoice.findFirst({
+      where: { id, ...tenantFilter },
       include: {
         customer: {
           select: { id: true, name: true, phone: true, email: true },

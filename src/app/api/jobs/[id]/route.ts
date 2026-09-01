@@ -127,6 +127,34 @@ async function _GET(
             { status: 404 },
           );
         }
+
+        // ── Security-3 IDOR fix: tenant boundary (RPC path) ───────────
+        // Verify the job belongs to the authenticated user's tenant before
+        // returning data. Same logic as the Promise.all fallback path.
+        if (!(user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin')) {
+          const rpcJobRecord = rpcJob as Record<string, unknown>;
+          let rpcJobTenantId: string | null = null;
+          if (rpcJobRecord.workspaceId) {
+            try {
+              const ws = await db.workspace.findUnique({
+                where: { id: rpcJobRecord.workspaceId as string },
+                select: { tenantId: true },
+              });
+              rpcJobTenantId = ws?.tenantId ?? null;
+            } catch {
+              rpcJobTenantId = user.tenantId;
+            }
+          }
+          if (!rpcJobTenantId && user.tenantId) {
+            rpcJobTenantId = user.tenantId;
+          }
+          if (rpcJobTenantId !== user.tenantId) {
+            return NextResponse.json(
+              { error: 'Job not found' },
+              { status: 404 },
+            );
+          }
+        }
         // Cast to the shape parseLifecycleTimestamps + deriveLifecycleState need.
         // The RPC returns all Job columns as-is (jsonb via to_jsonb), so the
         // field names match the Prisma model exactly (camelCase).
@@ -249,6 +277,39 @@ async function _GET(
         { error: 'Job not found' },
         { status: 404 }
       );
+    }
+
+    // ── Security-3 IDOR fix: tenant boundary ──────────────────────────
+    // Verify the job belongs to the authenticated user's tenant (or the user
+    // is a super-admin). The Job model has a workspaceId, not a direct
+    // tenantId — so we resolve the workspace's tenantId and compare.
+    // This prevents cross-tenant job access via direct ID enumeration.
+    if (!(user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin')) {
+      // Resolve the job's tenant via its workspaceId
+      let jobTenantId: string | null = null;
+      if ((job as Record<string, unknown>).workspaceId) {
+        try {
+          const ws = await db.workspace.findUnique({
+            where: { id: (job as Record<string, unknown>).workspaceId as string },
+            select: { tenantId: true },
+          });
+          jobTenantId = ws?.tenantId ?? null;
+        } catch {
+          // If workspace lookup fails, fall back to user's tenant (defensive)
+          jobTenantId = user.tenantId;
+        }
+      }
+      // If no workspaceId, fall back to user's tenant (job may be pre-workspace)
+      if (!jobTenantId && user.tenantId) {
+        jobTenantId = user.tenantId;
+      }
+      // Deny if tenant mismatch
+      if (jobTenantId !== user.tenantId) {
+        return NextResponse.json(
+          { error: 'Job not found' },
+          { status: 404 }
+        );
+      }
     }
 
     // ── Enrich with lifecycle state + timestamps + counts ──
