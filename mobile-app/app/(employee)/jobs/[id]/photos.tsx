@@ -284,7 +284,7 @@ export default function JobPhotosScreen() {
       // we proceed.
       gps = await captureGps();
       const fd = await buildPhotoFormData(previewAsset, gps);
-      fd.append('type', photoType);
+      fd.append('photoType', photoType);
       if (caption.trim()) fd.append('caption', caption.trim());
 
       await uploadPhoto.mutateAsync({ id, formData: fd });

@@ -39,9 +39,19 @@ function asArray<T>(r: unknown): T[] {
   if (Array.isArray(r)) return r as T[];
   if (r && typeof r === 'object') {
     const obj = r as Record<string, unknown>;
+    // Standard wrappers
     if (Array.isArray(obj.data)) return obj.data as T[];
     if (Array.isArray(obj.items)) return obj.items as T[];
     if (Array.isArray(obj.jobs)) return obj.jobs as T[];
+    // Backend-specific wrappers (each endpoint returns its own key)
+    if (Array.isArray(obj.photos)) return obj.photos as T[];
+    if (Array.isArray(obj.signatures)) return obj.signatures as T[];
+    if (Array.isArray(obj.expenses)) return obj.expenses as T[];
+    if (Array.isArray(obj.visits)) return obj.visits as T[];
+    if (Array.isArray(obj.timeEntries)) return obj.timeEntries as T[];
+    if (Array.isArray(obj.entries)) return obj.entries as T[];
+    if (Array.isArray(obj.checklist)) return obj.checklist as T[];
+    if (Array.isArray(obj.items)) return obj.items as T[];
   }
   return [];
 }
@@ -244,7 +254,24 @@ export function useJobChecklist(jobId: string | undefined) {
     queryKey: ['job', jobId, 'checklist'],
     queryFn: async () => {
       const r = await api.get<unknown>(`/api/jobs/${jobId}/checklist`);
-      return asArray<ChecklistItem>(r);
+      // Response shape: { jobChecklist: { itemsJson: "[...]", ... } } | { jobChecklist: null }
+      // The PWA extracts jobChecklist and parses itemsJson — we do the same here.
+      if (r && typeof r === 'object') {
+        const obj = r as Record<string, unknown>;
+        const jc = obj.jobChecklist;
+        if (jc && typeof jc === 'object') {
+          const jcObj = jc as Record<string, unknown>;
+          if (typeof jcObj.itemsJson === 'string') {
+            try {
+              const items = JSON.parse(jcObj.itemsJson);
+              if (Array.isArray(items)) return items as ChecklistItem[];
+            } catch {
+              // itemsJson is malformed — return empty
+            }
+          }
+        }
+      }
+      return [];
     },
     enabled: !!jobId,
   });
