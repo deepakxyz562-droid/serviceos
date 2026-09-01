@@ -43,7 +43,7 @@
 
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { API_BASE_URL } from '@/lib/constants';
 import { getToken } from '@/lib/auth';
@@ -185,7 +185,24 @@ const INITIAL_STATE: LiveTrackingState = {
 
 // ── Hook implementation ──────────────────────────────────────────────────
 
-export function useLiveTracking(options: UseLiveTrackingOptions): LiveTrackingState {
+export interface UseLiveTrackingApi extends LiveTrackingState {
+  /**
+   * Request foreground + background location permissions on demand.
+   *
+   * Should be called from a user gesture (e.g. the "Start Travel" button
+   * handler) — NOT on mount. The OS only shows the permission prompt once;
+   * calling this when permissions are already granted is a no-op (returns
+   * true immediately) so callers don't need to check state first.
+   *
+   * Returns true only if BOTH foreground AND background location permission
+   * are granted (background is best-effort on emulators that don't support
+   * the prompt — a missing background prompt response is treated as
+   * "granted" if foreground succeeded, so foreground tracking still works).
+   */
+  requestLocationPermissions: () => Promise<boolean>;
+}
+
+export function useLiveTracking(options: UseLiveTrackingOptions): UseLiveTrackingApi {
   const {
     enabled,
     employeeId,
@@ -202,11 +219,22 @@ export function useLiveTracking(options: UseLiveTrackingOptions): LiveTrackingSt
   const lastPingAtRef = useRef<Date | null>(null);
   const lastHeartbeatAtRef = useRef<Date | null>(null);
 
-  // ── Effect 1: Request permissions on mount (once) ─────────────────────
+  // ── Effect 1: READ existing permission status on mount (no prompt) ───
+  // IMPORTANT: We previously called `requestForegroundPermissionsAsync` +
+  // `requestBackgroundPermissionsAsync` here, which fired the OS permission
+  // prompt the moment the job screen opened — before the user had tapped
+  // "Start Travel". That's a Play Store / App Store anti-pattern (Google
+  // Play specifically requires a "prominent in-app disclosure" before
+  // requesting background location).
+  //
+  // Now we ONLY read the current status (no prompt). The actual request
+  // happens in `requestLocationPermissions()`, called from the "Start
+  // Travel" button handler AFTER the user has seen the prominent
+  // disclosure dialog.
   useEffect(() => {
     let cancelled = false;
 
-    async function requestPermissions() {
+    async function checkPermissions() {
       if (Platform.OS === 'web') {
         // Web: no background tasks. Foreground permission is implicit via
         // the Geolocation API (requested when watchPosition is called).
@@ -219,14 +247,14 @@ export function useLiveTracking(options: UseLiveTrackingOptions): LiveTrackingSt
       }
 
       try {
-        const fg = await Location.requestForegroundPermissionsAsync();
+        const fg = await Location.getForegroundPermissionsAsync();
         let bgStatus: Location.LocationPermissionResponse | null = null;
         try {
-          bgStatus = await Location.requestBackgroundPermissionsAsync();
+          bgStatus = await Location.getBackgroundPermissionsAsync();
         } catch (bgErr) {
-          // Some Android versions / emulators don't support the background
-          // permission prompt — foreground tracking still works.
-          console.warn('[live-tracking] background permission request failed:', bgErr);
+          // Some Android versions / emulators don't implement the
+          // background permission API — leave hasBackgroundPermission false.
+          console.warn('[live-tracking] background permission query failed:', bgErr);
         }
 
         if (cancelled) return;
@@ -235,21 +263,72 @@ export function useLiveTracking(options: UseLiveTrackingOptions): LiveTrackingSt
           ...s,
           hasForegroundPermission: fg.status === 'granted',
           hasBackgroundPermission: bgStatus?.status === 'granted',
-          permissionDenied: fg.status !== 'granted',
+          permissionDenied: fg.status === 'denied',
         }));
-
-        if (fg.status !== 'granted') {
-          console.warn('[live-tracking] foreground location permission denied — tracking disabled');
-        }
       } catch (err) {
-        console.warn('[live-tracking] permission request failed:', err);
+        console.warn('[live-tracking] permission query failed:', err);
       }
     }
 
-    requestPermissions();
+    checkPermissions();
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // ── requestLocationPermissions (called on user gesture) ─────────────
+  const requestLocationPermissions = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS === 'web') {
+      // Web: no permission prompt — treat as granted (the browser prompts
+      // when watchPosition is first called).
+      setState((s) => ({
+        ...s,
+        hasForegroundPermission: true,
+        hasBackgroundPermission: false,
+        permissionDenied: false,
+      }));
+      return true;
+    }
+
+    try {
+      const fg = await Location.requestForegroundPermissionsAsync();
+      if (!fg.granted) {
+        setState((s) => ({
+          ...s,
+          hasForegroundPermission: false,
+          hasBackgroundPermission: false,
+          permissionDenied: true,
+        }));
+        console.warn('[live-tracking] foreground location permission denied — tracking disabled');
+        return false;
+      }
+
+      // Foreground granted → now ask for background. Best-effort: some
+      // emulators throw when the background permission isn't implemented.
+      let bgGranted = false;
+      try {
+        const bg = await Location.requestBackgroundPermissionsAsync();
+        bgGranted = bg.status === 'granted';
+      } catch (bgErr) {
+        console.warn('[live-tracking] background permission request failed:', bgErr);
+      }
+
+      setState((s) => ({
+        ...s,
+        hasForegroundPermission: true,
+        hasBackgroundPermission: bgGranted,
+        permissionDenied: false,
+      }));
+
+      // Background permission is best-effort — foreground tracking still
+      // works without it. Return true so the "Start Travel" action proceeds
+      // (the user will see a banner if background tracking isn't available).
+      return true;
+    } catch (err) {
+      console.warn('[live-tracking] permission request failed:', err);
+      setState((s) => ({ ...s, permissionDenied: true }));
+      return false;
+    }
   }, []);
 
   // ── Effect 2: Start / stop tracking based on `enabled` + identity ─────
@@ -534,5 +613,5 @@ export function useLiveTracking(options: UseLiveTrackingOptions): LiveTrackingSt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, employeeId, jobId, authToken, apiBaseUrl]);
 
-  return state;
+  return { ...state, requestLocationPermissions };
 }

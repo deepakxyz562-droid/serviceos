@@ -70,6 +70,19 @@ function nextWithRequestId(requestId: string, extraHeaders?: Record<string, stri
       response.headers.set(k, v);
     }
   }
+
+  // ── CORS for local development ──────────────────────────────────────
+  // When the Expo mobile app (localhost:8081) or any local dev tool calls
+  // the API (localhost:3000), the browser blocks cross-origin requests
+  // unless we return Access-Control-Allow-Origin. In production, Caddy
+  // handles CORS at the edge — this only runs for local dev.
+  if (process.env.NODE_ENV !== 'production') {
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Cron-Secret, x-cron-secret');
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+  }
+
   return response;
 }
 
@@ -158,6 +171,21 @@ export async function proxy(request: NextRequest) {
   const requestId =
     request.headers.get('x-request-id') || generateRequestId();
 
+  // ── CORS preflight for local development ──────────────────────────────
+  // Handle OPTIONS requests immediately (don't pass through to route handlers)
+  if (request.method === 'OPTIONS' && pathname.startsWith('/api/') && process.env.NODE_ENV !== 'production') {
+    return new NextResponse(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Cron-Secret, x-cron-secret',
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Max-Age': '86400',
+      },
+    });
+  }
+
   // Always allow static assets and Next.js internals (no rate limit on these).
   if (
     pathname.startsWith('/_next/') ||
@@ -225,6 +253,44 @@ export async function proxy(request: NextRequest) {
       const response = NextResponse.rewrite(url);
       response.headers.set('X-Request-Id', requestId);
       return response;
+    }
+  }
+
+  // ── CORS for local development (mobile app on localhost:8081) ──────────
+  // When developing the Expo mobile app locally, the app runs on
+  // localhost:8081 and makes API requests to localhost:3000. The browser
+  // blocks these cross-origin requests unless we return CORS headers.
+  // In production, the Caddy reverse proxy handles CORS at the edge.
+  if (isLocal && pathname.startsWith('/api/')) {
+    const origin = request.headers.get('origin');
+    if (origin) {
+      // Allow any localhost origin (mobile app, web dev, etc.)
+      const isLocalOrigin =
+        origin.includes('localhost') ||
+        origin.includes('127.0.0.1') ||
+        origin.includes('192.168.') ||
+        origin.includes('10.0.');
+
+      if (isLocalOrigin) {
+        // Handle OPTIONS preflight
+        if (request.method === 'OPTIONS') {
+          const preflightResponse = new NextResponse(null, { status: 204 });
+          preflightResponse.headers.set('Access-Control-Allow-Origin', origin);
+          preflightResponse.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+          preflightResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Cron-Secret, x-cron-secret');
+          preflightResponse.headers.set('Access-Control-Allow-Credentials', 'true');
+          preflightResponse.headers.set('Access-Control-Max-Age', '86400');
+          preflightResponse.headers.set('X-Request-Id', requestId);
+          return preflightResponse;
+        }
+
+        // For non-OPTIONS requests, add CORS headers to the response
+        const response = nextWithRequestId(requestId, {
+          'Access-Control-Allow-Origin': origin,
+          'Access-Control-Allow-Credentials': 'true',
+        });
+        return response;
+      }
     }
   }
 
