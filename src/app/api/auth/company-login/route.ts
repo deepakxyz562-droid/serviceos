@@ -147,6 +147,7 @@ export async function POST(request: NextRequest) {
         },
         customer: { id: customer.id, name: customer.name },
         token,
+        refreshToken: token,
       });
       response.cookies.set({ ...COOKIE_OPTIONS, value: token });
       return response;
@@ -373,6 +374,7 @@ export async function POST(request: NextRequest) {
       // cannot read cookies and depend on `token` being in the body —
       // matches the customer-login success path above.
       token,
+      refreshToken: token,
     });
     response.cookies.set({ ...COOKIE_OPTIONS, value: token });
     return response;

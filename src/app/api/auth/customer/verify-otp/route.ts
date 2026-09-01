@@ -283,6 +283,7 @@ export async function POST(request: NextRequest) {
             }
           : null,
         token,
+        refreshToken: token,
         portalToken,
       });
     }

@@ -40,6 +40,23 @@ function getJwtSecret(): string {
 const TOKEN_NAME = 'fieseros_session';
 const TOKEN_EXPIRY = '7d';
 
+/**
+ * Absolute session maximum lifetime (30 days).
+ *
+ * SESSION POLICY (Phase Security-2):
+ *   - Access JWT: 7-day sliding window (refresh extends it)
+ *   - Absolute maximum: 30 days from the ORIGINAL login (embedded as `originalIat`)
+ *   - After 30 days: user must re-authenticate, regardless of activity
+ *
+ * This prevents unbounded sliding sessions while still giving active users
+ * a seamless experience (they stay logged in for up to 30 days as long as
+ * they use the app at least once per 7 days).
+ *
+ * The `originalIat` claim is set at login and preserved across refreshes.
+ * The refresh endpoint rejects tokens where `now - originalIat > 30 days`.
+ */
+export const ABSOLUTE_SESSION_MAX_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -64,7 +81,17 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
-export function generateToken(user: AuthUser): string {
+/**
+ * Generate a JWT for a user.
+ *
+ * @param user - The user data to encode in the token
+ * @param originalIat - The ORIGINAL login timestamp (seconds since epoch).
+ *   - At login: omit this (defaults to now)
+ *   - At refresh: pass the existing token's originalIat to preserve the
+ *     absolute session age (prevents unbounded sliding sessions)
+ */
+export function generateToken(user: AuthUser, originalIat?: number): string {
+  const now = Math.floor(Date.now() / 1000);
   return jwt.sign(
     {
       id: user.id,
@@ -76,6 +103,10 @@ export function generateToken(user: AuthUser): string {
       avatar: user.avatar,
       isSuperAdmin: user.isSuperAdmin || false,
       employeeId: user.employeeId || null,
+      // Preserve the original login time across refreshes for absolute
+      // session max enforcement. At login this is now; at refresh it's
+      // carried over from the old token.
+      originalIat: originalIat || now,
       // Include phone for customer sessions so /api/ecommerce/orders can
       // filter by phone without an extra DB lookup. For non-customer
       // sessions this is undefined and gets omitted from the JWT.

@@ -111,6 +111,10 @@ export async function POST(request: NextRequest) {
     const token = generateToken(authUser);
 
     // Build response
+    // Note: `refreshToken` is included so the mobile app stores it in SecureStore
+    // and can call /api/auth/refresh when the access token expires.
+    // In the current single-token system, refreshToken === token (same JWT).
+    // This may change in a future multi-token refresh system.
     const response = NextResponse.json(
       {
         user: {
@@ -127,6 +131,7 @@ export async function POST(request: NextRequest) {
           lastLoginAt: new Date(),
         },
         token,
+        refreshToken: token, // same JWT — mobile stores this for /api/auth/refresh
         tenant: user.tenant
           ? {
               id: user.tenant.id,

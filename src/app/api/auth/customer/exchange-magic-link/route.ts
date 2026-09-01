@@ -218,6 +218,7 @@ export async function POST(request: Request) {
           }
         : null,
       token: jwt,
+      refreshToken: jwt,
     })
   } catch (error) {
     console.error('[exchange-magic-link] unexpected error:', error)
