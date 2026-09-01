@@ -38,6 +38,8 @@
 import { db } from '@/lib/db'
 import { sendJobNotification as _sendJobNotification } from '@/lib/whatsapp-notifications'
 import { issueCustomerMagicLink } from '@/lib/customer-magic-link'
+import { renderBookingConfirmationEmail } from '@/lib/email-templates/booking-confirmation'
+import { getAppUrl } from '@/lib/brand'
 
 // Re-export for backward compatibility (journey-engine imports from this module)
 export { _sendJobNotification as sendJobNotification }
@@ -291,16 +293,20 @@ const TEMPLATES: Record<NotificationTemplate, TemplateDefinition> = {
       '',
       'We will assign a technician shortly.',
     ].join('\n'),
-    getEmailBody: (d) => [
-      `<h2>📋 Booking Confirmed</h2>`,
-      `<p>Thank you for your booking.</p>`,
-      `<ul>`,
-      `<li><strong>Booking ID:</strong> ${d.jobNumber || 'N/A'}</li>`,
-      `<li><strong>Service:</strong> ${d.serviceTitle || d.jobTitle || 'N/A'}</li>`,
-      `<li><strong>Date:</strong> ${d.scheduledDate || 'TBD'}</li>`,
-      `</ul>`,
-      `<p>We will assign a technician shortly.</p>`,
-    ].join('\n'),
+    getEmailBody: (d) => renderBookingConfirmationEmail({
+      customerName: d.customerName,
+      jobNumber: d.jobNumber || 'N/A',
+      jobTitle: d.serviceTitle || d.jobTitle,
+      scheduledDate: d.scheduledDate,
+      scheduledTime: d.scheduledTime,
+      address: d.address || d.location,
+      customerPhone: d.customerPhone,
+      customerEmail: d.customerEmail,
+      viewBookingUrl: d.jobId ? `${getAppUrl()}/?view=jobs&job=${d.jobId}` : undefined,
+      tenantName: d.tenantName,
+      tenantPhone: d.tenantPhone,
+      tenantEmail: d.tenantEmail,
+    }),
     getSmsMessage: (d) =>
       `Booking confirmed: #${d.jobNumber || 'N/A'} - ${d.serviceTitle || d.jobTitle || 'Service'} on ${d.scheduledDate || 'TBD'}. We'll assign a technician soon.`,
     getInAppPayload: (d) => ({
@@ -507,6 +513,10 @@ async function sendWhatsApp(
  * and professional (instead of bare unstyled HTML).
  */
 function wrapEmailHtml(body: string, subject: string): string {
+  if (body.includes('<!DOCTYPE') || body.includes('<html')) {
+    return body;
+  }
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -514,35 +524,33 @@ function wrapEmailHtml(body: string, subject: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${subject}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:24px 0;">
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:none;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f1f5f9;padding:32px 16px;">
 <tr><td align="center">
-<table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);max-width:600px;width:100%;">
-<!-- Header -->
+<table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(15,23,42,0.06),0 1px 3px rgba(15,23,42,0.04);border:1px solid #e2e8f0;max-width:600px;width:100%;">
+<!-- Header Bar -->
 <tr>
-<td style="background-color:#10B981;padding:24px 32px;text-align:center;">
-<h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Fieseros</h1>
-<p style="margin:4px 0 0;color:#d1fae5;font-size:12px;font-weight:400;">The Operating System for Service Businesses</p>
+<td style="background:linear-gradient(90deg, #0f766e 0%, #10b981 100%);background-color:#0f766e;height:6px;line-height:6px;font-size:6px;">&nbsp;</td>
+</tr>
+<tr>
+<td style="padding:28px 36px 12px 36px;text-align:center;border-bottom:1px solid #f1f5f9;">
+<h1 style="margin:0;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.02em;">Fieseros</h1>
+<p style="margin:4px 0 0;color:#64748b;font-size:13px;font-weight:400;">The Operating System for Service Businesses</p>
 </td>
 </tr>
 <!-- Body -->
 <tr>
-<td style="padding:32px 32px 8px 32px;color:#1f2937;font-size:15px;line-height:1.6;">
+<td style="padding:28px 36px 16px 36px;color:#334155;font-size:15px;line-height:1.65;">
 ${body}
 </td>
 </tr>
 <!-- Footer -->
 <tr>
-<td style="padding:24px 32px 32px 32px;">
-<table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e5e7eb;padding-top:20px;">
-<tr>
-<td style="color:#9ca3af;font-size:12px;line-height:1.5;">
-<p style="margin:0 0 4px;">This is an automated message from Fieseros.</p>
-<p style="margin:0 0 4px;">Fieseros · <a href="https://fieseros.com" style="color:#10B981;text-decoration:none;">fieseros.com</a></p>
-<p style="margin:0;">© ${new Date().getFullYear()} Fieseros. All rights reserved.</p>
-</td>
-</tr>
-</table>
+<td style="padding:20px 36px 28px 36px;background-color:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;">
+<p style="color:#94a3b8;font-size:12px;margin:0 0 4px;line-height:1.5;">This is an automated notification from Fieseros.</p>
+<p style="color:#94a3b8;font-size:12px;margin:0;">
+  Powered by <a href="https://fieseros.com" style="color:#0f766e;text-decoration:none;font-weight:600;">Fieseros</a> &middot; <a href="https://fieseros.com" style="color:#0f766e;text-decoration:none;">fieseros.com</a>
+</p>
 </td>
 </tr>
 </table>

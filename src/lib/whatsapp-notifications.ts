@@ -14,6 +14,7 @@ import {
 } from '@/lib/email-templates/job-assignment'
 import { loadTenantEmailBranding, type TenantEmailBranding } from '@/lib/tenant-branding'
 import { renderPinEmailHtml } from '@/lib/email-templates/render-pin-email'
+import { renderBookingConfirmationEmail } from '@/lib/email-templates/booking-confirmation'
 import { getAppUrl } from '@/lib/brand'
 
 // ==========================================
@@ -681,11 +682,48 @@ async function sendEmailChannel(
   // Build an HTML body. Prefer the caller-provided emailHtml; otherwise wrap
   // the plain-text message in a simple <pre> block so line breaks render.
   const html = payload.emailHtml
-    || `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px;">
-  <h2 style="margin: 0 0 16px 0; color: #059669;">${escapeHtml(subject)}</h2>
-  <pre style="white-space: pre-wrap; font-family: inherit; font-size: 14px; line-height: 1.5; color: #374151; margin: 0;">${escapeHtml(payload.message)}</pre>
-  ${payload.actionUrl || payload.jobId ? `<p style="margin-top: 24px;"><a href="${escapeHtml(payload.actionUrl || (payload.jobId ? `/?view=jobs&job=${payload.jobId}` : '/'))}" style="display: inline-block; padding: 10px 18px; background: #059669; color: #fff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 600;">Open in Fieseros</a></p>` : ''}
-</div>`
+    || `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(subject)}</title>
+</head>
+<body style="font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background-color:#f1f5f9;margin:0;padding:0;width:100%;-webkit-text-size-adjust:none;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f1f5f9;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(15,23,42,0.06),0 1px 3px rgba(15,23,42,0.04);border:1px solid #e2e8f0;max-width:600px;width:100%;">
+          <tr>
+            <td style="background:linear-gradient(90deg, #0f766e 0%, #10b981 100%);background-color:#0f766e;height:6px;line-height:6px;font-size:6px;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="padding:32px 40px 16px;">
+              <h2 style="margin:0 0 12px 0;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.02em;">${escapeHtml(subject)}</h2>
+              <div style="color:#334155;font-size:15px;line-height:1.6;white-space:pre-wrap;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:18px 20px;margin:16px 0;">${escapeHtml(payload.message)}</div>
+              ${payload.actionUrl || payload.jobId ? `
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 12px;">
+                <tr>
+                  <td align="center">
+                    <a href="${escapeHtml(payload.actionUrl || (payload.jobId ? `${getAppUrl()}/?view=jobs&job=${payload.jobId}` : getAppUrl()))}" style="display:inline-block;background-color:#0f766e;color:#ffffff;font-weight:600;font-size:15px;text-decoration:none;padding:12px 32px;border-radius:8px;box-shadow:0 2px 4px rgba(15,118,110,0.2);">Open in Fieseros &rarr;</a>
+                  </td>
+                </tr>
+              </table>` : ''}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 40px 28px;background-color:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;">
+              <p style="color:#94a3b8;font-size:12px;margin:0;">
+                Powered by <a href="https://fieseros.com" style="color:#0f766e;text-decoration:none;font-weight:600;">Fieseros</a> &middot; The Operating System for Service Businesses
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
 
   try {
     const result = await sendEmail({
@@ -1550,6 +1588,7 @@ export async function notifyCustomerBookingConfirmed(
 
   const jobNumber = getJobNumber(job)
   const scheduledDate = formatDate(job.scheduledAt as string | null)
+  const appUrl = getAppUrl()
 
   const message = [
     '📋 Booking Confirmed',
@@ -1562,9 +1601,22 @@ export async function notifyCustomerBookingConfirmed(
     'We will assign a technician shortly.',
   ].join('\n')
 
+  const emailHtml = renderBookingConfirmationEmail({
+    customerName: (job.customerName as string) || undefined,
+    jobNumber,
+    jobTitle: (job.title as string) || undefined,
+    scheduledDate,
+    address: (job.address as string) || (job.location as string) || undefined,
+    customerPhone: customerPhone || undefined,
+    customerEmail: customerEmail || undefined,
+    viewBookingUrl: job.id ? `${appUrl}/?view=jobs&job=${job.id}` : `${appUrl}/?view=jobs&job=${jobNumber}`,
+    tenantName: (job.tenantName as string) || undefined,
+  })
+
   await sendJobNotification({
     to: customerPhone,
     message,
+    emailHtml,
     recipientName: (job.customerName as string) || undefined,
     recipientRole: 'customer',
     subject: `Booking Confirmed: #${jobNumber}`,
