@@ -96,10 +96,29 @@ export async function PATCH(
       }
     }
 
-    const ticket = await db.supportTicket.update({
-      where: { id },
+    // Security-3 TOCTOU fix: use updateMany with tenant scope so the mutation
+    // itself enforces the authorization boundary. If the ticket was moved to
+    // another tenant between our findUnique and update, this affects 0 rows.
+    // Super-admins can update any ticket; non-super-admins are constrained
+    // to their own tenant's tickets.
+    const updateFilter = isSuperAdmin
+      ? { id }
+      : { id, tenantId: user.tenantId };
+
+    const updateResult = await db.supportTicket.updateMany({
+      where: updateFilter,
       data: updateData,
     });
+
+    if (updateResult.count === 0) {
+      return NextResponse.json(
+        { error: 'Ticket not found or access denied' },
+        { status: 404 }
+      );
+    }
+
+    // Fetch the updated ticket to return
+    const ticket = await db.supportTicket.findFirst({ where: updateFilter });
 
     return NextResponse.json(ticket);
   } catch (error) {

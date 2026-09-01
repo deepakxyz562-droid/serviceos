@@ -250,6 +250,10 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     const tenantId = user.tenantId || 'default';
     const { id } = await params;
 
+    // Security-3 IDOR fix: use findFirst with tenant scope to verify ownership
+    // BEFORE any mutation. This closes the TOCTOU gap where a contact could
+    // be accessed by ID, checked, then deleted by ID without the tenant
+    // constraint on the delete itself.
     const existing = await db.contact.findFirst({ where: { id, tenantId } });
     if (!existing) {
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
@@ -265,7 +269,17 @@ export async function DELETE(request: NextRequest, { params }: Params) {
       select: { groupId: true },
     });
 
-    await db.contact.delete({ where: { id } });
+    // Security-3 TOCTOU fix: use deleteMany with tenant + workspace scope so
+    // the mutation itself enforces the authorization boundary. If someone
+    // races to move the contact to another tenant between our findFirst and
+    // delete, this deleteMany will affect 0 rows (not delete the wrong record).
+    const deleteResult = await db.contact.deleteMany({
+      where: { id, tenantId },
+    });
+
+    if (deleteResult.count === 0) {
+      return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+    }
 
     // Sync memberCount for each affected group
     for (const ag of affectedGroups) {
