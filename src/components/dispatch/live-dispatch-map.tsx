@@ -2039,20 +2039,33 @@ export default function LiveDispatchMap({
         </div>
       )}
 
-      {/* Hard error: API key missing or script failed to load */}
+      {/* Hard error: API key missing or script failed to load.
+          P0 fix: user-friendly error (not developer error) + Try again button.
+          The dispatch system remains operational even when the map is unavailable. */}
       {(loadError || apiKeyMissing) && (
         <div className="absolute inset-0 z-[1001] flex items-center justify-center p-6">
-          <div className="max-w-md rounded-md border border-red-200 bg-red-50/95 px-4 py-3 text-center shadow-md dark:border-red-900 dark:bg-red-950/80">
-            <p className="text-[12px] font-semibold text-red-700 dark:text-red-300">
-              {apiKeyMissing
-                ? 'Map unavailable — missing API key'
-                : 'Map failed to load'}
+          <div className="max-w-md rounded-lg border border-amber-200 bg-amber-50/95 px-6 py-5 text-center shadow-md dark:border-amber-900 dark:bg-amber-950/80">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50">
+              <svg className="h-6 w-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              Map unavailable
             </p>
-            <p className="mt-1 text-[11px] text-red-600/80 dark:text-red-400/80">
-              {apiKeyMissing
-                ? 'NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not configured. Set it in your environment to enable the dispatch map.'
-                : loadError}
+            <p className="mt-1.5 text-xs text-amber-700/80 dark:text-amber-300/80">
+              We couldn&rsquo;t connect to the live map. Your dispatch data is still available —
+              use the team list and job queue on the left.
             </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 transition-colors"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Try again
+            </button>
           </div>
         </div>
       )}

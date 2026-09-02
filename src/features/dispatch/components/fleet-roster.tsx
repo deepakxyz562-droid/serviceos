@@ -184,19 +184,22 @@ function EmployeeRow({
               </span>
             )}
           </div>
-          {/* GPS health indicator */}
+          {/* GPS health indicator — separated from employee status.
+              P0-2: Employee status is shown above (Available/En Route/On Job).
+              GPS status is shown here independently (Live/Stale/Unavailable).
+              P0-3: Human-friendly labels instead of 'offline · 0.0' */}
           <div className="flex items-center gap-1 mt-1">
             {!gps ? (
-              <span className="flex items-center gap-0.5 text-[9px] text-gray-400" title="No GPS signal">
-                <MapPin className="size-2.5" /> no GPS
+              <span className="flex items-center gap-0.5 text-[9px] text-gray-400" title="No GPS signal received">
+                <MapPin className="size-2.5" /> GPS unavailable
               </span>
             ) : offline ? (
-              <span className="flex items-center gap-0.5 text-[9px] text-red-500" title="Offline">
-                <MapPin className="size-2.5" /> offline
+              <span className="flex items-center gap-0.5 text-[9px] text-red-500" title={`Last seen ${timeAgo(e.lastSeenAt)}`}>
+                <MapPin className="size-2.5" /> GPS unavailable · {timeAgo(e.lastSeenAt)}
               </span>
             ) : stale ? (
-              <span className="flex items-center gap-0.5 text-[9px] text-amber-500" title={`Last ping ${timeAgo(e.lastSeenAt)}`}>
-                <MapPin className="size-2.5" /> stale {timeAgo(e.lastSeenAt)}
+              <span className="flex items-center gap-0.5 text-[9px] text-amber-500" title={`Last location ${timeAgo(e.lastSeenAt)}`}>
+                <MapPin className="size-2.5" /> GPS stale · {timeAgo(e.lastSeenAt)}
               </span>
             ) : (
               <span className="flex items-center gap-0.5 text-[9px] text-emerald-600" title={`Live · ${timeAgo(e.lastSeenAt)}`}>
@@ -204,7 +207,7 @@ function EmployeeRow({
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
                 </span>
-                live
+                GPS live · {timeAgo(e.lastSeenAt)}
               </span>
             )}
             <span className="text-muted-foreground/40">·</span>

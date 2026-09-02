@@ -156,8 +156,8 @@ export function FleetPane({
             />
           )}
 
-          {/* Unassigned jobs queue */}
-          <div className="pt-2 border-t">
+          {/* Unassigned jobs queue — P0-4: data-job-queue attr for scroll target */}
+          <div className="pt-2 border-t" data-job-queue>
             <div className="flex items-center gap-1.5 px-1 py-1">
               <Briefcase className="size-3 text-muted-foreground" />
               <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex-1">

@@ -136,6 +136,9 @@ export function DispatchView() {
 
   const mapControllerRef = useRef<LiveTechnicianMapController | null>(null);
 
+  // P0-6: Track last poll time for connection state indicator
+  const lastPollAt = useRef<Date | null>(null);
+
   // ─── Live position ref (FIX A+B) ────────────────────────────────────
   //
   // GPS positions are held in this ref, NOT in React state. This is the
@@ -439,7 +442,12 @@ export function DispatchView() {
     };
 
     pollPositions();
-    const interval = setInterval(pollPositions, 5000);
+    // P0-6: Track last successful poll for the connection state indicator
+    lastPollAt.current = new Date();
+    const interval = setInterval(() => {
+      pollPositions();
+      lastPollAt.current = new Date();
+    }, 5000);
     return () => {
       active = false;
       clearInterval(interval);
@@ -864,20 +872,28 @@ export function DispatchView() {
                   className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border ${
                     realtimeConnected
                       ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/50 dark:border-emerald-800 dark:text-emerald-300'
-                      : 'bg-muted/50 border-border text-muted-foreground'
+                      : 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-300'
                   }`}
                 >
                   <span className="relative flex size-2">
                     {realtimeConnected && (
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                     )}
-                    <span className={`relative inline-flex size-2 rounded-full ${realtimeConnected ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                    <span className={`relative inline-flex size-2 rounded-full ${realtimeConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                   </span>
-                  <span className="font-medium">{realtimeConnected ? 'Live' : 'Offline'}</span>
+                  <span className="font-medium">{realtimeConnected ? 'Live' : 'Reconnecting'}</span>
+                  {/* P0-6: Show last updated time when disconnected */}
+                  {!realtimeConnected && lastPollAt.current && (
+                    <span className="text-[10px] text-amber-600/80 dark:text-amber-400/80">
+                      · updated {timeAgoShort(lastPollAt.current)}
+                    </span>
+                  )}
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                {realtimeConnected ? 'Realtime connected — GPS pings update markers live' : 'Realtime disconnected — falling back to 20s polling'}
+                {realtimeConnected
+                  ? 'Realtime connected — GPS pings update markers live'
+                  : 'Realtime disconnected — using 5s polling fallback. Data is still updating.'}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -890,7 +906,15 @@ export function DispatchView() {
           <Button
             size="sm"
             className="h-8 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white shadow-md"
-            onClick={handleSmartAssignAll}
+            onClick={() => {
+              // P0-5: Confirmation before bulk auto-assignment
+              if (pendingJobs.length === 0) return;
+              const jobList = pendingJobs.map(j => `• ${j.title || j.jobNumber || j.id}`).join('\n');
+              const confirmed = window.confirm(
+                `Auto-assign ${pendingJobs.length} job(s)?\n\n${jobList}\n\nWe'll assign technicians based on availability, distance, and service area.`
+              );
+              if (confirmed) handleSmartAssignAll();
+            }}
             disabled={smartAssignAllLoading || pendingJobs.length === 0}
           >
             {smartAssignAllLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
@@ -901,12 +925,25 @@ export function DispatchView() {
 
       {/* KPI bar */}
       <div className="flex items-center gap-2 flex-wrap mb-2 shrink-0">
-        <KpiPill icon={Users} label="Fleet" value={kpis.total} color="text-slate-600" />
-        <KpiPill icon={ArrowRight} label="On-Duty" value={kpis.onDuty} color="text-emerald-600" />
-        <KpiPill icon={Navigation} label="En-Route" value={kpis.enRoute} color="text-sky-600" />
-        <KpiPill icon={Activity} label="On-Job" value={kpis.onJob} color="text-amber-600" />
+        <KpiPill icon={Users} label="Team" value={kpis.total} color="text-slate-600" />
         <KpiPill icon={CircleDot} label="Available" value={kpis.available} color="text-teal-600" />
-        <KpiPill icon={ArrowRight} label="Unassigned" value={kpis.unassigned} color="text-orange-600" />
+        <KpiPill icon={Navigation} label="En Route" value={kpis.enRoute} color="text-sky-600" />
+        <KpiPill icon={Activity} label="On Job" value={kpis.onJob} color="text-amber-600" />
+        {/* P0-4: Make Unassigned KPI clickable — filters the job queue */}
+        <button
+          type="button"
+          onClick={() => {
+            // Scroll to the fleet pane's job queue + highlight unassigned
+            const queueEl = document.querySelector('[data-job-queue]');
+            if (queueEl) queueEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }}
+          className="flex items-center gap-1.5 rounded-md border border-orange-300 bg-orange-50 px-2 py-0.5 text-xs hover:bg-orange-100 transition-colors dark:bg-orange-950/50 dark:border-orange-700"
+          title="Click to view unassigned jobs"
+        >
+          <ArrowRight className="size-3 text-orange-600" />
+          <span className="font-semibold text-orange-700 dark:text-orange-300">{kpis.unassigned}</span>
+          <span className="text-[10px] text-orange-600 dark:text-orange-400">Unassigned</span>
+        </button>
         {attentionItems.length > 0 && (
           <button
             type="button"
@@ -1052,4 +1089,13 @@ export function DispatchView() {
       )}
     </div>
   );
+}
+
+// P0-6: Compact time-ago formatter for the connection state indicator
+function timeAgoShort(date: Date): string {
+  const secs = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (secs < 5) return 'just now';
+  if (secs < 60) return `${secs}s ago`;
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  return `${Math.floor(secs / 3600)}h ago`;
 }
