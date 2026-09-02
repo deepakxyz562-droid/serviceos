@@ -354,6 +354,8 @@ export async function PUT(request: NextRequest) {
         where: { id },
         data: { suspendedAt: new Date(), planStatus: 'suspended' },
       });
+      // Gate H: recompute eligibility (suspended → ineligible)
+      try { await (await import('@/lib/verification/verification-engine')).recomputeMarketplaceEligibility(id); } catch {}
       return NextResponse.json({ message: 'Tenant suspended successfully' });
     }
 
@@ -362,6 +364,8 @@ export async function PUT(request: NextRequest) {
         where: { id },
         data: { suspendedAt: null, planStatus: 'active' },
       });
+      // Gate H: recompute eligibility (activated → may regain access)
+      try { await (await import('@/lib/verification/verification-engine')).recomputeMarketplaceEligibility(id); } catch {}
       return NextResponse.json({ message: 'Tenant activated successfully' });
     }
 

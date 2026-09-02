@@ -53,19 +53,22 @@ const MARKETPLACE_ACCESS_OK = new Set(['receive_bookings', 'priority']);
  * Compute the tenant's profile completion percentage (0-100).
  *
  * Weighted checklist (totals 100%):
- *   business name         5%
- *   industry set          5%
- *   description ≥ 100ch  10%
+ *   business name         10%
+ *   industry set          10%
+ *   description ≥ 100ch  15%
  *   ≥ 3 services         15%
  *   ≥ 1 image            10%
  *   business hours set   10%
  *   service areas set    10%
- *   pricing type set      5%
- *   call-out fee set      5%
- *   insurance info set   10%
- *   VAT number set        5%
- *   licence number set    5%
- *   Stripe connected      5%
+ *   pricing type set     10%
+ *   call-out fee set     10%
+ *
+ * Gate H: Insurance, VAT, licence, and Stripe have been REMOVED from the
+ * profile completion score. They are COMPLIANCE fields, not PROFILE QUALITY
+ * fields. A provider shouldn't reach 80% "profile complete" partly by
+ * entering insurance data — profile completion should reflect how complete
+ * the PUBLIC profile is (description, services, photos, hours, areas).
+ * Compliance is tracked separately via VerificationEvidence.
  *
  * Returns 0 if the tenant cannot be found.
  */
@@ -97,14 +100,14 @@ export async function computeProfileCompletion(tenantId: string): Promise<number
 
     let pct = 0;
 
-    // business name (5%)
-    if (tenant.name && tenant.name.trim().length > 0) pct += 5;
+    // business name (10%)
+    if (tenant.name && tenant.name.trim().length > 0) pct += 10;
 
-    // industry set (5%)
-    if (tenant.industry && tenant.industry.trim().length > 0) pct += 5;
+    // industry set (10%)
+    if (tenant.industry && tenant.industry.trim().length > 0) pct += 10;
 
-    // description ≥ 100 chars (10%)
-    if (tenant.description && tenant.description.trim().length >= 100) pct += 10;
+    // description ≥ 100 chars (15%)
+    if (tenant.description && tenant.description.trim().length >= 100) pct += 15;
 
     // ≥ 3 services (15%) — count active+inactive services owned by tenant
     try {
@@ -138,28 +141,16 @@ export async function computeProfileCompletion(tenantId: string): Promise<number
       pct += 10;
     }
 
-    // pricing type set (5%)
-    if (tenant.pricingType && tenant.pricingType.trim().length > 0) pct += 5;
+    // pricing type set (10%)
+    if (tenant.pricingType && tenant.pricingType.trim().length > 0) pct += 10;
 
-    // call-out fee set (5%) — explicitly set to a positive value
-    if (typeof tenant.callOutFee === 'number' && tenant.callOutFee > 0) pct += 5;
+    // call-out fee set (10%) — explicitly set to a positive value
+    if (typeof tenant.callOutFee === 'number' && tenant.callOutFee > 0) pct += 10;
 
-    // insurance info set (10%) — provider OR policy number present
-    if (
-      (tenant.insuranceProvider && tenant.insuranceProvider.trim().length > 0) ||
-      (tenant.insurancePolicyNumber && tenant.insurancePolicyNumber.trim().length > 0)
-    ) {
-      pct += 10;
-    }
-
-    // VAT number set (5%)
-    if (tenant.vatNumber && tenant.vatNumber.trim().length > 0) pct += 5;
-
-    // licence number set (5%)
-    if (tenant.licenceNumber && tenant.licenceNumber.trim().length > 0) pct += 5;
-
-    // Stripe connected (5%)
-    if (tenant.stripeConnected) pct += 5;
+    // Gate H: insurance, VAT, licence, and Stripe are NO LONGER part of
+    // profile completion. They're compliance/verification fields tracked
+    // separately via VerificationEvidence. Profile completion reflects how
+    // complete the PUBLIC profile is (description, services, photos, etc.).
 
     // Clamp to [0, 100] (defensive — should never exceed)
     return Math.max(0, Math.min(100, pct));

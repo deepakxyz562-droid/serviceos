@@ -22,9 +22,12 @@ import {
   Upload,
   X,
   AlertCircle,
+  Phone,
+  KeyRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/client-auth';
 
 /**
  * ClaimBusinessModal
@@ -90,6 +93,89 @@ export function ClaimBusinessModal({
   const [documents, setDocuments] = React.useState<UploadedDoc[]>([]);
   const [docNote, setDocNote] = React.useState('');
   const [uploading, setUploading] = React.useState(false);
+
+  // ── Gate D: Anchor-based verification state ────────────────────────
+  // Fetches the listing's available verification anchors (masked phone/email)
+  // and offers OTP-based verification against the listing's EXISTING contact.
+  const [anchors, setAnchors] = React.useState<{
+    phone?: { available: boolean; masked: string };
+    email?: { available: boolean; masked: string };
+  } | null>(null);
+  const [anchorsLoading, setAnchorsLoading] = React.useState(false);
+  const [otpChannel, setOtpChannel] = React.useState<'phone' | 'email' | null>(null);
+  const [otpCode, setOtpCode] = React.useState('');
+  const [otpSending, setOtpSending] = React.useState(false);
+  const [otpVerifying, setOtpVerifying] = React.useState(false);
+  const [otpSent, setOtpSent] = React.useState(false);
+  const [otpVerified, setOtpVerified] = React.useState(false);
+
+  // Fetch anchors when modal opens
+  React.useEffect(() => {
+    if (!open) return;
+    setAnchorsLoading(true);
+    authFetch(`/api/marketplace/claim/anchors/${tenantId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setAnchors(data);
+      })
+      .catch(() => {})
+      .finally(() => setAnchorsLoading(false));
+  }, [open, tenantId]);
+
+  // Send OTP to the listing's anchor (phone or email)
+  async function sendAnchorOtp(channel: 'phone' | 'email') {
+    setOtpChannel(channel);
+    setOtpSending(true);
+    setOtpSent(false);
+    try {
+      const res = await authFetch('/api/marketplace/claim/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId, channel }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setOtpSent(true);
+        toast.success(data.message || `Code sent to ${data.maskedTarget}`);
+      } else {
+        toast.error(data.error || 'Failed to send code');
+        setOtpChannel(null);
+      }
+    } catch {
+      toast.error('Network error');
+      setOtpChannel(null);
+    } finally {
+      setOtpSending(false);
+    }
+  }
+
+  // Verify the OTP code
+  async function verifyAnchorOtp() {
+    if (!otpCode.trim()) {
+      toast.error('Enter the code');
+      return;
+    }
+    setOtpVerifying(true);
+    try {
+      const res = await authFetch('/api/marketplace/claim/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId, code: otpCode }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setOtpVerified(true);
+        toast.success('Verified! You can now submit your claim.');
+        setOtpCode('');
+      } else {
+        toast.error(data.error || 'Verification failed');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setOtpVerifying(false);
+    }
+  }
 
   // Pre-fill email from tenant record (masked) when available
   React.useEffect(() => {
@@ -172,10 +258,11 @@ export function ClaimBusinessModal({
 
     const hasGoogle = showGoogle && gbpUrl && gbpName;
     const hasDocs = showDocs && documents.length > 0;
+    const hasAnchorOtp = otpVerified;
 
-    if (!hasGoogle && !hasDocs) {
+    if (!hasGoogle && !hasDocs && !hasAnchorOtp) {
       setError(
-        'Please provide either a Google Business Profile URL or upload a verification document.',
+        'Please verify your business using one of the methods above (phone/email OTP, Google Business Profile, or document upload).',
       );
       return;
     }
@@ -275,6 +362,105 @@ export function ClaimBusinessModal({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* ── Gate D: Anchor-based verification ─────────────────────────── */}
+          {/* The strongest path: verify control of the listing's EXISTING
+              phone/email. This is better than pasting a Google URL. */}
+          {anchorsLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking available verification methods...
+            </div>
+          ) : anchors && (anchors.phone?.available || anchors.email?.available) ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 space-y-3 dark:bg-emerald-950/20">
+              <div>
+                <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                  Verify your business
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Verify control of this business&rsquo;s contact info for instant approval.
+                </p>
+              </div>
+
+              {otpVerified ? (
+                <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">
+                  <CheckCircle2 className="h-4 w-4" />
+                  {otpChannel === 'phone' ? 'Phone' : 'Email'} verified — submit your claim below.
+                </div>
+              ) : (
+                <>
+                  {/* Anchor buttons */}
+                  <div className="flex flex-col gap-2">
+                    {anchors.phone?.available && !otpSent && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => sendAnchorOtp('phone')}
+                        disabled={otpSending || otpChannel !== null}
+                        className="gap-1.5 justify-start"
+                      >
+                        {otpSending && otpChannel === 'phone' ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Phone className="h-3.5 w-3.5" />
+                        )}
+                        Send code to {anchors.phone.masked}
+                      </Button>
+                    )}
+                    {anchors.email?.available && !otpSent && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => sendAnchorOtp('email')}
+                        disabled={otpSending || otpChannel !== null}
+                        className="gap-1.5 justify-start"
+                      >
+                        {otpSending && otpChannel === 'email' ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Mail className="h-3.5 w-3.5" />
+                        )}
+                        Send code to {anchors.email.masked}
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* OTP input */}
+                  {otpSent && (
+                    <div className="space-y-2">
+                      <Label className="text-xs">
+                        Enter the code sent to{' '}
+                        {otpChannel === 'phone' ? anchors.phone?.masked : anchors.email?.masked}
+                      </Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={otpCode}
+                          onChange={(e) => setOtpCode(e.target.value)}
+                          placeholder="6-digit code"
+                          maxLength={6}
+                          className="flex-1"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={verifyAnchorOtp}
+                          disabled={otpVerifying}
+                          className="gap-1.5"
+                        >
+                          {otpVerifying ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <KeyRound className="h-3 w-3" />
+                          )}
+                          Verify
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          ) : null}
+
           {/* ── Business Email (required) ─────────────────────────────────── */}
           <div className="space-y-2">
             <Label htmlFor="claimant-email" className="flex items-center gap-1.5">

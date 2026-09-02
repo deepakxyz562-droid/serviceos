@@ -33,14 +33,22 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
   }
 
   // Create tenant with onboardingCompleted=false so the SaaS wizard triggers.
-  // Set claimed=true + listingTier='claimed' so the new business renders as a
-  // full card on the marketplace (not an "Unclaimed" minimal card). This
-  // matches the email/password registration flow in /api/auth/register.
+  //
+  // GATE H FIX: Do NOT set claimed=true or marketplaceOptIn=true here.
+  // Previously this set claimed=true immediately, which made the business
+  // show as "claimed" on the marketplace WITHOUT any verification — a Google
+  // login is NOT proof of business ownership.
+  //
+  // The user should:
+  //   1. Complete the SaaS onboarding wizard (enters business name + city)
+  //   2. The wizard calls /api/business/match to check for existing listings
+  //   3. If a match is found → the user can CLAIM the existing listing
+  //      (which sets claimed=true via the claim flow, with verification)
+  //   4. If no match → a new tenant is created (but still NOT claimed=true
+  //      until the user completes verification)
   //
   // signupMode='crm_trial' distinguishes this from a marketplace-only claim
-  // (signupMode='listing_only', listingTier='claimed_free'). Previously this
-  // field was left NULL, making Google-registered tenants look like "legacy"
-  // tenants and breaking downstream signupMode filters.
+  // (signupMode='listing_only', listingTier='claimed_free').
   const tenant = await db.tenant.create({
     data: {
       name: businessName,
@@ -51,13 +59,12 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
       trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
       onboardingCompleted: false,
       onboardingStep: 1,
-      claimed: true,
-      claimedAt: new Date(),
-      listingTier: 'claimed',
+      claimed: false,
+      listingTier: 'none',
       signupMode: 'crm_trial',
-      marketplaceOptIn: true,
-      marketplaceTermsAcceptedAt: new Date(),
-      publicProfileEnabled: true,
+      marketplaceOptIn: false,
+      marketplaceTermsAcceptedAt: null,
+      publicProfileEnabled: false,
     },
   });
 

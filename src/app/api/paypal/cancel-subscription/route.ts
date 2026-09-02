@@ -103,6 +103,7 @@ export async function POST(request: NextRequest) {
       });
 
       cache.invalidateByPrefix('subscription:');
+      try { await (await import('@/lib/verification/verification-engine')).recomputeMarketplaceEligibility(tenantId); } catch {}
 
       await logBillingEvent({
         tenantId,
@@ -159,6 +160,7 @@ export async function POST(request: NextRequest) {
       });
 
       cache.invalidateByPrefix('subscription:');
+      try { await (await import('@/lib/verification/verification-engine')).recomputeMarketplaceEligibility(tenantId); } catch {}
 
       await logBillingEvent({
         tenantId,

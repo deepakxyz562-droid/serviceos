@@ -49,6 +49,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
+import { VerificationDashboard } from './verification-dashboard';
 
 interface TenantData {
   id: string;
@@ -65,6 +66,8 @@ interface TenantData {
   stripeConnected?: boolean;
   stripeAccountId?: string | null;
   stripePayoutsEnabled?: boolean;
+  representativeDeclaration?: boolean;
+  currency?: string;
 }
 
 interface VerificationComplianceSectionProps {
@@ -124,13 +127,12 @@ export function VerificationComplianceSection({ tenantId }: VerificationComplian
     if (!data) return;
     setSaving(true);
     try {
-      // Auto-verify: business verified when licence is filled
-      const shouldBusinessVerified = !!form.licenceNumber.trim();
-      // Auto-verify: insurance verified when provider + policy are filled
-      const shouldInsuranceVerified = !!form.insuranceProvider.trim() && !!form.insurancePolicyNumber.trim();
-
+      // Phase 1.2: Do NOT auto-set businessVerified/insuranceVerified from
+      // field entry. Entering a licence number saves the number — it does
+      // NOT verify the business. Verification comes from evidence (Google
+      // OAuth, OTP, document review), not from typing into a form.
       const res = await authFetch(`/api/tenants/${tenantId}?XTransformPort=3000`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           licenceNumber: form.licenceNumber || null,
@@ -139,19 +141,14 @@ export function VerificationComplianceSection({ tenantId }: VerificationComplian
           callOutFee: Number(form.callOutFee) || 0,
           insuranceProvider: form.insuranceProvider || null,
           insurancePolicyNumber: form.insurancePolicyNumber || null,
-          // Auto-set verification flags
-          businessVerified: shouldBusinessVerified,
-          insuranceVerified: shouldInsuranceVerified,
         }),
       });
 
       if (res.ok) {
         const updated = await res.json();
         setData(updated);
-        toast.success('Verification details saved', {
-          description: shouldBusinessVerified
-            ? 'Business verification updated.'
-            : 'Fill in your licence number to get business-verified.',
+        toast.success('Details saved', {
+          description: 'Your business details have been saved. Verification status is reviewed separately.',
         });
       } else {
         toast.error('Failed to save. Please try again.');
@@ -163,24 +160,30 @@ export function VerificationComplianceSection({ tenantId }: VerificationComplian
     }
   }
 
-  // Self-declaration KYC
-  async function handleIdentityVerify() {
+  // Phase 3: Representative declaration (NOT KYC)
+  // The user attests they are authorized to represent the business.
+  // This is recorded with a timestamp + user ID for audit. It is NOT
+  // identity verification — it's an attestation that contributes to
+  // the verification profile but is never sufficient by itself.
+  async function handleRepresentativeDeclaration() {
     if (!data) return;
     setSaving(true);
     try {
       const res = await authFetch(`/api/tenants/${tenantId}?XTransformPort=3000`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identityVerified: true }),
+        body: JSON.stringify({
+          representativeDeclaration: true,
+        }),
       });
       if (res.ok) {
         const updated = await res.json();
         setData(updated);
-        toast.success('Identity verified', {
-          description: 'Your identity has been self-verified.',
+        toast.success('Declaration recorded', {
+          description: 'Your representative declaration has been recorded.',
         });
       } else {
-        toast.error('Failed to verify identity.');
+        toast.error('Failed to record declaration.');
       }
     } catch {
       toast.error('Network error.');
@@ -228,54 +231,12 @@ export function VerificationComplianceSection({ tenantId }: VerificationComplian
 
   return (
     <div className="space-y-6">
-      {/* ── Eligibility summary ────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-emerald-600" />
-            Marketplace Eligibility
-          </CardTitle>
-          <CardDescription>
-            Complete these steps to start receiving marketplace leads and bookings.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <EligibilityItem
-              label="Active Subscription"
-              done={false}
-              hint="Upgrade from trial to a paid plan"
-            />
-            <EligibilityItem
-              label="Identity Verified"
-              done={!!data.identityVerified}
-              hint="Self-declaration KYC"
-            />
-            <EligibilityItem
-              label="Business Verified"
-              done={!!data.businessVerified}
-              hint="Enter your licence number below"
-            />
-            <EligibilityItem
-              label="Insurance Verified"
-              done={!!data.insuranceVerified}
-              hint="Enter insurance details below"
-            />
-            <EligibilityItem
-              label="Stripe Connected"
-              done={!!data.stripeConnected}
-              hint="Connect Stripe for payouts"
-            />
-            <EligibilityItem
-              label="Profile ≥ 80%"
-              done={false}
-              hint="Fill out your public hub profile"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      {/* ── Verification Dashboard (Phase 9-10 + Gate B UI) ─────────────── */}
+      {/* Dynamic verification options — phone OTP, email OTP, Google Business,
+          representative declaration. Shows trust level + available methods. */}
+      <VerificationDashboard tenantId={tenantId} />
 
-      {/* ── Business Registration ──────────────────────────────────────── */}
+      {/* ── Business Registration (submitted information — not verification) ── */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -402,39 +363,40 @@ export function VerificationComplianceSection({ tenantId }: VerificationComplian
         </CardContent>
       </Card>
 
-      {/* ── Identity Verification (KYC) ────────────────────────────────── */}
+      {/* ── Business Representative Declaration (Phase 3) ─────────── */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Award className="h-5 w-5 text-emerald-600" />
-            Identity Verification (KYC)
+            Business Representative Declaration
           </CardTitle>
           <CardDescription>
-            Confirm that you are the authorized owner of this business.
+            Confirm that you are authorized to represent this business. This is
+            an attestation — not identity verification (KYC).
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {data.identityVerified ? (
+          {data.representativeDeclaration ? (
             <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">
               <CheckCircle2 className="h-4 w-4" />
-              Identity verified
+              Representative declaration confirmed
             </div>
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                By clicking below, you confirm that you are the authorized owner or
+                By clicking below, you confirm that you are the owner or authorized
                 representative of <strong>{data.name}</strong> and that the information
                 you have provided is accurate.
               </p>
               <Button
-                onClick={handleIdentityVerify}
+                onClick={handleRepresentativeDeclaration}
                 disabled={saving}
                 className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
               >
                 {saving ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Verifying...</>
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Recording...</>
                 ) : (
-                  <><ShieldCheck className="h-4 w-4" /> I confirm I am the business owner</>
+                  <><ShieldCheck className="h-4 w-4" /> I confirm I am authorized to represent this business</>
                 )}
               </Button>
             </div>
@@ -502,26 +464,6 @@ export function VerificationComplianceSection({ tenantId }: VerificationComplian
             <><Save className="h-4 w-4" /> Save Verification Details</>
           )}
         </Button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Eligibility item helper ────────────────────────────────────────────────
-
-function EligibilityItem({ label, done, hint }: { label: string; done: boolean; hint: string }) {
-  return (
-    <div className="flex items-start gap-2 rounded-lg border border-border bg-card p-3">
-      {done ? (
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-      ) : (
-        <div className="mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 border-muted-foreground/30" />
-      )}
-      <div className="min-w-0">
-        <p className={`text-sm font-medium ${done ? 'text-foreground' : 'text-muted-foreground'}`}>
-          {label}
-        </p>
-        <p className="text-xs text-muted-foreground">{hint}</p>
       </div>
     </div>
   );

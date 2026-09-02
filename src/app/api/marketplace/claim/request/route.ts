@@ -294,6 +294,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Phase 4.2: Verify the target is an eligible marketplace listing ──
+    // The claim target must be an unclaimed marketplace listing (listingTier
+    // 'free' or 'claimed_free'), NOT a CRM tenant (listingTier 'claimed' or
+    // 'none'). This prevents claiming non-marketplace tenants.
+    const eligibleListingTiers = ['free', 'claimed_free', 'none'];
+    if (tenant.listingTier && !eligibleListingTiers.includes(tenant.listingTier)) {
+      return NextResponse.json(
+        { error: 'This business is not eligible for claiming (not a marketplace listing)' },
+        { status: 400 },
+      );
+    }
+
+    // ── Phase 4.3: Prevent tenant takeover ──────────────────────────────
+    // If the claimant already owns a DIFFERENT tenant, don't allow them to
+    // claim this one (which would overwrite their tenantId at completion).
+    // Multi-business membership is a future feature — for now, reject.
+    if (user.tenantId && user.tenantId !== tenantId) {
+      return NextResponse.json(
+        {
+          error:
+            'You already own a different business. To manage multiple businesses, please contact support.',
+        },
+        { status: 409 },
+      );
+    }
+
     // Prevent duplicate pending claims by the same user for the same tenant
     const existingPending = await db.claimRequest.findFirst({
       where: {
@@ -411,20 +437,21 @@ export async function POST(request: NextRequest) {
 
     const appUrl = getAppUrl(request);
 
-    // ── Auto-approve path: claim the business + send approval email ───────
+    // ── Phase 4.1: DO NOT set tenant.claimed=true at auto-approve time ──
+    // Previously this set tenant.claimed=true immediately. If the email was
+    // lost or the token expired, the listing was stuck "claimed" with no
+    // completed owner account. Now: only set status='auto_approved' + send
+    // the email. The tenant is claimed at completion (claim/complete POST).
     if (status === 'auto_approved' && completionToken) {
-      await db.tenant.update({
-        where: { id: tenantId },
-        data: {
-          claimed: true,
-          claimedAt: new Date(),
-          claimedById: user.id,
-          listingTier: 'claimed_free',
-          googleBusinessProfileUrl:
-            verificationMethod === 'google' ? String(google!.gbpUrl) : undefined,
-          googleBusinessVerified: verificationMethod === 'google',
-        },
-      });
+      // Record the Google Business URL for reference, but DO NOT mark claimed
+      if (verificationMethod === 'google') {
+        await db.tenant.update({
+          where: { id: tenantId },
+          data: {
+            googleBusinessProfileUrl: String(google!.gbpUrl),
+          },
+        });
+      }
 
       const emailCtx: ClaimEmailContext = {
         businessName: tenant.name,

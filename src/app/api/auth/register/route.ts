@@ -70,8 +70,14 @@ export async function POST(request: NextRequest) {
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
         marketplaceOptIn: false,
         marketplaceTermsAcceptedAt: null,
-        claimed: true,
-        listingTier: 'claimed',
+        // GATE H FIX: claimed=false + listingTier='none' — a new registration
+        // is NOT a claimed business. The user completes verification (phone
+        // OTP, Google Business Profile, etc.) before the business shows as
+        // claimed on the marketplace. The onboarding wizard will call
+        // /api/business/match to check for existing listings the user can
+        // claim instead of creating a duplicate.
+        claimed: false,
+        listingTier: 'none',
         signupMode: 'crm_trial',
       },
     });

@@ -368,6 +368,9 @@ async function handleSubscriptionActivated(body: Record<string, unknown>) {
     data: { planStatus: 'active' },
   });
 
+  // Gate H: recompute cached marketplace eligibility after subscription activation
+  try { await (await import('@/lib/verification/verification-engine')).recomputeMarketplaceEligibility(local.tenantId); } catch {}
+
   invalidateCache(local.tenantId);
 
   await logBillingEvent({
@@ -428,6 +431,8 @@ async function handleSubscriptionCancelled(body: Record<string, unknown>) {
     where: { id: local.tenantId },
     data: { planStatus: 'cancelled' },
   });
+  // Gate H: recompute eligibility (cancelled subscription → likely ineligible)
+  try { await (await import('@/lib/verification/verification-engine')).recomputeMarketplaceEligibility(local.tenantId); } catch {}
   invalidateCache(local.tenantId);
 
   await logBillingEvent({
@@ -456,6 +461,8 @@ async function handleSubscriptionExpired(body: Record<string, unknown>) {
     where: { id: local.tenantId },
     data: { planStatus: 'expired' },
   });
+  // Gate H: recompute eligibility (expired subscription → likely ineligible)
+  try { await (await import('@/lib/verification/verification-engine')).recomputeMarketplaceEligibility(local.tenantId); } catch {}
   invalidateCache(local.tenantId);
 }
 
@@ -533,6 +540,8 @@ async function handlePaymentSaleCompleted(body: Record<string, unknown>) {
       planEndsAt: newEndDate,
     },
   });
+  // Gate H: recompute eligibility (payment success → may regain eligibility)
+  try { await (await import('@/lib/verification/verification-engine')).recomputeMarketplaceEligibility(local.tenantId); } catch {}
 
   // Record the payment
   const invoiceNumber = await nextInvoiceNumber();

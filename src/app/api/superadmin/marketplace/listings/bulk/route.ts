@@ -198,6 +198,10 @@ export async function DELETE(request: NextRequest) {
           },
         });
         deleted = res.count;
+        // Gate H: recompute eligibility for each affected tenant (opt-out → ineligible)
+        for (const tid of ids) {
+          try { await (await import('@/lib/verification/verification-engine')).recomputeMarketplaceEligibility(tid); } catch {}
+        }
       } catch (err) {
         console.error('[bulk DELETE soft] updateMany failed:', err);
         throw err;

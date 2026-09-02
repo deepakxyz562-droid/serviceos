@@ -486,7 +486,10 @@ export async function PATCH(
       insuranceProvider,
       insurancePolicyNumber,
       insuranceExpiryDate,
-      insuranceVerified,
+      // NOTE: insuranceVerified is NO LONGER client-writable (Phase 1.3).
+      // It's set by the verification engine / admin review, not by typing
+      // a policy number. The destructuring is removed to prevent clients
+      // from setting it.
       // Operations
       employeesCount,
       languagesJson,
@@ -496,10 +499,13 @@ export async function PATCH(
       // Marketplace
       marketplaceOptIn,
       marketplaceTermsAcceptedAt,
-      // Verification flags
-      identityVerified,
-      businessVerified,
-      stripeConnected,
+      // Phase 3: Representative declaration (client CAN set this — it's
+      // an attestation, not a verification claim).
+      representativeDeclaration,
+      // NOTE: identityVerified, businessVerified, stripeConnected are NO
+      // LONGER client-writable (Phase 1.3). They're set by the verification
+      // engine, Google OAuth, Stripe webhook, or admin review — not by the
+      // provider's own save action.
       // Misc — allow onboarding step + completion sync too
       onboardingStep,
       onboardingCompleted,
@@ -549,7 +555,8 @@ export async function PATCH(
         updateData.insuranceExpiryDate = isNaN(parsed.getTime()) ? null : parsed;
       }
     }
-    if (insuranceVerified !== undefined) updateData.insuranceVerified = !!insuranceVerified;
+    // Phase 1.3: insuranceVerified is NO LONGER set from client input.
+    // It's set by the verification engine / admin review only.
 
     // Operations
     if (employeesCount !== undefined) {
@@ -601,10 +608,20 @@ export async function PATCH(
       }
     }
 
-    // Verification flags
-    if (identityVerified !== undefined) updateData.identityVerified = !!identityVerified;
-    if (businessVerified !== undefined) updateData.businessVerified = !!businessVerified;
-    if (stripeConnected !== undefined) updateData.stripeConnected = !!stripeConnected;
+    // Phase 1.3: Verification booleans are NO LONGER client-writable.
+    // identityVerified, businessVerified, stripeConnected are set by:
+    //   - identityVerified: KYC provider (future) or admin
+    //   - businessVerified: verification engine (Google/website/document)
+    //   - stripeConnected: Stripe webhook
+    // NOT by the provider's own PATCH request.
+
+    // Phase 3: Representative declaration (client CAN set — it's an attestation)
+    if (representativeDeclaration !== undefined && representativeDeclaration) {
+      updateData.representativeDeclaration = true;
+      updateData.declaredAt = new Date();
+      // declaredById is set from the auth context, not client input
+      updateData.declaredById = authUser.id;
+    }
 
     // Onboarding meta
     if (onboardingStep !== undefined) updateData.onboardingStep = Number(onboardingStep) || 1;
@@ -670,6 +687,18 @@ export async function PATCH(
       console.error('[tenants PATCH] computeProfileCompletion failed:', err);
     }
 
+    // Gate H: Recompute cached marketplaceEligible after any settings change.
+    // The PATCH handler touches marketplaceOptIn, termsAccepted, AND profile
+    // fields — all of which affect eligibility. Without this, the cached
+    // boolean goes stale when a provider toggles opt-in or fills in their
+    // profile. Best-effort — non-fatal if it fails.
+    try {
+      const { recomputeMarketplaceEligibility } = await import('@/lib/verification/verification-engine');
+      await recomputeMarketplaceEligibility(id);
+    } catch (err) {
+      console.error('[tenants PATCH] recomputeMarketplaceEligibility failed:', err);
+    }
+
     // Revalidate the public Business Hub page (description/business hours may
     // have changed — ISR should pick up the update immediately).
     try {
@@ -732,6 +761,10 @@ export async function PATCH(
         identityVerified: tenant.identityVerified,
         businessVerified: tenant.businessVerified,
         stripeConnected: tenant.stripeConnected,
+        representativeDeclaration: tenant.representativeDeclaration,
+        declaredAt: tenant.declaredAt,
+        googleBusinessVerified: tenant.googleBusinessVerified,
+        googleBusinessLocationId: tenant.googleBusinessLocationId,
         profileCompletionPct,
         onboardingStep: tenant.onboardingStep,
         onboardingCompleted: tenant.onboardingCompleted,

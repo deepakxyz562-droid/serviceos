@@ -74,6 +74,27 @@ model Tenant {
   stripeConnected          Boolean   @default(false)
   stripeAccountId          String?   // Stripe Connect account ID (acct_...)
   stripePayoutsEnabled     Boolean   @default(false)
+  // ── Phase 3: Representative Declaration ──────────────────────────────
+  // The user attests they are authorized to represent this business.
+  // This is NOT identity verification (KYC) — it's an attestation that
+  // contributes to the verification profile but is never sufficient alone.
+  // identityVerified stays false until real KYC is performed.
+  representativeDeclaration Boolean  @default(false)
+  declaredAt                DateTime?
+  declaredById              String?
+  // ── Phase 2: Google Business verification ────────────────────────────
+  // Set when Google Business Profile OAuth confirms the user manages a
+  // location matching this tenant. Uses the business.manage scope.
+  googleBusinessVerified    Boolean  @default(false)
+  googleBusinessLocationId   String?
+  googleBusinessVerifiedAt   DateTime?
+  googleBusinessVerifiedById String?
+  // ── Gate H: Cached marketplace eligibility ──────────────────────────
+  // Recomputed when verification status or profile completion changes.
+  // The instant booking hot path reads this ONE boolean instead of running
+  // the full 9-check eligibility function on every booking request.
+  marketplaceEligible      Boolean  @default(false)
+  marketplaceEligibleComputedAt DateTime?
   profileCompletionPct     Int       @default(0)  // 0-100, computed from onboarding fields
   marketplaceOptIn         Boolean   @default(false)
   marketplaceTermsAcceptedAt DateTime?
@@ -269,6 +290,8 @@ model Tenant {
   // Marketplace claim requests — a tenant can have many claim attempts
   // (only one will be approved; the rest are rejected).
   claimRequests       ClaimRequest[]
+  // Phase 2: Verification evidence rows (phone/email/Google/website/document)
+  verificationEvidence VerificationEvidence[]
   // Customers (tenant-scoped — mirrors Lead/Job/Invoice tenant scoping)
   customers           Customer[]
   // Brand Brain — AI content context (brand voice, persona, USPs)
@@ -6602,6 +6625,50 @@ model AiBillingCounter {
 }
 
 /// Marketplace business-claim request. Created when a user clicks
+/// Phase 2: VerificationEvidence — the source of truth for business verification.
+///
+/// Each row records one piece of evidence that a user has verified control of
+/// a business-linked channel (phone, email, Google Business Profile, website,
+/// document). The verification engine evaluates these rows to derive trust levels.
+///
+/// The old booleans on Tenant (businessVerified, identityVerified, etc.) are
+/// kept for backward compatibility but are NO LONGER the primary source of truth.
+/// They're derived/cached from these evidence rows.
+///
+/// type values:
+///   PHONE            → OTP verified against the listing's phone
+///   EMAIL            → OTP verified against the listing's email
+///   GOOGLE_BUSINESS → Google Business Profile OAuth (business.manage scope)
+///   WEBSITE          → DNS TXT / HTML meta verification
+///   DOCUMENT         → uploaded business document (admin review)
+///   REPRESENTATIVE   → attestation of authority (not KYC)
+///
+/// status values:
+///   PENDING   → awaiting verification (e.g. OTP sent, document uploaded)
+///   VERIFIED  → verification succeeded
+///   REJECTED  → admin rejected the evidence
+///   EXPIRED   → verification TTL exceeded
+model VerificationEvidence {
+  id         String   @id @default(cuid())
+  tenantId   String
+  claimId    String?  // linked to ClaimRequest if this evidence is for a claim
+  type       String   // PHONE | EMAIL | GOOGLE_BUSINESS | WEBSITE | DOCUMENT | REPRESENTATIVE
+  status     String   @default("PENDING") // PENDING | VERIFIED | REJECTED | EXPIRED
+  target     String?  // masked channel (e.g. "+91 98******42", "c****@abc.com")
+  metadata   String   @default("{}") // JSON: { matchScore, googleLocationId, otpHash, etc. }
+  verifiedAt DateTime?
+  expiresAt  DateTime? // for OTP-based evidence (5-min TTL)
+  verifiedById String? // the user who completed the verification
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([claimId])
+  @@index([type, status])
+}
+
 /// "Claim this business" on an unclaimed provider detail page. The request
 /// records which verification method the user chose (phone/email/google/
 /// document), the verification payload, and the review state.

@@ -131,33 +131,67 @@ export async function POST(request: NextRequest) {
     const existingUser = await getAuthUser();
 
     if (existingUser) {
-      // ── Path B: Attach business to existing user ────────────────────────
-      // The user already has an account — just attach this tenant to them.
-      // This handles the case where a user is logged in and clicks the claim
-      // link from their email.
-      await db.$transaction([
-        db.user.update({
-          where: { id: existingUser.id },
-          data: { tenantId: claim.tenantId },
-        }),
-        db.tenant.update({
-          where: { id: claim.tenantId },
-          data: {
-            claimedById: existingUser.id,
-            signupMode: 'listing_only',
-            listingTier: 'claimed_free',
+      // ── Phase 4.3: Prevent tenant takeover ────────────────────────────
+      // If the logged-in user already owns a DIFFERENT tenant, don't silently
+      // overwrite their tenantId. They must log out + use the claim link
+      // from an incognito session, OR contact support for multi-business.
+      if (existingUser.tenantId && existingUser.tenantId !== claim.tenantId) {
+        return NextResponse.json(
+          {
+            error:
+              'You are logged into a different business account. Please log out and click the claim link again, or contact support to manage multiple businesses.',
+            needsLogout: true,
           },
-        }),
-        db.claimRequest.update({
-          where: { id: claim.id },
-          data: {
-            status: 'completed',
-            completedAt: new Date(),
-            completionToken: null, // single-use
-            claimantUserId: existingUser.id,
-          },
-        }),
-      ]);
+          { status: 409 },
+        );
+      }
+
+      // ── Path B: Attach business to existing user (transactional) ──────
+      // Phase 4.4 + Gate 1.5 fix: Atomic completion — user update + tenant
+      // claim + claim status change all happen in one transaction.
+      //
+      // Gate 1.5 fix (TOCTOU race): the tenant.update uses a conditional
+      // where clause `claimed: false` — if another user already claimed
+      // the tenant between our pre-check and this transaction, the update
+      // affects 0 rows and Prisma throws P2025 (record not found). We
+      // catch that and return a clear error instead of silently failing.
+      try {
+        await db.$transaction([
+          db.user.update({
+            where: { id: existingUser.id },
+            data: { tenantId: claim.tenantId },
+          }),
+          db.tenant.update({
+            where: { id: claim.tenantId, claimed: false }, // ← conditional: only if NOT already claimed
+            data: {
+              claimed: true,           // ← NOW set claimed (was deferred from request)
+              claimedAt: new Date(),
+              claimedById: existingUser.id,
+              signupMode: 'listing_only',
+              listingTier: 'claimed_free',
+            },
+          }),
+          db.claimRequest.update({
+            where: { id: claim.id },
+            data: {
+              status: 'completed',
+              completedAt: new Date(),
+              completionToken: null, // single-use
+              claimantUserId: existingUser.id,
+            },
+          }),
+        ]);
+      } catch (txErr) {
+        // Prisma P2025 = record not found → the conditional `claimed: false`
+        // matched 0 rows, meaning another user claimed it first.
+        if (txErr instanceof Error && txErr.message.includes('P2025')) {
+          return NextResponse.json(
+            { error: 'This business was just claimed by someone else. Please refresh and try another business.' },
+            { status: 409 },
+          );
+        }
+        throw txErr;
+      }
 
       logger.info(
         { component: 'claim', claimId: claim.id, userId: existingUser.id },
@@ -252,28 +286,42 @@ export async function POST(request: NextRequest) {
       data: { ownerId: newUser.id },
     });
 
-    // Mark the tenant as claimed by this new user, set listing-only mode
-    await db.$transaction([
-      db.tenant.update({
-        where: { id: claim.tenantId },
-        data: {
-          claimed: true,
-          claimedAt: new Date(),
-          claimedById: newUser.id,
-          signupMode: 'listing_only',
-          listingTier: 'claimed_free',
-        },
-      }),
-      db.claimRequest.update({
-        where: { id: claim.id },
-        data: {
-          status: 'completed',
-          completedAt: new Date(),
-          completionToken: null, // single-use
-          claimantUserId: newUser.id,
-        },
-      }),
-    ]);
+    // Mark the tenant as claimed by this new user, set listing-only mode.
+    // Gate 1.5 fix: conditional where clause `claimed: false` prevents
+    // the TOCTOU race (two users completing the same claim simultaneously).
+    try {
+      await db.$transaction([
+        db.tenant.update({
+          where: { id: claim.tenantId, claimed: false }, // ← conditional
+          data: {
+            claimed: true,
+            claimedAt: new Date(),
+            claimedById: newUser.id,
+            signupMode: 'listing_only',
+            listingTier: 'claimed_free',
+          },
+        }),
+        db.claimRequest.update({
+          where: { id: claim.id },
+          data: {
+            status: 'completed',
+            completedAt: new Date(),
+            completionToken: null, // single-use
+            claimantUserId: newUser.id,
+          },
+        }),
+      ]);
+    } catch (txErr) {
+      // Prisma P2025 = record not found → the conditional `claimed: false`
+      // matched 0 rows, meaning another user claimed it first.
+      if (txErr instanceof Error && txErr.message.includes('P2025')) {
+        return NextResponse.json(
+          { error: 'This business was just claimed by someone else. Please refresh and try another business.' },
+          { status: 409 },
+        );
+      }
+      throw txErr;
+    }
 
     // Mark sitemap dirty — the tenant's claim status changed, affecting its URL
     await markSitemapDirtyForTenant(claim.tenantId).catch(() => {});

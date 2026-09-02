@@ -143,9 +143,10 @@ export async function POST(request: NextRequest) {
   }
 
   // ── 3. Verify the provider tenant exists and is marketplace-eligible ──
-  // Use the cached eligibility gates on the Tenant row for the read path
-  // (the full `checkMarketplaceEligibility` function does extra plan +
-  // subscription lookups and is too expensive for a hot booking path).
+  // Gate H: Now reads the cached `marketplaceEligible` boolean (recomputed
+  // by the verification engine when evidence changes) instead of the old
+  // 2-check shortcut (marketplaceOptIn && !suspendedAt). This is one
+  // boolean read — fast for the hot booking path.
   let provider: {
     id: string;
     name: string;
@@ -153,12 +154,8 @@ export async function POST(request: NextRequest) {
     currency: string;
     email: string | null;
     phone: string | null;
-    marketplaceOptIn: boolean;
+    marketplaceEligible: boolean;
     suspendedAt: Date | null;
-    identityVerified: boolean;
-    businessVerified: boolean;
-    insuranceVerified: boolean;
-    stripeConnected: boolean;
     planStatus: string;
   } | null;
   try {
@@ -171,12 +168,8 @@ export async function POST(request: NextRequest) {
         currency: true,
         email: true,
         phone: true,
-        marketplaceOptIn: true,
+        marketplaceEligible: true,
         suspendedAt: true,
-        identityVerified: true,
-        businessVerified: true,
-        insuranceVerified: true,
-        stripeConnected: true,
         planStatus: true,
       },
     });
@@ -194,12 +187,12 @@ export async function POST(request: NextRequest) {
   // Matches the browse-page gate: a provider is bookable if they opted into
   // the marketplace and are not suspended. Verification flags (identity,
   // business, insurance, Stripe) are no longer hard requirements — they're
-  // rendered as trust badges on the browse grid so customers can see how
-  // verified a pro is, but a provider who hasn't finished Stripe Connect or
-  // insurance upload is still bookable (payment is settled on completion, not
-  // at booking time). This keeps the booking button working for ALL providers
-  // visible in the marketplace instead of silently 409-ing for 6 of 8.
-  const eligible = provider.marketplaceOptIn && !provider.suspendedAt;
+  // Gate H: Use the cached `marketplaceEligible` boolean (recomputed by the
+  // verification engine when evidence/verification status changes) instead of
+  // the old 2-check shortcut (marketplaceOptIn && !suspendedAt). This ensures
+  // instant booking uses the SAME eligibility rules as the quote/emergency flows
+  // (which call checkMarketplaceEligibility) — no more inconsistent enforcement.
+  const eligible = provider.marketplaceEligible && !provider.suspendedAt;
   if (!eligible) {
     return NextResponse.json(
       { error: 'Provider is not currently available for marketplace bookings.' },
