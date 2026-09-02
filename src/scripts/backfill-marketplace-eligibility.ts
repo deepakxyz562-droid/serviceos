@@ -20,67 +20,69 @@
  *
  * ⚠️ DO NOT run the production db:push without running this backfill first.
  */
-import { recomputeMarketplaceEligibility } from '../src/lib/verification/verification-engine';
-import { db } from '../src/lib/db';
+import { recomputeMarketplaceEligibility } from '@/lib/verification/verification-engine';
+import { db } from '@/lib/db';
 
 async function main() {
   console.log('=== Marketplace Eligibility Backfill ===\n');
 
-  // Count before
-  const beforeCount = await db.tenant.count({
-    where: { marketplaceEligible: true },
-  });
-  console.log(`Before: ${beforeCount} tenants with marketplaceEligible=true\n`);
+  let beforeCount = 0;
+  try {
+    beforeCount = await db.tenant.count({
+      where: { marketplaceEligible: true },
+    });
+    console.log(`Before: ${beforeCount} tenants with marketplaceEligible=true\n`);
+  } catch {
+    console.log('Before: marketplaceEligible column not yet active in DB.\n');
+  }
 
-  // Fetch all tenants (process in batches of 100)
-  const total = await db.tenant.count();
-  console.log(`Processing ${total} tenants...\n`);
+  // Priority 1: All claimed or opted-in tenants (the real businesses)
+  const priorityTenants = await db.tenant.findMany({
+    where: {
+      OR: [
+        { claimed: true },
+        { marketplaceOptIn: true },
+      ],
+    },
+    select: { id: true, name: true, claimed: true, marketplaceOptIn: true },
+  });
+
+  console.log(`Found ${priorityTenants.length} priority (claimed / opted-in) tenants to evaluate...\n`);
 
   let processed = 0;
   let eligible = 0;
   let ineligible = 0;
   let errors = 0;
 
-  const batchSize = 100;
-  let skip = 0;
-
-  while (skip < total) {
-    const tenants = await db.tenant.findMany({
-      skip,
-      take: batchSize,
-      select: { id: true, name: true },
-    });
-
-    for (const tenant of tenants) {
-      try {
-        const isEligible = await recomputeMarketplaceEligibility(tenant.id);
-        if (isEligible) {
-          eligible++;
-        } else {
-          ineligible++;
-        }
-      } catch (err) {
-        errors++;
-        console.error(`  ✗ ${tenant.name} (${tenant.id}):`, err instanceof Error ? err.message : err);
+  for (const tenant of priorityTenants) {
+    try {
+      const isEligible = await recomputeMarketplaceEligibility(tenant.id);
+      if (isEligible) {
+        eligible++;
+        console.log(`  ✅ [ELIGIBLE] ${tenant.name} (${tenant.id})`);
+      } else {
+        ineligible++;
+        console.log(`  ⚪ [INELIGIBLE] ${tenant.name} (${tenant.id})`);
       }
-      processed++;
-      if (processed % 100 === 0) {
-        console.log(`  Processed ${processed}/${total}...`);
-      }
+    } catch (err) {
+      errors++;
+      console.error(`  ✗ [ERROR] ${tenant.name} (${tenant.id}):`, err instanceof Error ? err.message : err);
     }
-
-    skip += batchSize;
+    processed++;
   }
 
   // Count after
-  const afterCount = await db.tenant.count({
-    where: { marketplaceEligible: true },
-  });
+  let afterCount = eligible;
+  try {
+    afterCount = await db.tenant.count({
+      where: { marketplaceEligible: true },
+    });
+  } catch {}
 
   console.log('\n=== Results ===');
   console.log(`Before: ${beforeCount} eligible`);
   console.log(`After: ${afterCount} eligible`);
-  console.log(`Processed: ${processed}`);
+  console.log(`Priority Tenants Evaluated: ${processed}`);
   console.log(`Eligible: ${eligible}`);
   console.log(`Ineligible: ${ineligible}`);
   console.log(`Errors: ${errors}`);
