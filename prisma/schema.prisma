@@ -150,12 +150,10 @@ model Tenant {
   //   'listing_only' → free marketplace listing only (no CRM trial) → mini
   //                  1-step onboarding wizard + simplified provider dashboard
   signupMode            String?
-  // Google Business Profile — user-pasted URL (link-only integration). When set
-  // AND googleBusinessVerified=true, we trust Google's verification and the
-  // claim flow can auto-approve. Rating/review counts stay on Tenant.rating /
-  // Tenant.reviewCount (optionally synced by an admin or future GBP API job).
+  // Google Business Profile — user-pasted URL (link-only integration).
+  // Rating/review counts stay on Tenant.rating / Tenant.reviewCount
+  // (optionally synced by an admin or future GBP API job).
   googleBusinessProfileUrl String? @default("")
-  googleBusinessVerified   Boolean @default(false)
 
   // ── Outreach (Superadmin → Tenant one-to-one email) ───────────────────
   // When true, the entire business is opted out of ALL outreach emails
