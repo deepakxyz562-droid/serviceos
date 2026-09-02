@@ -623,68 +623,106 @@ let googleMapsLoaderPromise: Promise<void> | null = null;
 /**
  * Load the Google Maps JS API once via a script tag injected into <head>.
  * Returns a cached promise — subsequent callers await the same load.
- * Resolves once `window.google.maps` is available.
+ * Resolves once `google.maps.Map` and `google.maps.marker` are fully imported.
  */
-function loadGoogleMapsApi(): Promise<void> {
+async function loadGoogleMapsApi(): Promise<void> {
   if (typeof window === 'undefined') {
-    return Promise.reject(new Error('Google Maps cannot be loaded server-side'));
+    throw new Error('Google Maps cannot be loaded server-side');
   }
-  const existing = (window as unknown as { google?: { maps?: unknown } }).google;
-  if (existing?.maps) return Promise.resolve();
-  if (googleMapsLoaderPromise) return googleMapsLoaderPromise;
+
+  const existing = (window as unknown as { google?: { maps?: { importLibrary?: (name: string) => Promise<unknown>; Map?: unknown } } }).google;
+  if (existing?.maps?.Map) {
+    if (existing.maps.importLibrary) {
+      await Promise.all([
+        existing.maps.importLibrary('maps'),
+        existing.maps.importLibrary('marker'),
+      ]);
+    }
+    return;
+  }
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
   if (!apiKey) {
-    return Promise.reject(
-      new Error('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set — cannot load Google Maps JS API'),
-    );
+    throw new Error('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set — cannot load Google Maps JS API');
   }
 
-  googleMapsLoaderPromise = new Promise<void>((resolve, reject) => {
-    const prior = document.getElementById('google-maps-js-api') as HTMLScriptElement | null;
-    if (prior) {
-      // Script already injected (maybe by another instance) — poll for readiness.
-      const check = () => {
-        const g = (window as unknown as { google?: { maps?: unknown } }).google;
-        if (g?.maps) resolve();
-        else setTimeout(check, 50);
+  if (!googleMapsLoaderPromise) {
+    googleMapsLoaderPromise = new Promise<void>((resolve, reject) => {
+      const prior = document.getElementById('google-maps-js-api') as HTMLScriptElement | null;
+      if (prior) {
+        // Script already injected — poll for importLibrary and resolve
+        const check = async () => {
+          const g = (window as unknown as { google?: { maps?: { importLibrary?: (name: string) => Promise<unknown>; Map?: unknown } } }).google;
+          if (g?.maps?.importLibrary) {
+            try {
+              await Promise.all([
+                g.maps.importLibrary('maps'),
+                g.maps.importLibrary('marker'),
+              ]);
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          } else if (g?.maps?.Map) {
+            resolve();
+          } else {
+            setTimeout(check, 50);
+          }
+        };
+        void check();
+        return;
+      }
+
+      const params = new URLSearchParams({
+        key: apiKey,
+        v: 'weekly',
+        libraries: 'marker',
+        loading: 'async',
+      });
+      if (mapId) params.set('map_ids', mapId);
+
+      const script = document.createElement('script');
+      script.id = 'google-maps-js-api';
+      script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
+      script.async = true;
+      script.defer = true;
+
+      script.onload = async () => {
+        try {
+          const g = (window as unknown as { google?: { maps?: { importLibrary?: (name: string) => Promise<unknown>; Map?: unknown } } }).google;
+          if (g?.maps?.importLibrary) {
+            await Promise.all([
+              g.maps.importLibrary('maps'),
+              g.maps.importLibrary('marker'),
+            ]);
+          }
+          resolve();
+        } catch (err) {
+          googleMapsLoaderPromise = null;
+          reject(err);
+        }
       };
-      check();
-      return;
-    }
-    const params = new URLSearchParams({
-      key: apiKey,
-      v: 'weekly',
-      libraries: 'marker',
-      loading: 'async',
+
+      script.onerror = () => {
+        googleMapsLoaderPromise = null;
+        reject(new Error('Failed to load Google Maps JS API script'));
+      };
+
+      document.head.appendChild(script);
     });
-    if (mapId) params.set('map_ids', mapId);
+  }
 
-    const script = document.createElement('script');
-    script.id = 'google-maps-js-api';
-    script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
-    script.async = true;
-    script.defer = true;
+  await googleMapsLoaderPromise;
 
-    const startPolling = () => {
-      const check = () => {
-        const g = (window as unknown as { google?: { maps?: unknown } }).google;
-        if (g?.maps) resolve();
-        else setTimeout(check, 50);
-      };
-      check();
-    };
-
-    script.onload = startPolling;
-    script.onerror = () => {
-      googleMapsLoaderPromise = null; // allow a future retry
-      reject(new Error('Failed to load Google Maps JS API script'));
-    };
-    document.head.appendChild(script);
-  });
-
-  return googleMapsLoaderPromise;
+  // Double check library readiness
+  const g = (window as unknown as { google?: { maps?: { importLibrary?: (name: string) => Promise<unknown> } } }).google;
+  if (g?.maps?.importLibrary) {
+    await Promise.all([
+      g.maps.importLibrary('maps'),
+      g.maps.importLibrary('marker'),
+    ]);
+  }
 }
 
 // ─── Component ────────────────────────────────────────────────────────────
