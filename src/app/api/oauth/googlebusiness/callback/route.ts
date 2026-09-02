@@ -89,9 +89,13 @@ export async function GET(request: NextRequest) {
       scopes: true,
     },
   });
-  if (!cred || !cred.clientId || !cred.clientSecret) {
+
+  const clientId = cred?.clientId || process.env.GOOGLE_BUSINESS_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = cred?.clientSecret || process.env.GOOGLE_BUSINESS_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
     return renderErrorPage(
-      'Platform credentials for Google Business Profile are not configured.',
+      'Platform credentials for Google Business Profile are not configured in DB or environment variables.',
     );
   }
 
@@ -99,7 +103,7 @@ export async function GET(request: NextRequest) {
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
     getAppUrlFromRequest(request);
-  const redirectUri = cred.redirectUri
+  const redirectUri = cred?.redirectUri
     ? cred.redirectUri
     : `${appUrl}/api/oauth/googlebusiness/callback`;
 
@@ -118,8 +122,8 @@ export async function GET(request: NextRequest) {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
-        client_id: cred.clientId,
-        client_secret: cred.clientSecret,
+        client_id: clientId,
+        client_secret: clientSecret,
         code,
         redirect_uri: redirectUri,
       }),

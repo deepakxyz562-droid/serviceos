@@ -53,13 +53,16 @@ export async function GET(request: NextRequest) {
     where: { provider: 'googlebusiness', status: 'active' },
     select: { id: true, clientId: true, redirectUri: true, scopes: true },
   });
-  if (!cred || !cred.clientId) {
+
+  const clientId = cred?.clientId || process.env.GOOGLE_BUSINESS_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+
+  if (!clientId) {
     return NextResponse.json(
       {
         error: 'PLATFORM_NOT_CONFIGURED',
         message:
           'A platform admin must register Google Business Profile OAuth credentials ' +
-          '(IntegrationCredential, provider=googlebusiness) before tenants can connect.',
+          '(IntegrationCredential, provider=googlebusiness or GOOGLE_CLIENT_ID in .env) before tenants can connect.',
       },
       { status: 503 },
     );
@@ -95,12 +98,12 @@ export async function GET(request: NextRequest) {
   // ── 5. Build Google consent URL ────────────────────────────────────────
   const meta = OAUTH_PROVIDERS.googlebusiness;
   const authUrl = new URL(meta.authUrl);
-  authUrl.searchParams.set('client_id', cred.clientId);
+  authUrl.searchParams.set('client_id', clientId);
   authUrl.searchParams.set('redirect_uri', callbackUrl);
   authUrl.searchParams.set('response_type', 'code');
   // Use the scopes from the credential if set, otherwise the canonical
   // GBP scope from OAUTH_PROVIDERS (business.manage).
-  authUrl.searchParams.set('scope', cred.scopes || meta.scopes);
+  authUrl.searchParams.set('scope', cred?.scopes || meta.scopes);
   authUrl.searchParams.set('access_type', 'offline'); // force refresh_token
   authUrl.searchParams.set('prompt', 'consent'); // force fresh refresh_token
   authUrl.searchParams.set('state', state);
