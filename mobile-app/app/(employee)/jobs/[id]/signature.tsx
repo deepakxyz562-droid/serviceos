@@ -29,6 +29,7 @@ import {
   Image,
   Platform,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
@@ -43,7 +44,6 @@ import {
   ImageOff,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -117,11 +117,15 @@ export default function JobSignatureScreen() {
 
   const hasInk = strokes.length > 0 || currentStroke.length > 0;
 
-  // Pan gesture: native + web compatible via runOnJS.
+  // Pan gesture: native + web compatible via runOnJS. Disabled while a
+  // signature is uploading so the user can't alter the strokes mid-upload
+  // (which would desync the rendered PNG from what's actually being saved).
+  const isUploading = uploadSignature.isPending;
   const panGesture = useMemo(
     () =>
       Gesture.Pan()
         .runOnJS(true)
+        .enabled(!isUploading)
         .onBegin((e) => {
           setCurrentStroke([{ x: e.x, y: e.y }]);
         })
@@ -138,7 +142,7 @@ export default function JobSignatureScreen() {
             return [];
           });
         }),
-    []
+    [isUploading]
   );
 
   const handleClear = useCallback(() => {
@@ -366,26 +370,54 @@ export default function JobSignatureScreen() {
 
         {/* Canvas controls */}
         <View className="mt-3 flex-row gap-2">
-          <View className="flex-1">
-            <Button variant="outline" onPress={handleClear} disabled={!hasInk}>
-              <View className="flex-row items-center justify-center">
-                <Trash2 size={16} color={COLORS.primary} />
-                <Text className="ml-2 font-semibold text-primary-700">Clear</Text>
-              </View>
-            </Button>
-          </View>
-          <View className="flex-1">
-            <Button
-              onPress={handleSave}
-              loading={uploadSignature.isPending}
-              disabled={!hasInk}
-            >
-              <View className="flex-row items-center justify-center">
-                <Check size={16} color="#fff" />
-                <Text className="ml-2 font-semibold text-white">Save</Text>
-              </View>
-            </Button>
-          </View>
+          <Pressable
+            onPress={handleClear}
+            disabled={!hasInk || uploadSignature.isPending}
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 12,
+              borderRadius: 12,
+              borderWidth: 2,
+              borderColor: COLORS.primary,
+              backgroundColor: 'transparent',
+              opacity: !hasInk || uploadSignature.isPending ? 0.5 : 1,
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear signature"
+          >
+            <Trash2 size={16} color={COLORS.primary} />
+            <Text style={{ marginLeft: 6, fontSize: 14, fontWeight: '600', color: COLORS.primary }}>
+              Clear
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={handleSave}
+            disabled={!hasInk || uploadSignature.isPending}
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 12,
+              borderRadius: 12,
+              backgroundColor: COLORS.primary,
+              opacity: !hasInk || uploadSignature.isPending ? 0.6 : 1,
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={uploadSignature.isPending ? 'Saving signature' : 'Save signature'}
+          >
+            {uploadSignature.isPending ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Check size={16} color="#FFFFFF" />
+            )}
+            <Text style={{ marginLeft: 6, fontSize: 14, fontWeight: '600', color: '#FFFFFF' }}>
+              {uploadSignature.isPending ? 'Saving…' : 'Save'}
+            </Text>
+          </Pressable>
         </View>
 
         <Text className="mt-3 text-xs text-muted-foreground">

@@ -48,9 +48,14 @@ export async function PATCH(
     const now = new Date().toISOString();
     const item = items[idx];
 
-    if (typeof body.checked === 'boolean') {
-      item.checked = body.checked;
-      if (body.checked) {
+    // Accept both `checked` (backend canonical) and `completed` (mobile app
+    // alias). The mobile app sends `{ completed: boolean }` while the PWA
+    // sends `{ checked: boolean }`. Without this fallback, mobile toggles
+    // were silently ignored — the DB item stayed unchecked.
+    const checkedValue = typeof body.checked === 'boolean' ? body.checked : body.completed;
+    if (typeof checkedValue === 'boolean') {
+      item.checked = checkedValue;
+      if (checkedValue) {
         item.checkedAt = now;
         item.checkedBy = user.id;
         item.checkedByName = user.name || user.email || null;

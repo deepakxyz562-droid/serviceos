@@ -55,9 +55,18 @@ export async function POST(
       return NextResponse.json({ error: 'Job is already completed' }, { status: 400 });
     }
 
-    if (job.status !== 'in_progress' && job.status !== 'assigned') {
+    // Accept all active employee lifecycle states. The employee lifecycle
+    // route writes canonical statuses like 'working' (start_work / resume),
+    // 'paused', 'arrived', 'travelling', 'accepted' — not 'in_progress'.
+    // Previously this check only allowed 'in_progress' | 'assigned', which
+    // rejected the common 'working' state and broke mobile job completion.
+    const COMPLETABLE_STATUSES = [
+      'assigned', 'accepted', 'travelling', 'arrived',
+      'working', 'in_progress', 'on_site', 'paused',
+    ];
+    if (!COMPLETABLE_STATUSES.includes(job.status)) {
       return NextResponse.json(
-        { error: `Cannot complete a job with status "${job.status}". Job must be in progress or assigned.` },
+        { error: `Cannot complete a job with status "${job.status}". Job must be in an active state.` },
         { status: 400 }
       );
     }
