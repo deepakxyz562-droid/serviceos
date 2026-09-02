@@ -56,7 +56,7 @@ import {
   Activity, Loader2,
   Sparkles,
   X,
-  PanelRightOpen, Locate, Layers,
+  PanelRightOpen, Locate,
   Users,
   Navigation, ArrowRight, AlertTriangle,
   CircleDot,
@@ -66,7 +66,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { useRealtime } from '@/hooks/use-realtime';
-import type { LiveTechnicianMapController } from '@/components/dispatch/live-technician-map';
+import type { LiveTechnicianMapController } from '@/components/dispatch/live-dispatch-map';
 import { apiUrl } from '@/lib/api';
 import dynamic from 'next/dynamic';
 
@@ -89,8 +89,8 @@ import {
 import { AttentionPanel } from '@/features/dispatch/components/attention-panel';
 import { KpiPill } from '@/features/dispatch/components/kpi-pill';
 
-const LiveTechnicianMap = dynamic(
-  () => import('@/components/dispatch/live-technician-map'),
+const LiveDispatchMap = dynamic(
+  () => import('@/components/dispatch/live-dispatch-map'),
   { ssr: false, loading: () => (
     <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
       <Loader2 className="size-4 mr-2 animate-spin" /> Loading map…
@@ -132,7 +132,6 @@ export function DispatchView() {
   // ─── Layout state ───────────────────────────────────────────────────
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [fleetOpen, setFleetOpen] = useState(true);
-  const [mapLayer, setMapLayer] = useState<'streets' | 'satellite'>('streets');
   const [showAttention, setShowAttention] = useState(false);
 
   const mapControllerRef = useRef<LiveTechnicianMapController | null>(null);
@@ -361,7 +360,14 @@ export function DispatchView() {
                 heading: null,
                 speed: null,
                 batteryLevel: null,
-                capturedAt: newLast ?? new Date().toISOString(),
+                // Phase F-1: use lastGpsAt (authoritative GPS timestamp from
+                // GPSLocation.capturedAt) instead of lastSeenAt (which can be
+                // updated by non-GPS flows like clock-in / API calls). Without
+                // this, marker interpolation timing is wrong — the glide
+                // window is computed from the ping's capturedAt, and using
+                // lastSeenAt would make a technician who was active but had no
+                // GPS pings look "live" with a stale coordinate.
+                capturedAt: newLastGps ?? newLast ?? new Date().toISOString(),
               });
             }
           }
@@ -808,14 +814,6 @@ export function DispatchView() {
   const handleRecenterOnTech = useCallback((techId: string) => {
     mapControllerRef.current?.recenterOnTech(techId);
   }, []);
-  const handleToggleLayer = useCallback(() => {
-    setMapLayer((prev) => {
-      const next = prev === 'streets' ? 'satellite' : 'streets';
-      mapControllerRef.current?.setLayer(next);
-      return next;
-    });
-  }, []);
-
   const toggleTeamCollapsed = (teamId: string) => {
     setCollapsedTeams((prev) => {
       const next = new Set(prev);
@@ -961,7 +959,7 @@ export function DispatchView() {
               </p>
             </div>
           ) : (
-            <LiveTechnicianMap
+            <LiveDispatchMap
               employees={mapTechnicians}
               jobs={activeJobsForMap}
               selectedTechnicianId={selectedTechnicianId}
@@ -989,16 +987,6 @@ export function DispatchView() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="left">Recenter on all technicians</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="secondary" size="sm" onClick={handleToggleLayer} className="h-8 w-8 p-0 shadow-md bg-background/95 backdrop-blur" aria-label="Toggle map layer">
-                    <Layers className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left">{mapLayer === 'streets' ? 'Switch to satellite' : 'Switch to streets'}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>

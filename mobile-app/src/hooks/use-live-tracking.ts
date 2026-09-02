@@ -48,6 +48,11 @@ import { Platform } from 'react-native';
 import { API_BASE_URL } from '@/lib/constants';
 import { getToken } from '@/lib/auth';
 import {
+  enqueueGpsPing,
+  drainGpsQueue,
+  getQueuedGpsCount,
+} from '@/lib/gps-offline-queue';
+import {
   setLiveTrackingContext,
   clearLiveTrackingContext,
 } from '@/lib/live-tracking-context';
@@ -345,6 +350,27 @@ export function useLiveTracking(options: UseLiveTrackingOptions): UseLiveTrackin
     const empId: string = employeeId;
     const activeJobId: string | null = jobId ?? null;
 
+    // Phase F-5: On tracking start, drain any GPS pings queued while the
+    // app was closed (device was offline / app killed). Fire-and-forget —
+    // don't block tracking setup on the drain. Also surface the queue count
+    // in state so the UI can show "N pings pending upload" if non-zero.
+    (async () => {
+      try {
+        const count = await getQueuedGpsCount();
+        if (count > 0) {
+          const token = await getToken();
+          if (token) {
+            const drained = await drainGpsQueue(API_BASE_URL, token);
+            if (drained > 0) {
+              console.debug('[live-tracking] drained', drained, 'queued pings on start');
+            }
+          }
+        }
+      } catch {
+        /* non-fatal — drain will retry on next successful ping */
+      }
+    })();
+
     // On web, fall back to navigator.geolocation.watchPosition. The Expo
     // background task system is native-only.
     if (Platform.OS === 'web') {
@@ -354,14 +380,48 @@ export function useLiveTracking(options: UseLiveTrackingOptions): UseLiveTrackin
         try {
           const token = authToken ?? (await getToken());
           if (!token) return;
-          await fetch(`${apiBaseUrl}/api/gps/track`, {
+          const payload = {
+            employeeId: empId,
+            jobId: activeJobId,
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy ?? null,
+            heading: pos.coords.heading ?? null,
+            speed: pos.coords.speed ?? null,
+            capturedAt: new Date(pos.timestamp).toISOString(),
+          };
+          const res = await fetch(`${apiBaseUrl}/api/gps/track`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               Accept: 'application/json',
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({
+            body: JSON.stringify(payload),
+          });
+          if (res.ok) {
+            countersRef.current.pingsSent += 1;
+            lastPingAtRef.current = new Date();
+            setState((s) => ({
+              ...s,
+              pingsSent: countersRef.current.pingsSent,
+              lastPingAt: lastPingAtRef.current,
+            }));
+            // Phase F-5: drain the offline queue on success (network recovered).
+            // Fire-and-forget — don't block the UI on the drain.
+            drainGpsQueue(apiBaseUrl, token).then((n) => {
+              if (n > 0) console.debug('[live-tracking] drained', n, 'queued GPS pings');
+            }).catch(() => { /* non-fatal */ });
+          } else {
+            console.warn(`[live-tracking] web GPS POST ${res.status}`);
+          }
+        } catch (err) {
+          console.warn('[live-tracking] web GPS POST failed:', err);
+          // Phase F-5: enqueue the ping for offline replay instead of
+          // discarding it. Preserves the original capturedAt so the
+          // backend writes the true timestamp.
+          try {
+            await enqueueGpsPing({
               employeeId: empId,
               jobId: activeJobId,
               latitude: pos.coords.latitude,
@@ -370,17 +430,11 @@ export function useLiveTracking(options: UseLiveTrackingOptions): UseLiveTrackin
               heading: pos.coords.heading ?? null,
               speed: pos.coords.speed ?? null,
               capturedAt: new Date(pos.timestamp).toISOString(),
-            }),
-          });
-          countersRef.current.pingsSent += 1;
-          lastPingAtRef.current = new Date();
-          setState((s) => ({
-            ...s,
-            pingsSent: countersRef.current.pingsSent,
-            lastPingAt: lastPingAtRef.current,
-          }));
-        } catch (err) {
-          console.warn('[live-tracking] web GPS POST failed:', err);
+            });
+            console.debug('[live-tracking] GPS ping queued for offline replay');
+          } catch {
+            /* non-fatal — queue is best-effort */
+          }
         }
       };
 
@@ -469,6 +523,16 @@ export function useLiveTracking(options: UseLiveTrackingOptions): UseLiveTrackin
           console.warn('[live-tracking] no auth token — skipping GPS ping');
           return;
         }
+        const payload = {
+          employeeId: empId,
+          jobId: activeJobId,
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+          accuracy: loc.coords.accuracy ?? null,
+          heading: loc.coords.heading ?? null,
+          speed: loc.coords.speed ?? null,
+          capturedAt: new Date(loc.timestamp).toISOString(),
+        };
         const res = await fetch(`${apiBaseUrl}/api/gps/track`, {
           method: 'POST',
           headers: {
@@ -476,16 +540,7 @@ export function useLiveTracking(options: UseLiveTrackingOptions): UseLiveTrackin
             Accept: 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            employeeId: empId,
-            jobId: activeJobId,
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-            accuracy: loc.coords.accuracy ?? null,
-            heading: loc.coords.heading ?? null,
-            speed: loc.coords.speed ?? null,
-            capturedAt: new Date(loc.timestamp).toISOString(),
-          }),
+          body: JSON.stringify(payload),
         });
         if (res.ok) {
           countersRef.current.pingsSent += 1;
@@ -496,11 +551,42 @@ export function useLiveTracking(options: UseLiveTrackingOptions): UseLiveTrackin
             lastPingAt: lastPingAtRef.current,
             lastError: null,
           }));
+          // Phase F-5: drain the offline queue on success (network recovered).
+          // Fire-and-forget — don't block the location watcher on the drain.
+          drainGpsQueue(apiBaseUrl, token).then((n) => {
+            if (n > 0) console.debug('[live-tracking] drained', n, 'queued GPS pings');
+          }).catch(() => { /* non-fatal */ });
         } else {
           console.warn(`[live-tracking] GPS POST ${res.status}`);
+          // 4xx (auth/validation) won't succeed on retry — don't queue.
+          // 5xx + network errors → enqueue for offline replay.
+          if (res.status >= 500) {
+            try {
+              await enqueueGpsPing(payload);
+            } catch {
+              /* non-fatal — queue is best-effort */
+            }
+          }
         }
       } catch (err) {
         console.warn('[live-tracking] GPS POST failed:', err);
+        // Phase F-5: network failure (device offline) — enqueue the ping
+        // for offline replay with its original capturedAt. The backend
+        // accepts backdated pings within 24h (see gps/track/route.ts).
+        try {
+          await enqueueGpsPing({
+            employeeId: empId,
+            jobId: activeJobId,
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+            accuracy: loc.coords.accuracy ?? null,
+            heading: loc.coords.heading ?? null,
+            speed: loc.coords.speed ?? null,
+            capturedAt: new Date(loc.timestamp).toISOString(),
+          });
+        } catch {
+          /* non-fatal — queue is best-effort */
+        }
       }
     };
 

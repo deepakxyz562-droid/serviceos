@@ -46,7 +46,15 @@ import { PrismaClient } from '@prisma/client';
 
 const PORT = Number(process.env.REALTIME_PORT || 3003);
 const JWT_SECRET = process.env.JWT_SECRET || 'fieseros-saas-dev-secret-key';
-const INTERNAL_SECRET = process.env.REALTIME_INTERNAL_SECRET || 'fieseros-internal';
+// Phase E-4: REALTIME_INTERNAL_SECRET must NOT have a predictable fallback.
+// Previously defaulted to 'fieseros-internal' — anyone who knew the default
+// could POST to /broadcast and fan out arbitrary events to any tenant room.
+// Now: throw at startup if unset, forcing the operator to set a real secret.
+const INTERNAL_SECRET = process.env.REALTIME_INTERNAL_SECRET;
+if (!INTERNAL_SECRET) {
+  console.error('[realtime-service] FATAL: REALTIME_INTERNAL_SECRET is not set. Refusing to start — set it in .env (use `openssl rand -hex 32`).');
+  process.exit(1);
+}
 
 // Presence threshold — must mirror PRESENCE_THRESHOLD_MS in
 // src/lib/presence.ts. A user is "online" if they sent a heartbeat (or made

@@ -152,6 +152,52 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+
+    // ── Phase E-1: Coordinate + telemetry bounds validation ────────────
+    // Reject obviously invalid GPS data before writing to the DB. Prevents
+    // garbage coordinates (lat 999, lng -999) from polluting the dispatch
+    // map + route history. Also clamps optional telemetry fields to sane
+    // ranges so a buggy/malicious client can't send impossible values.
+    if (
+      !Number.isFinite(latitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      !Number.isFinite(longitude) ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      return NextResponse.json(
+        { error: 'Coordinates out of range (lat [-90,90], lng [-180,180])' },
+        { status: 400 },
+      );
+    }
+    if (accuracy != null && (!Number.isFinite(accuracy) || accuracy < 0)) {
+      return NextResponse.json(
+        { error: 'accuracy must be a non-negative number' },
+        { status: 400 },
+      );
+    }
+    if (heading != null && (!Number.isFinite(heading) || heading < 0 || heading > 360)) {
+      return NextResponse.json(
+        { error: 'heading must be in [0, 360]' },
+        { status: 400 },
+      );
+    }
+    if (speed != null && (!Number.isFinite(speed) || speed < 0)) {
+      return NextResponse.json(
+        { error: 'speed must be a non-negative number' },
+        { status: 400 },
+      );
+    }
+    if (
+      batteryLevel != null &&
+      (!Number.isFinite(batteryLevel) || batteryLevel < 0 || batteryLevel > 100)
+    ) {
+      return NextResponse.json(
+        { error: 'batteryLevel must be in [0, 100]' },
+        { status: 400 },
+      );
+    }
     const ADMIN_ROLES = ['owner', 'admin', 'manager', 'super_admin'];
     if (!ADMIN_ROLES.includes(authUser.role)) {
       // Employee: verify the employeeId belongs to them.
@@ -183,6 +229,46 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
     }
 
+    // ── Phase E-2: jobId ownership validation ──────────────────────────
+    // If a jobId is supplied, verify it belongs to the same workspace as the
+    // employee AND is assigned to this employee. Prevents a malicious client
+    // from contaminating another job's route history by submitting
+    // `{ employeeId: A, jobId: B, coordinates }` where job B belongs to a
+    // different tenant or a different employee.
+    if (jobId) {
+      const job = await db.job.findUnique({
+        where: { id: jobId },
+        select: {
+          id: true,
+          workspaceId: true,
+          assigneeId: true,
+          status: true,
+        },
+      });
+      if (!job) {
+        return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+      }
+      // Cross-tenant check: the job's workspace must match the employee's.
+      if (
+        job.workspaceId &&
+        employee.workspaceId &&
+        job.workspaceId !== employee.workspaceId
+      ) {
+        return NextResponse.json(
+          { error: 'Job does not belong to this employee workspace' },
+          { status: 403 },
+        );
+      }
+      // Assignment check: the job must be assigned to this employee (or have
+      // no assignee — some jobs are unassigned while being dispatched).
+      if (job.assigneeId && job.assigneeId !== targetEmployeeId) {
+        return NextResponse.json(
+          { error: 'Job is not assigned to this employee' },
+          { status: 403 },
+        );
+      }
+    }
+
     // Resolve tenantId from workspace → User fallback (see resolveTenantId docs).
     // If both are null, fall back to the authenticated user's tenantId (from
     // the JWT). We do NOT write 'unknown' to the DB — that would pollute the
@@ -209,6 +295,57 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── Phase F-6: Server-side movement validation ─────────────────────
+    // Derive `isMoving` + `speed` from the coordinate delta vs the previous
+    // GPS ping, rather than blindly trusting the client-supplied values.
+    // A malicious/buggy client could send `isMoving: false` while moving 80
+    // km/h, or `speed: 999` while stationary. We compute the authoritative
+    // values server-side and use them if the client didn't supply them, or
+    // if the client's values are implausible (> 300 km/h, i.e. faster than
+    // any commercial vehicle).
+    let serverIsMoving = isMoving;
+    let serverSpeed = speed;
+    try {
+      const prev = await db.gPSLocation.findFirst({
+        where: { employeeId: targetEmployeeId },
+        orderBy: { capturedAt: 'desc' },
+        select: { latitude: true, longitude: true, capturedAt: true },
+      });
+      if (prev) {
+        const prevTime = new Date(prev.capturedAt as string | Date).getTime();
+        const dtSec = Math.max(1, (now.getTime() - prevTime) / 1000); // min 1s to avoid div-by-zero
+        const distM = haversineMeters(
+          prev.latitude as number,
+          prev.longitude as number,
+          latitude,
+          longitude,
+        );
+        const computedSpeed = distM / dtSec; // m/s
+
+        // Derive isMoving: moved > 10m since the last ping.
+        // (10m ≈ the GPS_MIN_DISTANCE_M threshold the mobile app uses.)
+        if (serverIsMoving === undefined || serverIsMoving === null) {
+          serverIsMoving = distM > 10;
+        } else {
+          // Cross-check: if client says "not moving" but we moved > 50m, the
+          // client is wrong — override.
+          if (!serverIsMoving && distM > 50) {
+            serverIsMoving = true;
+          }
+        }
+
+        // Derive speed if the client didn't supply it OR supplied an
+        // implausible value (> 83 m/s ≈ 300 km/h).
+        const implausibleSpeed = serverSpeed != null && serverSpeed > 83;
+        if (serverSpeed === undefined || serverSpeed === null || implausibleSpeed) {
+          serverSpeed = computedSpeed;
+        }
+      }
+    } catch (e) {
+      // Non-fatal — fall back to client values.
+      console.warn('[GPS POST] movement validation lookup failed (non-fatal):', e instanceof Error ? e.message : e);
+    }
+
     // 1. Create the GPSLocation record.
     //    If tenantId is null, we still write the row (the GPS data is valuable
     //    for the employee's own route history) but set tenantId to null. The
@@ -222,10 +359,10 @@ export async function POST(request: NextRequest) {
         longitude,
         accuracy: accuracy ?? null,
         heading: heading ?? null,
-        speed: speed ?? null,
+        speed: serverSpeed ?? null,
         altitude: altitude ?? null,
         batteryLevel: batteryLevel ?? null,
-        isMoving: isMoving ?? false,
+        isMoving: serverIsMoving ?? false,
         capturedAt: now,
       },
     });
@@ -276,6 +413,20 @@ export async function POST(request: NextRequest) {
           accuracy: accuracy ?? null,
         };
         path.push(newPoint);
+
+        // Phase F-4: Cap pathJson length at 500 points (prune oldest).
+        // Without this, a long shift (6h × 10s pings = ~2,160 points) would
+        // cause every subsequent GPS ping to read → parse → append → stringify
+        // → write a growing JSON document — O(n) per ping, quadratic overall.
+        // Capping at 500 keeps the JSON document small (~25KB max) + the
+        // read/parse/write cycle fast, while preserving enough breadcrumbs for
+        // the dispatch map's polyline rendering. The pruned points are still
+        // available in the GPSLocation table (raw telemetry history).
+        const PATH_MAX_POINTS = 500;
+        if (path.length > PATH_MAX_POINTS) {
+          // Drop the oldest points (keep the most recent 500).
+          path = path.slice(path.length - PATH_MAX_POINTS);
+        }
 
         // Recompute distance (add the haversine distance from the previous endpoint).
         let newDistance = route.distanceMeters as number;
@@ -407,6 +558,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Authorization: employees can only query their own location.
+    // Admins can query any employee — BUT only within their own workspace/
+    // tenant (Phase E-3: tenant isolation). Previously the admin bypass let
+    // a tenant-A admin query a tenant-B employee's GPS by guessing the ID.
     const ADMIN_ROLES = ['owner', 'admin', 'manager', 'super_admin'];
     if (!ADMIN_ROLES.includes(authUser.role)) {
       let ownEmployeeId = authUser.employeeId;
@@ -422,6 +576,33 @@ export async function GET(request: NextRequest) {
           { error: 'Forbidden: you can only query your own GPS location' },
           { status: 403 },
         );
+      }
+    } else {
+      // Admin: verify the target employee belongs to the same workspace/tenant.
+      // Super-admins (platform-level) bypass this scope.
+      if (!authUser.isSuperAdmin && !(authUser.role === 'admin' && !authUser.tenantId)) {
+        const empWhere: Record<string, unknown> = { id: employeeId };
+        if (authUser.workspaceId) {
+          empWhere.workspaceId = authUser.workspaceId;
+        } else if (authUser.tenantId) {
+          const tenantWorkspaces = await db.workspace.findMany({
+            where: { tenantId: authUser.tenantId },
+            select: { id: true },
+          });
+          const workspaceIds = tenantWorkspaces.map((w: { id: string }) => w.id);
+          if (workspaceIds.length === 0) {
+            return NextResponse.json({ location: null });
+          }
+          empWhere.workspaceId = { in: workspaceIds };
+        } else {
+          return NextResponse.json({ location: null });
+        }
+        const scopedEmp = await db.employee.findFirst({ where: empWhere, select: { id: true } });
+        if (!scopedEmp) {
+          // 404-style (returning null) avoids leaking whether the employeeId
+          // exists in another tenant (no enumeration oracle).
+          return NextResponse.json({ location: null });
+        }
       }
     }
 

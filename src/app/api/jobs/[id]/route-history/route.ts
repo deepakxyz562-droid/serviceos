@@ -11,7 +11,7 @@ export const revalidate = 0;
  * Returns the breadcrumb trail (RouteHistory.pathJson) for a job so the
  * Live Dispatch map can render an Uber-style polyline of the technician's
  * actual driven path — instead of the straight 2-point line currently
- * drawn by `live-technician-map.tsx`.
+ * drawn by `live-dispatch-map.tsx`.
  *
  * Response shape:
  *   {

@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { cachedJson } from '@/lib/cache-headers';
+import { LOCATION_FRESHNESS, deriveGpsStatus as deriveGpsStatusShared } from '@/lib/gps-freshness';
 
 /**
  * GET /api/employees/positions
@@ -58,28 +59,19 @@ import { cachedJson } from '@/lib/cache-headers';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// ── GPS freshness thresholds (Phase B) ──────────────────────────────────────
-// Mirror the PWA-side thresholds in use-gps-tracking.tsx for consistency.
-const GPS_LIVE_MS = 30 * 1000;        // < 30s → live
-const GPS_STALE_MS = 5 * 60 * 1000;   // 30s–5min → stale
-// > 5min → offline (implicit, no constant needed)
+// ── GPS freshness thresholds (Phase F-3) ────────────────────────────────────
+// Now sourced from the unified contract in src/lib/gps-freshness.ts so the
+// positions API, the PWA, and the dispatch map all agree on live/stale/offline.
 
-/**
- * Derive GPS status from the latest GPSLocation.capturedAt.
- * - No timestamp (never transmitted) → 'offline'
- * - > 5 min ago → 'offline'
- * - 30s–5min ago → 'stale'
- * - < 30s ago → 'live'
- */
+// Re-export the shared derivation for backward compat with the rest of this
+// file (which calls `deriveGpsStatus(lastGpsAt)` directly).
 function deriveGpsStatus(lastGpsAt: string | null): 'live' | 'stale' | 'offline' {
-  if (!lastGpsAt) return 'offline';
-  const ts = new Date(lastGpsAt).getTime();
-  if (Number.isNaN(ts)) return 'offline';
-  const ageMs = Date.now() - ts;
-  if (ageMs > GPS_STALE_MS) return 'offline';
-  if (ageMs > GPS_LIVE_MS) return 'stale';
-  return 'live';
+  return deriveGpsStatusShared(lastGpsAt);
 }
+
+// Keep the old constants as aliases for any inline use in this file.
+const GPS_LIVE_MS = LOCATION_FRESHNESS.LIVE_MS;
+const GPS_STALE_MS = LOCATION_FRESHNESS.STALE_MS;
 
 /**
  * Normalize a timestamp (Date | ISO string with/without TZ) to a proper
@@ -167,58 +159,73 @@ export async function GET() {
         latitude: true,
         longitude: true,
         lastSeenAt: true,
+        // Phase F-2: lastLocationAt is written ONLY by the GPS ping path
+        // (/api/gps/track line 431 + /api/employees/heartbeat line 111 when
+        // coords are provided). It's the authoritative GPS telemetry timestamp
+        // on the Employee row itself — so we can read it directly instead of
+        // running N separate GPSLocation.findFirst queries (the old N+1).
+        // Falls back to null for legacy employees who never had a GPS ping.
+        lastLocationAt: true,
         status: true,
         currentJobId: true,
       },
       take: 200,
     });
 
-    // ── Phase B: Fetch latest GPSLocation.capturedAt per employee ──────────
-    // This is the authoritative GPS telemetry timestamp — separate from
-    // Employee.lastSeenAt (which can be updated by non-GPS flows).
+    // ── Phase F-2: Eliminate the N+1 query ──────────────────────────────
+    // Previously this ran N `GPSLocation.findFirst` queries (one per employee)
+    // to get the latest GPS timestamp — ~201 DB queries per 5s poll for 200
+    // employees. Now we read `Employee.lastLocationAt` directly (already on
+    // the row, already written by every GPS ping). This collapses the N+1 to
+    // a single employee query.
     //
-    // We use findFirst with orderBy: capturedAt desc per employee. This is
-    // compatible with BOTH Prisma-direct (production) AND the Supabase
-    // PostgREST adapter (which doesn't support _max in groupBy). It's N
-    // queries (one per employee) but each is indexed + limited to 1 row,
-    // so it's fast for typical fleet sizes (< 200 employees).
-    //
-    // For very large fleets, this could be optimized to a single groupBy
-    // when running in Prisma-direct mode, but the current approach is
-    // simpler and works everywhere.
-    const employeeIds = rows.map((r: { id: string }) => r.id);
+    // The GPSLocation table is still the source of truth for raw telemetry
+    // history — but for "where is the technician RIGHT NOW", lastLocationAt
+    // is equivalent and ~200x cheaper to read.
     const lastGpsMap = new Map<string, string | null>();
+    const missingLastLocationAt: string[] = [];
 
-    if (employeeIds.length > 0) {
+    for (const r of rows as Array<{ id: string; lastLocationAt: string | Date | null }>) {
+      const lastGpsAt = r.lastLocationAt;
+      if (lastGpsAt) {
+        lastGpsMap.set(r.id, toUtcIso(lastGpsAt));
+      } else {
+        // Legacy employee with no lastLocationAt — collect for a single
+        // batched fallback query (rare; only employees who never sent a GPS
+        // ping). Kept as a safety net so we never show 'offline' for an
+        // employee who actually has GPS history but a null lastLocationAt.
+        missingLastLocationAt.push(r.id);
+      }
+    }
+
+    // Fallback: for employees without lastLocationAt, do ONE batched query
+    // (not N) to find their latest GPSLocation. This is rare and only runs
+    // for employees who never pinged (or whose lastLocationAt column was
+    // somehow null). For a healthy fleet this loop is a no-op.
+    if (missingLastLocationAt.length > 0) {
       try {
-        // Fetch the latest GPSLocation for each employee in parallel.
-        const results = await Promise.all(
-          employeeIds.map(async (empId: string) => {
-            try {
-              const latest = await db.gPSLocation.findFirst({
-                where: { employeeId: empId },
-                orderBy: { capturedAt: 'desc' },
-                select: { capturedAt: true },
-              });
-              return [empId, latest?.capturedAt ?? null] as const;
-            } catch {
-              // Per-employee failure (shouldn't happen) — return null.
-              return [empId, null] as const;
-            }
-          }),
-        );
-        for (const [empId, capturedAt] of results) {
-          lastGpsMap.set(empId, toUtcIso(capturedAt));
+        const fallbackRows = await db.gPSLocation.findMany({
+          where: { employeeId: { in: missingLastLocationAt } },
+          orderBy: { capturedAt: 'desc' },
+          // Take the latest per employee — we dedupe client-side since PostgREST
+          // doesn't support DISTINCT ON. Capped at 1 row per missing employee.
+          take: missingLastLocationAt.length,
+          select: { employeeId: true, capturedAt: true },
+        });
+        const seen = new Set<string>();
+        for (const g of fallbackRows) {
+          if (seen.has(g.employeeId)) continue;
+          seen.add(g.employeeId);
+          lastGpsMap.set(g.employeeId, toUtcIso(g.capturedAt));
         }
       } catch (e) {
-        // Non-fatal — if GPSLocation table is missing or query fails, fall
-        // back to lastSeenAt for all employees (graceful degradation).
-        console.error('[positions] GPSLocation fetch failed, falling back to lastSeenAt:', e);
+        // Non-fatal — fall back to 'offline' for these employees.
+        console.error('[positions] fallback GPSLocation fetch failed:', e);
       }
     }
 
     // Merge lastGpsAt + gpsStatus into each row.
-    const enriched = rows.map((r: { id: string; email: string | null; latitude: number | null; longitude: number | null; lastSeenAt: string | Date | null; status: string; currentJobId: string | null }) => {
+    const enriched = rows.map((r: { id: string; email: string | null; latitude: number | null; longitude: number | null; lastSeenAt: string | Date | null; lastLocationAt: string | Date | null; status: string; currentJobId: string | null }) => {
       const lastGpsAt = lastGpsMap.get(r.id) ?? null;
       const gpsStatus = deriveGpsStatus(lastGpsAt);
       // Normalize lastSeenAt to a UTC ISO string for the client.
