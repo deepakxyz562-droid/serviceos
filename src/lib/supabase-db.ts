@@ -270,6 +270,9 @@ const TABLE_MAP: Record<string, string> = {
   twilioProviderConfig: 'TwilioProviderConfig',
   aiProviderConfig: 'AiProviderConfig',
   aiToolExecution: 'AiToolExecution',
+  // ── Verification & Claims ──
+  claimRequest: 'ClaimRequest',
+  verificationEvidence: 'VerificationEvidence',
 };
 
 // Known missing tables in Supabase (return empty results gracefully)
@@ -651,6 +654,10 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   // claim.tenant is undefined → superadmin Claims tab crashes with
   // "Cannot read properties of undefined (reading 'name')".
   ClaimRequest: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+  },
+  // ── Verification evidence ──
+  VerificationEvidence: {
     tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
   },
 };
